@@ -234,6 +234,51 @@ describe('AzureKeyVaultKeySource', () => {
         });
     });
 
+    describe('parseLookupValue - secret name validation', () => {
+        it('should reject secret names with path traversal characters', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            // Secret names with slashes, dots, or special chars should be rejected
+            await expect(s.GetKey('../../../etc/passwd')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should reject secret names with special characters when using default vault URL', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            await expect(s.GetKey('secret;drop table')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should reject secret names with dots when using default vault URL', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            await expect(s.GetKey('secret.name.with.dots')).rejects.toThrow(
+                'Invalid Key Vault lookup value'
+            );
+        });
+
+        it('should accept valid alphanumeric-with-hyphens secret names', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            const s = new AzureKeyVaultKeySource();
+            await s.Initialize();
+
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            mockGetSecret.mockResolvedValue({ value: keyBytes.toString('base64') });
+
+            const result = await s.GetKey('my-valid-secret-123');
+            expect(result).toEqual(keyBytes);
+        });
+    });
+
     describe('Dispose', () => {
         it('should clear clients and reset initialization', async () => {
             await source.Initialize();
@@ -245,6 +290,86 @@ describe('AzureKeyVaultKeySource', () => {
 
         it('should handle dispose when not initialized', async () => {
             await expect(source.Dispose()).resolves.toBeUndefined();
+        });
+    });
+
+    describe('ValidateKeyAccessibility', () => {
+        it('should return error when not initialized', async () => {
+            const result = await source.ValidateKeyAccessibility('my-secret');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('not initialized');
+        });
+
+        it('should return IsAccessible true when secret is accessible', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            await source.Initialize();
+
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            mockGetSecret.mockResolvedValue({ value: keyBytes.toString('base64') });
+
+            const result = await source.ValidateKeyAccessibility('my-secret', undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should return error for key length mismatch', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            await source.Initialize();
+
+            const keyBytes = Buffer.alloc(16, 0xAB); // 16 bytes, not 32
+            mockGetSecret.mockResolvedValue({ value: keyBytes.toString('base64') });
+
+            const result = await source.ValidateKeyAccessibility('my-secret', undefined, 32);
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('16 bytes');
+            expect(result.Error).toContain('32 bytes');
+        });
+
+        it('should return error for SecretNotFound', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            await source.Initialize();
+            mockGetSecret.mockRejectedValue(new Error('SecretNotFound'));
+
+            const result = await source.ValidateKeyAccessibility('missing-secret');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('not found');
+        });
+
+        it('should return error for access denied', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            await source.Initialize();
+            mockGetSecret.mockRejectedValue(new Error('Forbidden'));
+
+            const result = await source.ValidateKeyAccessibility('restricted-secret');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('access denied');
+        });
+
+        it('should support full URL format', async () => {
+            await source.Initialize();
+
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            mockGetSecret.mockResolvedValue({ value: keyBytes.toString('base64') });
+
+            const result = await source.ValidateKeyAccessibility(
+                'https://my-vault.vault.azure.net/secrets/my-secret',
+                undefined,
+                32
+            );
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should not return key material in result', async () => {
+            process.env.AZURE_KEYVAULT_URL = 'https://my-vault.vault.azure.net';
+            await source.Initialize();
+
+            const keyBytes = Buffer.alloc(32, 0xDE);
+            const base64Key = keyBytes.toString('base64');
+            mockGetSecret.mockResolvedValue({ value: base64Key });
+
+            const result = await source.ValidateKeyAccessibility('my-secret', undefined, 32);
+            const resultStr = JSON.stringify(result);
+            expect(resultStr).not.toContain(base64Key);
+            expect(Object.keys(result).every(k => k === 'IsAccessible' || k === 'Error')).toBe(true);
         });
     });
 });

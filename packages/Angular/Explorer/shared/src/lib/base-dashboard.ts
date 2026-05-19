@@ -47,11 +47,15 @@ export abstract class BaseDashboard extends BaseResourceComponent implements OnI
   protected _config: DashboardConfig | null = null;
 
   async ngOnInit() {
+    super.ngOnInit();
     this.initDashboard();
     await this.loadData();
+    this.NotifyLoadComplete();
   }
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    super.ngOnDestroy();
+  }
 
   /**
    * This method will result in the dashboard being reloaded.

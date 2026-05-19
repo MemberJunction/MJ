@@ -118,6 +118,8 @@ export interface SchemaDiff {
     ModifiedColumns: ColumnModification[];
     /** Columns that exist in target but not in source — deprecated (no physical drop). */
     RemovedColumns: string[];
+    /** Warnings about skipped changes (PK type changes, etc.) — reported but not executed. */
+    Warnings: string[];
 }
 
 /** Describes a column type/nullability change. */

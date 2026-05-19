@@ -90,9 +90,9 @@
     border-inline-start-width: 0;
     color: var(--thead-color);
 }
-::ng-deep .list-detail-grid-wrap .k-grid-aria-root kendo-grid-list .k-grid-table tbody tr td { 
+::ng-deep .list-detail-grid-wrap .k-grid-aria-root .k-grid-table tbody tr td {
     border-inline-start-width: 0;
     color: var(--tdata-color);
     font-weight: 500;
     border-bottom-width: 1px;
-}   
+}

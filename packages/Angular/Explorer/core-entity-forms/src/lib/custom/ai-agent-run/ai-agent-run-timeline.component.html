@@ -1,4 +1,8 @@
-@if (!loading && (timelineItems$ | async); as items) {
+@if (loading) {
+  <div class="loading-state">
+    <mj-loading text="Loading run steps..." size="medium"></mj-loading>
+  </div>
+} @else if (timelineItems$ | async; as items) {
   <div class="timeline-container">
     @if (items.length > 0) {
       <div class="timeline">
@@ -50,12 +54,10 @@
       </div>
     }
   </div>
-}
-
-@if (loading) {
+} @else {
+  <!-- timelineItems$ hasn't emitted yet -->
   <div class="loading-state">
-    <i class="fas fa-spinner fa-spin fa-2x"></i>
-    <p>Loading timeline...</p>
+    <mj-loading text="Loading run steps..." size="medium"></mj-loading>
   </div>
 }
 

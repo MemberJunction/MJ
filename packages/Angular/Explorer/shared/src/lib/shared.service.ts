@@ -1,13 +1,12 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
-import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
-import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize, UUIDsEqual } from '@memberjunction/global';
+import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize, UUIDsEqual, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
-import { NotificationService } from "@progress/kendo-angular-notification";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationService } from './navigation.service';
 
@@ -15,7 +14,7 @@ import { NavigationService } from './navigation.service';
   providedIn: 'root'
 })
 export class SharedService {
-  private static _instance: SharedService;
+  private static readonly _globalStoreKey = '___SINGLETON__SharedService';
   private static _loaded: boolean = false;
   private static _resourceTypes: MJResourceTypeEntity[] = [];
   private static isLoading$ = new BehaviorSubject<boolean>(false);
@@ -24,31 +23,31 @@ export class SharedService {
   private _navigationService: NavigationService | null = null;
 
   constructor(
-    private notificationService: NotificationService,
     private mjNotificationsService: MJNotificationService,
     private injector: Injector
   ) {
-    if (SharedService._instance) {
-      // return existing instance which will short circuit the creation of a new instance
-      return SharedService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[SharedService._globalStoreKey]) {
+      return g[SharedService._globalStoreKey] as SharedService;
     }
-    // first time this has been called, so return ourselves since we're in the constructor
-    SharedService._instance = this;
+    g[SharedService._globalStoreKey] = this;
 
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       switch (event.event) {
         case MJEventType.LoggedIn:
           if (SharedService._loaded === false)  {
-            // Handle app startup
-            await StartupManager.Instance.Startup();          
+            // Pre-warm non-critical engines IMMEDIATELY on LoggedIn, before
+            // StartupManager.Startup() completes. These engines only need
+            // Metadata.Provider (set during setupGraphQLClient's provider.Config()).
+            // Firing them here allows their RunViews calls to be coalesced with
+            // the startup engines' calls into fewer mega-batched GraphQL requests.
+            SharedService.preWarmEngines();
+
+            // Handle app startup — joins the same Startup() promise that
+            // setupGraphQLClient kicked off.
+            await StartupManager.Instance.Startup();
 
             await SharedService.RefreshData(false);
-
-            // Pre-warm other engines in the background (fire and forget)
-            // These are not needed immediately but will be ready when user navigates to
-            // Conversations, Dashboards, or Artifacts. The BaseEngine pattern ensures
-            // subsequent callers will wait for the existing load rather than starting a new one.
-            SharedService.preWarmEngines();
           }
         break;
       }
@@ -56,7 +55,22 @@ export class SharedService {
   }
 
   public static get Instance(): SharedService {
-    return SharedService._instance;
+    return GetGlobalObjectStore()![SharedService._globalStoreKey] as SharedService;
+  }
+
+  /**
+   * Optional explicit metadata provider. Set via `setProvider()` from a caller
+   * with provider context (e.g. the shell). Falls back to `Metadata.Provider`
+   * when not set.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
   }
 
   /**
@@ -111,7 +125,7 @@ export class SharedService {
    * Returns the current session ID, which is automatically created when the service is instantiated.
    */
   public get SessionId(): string {
-    return (<GraphQLDataProvider>Metadata.Provider).sessionId;
+    return (<GraphQLDataProvider>this.Provider).sessionId;
   }
 
   public get ResourceTypes(): MJResourceTypeEntity[] {
@@ -175,14 +189,14 @@ export class SharedService {
   }
 
   private static async handleDataLoading() {
-    const md = new Metadata();
-
     // make sure startup is done
-    await StartupManager.Instance.Startup();          
+    await StartupManager.Instance.Startup();
 
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
-    await SharedService.RefreshUserNotifications();  
+    // Note: RefreshUserNotifications() removed here because MJNotificationService
+    // already handles it via its own MJEventType.LoggedIn subscription. Calling it
+    // from both places caused a duplicate User Notifications GraphQL request on login.
   }  
 
   FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
@@ -212,7 +226,7 @@ export class SharedService {
   }
 
   public PushStatusUpdates(): Observable<string> {
-    const gp: GraphQLDataProvider = <GraphQLDataProvider>Metadata.Provider;
+    const gp: GraphQLDataProvider = <GraphQLDataProvider>this.Provider;
     return gp.PushStatusUpdates();
   }
 

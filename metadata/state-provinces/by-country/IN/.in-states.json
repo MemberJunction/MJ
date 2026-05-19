@@ -1,0 +1,758 @@
+[
+  {
+    "fields": {
+      "Name": "Andaman and Nicobar Islands",
+      "Code": "AN",
+      "ISO3166_2": "IN-AN",
+      "Latitude": 12.6112,
+      "Longitude": 92.8317,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-AN.geojson",
+      "CommonAliases": [
+        "Andaman and Nicobar Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "10760197-3D34-47B6-BD73-3942C3F7EE4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.802Z",
+      "checksum": "d474119c5f3a9a9127a538949a1c6776dcad22c2a0e6f86091df4b8d8ffa1bf8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Andhra Pradesh",
+      "Code": "AP",
+      "ISO3166_2": "IN-AP",
+      "Latitude": 15.9241,
+      "Longitude": 80.1864,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-AP.geojson",
+      "CommonAliases": [
+        "Andhra Pradesh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "81778E3B-E3BA-42F1-9483-F29622DBE639"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.819Z",
+      "checksum": "24525ef2ff63c0a1c584dd803d914781e56c5678cbd8cf0dc9fea4dd1460e45b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arunachal Pradesh",
+      "Code": "AR",
+      "ISO3166_2": "IN-AR",
+      "Latitude": 28.0938,
+      "Longitude": 94.5921,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-AR.geojson",
+      "CommonAliases": [
+        "Arunachal Pradesh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "27160400-AEA0-4490-8AE4-BF50FEA0B303"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.834Z",
+      "checksum": "04745278504109418c53c8cfd3fd3052b7fc6071486d46330579b7908ef82032"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assam",
+      "Code": "AS",
+      "ISO3166_2": "IN-AS",
+      "Latitude": 26.4074,
+      "Longitude": 93.2551,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-AS.geojson",
+      "CommonAliases": [
+        "Assam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "7E4DC59B-C668-4FE8-88D5-02C02A422B59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.849Z",
+      "checksum": "9b400b9eaf3f57d9e9138dd4116aa50868b68e6c29c3eddee8a2af1618d753e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bihar",
+      "Code": "BR",
+      "ISO3166_2": "IN-BR",
+      "Latitude": 25.6441,
+      "Longitude": 85.9065,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-BR.geojson",
+      "CommonAliases": [
+        "Bihar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "F7742817-C2FD-4006-8D77-B2E2C9957E83"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.863Z",
+      "checksum": "0c1b66a5fd80dd3708cc4c23bd8cfab428c462724e7cfb7f10e1685e65a03280"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chandigarh",
+      "Code": "CH",
+      "ISO3166_2": "IN-CH",
+      "Latitude": 30.7333,
+      "Longitude": 76.7794,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-CH.geojson",
+      "CommonAliases": [
+        "Chandigarh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "15A1AB84-6168-40F7-A794-CD6397610287"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.879Z",
+      "checksum": "301c00e518bf6faaa0ab2d1091f28127a24334fe099ded1f33bc8c43c6daceae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chhattisgarh",
+      "Code": "CT",
+      "ISO3166_2": "IN-CT",
+      "Latitude": 21.6637,
+      "Longitude": 81.8406,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-CT.geojson",
+      "CommonAliases": [
+        "Chhattisgarh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "0250153A-5BD0-40A4-B876-E24E8162780F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.894Z",
+      "checksum": "7093ca712870ffea344ee63c9fa90a3f170258232e421e9904ddd74e678198bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dadra and Nagar Haveli and Daman and Diu",
+      "Code": "DH",
+      "ISO3166_2": "IN-DH",
+      "Latitude": 20.7182,
+      "Longitude": 70.9324,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-DH.geojson",
+      "CommonAliases": [
+        "Dadra and Nagar Haveli and Daman and Diu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "E26D6915-384F-465C-933B-40270D82BED3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.908Z",
+      "checksum": "c1f94e4924873bf672837f9c0e0f7b61a104c5c37f13c55572401adc7b3e2ba9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delhi",
+      "Code": "DL",
+      "ISO3166_2": "IN-DL",
+      "Latitude": 28.6328,
+      "Longitude": 77.2198,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-DL.geojson",
+      "CommonAliases": [
+        "Delhi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "CDA85354-505A-427A-B8CA-951B91A8818A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.921Z",
+      "checksum": "888f683cfe605201c267e3d6b1b9558b0126da0213f3ba78264b9ef2892d0688"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Goa",
+      "Code": "GA",
+      "ISO3166_2": "IN-GA",
+      "Latitude": 15.3005,
+      "Longitude": 74.0855,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-GA.geojson",
+      "CommonAliases": [
+        "Goa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "5A07E033-0E95-4D0F-A1A7-CACC88FA9810"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.934Z",
+      "checksum": "a19ec502d44dbf77fc2a986fca405d82893988515556fa670791dbca7535835e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gujarat",
+      "Code": "GJ",
+      "ISO3166_2": "IN-GJ",
+      "Latitude": 22.385,
+      "Longitude": 71.7453,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-GJ.geojson",
+      "CommonAliases": [
+        "Gujarat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "979C95FB-24BF-4629-9D60-29114AFA14E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.988Z",
+      "checksum": "fbd341d014711b1a45b59e2e149e7e3d965ade0e46a8587a4b350471d2c9a7c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haryana",
+      "Code": "HR",
+      "ISO3166_2": "IN-HR",
+      "Latitude": 29,
+      "Longitude": 76,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-HR.geojson",
+      "CommonAliases": [
+        "Haryana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "B5400859-8F31-4C1B-BE2A-7BB42788108E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.003Z",
+      "checksum": "3779d9865514e4ee477a6f58b6875e8f6c6e036e5431754bbda193d9200c5349"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Himachal Pradesh",
+      "Code": "HP",
+      "ISO3166_2": "IN-HP",
+      "Latitude": 31.9292,
+      "Longitude": 77.1828,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-HP.geojson",
+      "CommonAliases": [
+        "Himachal Pradesh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "05ADBFD8-0B41-4A8C-992E-F3C4691ECF5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.017Z",
+      "checksum": "42ee8ccf203dbc0e92a5a5893664fe77e0edc185e5c5400177b7e9d088188cef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jammu and Kashmir",
+      "Code": "JK",
+      "ISO3166_2": "IN-JK",
+      "Latitude": 33.6649,
+      "Longitude": 75.163,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-JK.geojson",
+      "CommonAliases": [
+        "Jammu and Kashmir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "EAD50760-D0AF-47E7-AFE5-D1609CA6DBEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.037Z",
+      "checksum": "41bb044bba35c996fec6c1848c7acdf132860f2a322cea1419de9e2de7b3b2cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jharkhand",
+      "Code": "JH",
+      "ISO3166_2": "IN-JH",
+      "Latitude": 23.456,
+      "Longitude": 85.2557,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-JH.geojson",
+      "CommonAliases": [
+        "Jharkhand"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "BA45877E-1F02-457F-9F89-0314115F18C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.055Z",
+      "checksum": "5f047cb4cf7e3188468a223c7697f2b0844e0d899d488d30e36792bd30cb94cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karnataka",
+      "Code": "KA",
+      "ISO3166_2": "IN-KA",
+      "Latitude": 14.5204,
+      "Longitude": 75.7224,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-KA.geojson",
+      "CommonAliases": [
+        "Karnataka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "E0430F61-0C05-48DC-9659-FA808A13C2A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.072Z",
+      "checksum": "edf4f8cdb1db5a3311fb2cba079f40853b2e951198f3964e010e29a592727652"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kerala",
+      "Code": "KL",
+      "ISO3166_2": "IN-KL",
+      "Latitude": 10.3529,
+      "Longitude": 76.512,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-KL.geojson",
+      "CommonAliases": [
+        "Kerala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "0649129B-139F-43FA-9260-E5DE39AA0946"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.088Z",
+      "checksum": "563f7bd132326b0dd3048a80e273ee5bc44ddef6d4f11a5bb150678394423f1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ladakh",
+      "Code": "LA",
+      "ISO3166_2": "IN-LA",
+      "Latitude": 33.9456,
+      "Longitude": 77.6569,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-LA.geojson",
+      "CommonAliases": [
+        "Ladakh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "F9D81EBB-22DE-41EB-AA53-7CB713ED1AFA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.104Z",
+      "checksum": "497b33ca710c89bf049c172de495ff648168bcd71581296fa91a75ae50ea3d51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lakshadweep",
+      "Code": "LD",
+      "ISO3166_2": "IN-LD",
+      "Latitude": 10.3337,
+      "Longitude": 72.9205,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-LD.geojson",
+      "CommonAliases": [
+        "Lakshadweep"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "FAE5A2EC-87F9-420C-8E50-727C89CBF9FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.121Z",
+      "checksum": "ec69d8bcc4e64b2779e71f1e8fe77a5166640d3d4cf7b631d9db2345e696cc71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madhya Pradesh",
+      "Code": "MP",
+      "ISO3166_2": "IN-MP",
+      "Latitude": 23.8143,
+      "Longitude": 77.5341,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-MP.geojson",
+      "CommonAliases": [
+        "Madhya Pradesh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "42CD573F-8A57-4F7B-96EA-080A1C321BB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.136Z",
+      "checksum": "82b07d9c777bb4fbe52813ef780f6d87f929f98ad59e25767ca70304387ef137"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maharashtra",
+      "Code": "MH",
+      "ISO3166_2": "IN-MH",
+      "Latitude": 18.9068,
+      "Longitude": 75.6742,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-MH.geojson",
+      "CommonAliases": [
+        "Maharashtra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "3CF5DB1C-A173-41C9-ADCE-67B778F7FCE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.193Z",
+      "checksum": "33b1c82fcba871e0879d921febb35413a2be9f8f9e0779eaa9ceaba4bc929799"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manipur",
+      "Code": "MN",
+      "ISO3166_2": "IN-MN",
+      "Latitude": 24.7209,
+      "Longitude": 93.9229,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-MN.geojson",
+      "CommonAliases": [
+        "Manipur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "59216EEE-85B7-4E3F-9511-45961385E5AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.216Z",
+      "checksum": "645e794114902aa2cc5fd2457725e56120306307842e68d1727fa19ed2261d4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meghalaya",
+      "Code": "ML",
+      "ISO3166_2": "IN-ML",
+      "Latitude": 25.5379,
+      "Longitude": 91.2999,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-ML.geojson",
+      "CommonAliases": [
+        "Meghalaya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "36598E40-10C8-43F9-B882-57BE2A9883E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.236Z",
+      "checksum": "b9f239f33e814bda468a9646443a93b0e0685ca96375c0229ba492487bd73be3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mizoram",
+      "Code": "MZ",
+      "ISO3166_2": "IN-MZ",
+      "Latitude": 23.2146,
+      "Longitude": 92.8688,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-MZ.geojson",
+      "CommonAliases": [
+        "Mizoram"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "3C5413FF-6A04-4458-ABA2-32ED7279C8D6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.256Z",
+      "checksum": "f70edd043226fe40c2392505fc8edd9a9202d17644543573d605407e66f9c3f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nagaland",
+      "Code": "NL",
+      "ISO3166_2": "IN-NL",
+      "Latitude": 26.1631,
+      "Longitude": 94.5885,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-NL.geojson",
+      "CommonAliases": [
+        "Nagaland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "E94EB1D0-3792-4EF3-9C9A-2E7493584B6A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.272Z",
+      "checksum": "29428c0c638d7fac984185e92b117be6ee34fd8d69b745c1c705385605c106b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Odisha",
+      "Code": "OR",
+      "ISO3166_2": "IN-OR",
+      "Latitude": 20.5431,
+      "Longitude": 84.6897,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-OR.geojson",
+      "CommonAliases": [
+        "Odisha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "EADC2BC5-7CFE-4AAB-A597-4C6CFA7E19C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.291Z",
+      "checksum": "8d0070c06825e276cd457afb2bbcd83ae62583a38f6b60fe70768f187268c968"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puducherry",
+      "Code": "PY",
+      "ISO3166_2": "IN-PY",
+      "Latitude": 11.9341,
+      "Longitude": 79.8306,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-PY.geojson",
+      "CommonAliases": [
+        "Puducherry"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "826C0B43-91D5-41BE-9E52-D00235CFD519"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.308Z",
+      "checksum": "7a7b83f6c59385fab459148948f1b98bc4b789c2b9a2954657b66c81542748bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Punjab",
+      "Code": "PB",
+      "ISO3166_2": "IN-PB",
+      "Latitude": 30.9293,
+      "Longitude": 75.5005,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-PB.geojson",
+      "CommonAliases": [
+        "Punjab"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "86CC8E12-0A6F-4C41-A283-BB599903AAAE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.325Z",
+      "checksum": "09a78d24c7c7b859900dbc9775ccc9ffed04fa4b86a5e164bd37adc803eba055"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rajasthan",
+      "Code": "RJ",
+      "ISO3166_2": "IN-RJ",
+      "Latitude": 26.8106,
+      "Longitude": 73.7685,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-RJ.geojson",
+      "CommonAliases": [
+        "Rajasthan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "2057531E-B0F0-413B-BF33-71170AC8F3B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.342Z",
+      "checksum": "22e1986538dd184b581b3113e9026caf23bc2172780eac31d7d1302ab64e285f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sikkim",
+      "Code": "SK",
+      "ISO3166_2": "IN-SK",
+      "Latitude": 27.601,
+      "Longitude": 88.4541,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-SK.geojson",
+      "CommonAliases": [
+        "Sikkim"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "1A7AC8F2-5E8D-4E62-98DD-13D819C70E99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.356Z",
+      "checksum": "57ca003958bf6abbd3f04c88e78e2ff733b0f35e12becc6784e42c2ce926e51b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tamil Nadu",
+      "Code": "TN",
+      "ISO3166_2": "IN-TN",
+      "Latitude": 10.9094,
+      "Longitude": 78.3665,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-TN.geojson",
+      "CommonAliases": [
+        "Tamil Nadu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "91D240B7-56CD-4EE6-B4C1-7E60C94C935B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.402Z",
+      "checksum": "965ea43a32fbdf0452998e433a97d2cd03bffb011238de40a914f990247cc8ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Telangana",
+      "Code": "TG",
+      "ISO3166_2": "IN-TG",
+      "Latitude": 17.8496,
+      "Longitude": 79.1152,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-TG.geojson",
+      "CommonAliases": [
+        "Telangana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "87BBE0A7-7704-47F2-9DF7-A3B2528B4AC1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.418Z",
+      "checksum": "45614fe4359c980400f92954349b819a76e33bc7c038b03a5cd90ebb829a5fd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tripura",
+      "Code": "TR",
+      "ISO3166_2": "IN-TR",
+      "Latitude": 23.7751,
+      "Longitude": 91.7025,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-TR.geojson",
+      "CommonAliases": [
+        "Tripura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "E1812E4A-A0B2-4FF9-8888-2E626CC88C13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.434Z",
+      "checksum": "7f751ce6f214114fec2361bddc8e8ffa07981189dc5f3be180e7a45a87b007eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uttar Pradesh",
+      "Code": "UP",
+      "ISO3166_2": "IN-UP",
+      "Latitude": 27.1303,
+      "Longitude": 80.8597,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-UP.geojson",
+      "CommonAliases": [
+        "Uttar Pradesh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "454CB9D6-2A91-4BBF-AD9E-FB3AC0F491C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.453Z",
+      "checksum": "88cfca69794e8b9aeee30c01ebee0d783ed0b503f7125c177c68f2b8939d0375"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uttarakhand",
+      "Code": "UK",
+      "ISO3166_2": "IN-UK",
+      "Latitude": 30.0417,
+      "Longitude": 79.0897,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Uttarakhand"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "111FC10B-1864-493E-8B03-BA1D092FAFF1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.469Z",
+      "checksum": "498543fd3c6bd06f2666ac1489708669adac31cd9b36e34f45a5b0e0d50119fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West Bengal",
+      "Code": "WB",
+      "ISO3166_2": "IN-WB",
+      "Latitude": 22.9965,
+      "Longitude": 87.6856,
+      "BoundaryGeoJSON": "@file:by-country/IN/boundaries/IN-WB.geojson",
+      "CommonAliases": [
+        "West Bengal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IN"
+    },
+    "primaryKey": {
+      "ID": "1EAED653-93A3-480A-A28F-AB01F9596316"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.483Z",
+      "checksum": "b5cf9912fc51a0fec0c8f53adb4045f722c2393adfbd2dba1f645976fa7acc2c"
+    }
+  }
+]

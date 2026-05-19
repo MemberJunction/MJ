@@ -50,6 +50,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
+import { KeyValidationResult } from '../interfaces';
 import { cosmiconfigSync } from 'cosmiconfig';
 
 // Type for cosmiconfig result
@@ -297,6 +298,82 @@ export class ConfigFileKeySource extends EncryptionKeySourceBase {
                 `The value must be a valid base64-encoded string. Error: ${message}. ` +
                 'Generate a valid key with: openssl rand -base64 32'
             );
+        }
+    }
+
+    /**
+     * Validates that the encryption key in the config file is accessible and usable.
+     *
+     * Checks: config loaded, key exists, valid base64, and (if specified) correct length.
+     * Key material is decoded internally for validation only — never returned to the caller.
+     */
+    async ValidateKeyAccessibility(
+        lookupValue: string,
+        keyVersion?: string,
+        expectedKeyLengthBytes?: number
+    ): Promise<KeyValidationResult> {
+        try {
+            if (!this._loadedConfig) {
+                const configPath = this._configFilePath || 'mj.config.cjs';
+                return {
+                    IsAccessible: false,
+                    Error: `Configuration file not loaded. Ensure ${configPath} exists with an "encryptionKeys" section.\n` +
+                        `  module.exports = { encryptionKeys: { "${lookupValue}": "<base64-key>" } };`
+                };
+            }
+
+            if (!lookupValue || !this.isValidKeyName(lookupValue)) {
+                return {
+                    IsAccessible: false,
+                    Error: `Invalid key name: "${lookupValue}". Key names must start with a letter or underscore.`
+                };
+            }
+
+            const keyName = this.buildKeyName(lookupValue, keyVersion);
+            const keyValue = this._loadedConfig[keyName];
+
+            if (keyValue === undefined || keyValue === null) {
+                return {
+                    IsAccessible: false,
+                    Error: `Key "${keyName}" not found in ${this._configFilePath || 'mj.config.cjs'}. ` +
+                        `Add it to the "encryptionKeys" section:\n` +
+                        `  encryptionKeys: { "${keyName}": "$(openssl rand -base64 ${expectedKeyLengthBytes || 32})" }`
+                };
+            }
+
+            if (keyValue.trim() === '') {
+                return {
+                    IsAccessible: false,
+                    Error: `Key "${keyName}" in configuration file is empty. ` +
+                        `Set it to a base64-encoded key: openssl rand -base64 ${expectedKeyLengthBytes || 32}`
+                };
+            }
+
+            // Decode and validate — key bytes stay local, never returned
+            const keyBytes = Buffer.from(keyValue, 'base64');
+            if (keyBytes.length === 0) {
+                return {
+                    IsAccessible: false,
+                    Error: `Key "${keyName}" in configuration file is not valid base64. ` +
+                        `Generate a key with: openssl rand -base64 ${expectedKeyLengthBytes || 32}`
+                };
+            }
+
+            if (expectedKeyLengthBytes !== undefined && keyBytes.length !== expectedKeyLengthBytes) {
+                return {
+                    IsAccessible: false,
+                    Error: `Key "${keyName}" is ${keyBytes.length} bytes but algorithm requires ${expectedKeyLengthBytes} bytes. ` +
+                        `Generate a correctly-sized key with: openssl rand -base64 ${expectedKeyLengthBytes}`
+                };
+            }
+
+            return { IsAccessible: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                IsAccessible: false,
+                Error: `Failed to validate key "${lookupValue}" in configuration file: ${message}`
+            };
         }
     }
 

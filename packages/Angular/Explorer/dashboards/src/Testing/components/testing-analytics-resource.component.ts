@@ -4,34 +4,25 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 
 /**
- * Testing Analytics Resource - displays test analytics and metrics
+ * Testing Analytics Resource — thin shim that renders the inner component.
+ * The inner owns its own <mj-page-layout> + <mj-page-header> when used standalone.
  */
 @RegisterClass(BaseResourceComponent, 'TestingAnalyticsResource')
 @Component({
   standalone: false,
   selector: 'mj-testing-analytics-resource',
-  template: `
-    <div class="resource-container">
-      <app-testing-analytics></app-testing-analytics>
-    </div>
-  `,
-  styles: [`
-    .resource-container {
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-    }
-  `]
+  template: `<app-testing-analytics></app-testing-analytics>`,
+  styles: [`:host { display: block; width: 100%; height: 100%; }`]
 })
 export class TestingAnalyticsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
-    // Notify that loading is complete
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
-    // Cleanup if needed
+    super.ngOnDestroy();
   }
 
   async GetResourceDisplayName(data: ResourceData): Promise<string> {

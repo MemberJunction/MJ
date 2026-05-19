@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection — Option B: Enhanced Kanban</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1400px; margin: 2rem auto 0; }
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+  .filter-bar {
+    display: flex; gap: 0.5rem;
+  }
+  .filter-btn {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 0.45rem 0.85rem;
+    font-size: 0.78rem; color: var(--text-secondary);
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .filter-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(59,130,246,0.08); }
+
+  /* Kanban board */
+  .kanban {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    align-items: start;
+  }
+  .column {
+    background: rgba(15,23,42,0.5);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    min-height: 400px;
+    display: flex;
+    flex-direction: column;
+  }
+  .col-header {
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .col-header h3 {
+    font-size: 0.85rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .col-count {
+    background: var(--bg-card);
+    border-radius: 10px;
+    padding: 0.1rem 0.5rem;
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--text-muted);
+  }
+  .col-body {
+    padding: 0.75rem;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+  }
+
+  /* Kanban cards */
+  .kanban-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+    overflow: hidden;
+  }
+  .kanban-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  }
+  .kc-top {
+    padding: 0.85rem;
+  }
+  .kc-header {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    margin-bottom: 0.5rem;
+  }
+  .kc-entity {
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted);
+    display: flex; align-items: center; gap: 0.35rem;
+  }
+  .kc-score {
+    padding: 0.1rem 0.4rem;
+    border-radius: 6px;
+    font-size: 0.65rem; font-weight: 700;
+  }
+  .kc-score.high { background: rgba(239,68,68,0.12); color: var(--error); }
+  .kc-score.med { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .kc-score.low { background: rgba(59,130,246,0.12); color: var(--accent); }
+
+  .kc-pair {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+  .kc-name {
+    font-size: 0.85rem; font-weight: 600;
+    flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .kc-vs {
+    font-size: 0.65rem; color: var(--text-muted); font-weight: 700;
+    flex-shrink: 0;
+  }
+  .kc-diff-summary {
+    font-size: 0.72rem; color: var(--text-muted); line-height: 1.4;
+  }
+
+  /* Inline preview */
+  .kc-preview {
+    border-top: 1px solid var(--border);
+    padding: 0.65rem 0.85rem;
+    background: rgba(15,23,42,0.5);
+  }
+  .kc-preview-row {
+    display: flex; gap: 0.5rem;
+    font-size: 0.72rem;
+    padding: 0.15rem 0;
+  }
+  .kc-preview-label {
+    color: var(--text-muted); width: 55px; flex-shrink: 0;
+    font-weight: 600; text-transform: uppercase;
+    font-size: 0.6rem; padding-top: 1px;
+  }
+  .kc-preview-vals {
+    flex: 1; display: flex; gap: 0.25rem;
+  }
+  .kc-val-a { color: var(--accent); }
+  .kc-val-sep { color: var(--text-muted); }
+  .kc-val-b { color: var(--purple); }
+  .kc-preview-row.same .kc-val-a { color: var(--text-secondary); }
+
+  .kc-actions {
+    border-top: 1px solid var(--border);
+    padding: 0.5rem 0.85rem;
+    display: flex; gap: 0.35rem;
+  }
+  .kc-btn {
+    flex: 1; padding: 0.35rem;
+    border-radius: 6px; font-size: 0.68rem; font-weight: 600;
+    cursor: pointer; transition: all 0.15s;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    text-align: center;
+  }
+  .kc-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .kc-btn.merge { border-color: var(--success); color: var(--success); }
+  .kc-btn.merge:hover { background: rgba(34,197,94,0.1); }
+  .kc-btn.dismiss { border-color: var(--text-muted); }
+  .kc-btn.dismiss:hover { background: rgba(100,116,139,0.1); }
+
+  @media (max-width: 1024px) {
+    .kanban { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 768px) {
+    .kanban { grid-template-columns: 1fr; }
+    .page-header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-clone"></i> Duplicate Detection</h1>
+    <div class="filter-bar">
+      <div class="filter-btn active"><i class="fa-solid fa-layer-group"></i> All</div>
+      <div class="filter-btn"><i class="fa-solid fa-building"></i> Accounts</div>
+      <div class="filter-btn"><i class="fa-solid fa-user"></i> Contacts</div>
+      <div class="filter-btn"><i class="fa-solid fa-handshake"></i> Opportunities</div>
+    </div>
+  </div>
+
+  <div class="kanban">
+    <!-- New Detections -->
+    <div class="column">
+      <div class="col-header">
+        <h3><span style="color: var(--error);">&#9679;</span> New Detections</h3>
+        <span class="col-count">8</span>
+      </div>
+      <div class="col-body">
+        <div class="kanban-card">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-building"></i> Accounts</span>
+              <span class="kc-score high">94%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">Acme Corp</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">ACME Corporation</span>
+            </div>
+            <div class="kc-diff-summary">4 of 11 fields differ (formatting only)</div>
+          </div>
+          <div class="kc-preview">
+            <div class="kc-preview-row">
+              <span class="kc-preview-label">Name</span>
+              <div class="kc-preview-vals">
+                <span class="kc-val-a">Acme Corp</span>
+                <span class="kc-val-sep">/</span>
+                <span class="kc-val-b">ACME Corporation</span>
+              </div>
+            </div>
+            <div class="kc-preview-row">
+              <span class="kc-preview-label">Phone</span>
+              <div class="kc-preview-vals">
+                <span class="kc-val-a">(555) 123-4567</span>
+                <span class="kc-val-sep">/</span>
+                <span class="kc-val-b">555-123-4567</span>
+              </div>
+            </div>
+          </div>
+          <div class="kc-actions">
+            <button class="kc-btn merge"><i class="fa-solid fa-compress-alt"></i> Merge</button>
+            <button class="kc-btn dismiss"><i class="fa-solid fa-xmark"></i> Dismiss</button>
+          </div>
+        </div>
+
+        <div class="kanban-card">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-user"></i> Contacts</span>
+              <span class="kc-score high">89%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">John Smith</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">Jon Smith</span>
+            </div>
+            <div class="kc-diff-summary">2 of 8 fields differ</div>
+          </div>
+          <div class="kc-preview">
+            <div class="kc-preview-row">
+              <span class="kc-preview-label">Name</span>
+              <div class="kc-preview-vals">
+                <span class="kc-val-a">John Smith</span>
+                <span class="kc-val-sep">/</span>
+                <span class="kc-val-b">Jon Smith</span>
+              </div>
+            </div>
+            <div class="kc-preview-row same">
+              <span class="kc-preview-label">Email</span>
+              <div class="kc-preview-vals">
+                <span class="kc-val-a">jsmith@acme.com</span>
+              </div>
+            </div>
+          </div>
+          <div class="kc-actions">
+            <button class="kc-btn merge"><i class="fa-solid fa-compress-alt"></i> Merge</button>
+            <button class="kc-btn dismiss"><i class="fa-solid fa-xmark"></i> Dismiss</button>
+          </div>
+        </div>
+
+        <div class="kanban-card">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-building"></i> Accounts</span>
+              <span class="kc-score med">87%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">TechFlow</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">Tech Flow Inc</span>
+            </div>
+            <div class="kc-diff-summary">3 of 11 fields differ</div>
+          </div>
+          <div class="kc-actions">
+            <button class="kc-btn merge"><i class="fa-solid fa-compress-alt"></i> Merge</button>
+            <button class="kc-btn dismiss"><i class="fa-solid fa-xmark"></i> Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Under Review -->
+    <div class="column">
+      <div class="col-header">
+        <h3><span style="color: var(--warning);">&#9679;</span> Under Review</h3>
+        <span class="col-count">5</span>
+      </div>
+      <div class="col-body">
+        <div class="kanban-card">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-user"></i> Contacts</span>
+              <span class="kc-score med">85%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">Sarah Chen</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">Sara Chen</span>
+            </div>
+            <div class="kc-diff-summary">Assigned to Marcus J. for review</div>
+          </div>
+          <div class="kc-actions">
+            <button class="kc-btn merge"><i class="fa-solid fa-compress-alt"></i> Merge</button>
+            <button class="kc-btn dismiss"><i class="fa-solid fa-xmark"></i> Dismiss</button>
+          </div>
+        </div>
+
+        <div class="kanban-card">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-building"></i> Accounts</span>
+              <span class="kc-score low">82%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">DataSphere</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">Data Sphere LLC</span>
+            </div>
+            <div class="kc-diff-summary">Needs verification: different addresses</div>
+          </div>
+          <div class="kc-actions">
+            <button class="kc-btn merge"><i class="fa-solid fa-compress-alt"></i> Merge</button>
+            <button class="kc-btn dismiss"><i class="fa-solid fa-xmark"></i> Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Merged -->
+    <div class="column">
+      <div class="col-header">
+        <h3><span style="color: var(--success);">&#9679;</span> Merged</h3>
+        <span class="col-count">12</span>
+      </div>
+      <div class="col-body">
+        <div class="kanban-card" style="opacity: 0.7;">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-building"></i> Accounts</span>
+              <span class="kc-score" style="background: rgba(34,197,94,0.12); color: var(--success);">Done</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">GlobalTech Solutions</span>
+            </div>
+            <div class="kc-diff-summary">Merged 2 records &middot; by Lisa P. &middot; 2h ago</div>
+          </div>
+        </div>
+        <div class="kanban-card" style="opacity: 0.7;">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-user"></i> Contacts</span>
+              <span class="kc-score" style="background: rgba(34,197,94,0.12); color: var(--success);">Done</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">Michael Rodriguez</span>
+            </div>
+            <div class="kc-diff-summary">Merged 3 records &middot; by Admin &middot; 5h ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dismissed -->
+    <div class="column">
+      <div class="col-header">
+        <h3><span style="color: var(--text-muted);">&#9679;</span> Dismissed</h3>
+        <span class="col-count">8</span>
+      </div>
+      <div class="col-body">
+        <div class="kanban-card" style="opacity: 0.5;">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-building"></i> Accounts</span>
+              <span class="kc-score" style="background: rgba(100,116,139,0.12); color: var(--text-muted);">78%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">Alpha Inc</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">Alpha Industries</span>
+            </div>
+            <div class="kc-diff-summary">Not duplicates &middot; different companies</div>
+          </div>
+        </div>
+        <div class="kanban-card" style="opacity: 0.5;">
+          <div class="kc-top">
+            <div class="kc-header">
+              <span class="kc-entity"><i class="fa-solid fa-user"></i> Contacts</span>
+              <span class="kc-score" style="background: rgba(100,116,139,0.12); color: var(--text-muted);">75%</span>
+            </div>
+            <div class="kc-pair">
+              <span class="kc-name">James Lee</span>
+              <span class="kc-vs">vs</span>
+              <span class="kc-name">James Lee Jr.</span>
+            </div>
+            <div class="kc-diff-summary">Parent/child relationship, not dupes</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

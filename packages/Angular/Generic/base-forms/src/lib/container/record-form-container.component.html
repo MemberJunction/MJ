@@ -16,6 +16,8 @@
   [IsDirty]="EffectiveIsDirty"
   [DirtyFieldNames]="EffectiveDirtyFieldNames"
   [ListCount]="ListCount"
+  [TagCount]="TagCount"
+  [VersionCount]="VersionCount"
   [EntityInfo]="EffectiveEntityInfo"
   [Config]="ToolbarConfig"
   [IsSaving]="EffectiveIsSaving"
@@ -47,7 +49,8 @@
   (ShowEmptyFieldsChange)="OnShowEmptyFieldsChange($event)"
   (WidthModeChange)="OnWidthModeChange($event)"
   (ResetSectionOrderRequested)="OnResetSectionOrder()"
-  (ManageSectionsRequested)="OnManageSections()">
+  (ManageSectionsRequested)="OnManageSections()"
+  (TagsPanelToggled)="OnTagsPanelToggled()">
 </mj-form-toolbar>
 
 <!-- ============================================
@@ -96,8 +99,24 @@
 @if (ShowRecordChanges && EffectiveRecord) {
   <mj-record-changes
     [record]="EffectiveRecord"
+    [AllowRestore]="EffectiveUserCanEdit"
+    (RestoreRequested)="OnRestoreRequested($event)"
     (dialogClosed)="OnRecordChangesClosed()">
   </mj-record-changes>
+}
+
+<!-- ============================================
+     TAGS PANEL (shown when tags button clicked)
+     ============================================ -->
+@if (ShowTagsPanel && EffectiveRecord) {
+  <mj-record-tags
+    [Record]="EffectiveRecord"
+    [WidthPx]="TagsPanelWidth"
+    (PanelClosed)="OnTagsPanelClosed()"
+    (TagCountChanged)="OnTagCountChanged($event)"
+    (RecordNavigate)="OnTagsRecordNavigate($event)"
+    (WidthChanged)="OnTagsPanelWidthChanged($event)">
+  </mj-record-tags>
 }
 
 <!-- ============================================

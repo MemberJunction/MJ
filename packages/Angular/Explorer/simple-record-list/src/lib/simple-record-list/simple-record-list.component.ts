@@ -1,17 +1,17 @@
 import { Component, OnInit, Input, EventEmitter, Output } from '@angular/core';
 
 import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
-import { Router } from '@angular/router';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
  
  
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 @Component({
   standalone: false,
   selector: 'mj-simple-record-list',
   templateUrl: './simple-record-list.component.html',
   styleUrls: ['./simple-record-list.component.css']
 })
-export class SimpleRecordListComponent implements OnInit {
+export class SimpleRecordListComponent extends BaseAngularComponent implements OnInit {
   /**
    * Name of the entity to display records for.
    */
@@ -86,8 +86,9 @@ export class SimpleRecordListComponent implements OnInit {
   public isLoading: boolean = false;
   public records: BaseEntity[] = [];
 
-  constructor(private router: Router) { 
-  } 
+  constructor() {
+    super();
+  }
       
   ngOnInit(): void {
     this.Refresh()
@@ -96,7 +97,7 @@ export class SimpleRecordListComponent implements OnInit {
   async Refresh() { 
     this.isLoading = true
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     if (this.Columns.length === 0) {
       // populate this by default by taking all columns if entity has < 10 columns, otherwise include columns that have DefaultInView=1, and if we have no columns with DefaultInView=1, then include the first 10 columns
       const e = md.Entities.find(e => e.Name === this.EntityName);
@@ -112,7 +113,7 @@ export class SimpleRecordListComponent implements OnInit {
         }
       }
     }
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: this.EntityName,
       ResultType: 'entity_object'
@@ -209,7 +210,7 @@ export class SimpleRecordListComponent implements OnInit {
   public recordMode: 'new' | 'edit' = 'new';
   public async createNewRecord() {
     // attempt to create a new record and if success, navigate to the new record
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.editOrNewRecord = await md.GetEntityObject(this.EntityName);
     if (this.editOrNewRecord) {
       this.editOrNewRecord.NewRecord();
@@ -250,7 +251,7 @@ export class SimpleRecordListComponent implements OnInit {
 
   public getRecordName(r: BaseEntity): string {
     // check to see if we have any columns in the entity that have IsNameField = 1, the fall back from there is to look for a column named "Name", and if that doesn't work we return the primary key(s)
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const e = md.Entities.find(e => e.Name === this.EntityName);
     if (!e)
       throw new Error('Entity not found: ' + this.EntityName);

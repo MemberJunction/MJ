@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import { ListInstalledApps } from '@memberjunction/open-app-engine';
 import chalk from 'chalk';
 import { buildContextUser } from '../../utils/open-app-context.js';
 
@@ -32,7 +33,6 @@ export default class AppList extends Command {
     const { flags } = await this.parse(AppList);
 
     try {
-      const { ListInstalledApps } = await import('@memberjunction/open-app-engine');
       const contextUser = await buildContextUser();
       const apps = await ListInstalledApps(contextUser);
 

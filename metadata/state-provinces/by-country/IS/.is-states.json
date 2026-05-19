@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Austurland",
+      "Code": "7",
+      "ISO3166_2": "IS-7",
+      "Latitude": 65.4363,
+      "Longitude": -15.2246,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-7.geojson",
+      "CommonAliases": [
+        "Austurland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "55C9C3A4-0EAA-49DD-A999-C0E745FC62AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.944Z",
+      "checksum": "5d39ded1eed0ab7585857427d52d4637f4560dde3242b5a0bade38cef78b7f08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Höfudborgarsvædi utan Reykjavíkur",
+      "Code": "1",
+      "ISO3166_2": "IS-1",
+      "Latitude": 64.2277,
+      "Longitude": -21.536,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-1.geojson",
+      "CommonAliases": [
+        "Höfudborgarsvædi utan Reykjavíkur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "A22A0E94-BD24-4F11-B0F7-949107F2667F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.961Z",
+      "checksum": "8bf700f3ffeaf5281bd7ce65cc7b4b8fb80d50c4b753693d9ac4deb955c425b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nordurland eystra",
+      "Code": "6",
+      "ISO3166_2": "IS-6",
+      "Latitude": 65.3752,
+      "Longitude": -17.1782,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-6.geojson",
+      "CommonAliases": [
+        "Nordurland eystra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "15A1B813-14E3-4E2A-8333-C32045006FE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.977Z",
+      "checksum": "80925da0ac0c67af95cdedb90b5e2d93f83fae15a07461d0e445039b3a979212"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nordurland vestra",
+      "Code": "5",
+      "ISO3166_2": "IS-5",
+      "Latitude": 65.1515,
+      "Longitude": -19.7011,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-5.geojson",
+      "CommonAliases": [
+        "Nordurland vestra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "196D501E-0395-4587-88F8-6F1BEC6FCBD0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.993Z",
+      "checksum": "1252a7af16ded0d80073e359a153213aa3d9b98e58c8829cd33d68f21a60e9d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Reykjavīk",
+      "Code": "0",
+      "ISO3166_2": "IS-0",
+      "Latitude": 64.0828,
+      "Longitude": -21.8646,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-0.geojson",
+      "CommonAliases": [
+        "Reykjavīk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "7AF824A2-2115-4DCC-B0F0-6130D0C229FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:04.009Z",
+      "checksum": "2d701c5a1ccac7ab3d42f266f2846c3b1ae2637173c428807ae9dc922608efdd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sudurland",
+      "Code": "8",
+      "ISO3166_2": "IS-8",
+      "Latitude": 64.0187,
+      "Longitude": -18.5336,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-8.geojson",
+      "CommonAliases": [
+        "Sudurland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "5D90D7D9-157C-4D23-964E-C3AB59F05C06"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:04.025Z",
+      "checksum": "21d85053c2b60b92b0d83a11d352596792de3b2ad17f97fd4cf1868b4510f8ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sudurnes",
+      "Code": "2",
+      "ISO3166_2": "IS-2",
+      "Latitude": 63.9429,
+      "Longitude": -22.1206,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-2.geojson",
+      "CommonAliases": [
+        "Sudurnes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "864A9484-9B90-43EA-AAD2-C6AECD4F4DAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:04.041Z",
+      "checksum": "2de55bbeab9937ad74ca863f76f7f3fdcef81365f6905c79aca256016650355e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vestfirdir",
+      "Code": "4",
+      "ISO3166_2": "IS-4",
+      "Latitude": 65.7068,
+      "Longitude": -22.1562,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-4.geojson",
+      "CommonAliases": [
+        "Vestfirdir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "43D9D2C3-46B1-4A11-9EFE-84D0724BD591"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:04.059Z",
+      "checksum": "23ab252fd7bd829ed376aab6d4dca63bd327e960e648123b05300defb605cee8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vesturland",
+      "Code": "3",
+      "ISO3166_2": "IS-3",
+      "Latitude": 64.8183,
+      "Longitude": -21.357,
+      "BoundaryGeoJSON": "@file:by-country/IS/boundaries/IS-3.geojson",
+      "CommonAliases": [
+        "Vesturland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IS"
+    },
+    "primaryKey": {
+      "ID": "3F603234-4D03-4059-93D3-2FC5C9C7CA4C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:04.073Z",
+      "checksum": "3a4cba9f3ca01f66a8be756ea6804b2a09fc19329afe9e82a0bd1849b8bb8cfc"
+    }
+  }
+]

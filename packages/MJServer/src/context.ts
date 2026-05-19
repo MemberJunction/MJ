@@ -5,7 +5,8 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload, TokenExpiredError } from './auth/index.js';
+import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
@@ -15,10 +16,28 @@ import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
+
+/**
+ * Renders a value for one-line console logging without Node's `[Object]` truncation.
+ * Arrays keep their structure; non-array objects collapse to JSON, truncated at `maxLen`.
+ * Objects whose JSON exceeds `maxLen` and contain nested structure are recursed into so
+ * outer keys remain visible.
+ */
+function shortenForLog(value: unknown, maxLen = 300): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((v) => shortenForLog(v, maxLen));
+  const json = JSON.stringify(value);
+  if (json.length <= maxLen) return json;
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    result[k] = shortenForLog(v, maxLen);
+  }
+  return result;
+}
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
@@ -167,7 +186,7 @@ export const getUserPayload = async (
       }
 
       // Verify issuer is supported
-      const factory = AuthProviderFactory.getInstance();
+      const factory = AuthProviderFactory.Instance;
       if (!factory.getByIssuer(issuer)) {
         console.warn(`Unsupported issuer: ${issuer}`);
         throw new AuthenticationError(`Unsupported authentication provider: ${issuer}`);
@@ -323,7 +342,7 @@ export const contextFunction =
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
     if (operationName !== 'IntrospectionQuery') {
-      console.log({ operationName, variables: reqAny.body?.variables || undefined });
+      console.dir({ operationName, variables: shortenForLog(reqAny.body?.variables) }, { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result
@@ -333,8 +352,8 @@ export const contextFunction =
       throw new AuthenticationError('No user payload — auth middleware may not have run');
     }
 
-    if (Metadata.Provider.Entities.length === 0 ) {
-      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
+    if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
     }
 
     // Create per-request provider instance based on database type
@@ -356,8 +375,7 @@ async function createPerRequestProviders(
   dataSource: sql.ConnectionPool,
   dataSources: DataSourceInfo[]
 ): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }>> {
-  const dbType = process.env.DB_TYPE?.toLowerCase();
-  const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
+  const isPostgres = resolveDbPlatformFromEnv() === 'postgresql';
 
   let p: DatabaseProviderBase;
   if (isPostgres) {
@@ -406,7 +424,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   );
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
-  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
   if (primaryProvider?.DatabaseConnection) {
     await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
   } else {

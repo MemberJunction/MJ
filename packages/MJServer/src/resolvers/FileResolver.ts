@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions, RunView } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
@@ -32,7 +32,7 @@ import {
   FileSearchResult,
   UserContextOptions,
   ExtendedUserContextOptions,
-  initializeDriverWithAccountCredentials,
+  FileStorageEngine,
 } from '@memberjunction/storage';
 import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -368,9 +368,21 @@ export class FileResolver extends FileResolverBase {
     return { account, provider };
   }
 
+  /**
+   * Legacy file upload path — used by the `<mj-files-file-upload>` Angular component.
+   * Creates a File entity record in the database AND generates a pre-authenticated upload URL.
+   * The client then PUTs the file binary directly to that URL.
+   *
+   * Driver initialization: uses `buildUserContext()` (no storage account). The driver
+   * initializes from environment variables (e.g. STORAGE_AZURE_ACCOUNT_NAME, STORAGE_DROPBOX_ACCESS_TOKEN).
+   *
+   * Input: `ProviderID` identifies which storage provider to use.
+   * Returns: `{ File, UploadUrl, NameExists }` — the persisted File record, upload URL, and duplicate check.
+   *
+   * @see CreatePreAuthUploadUrl for the enterprise storage-account-based path (used by File Browser).
+   */
   @Mutation(() => CreateFilePayload)
   async CreateFile(@Arg('input', () => CreateMJFileInput) input: CreateMJFileInput, @Ctx() context: AppContext, @PubSub() pubSub: PubSubEngine) {
-    // Check to see if there's already an object with that name
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
@@ -389,12 +401,15 @@ export class FileResolver extends FileResolverBase {
 
     // Create the upload URL and get the record updates (provider key, content type, etc)
     const userContext = this.buildUserContext(context);
-    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileEntity, userContext);
+    const { updatedInput, UploadUrl } = await createUploadUrl(providerEntity, fileEntity as unknown as { ID: string; Name: string; ProviderID: string; ContentType?: string; ProviderKey?: string }, userContext);
 
     // Save the file record with the updated input
     const mapper = new FieldMapper();
-    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, true);
-    await fileEntity.Save();
+    fileEntity.SetMany(mapper.ReverseMapFields({ ...updatedInput }), true, false);
+    const saved = await fileEntity.Save();
+    if (!saved) {
+      console.error('[CreateFile] File save failed:', fileEntity.LatestResult?.CompleteMessage);
+    }
     const File = mapper.MapFields({ ...fileEntity.GetAll() });
 
     return { File, UploadUrl, NameExists };
@@ -402,7 +417,7 @@ export class FileResolver extends FileResolverBase {
 
   @FieldResolver(() => String)
   async DownloadUrl(@Root() file: MJFile_, @Ctx() context: AppContext) {
-    const md = new Metadata();
+    const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
@@ -534,6 +549,20 @@ export class FileResolver extends FileResolverBase {
     return downloadUrl;
   }
 
+  /**
+   * Enterprise file upload path — used by the File Browser UI.
+   * Generates a pre-authenticated upload URL only (does NOT create a File entity record).
+   * The client handles the upload directly to the storage provider via the returned URL.
+   *
+   * Driver initialization: uses `buildExtendedUserContext()` with a FileStorageAccount entity.
+   * Credentials are loaded from the Credential Engine (encrypted in the database), with
+   * automatic token refresh for OAuth providers like Dropbox and Box.com.
+   *
+   * Input: `AccountID` identifies which storage account (and its linked provider/credentials) to use.
+   * Returns: `{ UploadUrl, ProviderKey }` — the pre-authenticated URL and optional provider key.
+   *
+   * @see CreateFile for the legacy path that also creates a File entity record.
+   */
   @Mutation(() => CreatePreAuthUploadUrlPayload)
   async CreatePreAuthUploadUrl(@Arg('input', () => CreatePreAuthUploadUrlInput) input: CreatePreAuthUploadUrlInput, @Ctx() context: AppContext) {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
@@ -648,12 +677,9 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    // Initialize driver with account-based credentials from Credential Engine
-    const driver = await initializeDriverWithAccountCredentials({
-      accountEntity,
-      providerEntity,
-      contextUser: user,
-    });
+    // Initialize driver via FileStorageEngine (handles credential decryption + token refresh)
+    await FileStorageEngine.Instance.Config(false, user);
+    const driver = await FileStorageEngine.Instance.GetDriver(accountEntity.ID, user);
 
     const success = await driver.CreateDirectory(input.Path);
     return success;
@@ -726,23 +752,12 @@ export class FileResolver extends FileResolverBase {
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    // Load all requested account entities in a single query
-    const rv = new RunView();
-    const quotedIDs = input.AccountIDs.map((id) => `'${id}'`).join(', ');
-    const accountResult = await rv.RunView<MJFileStorageAccountEntity>(
-      {
-        EntityName: 'MJ: File Storage Accounts',
-        ExtraFilter: `ID IN (${quotedIDs})`,
-        ResultType: 'entity_object',
-      },
-      user,
-    );
+    // Use cached accounts from the engine — no RunView needed
+    await FileStorageEngine.Instance.Config(false, user);
+    const normalizedIDs = new Set(input.AccountIDs.map((id: string) => NormalizeUUID(id)));
+    const accountEntities = FileStorageEngine.Instance.Accounts
+      .filter(a => normalizedIDs.has(NormalizeUUID(a.ID)));
 
-    if (!accountResult.Success) {
-      throw new Error(`Failed to load storage accounts: ${accountResult.ErrorMessage}`);
-    }
-
-    const accountEntities = accountResult.Results;
     if (accountEntities.length === 0) {
       throw new Error('No valid storage accounts found for the provided IDs');
     }
@@ -754,24 +769,9 @@ export class FileResolver extends FileResolverBase {
       console.warn(`[FileResolver] Accounts not found: ${missingIDs.join(', ')}`);
     }
 
-    // Load providers for all accounts
-    const providerIDs = [...new Set(accountEntities.map((a) => a.ProviderID))];
-    const quotedProviderIDs = providerIDs.map((id) => `'${id}'`).join(', ');
-    const providerResult = await rv.RunView<MJFileStorageProviderEntity>(
-      {
-        EntityName: 'MJ: File Storage Providers',
-        ExtraFilter: `ID IN (${quotedProviderIDs})`,
-        ResultType: 'entity_object',
-      },
-      user,
-    );
-
-    if (!providerResult.Success) {
-      throw new Error(`Failed to load storage providers: ${providerResult.ErrorMessage}`);
-    }
-
+    // Load providers from cached metadata
     const providerMap = new Map<string, MJFileStorageProviderEntity>();
-    for (const provider of providerResult.Results) {
+    for (const provider of FileStorageEngine.Instance.Providers) {
       providerMap.set(provider.ID, provider);
     }
 

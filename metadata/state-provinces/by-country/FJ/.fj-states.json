@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "C",
+      "ISO3166_2": "FJ-C",
+      "Latitude": -18.3823,
+      "Longitude": 178.132,
+      "BoundaryGeoJSON": "@file:by-country/FJ/boundaries/FJ-C.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FJ"
+    },
+    "primaryKey": {
+      "ID": "9074F570-E52B-4EC9-9BAB-5B7B09E037C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.684Z",
+      "checksum": "c1783baee6ac1cd79b58d0a4c1bc59e4201216506a067dcaadc4ddf7262f3cf4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eastern",
+      "Code": "E",
+      "ISO3166_2": "FJ-E",
+      "Latitude": -20.6657,
+      "Longitude": -178.72,
+      "BoundaryGeoJSON": "@file:by-country/FJ/boundaries/FJ-E.geojson",
+      "CommonAliases": [
+        "Eastern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FJ"
+    },
+    "primaryKey": {
+      "ID": "0B2A93CB-16F7-4A9E-A02A-D4DB8EC39301"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.700Z",
+      "checksum": "09abb4723aa9bd19164bf95a6962f06e956a55414337e22d145358e2b6d8ce0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern",
+      "Code": "N",
+      "ISO3166_2": "FJ-N",
+      "Latitude": -16.8107,
+      "Longitude": 178.308,
+      "BoundaryGeoJSON": "@file:by-country/FJ/boundaries/FJ-N.geojson",
+      "CommonAliases": [
+        "Northern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FJ"
+    },
+    "primaryKey": {
+      "ID": "4A805023-BAB9-4908-9520-3368BE2E87F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.716Z",
+      "checksum": "4552c127bcbb26073c247a2706dee19b49d545747393ff9a4e1704ad112dca58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rotuma",
+      "Code": "R",
+      "ISO3166_2": "FJ-R",
+      "Latitude": -12.4964,
+      "Longitude": 177.067,
+      "BoundaryGeoJSON": "@file:by-country/FJ/boundaries/FJ-R.geojson",
+      "CommonAliases": [
+        "Rotuma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FJ"
+    },
+    "primaryKey": {
+      "ID": "8D967EBC-AEA4-4CD4-9949-F9383B6C9ABD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.732Z",
+      "checksum": "62e1f4d808f4f2644908feec185cdd8904ce8cec3f405a191d500e9d75ff9f72"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "W",
+      "ISO3166_2": "FJ-W",
+      "Latitude": -21.6878,
+      "Longitude": 174.61,
+      "BoundaryGeoJSON": "@file:by-country/FJ/boundaries/FJ-W.geojson",
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FJ"
+    },
+    "primaryKey": {
+      "ID": "9BE43FF7-EFFD-41ED-BC49-666957717350"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.746Z",
+      "checksum": "b063ae5cf53aabc1d7db5118e973703b07cc175180d6942a93b0705d4a4956a4"
+    }
+  }
+]

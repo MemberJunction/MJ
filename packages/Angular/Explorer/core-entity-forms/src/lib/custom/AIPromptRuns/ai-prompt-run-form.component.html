@@ -1,7 +1,13 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-            <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
             <!-- Header Section -->
             <div class="prompt-run-header">
@@ -18,33 +24,71 @@
                                 }
                             </h1>
                             <div class="run-meta">
-                                <span class="status-badge" [style.background-color]="getStatusColor()">
-                                    <i [class]="'fa-solid ' + getStatusIcon()"></i>
-                                    {{ getStatusText() }}
-                                </span>
+                                <!-- Status Card -->
+                                <div class="meta-card status-card">
+                                    <div class="c3-card-label">Status</div>
+                                    <div class="meta-card-body">
+                                        <span class="status-indicator" [style.background-color]="getStatusColor()"></span>
+                                        <i [class]="'fa-solid ' + getStatusIcon()" [style.color]="getStatusColor()"></i>
+                                        {{ getStatusText() }}
+                                    </div>
+                                </div>
+
+                                <!-- Execution Card -->
                                 @if (record.RunType) {
-                                    <span class="run-type-badge" [style.color]="getRunTypeColor(record.RunType)">
-                                        <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)"></i>
-                                        {{ record.RunType }}
-                                    </span>
+                                    <div class="meta-card execution-card">
+                                        <div class="c3-card-label">Execution</div>
+                                        <div class="meta-card-body">
+                                            <i [class]="'fa-solid ' + getRunTypeIcon(record.RunType)" [style.color]="getRunTypeColor(record.RunType)"></i>
+                                            {{ record.RunType }}
+                                        </div>
+                                    </div>
                                 }
+
+                                <!-- Prompt Card -->
                                 @if (prompt) {
-                                    <span class="prompt-name" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View Prompt">
-                                        <i class="fa-solid fa-comment-dots"></i>
-                                        {{ prompt.Name }}
-                                    </span>
+                                    @if (record.ChildPromptID) {
+                                        <!-- C3 Stacked Connector: child prompt prominent, parent nested -->
+                                        <div class="prompt-card-c3">
+                                            <div class="c3-card-label">Prompt</div>
+                                            <div class="c3-child-section" (click)="navigateToEntity('MJ: AI Prompts', record.ChildPromptID)" title="View Agent Prompt">
+                                                <i class="fa-solid fa-comment prompt-icon"></i>
+                                                {{ record.ChildPrompt }}
+                                            </div>
+                                            <div class="c3-divider">
+                                                <span class="c3-line"></span>
+                                                <span class="c3-divider-label">wrapped by</span>
+                                                <span class="c3-line"></span>
+                                            </div>
+                                            <div class="c3-parent-section" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View System Prompt">
+                                                <i class="fa-solid fa-cog"></i>
+                                                {{ prompt.Name }}
+                                                <i class="fa-solid fa-arrow-up-right-from-square c3-link-icon"></i>
+                                            </div>
+                                        </div>
+                                    } @else {
+                                        <!-- Single prompt (no child) — same card style -->
+                                        <div class="meta-card prompt-single-card">
+                                            <div class="c3-card-label">Prompt</div>
+                                            <div class="meta-card-body clickable" (click)="navigateToEntity('MJ: AI Prompts', prompt.ID)" title="View Prompt">
+                                                <i class="fa-solid fa-comment-dots" style="color: var(--mj-brand-primary);"></i>
+                                                {{ prompt.Name }}
+                                            </div>
+                                        </div>
+                                    }
                                 }
+
+                                <!-- Model Card -->
                                 @if (model) {
-                                    <span class="model-name" (click)="navigateToEntity('MJ: AI Models', model.ID)" title="View Model">
-                                        <i class="fa-solid fa-microchip"></i>
-                                        {{ model.Name }}
-                                    </span>
-                                }
-                                @if (record.Vendor) {
-                                    <span class="vendor-name" (click)="navigateToEntity('MJ: AI Vendors', record.VendorID)" title="View Vendor">
-                                        <i class="fa-solid fa-building"></i>
-                                        {{ record.Vendor }}
-                                    </span>
+                                    <div class="model-card-c3">
+                                        <div class="c3-card-label">Model</div>
+                                        <div class="c3-card-body" (click)="navigateToEntity('MJ: AI Models', model.ID)" title="View Model">
+                                            <span class="c3-model-name"><i class="fa-solid fa-microchip"></i> {{ model.Name }}</span>
+                                            @if (record.Vendor) {
+                                                <span class="c3-vendor-name">{{ record.Vendor }}</span>
+                                            }
+                                        </div>
+                                    </div>
                                 }
                                 @if (record.RerunFromPromptRunID) {
                                     <span class="original-run" title="View Original Run">
@@ -58,11 +102,11 @@
                     
                     <!-- Action Buttons -->
                     <div class="run-actions">
-                        <button kendoButton fillMode="outline" size="small" (click)="reRunPrompt()" title="Re-run this prompt">
+                        <button mjButton variant="outline" size="sm" (click)="reRunPrompt()" title="Re-run this prompt">
                             <i class="fa-solid fa-play-circle"></i>
                             Re-Run
                         </button>
-                        <button kendoButton fillMode="outline" size="small" (click)="refreshData()" title="Refresh data">
+                        <button mjButton variant="outline" size="sm" (click)="refreshData()" title="Refresh data">
                             <i class="fa-solid fa-refresh"></i>
                         </button>
                     </div>
@@ -202,11 +246,10 @@
 
             <!-- Main Content with Expansion Panels -->
             <div class="form-content" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
-                <kendo-panelbar [keepItemContent]="true">
-                    
+
                     <!-- Input Panel with nested sub-panels -->
-                    <kendo-panelbar-item [expanded]="inputExpanded" (stateChange)="onInputPanelToggle($event)">
-                        <ng-template kendoPanelBarItemTitle>
+                    <mj-accordion-panel [Expanded]="inputExpanded" (ExpandedChange)="onInputPanelToggle($event)" style="margin-bottom: 8px;">
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-comment-dots"></i>
                                 Input
@@ -215,17 +258,16 @@
                                 }
                             </span>
                         </ng-template>
-                        <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 @if (record.Messages && record.Messages.trim() !== '') {
                                     <!-- Nested expansion panels for sub-sections -->
                                     <div class="nested-panels">
                                         <!-- Messages Sub-Panel -->
-                                        <kendo-expansionpanel 
-                                            [expanded]="messagesExpanded" 
+                                        <mj-accordion-panel
+                                            [Expanded]="messagesExpanded"
                                             class="sub-expansion-panel"
-                                            [animation]="false">
-                                            <ng-template kendoExpansionPanelTitleDirective>
+                                            style="margin-bottom: 8px;">
+                                            <ng-template mjAccordionTitle>
                                                 <span class="sub-panel-title">
                                                     <i class="fa-solid fa-comments"></i>
                                                     Messages
@@ -251,14 +293,14 @@
                                                     </div>
                                                 }
                                             </div>
-                                        </kendo-expansionpanel>
-                                        
+                                        </mj-accordion-panel>
+
                                         <!-- Data Sub-Panel -->
-                                        <kendo-expansionpanel 
-                                            [expanded]="dataExpanded" 
+                                        <mj-accordion-panel
+                                            [Expanded]="dataExpanded"
                                             class="sub-expansion-panel"
-                                            [animation]="false">
-                                            <ng-template kendoExpansionPanelTitleDirective>
+                                            style="margin-bottom: 8px;">
+                                            <ng-template mjAccordionTitle>
                                                 <span class="sub-panel-title">
                                                     <i class="fa-solid fa-database"></i>
                                                     Data
@@ -271,12 +313,19 @@
                                                 @if (inputData && formattedData) {
                                                     <div class="json-editor-container">
                                                         <div class="json-toolbar">
-                                                            <button kendoButton
-                                                                fillMode="flat" 
-                                                                size="small"
+                                                            <button mjButton
+                                                                variant="flat"
+                                                                size="sm"
                                                                 (click)="copyToClipboard(formattedData, 'Data')"
                                                                 title="Copy JSON">
                                                                 <i class="fa-solid fa-copy"></i> Copy
+                                                            </button>
+                                                            <button mjButton
+                                                                variant="flat"
+                                                                size="sm"
+                                                                (click)="openFullScreen(formattedData, 'json', 'Data')"
+                                                                title="View full screen">
+                                                                <i class="fa-solid fa-expand"></i>
                                                             </button>
                                                         </div>
                                                         <mj-code-editor 
@@ -295,14 +344,14 @@
                                                     </div>
                                                 }
                                             </div>
-                                        </kendo-expansionpanel>
-                                        
+                                        </mj-accordion-panel>
+
                                         <!-- Raw Sub-Panel -->
-                                        <kendo-expansionpanel 
-                                            [expanded]="rawExpanded" 
+                                        <mj-accordion-panel
+                                            [Expanded]="rawExpanded"
                                             class="sub-expansion-panel"
-                                            [animation]="false">
-                                            <ng-template kendoExpansionPanelTitleDirective>
+                                            style="margin-bottom: 8px;">
+                                            <ng-template mjAccordionTitle>
                                                 <span class="sub-panel-title">
                                                     <i class="fa-solid fa-code"></i>
                                                     Raw
@@ -311,12 +360,19 @@
                                             <div class="sub-panel-content">
                                                 <div class="json-editor-container">
                                                     <div class="json-toolbar">
-                                                        <button kendoButton
-                                                            fillMode="flat" 
-                                                            size="small"
+                                                        <button mjButton
+                                                            variant="flat"
+                                                            size="sm"
                                                             (click)="copyToClipboard(formattedMessages, 'Messages')"
                                                             title="Copy JSON">
                                                             <i class="fa-solid fa-copy"></i> Copy
+                                                        </button>
+                                                        <button mjButton
+                                                            variant="flat"
+                                                            size="sm"
+                                                            (click)="openFullScreen(formattedMessages, 'json', 'Raw Messages')"
+                                                            title="View full screen">
+                                                            <i class="fa-solid fa-expand"></i>
                                                         </button>
                                                     </div>
                                                     <mj-code-editor 
@@ -329,7 +385,7 @@
                                                     </mj-code-editor>
                                                 </div>
                                             </div>
-                                        </kendo-expansionpanel>
+                                        </mj-accordion-panel>
                                     </div>
                                 } @else {
                                     <div class="empty-state">
@@ -338,12 +394,11 @@
                                     </div>
                                 }
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
+                    </mj-accordion-panel>
                     
                     <!-- Result Panel -->
-                    <kendo-panelbar-item [expanded]="resultExpanded" (stateChange)="onResultPanelToggle($event)">
-                        <ng-template kendoPanelBarItemTitle>
+                    <mj-accordion-panel [Expanded]="resultExpanded" (ExpandedChange)="onResultPanelToggle($event)" style="margin-bottom: 8px;">
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-square-check"></i>
                                 Result
@@ -355,7 +410,6 @@
                                 }
                             </span>
                         </ng-template>
-                        <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 @if (record.ErrorMessage) {
                                     <div class="error-message">
@@ -370,12 +424,19 @@
                                 @if (record.Result && record.Result.trim() !== '') {
                                     <div class="json-editor-container">
                                         <div class="json-toolbar">
-                                            <button kendoButton
-                                                fillMode="flat" 
-                                                size="small"
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
                                                 (click)="copyToClipboard(formattedResult, 'Result')"
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
+                                            </button>
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
+                                                (click)="openFullScreen(formattedResult, 'json', 'Result')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
                                             </button>
                                         </div>
                                         <mj-code-editor 
@@ -400,7 +461,16 @@
                                                 }
                                                 @if (formattedErrorDetails) {
                                                     <div class="error-details">
-                                                        <h4>Error Details</h4>
+                                                        <div class="json-toolbar">
+                                                            <h4 style="margin: 0;">Error Details</h4>
+                                                            <button mjButton
+                                                                variant="flat"
+                                                                size="sm"
+                                                                (click)="openFullScreen(formattedErrorDetails, 'json', 'Error Details')"
+                                                                title="View full screen">
+                                                                <i class="fa-solid fa-expand"></i>
+                                                            </button>
+                                                        </div>
                                                         <mj-code-editor
                                                             [ngModel]="formattedErrorDetails"
                                                             [disabled]="true"
@@ -420,18 +490,16 @@
                                     </div>
                                 }
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                    
+                    </mj-accordion-panel>
+
                     <!-- Token Usage & Metrics Panel -->
-                    <kendo-panelbar-item [expanded]="metricsExpanded" (stateChange)="onMetricsPanelToggle($event)">
-                        <ng-template kendoPanelBarItemTitle>
+                    <mj-accordion-panel [Expanded]="metricsExpanded" (ExpandedChange)="onMetricsPanelToggle($event)" style="margin-bottom: 8px;">
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-chart-line"></i>
-                                Token Usage & Metrics
+                                Token Usage &amp; Metrics
                             </span>
                         </ng-template>
-                        <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 <div class="metrics-grid">
                                     <div class="metric-card">
@@ -540,16 +608,15 @@
                                     }
                                 </div>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                    
+                    </mj-accordion-panel>
+
                     <!-- Validation & Retry Panel -->
                     @if (record && ((record.ValidationAttemptCount && record.ValidationAttemptCount > 0) || record.ValidationBehavior)) {
-                        <kendo-panelbar-item [expanded]="validationExpanded" (stateChange)="onValidationPanelToggle($event)">
-                            <ng-template kendoPanelBarItemTitle>
+                        <mj-accordion-panel [Expanded]="validationExpanded" (ExpandedChange)="onValidationPanelToggle($event)" style="margin-bottom: 8px;">
+                            <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-shield-check"></i>
-                                    Validation & Retries
+                                    Validation &amp; Retries
                                     @if (record && record.ValidationAttemptCount && record.ValidationAttemptCount > 1) {
                                         <span class="panel-count">({{ record.ValidationAttemptCount }} attempts)</span>
                                     }
@@ -560,7 +627,6 @@
                                     }
                                 </span>
                             </ng-template>
-                            <ng-template kendoPanelBarContent>
                                 <div class="panel-content">
                                     <!-- Validation Summary -->
                                     <div class="validation-summary">
@@ -662,9 +728,18 @@
                                     <!-- Validation Summary JSON -->
                                     @if (validationSummary) {
                                         <div class="validation-json">
-                                            <h4>Validation Summary Details</h4>
+                                            <div class="json-toolbar">
+                                                <h4 style="margin: 0;">Validation Summary Details</h4>
+                                                <button mjButton
+                                                    variant="flat"
+                                                    size="sm"
+                                                    (click)="openFullScreen(formattedValidationSummary, 'json', 'Validation Summary')"
+                                                    title="View full screen">
+                                                    <i class="fa-solid fa-expand"></i>
+                                                </button>
+                                            </div>
                                             <div class="json-viewer-container">
-                                                <mj-code-editor 
+                                                <mj-code-editor
                                                     [(ngModel)]="formattedValidationSummary"
                                                     name="formattedValidationSummary"
                                                     [readonly]="true"
@@ -679,9 +754,18 @@
                                     <!-- Validation Attempts JSON -->
                                     @if (record.ValidationAttempts) {
                                         <div class="validation-json">
-                                            <h4>Validation Attempts (Raw JSON)</h4>
+                                            <div class="json-toolbar">
+                                                <h4 style="margin: 0;">Validation Attempts (Raw JSON)</h4>
+                                                <button mjButton
+                                                    variant="flat"
+                                                    size="sm"
+                                                    (click)="openFullScreen(formattedValidationAttempts, 'json', 'Validation Attempts')"
+                                                    title="View full screen">
+                                                    <i class="fa-solid fa-expand"></i>
+                                                </button>
+                                            </div>
                                             <div class="json-viewer-container">
-                                                <mj-code-editor 
+                                                <mj-code-editor
                                                     [(ngModel)]="formattedValidationAttempts"
                                                     name="formattedValidationAttempts"
                                                     [readonly]="true"
@@ -693,14 +777,13 @@
                                         </div>
                                     }
                                 </div>
-                            </ng-template>
-                        </kendo-panelbar-item>
+                        </mj-accordion-panel>
                     }
-                    
+
                     <!-- Hierarchy Panel (for parent/child relationships) -->
                     @if (record.ParentID || childRuns.length > 0) {
-                        <kendo-panelbar-item [expanded]="hierarchyExpanded">
-                            <ng-template kendoPanelBarItemTitle>
+                        <mj-accordion-panel [Expanded]="hierarchyExpanded" style="margin-bottom: 8px;">
+                            <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-sitemap"></i>
                                     Run Hierarchy
@@ -709,7 +792,6 @@
                                     }
                                 </span>
                             </ng-template>
-                            <ng-template kendoPanelBarContent>
                                 <div class="panel-content">
                                     @if (parentRun) {
                                         <div class="parent-run-section">
@@ -767,19 +849,17 @@
                                         </div>
                                     }
                                 </div>
-                            </ng-template>
-                        </kendo-panelbar-item>
+                        </mj-accordion-panel>
                     }
-                    
+
                     <!-- Additional Details Panel -->
-                    <kendo-panelbar-item [expanded]="false">
-                        <ng-template kendoPanelBarItemTitle>
+                    <mj-accordion-panel [Expanded]="false" style="margin-bottom: 8px;">
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-info-circle"></i>
                                 Additional Details
                             </span>
                         </ng-template>
-                        <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 <div class="detail-fields-grid">
                                     @if (record.AgentID) {
@@ -907,29 +987,34 @@
                                     }
                                 </div>
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                    
+                    </mj-accordion-panel>
+
                     <!-- Model Specific Response Details Panel -->
                     @if (record.ModelSpecificResponseDetails) {
-                        <kendo-panelbar-item [expanded]="modelSpecificExpanded" (stateChange)="onModelSpecificPanelToggle($event)">
-                            <ng-template kendoPanelBarItemTitle>
+                        <mj-accordion-panel [Expanded]="modelSpecificExpanded" (ExpandedChange)="onModelSpecificPanelToggle($event)" style="margin-bottom: 8px;">
+                            <ng-template mjAccordionTitle>
                                 <span class="panel-title">
                                     <i class="fa-solid fa-microchip"></i>
                                     Model Specific Response Details
                                     <span class="panel-badge">JSON</span>
                                 </span>
                             </ng-template>
-                            <ng-template kendoPanelBarContent>
                                 <div class="panel-content">
                                     <div class="json-editor-container">
                                         <div class="json-toolbar">
-                                            <button kendoButton
-                                                fillMode="flat" 
-                                                size="small"
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
                                                 (click)="copyToClipboard(formattedModelSpecificResponseDetails, 'Model Specific Response Details')"
                                                 title="Copy JSON">
                                                 <i class="fa-solid fa-copy"></i> Copy
+                                            </button>
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
+                                                (click)="openFullScreen(formattedModelSpecificResponseDetails, 'json', 'Model Specific Response Details')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
                                             </button>
                                         </div>
                                         <mj-code-editor 
@@ -942,16 +1027,15 @@
                                         </mj-code-editor>
                                     </div>
                                 </div>
-                            </ng-template>
-                        </kendo-panelbar-item>
+                        </mj-accordion-panel>
                     }
-                    
+
                     <!-- Model Selection & Performance Panel (v2.78 fields) -->
-                    <kendo-panelbar-item [expanded]="false" (stateChange)="onModelSelectionPanelToggle($event)">
-                        <ng-template kendoPanelBarItemTitle>
+                    <mj-accordion-panel [Expanded]="false" (ExpandedChange)="onModelSelectionPanelToggle($event)" style="margin-bottom: 8px;">
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-microchip"></i>
-                                Model Selection & Performance
+                                Model Selection &amp; Performance
                                 @if (record.CacheHit) {
                                     <span class="panel-badge success">Cached</span>
                                 }
@@ -960,7 +1044,6 @@
                                 }
                             </span>
                         </ng-template>
-                        <ng-template kendoPanelBarContent>
                             <div class="panel-content">
                                 <div class="detail-fields-grid">
                                     <!-- Model Selection Details -->
@@ -1080,9 +1163,18 @@
                                 <!-- Model Selection JSON -->
                                 @if (record.ModelSelection) {
                                     <div class="model-selection-json">
-                                        <h4>Model Selection Details</h4>
+                                        <div class="json-toolbar">
+                                            <h4 style="margin: 0;">Model Selection Details</h4>
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
+                                                (click)="openFullScreen(formattedModelSelection, 'json', 'Model Selection')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
+                                        </div>
                                         <div class="json-viewer-container">
-                                            <mj-code-editor 
+                                            <mj-code-editor
                                                 [(ngModel)]="formattedModelSelection"
                                                 name="formattedModelSelection"
                                                 [readonly]="true"
@@ -1097,9 +1189,18 @@
                                 <!-- Error Details JSON -->
                                 @if (record.ErrorDetails) {
                                     <div class="error-details-json">
-                                        <h4>Error Details</h4>
+                                        <div class="json-toolbar">
+                                            <h4 style="margin: 0;">Error Details</h4>
+                                            <button mjButton
+                                                variant="flat"
+                                                size="sm"
+                                                (click)="openFullScreen(formattedErrorDetails, 'json', 'Error Details')"
+                                                title="View full screen">
+                                                <i class="fa-solid fa-expand"></i>
+                                            </button>
+                                        </div>
                                         <div class="json-viewer-container">
-                                            <mj-code-editor 
+                                            <mj-code-editor
                                                 [(ngModel)]="formattedErrorDetails"
                                                 name="formattedErrorDetails"
                                                 [readonly]="true"
@@ -1111,11 +1212,47 @@
                                     </div>
                                 }
                             </div>
-                        </ng-template>
-                    </kendo-panelbar-item>
-                    
-                </kendo-panelbar>
+                    </mj-accordion-panel>
+
             </div>
         </form>
+</mj-record-form-container>
+}
+
+<!-- Full-screen overlay -->
+    @if (FullScreenContent) {
+        <div class="fullscreen-overlay" (click)="closeFullScreen()">
+            <div class="fullscreen-container" (click)="$event.stopPropagation()">
+                <div class="fullscreen-header">
+                    <span class="fullscreen-title">
+                        <i class="fa-solid fa-expand"></i>
+                        {{ FullScreenTitle }}
+                    </span>
+                    <div class="fullscreen-actions">
+                        <button mjButton
+                            variant="flat"
+                            size="sm"
+                            (click)="copyToClipboard(FullScreenContent, FullScreenTitle)"
+                            title="Copy content">
+                            <i class="fa-solid fa-copy"></i> Copy
+                        </button>
+                        <button mjButton
+                            variant="flat"
+                            size="sm"
+                            (click)="closeFullScreen()"
+                            title="Close">
+                            <i class="fa-solid fa-times"></i> Close
+                        </button>
+                    </div>
+                </div>
+                <div class="fullscreen-body">
+                    <mj-code-editor
+                        [value]="FullScreenContent"
+                        [readonly]="true"
+                        [language]="FullScreenLanguage"
+                        style="height: 100%; width: 100%;">
+                    </mj-code-editor>
+                </div>
+            </div>
+        </div>
     }
-</div>

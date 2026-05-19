@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Caprivi",
+      "Code": "CA",
+      "ISO3166_2": "NA-CA",
+      "Latitude": -17.8491,
+      "Longitude": 23.1229,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-CA.geojson",
+      "CommonAliases": [
+        "Caprivi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "BE7025AC-A86F-4CA7-ACC4-C2B5BBB02BAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.886Z",
+      "checksum": "d379aa2fd8ba8ba4465ba84acd029bb4faea1c47228f7883034da82f1ad0b45f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Erongo",
+      "Code": "ER",
+      "ISO3166_2": "NA-ER",
+      "Latitude": -22.2166,
+      "Longitude": 15.0824,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-ER.geojson",
+      "CommonAliases": [
+        "Erongo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "F26AF289-613A-4927-BF7F-76F80E220337"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.903Z",
+      "checksum": "913864dfa4a537d4edf7657d0d1ed4d114f74eef2b6cc3e0690fffc2d0e2f7f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hardap",
+      "Code": "HA",
+      "ISO3166_2": "NA-HA",
+      "Latitude": -24.5108,
+      "Longitude": 17.2167,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-HA.geojson",
+      "CommonAliases": [
+        "Hardap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "3756AC6C-8FFB-45D7-BEBD-DD1F4AB54E17"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.920Z",
+      "checksum": "c2f70c4fc896dc8f1a915602593bdd4680b6e4203f516bfb3bbc804852dd5a6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karas",
+      "Code": "KA",
+      "ISO3166_2": "NA-KA",
+      "Latitude": -27.0276,
+      "Longitude": 17.4903,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-KA.geojson",
+      "CommonAliases": [
+        "Karas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "6530AD6C-8BAB-45B1-823A-BB040D0DC59C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.939Z",
+      "checksum": "6b93852c2f7dc57bd68e6f35699c21160517a21fa53109b281ff1b469daa44ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khomas",
+      "Code": "KH",
+      "ISO3166_2": "NA-KH",
+      "Latitude": -22.7056,
+      "Longitude": 17.1204,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-KH.geojson",
+      "CommonAliases": [
+        "Khomas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "CC8947CB-28F0-4F4D-B588-CEFDE62794C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.956Z",
+      "checksum": "5561c6c293e0ad34732ab0259f1c56eb084d0fdfde8ddcb09b9c25fa8e6bbdf7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kunene",
+      "Code": "KU",
+      "ISO3166_2": "NA-KU",
+      "Latitude": -19.8757,
+      "Longitude": 13.9847,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-KU.geojson",
+      "CommonAliases": [
+        "Kunene"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "9417BC58-78E6-4FE6-9377-79230052A39E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.972Z",
+      "checksum": "d4a984a91d29a5f99a2b8e5a36f9c18f1f4be6d80661d290645a76ad88fd8190"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ohangwena",
+      "Code": "OW",
+      "ISO3166_2": "NA-OW",
+      "Latitude": -17.5789,
+      "Longitude": 16.7798,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OW.geojson",
+      "CommonAliases": [
+        "Ohangwena"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "5C60EFE4-33AB-43B7-A470-A2E3CE9194A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:20.988Z",
+      "checksum": "a0daffe420022db444409d291cffef908bcc94391e1f0ffcffc31c89a9df4673"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Okavango",
+      "Code": "OK",
+      "ISO3166_2": "NA-OK",
+      "Latitude": -18.5224,
+      "Longitude": 19.4968,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OK.geojson",
+      "CommonAliases": [
+        "Okavango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "2FF53F49-04E2-4A43-B3B6-10EC33BA5300"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.004Z",
+      "checksum": "408e92bb15e85bbc02b27f1e443076681b076df046a7ee14081e82f5b73e184d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Omaheke",
+      "Code": "OH",
+      "ISO3166_2": "NA-OH",
+      "Latitude": -22.0526,
+      "Longitude": 19.4738,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OH.geojson",
+      "CommonAliases": [
+        "Omaheke"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "F9BE6D1D-1F36-4F0E-9D87-AE18CBE424D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.020Z",
+      "checksum": "2938399c9dccf0ce1a98f65343f66496de41e57489a2396415ad7816ee666f30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Omusati",
+      "Code": "OS",
+      "ISO3166_2": "NA-OS",
+      "Latitude": -18.3099,
+      "Longitude": 14.8918,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OS.geojson",
+      "CommonAliases": [
+        "Omusati"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "91E5D7B4-3E05-491E-AE4D-50A1C66B1797"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.034Z",
+      "checksum": "511868481b2cfb6fb9dd8028292cc5de7ee27f134fb8b120a4874ec68420bcc3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oshana",
+      "Code": "ON",
+      "ISO3166_2": "NA-ON",
+      "Latitude": -18.4961,
+      "Longitude": 15.662,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-ON.geojson",
+      "CommonAliases": [
+        "Oshana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "BAAEA3E9-A139-4135-9E81-856A51F3AA4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.067Z",
+      "checksum": "1b5b4f2e235c6d91ac5205000335809902c76425b6f27a46c5bd66d6b232601c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oshikoto",
+      "Code": "OT",
+      "ISO3166_2": "NA-OT",
+      "Latitude": -18.5381,
+      "Longitude": 17.0179,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OT.geojson",
+      "CommonAliases": [
+        "Oshikoto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "C68DB957-09E5-46FE-8E00-822F01E8F8C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.084Z",
+      "checksum": "9e6a4898b8f511bbf13904fb34fd717716c7f77cce88dd13f3c971c7a18beb4d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Otjozondjupa",
+      "Code": "OD",
+      "ISO3166_2": "NA-OD",
+      "Latitude": -20.0032,
+      "Longitude": 18.2876,
+      "BoundaryGeoJSON": "@file:by-country/NA/boundaries/NA-OD.geojson",
+      "CommonAliases": [
+        "Otjozondjupa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NA"
+    },
+    "primaryKey": {
+      "ID": "3B3F33CD-DF2D-40C2-BA38-BF6C51B70DFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.098Z",
+      "checksum": "d7c5d672847f085ca321b5953ead5779ebcbfe4a24a3a3cb02e55a2b7dff821a"
+    }
+  }
+]

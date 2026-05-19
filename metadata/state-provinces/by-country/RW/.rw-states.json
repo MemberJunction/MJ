@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Butare",
+      "Code": "C",
+      "ISO3166_2": "RW-C",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Butare"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "D8CD9D85-965F-4A99-90DE-AA8A01E41565"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.557Z",
+      "checksum": "a8f653820c8ef3c06b231c2b7e9006e342711f90aa09e29f14b6ec5e9c31d216"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Byumba",
+      "Code": "I",
+      "ISO3166_2": "RW-I",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Byumba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "5BEAA81D-BF3B-4611-B673-204447A28766"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.572Z",
+      "checksum": "f6749553101e3878f3993d48993d96c6a70006b03e2ddb0c682e16bc544e3966"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cyangugu",
+      "Code": "E",
+      "ISO3166_2": "RW-E",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cyangugu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "BAD815B8-EE86-4650-AC5F-AD3D5E5C5B76"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.588Z",
+      "checksum": "0780f459e6acc8d61e8014966c423c5d5a4a27d1a424ff04c17f8d8873925410"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gikongoro",
+      "Code": "D",
+      "ISO3166_2": "RW-D",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gikongoro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "483E9BBC-9102-46A2-A038-DF88D4E2815F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.605Z",
+      "checksum": "adda836212825d68b53423267e167aed9a48032f8638fe72d5d2032cdd5f024b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gisenyi",
+      "Code": "G",
+      "ISO3166_2": "RW-G",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gisenyi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "4303D078-0ECA-42B1-B9C4-B9C45647244C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.621Z",
+      "checksum": "18beed16ce693606fef1be254721f9bd054ca76fde9e7ad8ef95e2a243a0302c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gitarama",
+      "Code": "B",
+      "ISO3166_2": "RW-B",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Gitarama"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "93873A08-DA4A-48BC-A6DD-FA64975FE67B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.636Z",
+      "checksum": "bcab0969605a42801051cf0f94be10db9a197195fb023b0a106f07554de2584a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kibungo",
+      "Code": "J",
+      "ISO3166_2": "RW-J",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kibungo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "1C2CA43B-E9D3-47BD-91FD-E4772C6353BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.651Z",
+      "checksum": "30c7c885d344f87e4c2ccf2a5e1bc7895f94479543fd8faf2013046a710b9ab9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kibuye",
+      "Code": "F",
+      "ISO3166_2": "RW-F",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kibuye"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "9D195A29-5507-4A94-873B-F0EEEB180D90"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.668Z",
+      "checksum": "0e614ee4ca612d5460f7c825557168956abddf1ddc19688bd3de4ca801d26aa5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kigali-Rural (Kigali y’ Icyaro)",
+      "Code": "K",
+      "ISO3166_2": "RW-K",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kigali-Rural (Kigali y’ Icyaro)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "A9BE1690-32C7-4338-BCC5-6E008CF9EB7C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.684Z",
+      "checksum": "9a6effef82778d68857145ca199b8f10abe2cc442961be93b00ed7d6a82755e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kigali-Ville (Kilgali Ngari)",
+      "Code": "L",
+      "ISO3166_2": "RW-L",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kigali-Ville (Kilgali Ngari)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "D6B4C230-02B8-4FBC-8B52-60F7CE8A65D4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.700Z",
+      "checksum": "8e4ca708f8568976afd64789c57bb875fe6136c667f37b07c318158400e17390"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mutara",
+      "Code": "M",
+      "ISO3166_2": "RW-M",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mutara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "E73244B5-39B2-4571-96E4-8787BE98F08E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.729Z",
+      "checksum": "3c114318270586576cbc4cb273fc015bcd91e43b94e6e70a192c210c2c7d8808"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ruhengeri",
+      "Code": "H",
+      "ISO3166_2": "RW-H",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ruhengeri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RW"
+    },
+    "primaryKey": {
+      "ID": "934315F4-A867-473D-9BB5-DCDA958B5B51"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.742Z",
+      "checksum": "2b8ed0aa28bcd77a48af330849c90ac3d6e92cc32a264a8de5611b11854a8d44"
+    }
+  }
+]

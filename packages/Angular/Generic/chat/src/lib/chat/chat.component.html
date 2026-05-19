@@ -50,10 +50,16 @@
         <span class="scroll-to-bottom fas fa-arrow-down" (click)="ScrollMessagesToBottom()"></span>
     }
 
+    @if (ShowWaitingIndicator) {
+        <div class="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <span class="typing-text">Thinking...</span>
+        </div>
+    }
+
     <div class = "chat-input-area">
-        @if (ShowWaitingIndicator) {
-            <mj-loading [showText]="false" size="small" class="loader"></mj-loading>
-        }
         <div class="text-area-wrapper">
             <textarea #theInput 
                         [(ngModel)]="currentMessage" 
@@ -63,25 +69,28 @@
                         (keyup.enter)="SendCurrentMessage()" >
             </textarea>
         </div>
-        <button kendoButton 
+        <button class="chat-action-btn"
                 [disabled]="Messages.length === 0 || ShowWaitingIndicator"
-                (click)="showingClearAllDialog = true">
-            <span class="fa-solid fa-trash-can" title="Clear Chat">
-            </span>
+                (click)="showingClearAllDialog = true"
+                title="Clear Chat">
+            <i class="fa-solid fa-trash-can"></i>
         </button>
-        <button kendoButton
-                [disabled]="!InternalAllowSend || currentMessage.length === 0 || ShowWaitingIndicator" 
-                (click)="SendCurrentMessage()">
-                <span class="fas fa-solid fa-arrow-up" title="Send Message"></span>
+        <button class="chat-action-btn chat-send-btn"
+                [disabled]="!InternalAllowSend || currentMessage.length === 0 || ShowWaitingIndicator"
+                (click)="SendCurrentMessage()"
+                title="Send Message">
+            <i class="fa-solid fa-arrow-up"></i>
         </button>
     </div>
 </div>
 @if (showingClearAllDialog) {
-    <kendo-dialog>
-        <p>{{ClearAllMessagesPrompt}}</p>
-          <kendo-dialog-actions>
-            <button kendoButton (click)="HandleClearChat()" themeColor="primary">Yes</button>
-            <button kendoButton (click)="showingClearAllDialog = false">No</button>
-          </kendo-dialog-actions>
-    </kendo-dialog>
+    <div class="chat-dialog-overlay" (click)="showingClearAllDialog = false">
+        <div class="chat-dialog" (click)="$event.stopPropagation()">
+            <p class="chat-dialog-message">{{ClearAllMessagesPrompt}}</p>
+            <div class="chat-dialog-actions">
+                <button class="chat-dialog-btn chat-dialog-btn-primary" (click)="HandleClearChat()">Yes</button>
+                <button class="chat-dialog-btn" (click)="showingClearAllDialog = false">No</button>
+            </div>
+        </div>
+    </div>
 }

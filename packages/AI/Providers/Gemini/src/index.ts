@@ -4,7 +4,7 @@
 import { GoogleGenAI, Content, Part, Blob} from "@google/genai";
 
 // MJ stuff
-import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatParams, ChatResult, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ChatMessageContent, ModelUsage, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, "GeminiLLM")
@@ -56,6 +56,24 @@ export class GeminiLLM extends BaseLLM {
 
         this._gemini = await this._geminiPromise;
         return this._gemini;
+    }
+
+    /**
+     * Gemini supports a wide range of file types natively, including via the Files API.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: [
+                'application/pdf',
+                'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+                'audio/mp3', 'audio/wav', 'audio/ogg',
+                'video/mp4', 'video/webm',
+                'text/plain', 'text/csv', 'text/html',
+            ],
+            MaxFileSize: 20 * 1024 * 1024,
+            MaxFilesPerRequest: 10,
+            HasFileAPI: true,
+        };
     }
 
     /**
@@ -227,7 +245,7 @@ export class GeminiLLM extends BaseLLM {
                 modelOptions.top_k = params.topK;
             }
             if (params.stopSequences != null && params.stopSequences.length > 0) {
-                modelOptions.stop_sequences = params.stopSequences;
+                modelOptions.stopSequences = params.stopSequences;
             }
             if (params.seed != null) {
                 modelOptions.seed = params.seed;
@@ -435,7 +453,7 @@ export class GeminiLLM extends BaseLLM {
     /**
      * Reset streaming state for a new request
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,
@@ -494,7 +512,7 @@ export class GeminiLLM extends BaseLLM {
             modelOptions.top_k = params.topK;
         }
         if (params.stopSequences != null && params.stopSequences.length > 0) {
-            modelOptions.stop_sequences = params.stopSequences;
+            modelOptions.stopSequences = params.stopSequences;
         }
         if (params.seed != null) {
             modelOptions.seed = params.seed;
@@ -770,23 +788,34 @@ export class GeminiLLM extends BaseLLM {
                     parts.push({text: part.content});
                 }
                 else {
-                    // use the inlineData property which expects a Blob property which consists of data and mimeType
-                    const blob: Blob = {
-                        data: part.content
+                    // Strip data-URL prefix if present — Gemini expects raw base64
+                    let rawBase64 = part.content;
+                    let detectedMime: string | undefined;
+                    const dataUrlMatch = rawBase64.match(/^data:([^;]+);base64,(.+)$/s);
+                    if (dataUrlMatch) {
+                        detectedMime = dataUrlMatch[1];
+                        rawBase64 = dataUrlMatch[2];
                     }
-                    switch (part.type) {
-                        case 'image_url':
-                            blob.mimeType = 'image/jpeg';
-                            break;
-                        case 'audio_url':
-                            blob.mimeType = 'audio/mpeg';
-                            break;
-                        case 'video_url':
-                            blob.mimeType = 'video/mp4';
-                            break;
-                        case 'file_url':
-                            blob.mimeType = 'application/octet-stream';
-                            break;
+
+                    // Guard: if content isn't valid base64, fall back to a text part.
+                    // This handles placeholder strings (e.g. "[File: ... — accessible via artifact tools]")
+                    // that were tagged as file_url content blocks.
+                    if (!dataUrlMatch && !/^[A-Za-z0-9+/\r\n]+=*$/.test(rawBase64.substring(0, 100))) {
+                        parts.push({text: part.content});
+                        continue;
+                    }
+
+                    // Use the inlineData property which expects a Blob with data and mimeType.
+                    // Prefer the explicit mimeType from the content block; fall back to
+                    // data-URL detected mime, then type-based defaults.
+                    const blob: Blob = {
+                        data: rawBase64,
+                        mimeType: part.mimeType || detectedMime || (
+                            part.type === 'image_url' ? 'image/jpeg' :
+                            part.type === 'audio_url' ? 'audio/mpeg' :
+                            part.type === 'video_url' ? 'video/mp4' :
+                            'application/octet-stream'
+                        ),
                     }
                     parts.push({inlineData: blob});
                 }

@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub - Scheduled Pipelines</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  /* ── Design Tokens ─────────────────────────────────────────── */
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-bg-surface-hover: #eef1f6;
+    --mj-bg-overlay: rgba(15, 23, 42, 0.45);
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #264FAF;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-hover: #1e3f8c;
+    --mj-brand-primary-active: #193574;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-border-strong: #cbd5e1;
+    --mj-border-focus: #264FAF;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #2563eb;
+    --mj-status-info-bg: #eff6ff;
+    --mj-radius-sm: 6px;
+    --mj-radius-md: 8px;
+    --mj-radius-lg: 12px;
+    --mj-shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    --mj-shadow-card-hover: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    --mj-shadow-dialog: 0 20px 60px rgba(0,0,0,0.18), 0 8px 20px rgba(0,0,0,0.10);
+  }
+
+  /* ── Reset & Base ──────────────────────────────────────────── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── App Shell ─────────────────────────────────────────────── */
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ── Sidebar ───────────────────────────────────────────────── */
+  .sidebar {
+    width: 220px;
+    background: var(--mj-bg-surface);
+    border-right: 1px solid var(--mj-border-default);
+    padding: 20px 0;
+    flex-shrink: 0;
+  }
+  .sidebar-brand {
+    padding: 0 16px 20px;
+    border-bottom: 1px solid var(--mj-border-default);
+    margin-bottom: 12px;
+  }
+  .sidebar-brand h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mj-brand-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-brand h2 i { font-size: 18px; }
+  .sidebar-brand span {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    display: block;
+    margin-top: 2px;
+    padding-left: 26px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 16px;
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+    border-left: 3px solid transparent;
+  }
+  .nav-item:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+  .nav-item.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-left-color: var(--mj-brand-primary);
+    font-weight: 600;
+  }
+  .nav-item i { width: 18px; text-align: center; font-size: 14px; }
+
+  /* ── Main Content ──────────────────────────────────────────── */
+  .main-content {
+    flex: 1;
+    padding: 28px 32px 40px;
+    max-width: 1200px;
+    min-width: 0;
+  }
+
+  /* ── Page Header ───────────────────────────────────────────── */
+  .page-header {
+    margin-bottom: 24px;
+  }
+  .page-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    margin-bottom: 4px;
+  }
+  .page-header p {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+  }
+
+  /* ── Toolbar ───────────────────────────────────────────────── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border: none;
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+    white-space: nowrap;
+  }
+  .btn-primary:hover { background: var(--mj-brand-primary-hover); }
+  .filter-select {
+    padding: 7px 32px 7px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    cursor: pointer;
+  }
+  .search-input {
+    padding: 7px 12px 7px 32px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    width: 220px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8'%3E%3Cpath d='M10 6.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0zm-.3 3.9a5.5 5.5 0 111.1-1.1l3.1 3.1a.75.75 0 01-1.1 1.1L9.7 10.4z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: 10px center;
+  }
+  .search-input::placeholder { color: var(--mj-text-muted); }
+  .toolbar-spacer { flex: 1; }
+  .toolbar-stat {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+  }
+  .toolbar-stat strong {
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+  }
+
+  /* ── Card Grid ─────────────────────────────────────────────── */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  @media (max-width: 1024px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .card-grid { grid-template-columns: 1fr; } }
+
+  /* ── Job Card ──────────────────────────────────────────────── */
+  .job-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    padding: 14px 16px;
+    box-shadow: var(--mj-shadow-card);
+    position: relative;
+    cursor: pointer;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    height: 132px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .job-card:hover {
+    box-shadow: var(--mj-shadow-card-hover);
+    border-color: var(--mj-border-strong);
+  }
+  .job-card:hover .card-actions { opacity: 1; }
+
+  .card-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .status-dot.active { background: var(--mj-status-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 18%, transparent); }
+  .status-dot.paused { background: var(--mj-status-warning); box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-warning) 18%, transparent); }
+  .status-dot.disabled { background: var(--mj-border-strong); }
+
+  .card-title-area { flex: 1; min-width: 0; }
+  .card-title {
+    font-size: 13.5px;
+    font-weight: 650;
+    color: var(--mj-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+  }
+  .card-cron {
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    margin-top: 1px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .card-cron i { font-size: 11px; color: var(--mj-text-muted); }
+
+  /* Stats row */
+  .card-stats {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
+  }
+  .card-stat {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .card-stat i { font-size: 10px; }
+  .card-stat .value {
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+  }
+  .success-rate {
+    font-weight: 700;
+  }
+  .success-rate.high { color: var(--mj-status-success); }
+  .success-rate.mid { color: var(--mj-status-warning); }
+
+  /* Sparkline */
+  .sparkline {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    margin-top: 8px;
+  }
+  .spark-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+  .spark-dot.ok { background: color-mix(in srgb, var(--mj-status-success) 65%, transparent); }
+  .spark-dot.fail { background: color-mix(in srgb, var(--mj-status-error) 65%, transparent); }
+  .spark-dot.skip { background: var(--mj-border-default); }
+  .sparkline-label {
+    font-size: 10px;
+    color: var(--mj-text-muted);
+    margin-left: 4px;
+  }
+
+  /* Hover actions */
+  .card-actions {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+  .card-action-btn {
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 4px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: all 0.12s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+  }
+  .card-action-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-strong);
+  }
+  .card-action-btn.run-now {
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
+  }
+  .card-action-btn.run-now:hover {
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+  }
+
+  /* ── Section Header ────────────────────────────────────────── */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .section-header h2 {
+    font-size: 15px;
+    font-weight: 650;
+    color: var(--mj-text-primary);
+  }
+  .section-header .badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface-sunken);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* ── Activity Table ────────────────────────────────────────── */
+  .activity-table {
+    width: 100%;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    box-shadow: var(--mj-shadow-card);
+    overflow: hidden;
+  }
+  .activity-table table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .activity-table thead th {
+    background: var(--mj-bg-surface-card);
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .activity-table tbody td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    color: var(--mj-text-primary);
+  }
+  .activity-table tbody tr:last-child td { border-bottom: none; }
+  .activity-table tbody tr:hover { background: var(--mj-bg-surface-hover); }
+  .activity-table .job-name-cell {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+  }
+  .activity-table .time-cell {
+    color: var(--mj-text-secondary);
+    font-size: 12.5px;
+  }
+
+  /* Status badges */
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+  .status-badge.success {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success);
+  }
+  .status-badge.failed {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error);
+  }
+  .status-badge.running {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info);
+  }
+  .status-badge i { font-size: 9px; }
+
+  /* ── Dialog Overlay ────────────────────────────────────────── */
+  .dialog-overlay {
+    position: fixed;
+    inset: 0;
+    background: var(--mj-bg-overlay);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  .dialog {
+    background: var(--mj-bg-surface);
+    border-radius: var(--mj-radius-lg);
+    box-shadow: var(--mj-shadow-dialog);
+    width: 580px;
+    max-height: 88vh;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Dialog header */
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+  }
+  .dialog-header h2 {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+  }
+  .dialog-close {
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: none;
+    color: var(--mj-text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    border-radius: var(--mj-radius-sm);
+    transition: all 0.12s;
+  }
+  .dialog-close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+
+  /* Dialog body */
+  .dialog-body {
+    padding: 20px 24px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  /* Form sections */
+  .form-section {
+    margin-bottom: 22px;
+  }
+  .form-section:last-child { margin-bottom: 0; }
+  .form-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .form-section-title i { font-size: 12px; }
+  .form-section-divider {
+    border: none;
+    border-top: 1px solid var(--mj-border-default);
+    margin: 0 0 22px;
+  }
+
+  /* Form fields */
+  .form-row {
+    margin-bottom: 14px;
+  }
+  .form-row:last-child { margin-bottom: 0; }
+  .form-label {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    margin-bottom: 5px;
+  }
+  .form-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    transition: border-color 0.15s;
+    font-family: inherit;
+  }
+  .form-input:focus {
+    outline: none;
+    border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  }
+  textarea.form-input {
+    resize: vertical;
+    min-height: 60px;
+  }
+  select.form-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+    cursor: pointer;
+  }
+  .form-row-inline {
+    display: flex;
+    gap: 12px;
+  }
+  .form-row-inline > * { flex: 1; }
+
+  /* Frequency chips */
+  .freq-chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .freq-chip {
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 20px;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .freq-chip:hover {
+    border-color: var(--mj-border-strong);
+    background: var(--mj-bg-surface-hover);
+  }
+  .freq-chip.selected {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+  }
+
+  /* Time picker row */
+  .time-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .time-picker-row label {
+    font-size: 12.5px;
+    color: var(--mj-text-secondary);
+    font-weight: 500;
+  }
+  .time-select {
+    padding: 6px 28px 6px 10px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2394a3b8'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    cursor: pointer;
+    min-width: 70px;
+  }
+  .time-colon {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--mj-text-muted);
+  }
+  .time-preview {
+    font-size: 12px;
+    color: var(--mj-brand-primary);
+    background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-left: auto;
+    font-weight: 600;
+  }
+
+  /* Concurrency radios */
+  .radio-group {
+    display: flex;
+    gap: 16px;
+    margin-top: 4px;
+  }
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+  }
+  .radio-dot {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--mj-border-strong);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .radio-dot.checked {
+    border-color: var(--mj-brand-primary);
+  }
+  .radio-dot.checked::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border-radius: 50%;
+    background: var(--mj-brand-primary);
+  }
+
+  /* Checkboxes */
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .checkbox-box {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--mj-border-strong);
+    border-radius: 3px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .checkbox-box.checked {
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+  }
+  .checkbox-box.checked::after {
+    content: '';
+    width: 8px;
+    height: 5px;
+    border-left: 2px solid var(--mj-text-inverse);
+    border-bottom: 2px solid var(--mj-text-inverse);
+    transform: rotate(-45deg);
+    margin-top: -2px;
+  }
+  .checkbox-text {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+  }
+
+  /* Multi-select chips */
+  .chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+  }
+  .entity-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-border-default));
+    border-radius: 14px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .entity-chip .remove {
+    font-size: 10px;
+    cursor: pointer;
+    opacity: 0.6;
+  }
+
+  /* Run history mini-table */
+  .run-history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  .run-history-table th {
+    text-align: left;
+    padding: 6px 8px;
+    color: var(--mj-text-muted);
+    font-weight: 600;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .run-history-table td {
+    padding: 6px 8px;
+    color: var(--mj-text-secondary);
+    border-bottom: 1px solid var(--mj-border-subtle);
+  }
+  .run-history-table tr:last-child td { border-bottom: none; }
+  .mini-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10.5px;
+    font-weight: 600;
+  }
+  .mini-badge.success { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .mini-badge.failed { background: var(--mj-status-error-bg); color: var(--mj-status-error); }
+
+  /* Dialog footer */
+  .dialog-footer {
+    display: flex;
+    align-items: center;
+    padding: 16px 24px;
+    border-top: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+    gap: 10px;
+  }
+  .btn-danger {
+    padding: 8px 16px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-status-error);
+    border: 1px solid color-mix(in srgb, var(--mj-status-error) 30%, var(--mj-border-default));
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-danger:hover {
+    background: var(--mj-status-error-bg);
+    border-color: var(--mj-status-error);
+  }
+  .btn-save {
+    padding: 8px 20px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border: none;
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-save:hover { background: var(--mj-brand-primary-hover); }
+  .btn-cancel {
+    padding: 8px 16px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-cancel:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+  .footer-spacer { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="app-shell">
+  <!-- ── Sidebar ───────────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h2><i class="fa-solid fa-brain"></i> Knowledge Hub</h2>
+      <span>Content Intelligence</span>
+    </div>
+    <a class="nav-item" href="#"><i class="fa-solid fa-magnifying-glass"></i> Search</a>
+    <a class="nav-item" href="#"><i class="fa-solid fa-vector-square"></i> Vectors</a>
+    <a class="nav-item" href="#"><i class="fa-solid fa-clone"></i> Duplicates</a>
+    <a class="nav-item" href="#"><i class="fa-solid fa-diagram-project"></i> Clusters</a>
+    <a class="nav-item" href="#"><i class="fa-solid fa-tags"></i> Autotagging</a>
+    <a class="nav-item active" href="#"><i class="fa-solid fa-clock"></i> Schedules</a>
+    <a class="nav-item" href="#"><i class="fa-solid fa-gear"></i> Configuration</a>
+  </aside>
+
+  <!-- ── Main Content ──────────────────────────────────────── -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1>Scheduled Pipelines</h1>
+      <p>Automate content ingestion, autotagging, and vector sync</p>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <button class="btn-primary"><i class="fa-solid fa-plus"></i> New Schedule</button>
+      <select class="filter-select">
+        <option>All Statuses</option>
+        <option>Active</option>
+        <option>Paused</option>
+        <option>Disabled</option>
+      </select>
+      <input type="text" class="search-input" placeholder="Search pipelines...">
+      <div class="toolbar-spacer"></div>
+      <span class="toolbar-stat"><strong>4</strong> active &middot; <strong>1</strong> paused &middot; <strong>1</strong> disabled</span>
+    </div>
+
+    <!-- Card Grid -->
+    <div class="card-grid">
+
+      <!-- Card 1: RSS Feed Ingestion -->
+      <div class="job-card">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot active"></div>
+            <div class="card-title-area">
+              <div class="card-title">RSS Feed Ingestion</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Every 4 hours</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot fail"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">2h ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate high">98%</span></span>
+          <span class="card-stat"><i class="fa-regular fa-calendar"></i> Next: <span class="value">2h</span></span>
+        </div>
+      </div>
+
+      <!-- Card 2: Entity Autotagging - Contacts -->
+      <div class="job-card">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot active"></div>
+            <div class="card-title-area">
+              <div class="card-title">Entity Autotagging - Contacts</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Daily at 2:00 AM</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">22h ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate high">100%</span></span>
+          <span class="card-stat"><i class="fa-regular fa-calendar"></i> Next: <span class="value">2h</span></span>
+        </div>
+      </div>
+
+      <!-- Card 3: Entity Autotagging - Companies -->
+      <div class="job-card">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot active"></div>
+            <div class="card-title-area">
+              <div class="card-title">Entity Autotagging - Companies</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Daily at 3:00 AM</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot fail"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">21h ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate high">95%</span></span>
+          <span class="card-stat"><i class="fa-regular fa-calendar"></i> Next: <span class="value">3h</span></span>
+        </div>
+      </div>
+
+      <!-- Card 4: Vector Sync - All Entities -->
+      <div class="job-card">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot active"></div>
+            <div class="card-title-area">
+              <div class="card-title">Vector Sync - All Entities</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Every 6 hours</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot fail"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">4h ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate high">97%</span></span>
+          <span class="card-stat"><i class="fa-regular fa-calendar"></i> Next: <span class="value">2h</span></span>
+        </div>
+      </div>
+
+      <!-- Card 5: Website Content Crawl (Paused) -->
+      <div class="job-card">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot paused"></div>
+            <div class="card-title-area">
+              <div class="card-title">Website Content Crawl</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Weekly on Sunday at 1:00 AM</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot fail"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot skip"></div>
+            <div class="spark-dot skip"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">5d ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate mid">90%</span></span>
+          <span class="card-stat" style="color:var(--mj-status-warning);font-weight:600"><i class="fa-solid fa-pause"></i> Paused</span>
+        </div>
+      </div>
+
+      <!-- Card 6: Cloud Storage Scan (Disabled) -->
+      <div class="job-card" style="opacity: 0.65;">
+        <div class="card-actions">
+          <button class="card-action-btn">Edit</button>
+          <button class="card-action-btn run-now"><i class="fa-solid fa-play" style="font-size:9px"></i> Run Now</button>
+        </div>
+        <div>
+          <div class="card-top">
+            <div class="status-dot disabled"></div>
+            <div class="card-title-area">
+              <div class="card-title">Cloud Storage Scan</div>
+              <div class="card-cron"><i class="fa-regular fa-clock"></i> Daily at 6:00 AM</div>
+            </div>
+          </div>
+          <div class="sparkline">
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot fail"></div>
+            <div class="spark-dot ok"></div>
+            <div class="spark-dot skip"></div>
+            <div class="spark-dot skip"></div>
+            <div class="spark-dot skip"></div>
+            <span class="sparkline-label">last 7 runs</span>
+          </div>
+        </div>
+        <div class="card-stats">
+          <span class="card-stat"><i class="fa-regular fa-clock"></i> Last: <span class="value">12d ago</span></span>
+          <span class="card-stat"><i class="fa-solid fa-check-circle"></i> <span class="success-rate mid">85%</span></span>
+          <span class="card-stat" style="color:var(--mj-text-muted);font-weight:600"><i class="fa-solid fa-ban"></i> Disabled</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Recent Activity ───────────────────────────────────── -->
+    <div class="section-header">
+      <h2>Recent Activity</h2>
+      <span class="badge">Last 10 runs</span>
+    </div>
+    <div class="activity-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Job Name</th>
+            <th>Started</th>
+            <th>Duration</th>
+            <th>Status</th>
+            <th style="text-align:right">Items Processed</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="job-name-cell">RSS Feed Ingestion</td>
+            <td class="time-cell">2h ago</td>
+            <td class="time-cell">3m 42s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">127</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Vector Sync - All Entities</td>
+            <td class="time-cell">4h ago</td>
+            <td class="time-cell">12m 18s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">2,451</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">RSS Feed Ingestion</td>
+            <td class="time-cell">6h ago</td>
+            <td class="time-cell">2m 55s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">84</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Vector Sync - All Entities</td>
+            <td class="time-cell">10h ago</td>
+            <td class="time-cell">14m 03s</td>
+            <td><span class="status-badge failed"><i class="fa-solid fa-xmark"></i> Failed</span></td>
+            <td style="text-align:right; font-weight:600; color:var(--mj-status-error)">1,892 / 2,500</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Entity Autotagging - Contacts</td>
+            <td class="time-cell">22h ago</td>
+            <td class="time-cell">8m 12s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">1,024</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Entity Autotagging - Companies</td>
+            <td class="time-cell">21h ago</td>
+            <td class="time-cell">6m 34s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">583</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">RSS Feed Ingestion</td>
+            <td class="time-cell">1d ago</td>
+            <td class="time-cell">3m 18s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">102</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Vector Sync - All Entities</td>
+            <td class="time-cell">1d ago</td>
+            <td class="time-cell">11m 47s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">2,380</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Website Content Crawl</td>
+            <td class="time-cell">5d ago</td>
+            <td class="time-cell">45m 22s</td>
+            <td><span class="status-badge success"><i class="fa-solid fa-check"></i> Success</span></td>
+            <td style="text-align:right; font-weight:600">312</td>
+          </tr>
+          <tr>
+            <td class="job-name-cell">Cloud Storage Scan</td>
+            <td class="time-cell">12d ago</td>
+            <td class="time-cell">22m 08s</td>
+            <td><span class="status-badge failed"><i class="fa-solid fa-xmark"></i> Failed</span></td>
+            <td style="text-align:right; font-weight:600; color:var(--mj-status-error)">67 / 150</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     EDIT DIALOG OVERLAY
+     ══════════════════════════════════════════════════════════════ -->
+<div class="dialog-overlay">
+  <div class="dialog">
+    <!-- Header -->
+    <div class="dialog-header">
+      <h2>Edit Schedule</h2>
+      <button class="dialog-close"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <!-- Body -->
+    <div class="dialog-body">
+
+      <!-- Section: General -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fa-solid fa-circle-info"></i> General</div>
+        <div class="form-row">
+          <label class="form-label">Name</label>
+          <input type="text" class="form-input" value="Entity Autotagging - Contacts">
+        </div>
+        <div class="form-row">
+          <label class="form-label">Description</label>
+          <textarea class="form-input" rows="2">Autotag and vectorize all Contact records with updated content since last run.</textarea>
+        </div>
+        <div class="form-row">
+          <label class="form-label">Status</label>
+          <select class="form-input" style="width:160px">
+            <option selected>Active</option>
+            <option>Paused</option>
+            <option>Disabled</option>
+          </select>
+        </div>
+      </div>
+
+      <hr class="form-section-divider">
+
+      <!-- Section: Schedule -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fa-regular fa-calendar-days"></i> Schedule</div>
+
+        <!-- Visual cron builder: frequency chips -->
+        <label class="form-label">Frequency</label>
+        <div class="freq-chips">
+          <span class="freq-chip">Every Hour</span>
+          <span class="freq-chip selected">Daily</span>
+          <span class="freq-chip">Weekly</span>
+          <span class="freq-chip">Monthly</span>
+          <span class="freq-chip">Custom</span>
+        </div>
+
+        <!-- "Daily" selected: time picker -->
+        <label class="form-label">Run At</label>
+        <div class="time-picker-row">
+          <select class="time-select">
+            <option>12 AM</option>
+            <option>1 AM</option>
+            <option selected>2 AM</option>
+            <option>3 AM</option>
+            <option>4 AM</option>
+            <option>5 AM</option>
+            <option>6 AM</option>
+            <option>7 AM</option>
+            <option>8 AM</option>
+            <option>9 AM</option>
+            <option>10 AM</option>
+            <option>11 AM</option>
+            <option>12 PM</option>
+            <option>1 PM</option>
+            <option>2 PM</option>
+            <option>3 PM</option>
+            <option>4 PM</option>
+            <option>5 PM</option>
+            <option>6 PM</option>
+            <option>7 PM</option>
+            <option>8 PM</option>
+            <option>9 PM</option>
+            <option>10 PM</option>
+            <option>11 PM</option>
+          </select>
+          <span class="time-colon">:</span>
+          <select class="time-select" style="min-width:60px">
+            <option selected>00</option>
+            <option>15</option>
+            <option>30</option>
+            <option>45</option>
+          </select>
+          <span class="time-preview"><i class="fa-regular fa-clock" style="font-size:11px"></i> 0 2 * * *</span>
+        </div>
+
+        <!-- Timezone -->
+        <div class="form-row" style="margin-top:14px">
+          <label class="form-label">Timezone</label>
+          <select class="form-input" style="width:260px">
+            <option selected>America/New_York (UTC-4)</option>
+            <option>America/Chicago (UTC-5)</option>
+            <option>America/Denver (UTC-6)</option>
+            <option>America/Los_Angeles (UTC-7)</option>
+            <option>UTC</option>
+            <option>Europe/London (UTC+1)</option>
+          </select>
+        </div>
+
+        <!-- Concurrency -->
+        <div class="form-row" style="margin-top:14px">
+          <label class="form-label">If already running</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <div class="radio-dot checked"></div>
+              Skip
+            </label>
+            <label class="radio-label">
+              <div class="radio-dot"></div>
+              Queue
+            </label>
+            <label class="radio-label">
+              <div class="radio-dot"></div>
+              Concurrent
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <hr class="form-section-divider">
+
+      <!-- Section: Action -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fa-solid fa-bolt"></i> Action</div>
+        <div class="form-row">
+          <label class="form-label">Action Type</label>
+          <select class="form-input" style="width:240px">
+            <option selected>Autotag Content</option>
+            <option>Vector Sync</option>
+            <option>Content Crawl</option>
+          </select>
+        </div>
+        <!-- Autotag-specific params shown -->
+        <div class="form-row-inline" style="margin-top:12px">
+          <div>
+            <div class="checkbox-row">
+              <div class="checkbox-box checked"></div>
+              <span class="checkbox-text">Autotag records</span>
+            </div>
+          </div>
+          <div>
+            <div class="checkbox-row">
+              <div class="checkbox-box checked"></div>
+              <span class="checkbox-text">Vectorize records</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <label class="form-label">Source Filter</label>
+          <select class="form-input" style="width:260px">
+            <option selected>Updated since last run</option>
+            <option>All records</option>
+            <option>Untagged only</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:10px">
+          <label class="form-label">Entities</label>
+          <div class="chip-group">
+            <span class="entity-chip">Contacts <span class="remove"><i class="fa-solid fa-xmark"></i></span></span>
+          </div>
+        </div>
+      </div>
+
+      <hr class="form-section-divider">
+
+      <!-- Section: Notifications -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fa-regular fa-bell"></i> Notifications</div>
+        <div class="checkbox-row">
+          <div class="checkbox-box"></div>
+          <span class="checkbox-text">Notify on success</span>
+        </div>
+        <div class="checkbox-row">
+          <div class="checkbox-box checked"></div>
+          <span class="checkbox-text">Notify on failure</span>
+        </div>
+      </div>
+
+      <hr class="form-section-divider">
+
+      <!-- Section: Run History -->
+      <div class="form-section">
+        <div class="form-section-title"><i class="fa-solid fa-history"></i> Run History</div>
+        <table class="run-history-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Duration</th>
+              <th>Status</th>
+              <th style="text-align:right">Items</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Apr 4, 2:00 AM</td>
+              <td>8m 12s</td>
+              <td><span class="mini-badge success"><i class="fa-solid fa-check" style="font-size:8px"></i> Success</span></td>
+              <td style="text-align:right; font-weight:600">1,024</td>
+            </tr>
+            <tr>
+              <td>Apr 3, 2:00 AM</td>
+              <td>7m 58s</td>
+              <td><span class="mini-badge success"><i class="fa-solid fa-check" style="font-size:8px"></i> Success</span></td>
+              <td style="text-align:right; font-weight:600">986</td>
+            </tr>
+            <tr>
+              <td>Apr 2, 2:00 AM</td>
+              <td>8m 34s</td>
+              <td><span class="mini-badge success"><i class="fa-solid fa-check" style="font-size:8px"></i> Success</span></td>
+              <td style="text-align:right; font-weight:600">1,102</td>
+            </tr>
+            <tr>
+              <td>Apr 1, 2:00 AM</td>
+              <td>9m 01s</td>
+              <td><span class="mini-badge success"><i class="fa-solid fa-check" style="font-size:8px"></i> Success</span></td>
+              <td style="text-align:right; font-weight:600">1,247</td>
+            </tr>
+            <tr>
+              <td>Mar 31, 2:00 AM</td>
+              <td>7m 44s</td>
+              <td><span class="mini-badge success"><i class="fa-solid fa-check" style="font-size:8px"></i> Success</span></td>
+              <td style="text-align:right; font-weight:600">891</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="dialog-footer">
+      <button class="btn-danger"><i class="fa-regular fa-trash-can" style="font-size:12px"></i> Delete</button>
+      <div class="footer-spacer"></div>
+      <button class="btn-save">Save</button>
+      <button class="btn-cancel">Cancel</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

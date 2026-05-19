@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.server.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "es2022"
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]
+}

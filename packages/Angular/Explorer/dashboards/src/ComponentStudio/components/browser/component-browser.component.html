@@ -3,14 +3,12 @@
   <!-- Header -->
   <div class="browser-header">
     <div class="header-top-row">
-      <button kendoButton
-        [themeColor]="'primary'"
+      <button mjButton variant="primary"
         (click)="OnNewComponent()">
         <i class="fa-solid fa-plus"></i> New Component
       </button>
       <div class="import-dropdown" [class.open]="ImportDropdownOpen">
-        <button kendoButton
-          [themeColor]="'base'"
+        <button mjButton
           (click)="ToggleImportDropdown()">
           <i class="fa-solid fa-file-import"></i> Import
           <i class="fa-solid fa-chevron-down dropdown-chevron"></i>
@@ -50,15 +48,15 @@
 
   <!-- Search -->
   <div class="search-box">
-    <kendo-textbox
-      [value]="State.SearchQuery"
-      (valueChange)="OnSearchChange($event)"
-      placeholder="Search components..."
-      [clearButton]="true">
-      <ng-template kendoTextBoxPrefixTemplate>
-        <i class="fa-solid fa-search search-icon"></i>
-      </ng-template>
-    </kendo-textbox>
+    <div class="search-input-wrapper">
+      <i class="fa-solid fa-search search-icon"></i>
+      <input
+        type="text"
+        class="mj-input"
+        [value]="State.SearchQuery"
+        (input)="OnSearchChange($any($event.target).value)"
+        placeholder="Search components...">
+    </div>
   </div>
 
   <!-- Collapsible Filter Panel -->
@@ -259,21 +257,18 @@
 
               <div class="detail-actions">
                 @if (IsComponentRunning(component)) {
-                  <button kendoButton
-                    [themeColor]="'error'"
+                  <button mjButton variant="danger"
                     (click)="OnStopComponent($event)">
                     <i class="fa-solid fa-stop"></i> Stop
                   </button>
                 } @else if (IsAnotherComponentRunning(component)) {
-                  <button kendoButton
-                    [themeColor]="'base'"
+                  <button mjButton
                     title="Stop current component and run this one"
                     (click)="OnSwitchComponent(component, $event)">
                     <i class="fa-solid fa-exchange-alt"></i> Switch To This
                   </button>
                 } @else {
-                  <button kendoButton
-                    [themeColor]="'primary'"
+                  <button mjButton variant="primary"
                     (click)="OnRunComponent(component, $event)">
                     <i class="fa-solid fa-play"></i> Run
                   </button>

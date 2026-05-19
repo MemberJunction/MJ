@@ -12,7 +12,7 @@
  * @since 2.130.0
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     MJFileStorageProviderEntity,
     MJFileEntity,
@@ -22,7 +22,7 @@ import {
     MJAIModalityEntity
 } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
-import { FileStorageBase } from '@memberjunction/storage';
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import {
     ConversationUtility,
     AttachmentType,
@@ -85,22 +85,38 @@ interface ModalityCache {
  * Handles validation, storage, thumbnails, and CRUD operations.
  */
 export class ConversationAttachmentService {
-    private md: Metadata;
+    private _defaultProvider: IMetadataProvider | null = null;
     private modalityCache: ModalityCache = { byName: new Map(), loaded: false };
 
-    constructor() {
-        this.md = new Metadata();
+    constructor() {}
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking service methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._defaultProvider ?? Metadata.Provider;
     }
+    public set Provider(value: IMetadataProvider | null) {
+        this._defaultProvider = value;
+    }
+
+    /** Resolves the provider to use: caller-supplied or the default captured at construction. */
+    private resolveProvider(provider?: IMetadataProvider): IMetadataProvider {
+        return provider ?? this.Provider;
+    }
+
 
     /**
      * Load and cache modalities for efficient lookup
      */
-    private async loadModalitiesIfNeeded(contextUser: UserInfo): Promise<void> {
+    private async loadModalitiesIfNeeded(contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         if (this.modalityCache.loaded) {
             return;
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJAIModalityEntity>({
             EntityName: 'MJ: AI Modalities',
             ResultType: 'entity_object'
@@ -117,8 +133,8 @@ export class ConversationAttachmentService {
     /**
      * Get modality by name (e.g., 'Image', 'Audio', 'Video', 'File')
      */
-    private async getModalityByName(name: string, contextUser: UserInfo): Promise<MJAIModalityEntity | null> {
-        await this.loadModalitiesIfNeeded(contextUser);
+    private async getModalityByName(name: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<MJAIModalityEntity | null> {
+        await this.loadModalitiesIfNeeded(contextUser, provider);
         return this.modalityCache.byName.get(name.toLowerCase()) || null;
     }
 
@@ -144,15 +160,17 @@ export class ConversationAttachmentService {
      * @param model - The AI model (for capability limits)
      * @param contextUser - The current user context
      * @param existingCounts - Current attachment counts for validation
+     * @param provider - Optional per-request metadata provider for server isolation
      * @returns The result with created attachment or error
      */
-    async addAttachment(
+    async AddAttachment(
         conversationDetailId: string,
         input: AddAttachmentInput,
         agent: MJAIAgentEntity | null,
         model: MJAIModelEntity | null,
         contextUser: UserInfo,
-        existingCounts: { images: number; videos: number; audios: number; documents: number } = { images: 0, videos: 0, audios: 0, documents: 0 }
+        existingCounts: { images: number; videos: number; audios: number; documents: number } = { images: 0, videos: 0, audios: 0, documents: 0 },
+        provider?: IMetadataProvider
     ): Promise<AddAttachmentResult> {
         // Parse data if it's a data URL
         const parsed = parseBase64DataUrl(input.data);
@@ -167,7 +185,7 @@ export class ConversationAttachmentService {
 
         // Get the modality entity for this attachment type
         const modalityName = this.attachmentTypeToModalityName(attachmentType);
-        const modality = await this.getModalityByName(modalityName, contextUser);
+        const modality = await this.getModalityByName(modalityName, contextUser, provider);
         if (!modality) {
             return {
                 success: false,
@@ -213,7 +231,8 @@ export class ConversationAttachmentService {
                 mimeType,
                 input.fileName || `attachment_${Date.now()}`,
                 agent,
-                contextUser
+                contextUser,
+                provider
             );
 
             if (!uploadResult.success) {
@@ -245,7 +264,7 @@ export class ConversationAttachmentService {
             fileId,
             thumbnailBase64,
             displayOrder: existingCounts.images + existingCounts.videos + existingCounts.audios + existingCounts.documents
-        }, contextUser);
+        }, contextUser, provider);
 
         if (!attachment) {
             return {
@@ -267,11 +286,13 @@ export class ConversationAttachmentService {
      *
      * @param attachment - The attachment entity
      * @param contextUser - The current user context
+     * @param provider - Optional per-request metadata provider for server isolation
      * @returns The attachment with content URL
      */
-    async getAttachmentData(
+    async GetAttachmentData(
         attachment: MJConversationDetailAttachmentEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<AttachmentWithData | null> {
         let contentUrl: string;
 
@@ -279,12 +300,19 @@ export class ConversationAttachmentService {
             // Inline data - convert to data URL
             contentUrl = createBase64DataUrl(attachment.InlineData, attachment.MimeType);
         } else if (attachment.FileID) {
-            // MJStorage - get download URL
-            const downloadUrl = await this.getDownloadUrl(attachment.FileID, contextUser);
-            if (!downloadUrl) {
-                return null;
+            // MJStorage - download file content and convert to data URL
+            // This ensures the extraction pipeline can process it identically to inline data
+            const fileContent = await this.DownloadFileContent(attachment.FileID, contextUser, provider);
+            if (!fileContent) {
+                // Fall back to pre-auth download URL if direct download fails
+                const downloadUrl = await this.GetDownloadUrl(attachment.FileID, contextUser, provider);
+                if (!downloadUrl) {
+                    return null;
+                }
+                contentUrl = downloadUrl;
+            } else {
+                contentUrl = createBase64DataUrl(fileContent.toString('base64'), attachment.MimeType);
             }
-            contentUrl = downloadUrl;
         } else {
             return null;
         }
@@ -296,29 +324,76 @@ export class ConversationAttachmentService {
     }
 
     /**
+     * Download file content from MJStorage as a Buffer.
+     *
+     * @param fileId - The File entity ID
+     * @param contextUser - The current user context
+     * @param provider - Optional per-request metadata provider for server isolation
+     * @returns Buffer of file content, or null if unavailable
+     */
+    async DownloadFileContent(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<Buffer | null> {
+        try {
+            const md = this.resolveProvider(provider);
+            const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+            if (!await file.Load(fileId)) {
+                return null;
+            }
+
+            const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+            if (!await storageProvider.Load(file.ProviderID)) {
+                return null;
+            }
+
+            // Find the FileStorageAccount that links to this provider using cached metadata
+            const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+
+            let driver: FileStorageBase;
+            if (matchingAccounts.length > 0) {
+                // Initialize driver with account credentials via FileStorageEngine
+                driver = await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, contextUser);
+            } else {
+                // Fallback: create driver without account credentials (env vars only)
+                driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+                    FileStorageBase,
+                    storageProvider.ServerDriverKey
+                );
+            }
+
+            const objectKey = file.ProviderKey || file.Name;
+            return await driver.GetObject({ fullPath: objectKey });
+        } catch (err) {
+            console.error(`[ConversationAttachmentService] Failed to download file ${fileId}:`, err);
+            return null;
+        }
+    }
+
+    /**
      * Get a pre-authenticated download URL for an MJStorage file.
      *
      * @param fileId - The File entity ID
      * @param contextUser - The current user context
+     * @param provider - Optional per-request metadata provider for server isolation
      * @returns The download URL or null if unavailable
      */
-    async getDownloadUrl(fileId: string, contextUser: UserInfo): Promise<string | null> {
+    async GetDownloadUrl(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        const md = this.resolveProvider(provider);
+
         // Load file entity
-        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!await file.Load(fileId)) {
             return null;
         }
 
-        // Load provider
-        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await provider.Load(file.ProviderID)) {
+        // Load storage provider
+        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+        if (!await storageProvider.Load(file.ProviderID)) {
             return null;
         }
 
         // Get driver and create download URL
         const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
             FileStorageBase,
-            provider.ServerDriverKey
+            storageProvider.ServerDriverKey
         );
 
         const objectKey = file.ProviderKey || file.Name;
@@ -332,11 +407,12 @@ export class ConversationAttachmentService {
      * @param contextUser - The current user context
      * @returns Array of attachment entities
      */
-    async getAttachments(
+    async GetAttachments(
         conversationDetailId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJConversationDetailAttachmentEntity[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
@@ -358,9 +434,10 @@ export class ConversationAttachmentService {
      * @param contextUser - The current user context
      * @returns Map of conversation detail ID to attachments
      */
-    async getAttachmentsBatch(
+    async GetAttachmentsBatch(
         conversationDetailIds: string[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<Map<string, MJConversationDetailAttachmentEntity[]>> {
         if (conversationDetailIds.length === 0) {
             return new Map();
@@ -368,7 +445,7 @@ export class ConversationAttachmentService {
 
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,
@@ -397,11 +474,13 @@ export class ConversationAttachmentService {
      *
      * @param attachmentId - The attachment ID
      * @param contextUser - The current user context
+     * @param provider - Optional per-request metadata provider for server isolation
      * @returns Whether deletion succeeded
      */
-    async deleteAttachment(attachmentId: string, contextUser: UserInfo): Promise<boolean> {
+    async DeleteAttachment(attachmentId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
+        const md = this.resolveProvider(provider);
         // Load attachment using strongly-typed entity
-        const attachment = await this.md.GetEntityObject<MJConversationDetailAttachmentEntity>(
+        const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
             'MJ: Conversation Detail Attachments',
             contextUser
         );
@@ -412,7 +491,7 @@ export class ConversationAttachmentService {
 
         // If stored in MJStorage, delete the file
         if (attachment.FileID) {
-            await this.deleteStorageFile(attachment.FileID, contextUser);
+            await this.deleteStorageFile(attachment.FileID, contextUser, provider);
         }
 
         // Delete the attachment record
@@ -426,7 +505,7 @@ export class ConversationAttachmentService {
      * @param attachment - The attachment entity
      * @returns The attachment content reference
      */
-    createAttachmentReference(attachment: MJConversationDetailAttachmentEntity): AttachmentContent {
+    CreateAttachmentReference(attachment: MJConversationDetailAttachmentEntity): AttachmentContent {
         // Map from modality to AttachmentType
         const modalityName = attachment.Modality?.toLowerCase() || 'file';
         let type: AttachmentType = 'Document';
@@ -462,99 +541,107 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Upload data to MJStorage
+     * Upload data to MJStorage.
+     *
+     * Resolves the storage account using:
+     * 1. Agent's `DefaultStorageAccountID` (account-based, with credentials)
+     * 2. Fallback: Agent's `AttachmentStorageProviderID` (legacy provider-based)
+     *
+     * When an account is resolved, uses `FileStorageEngine.Instance.UploadFile()`
+     * for proper OAuth credential handling.
      */
     private async uploadToStorage(
         base64Data: string,
         mimeType: string,
         fileName: string,
         agent: MJAIAgentEntity | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
-        // Get storage provider from agent config or use default
-        const providerId = agent?.AttachmentStorageProviderID ?? null;
-        if (!providerId) {
-            return {
-                success: false,
-                error: 'No storage provider configured for attachments'
-            };
+        const md = this.resolveProvider(provider);
+
+        // Prefer account-based resolution (new path via FileStorageEngine)
+        const storageAccountId = agent?.DefaultStorageAccountID ?? null;
+        if (storageAccountId) {
+            await FileStorageEngine.Instance.Config(false, contextUser);
+            try {
+                const result = await FileStorageEngine.Instance.UploadFile({
+                    content: Buffer.from(base64Data, 'base64'),
+                    fileName,
+                    mimeType,
+                    contextUser,
+                    storageAccountId,
+                    provider: md,
+                    pathPrefix: `conversation-attachments/${Date.now()}`
+                });
+                return { success: true, fileId: result.FileID };
+            } catch (err) {
+                return { success: false, error: (err as Error).message };
+            }
         }
 
-        // Load provider
-        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await provider.Load(providerId)) {
-            return {
-                success: false,
-                error: 'Failed to load storage provider'
-            };
+        // Legacy fallback: provider-based resolution (no account credentials)
+        const legacyProviderId = agent?.AttachmentStorageProviderID ?? null;
+        if (!legacyProviderId) {
+            return { success: false, error: 'No storage provider configured for attachments' };
         }
-
-        // Get driver
+        const storageProviderEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+        if (!await storageProviderEntity.Load(legacyProviderId)) {
+            return { success: false, error: 'Failed to load storage provider' };
+        }
         const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
             FileStorageBase,
-            provider.ServerDriverKey
+            storageProviderEntity.ServerDriverKey
         );
 
-        // Determine storage path - use a default if agent doesn't have one
-        const basePath = 'conversation-attachments';
-        const timestamp = Date.now();
-        const objectName = `${basePath}/${timestamp}_${fileName}`;
+        // Determine storage path
+        const objectName = `conversation-attachments/${Date.now()}_${fileName}`;
 
-        // Convert base64 to buffer
+        // Convert base64 to buffer and upload
         const buffer = Buffer.from(base64Data, 'base64');
-
-        // Upload
         const uploaded = await driver.PutObject(objectName, buffer, mimeType);
         if (!uploaded) {
-            return {
-                success: false,
-                error: 'Failed to upload file to storage'
-            };
+            return { success: false, error: 'Failed to upload file to storage' };
         }
 
         // Create File entity record
-        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         file.Name = fileName;
-        file.ProviderID = providerId;
+        file.ProviderID = legacyProviderId;
         file.ContentType = mimeType;
         file.ProviderKey = objectName;
         file.Status = 'Uploaded';
 
         if (!await file.Save()) {
-            // Try to clean up uploaded file
             await driver.DeleteObject(objectName);
-            return {
-                success: false,
-                error: 'Failed to create file record'
-            };
+            return { success: false, error: 'Failed to create file record' };
         }
 
-        return {
-            success: true,
-            fileId: file.ID
-        };
+        return { success: true, fileId: file.ID };
     }
 
     /**
      * Delete a file from MJStorage
      */
-    private async deleteStorageFile(fileId: string, contextUser: UserInfo): Promise<boolean> {
+    private async deleteStorageFile(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
+        const md = this.resolveProvider(provider);
+
         // Load file entity
-        const file = await this.md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
+        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!await file.Load(fileId)) {
             return false;
         }
 
-        // Load provider
-        const provider = await this.md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await provider.Load(file.ProviderID)) {
+        // Load storage provider
+        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
+        if (!await storageProvider.Load(file.ProviderID)) {
             return false;
         }
 
         // Get driver and delete
         const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
             FileStorageBase,
-            provider.ServerDriverKey
+            storageProvider.ServerDriverKey
         );
 
         const objectKey = file.ProviderKey || file.Name;
@@ -617,9 +704,11 @@ export class ConversationAttachmentService {
             thumbnailBase64: string | null;
             displayOrder: number;
         },
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJConversationDetailAttachmentEntity | null> {
-        const attachment = await this.md.GetEntityObject<MJConversationDetailAttachmentEntity>(
+        const md = this.resolveProvider(provider);
+        const attachment = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
             'MJ: Conversation Detail Attachments',
             contextUser
         );
@@ -656,7 +745,7 @@ let _attachmentServiceInstance: ConversationAttachmentService | null = null;
  *
  * @returns The attachment service instance
  */
-export function getAttachmentService(): ConversationAttachmentService {
+export function GetAttachmentService(): ConversationAttachmentService {
     if (!_attachmentServiceInstance) {
         _attachmentServiceInstance = new ConversationAttachmentService();
     }

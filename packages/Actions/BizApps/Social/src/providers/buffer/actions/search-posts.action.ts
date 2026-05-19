@@ -4,260 +4,113 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { SocialPost } from '../../../base/base-social.action';
 import { BaseAction } from '@memberjunction/actions';
 
+function generateSearchStatistics(posts: SocialPost[], extractHashtags: (content: string) => string[]) {
+  const stats = {
+    postsByChannel: {} as Record<string, number>,
+    postsByMonth: {} as Record<string, number>,
+    postsByDayOfWeek: {} as Record<string, number>,
+    postsWithMedia: 0,
+    hashtagFrequency: {} as Record<string, number>,
+  };
+
+  for (const post of posts) {
+    stats.postsByChannel[post.profileId] = (stats.postsByChannel[post.profileId] || 0) + 1;
+
+    const month = post.publishedAt.toISOString().substring(0, 7);
+    stats.postsByMonth[month] = (stats.postsByMonth[month] || 0) + 1;
+
+    const dayOfWeek = post.publishedAt.toLocaleDateString('en-US', { weekday: 'long' });
+    stats.postsByDayOfWeek[dayOfWeek] = (stats.postsByDayOfWeek[dayOfWeek] || 0) + 1;
+
+    if (post.mediaUrls.length > 0) stats.postsWithMedia++;
+
+    for (const tag of extractHashtags(post.content)) {
+      stats.hashtagFrequency[tag] = (stats.hashtagFrequency[tag] || 0) + 1;
+    }
+  }
+
+  return stats;
+}
+
 /**
- * Action to search historical posts in Buffer across profiles and date ranges
+ * Searches historical posts in Buffer using the GraphQL posts query with
+ * server-side date/channel/status filters. Text and hashtag filtering is
+ * applied client-side since the API doesn't support full-text search.
  */
 @RegisterClass(BaseAction, 'BufferSearchPostsAction')
 export class BufferSearchPostsAction extends BufferBaseAction {
-    /**
-     * Search for posts in Buffer
-     */
-    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const { Params, ContextUser } = params;
-        
-        try {
-            // Get parameters
-            const companyIntegrationId = this.getParamValue(Params, 'CompanyIntegrationID');
-            const query = this.getParamValue(Params, 'Query');
-            const profileIds = this.getParamValue(Params, 'ProfileIDs');
-            const hashtags = this.getParamValue(Params, 'Hashtags');
-            const startDate = this.getParamValue(Params, 'StartDate');
-            const endDate = this.getParamValue(Params, 'EndDate');
-            const limit = this.getParamValue(Params, 'Limit') || 100;
-            const offset = this.getParamValue(Params, 'Offset') || 0;
-            const includeAnalytics = this.getParamValue(Params, 'IncludeAnalytics') !== false;
+  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    const { Params } = params;
 
-            // Validate required parameters
-            if (!companyIntegrationId) {
-                throw new Error('CompanyIntegrationID is required');
-            }
+    try {
+      const query = this.getParamValue(Params, 'Query') as string | null;
+      const channelIds = this.getParamValue(Params, 'ChannelIDs') as string[] | null;
+      const hashtags = this.getParamValue(Params, 'Hashtags') as string[] | null;
+      const startDate = this.getParamValue(Params, 'StartDate') as string | null;
+      const endDate = this.getParamValue(Params, 'EndDate') as string | null;
+      const limit = (this.getParamValue(Params, 'Limit') as number | null) || 100;
+      const offset = (this.getParamValue(Params, 'Offset') as number | null) || 0;
 
-            // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_TOKEN',
-                    Message: 'Failed to initialize Buffer OAuth connection',
-                    Params
-                };
-            }
+      const authError = await this.ensureAuthenticated(params);
+      if (authError) return authError;
 
-            // Search posts
-            const searchParams = {
-                query,
-                hashtags,
-                startDate: startDate ? new Date(startDate) : undefined,
-                endDate: endDate ? new Date(endDate) : undefined,
-                limit,
-                offset,
-                profileIds
-            };
+      const organizationId = await this.resolveOrganizationId(Params);
 
-            const posts = await this.searchPosts(searchParams);
+      const posts = await this.searchPosts({
+        query: query || undefined,
+        hashtags: hashtags || undefined,
+        startDate: startDate ? new Date(startDate) : undefined,
+        endDate: endDate ? new Date(endDate) : undefined,
+        limit,
+        offset,
+        channelIds: channelIds || undefined,
+        organizationId,
+      });
 
-            // Optionally fetch analytics for each post
-            if (includeAnalytics) {
-                for (const post of posts) {
-                    try {
-                        const analytics = await this.getAnalytics(post.id);
-                        post.analytics = this.normalizeAnalytics(analytics);
-                    } catch (error) {
-                        // Log but don't fail if analytics fetch fails
-                        console.warn(`Failed to fetch analytics for post ${post.id}:`, error);
-                    }
-                }
-            }
+      const statistics = generateSearchStatistics(posts, (content) => this.extractHashtags(content));
 
-            // Create search statistics
-            const statistics = this.generateSearchStatistics(posts, searchParams);
+      const summary = {
+        totalResults: posts.length,
+        searchCriteria: {
+          query: query || null,
+          hashtags: hashtags || [],
+          dateRange: { start: startDate || null, end: endDate || null },
+          channelIds: channelIds || [],
+          limit,
+          offset,
+        },
+        statistics,
+        dateRange: {
+          earliest: posts.length > 0 ? posts[posts.length - 1].publishedAt : null,
+          latest: posts.length > 0 ? posts[0].publishedAt : null,
+        },
+      };
 
-            // Create summary
-            const summary = {
-                totalResults: posts.length,
-                searchCriteria: {
-                    query: query || null,
-                    hashtags: hashtags || [],
-                    dateRange: {
-                        start: startDate || null,
-                        end: endDate || null
-                    },
-                    profileIds: profileIds || [],
-                    limit,
-                    offset
-                },
-                statistics,
-                topPerformingPost: this.findTopPerformingPost(posts),
-                dateRange: {
-                    earliest: posts.length > 0 ? posts[posts.length - 1].publishedAt : null,
-                    latest: posts.length > 0 ? posts[0].publishedAt : null
-                }
-            };
+      this.setOutputParam(Params, 'Posts', posts);
+      this.setOutputParam(Params, 'Summary', summary);
 
-            // Update output parameters
-            const outputParams = [...Params];
-            const postsParam = outputParams.find(p => p.Name === 'Posts');
-            if (postsParam) postsParam.Value = posts;
-            const summaryParam = outputParams.find(p => p.Name === 'Summary');
-            if (summaryParam) summaryParam.Value = summary;
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: `Found ${posts.length} posts matching search criteria`,
-                Params: outputParams
-            };
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            const resultCode = this.mapBufferError(error);
-            
-            return {
-                Success: false,
-                ResultCode: resultCode,
-                Message: `Failed to search posts: ${errorMessage}`,
-                Params
-            };
-        }
+      return { Success: true, ResultCode: 'SUCCESS', Message: `Found ${posts.length} posts matching search criteria`, Params };
+    } catch (error) {
+      return this.buildErrorResult(error, 'search posts', Params);
     }
+  }
 
-    /**
-     * Generate statistics from search results
-     */
-    private generateSearchStatistics(posts: SocialPost[], searchParams: any): any {
-        const stats = {
-            postsByProfile: {} as Record<string, number>,
-            postsByMonth: {} as Record<string, number>,
-            postsByDayOfWeek: {} as Record<string, number>,
-            postsByHour: {} as Record<string, number>,
-            averageEngagements: 0,
-            totalEngagements: 0,
-            postsWithMedia: 0,
-            hashtagFrequency: {} as Record<string, number>
-        };
+  public get Params(): ActionParam[] {
+    return [
+      ...this.bufferCommonParams,
+      { Name: 'Query', Type: 'Input', Value: null },
+      { Name: 'ChannelIDs', Type: 'Input', Value: null },
+      { Name: 'Hashtags', Type: 'Input', Value: null },
+      { Name: 'StartDate', Type: 'Input', Value: null },
+      { Name: 'EndDate', Type: 'Input', Value: null },
+      { Name: 'Limit', Type: 'Input', Value: 100 },
+      { Name: 'Offset', Type: 'Input', Value: 0 },
+      { Name: 'Posts', Type: 'Output', Value: null },
+      { Name: 'Summary', Type: 'Output', Value: null },
+    ];
+  }
 
-        let totalEngagements = 0;
-        let postsWithEngagementData = 0;
-
-        for (const post of posts) {
-            // Count by profile
-            stats.postsByProfile[post.profileId] = (stats.postsByProfile[post.profileId] || 0) + 1;
-
-            // Count by month
-            const month = post.publishedAt.toISOString().substring(0, 7); // YYYY-MM
-            stats.postsByMonth[month] = (stats.postsByMonth[month] || 0) + 1;
-
-            // Count by day of week
-            const dayOfWeek = post.publishedAt.toLocaleDateString('en-US', { weekday: 'long' });
-            stats.postsByDayOfWeek[dayOfWeek] = (stats.postsByDayOfWeek[dayOfWeek] || 0) + 1;
-
-            // Count by hour
-            const hour = post.publishedAt.getHours();
-            stats.postsByHour[hour] = (stats.postsByHour[hour] || 0) + 1;
-
-            // Count posts with media
-            if (post.mediaUrls && post.mediaUrls.length > 0) {
-                stats.postsWithMedia++;
-            }
-
-            // Calculate engagements
-            if (post.analytics) {
-                totalEngagements += post.analytics.engagements;
-                postsWithEngagementData++;
-            }
-
-            // Extract and count hashtags
-            const hashtags = this.extractHashtags(post.content);
-            for (const hashtag of hashtags) {
-                stats.hashtagFrequency[hashtag] = (stats.hashtagFrequency[hashtag] || 0) + 1;
-            }
-        }
-
-        // Calculate averages
-        stats.totalEngagements = totalEngagements;
-        stats.averageEngagements = postsWithEngagementData > 0 ? 
-            totalEngagements / postsWithEngagementData : 0;
-
-        return stats;
-    }
-
-
-    /**
-     * Find the top performing post by engagements
-     */
-    private findTopPerformingPost(posts: SocialPost[]): SocialPost | null {
-        if (posts.length === 0) return null;
-
-        return posts.reduce((top, post) => {
-            if (!top || (post.analytics?.engagements || 0) > (top.analytics?.engagements || 0)) {
-                return post;
-            }
-            return top;
-        }, posts[0]);
-    }
-
-    /**
-     * Define the parameters this action expects
-     */
-    public get Params(): ActionParam[] {
-        return [
-            ...this.commonSocialParams,
-            {
-                Name: 'Query',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'ProfileIDs',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'Hashtags',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'StartDate',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'EndDate',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'Limit',
-                Type: 'Input',
-                Value: 100
-            },
-            {
-                Name: 'Offset',
-                Type: 'Input',
-                Value: 0
-            },
-            {
-                Name: 'IncludeAnalytics',
-                Type: 'Input',
-                Value: true
-            },
-            {
-                Name: 'Posts',
-                Type: 'Output',
-                Value: null
-            },
-            {
-                Name: 'Summary',
-                Type: 'Output',
-                Value: null
-            }
-        ];
-    }
-
-    /**
-     * Metadata about this action
-     */
-    public get Description(): string {
-        return 'Searches historical posts in Buffer across profiles with support for date ranges, hashtags, and content queries';
-    }
+  public get Description(): string {
+    return 'Searches historical posts in Buffer across channels with support for date ranges, hashtags, and content queries';
+  }
 }

@@ -1,0 +1,422 @@
+[
+  {
+    "fields": {
+      "Name": "Aveiro",
+      "Code": "01",
+      "ISO3166_2": "PT-01",
+      "Latitude": 40.6738,
+      "Longitude": -8.4394,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-01.geojson",
+      "CommonAliases": [
+        "Aveiro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "523818CC-67D9-4AFA-B0DF-DD86D63F1FED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.877Z",
+      "checksum": "3b5e2f1a3d2355b0da575a9d68a87cc208284fb165e45ddc7ad9a507b45f9a5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beja",
+      "Code": "02",
+      "ISO3166_2": "PT-02",
+      "Latitude": 37.8511,
+      "Longitude": -7.8872,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-02.geojson",
+      "CommonAliases": [
+        "Beja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "886CB9DF-B85C-4F0B-905E-E3384F193DAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.893Z",
+      "checksum": "a95ecc07e49f5ac705e6c39a6ddf042a76f1c3158d745145c491ff32f47428b6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Braga",
+      "Code": "03",
+      "ISO3166_2": "PT-03",
+      "Latitude": 41.5663,
+      "Longitude": -8.3186,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-03.geojson",
+      "CommonAliases": [
+        "Braga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "D93B7ED9-C2AA-421C-9AB2-932941D19D8D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.908Z",
+      "checksum": "c693736d4ffe6ca66389e4b5e48a2053f808117ff4d83df5c1c2b2353b33fe7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bragança",
+      "Code": "04",
+      "ISO3166_2": "PT-04",
+      "Latitude": 41.5188,
+      "Longitude": -6.8193,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-04.geojson",
+      "CommonAliases": [
+        "Bragança"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "1760DFA1-989B-49AA-9E7D-78EC53C70C54"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.922Z",
+      "checksum": "bcf007b951579c7301036867d35c5f718864dc5f21ef01e87161180ca967a632"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Castelo Branco",
+      "Code": "05",
+      "ISO3166_2": "PT-05",
+      "Latitude": 39.9984,
+      "Longitude": -7.5822,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-05.geojson",
+      "CommonAliases": [
+        "Castelo Branco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "1B0288C6-7A16-47A6-9455-261FE46EE8BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.935Z",
+      "checksum": "d49eb82178c54cb2ec5c13540d8cbb4409dbea267488b4fff64f14304271bc89"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coimbra",
+      "Code": "06",
+      "ISO3166_2": "PT-06",
+      "Latitude": 40.1645,
+      "Longitude": -8.3219,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-06.geojson",
+      "CommonAliases": [
+        "Coimbra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "2DEA5EBC-5039-47DB-98A4-CEDB5BBFFF7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.951Z",
+      "checksum": "3c56ea8d5d14283f297fb0bce62ca2920bb487e30e61bd23727ec4f23ac24c78"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Évora",
+      "Code": "07",
+      "ISO3166_2": "PT-07",
+      "Latitude": 38.6036,
+      "Longitude": -7.8846,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-07.geojson",
+      "CommonAliases": [
+        "Évora"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "D6541028-6B5D-4E23-826B-431632734A63"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.965Z",
+      "checksum": "72f8ba0076e776ddbb474ac8372d040fead510ea9b5cbc5e02d31d1c41b99682"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faro",
+      "Code": "08",
+      "ISO3166_2": "PT-08",
+      "Latitude": 37.1704,
+      "Longitude": -7.9389,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-08.geojson",
+      "CommonAliases": [
+        "Faro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "302DF6DC-9B96-4FE4-9EF7-E3077C2BC415"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.979Z",
+      "checksum": "631eabff12e82ab6b513058c2b5ad5066e0303747a4c273033845e30f744d27c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guarda",
+      "Code": "09",
+      "ISO3166_2": "PT-09",
+      "Latitude": 40.2918,
+      "Longitude": -7.3162,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-09.geojson",
+      "CommonAliases": [
+        "Guarda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "0E61C093-F3F3-4E10-9EBD-3EE02AEC0722"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.995Z",
+      "checksum": "53234692caebaffc0e09a9415b5acfce94d08609901f1d52a3a90217f1b6c30f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leiria",
+      "Code": "10",
+      "ISO3166_2": "PT-10",
+      "Latitude": 39.7583,
+      "Longitude": -8.7586,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-10.geojson",
+      "CommonAliases": [
+        "Leiria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "EDC4E7ED-367D-429B-8BE1-BB910D257042"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.008Z",
+      "checksum": "0589f70900890b59c84ed8129f02ffe99b9af27f5c96dd100cb7565bffc45c20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lisboa",
+      "Code": "11",
+      "ISO3166_2": "PT-11",
+      "Latitude": 38.9835,
+      "Longitude": -9.134,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-11.geojson",
+      "CommonAliases": [
+        "Lisboa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "AD68B4D3-536B-45EB-AD80-DC2A9C5DAA20"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.061Z",
+      "checksum": "b7b5c5bca1ce528fe7cf54023777277331f47cf331847d6aa7459cae30b16302"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Portalegre",
+      "Code": "12",
+      "ISO3166_2": "PT-12",
+      "Latitude": 39.2822,
+      "Longitude": -7.6539,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-12.geojson",
+      "CommonAliases": [
+        "Portalegre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "10D37067-007E-43CF-A169-9CAA6040110C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.076Z",
+      "checksum": "d029add6cfc9d255795a20e73a530ae562f64eb803b48695e7cfc1c510867371"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Porto",
+      "Code": "13",
+      "ISO3166_2": "PT-13",
+      "Latitude": 41.2118,
+      "Longitude": -8.3311,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-13.geojson",
+      "CommonAliases": [
+        "Porto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "7ADA2523-2759-427F-B15C-E2E5B887E9B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.090Z",
+      "checksum": "31468d9bcbc6df393032aab5ae7d611841308d654433031e0d780d13029907b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Regiāo Autónoma da Madeira",
+      "Code": "30",
+      "ISO3166_2": "PT-30",
+      "Latitude": 32.7427,
+      "Longitude": -16.9465,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-30.geojson",
+      "CommonAliases": [
+        "Regiāo Autónoma da Madeira"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "58058BBC-54F7-44F1-8766-CE860F5E2523"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.106Z",
+      "checksum": "d3d3633559474db6c41e8a8659926c07e260aeb7f3910931929cbceb1928fae9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Regiāo Autónoma dos Açores",
+      "Code": "20",
+      "ISO3166_2": "PT-20",
+      "Latitude": 38.6351,
+      "Longitude": -28.0394,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-20.geojson",
+      "CommonAliases": [
+        "Regiāo Autónoma dos Açores"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "17324BB2-EFCB-45B6-A775-A4F382046DD8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.123Z",
+      "checksum": "75a29aba5ee3ae60e24ecb9a7247256dabbd33216726b1353cbf7fcb17cbe72f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santarém",
+      "Code": "14",
+      "ISO3166_2": "PT-14",
+      "Latitude": 39.291,
+      "Longitude": -8.4038,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-14.geojson",
+      "CommonAliases": [
+        "Santarém"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "85CF630E-E351-4FEC-BF80-D2605487AE4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.140Z",
+      "checksum": "8c6d20b6ab970b788a728459b8f9bf07851d52869a2ba1a0242bff250fa50d88"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Setúbal",
+      "Code": "15",
+      "ISO3166_2": "PT-15",
+      "Latitude": 38.2071,
+      "Longitude": -8.5732,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-15.geojson",
+      "CommonAliases": [
+        "Setúbal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "7C1D544C-6697-44A9-9242-B8064EA1EA08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.157Z",
+      "checksum": "993678aeea88e65c26db0b2f9ab5ea7d04ef00307e588e5388857b40a59f6652"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Viana do Castelo",
+      "Code": "16",
+      "ISO3166_2": "PT-16",
+      "Latitude": 41.9099,
+      "Longitude": -8.4986,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-16.geojson",
+      "CommonAliases": [
+        "Viana do Castelo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "69C2117A-CEB5-4854-90EB-690593218FEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.174Z",
+      "checksum": "3cfbce61ab61d90d137c2827e6f20202cb789ffbf3c5b6e2ab738c9cd9f23e66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vila Real",
+      "Code": "17",
+      "ISO3166_2": "PT-17",
+      "Latitude": 41.5279,
+      "Longitude": -7.6453,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-17.geojson",
+      "CommonAliases": [
+        "Vila Real"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "51EA7863-37AA-442E-8004-2E7F4D9614AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.191Z",
+      "checksum": "c09fb453dae31dfab592b0153768381ab36b7786f4dac2200a88122834653610"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Viseu",
+      "Code": "18",
+      "ISO3166_2": "PT-18",
+      "Latitude": 40.8417,
+      "Longitude": -7.8274,
+      "BoundaryGeoJSON": "@file:by-country/PT/boundaries/PT-18.geojson",
+      "CommonAliases": [
+        "Viseu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PT"
+    },
+    "primaryKey": {
+      "ID": "8B5320DD-2136-41E7-91B8-4F185BADD856"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.207Z",
+      "checksum": "3a3306b60e40bb772574391bb476dafdd7f7b2b34febacf209f12189bc20db4f"
+    }
+  }
+]

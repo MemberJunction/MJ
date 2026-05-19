@@ -901,17 +901,6 @@
     height: 100%;
 }
 
-/* Kendo Splitter Specific Styles */
-.harness-body kendo-splitter {
-    height: 100%;
-}
-
-.harness-body kendo-splitter-pane {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-}
-
 /* Sidebar Tabs */
 .sidebar-tabs {
     display: flex;

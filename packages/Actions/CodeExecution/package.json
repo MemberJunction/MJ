@@ -1,19 +1,20 @@
 {
   "name": "@memberjunction/code-execution",
   "type": "module",
-  "version": "5.15.0",
+  "version": "5.34.1",
   "description": "Sandboxed code execution service for MemberJunction actions and agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc && tsc-alias -f",
+    "build": "tsc && tsc-alias -f && npm run copy:bundled-libs",
+    "copy:bundled-libs": "node -e \"const fs=require('fs'),p=require('path');const src=p.join('src','libraries','bundled-libs');const dst=p.join('dist','libraries','bundled-libs');fs.mkdirSync(dst,{recursive:true});for(const f of fs.readdirSync(src))fs.copyFileSync(p.join(src,f),p.join(dst,f));\"",
     "watch": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/core": "5.15.0",
-    "@memberjunction/global": "5.15.0",
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/global": "5.34.1",
     "isolated-vm": "^6.0.2",
     "lodash": "^4.17.23",
     "date-fns": "^3.0.0",

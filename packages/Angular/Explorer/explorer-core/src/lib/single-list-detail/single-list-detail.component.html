@@ -2,15 +2,25 @@
   <!-- Header with title and Add button -->
   <div class="list-header">
     <h1>{{ listRecord ? listRecord.Name : "List" }}</h1>
-    <kendo-dropdownbutton
-      class="add-btn"
-      (itemClick)="onDropdownItemClick($event)"
-      [data]="addOptions"
-      textField="Text"
-      themeColor="info">
-      <span class="fa-solid fa-plus"></span>
-      Add to List
-    </kendo-dropdownbutton>
+    <div class="add-dropdown-wrapper">
+      <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
+        <span class="fa-solid fa-plus"></span>
+        Add to List
+        <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
+      </button>
+      @if (showAddDropdown) {
+        <div class="add-dropdown-panel">
+          @for (option of addOptions; track option.Text) {
+            <div class="add-dropdown-item" (click)="onDropdownItemClick(option)">
+              <span class="add-dropdown-item-text">{{ option.Text }}</span>
+              @if (option.Description) {
+                <span class="add-dropdown-item-desc">{{ option.Description }}</span>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
   </div>
 
   <!-- Custom Toolbar -->
@@ -24,25 +34,24 @@
       </div>
       <div class="toolbar-right">
         @if (selectedKeys.length > 0) {
-          <button kendoButton
+          <button mjButton
             (click)="openRemoveDialog()"
-            fillMode="flat"
-            themeColor="error"
+            variant="flat"
             class="toolbar-button remove-btn">
             <span class="fa-solid fa-trash"></span>
             Remove from List
           </button>
         }
-        <button kendoButton
+        <button mjButton
           (click)="onRefreshClick()"
-          fillMode="flat"
+          variant="flat"
           class="toolbar-button">
           <span class="fa-solid fa-rotate"></span>
           Refresh
         </button>
-        <button kendoButton
+        <button mjButton
           (click)="onExportClick()"
-          fillMode="flat"
+          variant="flat"
           class="toolbar-button">
           <span class="fa-solid fa-file-export"></span>
           Export
@@ -81,23 +90,21 @@
 
 <!-- Remove from List Confirmation Dialog -->
 @if (showRemoveDialog) {
-  <kendo-dialog
-    title="Remove from List"
-    (close)="closeRemoveDialog()"
-    [minWidth]="350"
-    [width]="450">
+  <mj-dialog
+    [Visible]="true"
+    Title="Remove from List"
+    (Close)="closeRemoveDialog()"
+    [MinWidth]="350"
+    [Width]="450">
     <div class="dialog-content">
       @if (isRemoving) {
         <div class="dialog-loading">
           <mj-loading text="Removing records..." size="small"></mj-loading>
           @if (removeTotal > 0) {
-            <kendo-progressbar
-              [min]="0"
-              [max]="removeTotal"
-              [value]="removeProgress"
-              [label]="false"
+            <mj-progress-bar
+              [Value]="removeProgressPercent"
               class="progress-bar">
-            </kendo-progressbar>
+            </mj-progress-bar>
           }
         </div>
       } @else {
@@ -108,58 +115,55 @@
         </div>
       }
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton
+    <mj-dialog-actions>
+      <button mjButton
         (click)="confirmRemoveFromList()"
         [disabled]="isRemoving"
-        themeColor="error">
+        variant="danger">
         Remove
       </button>
-      <button kendoButton
+      <button mjButton
         (click)="closeRemoveDialog()"
         [disabled]="isRemoving"
-        fillMode="outline">
+        variant="outline">
         Cancel
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 <!-- Add Records Dialog -->
 @if (showAddRecordsDialog) {
-  <kendo-dialog
-    [title]="'Add ' + (listRecord?.Entity || 'Records') + ' to List'"
-    (close)="closeAddRecordsDialog()"
-    [minWidth]="500"
-    [width]="700"
-    [height]="650">
+  <mj-dialog
+    [Visible]="true"
+    [Title]="'Add ' + (listRecord?.Entity || 'Records') + ' to List'"
+    (Close)="closeAddRecordsDialog()"
+    [MinWidth]="500"
+    [Width]="700"
+    [Height]="650">
     <div class="dialog-content add-records-dialog">
       @if (addDialogSaving) {
         <div class="dialog-loading">
           <mj-loading text="Adding records to list..." size="small"></mj-loading>
           @if (addTotal > 0) {
-            <kendo-progressbar
-              [min]="0"
-              [max]="addTotal"
-              [value]="addProgress"
-              [label]="false"
+            <mj-progress-bar
+              [Value]="addProgressPercent"
               class="progress-bar">
-            </kendo-progressbar>
+            </mj-progress-bar>
           }
         </div>
       } @else {
         <!-- Search Input -->
         <div class="search-section">
-          <kendo-textbox
-            [placeholder]="'Search ' + (listRecord?.Entity || 'records') + '...'"
-            [clearButton]="true"
-            (valueChange)="onAddRecordsSearchChange($event)"
-            [value]="addRecordsSearchFilter"
-            class="search-input">
-            <ng-template kendoTextBoxPrefixTemplate>
-              <span class="fa-solid fa-search search-icon"></span>
-            </ng-template>
-          </kendo-textbox>
+          <div class="search-input-wrapper">
+            <span class="fa-solid fa-search search-icon"></span>
+            <input
+              class="mj-input search-input"
+              type="text"
+              [placeholder]="'Search ' + (listRecord?.Entity || 'records') + '...'"
+              [value]="addRecordsSearchFilter"
+              (input)="onAddRecordsSearchInputEvent($event)" />
+          </div>
           <span class="search-hint">Type at least 2 characters to search</span>
         </div>
         <!-- Records List -->
@@ -181,8 +185,8 @@
           } @else {
             <!-- Selection controls -->
             <div class="selection-controls">
-              <button kendoButton fillMode="flat" size="small" (click)="selectAllAddable()">Select All</button>
-              <button kendoButton fillMode="flat" size="small" (click)="deselectAllAddable()">Deselect All</button>
+              <button mjButton variant="flat" size="sm" (click)="selectAllAddable()">Select All</button>
+              <button mjButton variant="flat" size="sm" (click)="deselectAllAddable()">Deselect All</button>
               <span class="selection-info">{{ selectedAddableRecords.length }} selected</span>
             </div>
             <!-- Records -->
@@ -213,31 +217,32 @@
         </div>
       }
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton
+    <mj-dialog-actions>
+      <button mjButton
         (click)="confirmAddRecords()"
         [disabled]="addDialogSaving || selectedAddableRecords.length === 0"
-        themeColor="info">
+        variant="primary">
         Add {{ selectedAddableRecords.length > 0 ? selectedAddableRecords.length : '' }} Record{{ selectedAddableRecords.length !== 1 ? 's' : '' }}
       </button>
-      <button kendoButton
+      <button mjButton
         (click)="closeAddRecordsDialog()"
         [disabled]="addDialogSaving"
-        fillMode="outline">
+        variant="outline">
         Cancel
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 <!-- Add From View Dialog -->
 @if (showAddFromViewDialog) {
-  <kendo-dialog
-    title="Add Records from Views"
-    (close)="closeAddFromViewDialog()"
-    [minWidth]="400"
-    [width]="600"
-    [height]="500">
+  <mj-dialog
+    [Visible]="true"
+    Title="Add Records from Views"
+    (Close)="closeAddFromViewDialog()"
+    [MinWidth]="400"
+    [Width]="600"
+    [Height]="500">
     <div class="dialog-content">
       @if (showAddFromViewLoader && fetchingRecordsToSave) {
         <div class="dialog-loading">
@@ -246,13 +251,10 @@
       } @else if (showAddFromViewLoader && addFromViewTotal > 0) {
         <div class="dialog-loading">
           <mj-loading text="Adding records to list..." size="small"></mj-loading>
-          <kendo-progressbar
-            [min]="0"
-            [max]="addFromViewTotal"
-            [value]="addFromViewProgress"
-            [label]="false"
+          <mj-progress-bar
+            [Value]="addFromViewProgressPercent"
             class="progress-bar">
-          </kendo-progressbar>
+          </mj-progress-bar>
         </div>
       } @else if (showAddFromViewLoader) {
         <div class="dialog-loading">
@@ -283,19 +285,19 @@
         </div>
       }
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton
+    <mj-dialog-actions>
+      <button mjButton
         (click)="confirmAddFromView()"
         [disabled]="showAddFromViewLoader || userViewsToAdd.length === 0"
-        themeColor="info">
+        variant="primary">
         Add from {{ userViewsToAdd.length }} View{{ userViewsToAdd.length !== 1 ? 's' : '' }}
       </button>
-      <button kendoButton
+      <button mjButton
         (click)="closeAddFromViewDialog()"
         [disabled]="showAddFromViewLoader"
-        fillMode="outline">
+        variant="outline">
         Cancel
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

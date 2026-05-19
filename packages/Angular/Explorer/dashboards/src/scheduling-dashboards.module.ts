@@ -1,11 +1,19 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
+import {
+  MJButtonDirective,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJTabNavComponent,
+  MJPageSearchComponent,
+  MJFilterChipComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -39,12 +47,17 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    InputsModule,
-    DialogsModule,
-    WindowModule,
+    MJButtonDirective,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJTabNavComponent,
+    MJPageSearchComponent,
+    MJFilterChipComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

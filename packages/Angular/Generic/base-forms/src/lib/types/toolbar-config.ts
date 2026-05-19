@@ -36,10 +36,18 @@ export interface FormToolbarConfig {
   /** Show the Lists button for managing list membership. Default: true */
   ShowListButton: boolean;
 
+  /** Show the Tags button for viewing/managing tags on this record. Default: true */
+  ShowTagsButton: boolean;
+
   /** Show the IS-A entity hierarchy breadcrumb. Default: true */
   ShowEntityHierarchy: boolean;
 
-  /** Show section controls (search, expand/collapse, count). Default: true */
+  /**
+   * Master toggle for the entire right-hand section-controls group
+   * (search, expand-all, collapse-all, manage sections, width toggle).
+   * When false, the individual Show- and Allow- flags below are irrelevant.
+   * Default: true
+   */
   ShowSectionControls: boolean;
 
   /** Show the edit banner when entering edit mode. Default: true */
@@ -50,6 +58,19 @@ export interface FormToolbarConfig {
 
   /** Show the section search/filter input. Default: true */
   ShowSectionFilter: boolean;
+
+  /**
+   * Show the Expand-All and Collapse-All chevron buttons. Only relevant for
+   * forms that render MJ collapsible panels — custom layouts that manage
+   * their own open/closed state should set this to false. Default: true
+   */
+  ShowExpandCollapseAllButtons: boolean;
+
+  /**
+   * Show the width-mode toggle button (centered ⇄ full-width). Custom
+   * layouts with a fixed width should set this to false. Default: true
+   */
+  ShowWidthToggle: boolean;
 
   /** Allow drag-and-drop section reordering. Default: true */
   AllowSectionReorder: boolean;
@@ -90,11 +111,14 @@ export const DEFAULT_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
+  ShowTagsButton: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,
   ShowChangesButton: true,
   ShowSectionFilter: true,
+  ShowExpandCollapseAllButtons: true,
+  ShowWidthToggle: true,
   AllowSectionReorder: true,
   ShowSectionManager: true,
   StickyToolbar: true,
@@ -113,13 +137,46 @@ export const EXPLORER_TOOLBAR_CONFIG: FormToolbarConfig = {
   ShowFavoriteButton: true,
   ShowHistoryButton: true,
   ShowListButton: true,
+  ShowTagsButton: true,
   ShowEntityHierarchy: true,
   ShowSectionControls: true,
   ShowEditBanner: true,
   ShowChangesButton: true,
   ShowSectionFilter: true,
+  ShowExpandCollapseAllButtons: true,
+  ShowWidthToggle: true,
   AllowSectionReorder: true,
   ShowSectionManager: true,
+  StickyToolbar: true,
+  AdditionalActions: null,
+  CustomButtons: []
+};
+
+/**
+ * Toolbar config for custom-layout forms (Actions, AI Agents, etc.) that
+ * manage their own panel open/closed state and layout. Hides the entire
+ * right-hand section-controls group since search/expand-all/width-toggle
+ * don't apply to forms that don't use MJ collapsible panels.
+ *
+ * Still shows the left-side action buttons (edit, save, delete, favorite,
+ * history, lists, tags, changes) — those work the same for any entity form.
+ */
+export const CUSTOM_LAYOUT_TOOLBAR_CONFIG: FormToolbarConfig = {
+  ShowEditButton: true,
+  ShowDeleteButton: true,
+  ShowFavoriteButton: true,
+  ShowHistoryButton: true,
+  ShowListButton: true,
+  ShowTagsButton: true,
+  ShowEntityHierarchy: true,
+  ShowSectionControls: false,            // ← hides the whole right group
+  ShowEditBanner: true,
+  ShowChangesButton: true,
+  ShowSectionFilter: false,
+  ShowExpandCollapseAllButtons: false,
+  ShowWidthToggle: false,
+  AllowSectionReorder: false,
+  ShowSectionManager: false,
   StickyToolbar: true,
   AdditionalActions: null,
   CustomButtons: []

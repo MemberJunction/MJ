@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Run Analysis — 3 Options</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+.analytics-shell { display: flex; height: calc(100vh - 78px); background: var(--mj-bg-page); }
+.left-nav { width: 220px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); flex-shrink: 0; overflow-y: auto; }
+.nav-header { padding: 20px 16px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--mj-text-disabled); }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--mj-text-secondary); cursor: pointer; border-left: 3px solid transparent; }
+.nav-item:hover { background: var(--mj-bg-surface-hover); }
+.nav-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-weight: 600; border-left-color: var(--mj-brand-primary); }
+.nav-item i { width: 18px; text-align: center; }
+.nav-divider { height: 1px; background: var(--mj-border-subtle); margin: 8px 16px; }
+.content-area { flex: 1; overflow-y: auto; padding: 24px; }
+
+.filter-bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.filter-label { font-size: 12px; font-weight: 600; color: var(--mj-text-muted); }
+.filter-select { padding: 6px 12px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 12px; background: var(--mj-bg-surface-card); color: var(--mj-text-primary); }
+.time-chips { display: flex; gap: 4px; margin-left: auto; }
+.time-chip { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--mj-bg-surface-card); color: var(--mj-text-muted); border: 1px solid transparent; cursor: pointer; }
+.time-chip.active { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+
+.stats-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 20px; }
+.stat-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px; text-align: center; }
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); margin-bottom: 4px; }
+.stat-value { font-size: 20px; font-weight: 800; color: var(--mj-text-primary); }
+.stat-value.highlight { color: var(--mj-brand-primary); }
+.stat-value.success { color: var(--mj-status-success); }
+.stat-delta { font-size: 10px; font-weight: 600; margin-top: 2px; }
+.stat-delta.up { color: var(--mj-status-success); }
+.stat-delta.down { color: var(--mj-status-error); }
+
+.panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+.panel-title { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); display: flex; align-items: center; gap: 8px; }
+.panel-title i { color: var(--mj-brand-primary); font-size: 13px; }
+.panel-body { padding: 18px; }
+.panel-action { font-size: 11px; color: var(--mj-text-link); cursor: pointer; font-weight: 600; background: none; border: none; }
+
+.status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.status-pill.success { background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.status-pill.failed { background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+.status-pill.running { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+/* Agent Run Cards */
+.run-card { border: 1px solid var(--mj-border-default); border-radius: 10px; margin-bottom: 12px; overflow: hidden; transition: all 0.2s; cursor: pointer; }
+.run-card:hover { border-color: var(--mj-brand-primary); box-shadow: 0 4px 16px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); }
+.run-card-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; background: var(--mj-bg-surface); }
+.run-card-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 15px; background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); color: var(--mj-status-success); flex-shrink: 0; }
+.run-card-info { flex: 1; }
+.run-card-name { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); }
+.run-card-meta { font-size: 11px; color: var(--mj-text-muted); display: flex; gap: 12px; margin-top: 2px; }
+.run-card-stats { display: flex; gap: 16px; align-items: center; }
+.run-stat { text-align: center; }
+.run-stat-value { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); }
+.run-stat-label { font-size: 9px; font-weight: 600; text-transform: uppercase; color: var(--mj-text-disabled); }
+
+/* Timeline / Gantt */
+.timeline-container { padding: 14px 18px; background: var(--mj-bg-surface-card); }
+.timeline-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.timeline-label { width: 140px; font-size: 11px; font-weight: 600; color: var(--mj-text-secondary); text-align: right; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timeline-track { flex: 1; height: 20px; background: var(--mj-bg-surface-sunken); border-radius: 4px; position: relative; overflow: hidden; }
+.timeline-bar { position: absolute; top: 2px; bottom: 2px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--mj-text-inverse); }
+.timeline-bar.primary { background: var(--mj-brand-primary); }
+.timeline-bar.accent { background: var(--mj-brand-accent); }
+.timeline-bar.success { background: var(--mj-status-success); }
+.timeline-bar.warning { background: var(--mj-status-warning); }
+.timeline-bar.error { background: var(--mj-status-error); }
+.timeline-duration { width: 50px; font-size: 11px; color: var(--mj-text-muted); text-align: right; flex-shrink: 0; }
+.timeline-axis { display: flex; justify-content: space-between; padding: 4px 0 0; margin-left: 152px; font-size: 9px; color: var(--mj-text-disabled); }
+
+/* Cost attribution stacked bar */
+.cost-attr { display: flex; flex-direction: column; gap: 8px; }
+.cost-attr-row { display: flex; align-items: center; gap: 10px; }
+.cost-attr-label { width: 120px; font-size: 12px; font-weight: 500; color: var(--mj-text-primary); flex-shrink: 0; }
+.cost-attr-bar-wrap { flex: 1; height: 24px; display: flex; border-radius: 4px; overflow: hidden; }
+.cost-attr-segment { height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: var(--mj-text-inverse); min-width: 30px; }
+.cost-attr-value { width: 60px; font-size: 12px; font-weight: 700; color: var(--mj-text-secondary); text-align: right; flex-shrink: 0; }
+
+/* Agent comparison */
+.compare-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.compare-card { background: var(--mj-bg-surface-card); border-radius: 10px; padding: 18px; border: 1px solid var(--mj-border-default); }
+.compare-card-title { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.compare-metric { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--mj-border-subtle); }
+.compare-metric:last-child { border-bottom: none; }
+.compare-metric-label { font-size: 12px; color: var(--mj-text-muted); }
+.compare-metric-value { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); }
+.compare-best { color: var(--mj-status-success) !important; }
+.compare-worst { color: var(--mj-status-error) !important; }
+
+@media (max-width: 1200px) { .stats-bar { grid-template-columns: repeat(3, 1fr); } .compare-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .analytics-shell { flex-direction: column; } .left-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--mj-border-default); } .nav-header { display: none; } .compare-grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP: Agent Run Analysis — 3 Design Options</div>
+<div class="option-tabs">
+  <button class="option-tab active" onclick="showOption('a')">Option A — Run Cards + Timeline</button>
+  <button class="option-tab" onclick="showOption('b')">Option B — Cost Attribution Focus</button>
+  <button class="option-tab" onclick="showOption('c')">Option C — Agent Comparison</button>
+</div>
+
+<div class="options-container">
+
+<!-- ==================== OPTION A: Run Cards with Expandable Timeline ==================== -->
+<div id="option-a" class="option-content active">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item active"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Agents</option></select>
+      <select class="filter-select"><option>All Statuses</option></select>
+      <div class="time-chips">
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+      </div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">Total Runs</div><div class="stat-value highlight">347</div><div class="stat-delta up">+8%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Steps</div><div class="stat-value">4.2</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value">12.4s</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">$8.92</div><div class="stat-delta down">+15%</div></div>
+      <div class="stat-card"><div class="stat-label">Success Rate</div><div class="stat-value success">96.3%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Prompts/Run</div><div class="stat-value">6.8</div></div>
+    </div>
+
+    <!-- Agent Run Cards with expandable timeline -->
+    <div class="run-card">
+      <div class="run-card-header">
+        <div class="run-card-icon"><i class="fa-solid fa-robot"></i></div>
+        <div class="run-card-info">
+          <div class="run-card-name">Data Analysis Agent</div>
+          <div class="run-card-meta">
+            <span>Apr 13, 2:34 PM</span>
+            <span>8 prompt runs</span>
+            <span><span class="status-pill success">Completed</span></span>
+          </div>
+        </div>
+        <div class="run-card-stats">
+          <div class="run-stat"><div class="run-stat-value">14.2s</div><div class="run-stat-label">Duration</div></div>
+          <div class="run-stat"><div class="run-stat-value">$0.42</div><div class="run-stat-label">Cost</div></div>
+          <div class="run-stat"><div class="run-stat-value">12.4K</div><div class="run-stat-label">Tokens</div></div>
+        </div>
+      </div>
+      <div class="timeline-container">
+        <div class="timeline-row">
+          <div class="timeline-label">Analyze Schema</div>
+          <div class="timeline-track"><div class="timeline-bar primary" style="left:0%;width:15%">0.8s</div></div>
+          <div class="timeline-duration">0.8s</div>
+        </div>
+        <div class="timeline-row">
+          <div class="timeline-label">Generate Queries</div>
+          <div class="timeline-track"><div class="timeline-bar accent" style="left:15%;width:25%">2.1s</div></div>
+          <div class="timeline-duration">2.1s</div>
+        </div>
+        <div class="timeline-row">
+          <div class="timeline-label">Execute SQL (x3)</div>
+          <div class="timeline-track"><div class="timeline-bar success" style="left:40%;width:20%">1.4s</div></div>
+          <div class="timeline-duration">1.4s</div>
+        </div>
+        <div class="timeline-row">
+          <div class="timeline-label">Analyze Results</div>
+          <div class="timeline-track"><div class="timeline-bar primary" style="left:60%;width:22%">3.2s</div></div>
+          <div class="timeline-duration">3.2s</div>
+        </div>
+        <div class="timeline-row">
+          <div class="timeline-label">Generate Summary</div>
+          <div class="timeline-track"><div class="timeline-bar accent" style="left:82%;width:18%">6.7s</div></div>
+          <div class="timeline-duration">6.7s</div>
+        </div>
+        <div class="timeline-axis"><span>0s</span><span>3s</span><span>6s</span><span>9s</span><span>12s</span><span>14.2s</span></div>
+      </div>
+    </div>
+
+    <div class="run-card">
+      <div class="run-card-header">
+        <div class="run-card-icon" style="background:color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));color:var(--mj-brand-primary)"><i class="fa-solid fa-robot"></i></div>
+        <div class="run-card-info">
+          <div class="run-card-name">Skip Conductor</div>
+          <div class="run-card-meta"><span>Apr 13, 2:28 PM</span><span>12 prompt runs</span><span><span class="status-pill success">Completed</span></span></div>
+        </div>
+        <div class="run-card-stats">
+          <div class="run-stat"><div class="run-stat-value">28.6s</div><div class="run-stat-label">Duration</div></div>
+          <div class="run-stat"><div class="run-stat-value">$1.24</div><div class="run-stat-label">Cost</div></div>
+          <div class="run-stat"><div class="run-stat-value">34.2K</div><div class="run-stat-label">Tokens</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="run-card">
+      <div class="run-card-header">
+        <div class="run-card-icon" style="background:color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));color:var(--mj-status-error)"><i class="fa-solid fa-robot"></i></div>
+        <div class="run-card-info">
+          <div class="run-card-name">Classification Agent</div>
+          <div class="run-card-meta"><span>Apr 13, 2:22 PM</span><span>3 prompt runs</span><span><span class="status-pill failed">Failed</span></span></div>
+        </div>
+        <div class="run-card-stats">
+          <div class="run-stat"><div class="run-stat-value">4.1s</div><div class="run-stat-label">Duration</div></div>
+          <div class="run-stat"><div class="run-stat-value">$0.08</div><div class="run-stat-label">Cost</div></div>
+          <div class="run-stat"><div class="run-stat-value">2.1K</div><div class="run-stat-label">Tokens</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION B: Cost Attribution Focus ==================== -->
+<div id="option-b" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item active"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Agents</option></select>
+      <select class="filter-select"><option>All Statuses</option></select>
+      <div class="time-chips"><button class="time-chip active">24H</button><button class="time-chip">7D</button><button class="time-chip">30D</button></div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">Agent Runs</div><div class="stat-value highlight">347</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">$8.92</div></div>
+      <div class="stat-card"><div class="stat-label">Prompt Runs</div><div class="stat-value">2,134</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Cost/Run</div><div class="stat-value">$0.026</div></div>
+      <div class="stat-card"><div class="stat-label">Success</div><div class="stat-value success">96.3%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Duration</div><div class="stat-value">12.4s</div></div>
+    </div>
+
+    <!-- Cost Attribution Panel -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-coins"></i> Cost Attribution by Agent</span>
+        <button class="panel-action">Export</button>
+      </div>
+      <div class="panel-body">
+        <div class="cost-attr">
+          <div class="cost-attr-row">
+            <div class="cost-attr-label">Data Analysis</div>
+            <div class="cost-attr-bar-wrap">
+              <div class="cost-attr-segment" style="width:35%;background:var(--mj-brand-primary)">Analyze</div>
+              <div class="cost-attr-segment" style="width:25%;background:var(--mj-brand-accent)">Query Gen</div>
+              <div class="cost-attr-segment" style="width:30%;background:var(--mj-color-violet-500)">Summarize</div>
+              <div class="cost-attr-segment" style="width:10%;background:var(--mj-text-disabled)">Other</div>
+            </div>
+            <div class="cost-attr-value">$3.42</div>
+          </div>
+          <div class="cost-attr-row">
+            <div class="cost-attr-label">Skip Conductor</div>
+            <div class="cost-attr-bar-wrap">
+              <div class="cost-attr-segment" style="width:20%;background:var(--mj-brand-primary)">Plan</div>
+              <div class="cost-attr-segment" style="width:40%;background:var(--mj-brand-accent)">Execute</div>
+              <div class="cost-attr-segment" style="width:25%;background:var(--mj-color-violet-500)">Review</div>
+              <div class="cost-attr-segment" style="width:15%;background:var(--mj-text-disabled)">Other</div>
+            </div>
+            <div class="cost-attr-value">$2.84</div>
+          </div>
+          <div class="cost-attr-row">
+            <div class="cost-attr-label">Report Builder</div>
+            <div class="cost-attr-bar-wrap">
+              <div class="cost-attr-segment" style="width:15%;background:var(--mj-brand-primary)">Schema</div>
+              <div class="cost-attr-segment" style="width:55%;background:var(--mj-brand-accent)">Generate</div>
+              <div class="cost-attr-segment" style="width:30%;background:var(--mj-color-violet-500)">Format</div>
+            </div>
+            <div class="cost-attr-value">$1.56</div>
+          </div>
+          <div class="cost-attr-row">
+            <div class="cost-attr-label">Classification</div>
+            <div class="cost-attr-bar-wrap">
+              <div class="cost-attr-segment" style="width:80%;background:var(--mj-brand-primary)">Classify</div>
+              <div class="cost-attr-segment" style="width:20%;background:var(--mj-status-error)">Retries</div>
+            </div>
+            <div class="cost-attr-value">$1.10</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:14px;font-size:10px;">
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--mj-brand-primary);border-radius:2px"></span> Analysis</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--mj-brand-accent);border-radius:2px"></span> Generation</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--mj-color-violet-500);border-radius:2px"></span> Summarize</span>
+          <span style="display:flex;align-items:center;gap:4px"><span style="width:10px;height:10px;background:var(--mj-status-error);border-radius:2px"></span> Retries</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Agent run list below -->
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-list"></i> Recent Agent Runs</span></div>
+      <div class="panel-body" style="padding:0">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Agent</th>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Status</th>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Steps</th>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Duration</th>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Cost</th>
+            <th style="padding:10px 14px;font-size:11px;font-weight:700;text-transform:uppercase;color:var(--mj-text-muted);text-align:left;background:var(--mj-bg-surface-card);">Time</th>
+          </tr></thead>
+          <tbody>
+            <tr style="border-bottom:1px solid var(--mj-border-subtle);cursor:pointer;" onmouseover="this.style.background='var(--mj-bg-surface-hover)'" onmouseout="this.style.background=''">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">Data Analysis Agent</td>
+              <td style="padding:10px 14px"><span class="status-pill success">OK</span></td>
+              <td style="padding:10px 14px;font-size:12px">8</td>
+              <td style="padding:10px 14px;font-size:12px">14.2s</td>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">$0.42</td>
+              <td style="padding:10px 14px;font-size:11px;color:var(--mj-text-muted)">2:34 PM</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--mj-border-subtle);cursor:pointer;" onmouseover="this.style.background='var(--mj-bg-surface-hover)'" onmouseout="this.style.background=''">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">Skip Conductor</td>
+              <td style="padding:10px 14px"><span class="status-pill success">OK</span></td>
+              <td style="padding:10px 14px;font-size:12px">12</td>
+              <td style="padding:10px 14px;font-size:12px">28.6s</td>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">$1.24</td>
+              <td style="padding:10px 14px;font-size:11px;color:var(--mj-text-muted)">2:28 PM</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--mj-border-subtle);cursor:pointer;" onmouseover="this.style.background='var(--mj-bg-surface-hover)'" onmouseout="this.style.background=''">
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">Classification Agent</td>
+              <td style="padding:10px 14px"><span class="status-pill failed">Fail</span></td>
+              <td style="padding:10px 14px;font-size:12px">3</td>
+              <td style="padding:10px 14px;font-size:12px">4.1s</td>
+              <td style="padding:10px 14px;font-size:12px;font-weight:600">$0.08</td>
+              <td style="padding:10px 14px;font-size:11px;color:var(--mj-text-muted)">2:22 PM</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION C: Agent Comparison ==================== -->
+<div id="option-c" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item active"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Compare Agents:</span>
+      <select class="filter-select"><option>Data Analysis Agent</option></select>
+      <span style="color:var(--mj-text-disabled)">vs</span>
+      <select class="filter-select"><option>Skip Conductor</option></select>
+      <span style="color:var(--mj-text-disabled)">vs</span>
+      <select class="filter-select"><option>Report Builder</option></select>
+      <div class="time-chips"><button class="time-chip active">7D</button><button class="time-chip">30D</button></div>
+    </div>
+
+    <div class="compare-grid">
+      <div class="compare-card">
+        <div class="compare-card-title"><i class="fa-solid fa-robot" style="color:var(--mj-brand-primary)"></i> Data Analysis Agent</div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Runs</span><span class="compare-metric-value">124</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Success Rate</span><span class="compare-metric-value compare-best">98.4%</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Duration</span><span class="compare-metric-value compare-best">12.4s</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Cost</span><span class="compare-metric-value">$0.42</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Steps</span><span class="compare-metric-value">4.2</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Cost</span><span class="compare-metric-value">$52.08</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Tokens/Run</span><span class="compare-metric-value compare-best">8.2K</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">P95 Duration</span><span class="compare-metric-value">24.1s</span></div>
+      </div>
+
+      <div class="compare-card">
+        <div class="compare-card-title"><i class="fa-solid fa-robot" style="color:var(--mj-brand-accent)"></i> Skip Conductor</div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Runs</span><span class="compare-metric-value">89</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Success Rate</span><span class="compare-metric-value">95.5%</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Duration</span><span class="compare-metric-value compare-worst">28.6s</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Cost</span><span class="compare-metric-value compare-worst">$1.24</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Steps</span><span class="compare-metric-value">8.1</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Cost</span><span class="compare-metric-value compare-worst">$110.36</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Tokens/Run</span><span class="compare-metric-value">24.6K</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">P95 Duration</span><span class="compare-metric-value compare-worst">52.3s</span></div>
+      </div>
+
+      <div class="compare-card">
+        <div class="compare-card-title"><i class="fa-solid fa-robot" style="color:var(--mj-color-violet-500)"></i> Report Builder</div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Runs</span><span class="compare-metric-value">67</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Success Rate</span><span class="compare-metric-value">97.0%</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Duration</span><span class="compare-metric-value">18.2s</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Cost</span><span class="compare-metric-value">$0.78</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Steps</span><span class="compare-metric-value compare-best">3.4</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Total Cost</span><span class="compare-metric-value">$52.26</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">Avg Tokens/Run</span><span class="compare-metric-value">14.8K</span></div>
+        <div class="compare-metric"><span class="compare-metric-label">P95 Duration</span><span class="compare-metric-value compare-best">22.1s</span></div>
+      </div>
+    </div>
+
+    <!-- Summary insight -->
+    <div class="panel" style="margin-top:16px">
+      <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-lightbulb"></i> Insights</span></div>
+      <div class="panel-body">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:color-mix(in srgb, var(--mj-status-success) 6%, var(--mj-bg-surface));border-radius:6px;">
+            <i class="fa-solid fa-check-circle" style="color:var(--mj-status-success);margin-top:2px"></i>
+            <span style="font-size:12px;color:var(--mj-text-secondary)"><strong style="color:var(--mj-text-primary)">Data Analysis Agent</strong> has the highest success rate (98.4%) and lowest cost per run ($0.42)</span>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 14px;background:color-mix(in srgb, var(--mj-status-warning) 6%, var(--mj-bg-surface));border-radius:6px;">
+            <i class="fa-solid fa-exclamation-triangle" style="color:var(--mj-status-warning);margin-top:2px"></i>
+            <span style="font-size:12px;color:var(--mj-text-secondary)"><strong style="color:var(--mj-text-primary)">Skip Conductor</strong> is 2x more expensive per run — consider optimizing prompt chain or switching models for intermediate steps</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<script>
+function showOption(id) {
+  document.querySelectorAll('.option-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.option-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('option-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

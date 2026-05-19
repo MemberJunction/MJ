@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "New Caledonia",
+      "Code": "NC",
+      "ISO3166_2": "NC-NC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "New Caledonia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NC"
+    },
+    "primaryKey": {
+      "ID": "ED2F3057-4A48-437C-8E14-FD684F34B5DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.124Z",
+      "checksum": "ea6e63e2491028b6fb5f638838d98d3e4ca2d68027633c28bcd109c51f68543e"
+    }
+  }
+]

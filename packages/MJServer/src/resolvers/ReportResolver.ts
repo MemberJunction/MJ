@@ -2,7 +2,6 @@ import { EntitySaveOptions, IRunReportProvider, Metadata, RunReport } from '@mem
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { MJConversationDetailEntity, MJReportEntity } from '@memberjunction/core-entities';
-import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { z } from 'zod';
@@ -104,7 +103,7 @@ export class ReportResolverExtended extends ResolverBase {
       const request = new mssql.Request(dataSource);
       const result = await request.query(sql);
       if (!result || !result.recordset || result.recordset.length === 0) throw new Error('Unable to retrieve converation details');
-      const skipData = <SkipAPIAnalysisCompleteResponse>JSON.parse(result.recordset[0].Message);
+      const skipData: { title?: string; reportTitle?: string; userExplanation?: string; messages?: unknown[] } = JSON.parse(result.recordset[0].Message);
 
       const report = await md.GetEntityObject<MJReportEntity>('MJ: Reports', u);
       report.NewRecord();

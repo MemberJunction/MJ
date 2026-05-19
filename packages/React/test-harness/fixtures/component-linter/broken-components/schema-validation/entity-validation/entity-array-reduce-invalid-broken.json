@@ -1,0 +1,38 @@
+{
+  "name": "EntityArrayReduceInvalidBroken",
+  "type": "generic",
+  "title": "Entity Array Reduce Invalid Field - Broken Pattern",
+  "description": "Tests linter detection of grouping by field with typo in reduce",
+  "code": "function EntityArrayReduceInvalidBroken({ utilities }) {\n  const [grouped, setGrouped] = useState({});\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ Typo in reduce: Ttle should be Title\n        const groups = result.Results.reduce((acc, m) => {\n          const key = m.Ttle || 'Unknown';\n          acc[key] = (acc[key] || 0) + 1;\n          return acc;\n        }, {});\n        setGrouped(groups);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employees by Title</h3>\n      {Object.entries(grouped).map(([type, count]) => (\n        <div key={type}>{type}: {count}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [{
+      "name": "MJ: Employees",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Phone", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"},
+        {"name": "Active", "type": "bit"},
+        {"name": "CompanyID", "type": "uniqueidentifier"},
+        {"name": "SupervisorID", "type": "uniqueidentifier"},
+        {"name": "FirstLast", "type": "nvarchar"},
+        {"name": "Supervisor", "type": "nvarchar"},
+        {"name": "SupervisorEmail", "type": "nvarchar"},
+        {"name": "SupervisorFirstName", "type": "nvarchar"},
+        {"name": "SupervisorLastName", "type": "nvarchar"},
+        {"name": "BCMID", "type": "uniqueidentifier"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
+    }]
+  }
+}

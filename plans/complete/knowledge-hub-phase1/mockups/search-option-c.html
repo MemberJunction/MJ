@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Dashboard — Option C: Dashboard + Search Hybrid</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59,130,246,0.15);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --pink: #ec4899;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 2rem;
+  }
+
+  /* Header with search */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+    padding-top: 1rem;
+  }
+  .brand {
+    font-size: 1.3rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    white-space: nowrap;
+  }
+  .search-wrap {
+    flex: 1;
+    max-width: 600px;
+    position: relative;
+  }
+  .search-input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem 0.75rem 2.75rem;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .search-input::placeholder { color: var(--text-muted); }
+  .search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .search-wrap i {
+    position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted);
+  }
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-left: auto;
+  }
+  .top-btn {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+  }
+  .top-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .notif-dot {
+    position: absolute;
+    top: -2px; right: -2px;
+    width: 8px; height: 8px;
+    background: var(--error);
+    border-radius: 50%;
+    border: 2px solid var(--bg-page);
+  }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    transition: all 0.2s;
+  }
+  .stat-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .stat-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 0.75rem;
+  }
+  .stat-icon {
+    width: 36px; height: 36px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem;
+  }
+  .stat-trend {
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex; align-items: center; gap: 0.25rem;
+  }
+  .stat-trend.up { color: var(--success); }
+  .stat-trend.down { color: var(--error); }
+  .stat-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .stat-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 1.5rem;
+  }
+
+  /* Recent activity */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .card-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-header h3 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card-header .see-all {
+    font-size: 0.8rem;
+    color: var(--accent);
+    cursor: pointer;
+  }
+
+  /* Quick search results (inline) */
+  .quick-results {
+    margin-bottom: 1.5rem;
+  }
+  .results-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.25rem;
+  }
+  .results-tab {
+    padding: 0.75rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .results-tab:hover { color: var(--text-secondary); }
+  .results-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  .tab-count {
+    background: var(--bg-page);
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+
+  .result-row {
+    display: flex;
+    align-items: center;
+    padding: 0.85rem 1.25rem;
+    gap: 0.75rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .result-row:hover { background: var(--bg-card-hover); }
+  .result-row:last-child { border-bottom: none; }
+  .r-icon {
+    width: 34px; height: 34px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.85rem;
+  }
+  .r-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .r-icon.purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .r-icon.green { background: rgba(34,197,94,0.15); color: var(--success); }
+  .r-info { flex: 1; min-width: 0; }
+  .r-title {
+    font-size: 0.88rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .r-title mark {
+    background: rgba(59,130,246,0.2);
+    color: var(--accent);
+    border-radius: 2px;
+    padding: 0 2px;
+  }
+  .r-sub {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.1rem;
+  }
+  .r-score {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--success);
+    flex-shrink: 0;
+  }
+  .r-time {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* Activity feed */
+  .activity-item {
+    display: flex;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    transition: background 0.15s;
+  }
+  .activity-item:hover { background: var(--bg-card-hover); }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+  .activity-dot.blue { background: var(--accent); }
+  .activity-dot.green { background: var(--success); }
+  .activity-dot.orange { background: var(--warning); }
+  .activity-dot.pink { background: var(--pink); }
+  .activity-content { flex: 1; }
+  .activity-text {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+  }
+  .activity-text strong { color: var(--text-primary); font-weight: 600; }
+  .activity-time {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+
+  /* Sidebar cards */
+  .sidebar { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  /* Saved searches */
+  .saved-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1.25rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+  }
+  .saved-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+  .saved-item:last-child { border-bottom: none; }
+  .saved-item i { width: 16px; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+  .saved-item .count {
+    margin-left: auto;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--bg-page);
+    padding: 0.1rem 0.4rem;
+    border-radius: 8px;
+  }
+
+  /* Agent card */
+  .agent-card {
+    background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(168,85,247,0.1));
+    border: 1px solid rgba(59,130,246,0.25);
+  }
+  .agent-inner {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+  }
+  .agent-avatar {
+    width: 52px; height: 52px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+  }
+  .agent-inner h4 { font-size: 0.95rem; font-weight: 600; }
+  .agent-inner p { font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4; }
+  .agent-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 0.6rem 1.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .agent-btn:hover { background: var(--accent-hover, #2563eb); }
+
+  /* Top sources mini chart */
+  .source-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1.25rem;
+  }
+  .source-label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    width: 80px;
+    flex-shrink: 0;
+  }
+  .source-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-page);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .source-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .source-val {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    width: 40px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 1024px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 768px) {
+    .layout { padding: 1rem; }
+    .top-bar { flex-wrap: wrap; gap: 1rem; }
+    .search-wrap { flex: 1 1 100%; max-width: 100%; order: 3; }
+    .stats-row { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="top-bar">
+    <div class="brand"><i class="fa-solid fa-brain"></i> Knowledge Hub</div>
+    <div class="search-wrap">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" class="search-input" placeholder="Search everything... &#8984;K" value="customer retention">
+    </div>
+    <div class="top-actions">
+      <div class="top-btn"><i class="fa-solid fa-bookmark"></i></div>
+      <div class="top-btn">
+        <i class="fa-solid fa-bell"></i>
+        <span class="notif-dot"></span>
+      </div>
+      <div class="top-btn"><i class="fa-solid fa-gear"></i></div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-database"></i></div>
+        <div class="stat-trend up"><i class="fa-solid fa-arrow-up"></i> 2.4%</div>
+      </div>
+      <div class="stat-value" style="color: var(--accent);">142,847</div>
+      <div class="stat-label">Indexed Records</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-file-lines"></i></div>
+        <div class="stat-trend up"><i class="fa-solid fa-arrow-up"></i> 12</div>
+      </div>
+      <div class="stat-value" style="color: var(--purple);">8,234</div>
+      <div class="stat-label">Content Items</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon" style="background: rgba(34,197,94,0.15); color: var(--success);"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
+        <div class="stat-trend up"><i class="fa-solid fa-arrow-up"></i> 18%</div>
+      </div>
+      <div class="stat-value" style="color: var(--success);">347</div>
+      <div class="stat-label">Searches Today</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-header">
+        <div class="stat-icon" style="background: rgba(245,158,11,0.15); color: var(--warning);"><i class="fa-solid fa-clone"></i></div>
+        <div class="stat-trend down"><i class="fa-solid fa-arrow-down"></i> 8</div>
+      </div>
+      <div class="stat-value" style="color: var(--warning);">23</div>
+      <div class="stat-label">Pending Duplicates</div>
+    </div>
+  </div>
+
+  <!-- Main Grid -->
+  <div class="main-grid">
+    <div class="main-content">
+      <!-- Search Results -->
+      <div class="card quick-results">
+        <div class="results-tabs">
+          <div class="results-tab active"><i class="fa-solid fa-layer-group"></i> All <span class="tab-count">47</span></div>
+          <div class="results-tab"><i class="fa-solid fa-table"></i> Entities <span class="tab-count">18</span></div>
+          <div class="results-tab"><i class="fa-solid fa-file-lines"></i> Content <span class="tab-count">21</span></div>
+          <div class="results-tab"><i class="fa-solid fa-file-pdf"></i> Documents <span class="tab-count">8</span></div>
+        </div>
+        <div class="result-row">
+          <div class="r-icon blue"><i class="fa-solid fa-chart-line"></i></div>
+          <div class="r-info">
+            <div class="r-title">Q4 2025 <mark>Customer Retention</mark> Analysis</div>
+            <div class="r-sub">Reports &middot; Churn decreased 12% &middot; 3 days ago</div>
+          </div>
+          <span class="r-score">97%</span>
+        </div>
+        <div class="result-row">
+          <div class="r-icon purple"><i class="fa-solid fa-star"></i></div>
+          <div class="r-info">
+            <div class="r-title"><mark>Customer</mark> Loyalty Program Strategy</div>
+            <div class="r-sub">Content &middot; 3 pillars: rewards, offers, engagement</div>
+          </div>
+          <span class="r-score">94%</span>
+        </div>
+        <div class="result-row">
+          <div class="r-icon green"><i class="fa-solid fa-file-pdf"></i></div>
+          <div class="r-info">
+            <div class="r-title"><mark>Customer</mark> Success Playbook v3.pdf</div>
+            <div class="r-sub">Document &middot; 42 pages &middot; Section 4.2: Proactive <mark>Retention</mark></div>
+          </div>
+          <span class="r-score">91%</span>
+        </div>
+        <div class="result-row">
+          <div class="r-icon blue"><i class="fa-solid fa-building"></i></div>
+          <div class="r-info">
+            <div class="r-title">Acme Corp &mdash; At-Risk Account</div>
+            <div class="r-sub">Accounts &middot; $2.4M ARR &middot; <mark>Retention</mark> escalation active</div>
+          </div>
+          <span class="r-score">87%</span>
+        </div>
+        <div class="result-row">
+          <div class="r-icon purple"><i class="fa-solid fa-envelope"></i></div>
+          <div class="r-info">
+            <div class="r-title">Renewal Reminder Email Templates</div>
+            <div class="r-sub">Content &middot; 90/60/30-day series with <mark>retention</mark> offers</div>
+          </div>
+          <span class="r-score">83%</span>
+        </div>
+      </div>
+
+      <!-- Activity Feed -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-clock-rotate-left"></i> Recent Activity</h3>
+          <span class="see-all">View all</span>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot blue"></div>
+          <div class="activity-content">
+            <div class="activity-text"><strong>Marketing Team</strong> added 34 new content items to the knowledge base</div>
+            <div class="activity-time">2 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot green"></div>
+          <div class="activity-content">
+            <div class="activity-text"><strong>Vector sync</strong> completed for Accounts entity &mdash; 12,847 records indexed</div>
+            <div class="activity-time">4 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot orange"></div>
+          <div class="activity-content">
+            <div class="activity-text"><strong>Duplicate detection</strong> found 8 new potential duplicates in Contacts</div>
+            <div class="activity-time">6 hours ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot pink"></div>
+          <div class="activity-content">
+            <div class="activity-text"><strong>Sarah Chen</strong> saved a search: "enterprise accounts Q1 renewal"</div>
+            <div class="activity-time">Yesterday</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar">
+      <!-- Agent Card -->
+      <div class="card agent-card">
+        <div class="agent-inner">
+          <div class="agent-avatar"><i class="fa-solid fa-robot"></i></div>
+          <h4>Knowledge Agent</h4>
+          <p>Ask questions in natural language and get AI-powered answers from your entire knowledge base.</p>
+          <button class="agent-btn"><i class="fa-solid fa-sparkles"></i> Ask Agent</button>
+        </div>
+      </div>
+
+      <!-- Saved Searches -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-bookmark"></i> Saved Searches</h3>
+          <span class="see-all">Manage</span>
+        </div>
+        <div class="saved-item"><i class="fa-solid fa-bookmark"></i> My open deals <span class="count">142</span></div>
+        <div class="saved-item"><i class="fa-solid fa-bookmark"></i> At-risk accounts <span class="count">23</span></div>
+        <div class="saved-item"><i class="fa-solid fa-bookmark"></i> Engineering docs <span class="count">87</span></div>
+        <div class="saved-item"><i class="fa-solid fa-bookmark"></i> Q1 planning <span class="count">34</span></div>
+      </div>
+
+      <!-- Top Sources -->
+      <div class="card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-chart-bar"></i> Top Sources</h3>
+        </div>
+        <div style="padding: 0.75rem 0;">
+          <div class="source-bar">
+            <span class="source-label">Accounts</span>
+            <div class="source-track"><div class="source-fill" style="width: 85%; background: var(--accent);"></div></div>
+            <span class="source-val">42.8K</span>
+          </div>
+          <div class="source-bar">
+            <span class="source-label">Contacts</span>
+            <div class="source-track"><div class="source-fill" style="width: 68%; background: var(--purple);"></div></div>
+            <span class="source-val">34.2K</span>
+          </div>
+          <div class="source-bar">
+            <span class="source-label">Reports</span>
+            <div class="source-track"><div class="source-fill" style="width: 45%; background: var(--success);"></div></div>
+            <span class="source-val">22.6K</span>
+          </div>
+          <div class="source-bar">
+            <span class="source-label">Content</span>
+            <div class="source-track"><div class="source-fill" style="width: 32%; background: var(--warning);"></div></div>
+            <span class="source-val">16.1K</span>
+          </div>
+          <div class="source-bar">
+            <span class="source-label">Documents</span>
+            <div class="source-track"><div class="source-fill" style="width: 15%; background: var(--pink);"></div></div>
+            <span class="source-val">7.5K</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

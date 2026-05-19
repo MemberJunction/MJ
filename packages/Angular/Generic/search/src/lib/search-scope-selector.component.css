@@ -1,0 +1,169 @@
+:host {
+    display: inline-block;
+    position: relative;
+    font-family: inherit;
+}
+
+.scope-selector {
+    position: relative;
+}
+
+.scope-selector.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.scope-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.scope-trigger:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-border-strong);
+}
+
+.scope-trigger:focus-visible {
+    outline: 2px solid var(--mj-brand-primary);
+    outline-offset: 1px;
+}
+
+.scope-label {
+    font-weight: 500;
+}
+
+.scope-chevron {
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+}
+
+.scope-panel {
+    position: absolute;
+    z-index: 1000;
+    top: calc(100% + 4px);
+    left: 0;
+    min-width: 340px;
+    max-width: 440px;
+    max-height: 480px;
+    overflow-y: auto;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    padding: 8px 0;
+}
+
+.scope-loading {
+    padding: 16px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+}
+
+.scope-section {
+    padding: 4px 0;
+}
+
+.scope-section + .scope-section {
+    border-top: 1px solid var(--mj-border-subtle);
+}
+
+.scope-section-header {
+    padding: 6px 16px 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted);
+}
+
+.scope-option {
+    display: grid;
+    grid-template-columns: 16px 18px 1fr auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--mj-text-primary);
+    transition: background 120ms ease;
+}
+
+.scope-option:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.scope-option input[type="checkbox"] {
+    accent-color: var(--mj-brand-primary);
+    margin: 0;
+}
+
+.scope-option i {
+    color: var(--mj-text-secondary);
+}
+
+.scope-option-name {
+    font-weight: 500;
+}
+
+.scope-option-desc {
+    grid-column: 3 / -1;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--mj-text-muted);
+    line-height: 1.2rem;
+}
+
+.scope-option-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.scope-panel-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px 4px;
+    border-top: 1px solid var(--mj-border-subtle);
+    margin-top: 4px;
+}
+
+.scope-link {
+    background: transparent;
+    border: none;
+    padding: 6px 10px;
+    color: var(--mj-text-link);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.scope-link:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+}
+
+.scope-link:disabled {
+    color: var(--mj-text-disabled);
+    cursor: not-allowed;
+}
+
+.scope-link.primary {
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+}

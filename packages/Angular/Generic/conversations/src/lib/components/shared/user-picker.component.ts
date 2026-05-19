@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView } from '@memberjunction/core';
@@ -200,12 +201,13 @@ export interface UserSearchResult {
         }
     `]
 })
-export class UserPickerComponent implements OnInit, OnDestroy {
+export class UserPickerComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
     @Input() currentUser!: UserInfo;
     @Input() excludeUserIds: string[] = [];
     @Input() placeholder: string = 'Search for a user (press Enter)...';
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) {
+    super();}
 
     @Output() userSelected = new EventEmitter<UserSearchResult>();
 
@@ -257,7 +259,7 @@ export class UserPickerComponent implements OnInit, OnDestroy {
         this.showResults = true;
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             // Escape single quotes in query to prevent SQL errors
             const escapedQuery = query.replace(/'/g, "''");

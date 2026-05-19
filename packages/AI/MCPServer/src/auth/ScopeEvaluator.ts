@@ -14,6 +14,9 @@
 export class ScopeEvaluator {
   private readonly scopes: Set<string>;
 
+  /** Scope name that acts as a wildcard granting all permissions. */
+  private static readonly FULL_ACCESS_SCOPE = 'full_access';
+
   /**
    * Creates a new ScopeEvaluator with the given granted scopes.
    *
@@ -24,7 +27,17 @@ export class ScopeEvaluator {
   }
 
   /**
+   * Checks if the user was granted full access (the `full_access` wildcard scope).
+   *
+   * @returns true if `full_access` is in the granted scopes
+   */
+  get HasFullAccess(): boolean {
+    return this.scopes.has(ScopeEvaluator.FULL_ACCESS_SCOPE);
+  }
+
+  /**
    * Checks if a specific scope is granted.
+   * Returns true for any scope if `full_access` was granted.
    *
    * @param scope - The scope name to check (e.g., "entity:read")
    * @returns true if the scope is granted
@@ -34,14 +47,19 @@ export class ScopeEvaluator {
    * const evaluator = new ScopeEvaluator(['entity:read', 'entity:write']);
    * evaluator.hasScope('entity:read');  // true
    * evaluator.hasScope('action:execute');  // false
+   *
+   * const fullAccess = new ScopeEvaluator(['full_access']);
+   * fullAccess.hasScope('entity:read');  // true (full_access is a wildcard)
    * ```
    */
   hasScope(scope: string): boolean {
+    if (this.HasFullAccess) return true;
     return this.scopes.has(scope);
   }
 
   /**
    * Checks if any of the specified scopes is granted.
+   * Returns true for any check if `full_access` was granted.
    *
    * @param scopes - Array of scope names to check
    * @returns true if at least one scope is granted
@@ -54,11 +72,13 @@ export class ScopeEvaluator {
    * ```
    */
   hasAnyScope(scopes: string[]): boolean {
+    if (this.HasFullAccess) return true;
     return scopes.some((scope) => this.scopes.has(scope));
   }
 
   /**
    * Checks if all specified scopes are granted.
+   * Returns true for any check if `full_access` was granted.
    *
    * @param scopes - Array of scope names to check
    * @returns true if all scopes are granted
@@ -71,6 +91,7 @@ export class ScopeEvaluator {
    * ```
    */
   hasAllScopes(scopes: string[]): boolean {
+    if (this.HasFullAccess) return true;
     return scopes.every((scope) => this.scopes.has(scope));
   }
 
@@ -148,18 +169,22 @@ export function createScopeEvaluator(claims: { scopes?: string[] }): ScopeEvalua
 /**
  * Checks if a specific scope is present in a claims object.
  * Convenience function for simple scope checks without creating an evaluator.
+ * Recognizes `full_access` as a wildcard that grants all scopes.
  *
  * @param claims - JWT claims containing a 'scopes' array
  * @param scope - The scope name to check
  * @returns true if the scope is granted
  */
 export function checkScope(claims: { scopes?: string[] }, scope: string): boolean {
-  return claims.scopes?.includes(scope) ?? false;
+  if (!claims.scopes) return false;
+  if (claims.scopes.includes('full_access')) return true;
+  return claims.scopes.includes(scope);
 }
 
 /**
  * Checks if any of the specified scopes are present in a claims object.
  * Convenience function for simple scope checks without creating an evaluator.
+ * Recognizes `full_access` as a wildcard that grants all scopes.
  *
  * @param claims - JWT claims containing a 'scopes' array
  * @param scopes - The scope names to check
@@ -167,12 +192,14 @@ export function checkScope(claims: { scopes?: string[] }, scope: string): boolea
  */
 export function checkAnyScope(claims: { scopes?: string[] }, scopes: string[]): boolean {
   if (!claims.scopes) return false;
+  if (claims.scopes.includes('full_access')) return true;
   return scopes.some((scope) => claims.scopes!.includes(scope));
 }
 
 /**
  * Checks if all specified scopes are present in a claims object.
  * Convenience function for simple scope checks without creating an evaluator.
+ * Recognizes `full_access` as a wildcard that grants all scopes.
  *
  * @param claims - JWT claims containing a 'scopes' array
  * @param scopes - The scope names to check
@@ -180,5 +207,6 @@ export function checkAnyScope(claims: { scopes?: string[] }, scopes: string[]): 
  */
 export function checkAllScopes(claims: { scopes?: string[] }, scopes: string[]): boolean {
   if (!claims.scopes) return false;
+  if (claims.scopes.includes('full_access')) return true;
   return scopes.every((scope) => claims.scopes!.includes(scope));
 }

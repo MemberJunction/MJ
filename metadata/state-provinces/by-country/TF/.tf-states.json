@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "French Southern Territories",
+      "Code": "TF",
+      "ISO3166_2": "TF-TF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "French Southern Territories"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TF"
+    },
+    "primaryKey": {
+      "ID": "5698FB8F-4DE2-4AAF-AB8D-9B20FE93C2FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.848Z",
+      "checksum": "f7587581357c2d5714733b541caa02a48aba257e6367f780bc41d991088d59fd"
+    }
+  }
+]

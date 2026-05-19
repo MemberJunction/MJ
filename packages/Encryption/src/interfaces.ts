@@ -166,6 +166,31 @@ export interface KeyConfiguration {
 }
 
 /**
+ * Result of validating whether a specific encryption key's material is accessible.
+ *
+ * Returned by {@link EncryptionKeySourceBase.ValidateKeyAccessibility}.
+ * Each key source provider generates source-specific error messages with
+ * actionable remediation steps, keeping that knowledge encapsulated
+ * within the provider rather than in the engine.
+ */
+export interface KeyValidationResult {
+    /** Whether the key material was successfully accessed and validated */
+    IsAccessible: boolean;
+
+    /**
+     * Human-readable error with source-specific remediation steps.
+     * Only present when IsAccessible is false.
+     *
+     * Examples:
+     * - EnvVar: 'Environment variable "MJ_BASE_ENCRYPTION_KEY" is not set. Set it with: export MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)'
+     * - ConfigFile: 'Key "pii_master" not found in mj.config.cjs. Add it to the "encryptionKeys" section.'
+     * - AWS KMS: 'AWS KMS access denied. Ensure kms:Decrypt permission is granted.'
+     * - Azure: 'Azure Key Vault secret not accessible. Check vault URL and credentials.'
+     */
+    Error?: string;
+}
+
+/**
  * Result structure returned by key rotation operations.
  *
  * @see {@link RotateEncryptionKeyAction} for the rotation action

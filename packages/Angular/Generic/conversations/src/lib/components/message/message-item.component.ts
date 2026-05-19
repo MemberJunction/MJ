@@ -11,7 +11,7 @@ import {
   SimpleChanges,
   DoCheck
 } from '@angular/core';
-import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJArtifactVersionEntity, MJTaskEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -20,9 +20,9 @@ import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
-import { RatingJSON } from '../../models/conversation-complete-query.model';
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BadgeTextForAttachment } from '../../util/attachment-badge';
 
 /**
  * Represents an attachment on a message for display
@@ -37,6 +37,14 @@ export interface MessageAttachment {
   height?: number;
   thumbnailUrl?: string;
   contentUrl?: string;
+  /** Source of the attachment: 'upload' for chat uploads, 'artifact' for artifact picker */
+  source?: 'upload' | 'artifact';
+  /** For source='artifact': the underlying MJArtifact.ID so clicks can open the viewer. */
+  artifactId?: string;
+  /** For source='artifact': the underlying MJArtifactVersion.ID. */
+  artifactVersionId?: string;
+  /** For source='artifact': resolved MJArtifactType.Name, e.g. "Data Snapshot". Drives the type badge. */
+  artifactTypeName?: string;
 }
 
 /**
@@ -67,7 +75,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
 
-  @Output() public pinClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<MJConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<MJConversationDetailEntity>();
@@ -78,6 +85,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
   @Output() public attachmentClicked = new EventEmitter<MessageAttachment>();
+  @Output() public diagnosticRequested = new EventEmitter<string>(); // emits messageId on Shift+Click
+  @Output() public messagePinToggled = new EventEmitter<MJConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -89,6 +98,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Track previous status for DoCheck comparison
   private _previousMessageStatus: 'Complete' | 'In-Progress' | 'Error' | undefined = undefined;
+
+  /**
+   * Cached values updated in ngDoCheck so they stay stable through Angular's
+   * dev-mode verify pass. The underlying message entity properties (Status,
+   * Message) can mutate between the check and verify passes (e.g., from
+   * WebSocket streaming updates), which causes ExpressionChangedAfterItHasBeenCheckedError
+   * if templates read the live properties directly.
+   */
+  private _messageClasses: string = 'message-item';
+  private _stableDisplayMessage: string = '';
+  private _stableIsInProgressAIMessage: boolean = false;
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
@@ -109,6 +129,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
+    // AIEngineBase is deferred at startup; kick off the load early so the
+    // template-bound aiAgentInfo getter finds populated .Agents data when
+    // change detection asks for it. Fire-and-forget — the getter falls back
+    // to defaults until it's loaded.
+    AIEngineBase.Instance.EnsureLoaded();
+
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
@@ -147,6 +173,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Update previous status for next check
     this._previousMessageStatus = currentStatus;
+
+    // Rebuild cached values so they're stable during Angular's check/verify cycle.
+    // ngDoCheck runs once per CD pass but NOT during the dev-mode verify pass, so
+    // snapshotting here produces values that don't change between the two reads.
+    this._messageClasses = this.buildMessageClasses();
+    this._stableIsInProgressAIMessage = this.isAIMessage && currentStatus === 'In-Progress';
+    this._stableDisplayMessage = this.computeDisplayMessage();
   }
 
   ngAfterViewInit() {
@@ -169,14 +202,27 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Handles clicks on the message bubble.
+   * Shift+Click on any AI message emits a diagnosticRequested event so the parent
+   * can dump live streaming state to the browser console — useful for debugging
+   * stuck or forever-spinning conversations without any code changes.
+   */
+  public onMessageBubbleClick(event: MouseEvent): void {
+    if (!event.shiftKey || !this.isAIMessage) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.diagnosticRequested.emit(this.message.ID);
+  }
+
+  /**
    * Starts the elapsed time updater interval for temporary messages only
    * For agent runs with IDs, the parent's timer + agentRunDuration getter handles updates
    * Updates every second for temporary messages that use _elapsedTimeFormatted
    */
   private startElapsedTimeUpdater(): void {
-    // Only start timer for temporary messages (no ID yet)
-    // Agent runs with IDs use the parent's timer + agentRunDuration getter
-    if (this.isInProgressAIMessage) {
+    // Start timer for temporary messages (in-progress, no ID) OR active agent runs
+    // Both need periodic updates to _elapsedTimeFormatted / _agentRunDurationFormatted
+    if (this.isInProgressAIMessage || this.isAgentRunActive) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -329,6 +375,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get displayMessage(): string {
+    return this._stableDisplayMessage;
+  }
+
+  /**
+   * Computes the display message from the current message text. Called from
+   * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
+   */
+  private computeDisplayMessage(): string {
     let text = this.message.Message || '';
 
     // For Sage, only show the delegation line (starts with emoji)
@@ -339,7 +393,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
-    // Use cached result if message text hasn't changed
+    // Use cached result if message text hasn't changed (avoids re-parsing mentions)
     if (this._cachedMessageText === text && this._cachedDisplayMessage) {
       return this._cachedDisplayMessage;
     }
@@ -510,7 +564,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isInProgressAIMessage(): boolean {
-    return this.isAIMessage && this.message.Status === 'In-Progress';
+    return this._stableIsInProgressAIMessage;
   }
 
   public get isAgentRunActive(): boolean {
@@ -651,7 +705,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return this.agentRunDuration;
     }
 
-    // For completed or failed messages, show final generation time
+    // For completed/failed messages with an agent run, use agentRun timestamps.
+    // These are set when the run finishes and never change, so pin/edit saves on the
+    // message entity cannot corrupt the displayed duration.
+    if (this.agentRun?.__mj_CreatedAt && this.agentRun?.__mj_UpdatedAt) {
+      return this.agentRunDuration;
+    }
+
+    // No agent run — fall back to message entity timestamps
     return this.formattedGenerationTime;
   }
 
@@ -684,18 +745,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
   }
 
+  /**
+   * Returns the cached CSS class string. Updated in ngDoCheck so the value
+   * is stable within a single change detection cycle, preventing
+   * ExpressionChangedAfterItHasBeenCheckedError.
+   */
   public get messageClasses(): string {
+    return this._messageClasses;
+  }
+
+  private buildMessageClasses(): string {
     const classes: string[] = ['message-item'];
     if (this.isAIMessage) {
       classes.push('ai-message');
-      // Show in-progress styling for AI messages that are still processing
       if (this.isInProgressAIMessage) {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {
       classes.push('user-message');
     }
-    if (this.message.IsPinned) {
+    if (this.message?.IsPinned) {
       classes.push('pinned');
     }
     if (this.isEditing) {
@@ -711,12 +780,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return false;
     }
     return this.message.OriginalMessageChanged === true;
-  }
-
-  public onPinClick(): void {
-    if (!this.isProcessing) {
-      this.pinClicked.emit(this.message);
-    }
   }
 
   public onEditClick(): void {
@@ -791,6 +854,26 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public onDeleteClick(): void {
     if (!this.isProcessing) {
       this.deleteClicked.emit(this.message);
+    }
+  }
+
+  public async PinMessage(): Promise<void> {
+    // Optimistic update — toggle immediately so the UI responds at once
+    const previousValue = this.message.IsPinned;
+    this.message.IsPinned = !previousValue;
+    this.cdRef.detectChanges();
+
+    const saved = await this.message.Save();
+    if (!saved) {
+      // Revert on failure
+      this.message.IsPinned = previousValue;
+      this.cdRef.detectChanges();
+      console.error('Failed to save pin state for message', this.message.ID);
+    } else {
+      // Notify parent so it can patch the conversation cache in-place.
+      // Without this, navigating away and back rebuilds entities from stale cache data,
+      // causing the pin state to appear lost until the next full page reload.
+      this.messagePinToggled.emit(this.message);
     }
   }
 
@@ -882,6 +965,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   }
 
+  /** Compact UPPERCASE badge label (artifact-type name wins over file extension). */
+  public badgeTextFor(attachment: MessageAttachment): string {
+    return BadgeTextForAttachment(attachment);
+  }
+
   /**
    * Whether this message has an associated agent run
    * Based on whether the message has an AgentID (not whether agentRun object is loaded)
@@ -913,7 +1001,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',
@@ -943,37 +1031,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return null;
     }
 
-    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    let endTime: Date;
-
-    // If agent run is still active, use current time for live updates
+    // For active runs, return the interval-updated field to avoid
+    // ExpressionChangedAfterItHasBeenCheckedError (new Date() changes between CD cycles)
     if (this.isAgentRunActive) {
-      endTime = new Date(); // Uses current UTC time
-    } else {
-      // For completed runs, use the final updated timestamp
-      if (!this.agentRun.__mj_UpdatedAt) {
-        return null;
-      }
-      endTime = new Date(this.agentRun.__mj_UpdatedAt);
+      return this._agentRunDurationFormatted;
     }
 
+    // For completed runs, calculate static duration from timestamps
+    if (!this.agentRun.__mj_UpdatedAt) {
+      return null;
+    }
+    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    const endTime = new Date(this.agentRun.__mj_UpdatedAt);
     const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
       return null;
     }
 
-    const seconds = diffMs / 1000;
-
-    if (seconds < 1) {
-      return `${Math.round(diffMs)}ms`;
-    } else if (seconds < 60) {
-      return `${seconds.toFixed(1)}s`;
-    } else {
-      const mins = Math.floor(seconds / 60);
-      const secs = Math.floor(seconds % 60);
-      return `${mins}m ${secs}s`;
-    }
+    return this.formatDurationFromMs(diffMs);
   }
 
   /**
@@ -1079,40 +1155,55 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Get agent response form from message
    * Uses ResponseForm property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string so the getter returns a stable object reference
+   * for the same input. Without caching, `JSON.parse` produces a new object every call,
+   * which makes Angular's `@if (responseForm)` template index churn between CD passes —
+   * the classic NG0100 "ExpressionChangedAfterItHasBeenCheckedError" we used to hit here.
    */
+  private _responseFormRaw: string | null | undefined = undefined;
+  private _responseFormCache: AgentResponseForm | null = null;
   public get responseForm(): AgentResponseForm | null {
-    try {
-      const rawData = this.message.ResponseForm;
-      if (!rawData) {
-        return null;
-      }
-
-      // Parse JSON string to AgentResponseForm object
-      const form = JSON.parse(rawData);
-
-      return form || null;
-    } catch (error) {
-      console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
+    const rawData = this.message.ResponseForm ?? null;
+    if (rawData === this._responseFormRaw) return this._responseFormCache;
+    this._responseFormRaw = rawData;
+    if (!rawData) {
+      this._responseFormCache = null;
       return null;
     }
+    try {
+      this._responseFormCache = (JSON.parse(rawData) as AgentResponseForm) || null;
+    } catch (error) {
+      console.error('Failed to parse response form:', error, 'Raw data:', rawData);
+      this._responseFormCache = null;
+    }
+    return this._responseFormCache;
   }
 
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
+  private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsCache: ActionableCommand[] = [];
   public get actionableCommands(): ActionableCommand[] {
+    const rawData = this.message.ActionableCommands ?? null;
+    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    this._actionableCommandsRaw = rawData;
+    if (!rawData) {
+      this._actionableCommandsCache = [];
+      return this._actionableCommandsCache;
+    }
     try {
-      const rawData = this.message.ActionableCommands;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of ActionableCommand objects
       const commands = JSON.parse(rawData);
-      return Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
-      return [];
+      this._actionableCommandsCache = [];
     }
+    return this._actionableCommandsCache;
   }
 
   /**

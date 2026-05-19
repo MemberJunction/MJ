@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Tag Aggregates",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Tags",
+      "UserQuestion": "What are the aggregate statistics for all tags?",
+      "Description": "Returns per-tag item count and average relevance weight across all tagged items. Used by the Classify dashboard for taxonomy health metrics without loading individual records.",
+      "SQL": "@file:SQL/tag-aggregates.sql",
+      "TechnicalDescription": "Aggregates vwTaggedItems grouped by TagID. Returns: TagID (tag identifier), ItemCount (number of items tagged), AvgWeight (average relevance weight, DECIMAL(4,2)). No parameters — full table scan. Lightweight for dashboards.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 1,
+      "Reusable": true,
+      "UsesTemplate": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A95E20FE-E0E9-4BDD-A61F-24447252C4E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-13T01:48:44.684Z",
+      "checksum": "64e25508c8fadd4d31684eb3a6e4945c623241cfdad8dcab426a92fec944b888"
+    }
+  }
+]

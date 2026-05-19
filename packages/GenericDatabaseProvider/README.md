@@ -40,12 +40,14 @@ DatabaseProviderBase (@memberjunction/core — no heavy deps, abstract)
 | `DisposeAllSqlLoggingSessions()` | Disposes all active logging sessions (used on shutdown) |
 | `LogSQLStatement()` | Static method to log SQL from external sources (e.g., transaction groups) |
 | `RenderViewWhereClause()` | Resolves `{%UserView "id"%}` templates in saved view WHERE clauses |
-| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, pagination, aggregates, audit logging |
+| `InternalRunView()` | Shared view execution engine: view resolution, permissions, field selection, WHERE clause, ORDER BY, OFFSET *or* keyset (`AfterKey`) pagination, aggregates, audit logging |
 | `InternalRunViews()` | Parallel wrapper for multiple InternalRunView calls |
 | `getRunTimeViewFieldString()` | Builds dialect-neutral field list string for view queries |
 | `getRunTimeViewFieldArray()` | Resolves EntityFieldInfo list from params/view/entity |
 | `createViewUserSearchSQL()` | Builds full-text search and LIKE-based user search SQL |
 | `BuildPaginationSQL()` | Abstract: platform-specific OFFSET/FETCH or LIMIT/OFFSET |
+| `BuildKeysetSeekClause()` | Validates entity + `RunViewParams.AfterKey` and returns the `<pk> > value` (or `<`) seek predicate. Throws `AfterKeyNotSupportedError` on incompatible entities. See [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
+| `formatKeysetSeekValue()` | Type-aware SQL literal escaping for the seek value (UUID validation, numeric/date/string handling, SQL-injection defense). |
 | `BuildTopClause()` | Virtual: SQL Server TOP N, PG returns empty (default) |
 | `BuildNonPaginatedLimitSQL()` | Virtual: PG LIMIT N for non-paginated row limits (default: empty) |
 | `TransformExternalSQLClause()` | Virtual: PG overrides to quote mixed-case identifiers (default: no-op) |
@@ -82,6 +84,22 @@ export class MyDatabaseProvider extends GenericDatabaseProvider {
     // Override PostProcessRows if you need platform-specific row processing (call super first)
 }
 ```
+
+## Keyset (Seek) Pagination
+
+`InternalRunView` honors `RunViewParams.AfterKey` (a `CompositeKey`) to emit keyset-style SQL — `WHERE pk > @lastSeen ORDER BY pk LIMIT N` — instead of `OFFSET ... FETCH NEXT N`. Keyset stays O(log N) regardless of depth, making it the right tool for background jobs iterating large entities.
+
+The same code path works on both SQL Server (uses `TOP N` via `BuildTopClause`) and PostgreSQL (uses `LIMIT N` via `BuildNonPaginatedLimitSQL`) — no per-provider override needed.
+
+Keyset queries automatically bypass `LocalCacheManager` (both read and write) and are routed past the smart cache check in `RunViewsWithCacheCheck` because each call uses a different seek key.
+
+Validation enforced by `BuildKeysetSeekClause`:
+- Entity must have a single-column PK (composite throws `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`)
+- PK type must be in the orderable allowlist (everything sensible is)
+- `OrderBy`, if set, must reference only the PK column
+- Cannot be combined with non-zero `StartRow`
+
+See **[KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)** for the full pattern and reference implementations.
 
 ## Server-Side Cache Backend
 
@@ -146,6 +164,10 @@ Key types exported from this package:
 ## Switching Database Platforms (Developer Note)
 
 When developing against both SQL Server and PostgreSQL on the same URL/port, **clear your browser cache** after switching backends. The client-side `GraphQLDataProvider` caches entity metadata and query results in the browser. UUID casing differs between platforms (SQL Server: uppercase, PostgreSQL: lowercase), so stale cached data from one platform will cause subtle mismatches on the other. Clear browser cache or use an incognito window whenever you switch the backend database.
+
+## Full-Text Search
+
+This package implements the `createViewUserSearchSQL()` method which generates platform-specific full-text search SQL. When `entity.FullTextSearchEnabled` is true, it calls the CodeGen-generated search function. Otherwise, it falls back to `LIKE` on fields with `IncludeInUserSearchAPI`. See the **[Full-Text Search Guide](../MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** for the complete architecture.
 
 ## Dependencies
 

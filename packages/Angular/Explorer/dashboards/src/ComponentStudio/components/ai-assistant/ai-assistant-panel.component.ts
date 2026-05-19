@@ -4,6 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { MJAIModelEntity } from '@memberjunction/core-entities';
 import { ComponentStudioStateService, ComponentError } from '../../services/component-studio-state.service';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Represents a single message in the AI assistant chat thread
@@ -40,7 +41,7 @@ interface AIModelOption {
   templateUrl: './ai-assistant-panel.component.html',
   styleUrls: ['./ai-assistant-panel.component.css']
 })
-export class AIAssistantPanelComponent implements OnInit, OnDestroy {
+export class AIAssistantPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
   @ViewChild('chatThread') chatThreadEl!: ElementRef<HTMLDivElement>;
   @ViewChild('chatInput') chatInputEl!: ElementRef<HTMLTextAreaElement>;
@@ -68,7 +69,7 @@ export class AIAssistantPanelComponent implements OnInit, OnDestroy {
   constructor(
     public State: ComponentStudioStateService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { super(); }
 
   async ngOnInit(): Promise<void> {
     this.subscribeToErrorEvents();
@@ -88,7 +89,7 @@ export class AIAssistantPanelComponent implements OnInit, OnDestroy {
   async LoadModels(): Promise<void> {
     this.IsLoadingModels = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJAIModelEntity>({
         EntityName: 'MJ: AI Models',
         ExtraFilter: `IsActive = 1 AND AIModelTypeID IN (SELECT ID FROM __mj.vwAIModelTypes WHERE Name = 'LLM')`,

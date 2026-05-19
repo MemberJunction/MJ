@@ -1,0 +1,233 @@
+[
+  {
+    "fields": {
+      "Name": "Aragacotn",
+      "Code": "AG",
+      "ISO3166_2": "AM-AG",
+      "Latitude": 40.3213,
+      "Longitude": 44.0736,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-AG.geojson",
+      "CommonAliases": [
+        "Aragacotn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "72C7BEB9-EC08-4175-9A82-00205F8622F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.485Z",
+      "checksum": "a193b76ce354d94a5c76b15fd37baf74260c32bd076b7d07fb71d886b54a0ba2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ararat",
+      "Code": "AR",
+      "ISO3166_2": "AM-AR",
+      "Latitude": 39.9204,
+      "Longitude": 44.7304,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-AR.geojson",
+      "CommonAliases": [
+        "Ararat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "F3CEFEB4-4BB9-4F11-BAC1-D714301EE05C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.502Z",
+      "checksum": "f3772a21c19d5b97afbc892f83e0869f9d68c58e2c9823f04ae6c42c3054974d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Armavir",
+      "Code": "AV",
+      "ISO3166_2": "AM-AV",
+      "Latitude": 40.0992,
+      "Longitude": 44.0464,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-AV.geojson",
+      "CommonAliases": [
+        "Armavir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "F8427B5B-51F5-45D9-B618-41427C130B3A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.518Z",
+      "checksum": "2a1246311cd21e11ff732045954ff031dd075d9d7f7a01f5b3de93b9e49f9be4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Erevan",
+      "Code": "ER",
+      "ISO3166_2": "AM-ER",
+      "Latitude": 40.1474,
+      "Longitude": 44.533,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-ER.geojson",
+      "CommonAliases": [
+        "Erevan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "9025A49F-621D-41FB-9579-848D5D36C316"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.534Z",
+      "checksum": "51e7d5717af87bd7076ec2e36d9b4037d3298a02436b82918f201b1de33df149"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Geģark'unik'",
+      "Code": "GR",
+      "ISO3166_2": "AM-GR",
+      "Latitude": 40.278,
+      "Longitude": 45.3848,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-GR.geojson",
+      "CommonAliases": [
+        "Geģark'unik'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "1E99B867-5DF1-4BA9-A86A-5E392566D432"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.552Z",
+      "checksum": "4675d1a3c83b086a9ee66ed5cfc7fb6fee4d5a7c05db10f6f56a8079cd3360be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kotayk'",
+      "Code": "KT",
+      "ISO3166_2": "AM-KT",
+      "Latitude": 40.3747,
+      "Longitude": 44.7191,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-KT.geojson",
+      "CommonAliases": [
+        "Kotayk'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "3257D15A-FC2D-4717-B061-9241084DB90B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.570Z",
+      "checksum": "811a13f4bf8edbd62f3b9745b47a4dd92d3e7c96a9e6b230da6a362805bed160"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loŕy",
+      "Code": "LO",
+      "ISO3166_2": "AM-LO",
+      "Latitude": 40.9347,
+      "Longitude": 44.4524,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-LO.geojson",
+      "CommonAliases": [
+        "Loŕy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "3978E64F-BF9D-497C-A942-E56213E0586A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.587Z",
+      "checksum": "c25806552a5580a6a88b0b7c487895cd0a85afa1a0d22cc7b7e7a961b6f0172a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Širak",
+      "Code": "SH",
+      "ISO3166_2": "AM-SH",
+      "Latitude": 40.8194,
+      "Longitude": 43.8178,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-SH.geojson",
+      "CommonAliases": [
+        "Širak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "1BED7DBE-B1FF-4031-BDCE-3B0C65AB626D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.603Z",
+      "checksum": "4f8055acfbc7b0f86bd11bfde63d6f4f2ed794e8e2e4877e0aaaf4b8726d6534"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Syunik'",
+      "Code": "SU",
+      "ISO3166_2": "AM-SU",
+      "Latitude": 39.2479,
+      "Longitude": 46.1518,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-SU.geojson",
+      "CommonAliases": [
+        "Syunik'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "2C99A344-31DD-4CB8-BB68-D575FA91305A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.620Z",
+      "checksum": "aa96c0d774594c06844409b91eb7ec81254f6e2cb5a01ac8a0ddc7457bf8cd79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tavuš",
+      "Code": "TV",
+      "ISO3166_2": "AM-TV",
+      "Latitude": 40.8883,
+      "Longitude": 45.1763,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-TV.geojson",
+      "CommonAliases": [
+        "Tavuš"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "D9CA577F-7305-487F-A05A-964C987E278E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.634Z",
+      "checksum": "144aa0bc0b3125f84c4ef3e331f905f7a25d3ef4a8cdb86a9f23bc92af94a103"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vayoc Jor",
+      "Code": "VD",
+      "ISO3166_2": "AM-VD",
+      "Latitude": 39.7183,
+      "Longitude": 45.4421,
+      "BoundaryGeoJSON": "@file:by-country/AM/boundaries/AM-VD.geojson",
+      "CommonAliases": [
+        "Vayoc Jor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AM"
+    },
+    "primaryKey": {
+      "ID": "84C5D3BD-6781-48C0-8AE8-BDFE6659371D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:27.659Z",
+      "checksum": "fb21e94b339d9f422de3d8ade4b18f844c55a07095a6d39a8d7858142ca8fe6e"
+    }
+  }
+]

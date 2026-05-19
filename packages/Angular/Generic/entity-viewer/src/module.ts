@@ -6,6 +6,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { PaginationComponent } from '@memberjunction/ng-pagination';
 import { TimelineModule } from '@memberjunction/ng-timeline';
 import { ExportServiceModule } from '@memberjunction/ng-export-service';
+import { MapViewModule } from '@memberjunction/ng-map-view';
+import { RecordChangesModule } from '@memberjunction/ng-record-changes';
+import { VersionsModule } from '@memberjunction/ng-versions';
 
 import { EntityCardsComponent } from './lib/entity-cards/entity-cards.component';
 import { EntityViewerComponent } from './lib/entity-viewer/entity-viewer.component';
@@ -20,6 +23,8 @@ import { QuickSaveDialogComponent } from './lib/quick-save-dialog/quick-save-dia
 import { ViewHeaderComponent } from './lib/view-header/view-header.component';
 import { DuplicateViewDialogComponent } from './lib/duplicate-view-dialog/duplicate-view-dialog.component';
 import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dialog/shared-view-warning-dialog.component';
+import { RecycleBinComponent } from './lib/recycle-bin/recycle-bin.component';
+import { RecycleBinChipComponent } from './lib/recycle-bin/recycle-bin-chip.component';
 
 /**
  * EntityViewerModule - Provides components for viewing entity data
@@ -56,7 +61,9 @@ import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dial
     QuickSaveDialogComponent,
     ViewHeaderComponent,
     DuplicateViewDialogComponent,
-    SharedViewWarningDialogComponent
+    SharedViewWarningDialogComponent,
+    RecycleBinComponent,
+    RecycleBinChipComponent
   ],
   imports: [
     CommonModule,
@@ -65,7 +72,10 @@ import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dial
     SharedGenericModule,
     PaginationComponent,
     TimelineModule,
-    ExportServiceModule
+    ExportServiceModule,
+    MapViewModule,
+    RecordChangesModule,
+    VersionsModule
   ],
   exports: [
     EntityCardsComponent,
@@ -80,7 +90,8 @@ import { SharedViewWarningDialogComponent } from './lib/shared-view-warning-dial
     QuickSaveDialogComponent,
     ViewHeaderComponent,
     DuplicateViewDialogComponent,
-    SharedViewWarningDialogComponent
+    SharedViewWarningDialogComponent,
+    RecycleBinComponent
   ]
 })
 export class EntityViewerModule { }

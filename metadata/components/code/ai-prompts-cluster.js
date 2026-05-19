@@ -723,7 +723,7 @@ Format your response in clear markdown with headers and bullet points.`;
         display: 'flex',
         flex: 1,
         gap: styles.spacing?.md || '16px',
-        overflow: 'hidden'
+        minHeight: 0
       }}>
         {/* Left panel - Controls */}
         <div style={{

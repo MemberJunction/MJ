@@ -1,0 +1,101 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (Content Source Types entity) to enable",
+      "CodeGen to emit a typed ConfigurationObject accessor with IContentSourceTypeConfiguration."
+    ],
+    "fields": {
+      "Name": "MJ: Content Source Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IContentSourceTypeConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentSourceTypeConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — JSON blob for type-level settings"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Source Types&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:39.742Z",
+            "checksum": "971439d270d042a68f501aa30e744531a3bb77ffba5988c734d66defa375640f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Source Types"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (Content Sources entity) to enable",
+      "CodeGen to emit a typed ConfigurationObject accessor with IContentSourceConfiguration."
+    ],
+    "fields": {
+      "Name": "MJ: Content Sources"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IContentSourceConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentSourceConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — JSON blob for source-instance settings including taxonomy mode and vectorization"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Sources&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-05-01T14:03:04.581Z",
+            "checksum": "23261260899ca7ff0947315dcafd304d390b8ab7d3366648d9ab1e560a5a6122"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Sources"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on Configuration (Content Types entity) to enable",
+      "CodeGen to emit a typed ConfigurationObject accessor with IContentTypeConfiguration."
+    ],
+    "fields": {
+      "Name": "MJ: Content Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IContentTypeConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IContentTypeConfiguration.ts"
+          },
+          "_comments": [
+            "Configuration field — JSON blob for content-type-level settings"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Types&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:39.779Z",
+            "checksum": "4eb21e85de5c24631f73957cfa2115ef1a86d8ef951ba9c9e13c8ee89660d87b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Types"
+    }
+  }
+]

@@ -1,12 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentSelectorResult {
   selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
@@ -35,7 +35,7 @@ export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   templateUrl: './sub-agent-selector-dialog.component.html',
   styleUrls: ['./sub-agent-selector-dialog.component.css']
 })
-export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
+export class SubAgentSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   config!: SubAgentSelectorConfig;
@@ -68,10 +68,12 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
     return this.filteredAgents$.value.length;
   }
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeData();
@@ -97,7 +99,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   private async loadAgentsAndTypes() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     // Load both agents and types in a single batch for better performance
     const results = await rv.RunViews([
@@ -254,7 +256,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -262,7 +264,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents: [],
       createNew: true
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   async addSelectedAgents() {
@@ -280,6 +282,6 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
       selectedAgents,
       createNew: false
     });
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

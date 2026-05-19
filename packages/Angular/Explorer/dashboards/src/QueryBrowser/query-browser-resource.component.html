@@ -176,6 +176,13 @@
         [class.fa-folder-open]="node.expanded"></i>
         <span class="category-name">{{ node.category.Name }}</span>
         <span class="category-count">({{ getNodeQueryCount(node) }})</span>
+        @if (CanCreateQuery && node.category.ID !== '__uncategorized__') {
+          <button class="category-add-btn"
+            (click)="OpenCreateDrawer(node.category.ID); $event.stopPropagation()"
+            title="New query in {{ node.category.Name }}">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        }
       </div>
       <!-- Queries in this category -->
       @if (node.expanded) {
@@ -244,7 +251,7 @@
           }
         </div>
       </div>
-      <button class="query-drawer-close" (click)="CloseDrawer()" title="Close">
+      <button class="query-drawer-close" (click)="CloseDrawer()" title="Close" aria-label="Close">
         <i class="fa-solid fa-times"></i>
       </button>
     </div>
@@ -270,14 +277,17 @@
       <div class="drawer-row">
         <div class="drawer-field drawer-field-flex">
           <label class="drawer-label">Category</label>
-          <select class="drawer-select"
-            [(ngModel)]="DrawerCategoryID"
-            [disabled]="IsSavingDrawer">
-            <option value="">(none)</option>
-            @for (cat of categories; track cat.ID) {
-              <option [value]="cat.ID">{{ cat.Name }}</option>
-            }
-          </select>
+          <mj-tree-dropdown
+            [BranchConfig]="CategoryBranchConfig"
+            [Value]="DrawerCategoryIDAsKey"
+            [SelectableTypes]="'branch'"
+            [SelectionMode]="'single'"
+            [Placeholder]="'Select category...'"
+            [EnableSearch]="true"
+            [Clearable]="true"
+            [Disabled]="IsSavingDrawer"
+            (ValueChange)="OnDrawerCategoryChange($event)">
+          </mj-tree-dropdown>
         </div>
         <div class="drawer-field drawer-field-flex">
           <label class="drawer-label">Status</label>
@@ -289,6 +299,17 @@
             }
           </select>
         </div>
+      </div>
+
+      <!-- Reusable -->
+      <div class="drawer-field drawer-field-inline">
+        <label class="mj-checkbox drawer-reusable-label">
+          <input type="checkbox"
+            [(ngModel)]="DrawerReusable"
+            [disabled]="IsSavingDrawer">
+          <span>Reusable</span>
+        </label>
+        <span class="drawer-field-hint">Allow other queries to reference this query using composition syntax</span>
       </div>
 
       <!-- Description -->

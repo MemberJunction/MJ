@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Ad Dākhilīyah",
+      "Code": "DA",
+      "ISO3166_2": "OM-DA",
+      "Latitude": 22.474,
+      "Longitude": 57.3411,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-DA.geojson",
+      "CommonAliases": [
+        "Ad Dākhilīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "EF4791FA-BFA0-41E9-B758-650A747BCB77"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.854Z",
+      "checksum": "82f1db8dd2ab130973c41e786dabf1da0dc7736a0fc913e9c0bad49426020478"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Bāţinah",
+      "Code": "BA",
+      "ISO3166_2": "OM-BA",
+      "Latitude": 23.9794,
+      "Longitude": 56.8199,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-BA.geojson",
+      "CommonAliases": [
+        "Al Bāţinah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "C88F652A-2041-412B-9DBA-42957A5D050F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.870Z",
+      "checksum": "9499ad98b4f9133ef9e3dd984933c65c8706c1bc9bf73c229530ae18effcf775"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Janūbīyah [Zufār]",
+      "Code": "JA",
+      "ISO3166_2": "OM-JA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Janūbīyah [Zufār]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "3E550EB0-919E-4A31-AEDE-AB54D09C9B23"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.887Z",
+      "checksum": "de1f8703bb1a7277377e9edf2fa3faba4d62172e3772fbb4b986b0fc990d79ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Wusţā",
+      "Code": "WU",
+      "ISO3166_2": "OM-WU",
+      "Latitude": 20.4263,
+      "Longitude": 56.8705,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-WU.geojson",
+      "CommonAliases": [
+        "Al Wusţā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "DA8B5199-8672-457C-94C8-09867ED22F3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.904Z",
+      "checksum": "ea4e29e4ba05e03f122980c7452067f895eb3702bac2298d9f04123feb8abf22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash Sharqīyah",
+      "Code": "SH",
+      "ISO3166_2": "OM-SH",
+      "Latitude": 21.5958,
+      "Longitude": 58.9632,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-SH.geojson",
+      "CommonAliases": [
+        "Ash Sharqīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "291CD1F1-A4FD-4B2F-A4C2-8C1B063409B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.921Z",
+      "checksum": "e1ae3590edd6f2ae3df8a2d3f63f88282de748df5a0aee55391d9e2cb695e5b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Az Zāhirah",
+      "Code": "ZA",
+      "ISO3166_2": "OM-ZA",
+      "Latitude": 22.9127,
+      "Longitude": 55.9327,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-ZA.geojson",
+      "CommonAliases": [
+        "Az Zāhirah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "47BFD109-51D1-4DF8-8F37-526C176DB128"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.939Z",
+      "checksum": "a5fce0b9de150789fc32e64f358a9bff2cd999815211660606fa49d28a27b143"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masqaţ",
+      "Code": "MA",
+      "ISO3166_2": "OM-MA",
+      "Latitude": 23.2505,
+      "Longitude": 58.6759,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-MA.geojson",
+      "CommonAliases": [
+        "Masqaţ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "10D4E462-D556-40F9-A34E-190E95C6094B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.956Z",
+      "checksum": "85a2ce074dc07614beeb9a94e65aa9ad3deef4cdd08dc0176f12ce288df3c1bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Musandam",
+      "Code": "MU",
+      "ISO3166_2": "OM-MU",
+      "Latitude": 25.9744,
+      "Longitude": 56.2943,
+      "BoundaryGeoJSON": "@file:by-country/OM/boundaries/OM-MU.geojson",
+      "CommonAliases": [
+        "Musandam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=OM"
+    },
+    "primaryKey": {
+      "ID": "172AD4F4-936A-4A77-A1B7-F881D9BD05C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.970Z",
+      "checksum": "cde7a86d06e735006d83d297cb914e7442521ca2d3aba3a4e22f925dea01325a"
+    }
+  }
+]

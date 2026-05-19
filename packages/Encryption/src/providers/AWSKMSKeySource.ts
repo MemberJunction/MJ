@@ -36,6 +36,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { LogError } from '@memberjunction/core';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
+import { KeyValidationResult } from '../interfaces';
 
 // Lazy-load AWS SDK to avoid requiring it when not used
 let KMSClient: typeof import('@aws-sdk/client-kms').KMSClient | null = null;
@@ -232,6 +233,95 @@ export class AWSKMSKeySource extends EncryptionKeySourceBase {
             }
 
             throw new Error(`AWS KMS key retrieval failed: ${message}`);
+        }
+    }
+
+    /**
+     * Validates that the AWS KMS key is accessible by attempting a decrypt operation.
+     *
+     * For envelope encryption, this decrypts the data key blob and validates its length.
+     * Key material is decoded internally for validation only — never returned to the caller.
+     */
+    async ValidateKeyAccessibility(
+        lookupValue: string,
+        _keyVersion?: string,
+        expectedKeyLengthBytes?: number
+    ): Promise<KeyValidationResult> {
+        try {
+            if (!this._initialized || !this._client) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS client not initialized. Ensure @aws-sdk/client-kms is installed ' +
+                        'and AWS credentials are configured.'
+                };
+            }
+
+            const region = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
+            if (!region) {
+                return {
+                    IsAccessible: false,
+                    Error: 'No AWS region configured. Set AWS_REGION or AWS_DEFAULT_REGION environment variable.'
+                };
+            }
+
+            if (!lookupValue) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS lookup value is empty. Provide the base64-encoded encrypted data key (CiphertextBlob).'
+                };
+            }
+
+            // Attempt to decrypt the data key to verify accessibility
+            const ciphertextBlob = Buffer.from(lookupValue, 'base64');
+            const command = new DecryptCommand!({
+                CiphertextBlob: Uint8Array.from(ciphertextBlob)
+            });
+
+            const response = await this._client.send(command);
+
+            if (!response.Plaintext) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS returned empty plaintext. The encrypted data key may be invalid.'
+                };
+            }
+
+            // Validate key length if expected length provided — key bytes stay local
+            if (expectedKeyLengthBytes !== undefined && response.Plaintext.length !== expectedKeyLengthBytes) {
+                return {
+                    IsAccessible: false,
+                    Error: `KMS data key is ${response.Plaintext.length} bytes but algorithm requires ${expectedKeyLengthBytes} bytes. ` +
+                        `Regenerate the data key with the correct KeySpec.`
+                };
+            }
+
+            return { IsAccessible: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+
+            if (message.includes('InvalidCiphertextException')) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS: Invalid ciphertext. Ensure the lookup value contains a valid base64-encoded encrypted data key.'
+                };
+            }
+            if (message.includes('AccessDeniedException')) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS: Access denied. Ensure the application has kms:Decrypt permission for the key.'
+                };
+            }
+            if (message.includes('NotFoundException')) {
+                return {
+                    IsAccessible: false,
+                    Error: 'AWS KMS: Key not found. Verify the key ARN/alias exists and is in the correct region.'
+                };
+            }
+
+            return {
+                IsAccessible: false,
+                Error: `AWS KMS key validation failed: ${message}`
+            };
         }
     }
 

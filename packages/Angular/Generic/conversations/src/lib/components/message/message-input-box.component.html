@@ -19,16 +19,46 @@
       (attachmentClicked)="onAttachmentClicked($event)">
     </mj-mention-editor>
 
-    <!-- Attach Button - Positioned over editor -->
+    <!-- Attach Buttons - Positioned over editor -->
     @if (enableAttachments) {
-      <button
-        class="attach-button-icon"
-        [disabled]="disabled"
-        (click)="openFilePicker(); $event.stopPropagation()"
-        title="Attach file"
-        >
-        <i class="fa-solid fa-paperclip"></i>
-      </button>
+      <div class="attach-buttons">
+        <button
+          class="attach-button-icon"
+          [disabled]="disabled"
+          (click)="openFilePicker(); $event.stopPropagation()"
+          title="Attach file"
+          >
+          <i class="fa-solid fa-paperclip"></i>
+        </button>
+        <!--
+          TODO: "Attach artifact from library" button is not yet wired.
+
+          Current state (2026-04-15): emits `artifactPickerRequested` but no
+          consumer handles the event (handler was removed by commit 0a4612abf1,
+          orphaned template cleaned up in 7a063fc12a). Button is intentionally
+          visible but disabled so it's obvious what's missing.
+
+          To finish: build a picker modal (suggested approach: wrap the
+          `<mj-tree-dropdown>` used in dashboard-viewer's artifact-config-panel)
+          and on selection, attach the artifact version as a Direction='Input'
+          MJConversationDetailArtifact junction on the outgoing message.
+          The infrastructure for agents reading input artifacts is already in
+          place via AgentRunner.gatherConversationArtifacts().
+
+          See also: packages/Angular/Generic/artifacts/src/lib/services/analyze-artifact.service.ts
+          which does the similar end-to-end flow for standalone Analyze — the
+          attach-to-draft path is a strict subset (no artifact creation, no
+          conversation creation, just the junction).
+        -->
+        <button
+          class="attach-button-icon attach-artifact-button"
+          [disabled]="true"
+          (click)="openArtifactPicker(); $event.stopPropagation()"
+          title="Attach artifact from library — not yet wired (see message-input-box.component.html TODO)"
+          >
+          <i class="fa-solid fa-cube"></i>
+        </button>
+      </div>
     }
 
     <!-- Send Button (Icon Only) - Positioned over editor -->

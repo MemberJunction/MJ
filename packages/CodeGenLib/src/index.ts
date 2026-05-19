@@ -70,6 +70,7 @@ export * from './Misc/status_logging'
 export * from './Misc/system_integrity';
 export * from './Misc/runCommand'
 export * from './Misc/util'
+export * from './Misc/codegen-reporter'
 
 // Manifest generation
 export * from './Manifest/GenerateClassRegistrationsManifest'

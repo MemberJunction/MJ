@@ -1,0 +1,296 @@
+[
+  {
+    "fields": {
+      "Name": "Clarendon",
+      "Code": "13",
+      "ISO3166_2": "JM-13",
+      "Latitude": 17.9947,
+      "Longitude": -77.3109,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-13.geojson",
+      "CommonAliases": [
+        "Clarendon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "639AE70A-27A0-4353-9D94-08425BFA3A22"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.323Z",
+      "checksum": "d187dcfbf9a45b4094c953cff2dab1974ffa1f2bf83b9fd5ea4d5bd5ae0071d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hanover",
+      "Code": "09",
+      "ISO3166_2": "JM-09",
+      "Latitude": 18.3953,
+      "Longitude": -78.1337,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-09.geojson",
+      "CommonAliases": [
+        "Hanover"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "F8993E0B-589E-46D4-AD6E-642D61FA303E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.340Z",
+      "checksum": "f453a7c58109a075bc5a79e8902ff37c6197b4209dd56e76cdf994763c280f16"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kingston",
+      "Code": "01",
+      "ISO3166_2": "JM-01",
+      "Latitude": 17.9799,
+      "Longitude": -76.7653,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-01.geojson",
+      "CommonAliases": [
+        "Kingston"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "E088C586-49D6-49BC-8F09-1431C9D63AA8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.357Z",
+      "checksum": "268d55e0f27454443ac6f5d14169acf3cf4c2e96bb5f7711e022b16aaa52f4be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manchester",
+      "Code": "12",
+      "ISO3166_2": "JM-12",
+      "Latitude": 18.0219,
+      "Longitude": -77.4996,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-12.geojson",
+      "CommonAliases": [
+        "Manchester"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "4BDD3DBB-78DB-4239-8F0C-0D2A50A34A64"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.376Z",
+      "checksum": "0d74f776dd8df0fb50bc108479220859d4b7534db902e11ee211c7d1bac82631"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Portland",
+      "Code": "04",
+      "ISO3166_2": "JM-04",
+      "Latitude": 18.1179,
+      "Longitude": -76.5041,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-04.geojson",
+      "CommonAliases": [
+        "Portland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "8E45C1A3-BFF8-4625-8D38-6A38350B32E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.392Z",
+      "checksum": "b4b28fb2b5f77c9c9581f68bc3a8bb2788021838084da1648298d7f221e6d35b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Andrew",
+      "Code": "02",
+      "ISO3166_2": "JM-02",
+      "Latitude": 18.0229,
+      "Longitude": -76.7685,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-02.geojson",
+      "CommonAliases": [
+        "Saint Andrew"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "7EED35C1-FF2D-4248-989A-79A2FE07F4F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.409Z",
+      "checksum": "ea74deec4274f8955b9ba6d24d79cd1ecde9d0d9c54a3d1d1069518cfa6a6102"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Ann",
+      "Code": "06",
+      "ISO3166_2": "JM-06",
+      "Latitude": 18.3194,
+      "Longitude": -77.2438,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-06.geojson",
+      "CommonAliases": [
+        "Saint Ann"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "53756411-67FC-4F02-8445-EE1785C4413A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.426Z",
+      "checksum": "c2ad312bab02c6871ea2b3cafc7e99c4375b1fe0b3096c62b1d1d1f8b4016c6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Catherine",
+      "Code": "14",
+      "ISO3166_2": "JM-14",
+      "Latitude": 17.8518,
+      "Longitude": -77.0292,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-14.geojson",
+      "CommonAliases": [
+        "Saint Catherine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "68747D9D-12E9-4B7F-B297-86D672DACAC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.443Z",
+      "checksum": "c8d6a728507db5c63c5ba3150127eb8653d2ccfbf7d2c365b8c8fb01b3416844"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Elizabeth",
+      "Code": "11",
+      "ISO3166_2": "JM-11",
+      "Latitude": 18.0537,
+      "Longitude": -77.7646,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-11.geojson",
+      "CommonAliases": [
+        "Saint Elizabeth"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "6DCEEFD3-D57B-4331-9F44-663B9E44228F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.459Z",
+      "checksum": "be52ed41aaf9daeab4e37d66dcb7a29adaa2152b1d11d0e032173056fac68e00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint James",
+      "Code": "08",
+      "ISO3166_2": "JM-08",
+      "Latitude": 18.3637,
+      "Longitude": -77.8715,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-08.geojson",
+      "CommonAliases": [
+        "Saint James"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "13C27ABA-18C2-4130-8167-247ACE37C5AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.473Z",
+      "checksum": "8042d34e7ceb2ada64edb6cadcbb986be0521092df84242e70bcf5cc5287bf3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Mary",
+      "Code": "05",
+      "ISO3166_2": "JM-05",
+      "Latitude": 18.2655,
+      "Longitude": -76.8859,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-05.geojson",
+      "CommonAliases": [
+        "Saint Mary"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "AB340424-D7A3-4B89-9AE2-0EE3C3557454"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.511Z",
+      "checksum": "9400d52ed94c2da58aeb98b0b40d0b46369d421328eda25fed238ab24573214a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Thomas",
+      "Code": "03",
+      "ISO3166_2": "JM-03",
+      "Latitude": 17.951,
+      "Longitude": -76.4226,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-03.geojson",
+      "CommonAliases": [
+        "Saint Thomas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "A2C6E37F-F647-42E1-B2FC-97C7F4B0D033"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.527Z",
+      "checksum": "5cec23832138122c60978dfe1adcdb90b09f50aaf0d11549a04d31adac7d89c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trelawny",
+      "Code": "07",
+      "ISO3166_2": "JM-07",
+      "Latitude": 18.36,
+      "Longitude": -77.6163,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-07.geojson",
+      "CommonAliases": [
+        "Trelawny"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "2D422751-DB88-41B1-A5D4-0E37B59A5FE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.543Z",
+      "checksum": "12b0a22a78325a6ee366d5b213b035b967fb9eb8c4c12d7ee22ed7628e53be18"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Westmoreland",
+      "Code": "10",
+      "ISO3166_2": "JM-10",
+      "Latitude": 18.2678,
+      "Longitude": -78.1303,
+      "BoundaryGeoJSON": "@file:by-country/JM/boundaries/JM-10.geojson",
+      "CommonAliases": [
+        "Westmoreland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=JM"
+    },
+    "primaryKey": {
+      "ID": "DBD82A3B-AB3A-43AB-A889-8D773FF2EC22"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:07.556Z",
+      "checksum": "90dc38f85cd3531012d5c556abfe91c9ca49f4aac15bceabdb8119750009b294"
+    }
+  }
+]

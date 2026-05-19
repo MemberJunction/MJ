@@ -1,0 +1,947 @@
+[
+  {
+    "fields": {
+      "Name": "Balé",
+      "Code": "BAL",
+      "ISO3166_2": "BF-BAL",
+      "Latitude": 11.8279,
+      "Longitude": -3.0688,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BAL.geojson",
+      "CommonAliases": [
+        "Balé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "8D3D22B9-B746-48A1-92C3-C7236B0EF237"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.590Z",
+      "checksum": "b368e857b57899cfd57ff381513c3670569b7021689d1a455137a9dedee73d83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bam",
+      "Code": "BAM",
+      "ISO3166_2": "BF-BAM",
+      "Latitude": 13.4455,
+      "Longitude": -1.5778,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BAM.geojson",
+      "CommonAliases": [
+        "Bam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "1A743E68-5C46-4D0C-90F2-190C009711E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.606Z",
+      "checksum": "51b1d75da287cfef94d7a967754afcab3fe569b7064044ec5e63a49722b9eaa2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Banwa",
+      "Code": "BAN",
+      "ISO3166_2": "BF-BAN",
+      "Latitude": 12.1648,
+      "Longitude": -4.1085,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BAN.geojson",
+      "CommonAliases": [
+        "Banwa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "8180DEDD-E6ED-4E03-A6B2-C25BE442756C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.623Z",
+      "checksum": "cc20e894cde9efa97689fda7c5e6b14c13995cc8d5cdfcb9f1bf208b5234de06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bazèga",
+      "Code": "BAZ",
+      "ISO3166_2": "BF-BAZ",
+      "Latitude": 11.9332,
+      "Longitude": -1.4649,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BAZ.geojson",
+      "CommonAliases": [
+        "Bazèga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "4C416ED1-54AA-4A38-8E10-5F58410267FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.640Z",
+      "checksum": "ea47957979e171a0cd7255c09b5582cc7b07be8bad54d7fa4bed94dc988668fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bougouriba",
+      "Code": "BGR",
+      "ISO3166_2": "BF-BGR",
+      "Latitude": 10.8979,
+      "Longitude": -3.4235,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BGR.geojson",
+      "CommonAliases": [
+        "Bougouriba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "E44CE290-1B00-4C55-BDBF-F453CDE5A13D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.656Z",
+      "checksum": "ac8e3389bbc91d80ce8f834bf0dae79a88aa3257719126e73380be37dce755b0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boulgou",
+      "Code": "BLG",
+      "ISO3166_2": "BF-BLG",
+      "Latitude": 11.4767,
+      "Longitude": -0.4367,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BLG.geojson",
+      "CommonAliases": [
+        "Boulgou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "FEFDACD7-AF6A-47CF-A6EF-0C4E3D10F625"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.672Z",
+      "checksum": "32de0c40695bd45ed2bf7385d647017369f4e2b9eac16b03bc3efe73c3063216"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boulkiemdé",
+      "Code": "BLK",
+      "ISO3166_2": "BF-BLK",
+      "Latitude": 12.3143,
+      "Longitude": -2.1357,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-BLK.geojson",
+      "CommonAliases": [
+        "Boulkiemdé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "3535CBFD-16C3-4FA4-9A73-55B84556AE46"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.688Z",
+      "checksum": "6e20047bf922b35d027f1c76cc14f88daffb4d092ac639bed504e1aa4a3d423e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comoé",
+      "Code": "COM",
+      "ISO3166_2": "BF-COM",
+      "Latitude": 10.2156,
+      "Longitude": -4.4176,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-COM.geojson",
+      "CommonAliases": [
+        "Comoé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "876368F0-AB6E-4E3A-BEBB-F39396FF6F61"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.705Z",
+      "checksum": "24e91f3b68daf05989825b5e4472c173ad9cf0e096b6bf4fa9b1232e97c0d9aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ganzourgou",
+      "Code": "GAN",
+      "ISO3166_2": "BF-GAN",
+      "Latitude": 12.2052,
+      "Longitude": -0.7686,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-GAN.geojson",
+      "CommonAliases": [
+        "Ganzourgou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "311BDEF0-4229-46A3-81AF-DFC254EAFC9F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.721Z",
+      "checksum": "e82256b8a44ee3643dc485280d20f6a1c563eaa9ea3b91ba07ec8b73b2cdc60e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gnagna",
+      "Code": "GNA",
+      "ISO3166_2": "BF-GNA",
+      "Latitude": 12.9057,
+      "Longitude": 0.1153,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-GNA.geojson",
+      "CommonAliases": [
+        "Gnagna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "2E46803F-DDB9-496F-95E4-0EA276320022"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.734Z",
+      "checksum": "b3eec6c86120fea21f100f9adb3339acbc0c200578f4c1b26392fa632f5fe672"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gourma",
+      "Code": "GOU",
+      "ISO3166_2": "BF-GOU",
+      "Latitude": 12.0677,
+      "Longitude": 0.6104,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-GOU.geojson",
+      "CommonAliases": [
+        "Gourma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "4DA92824-0BE7-458C-A9DC-C909EA4EB57F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.792Z",
+      "checksum": "84c79208b0f33926cfb364fcf2b0954808564cb467962fe429b73b92fa5e1402"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Houet",
+      "Code": "HOU",
+      "ISO3166_2": "BF-HOU",
+      "Latitude": 11.3355,
+      "Longitude": -4.19,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-HOU.geojson",
+      "CommonAliases": [
+        "Houet"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "06916128-2E6E-45AA-8ED4-8619B9366941"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.807Z",
+      "checksum": "894f90fe3880008008bcbebc3b3234b77efb4f15b6f1732418429d589c092bc7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ioba",
+      "Code": "IOB",
+      "ISO3166_2": "BF-IOB",
+      "Latitude": 11.0116,
+      "Longitude": -2.9697,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-IOB.geojson",
+      "CommonAliases": [
+        "Ioba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "87F6EF67-9047-46B8-89C6-7C77297EA3C2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.823Z",
+      "checksum": "991b67e436e4a14a6e3c1b8c45f9afa598aec854deaac9cc4ddb48c0173f448e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kadiogo",
+      "Code": "KAD",
+      "ISO3166_2": "BF-KAD",
+      "Latitude": 12.3267,
+      "Longitude": -1.4662,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KAD.geojson",
+      "CommonAliases": [
+        "Kadiogo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "06B69840-AAC0-4E31-8101-8BC82D1CA7E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.840Z",
+      "checksum": "5829ce1863a180827c04882e6e1478ea056c029c948cd067ab849dce4311bced"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kénédougou",
+      "Code": "KEN",
+      "ISO3166_2": "BF-KEN",
+      "Latitude": 11.4128,
+      "Longitude": -5.0273,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KEN.geojson",
+      "CommonAliases": [
+        "Kénédougou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "EE6871A7-4E72-40F9-969D-B26FE6CE55B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.857Z",
+      "checksum": "793f99e275ccc276906f710f6f1a0fb42b92ca89ff29003f987c241545d544a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Komondjari",
+      "Code": "KMD",
+      "ISO3166_2": "BF-KMD",
+      "Latitude": 12.6971,
+      "Longitude": 0.776,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KMD.geojson",
+      "CommonAliases": [
+        "Komondjari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "0787B548-6DDB-49C5-97A1-77338378FDC4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.873Z",
+      "checksum": "06aba258db75b5d25b1744581d3d7fed76baa17dbb3e48e01c75acba4a4b7e3c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kompienga",
+      "Code": "KMP",
+      "ISO3166_2": "BF-KMP",
+      "Latitude": 11.4519,
+      "Longitude": 0.8989,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KMP.geojson",
+      "CommonAliases": [
+        "Kompienga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "99C93685-A104-4CAE-9504-4C7DA2D043D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.889Z",
+      "checksum": "0612e6b30f8e4e948284ef07bd25b1c0698ef0ee3b50ec18b8b5361ef0ff2fd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kossi",
+      "Code": "KOS",
+      "ISO3166_2": "BF-KOS",
+      "Latitude": 12.9587,
+      "Longitude": -3.8889,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KOS.geojson",
+      "CommonAliases": [
+        "Kossi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "29FEAF6B-8DFA-4D3D-9B8B-FDF03B6524B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.906Z",
+      "checksum": "8d294460ecf35b8ef373e908d743148d3316d25d9cfb187a93ea04773fe3afbf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Koulpélogo",
+      "Code": "KOP",
+      "ISO3166_2": "BF-KOP",
+      "Latitude": 11.4079,
+      "Longitude": 0.2043,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KOP.geojson",
+      "CommonAliases": [
+        "Koulpélogo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "0E1A8F62-D468-44B7-9F58-9A7C21D21129"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.921Z",
+      "checksum": "e6b2bd98c2220684d84ffd2a93d30f7f2eb079e86b111f4a0515570e49642248"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kouritenga",
+      "Code": "KOT",
+      "ISO3166_2": "BF-KOT",
+      "Latitude": 12.1587,
+      "Longitude": -0.2915,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KOT.geojson",
+      "CommonAliases": [
+        "Kouritenga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "04DCF64B-0C03-4B70-8CBF-471542B698CA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.936Z",
+      "checksum": "792c7b45708310bf6bec217b40928a6e4b17036c4141cffab77725a2dff81d47"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kourwéogo",
+      "Code": "KOW",
+      "ISO3166_2": "BF-KOW",
+      "Latitude": 12.3933,
+      "Longitude": -1.8367,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-KOW.geojson",
+      "CommonAliases": [
+        "Kourwéogo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "86BDEE3F-6953-4843-935D-8059312DD673"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.992Z",
+      "checksum": "c551769ae0b432c33c35a7f6e578e59745d77bc7aa0cdcfa56291d0ad2d3f959"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Léraba",
+      "Code": "LER",
+      "ISO3166_2": "BF-LER",
+      "Latitude": 10.5879,
+      "Longitude": -5.2352,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-LER.geojson",
+      "CommonAliases": [
+        "Léraba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "37F53883-14B6-40A6-BEDE-EDDA05897ED8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.012Z",
+      "checksum": "aac1b28afd0bc28914e13bdeca7599c62a82cd57000772df91a076ba9eecfdf7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loroum",
+      "Code": "LOR",
+      "ISO3166_2": "BF-LOR",
+      "Latitude": 13.8724,
+      "Longitude": -2.0709,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-LOR.geojson",
+      "CommonAliases": [
+        "Loroum"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "95449CD7-5606-4D70-8862-867A5BFE6D4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.028Z",
+      "checksum": "7296a9e6745e46497e0b86cc98204af0f38ee9e731752ff3682bd9bad5993e96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mouhoun",
+      "Code": "MOU",
+      "ISO3166_2": "BF-MOU",
+      "Latitude": 12.3486,
+      "Longitude": -3.3867,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-MOU.geojson",
+      "CommonAliases": [
+        "Mouhoun"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "20FD6DC9-8B63-4838-9ACF-97A49B179B2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.044Z",
+      "checksum": "ccc85c93fdd451a68a6519f92284a704485644b0bf510d0cfe692932d48ee7cd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nahouri",
+      "Code": "NAO",
+      "ISO3166_2": "BF-NAO",
+      "Latitude": 11.2028,
+      "Longitude": -1.1678,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-NAO.geojson",
+      "CommonAliases": [
+        "Nahouri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "57F5A569-D2B7-45D5-834C-479467BFDCB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.061Z",
+      "checksum": "15653e1fe3a419686b9b7960f17cdcab7c11daf72f7753aec947b14d363807af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namentenga",
+      "Code": "NAM",
+      "ISO3166_2": "BF-NAM",
+      "Latitude": 13.1697,
+      "Longitude": -0.504,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-NAM.geojson",
+      "CommonAliases": [
+        "Namentenga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "A1092EFF-2613-4B00-8EF2-DCCA9E0690AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.078Z",
+      "checksum": "8715abb7316eba3579fb53bc82d14c6898bf2186d53f6e37a799af83c6d98806"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nayala",
+      "Code": "NAY",
+      "ISO3166_2": "BF-NAY",
+      "Latitude": 12.6594,
+      "Longitude": -3.0332,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-NAY.geojson",
+      "CommonAliases": [
+        "Nayala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "F992A8D2-F2FC-4737-92F6-39EFC59E8949"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.094Z",
+      "checksum": "025f022785c112bfaa3cbfb0fd626a38cba0937ff11a2862e88972b26488aab9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Noumbiel",
+      "Code": "NOU",
+      "ISO3166_2": "BF-NOU",
+      "Latitude": 10.251,
+      "Longitude": -3.3401,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-NOU.geojson",
+      "CommonAliases": [
+        "Noumbiel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "03413CE4-1F04-456F-8605-28FA6A875F01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.117Z",
+      "checksum": "48620fbff02b79b032995d5353d7c2dc679d6cbe982e241b507103f92c2ebc8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oubritenga",
+      "Code": "OUB",
+      "ISO3166_2": "BF-OUB",
+      "Latitude": 12.6477,
+      "Longitude": -1.2856,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-OUB.geojson",
+      "CommonAliases": [
+        "Oubritenga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "6A18ADE7-E5BC-46F8-87D1-55BA7737156D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.138Z",
+      "checksum": "91d471c183f467d92ecf1946469ac54b9b23f5f2a8a076a60626a28f09562740"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oudalan",
+      "Code": "OUD",
+      "ISO3166_2": "BF-OUD",
+      "Latitude": 14.5769,
+      "Longitude": -0.4116,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-OUD.geojson",
+      "CommonAliases": [
+        "Oudalan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "BB29DBB7-F742-4751-880D-33214D38EDB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.156Z",
+      "checksum": "06ddee3d209485664bfd3fe26eea1edeb7da7d2bcc6a8358e1d83d5ddf4d77b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Passoré",
+      "Code": "PAS",
+      "ISO3166_2": "BF-PAS",
+      "Latitude": 12.8734,
+      "Longitude": -2.1066,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-PAS.geojson",
+      "CommonAliases": [
+        "Passoré"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "67F2CEFA-D88B-4359-AAA2-8C1BDC26CC68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.218Z",
+      "checksum": "d42fb7320fb3f6ccc70c22fa9fd3f997198a8cc07a53b96a862c449ead842d08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poni",
+      "Code": "PON",
+      "ISO3166_2": "BF-PON",
+      "Latitude": 10.251,
+      "Longitude": -3.3401,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-PON.geojson",
+      "CommonAliases": [
+        "Poni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "7BD048B6-706F-4C6E-868C-7A1EBC2CBC4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.235Z",
+      "checksum": "7f19fc6041aa670b15d1b3207fa73a30992cc37953f09b7ee354e57474ebaefb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sanguié",
+      "Code": "SNG",
+      "ISO3166_2": "BF-SNG",
+      "Latitude": 12.2508,
+      "Longitude": -2.573,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SNG.geojson",
+      "CommonAliases": [
+        "Sanguié"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "28BEF5CF-6AD8-4668-872E-A8ADCEE1D4BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.255Z",
+      "checksum": "10c38241a4678282ed859111577ac825191cdb71d3c29eebae9eff39558664af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sanmatenga",
+      "Code": "SMT",
+      "ISO3166_2": "BF-SMT",
+      "Latitude": 13.227,
+      "Longitude": -1.0804,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SMT.geojson",
+      "CommonAliases": [
+        "Sanmatenga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "59843937-F3B8-4225-AD5C-2AD2496D88DF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.272Z",
+      "checksum": "7169563c38c4928214c8c31306c2a1b4a51d801d61076d50d82c78b5e3642eb0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Séno",
+      "Code": "SEN",
+      "ISO3166_2": "BF-SEN",
+      "Latitude": 13.8673,
+      "Longitude": -0.0711,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SEN.geojson",
+      "CommonAliases": [
+        "Séno"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "79F912A1-D45B-45A8-96D7-EF9ECD114F86"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.289Z",
+      "checksum": "7e3226534f5cf4464ad524503b258835847a46d14557f1e9aaf1e1b24dd90b11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sissili",
+      "Code": "SIS",
+      "ISO3166_2": "BF-SIS",
+      "Latitude": 11.1806,
+      "Longitude": -2.1089,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SIS.geojson",
+      "CommonAliases": [
+        "Sissili"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "ACA421F9-46DB-4925-8E88-9FD774377F84"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.306Z",
+      "checksum": "9f465c9b1518aced4b9ed973ed6f09d419893c277d8a9f1d038e32250d9b2235"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Soum",
+      "Code": "SOM",
+      "ISO3166_2": "BF-SOM",
+      "Latitude": 14.2352,
+      "Longitude": -1.318,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SOM.geojson",
+      "CommonAliases": [
+        "Soum"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "914DFC0E-E41F-473B-8DAE-C22B87EB8D67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.323Z",
+      "checksum": "62ae312df0eed6aef49f74d33192ff16c2f5f64d2c74256744850cf1c1e9ce16"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sourou",
+      "Code": "SOR",
+      "ISO3166_2": "BF-SOR",
+      "Latitude": 13.2875,
+      "Longitude": -2.9597,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-SOR.geojson",
+      "CommonAliases": [
+        "Sourou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "7DB06A7C-C442-4101-BF2A-C5BB933DE668"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.339Z",
+      "checksum": "61702b870ea09a0d328d15aec3d7771915bc5ec2b425f39ec1faaadd1487110b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tapoa",
+      "Code": "TAP",
+      "ISO3166_2": "BF-TAP",
+      "Latitude": 12.0191,
+      "Longitude": 1.7947,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-TAP.geojson",
+      "CommonAliases": [
+        "Tapoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "C49A823F-47EB-4C5A-B550-A4576CF91FD8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.356Z",
+      "checksum": "86af58b99423bc3ac1f9fb8dd3ff14d221b414d527fbbd87bcda3ffad97217be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tui",
+      "Code": "TUI",
+      "ISO3166_2": "BF-TUI",
+      "Latitude": 11.3659,
+      "Longitude": -3.4095,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-TUI.geojson",
+      "CommonAliases": [
+        "Tui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "D30A4A8D-DE56-44A9-BC58-91E18CAB5AF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.369Z",
+      "checksum": "bea5d15fada085931b9a3ebe741fbbc8102ed7c360b2d2d3e325feb8ce7bc10b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yagha",
+      "Code": "YAG",
+      "ISO3166_2": "BF-YAG",
+      "Latitude": 13.3228,
+      "Longitude": 0.6648,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-YAG.geojson",
+      "CommonAliases": [
+        "Yagha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "95740A63-2183-4779-B16A-892A7D056F9B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.407Z",
+      "checksum": "2a28e0876cf1d7f7f0234e3547d65543779a490a19c429970ded81728b70750d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yatenga",
+      "Code": "YAT",
+      "ISO3166_2": "BF-YAT",
+      "Latitude": 13.6813,
+      "Longitude": -2.3253,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-YAT.geojson",
+      "CommonAliases": [
+        "Yatenga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "2EF813A0-D20A-495F-A701-372C9ED56A6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.421Z",
+      "checksum": "e77059ddf208a8e8770238458f997fffed3a5e5c3bf67aaad08027d95c04dbf4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ziro",
+      "Code": "ZIR",
+      "ISO3166_2": "BF-ZIR",
+      "Latitude": 11.6131,
+      "Longitude": -1.8319,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-ZIR.geojson",
+      "CommonAliases": [
+        "Ziro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "7DA98BF7-2D41-49FD-9E7E-4636C29C1F1C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.438Z",
+      "checksum": "a9d8e622b11324f83e1797bb7fba1736ef62e0f1e6eacef24524365b97c3d60f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zondoma",
+      "Code": "ZON",
+      "ISO3166_2": "BF-ZON",
+      "Latitude": 13.1939,
+      "Longitude": -2.3813,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-ZON.geojson",
+      "CommonAliases": [
+        "Zondoma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "B0866BBB-DBD4-423D-A1F8-B495ADC81C63"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.454Z",
+      "checksum": "874f8f3c45ee1a24108a988d2fc664bc1b4a2e72d7d936ebed2792a43cad3033"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zoundwéogo",
+      "Code": "ZOU",
+      "ISO3166_2": "BF-ZOU",
+      "Latitude": 11.5711,
+      "Longitude": -0.9402,
+      "BoundaryGeoJSON": "@file:by-country/BF/boundaries/BF-ZOU.geojson",
+      "CommonAliases": [
+        "Zoundwéogo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BF"
+    },
+    "primaryKey": {
+      "ID": "467CA833-3234-4693-BB65-3C6D782EBE91"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.470Z",
+      "checksum": "101d10654434a0749d1403b5c2111dcc0cce985007b3519233655397b87e0075"
+    }
+  }
+]

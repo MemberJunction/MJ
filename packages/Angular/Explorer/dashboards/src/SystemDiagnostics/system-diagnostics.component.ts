@@ -38,6 +38,10 @@ export interface EngineConfigItemDisplay {
     memoryDisplay: string;
     sampleData: unknown[];
     expanded: boolean;
+    /** Whether this property loaded successfully during engine startup */
+    loadedSuccessfully: boolean;
+    /** Error message if the property failed to load */
+    errorMessage?: string;
     // Paging support
     displayedData: unknown[];
     allDataLoaded: boolean;
@@ -168,33 +172,31 @@ export interface SystemDiagnosticsUserPreferences {
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <div class="system-diagnostics">
-          <!-- Header -->
-          <div class="diagnostics-header">
-            <div class="header-title">
-              <i class="fa-solid fa-stethoscope"></i>
-              <h2>System Diagnostics</h2>
-            </div>
-            <div class="header-controls">
-              <div class="auto-refresh-control">
-                <label>
-                  <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                  Auto-refresh
-                </label>
-                @if (autoRefresh) {
-                  <span class="refresh-indicator">
-                    <i class="fa-solid fa-sync-alt spinning"></i>
-                    Every 5s
-                  </span>
-                }
-              </div>
-              <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-                <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-                Refresh Now
-              </button>
+        <!--
+          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell,
+          which owns its own <mj-page-header>. We deliberately do NOT render a
+          <mj-page-header> here to avoid the doubled-header pattern Section 9b
+          defers. Action chrome (auto-refresh toggle + refresh button) lives
+          inline in the .sticky-header below, matching UserManagement /
+          ApplicationRoles. See plans/explorer-chrome-conventions.md Section 10.
+        -->
+        <div class="sd-container">
+          <div class="sticky-header">
+            <div class="action-buttons" role="toolbar" aria-label="System diagnostics actions">
+              @if (autoRefresh) {
+                <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
+              }
+              <label class="auto-refresh-toggle">
+                <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+                Auto-refresh
+              </label>
+              <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
             </div>
           </div>
-        
+
+          <div class="scrollable-content">
+        <div class="system-diagnostics">
+
           <!-- Overview Cards (Collapsible) -->
           <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
             <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
@@ -1022,7 +1024,7 @@ export interface SystemDiagnosticsUserPreferences {
                         </div>
                       } @else {
                         <div class="empty-state">
-                          <i class="fa-solid fa-check-circle" style="color: #4caf50;"></i>
+                          <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success);"></i>
                           <p>No optimization insights</p>
                           <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
                         </div>
@@ -1371,6 +1373,12 @@ export interface SystemDiagnosticsUserPreferences {
                       <div class="config-item" [class.expanded]="item.expanded">
                         <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
                           <div class="config-item-info">
+                            <i class="fa-solid config-health-icon"
+                               [class.fa-circle-check]="item.loadedSuccessfully"
+                               [class.fa-circle-xmark]="!item.loadedSuccessfully"
+                               [class.health-success]="item.loadedSuccessfully"
+                               [class.health-failure]="!item.loadedSuccessfully"
+                               [title]="item.loadedSuccessfully ? 'Loaded successfully' : ('Load failed: ' + (item.errorMessage || 'unknown'))"></i>
                             <span class="config-type-chip" [class]="'type-' + item.type">{{ item.type }}</span>
                             <span class="config-name">{{ item.entityName || item.datasetName || item.propertyName }}</span>
                           </div>
@@ -1399,7 +1407,13 @@ export interface SystemDiagnosticsUserPreferences {
                                 <code class="detail-value">{{ item.orderBy }}</code>
                               </div>
                             }
-        
+                            @if (!item.loadedSuccessfully && item.errorMessage) {
+                              <div class="config-detail-row config-detail-row--error">
+                                <span class="detail-label">Error:</span>
+                                <span class="detail-value detail-value--error">{{ item.errorMessage }}</span>
+                              </div>
+                            }
+
                             <!-- Data Table with Paging -->
                             @if (item.displayedData.length > 0) {
                               <div class="sample-data-section">
@@ -1472,14 +1486,16 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
+          </div>
+        </div>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })
 export class SystemDiagnosticsComponent extends BaseResourceComponent implements OnInit, OnDestroy, AfterViewInit {
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     // User settings persistence
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     private userSettingEntity: MJUserSettingEntity | null = null;
     private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
     private settingsLoaded = false;
@@ -1583,13 +1599,13 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     constructor(
         private cdr: ChangeDetectorRef,
         private ngZone: NgZone,
-        private navigationService: NavigationService,
         private route: ActivatedRoute
     ) {
         super();
     }
 
     async ngOnInit() {
+        super.ngOnInit();
         // Load user preferences first
         await this.loadUserPreferences();
 
@@ -1611,6 +1627,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     }
 
     ngOnDestroy() {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
         // Clear any pending save timeout
@@ -2408,6 +2425,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                     'Engine': { events: 0, avgMs: 0 },
                     'AI': { events: 0, avgMs: 0 },
                     'Cache': { events: 0, avgMs: 0 },
+                    'Coalesce': { events: 0, avgMs: 0 },
                     'Network': { events: 0, avgMs: 0 },
                     'Custom': { events: 0, avgMs: 0 }
                 };
@@ -3801,12 +3819,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const engineObj = engineInstance as Record<string, unknown>;
         const items: EngineConfigItemDisplay[] = [];
 
+        // Get load health data from DataMapEntries (if available)
+        const dataMapEntries = (engineObj as { DataMapEntries?: ReadonlyMap<string, { loadedSuccessfully: boolean; errorMessage?: string }> }).DataMapEntries;
+
         for (const config of engineInstance.Configs) {
             const propValue = engineObj[config.PropertyName];
             const dataArray = Array.isArray(propValue) ? propValue : [];
             const estimatedBytes = this.estimateArrayMemory(dataArray);
             const initialPageSize = 10;
             const initialData = dataArray.slice(0, initialPageSize);
+
+            // Look up load health from _dataMap
+            const healthEntry = dataMapEntries?.get(config.PropertyName);
 
             items.push({
                 propertyName: config.PropertyName,
@@ -3820,6 +3844,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 memoryDisplay: this.formatBytes(estimatedBytes),
                 sampleData: dataArray, // Store all data for paging
                 expanded: false,
+                loadedSuccessfully: healthEntry?.loadedSuccessfully ?? true,
+                errorMessage: healthEntry?.errorMessage,
                 // Paging support
                 displayedData: initialData,
                 allDataLoaded: dataArray.length <= initialPageSize,

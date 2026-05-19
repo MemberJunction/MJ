@@ -197,6 +197,19 @@ export interface SyncProgress {
 /** Callback for progress tracking during sync */
 export type OnProgressCallback = (progress: SyncProgress) => void;
 
+/** Snapshot of sync progress for a connector — stored in IntegrationEngine's static map */
+export interface SyncProgressSnapshot {
+    StartedAt: Date;
+    CurrentEntity: string;
+    EntityMapsTotal: number;
+    EntityMapsCompleted: number;
+    RecordsProcessed: number;
+    RecordsCreated: number;
+    RecordsUpdated: number;
+    RecordsErrored: number;
+    TriggerType: string;
+}
+
 /** Notification event type — what triggered the notification */
 export type SyncNotificationEvent = 'SyncCompleted' | 'SyncFailed' | 'SyncCompletedWithErrors';
 
@@ -234,6 +247,12 @@ export interface IntegrationSyncOptions {
     FullSync?: boolean;
     /** Links this sync run to a ScheduledJobRun for traceability. */
     ScheduledJobRunID?: string;
+    /**
+     * Override sync direction for all entity maps in this run.
+     * If omitted, each entity map's own SyncDirection is used.
+     * Pull = external → MJ only. Push = MJ → external only. Bidirectional = both.
+     */
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }
 
 // ─── Source Schema Introspection Types ──────────────────────────────
@@ -245,6 +264,18 @@ export interface IntegrationSyncOptions {
 export interface SourceSchemaInfo {
     /** All objects (tables, API entities) discovered in the source system. */
     Objects: SourceObjectInfo[];
+}
+
+/** Options controlling scope of IntrospectSchema. */
+export interface IntrospectSchemaOptions {
+    /**
+     * When set, restricts introspection (and any per-object describe calls)
+     * to this subset of object names. When omitted/empty, describes all
+     * objects the connector can discover — which for large systems (e.g.
+     * Salesforce with ~1,800 sobjects) is expensive. Prefer passing the
+     * user-selected subset whenever possible.
+     */
+    ObjectNames?: string[];
 }
 
 /** One source object (table, API entity) discovered during introspection. */

@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection — Option A: Side-by-Side Comparison</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --diff-add: rgba(34,197,94,0.15);
+    --diff-del: rgba(239,68,68,0.15);
+    --diff-change: rgba(245,158,11,0.15);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1400px; margin: 2rem auto 0; }
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+  .header-stats {
+    display: flex; gap: 1.5rem;
+  }
+  .h-stat {
+    text-align: center;
+  }
+  .h-stat .val { font-size: 1.3rem; font-weight: 700; }
+  .h-stat .lbl { font-size: 0.68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .btn {
+    padding: 0.5rem 1rem; border-radius: 8px;
+    font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: inline-flex; align-items: center; gap: 0.4rem; border: none;
+  }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .btn-success { background: var(--success); color: white; }
+  .btn-success:hover { background: #16a34a; }
+  .btn-danger { background: var(--error); color: white; }
+  .btn-danger:hover { background: #dc2626; }
+  .btn-outline { background: transparent; color: var(--text-secondary); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+
+  /* Duplicate pair list */
+  .pair-nav {
+    display: flex; gap: 0.5rem; margin-bottom: 1.5rem; overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+  .pair-chip {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+    display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.82rem;
+  }
+  .pair-chip:hover { border-color: var(--accent); }
+  .pair-chip.active { border-color: var(--accent); background: rgba(59,130,246,0.08); color: var(--accent); }
+  .pair-chip .score {
+    background: rgba(245,158,11,0.12);
+    color: var(--warning);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+  }
+  .pair-chip.active .score { background: rgba(59,130,246,0.15); color: var(--accent); }
+
+  /* Comparison container */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .record-panel {
+    padding: 0;
+  }
+  .panel-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(15,23,42,0.5);
+  }
+  .panel-header h3 {
+    font-size: 0.9rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .panel-header .badge {
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.65rem; font-weight: 700;
+  }
+  .badge-primary { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .badge-secondary { background: rgba(168,85,247,0.12); color: var(--purple); }
+
+  .field-list {
+    padding: 0;
+  }
+  .field-row {
+    display: flex;
+    padding: 0.6rem 1.5rem;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+    font-size: 0.85rem;
+    transition: background 0.15s;
+  }
+  .field-row:hover { background: var(--bg-card-hover); }
+  .field-row:last-child { border-bottom: none; }
+  .field-label {
+    width: 120px;
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-top: 2px;
+  }
+  .field-value {
+    flex: 1;
+    color: var(--text-secondary);
+  }
+  .field-row.match .field-value { color: var(--text-primary); }
+  .field-row.diff {
+    background: var(--diff-change);
+  }
+  .field-row.diff .field-value {
+    color: var(--warning);
+    font-weight: 600;
+  }
+
+  /* Middle column */
+  .diff-column {
+    width: 60px;
+    border-left: 1px solid var(--border);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: rgba(15,23,42,0.5);
+  }
+  .diff-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+    font-size: 0.7rem;
+  }
+  .diff-indicator:last-child { border-bottom: none; }
+  .diff-indicator.same { color: var(--success); }
+  .diff-indicator.diff { color: var(--warning); }
+  .diff-indicator.empty { color: var(--text-muted); }
+  .diff-header {
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--border);
+    text-align: center;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: rgba(15,23,42,0.5);
+  }
+
+  /* Action bar */
+  .action-bar {
+    margin-top: 1.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .action-info {
+    display: flex; align-items: center; gap: 1rem;
+  }
+  .match-score {
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .score-ring {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    border: 3px solid var(--warning);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 700; color: var(--warning);
+  }
+  .score-detail h4 { font-size: 0.9rem; font-weight: 600; }
+  .score-detail p { font-size: 0.75rem; color: var(--text-muted); }
+  .action-buttons {
+    display: flex; gap: 0.5rem;
+  }
+
+  @media (max-width: 1024px) {
+    .comparison { grid-template-columns: 1fr; }
+    .diff-column { display: none; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-clone"></i> Duplicate Detection</h1>
+    <div class="header-stats">
+      <div class="h-stat">
+        <div class="val" style="color: var(--warning);">23</div>
+        <div class="lbl">Pending Review</div>
+      </div>
+      <div class="h-stat">
+        <div class="val" style="color: var(--success);">142</div>
+        <div class="lbl">Resolved</div>
+      </div>
+      <div class="h-stat">
+        <div class="val" style="color: var(--text-muted);">8</div>
+        <div class="lbl">Dismissed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pair navigation -->
+  <div class="pair-nav">
+    <div class="pair-chip active">
+      <i class="fa-solid fa-building"></i>
+      Acme Corp / ACME Corporation
+      <span class="score">94%</span>
+    </div>
+    <div class="pair-chip">
+      <i class="fa-solid fa-user"></i>
+      John Smith / Jon Smith
+      <span class="score">89%</span>
+    </div>
+    <div class="pair-chip">
+      <i class="fa-solid fa-building"></i>
+      TechFlow / Tech Flow Inc
+      <span class="score">87%</span>
+    </div>
+    <div class="pair-chip">
+      <i class="fa-solid fa-user"></i>
+      Sarah Chen / Sara Chen
+      <span class="score">85%</span>
+    </div>
+    <div class="pair-chip">
+      <i class="fa-solid fa-building"></i>
+      DataSphere / Data Sphere LLC
+      <span class="score">82%</span>
+    </div>
+  </div>
+
+  <!-- Side-by-side comparison -->
+  <div class="comparison">
+    <div class="record-panel">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-building" style="color: var(--accent);"></i> Record A</h3>
+        <span class="badge badge-primary">Master</span>
+      </div>
+      <div class="field-list">
+        <div class="field-row match">
+          <div class="field-label">Name</div>
+          <div class="field-value">Acme Corp</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Full Name</div>
+          <div class="field-value">Acme Corporation</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Industry</div>
+          <div class="field-value">Technology</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Website</div>
+          <div class="field-value">www.acmecorp.com</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Phone</div>
+          <div class="field-value">(555) 123-4567</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">City</div>
+          <div class="field-value">San Francisco</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">State</div>
+          <div class="field-value">CA</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Revenue</div>
+          <div class="field-value">$2.4M ARR</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Employees</div>
+          <div class="field-value">450</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Owner</div>
+          <div class="field-value">Marcus Johnson</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Created</div>
+          <div class="field-value">Jan 12, 2024</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="diff-column">
+      <div class="diff-header">Match</div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator diff"><i class="fa-solid fa-not-equal"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator diff"><i class="fa-solid fa-not-equal"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator diff"><i class="fa-solid fa-not-equal"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+      <div class="diff-indicator diff"><i class="fa-solid fa-not-equal"></i></div>
+      <div class="diff-indicator same"><i class="fa-solid fa-equals"></i></div>
+    </div>
+
+    <div class="record-panel">
+      <div class="panel-header">
+        <h3><i class="fa-solid fa-building" style="color: var(--purple);"></i> Record B</h3>
+        <span class="badge badge-secondary">Duplicate</span>
+      </div>
+      <div class="field-list">
+        <div class="field-row match">
+          <div class="field-label">Name</div>
+          <div class="field-value">Acme Corp</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Full Name</div>
+          <div class="field-value">ACME Corporation Inc.</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Industry</div>
+          <div class="field-value">Technology</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Website</div>
+          <div class="field-value">www.acmecorp.com</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Phone</div>
+          <div class="field-value">555-123-4567</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">City</div>
+          <div class="field-value">San Francisco</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">State</div>
+          <div class="field-value">CA</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Revenue</div>
+          <div class="field-value">$2,400,000</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Employees</div>
+          <div class="field-value">450</div>
+        </div>
+        <div class="field-row diff">
+          <div class="field-label">Owner</div>
+          <div class="field-value">Lisa Park</div>
+        </div>
+        <div class="field-row match">
+          <div class="field-label">Created</div>
+          <div class="field-value">Mar 5, 2025</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Bar -->
+  <div class="action-bar">
+    <div class="action-info">
+      <div class="match-score">
+        <div class="score-ring">94%</div>
+        <div class="score-detail">
+          <h4>High Confidence Match</h4>
+          <p>7 of 11 fields match exactly. 4 fields differ in formatting.</p>
+        </div>
+      </div>
+    </div>
+    <div class="action-buttons">
+      <button class="btn btn-outline"><i class="fa-solid fa-xmark"></i> Not a Duplicate</button>
+      <button class="btn btn-outline"><i class="fa-solid fa-clock"></i> Skip for Now</button>
+      <button class="btn btn-success"><i class="fa-solid fa-compress-alt"></i> Merge Records</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

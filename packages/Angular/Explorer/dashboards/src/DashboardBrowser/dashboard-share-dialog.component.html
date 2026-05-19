@@ -1,19 +1,18 @@
 @if (Visible) {
-  <kendo-window
-    [width]="560"
-    [minHeight]="200"
-    [resizable]="false"
-    [draggable]="true"
-    [keepContent]="true"
-    (close)="onCancel()"
-    class="mj-share-dialog-window"
-    kendoWindowContainer>
-    <kendo-window-titlebar>
+  <mj-window
+    [Visible]="true"
+    [Width]="560"
+    [MinHeight]="200"
+    [Resizable]="false"
+    [Draggable]="true"
+    (Close)="onCancel()"
+    class="mj-share-dialog-window">
+    <mj-window-titlebar>
       <div class="share-dialog-header">
         <i class="fa-solid fa-share-nodes"></i>
         <span>Share "{{ Dashboard?.Name }}"</span>
       </div>
-    </kendo-window-titlebar>
+    </mj-window-titlebar>
     <div class="share-dialog-body">
       <!-- Error Alert -->
       @if (Error) {
@@ -150,5 +149,5 @@
         </div>
       </div>
     </div>
-  </kendo-window>
+  </mj-window>
 }

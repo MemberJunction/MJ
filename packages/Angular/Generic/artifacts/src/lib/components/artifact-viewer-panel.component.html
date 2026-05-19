@@ -3,7 +3,7 @@
     <div class="panel-header">
       <div class="panel-header-left">
         <h3>
-          <i class="fas" [ngClass]="getArtifactIcon()"></i>
+          <i class="fas" [ngClass]="artifactIcon"></i>
           {{ displayName }}
         </h3>
         @if (displayDescription) {
@@ -35,6 +35,13 @@
             </div>
           }
         </div>
+        @if (pluginViewer?.SupportsFeedback) {
+          <button class="feedback-btn"
+                  (click)="pluginViewer?.AskUserForFeedback()"
+                  title="Inspect & rate components">
+            <i class="fas fa-star-half-stroke"></i>
+          </button>
+        }
         @if (showSaveToCollection) {
           <button class="save-to-collection-btn"
                   [class.in-collection]="isInCollection"
@@ -50,6 +57,11 @@
             <i class="fas fa-share-nodes"></i>
           </button>
         }
+        <button class="analyze-btn"
+                (click)="OnAnalyze()"
+                title="Analyze this artifact with AI">
+          <i class="fas fa-magnifying-glass-chart"></i>
+        </button>
         @if (showMaximizeButton) {
           <button class="maximize-btn"
                   (click)="onMaximizeToggle()"

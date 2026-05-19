@@ -213,7 +213,7 @@ export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
 
     if (enrollmentsResponse.data) {
       userDetails.enrollments = enrollmentsResponse.data.map((e) => this.mapEnrollment(e));
-      this.calculateEnrollmentStats(userDetails);
+      Object.assign(userDetails, this.calculateEnrollmentStats(userDetails.enrollments));
     }
   }
 
@@ -225,10 +225,10 @@ export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
       const statsResponse = await this.makeLearnWorldsRequest<LWStatsResponse>(`users/${userId}/stats`, 'GET', undefined, contextUser);
 
       if (statsResponse) {
-        this.mergeStatistics(userDetails, statsResponse);
+        Object.assign(userDetails, this.extractStatistics(statsResponse));
       }
-    } catch {
-      // Stats endpoint might not be available for all plans
+    } catch (error) {
+      console.warn(`Stats endpoint unavailable for user ${userId}:`, error instanceof Error ? error.message : error);
     }
   }
 
@@ -254,43 +254,50 @@ export class GetLearnWorldsUserDetailsAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Calculate enrollment statistics and attach to userDetails
+   * Calculate enrollment statistics from the enrollment list (pure — no mutation).
    */
-  private calculateEnrollmentStats(userDetails: LearnWorldsUserDetailsFull): void {
-    if (!userDetails.enrollments) return;
+  private calculateEnrollmentStats(enrollments: UserDetailEnrollment[]): {
+    totalCourses: number;
+    completedCourses: number;
+    inProgressCourses: number;
+    notStartedCourses: number;
+    totalTimeSpent: number;
+    averageCompletionRate: number;
+  } {
+    const totalCourses = enrollments.length;
+    const completedCourses = enrollments.filter((e) => e.status === 'completed').length;
+    const inProgressCourses = enrollments.filter((e) => e.status === 'active' && e.progress > 0 && e.progress < 100).length;
+    const notStartedCourses = enrollments.filter((e) => e.status === 'active' && e.progress === 0).length;
+    const totalTimeSpent = enrollments.reduce((sum, e) => sum + e.timeSpent, 0);
 
-    userDetails.totalCourses = userDetails.enrollments.length;
-    userDetails.completedCourses = userDetails.enrollments.filter((e) => e.status === 'completed').length;
-    userDetails.inProgressCourses = userDetails.enrollments.filter((e) => e.status === 'active' && e.progress > 0 && e.progress < 100).length;
-    userDetails.notStartedCourses = userDetails.enrollments.filter((e) => e.status === 'active' && e.progress === 0).length;
-
-    // Calculate total time spent
-    userDetails.totalTimeSpent = userDetails.enrollments.reduce((sum, e) => sum + e.timeSpent, 0);
-
-    // Calculate average completion rate
-    const activeEnrollments = userDetails.enrollments.filter((e) => e.status === 'active' || e.status === 'completed');
+    let averageCompletionRate = 0;
+    const activeEnrollments = enrollments.filter((e) => e.status === 'active' || e.status === 'completed');
     if (activeEnrollments.length > 0) {
       const totalProgress = activeEnrollments.reduce((sum, e) => sum + e.progress, 0);
-      userDetails.averageCompletionRate = Math.round(totalProgress / activeEnrollments.length);
+      averageCompletionRate = Math.round(totalProgress / activeEnrollments.length);
     }
+
+    return { totalCourses, completedCourses, inProgressCourses, notStartedCourses, totalTimeSpent, averageCompletionRate };
   }
 
   /**
-   * Merge additional statistics from the stats endpoint
+   * Extract statistics from the stats response (pure — no mutation).
    */
-  private mergeStatistics(userDetails: LearnWorldsUserDetailsFull, stats: LWStatsResponse): void {
+  private extractStatistics(stats: LWStatsResponse): Partial<LearnWorldsUserDetailsFull> {
+    const result: Partial<LearnWorldsUserDetailsFull> = {};
     if (stats.total_time_spent) {
-      userDetails.totalTimeSpent = stats.total_time_spent;
+      result.totalTimeSpent = stats.total_time_spent;
     }
     if (stats.certificates_earned !== undefined) {
-      userDetails.totalCertificates = stats.certificates_earned;
+      result.totalCertificates = stats.certificates_earned;
     }
     if (stats.badges_earned !== undefined) {
-      userDetails.totalBadges = stats.badges_earned;
+      result.totalBadges = stats.badges_earned;
     }
     if (stats.points !== undefined) {
-      userDetails.points = stats.points;
+      result.points = stats.points;
     }
+    return result;
   }
 
   /**

@@ -74,8 +74,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
   private shortcutsSettingEntity: MJUserSettingEntity | null = null;
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   // Evaluation system
   evalPreferences: EvaluationPreferences = {
     showExecution: true,
@@ -184,7 +183,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     try {
       // Load test suite
       if (this.record.SuiteID) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const suite = await md.GetEntityObject<MJTestSuiteEntity>('MJ: Test Suites');
         if (suite && await suite.Load(this.record.SuiteID)) {
           this.testSuite = suite;
@@ -213,7 +212,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestSuiteRunID='${this.record.ID}'`,
@@ -344,7 +343,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       return;
     }
 
-    this.testingDialogService.OpenSuiteDialog(this.record.SuiteID, this.viewContainerRef);
+    this.testingDialogService.OpenSuitePanel(this.record.SuiteID);
   }
 
   async refresh() {
@@ -492,7 +491,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
       const testRunIds = this.testRuns.map(r => `'${r.ID}'`).join(',');
       if (!testRunIds) return;
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID IN (${testRunIds})`,
@@ -605,7 +604,7 @@ export class MJTestSuiteRunFormComponentExtended extends MJTestSuiteRunFormCompo
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const currentUser = md.CurrentUser;
 
       let feedback = this.feedbacks.get(this.expandedRunId);

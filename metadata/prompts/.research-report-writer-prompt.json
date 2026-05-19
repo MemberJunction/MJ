@@ -45,17 +45,17 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude 4.5 Opus",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.6",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "ConfigurationID": "@lookup:MJ: AI Configurations.Name=High Power",
             "Priority": 2
           },
           "primaryKey": {
-            "ID": "9820890F-D814-486E-8994-2561669C48A3"
+            "ID": "CAEA0AE0-B422-4522-B596-FD8B65D45C16"
           },
           "sync": {
-            "lastModified": "2026-03-20T21:19:39.658Z",
-            "checksum": "ae766e263f9591a049f5d00fbe9eb4d6262c964a2fc15435809bd9e200d68da5"
+            "lastModified": "2026-04-06T11:01:32.848Z",
+            "checksum": "997e40b6d00442934a368e82032a42f05094478732f9a33487308b0f5cef1d43"
           }
         },
         {
@@ -68,10 +68,6 @@
           },
           "primaryKey": {
             "ID": "9820890F-D814-486E-8994-2561669C48A3"
-          },
-          "sync": {
-            "lastModified": "2026-03-21T22:27:45.841Z",
-            "checksum": "c57bc14baf5351870dff3e2877e7445f5c8a1e28ccef92ebc8f240fcfac90ee9"
           }
         },
         {

@@ -1,0 +1,1417 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Tags"
+    Icon="fa-solid fa-sitemap"
+    Subtitle="Taxonomy management, health monitoring, and tag library">
+    <div actions>
+      <button mjButton variant="secondary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
+        @if (HealthRunning) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+        } @else {
+          <i class="fa-solid fa-heart-pulse"></i> Run Tag Health
+        }
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+  <!-- Tags Dashboard -->
+  <div class="at-dashboard">
+
+    <!-- ══════ LEFT NAV ══════ -->
+    <div class="at-left-nav">
+        <div class="at-left-nav-items">
+            @for (item of NavItems; track item.Tab) {
+                <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
+                    <i [class]="item.Icon"></i> {{ item.Label }}
+                    @if (item.BadgeText) {
+                        <span class="at-nav-badge" [class.at-nav-badge-live]="item.BadgeClass === 'nav-badge-live'">{{ item.BadgeText }}</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- ══════ MAIN AREA ══════ -->
+    <div class="at-main-area">
+
+        @if (IsLoading) {
+            <div class="at-loading-overlay">
+                <mj-loading text="Loading tag data…"></mj-loading>
+            </div>
+        }
+
+        @if (!IsLoading) {
+            <!-- TAB 4: TAG LIBRARY -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'tags') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Overview</div>
+                        <div class="at-page-subtitle">{{ TagRows.length }} unique tags across all content sources</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <input type="text" class="at-search-input" placeholder="Search tags..."
+                               [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+                    </div>
+                </div>
+                <div class="at-page-body">
+                    <div class="at-tag-lib-layout">
+                        <div class="at-tag-lib-main">
+                            <div class="at-card">
+                                <div class="at-card-body" style="max-height: 500px; overflow-y: auto;">
+                                    <table class="at-tag-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Tag</th>
+                                                <th>Count</th>
+                                                <th>Avg Weight</th>
+                                                <th>Distribution</th>
+                                                <th>Top Source</th>
+                                                <th>First Seen</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (row of FilteredTagRows; track row.Tag) {
+                                                <tr class="at-tag-row-clickable" (click)="DrillDownTag(row.Tag)"
+                                                    [class.at-tag-row-selected]="SelectedDrillDownTag === row.Tag">
+                                                    <td class="at-tag-name-cell">{{ row.Tag }}</td>
+                                                    <td>{{ row.UsageCount }}</td>
+                                                    <td>
+                                                        <div class="at-weight-indicator">
+                                                            <div class="at-weight-bar">
+                                                                <div class="at-weight-bar-fill" [style.width.%]="row.AvgWeight * 100"
+                                                                     [class.at-weight-high]="row.AvgWeight >= 0.7"
+                                                                     [class.at-weight-medium]="row.AvgWeight >= 0.4 && row.AvgWeight < 0.7"
+                                                                     [class.at-weight-low]="row.AvgWeight < 0.4"></div>
+                                                            </div>
+                                                            <span class="at-weight-value">{{ row.AvgWeight.toFixed(2) }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div class="at-tag-bar">
+                                                            <div class="at-tag-bar-fill" [style.width.%]="row.BarWidthPct"></div>
+                                                        </div>
+                                                    </td>
+                                                    <td>{{ row.TopSource }}</td>
+                                                    <td>{{ row.FirstSeen }}</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- Tag drill-down: content items matching selected tag -->
+                            @if (SelectedDrillDownTag) {
+                                <div class="at-card" style="margin-top: 12px;">
+                                    <div class="at-card-header">
+                                        <span class="at-card-title">
+                                            <i class="fa-solid fa-tag"></i>
+                                            Content items tagged "{{ SelectedDrillDownTag }}"
+                                            ({{ TagDrillDownItems.length }})
+                                        </span>
+                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)" aria-label="Close">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="at-card-body" style="max-height: 300px; overflow-y: auto;">
+                                        @if (TagDrillDownItems.length === 0) {
+                                            <div class="at-empty-state"><p>No content items found for this tag.</p></div>
+                                        } @else {
+                                            <table class="at-tag-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Name</th>
+                                                        <th>Source</th>
+                                                        <th>Weight</th>
+                                                        <th>Updated</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @for (di of TagDrillDownItems; track di.ID) {
+                                                        <tr class="at-tag-row-clickable" (click)="OpenItemDetailByID(di.ID)">
+                                                            <td>{{ di.Name }}</td>
+                                                            <td>{{ di.SourceName }}</td>
+                                                            <td>{{ FormatWeight(di.Weight) }}</td>
+                                                            <td>{{ di.UpdatedAt }}</td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                        <div class="at-tag-lib-sidebar">
+                            <div class="at-card at-tag-cloud-card">
+                                <div class="at-card-title" style="margin-bottom: 12px;"><i class="fa-solid fa-cloud"></i> Tag Cloud</div>
+                                @if (TagCloudWordItems.length > 0) {
+                                    <mj-word-cloud
+                                        [Items]="TagCloudWordItems"
+                                        [MaxFontSize]="40"
+                                        [MinFontSize]="12"
+                                        [MaxItems]="20"
+                                        Layout="spiral"
+                                        ColorMode="weight-gradient"
+                                        [Interactive]="true"
+                                        [Animate]="true">
+                                    </mj-word-cloud>
+                                } @else {
+                                    <div class="at-tag-cloud-empty">No tags yet</div>
+                                }
+                            </div>
+                            <div class="at-card" style="padding: 16px; margin-top: 12px;">
+                                <div class="at-card-title" style="margin-bottom: 10px;"><i class="fa-solid fa-chart-pie"></i> By Source</div>
+                                <div class="at-tags-by-source">
+                                    @for (s of TagsBySource; track s.SourceName) {
+                                        <div class="at-tag-source-row">
+                                            <span>{{ s.SourceName }}</span>
+                                            <strong>{{ s.Count }}</strong>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB 6: TAXONOMY GOVERNANCE -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'taxonomy') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Taxonomy Governance</div>
+                        <div class="at-page-subtitle">Manage tag hierarchy, resolve duplicates, and monitor taxonomy health &mdash; <strong>{{ TaxHealth.Total }} total tags</strong></div>
+                    </div>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-secondary-btn" (click)="RefreshTaxonomyData()">
+                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sub-tab strip -->
+                <div class="at-tax-tab-strip">
+                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'tree'" (click)="SwitchTaxSubTab('tree')">
+                        <i class="fa-solid fa-sitemap"></i> Tree View
+                    </div>
+                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'duplicates'" (click)="SwitchTaxSubTab('duplicates')">
+                        <i class="fa-solid fa-link"></i> Duplicates
+                        @if (TaxDuplicates.length > 0) {
+                            <span class="at-tax-tab-badge at-tax-badge-warning">{{ TaxDuplicates.length }}</span>
+                        }
+                    </div>
+                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'orphans'" (click)="SwitchTaxSubTab('orphans')">
+                        <i class="fa-solid fa-ban"></i> Orphans
+                        @if (TaxOrphans.length > 0) {
+                            <span class="at-tax-tab-badge at-tax-badge-error">{{ TaxOrphans.length }}</span>
+                        }
+                    </div>
+                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'treemap'" (click)="SwitchTaxSubTab('treemap')">
+                        <i class="fa-solid fa-chart-tree-map"></i> Treemap
+                    </div>
+                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'audit'" (click)="SwitchTaxSubTab('audit')">
+                        <i class="fa-solid fa-scroll"></i> Audit Log
+                    </div>
+                </div>
+
+                <div class="at-page-body">
+
+                    <!-- ══ SUB-TAB 1: TREE VIEW ══ -->
+                    @if (TaxSubTab === 'tree') {
+                        <div class="at-tax-split-view">
+                            <!-- Tree panel -->
+                            <div class="at-tax-tree-panel" style="position: relative;">
+                                <div class="at-tax-tree-toolbar">
+                                    <input type="text" class="at-search-input" style="flex: 1;" placeholder="Search tags..."
+                                           [(ngModel)]="TaxTreeSearch" (input)="FilterTaxTree()">
+                                    <button class="at-tax-toolbar-btn" title="Add root tag" (click)="OpenCreateRootTag()">
+                                        <i class="fa-solid fa-plus"></i>
+                                    </button>
+                                    <button class="at-tax-toolbar-btn" [class.active]="TaxMultiSelectMode"
+                                            title="Toggle multi-select for drag reparenting" (click)="ToggleMultiSelectMode()">
+                                        <i class="fa-solid fa-check-double"></i>
+                                    </button>
+                                </div>
+                                <div class="at-tax-tree-body"
+                                     (dragover)="$event.preventDefault()"
+                                     (drop)="OnDropToRoot($event)">
+                                    @if (TaxFilteredNodes.length === 0) {
+                                        <div class="at-empty-state">
+                                            <i class="fa-solid fa-sitemap"></i>
+                                            <p>No tags found</p>
+                                        </div>
+                                    }
+                                    @for (node of TaxFilteredNodes; track node.ID) {
+                                        <div class="at-tax-tree-node"
+                                             [class.at-tax-node-selected]="node.IsSelected"
+                                             [class.at-tax-node-drag-over]="TaxDragOverNodeID === node.ID"
+                                             [class.at-tax-node-multi-selected]="IsNodeMultiSelected(node.ID)"
+                                             [style.padding-left.px]="16 + node.Depth * 20"
+                                             [attr.draggable]="true"
+                                             (dragstart)="OnTreeNodeDragStart($event, node)"
+                                             (dragover)="OnTreeNodeDragOver($event, node)"
+                                             (dragleave)="OnTreeNodeDragLeave()"
+                                             (drop)="OnTreeNodeDrop($event, node); $event.stopPropagation()"
+                                             (click)="SelectTaxNode(node)">
+                                            @if (TaxMultiSelectMode) {
+                                                <input type="checkbox" class="at-tax-tree-checkbox"
+                                                       [checked]="IsNodeMultiSelected(node.ID)"
+                                                       (click)="ToggleNodeSelection(node, $event)">
+                                            }
+                                            <span class="at-tax-tree-arrow"
+                                                  [class.at-tax-arrow-expanded]="node.IsExpanded && node.Children.length > 0"
+                                                  [class.at-tax-arrow-collapsed]="!node.IsExpanded && node.Children.length > 0"
+                                                  [class.at-tax-arrow-leaf]="node.Children.length === 0"
+                                                  (click)="ToggleTaxNode(node); $event.stopPropagation()"></span>
+                                            <span class="at-tax-health-dot" [class]="node.HealthColor"></span>
+                                            <span class="at-tax-tree-label" [class.at-tax-tree-label-selected]="node.IsSelected">{{ node.Name }}</span>
+                                            <span class="at-tax-tree-count">({{ node.ItemCount }})</span>
+                                            <span class="at-tax-tree-add-child" title="Add child tag"
+                                                  (click)="OpenCreateChildTagFor(node); $event.stopPropagation()">
+                                                <i class="fa-solid fa-plus"></i>
+                                            </span>
+                                        </div>
+                                    }
+                                </div>
+                                @if (TaxTreeSaving) {
+                                    <div class="at-tax-tree-saving-overlay">
+                                        <mj-loading text="Moving tags..." size="small"></mj-loading>
+                                    </div>
+                                }
+                            </div>
+
+                            <!-- Details panel -->
+                            <div class="at-tax-details-panel">
+                                @if (TaxSelectedNode) {
+                                    <div class="at-tax-details-header">
+                                        <!-- Breadcrumb -->
+                                        <div class="at-tax-breadcrumb">
+                                            @for (bc of GetTaxBreadcrumb(TaxSelectedNode); track bc.ID) {
+                                                <span class="at-tax-bc-link" (click)="NavigateToBreadcrumb(bc.ID)">{{ bc.Name }}</span>
+                                                <span class="at-tax-bc-sep">&rsaquo;</span>
+                                            }
+                                            <span class="at-tax-bc-current">{{ TaxSelectedNode.Name }}</span>
+                                        </div>
+
+                                        @if (!TaxIsEditing) {
+                                            <div class="at-tax-details-title">
+                                                {{ TaxSelectedNode.DisplayName }}
+                                                <span class="at-tax-edit-icon" (click)="StartEditTag()" title="Edit name">
+                                                    <i class="fa-solid fa-pen"></i>
+                                                </span>
+                                            </div>
+                                            @if (TaxSelectedNode.Description) {
+                                                <div class="at-tax-details-desc">{{ TaxSelectedNode.Description }}</div>
+                                            }
+                                        } @else {
+                                            <div class="at-tax-edit-form">
+                                                <div class="at-form-group">
+                                                    <label class="at-form-label">Name</label>
+                                                    <input type="text" class="at-form-input" [(ngModel)]="TaxEditName">
+                                                </div>
+                                                <div class="at-form-group">
+                                                    <label class="at-form-label">Description</label>
+                                                    <textarea class="at-form-textarea" rows="3" [(ngModel)]="TaxEditDescription"></textarea>
+                                                </div>
+                                                <div class="at-form-actions">
+                                                    <button class="at-action-btn at-primary-btn" (click)="SaveEditTag()">Save</button>
+                                                    <button class="at-action-btn at-secondary-btn" (click)="CancelEditTag()">Cancel</button>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Stats row -->
+                                    <div class="at-tax-stats-row">
+                                        <div class="at-tax-stat-item">
+                                            <div class="at-tax-stat-value">{{ TaxSelectedNode.ItemCount }}</div>
+                                            <div class="at-tax-stat-label">Items Tagged</div>
+                                        </div>
+                                        <div class="at-tax-stat-item">
+                                            <div class="at-tax-stat-value">{{ TaxSelectedNode.AvgWeight.toFixed(2) }}</div>
+                                            <div class="at-tax-stat-label">Avg Weight</div>
+                                        </div>
+                                        <div class="at-tax-stat-item">
+                                            <div class="at-tax-stat-value">{{ TaxSelectedNode.Children.length }}</div>
+                                            <div class="at-tax-stat-label">Children</div>
+                                        </div>
+                                        <div class="at-tax-stat-item">
+                                            <div class="at-tax-stat-value">{{ TaxSelectedNode.Depth }}</div>
+                                            <div class="at-tax-stat-label">Depth</div>
+                                        </div>
+                                        <div class="at-tax-stat-item">
+                                            <div class="at-tax-stat-value at-tax-stat-date">{{ TaxSelectedNode.FirstSeen }}</div>
+                                            <div class="at-tax-stat-label">First Seen</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Action toolbar -->
+                                    @if (!TaxIsEditing) {
+                                        <div class="at-tax-action-toolbar">
+                                            <button class="at-tax-action-btn" (click)="OpenCreateChildTag()"><i class="fa-solid fa-plus"></i> Add Child</button>
+                                            <button class="at-tax-action-btn" (click)="StartEditTag()"><i class="fa-solid fa-pen"></i> Rename</button>
+                                            <button class="at-tax-action-btn" (click)="OpenMoveDialog(TaxSelectedNode)"><i class="fa-solid fa-arrows-up-down"></i> Move</button>
+                                            <button class="at-tax-action-btn" (click)="OpenMergeIntoDialog(TaxSelectedNode)"><i class="fa-solid fa-compress"></i> Merge Into...</button>
+                                            <button class="at-tax-action-btn" (click)="OpenSplitDialog(TaxSelectedNode)"><i class="fa-solid fa-code-branch"></i> Split</button>
+                                            <button class="at-tax-action-btn at-tax-action-danger" (click)="DeleteTag(TaxSelectedNode)"><i class="fa-solid fa-trash"></i> Delete</button>
+                                        </div>
+                                    }
+
+                                    <!-- Child tags -->
+                                    @if (TaxSelectedNode.Children.length > 0) {
+                                        <div class="at-tax-detail-section">
+                                            <div class="at-tax-section-title">Child Tags</div>
+                                            <div class="at-tax-child-chips">
+                                                @for (child of TaxSelectedNode.Children; track child.ID) {
+                                                    <span class="at-tax-child-chip" (click)="SelectTaxNode(child)">
+                                                        {{ child.Name }}
+                                                        <span class="at-tax-chip-count">{{ child.ItemCount }}</span>
+                                                    </span>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- Recently tagged items -->
+                                    @if (TaxRecentItems.length > 0) {
+                                        <div class="at-tax-detail-section">
+                                            <div class="at-tax-section-title">Recently Tagged Items</div>
+                                            <div class="at-tax-recent-list">
+                                                @for (item of TaxRecentItems; track $index) {
+                                                    <div class="at-tax-recent-item">
+                                                        <div class="at-tax-recent-icon"><i [class]="item.Icon"></i></div>
+                                                        <div class="at-tax-recent-name">{{ item.Name }}</div>
+                                                        <div class="at-tax-recent-weight">{{ item.Weight.toFixed(2) }}</div>
+                                                        <div class="at-tax-recent-date">{{ item.Date }}</div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+
+                                    <!-- ─── Governance — per-node controls for the autotagger ─── -->
+                                    @if (SelectedTagFull) {
+                                        <div class="at-tax-detail-section">
+                                            <div class="at-tax-section-title">Governance — how the autotagger may grow this subtree</div>
+
+                                            <div class="at-tg-toggle-row">
+                                                <div class="at-tg-toggle-label">
+                                                    <span class="at-tg-toggle-t">Allow auto-grow under this tag</span>
+                                                    <span class="at-tg-toggle-d">Lets the classifier create child tags below this one. Off = constrained subtree.</span>
+                                                </div>
+                                                <div class="at-tg-switch" [class.on]="SelectedTagFull.AllowAutoGrow"
+                                                     [class.disabled]="SelectedTagSavingField['AllowAutoGrow']"
+                                                     (click)="ToggleGovernanceFlag('AllowAutoGrow')"></div>
+                                            </div>
+
+                                            <div class="at-tg-toggle-row">
+                                                <div class="at-tg-toggle-label">
+                                                    <span class="at-tg-toggle-t">Freeze this subtree</span>
+                                                    <span class="at-tg-toggle-d">Locks this entire subtree against auto-creation, regardless of mode.</span>
+                                                </div>
+                                                <div class="at-tg-switch" [class.on]="SelectedTagFull.IsFrozen"
+                                                     [class.disabled]="SelectedTagSavingField['IsFrozen']"
+                                                     (click)="ToggleGovernanceFlag('IsFrozen')"></div>
+                                            </div>
+
+                                            <div class="at-tg-toggle-row">
+                                                <div class="at-tg-toggle-label">
+                                                    <span class="at-tg-toggle-t">Requires review for matches</span>
+                                                    <span class="at-tg-toggle-d">High-confidence matches against this tag are routed to the suggestion queue first.</span>
+                                                </div>
+                                                <div class="at-tg-switch" [class.on]="SelectedTagFull.RequiresReview"
+                                                     [class.disabled]="SelectedTagSavingField['RequiresReview']"
+                                                     (click)="ToggleGovernanceFlag('RequiresReview')"></div>
+                                            </div>
+
+                                            <div class="at-tg-grid-3">
+                                                <div class="at-tg-field">
+                                                    <label>Max children</label>
+                                                    <input class="at-search-input" type="number" min="0"
+                                                           [value]="SelectedTagFull.MaxChildren ?? ''"
+                                                           (change)="SaveSelectedTagNumber('MaxChildren', $any($event.target).value)" />
+                                                    <span class="at-tg-hint">Hard cap on direct children. Blank = unlimited.</span>
+                                                </div>
+                                                <div class="at-tg-field">
+                                                    <label>Max descendant depth</label>
+                                                    <input class="at-search-input" type="number" min="0"
+                                                           [value]="SelectedTagFull.MaxDescendantDepth ?? ''"
+                                                           (change)="SaveSelectedTagNumber('MaxDescendantDepth', $any($event.target).value)" />
+                                                    <span class="at-tg-hint">From this node down. 0 = leaf-only.</span>
+                                                </div>
+                                                <div class="at-tg-field">
+                                                    <label>Min confidence</label>
+                                                    <input class="at-search-input" type="number" min="0" max="1" step="0.01"
+                                                           [value]="SelectedTagFull.MinWeight ?? ''"
+                                                           (change)="SaveSelectedTagNumber('MinWeight', $any($event.target).value)" />
+                                                    <span class="at-tg-hint">Floor for matches against this tag.</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <!-- ─── Scope — who can see this tag ─── -->
+                                        <div class="at-tax-detail-section">
+                                            <div class="at-tax-section-title">Scope — who can see and tag with this</div>
+
+                                            <div class="at-tg-toggle-row">
+                                                <div class="at-tg-toggle-label">
+                                                    <span class="at-tg-toggle-t">Global tag (visible to all tenants)</span>
+                                                    <span class="at-tg-toggle-d">
+                                                        Off = restricted to the scope rows below.
+                                                        @if (IsGlobalLocked()) { <strong>Locked while scope rows exist.</strong> }
+                                                    </span>
+                                                </div>
+                                                <div class="at-tg-switch" [class.on]="SelectedTagFull.IsGlobal"
+                                                     [class.disabled]="IsGlobalLocked() || SelectedTagSavingField['IsGlobal']"
+                                                     (click)="ToggleGovernanceFlag('IsGlobal')"></div>
+                                            </div>
+
+                                            <div class="at-tg-chip-list">
+                                                @for (s of SelectedTagScopes; track s.ID) {
+                                                    <span class="at-tg-chip scoped">{{ s.EntityName }} · {{ s.DisplayName }}</span>
+                                                }
+                                                @if (SelectedTagScopes.length === 0) {
+                                                    <span class="at-tg-hint" style="font-style: italic;">
+                                                        No scope rows. {{ SelectedTagFull.IsGlobal ? 'Tag is global.' : 'Tag is non-global with no scope — currently unreachable.' }}
+                                                    </span>
+                                                }
+                                                <button class="at-action-btn at-btn-sm" (click)="OpenScopeDialog()">
+                                                    <i class="fa-solid fa-pencil"></i> Edit scope…
+                                                </button>
+                                            </div>
+                                            <div class="at-tg-hint" style="margin-top: 8px;">
+                                                <i class="fa-solid fa-info-circle"></i> Children inherit this scope automatically. Promotion to global requires admin approval.
+                                            </div>
+                                        </div>
+
+                                        <!-- ─── Synonyms — alternate names that resolve to this tag ─── -->
+                                        <div class="at-tax-detail-section">
+                                            <div class="at-tax-section-title">Synonyms — alternate names that resolve to this tag</div>
+
+                                            <div class="at-tg-syn-add">
+                                                <input class="at-search-input" placeholder='e.g. "GenAI"'
+                                                       [(ngModel)]="NewSynonymName"
+                                                       (keyup.enter)="AddSynonym()" />
+                                                <select class="at-search-input" style="width: 130px;"
+                                                        [(ngModel)]="NewSynonymSource">
+                                                    <option value="Manual">Manual</option>
+                                                    <option value="Imported">Imported</option>
+                                                    <option value="Merged">Merged</option>
+                                                    <option value="LLM">LLM</option>
+                                                </select>
+                                                <button class="at-action-btn at-primary-btn" (click)="AddSynonym()" [disabled]="!NewSynonymName.trim()">+ Add</button>
+                                            </div>
+
+                                            @if (SelectedTagSynonyms.length === 0) {
+                                                <div class="at-tg-hint" style="font-style: italic;">No synonyms yet.</div>
+                                            } @else {
+                                                @for (s of SelectedTagSynonyms; track s.ID) {
+                                                    <div class="at-tg-syn-row" [class.pending]="s.Source === 'LLM'">
+                                                        <div class="at-tg-syn-name">{{ s.Synonym }}</div>
+                                                        <span class="at-tg-syn-src {{ s.Source.toLowerCase() }}">{{ s.Source }}</span>
+                                                        <span class="at-tg-syn-x" title="Remove" (click)="RemoveSynonym(s)"><i class="fa-solid fa-xmark"></i></span>
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                } @else {
+                                    <div class="at-empty-state" style="height: 100%;">
+                                        <i class="fa-solid fa-hand-pointer"></i>
+                                        <p>Select a tag from the tree to view details</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Health bar -->
+                        <div class="at-tax-health-bar">
+                            <span class="at-tax-health-label">Taxonomy Health</span>
+                            <div class="at-tax-health-stat">
+                                <span class="at-tax-dot at-tax-dot-total"></span>
+                                <span class="at-tax-health-value">{{ TaxHealth.Total }}</span>
+                                <span class="at-tax-health-text">Total</span>
+                            </div>
+                            <div class="at-tax-health-stat">
+                                <span class="at-tax-dot at-tax-dot-healthy"></span>
+                                <span class="at-tax-health-value at-tax-val-success">{{ TaxHealth.Healthy }}</span>
+                                <span class="at-tax-health-text">Healthy</span>
+                            </div>
+                            <div class="at-tax-health-stat">
+                                <span class="at-tax-dot at-tax-dot-attention"></span>
+                                <span class="at-tax-health-value at-tax-val-warning">{{ TaxHealth.NeedAttention }}</span>
+                                <span class="at-tax-health-text">Need Attention</span>
+                            </div>
+                            <div class="at-tax-health-stat">
+                                <span class="at-tax-dot at-tax-dot-orphaned"></span>
+                                <span class="at-tax-health-value at-tax-val-error">{{ TaxHealth.Orphaned }}</span>
+                                <span class="at-tax-health-text">Orphaned</span>
+                            </div>
+                            <div class="at-tax-health-stat">
+                                <span class="at-tax-dot at-tax-dot-duplicates"></span>
+                                <span class="at-tax-health-value at-tax-val-info">{{ TaxHealth.Duplicates }}</span>
+                                <span class="at-tax-health-text">Duplicate Candidates</span>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- ══ SUB-TAB 2: DUPLICATES ══ -->
+                    @if (TaxSubTab === 'duplicates') {
+                        <div class="at-tax-dup-stats-bar">
+                            <div class="at-tax-dup-stat"><strong>{{ TaxDuplicates.length }}</strong> candidates found</div>
+                            <div class="at-tax-dup-stat at-tax-dup-high"><strong>{{ TaxHighConfidenceDupeCount }}</strong> high confidence (&gt;85%)</div>
+                            <div class="at-tax-dup-stat at-tax-dup-moderate"><strong>{{ TaxModerateDupeCount }}</strong> moderate (70-85%)</div>
+                        </div>
+
+                        @if (TaxDuplicates.length === 0) {
+                            <div class="at-empty-state">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <p>No duplicate tags detected</p>
+                            </div>
+                        }
+
+                        <div class="at-tax-dup-list">
+                            @for (pair of TaxDuplicates; track $index) {
+                                <div class="at-tax-dup-card" [class.at-tax-dup-high]="pair.SeverityClass === 'high'" [class.at-tax-dup-moderate]="pair.SeverityClass === 'moderate'">
+                                    @if (pair.IsExactDuplicate) {
+                                        <!-- Exact-name duplicates: show single tag name with count -->
+                                        <div class="at-tax-dup-tag">{{ pair.TagA }}</div>
+                                        <div class="at-tax-dup-similarity">
+                                            <span class="at-tax-sim-percent high">
+                                                <i class="fa-solid fa-clone"></i>&nbsp;{{ pair.ExactDuplicateCount }} identical records
+                                            </span>
+                                        </div>
+                                        <div class="at-tax-dup-actions">
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)" [disabled]="IsMerging">@if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { Merge }</button>
+                                            <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
+                                        </div>
+                                    } @else {
+                                        <!-- Similar (non-exact) pairs: show both tags with similarity -->
+                                        <div class="at-tax-dup-tag">{{ pair.TagA }}</div>
+                                        <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
+                                        <div class="at-tax-dup-similarity">
+                                            <div class="at-tax-sim-bar-bg">
+                                                <div class="at-tax-sim-bar-fill" [class]="pair.SeverityClass" [style.width.%]="pair.Similarity"></div>
+                                            </div>
+                                            <span class="at-tax-sim-percent" [class]="pair.SeverityClass">{{ pair.Similarity }}%</span>
+                                        </div>
+                                        <div class="at-tax-dup-arrow"><i class="fa-solid fa-arrows-left-right"></i></div>
+                                        <div class="at-tax-dup-tag">{{ pair.TagB }}</div>
+                                        <div class="at-tax-dup-actions">
+                                            <button class="at-tax-dup-btn at-tax-dup-btn-primary" (click)="MergeTags(pair.TagAID, pair.TagBID, pair.TagA, pair.TagB)" [disabled]="IsMerging">@if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { Merge }</button>
+                                            <button class="at-tax-dup-btn" (click)="MakeChildTag(pair.TagAID, pair.TagBID)">Make Child</button>
+                                            <button class="at-tax-dup-btn" (click)="DismissDuplicate(pair)">Dismiss</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- ══ SUB-TAB 3: ORPHANS ══ -->
+                    @if (TaxSubTab === 'orphans') {
+                        <div class="at-tax-orphan-toolbar">
+                            <span class="at-tax-orphan-count">{{ TaxOrphans.length }} orphaned tags</span>
+                            <span class="at-tax-orphan-desc">&mdash; no parent, no children, low usage</span>
+                            <div class="at-tax-orphan-bulk">
+                                <button class="at-tax-bulk-btn" (click)="ToggleAllOrphans()">
+                                    @if (TaxAllOrphansSelected) { <i class="fa-solid fa-square-check"></i> } @else { <i class="fa-regular fa-square"></i> }
+                                    Select All
+                                </button>
+                                <button class="at-tax-bulk-btn at-tax-bulk-danger" (click)="BulkDeleteOrphans()">
+                                    <i class="fa-solid fa-trash"></i> Bulk Delete
+                                </button>
+                                <button class="at-tax-bulk-btn at-tax-bulk-danger" (click)="DeleteAllOrphans()">
+                                    <i class="fa-solid fa-trash-can"></i> Delete All ({{ TaxOrphans.length }})
+                                </button>
+                            </div>
+                        </div>
+
+                        @if (TaxOrphans.length === 0) {
+                            <div class="at-empty-state">
+                                <i class="fa-solid fa-check-circle"></i>
+                                <p>No orphaned tags</p>
+                            </div>
+                        }
+
+                        <div class="at-tax-orphan-grid">
+                            @for (orphan of TaxOrphans; track orphan.ID) {
+                                <div class="at-tax-orphan-card">
+                                    <div class="at-tax-orphan-header">
+                                        <span class="at-tax-orphan-name">{{ orphan.Name }}</span>
+                                        <input type="checkbox" class="at-tax-orphan-checkbox" [checked]="orphan.IsSelected"
+                                               (change)="ToggleOrphanSelection(orphan)" (click)="$event.stopPropagation()">
+                                    </div>
+                                    <div class="at-tax-orphan-stats">
+                                        <span>Usage: <strong>{{ orphan.UsageCount }}</strong></span>
+                                        <span>Avg Weight: <strong>{{ orphan.AvgWeight.toFixed(2) }}</strong></span>
+                                    </div>
+                                    <div class="at-tax-orphan-dates">
+                                        <span>First: {{ orphan.FirstSeen }}</span>
+                                        <span>Last: {{ orphan.LastSeen }}</span>
+                                    </div>
+                                    <div class="at-tax-orphan-actions">
+                                        <button class="at-tax-orphan-btn at-tax-orphan-delete" (click)="DeleteOrphan(orphan)">Delete</button>
+                                        <button class="at-tax-orphan-btn">Ignore</button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- ══ SUB-TAB 4: TREEMAP ══ -->
+                    @if (TaxSubTab === 'treemap') {
+                        <div class="at-tax-treemap-kpi-strip">
+                            @for (kpi of TaxTreemapKPIs; track kpi.Label) {
+                                <div class="at-tax-treemap-kpi">
+                                    <div class="at-tax-treemap-kpi-value">{{ kpi.Value }}</div>
+                                    <div class="at-tax-treemap-kpi-label">{{ kpi.Label }}</div>
+                                </div>
+                            }
+                        </div>
+
+                        @if (TaxTreemapCells.length === 0) {
+                            <div class="at-empty-state">
+                                <i class="fa-solid fa-chart-tree-map"></i>
+                                <p>No taxonomy data to visualize</p>
+                            </div>
+                        } @else {
+                            <div class="at-tax-treemap-container">
+                                @for (cell of TaxTreemapCells; track $index) {
+                                    <div class="at-tax-treemap-cell at-tax-treemap-cell-clickable" [class]="cell.ColorClass"
+                                         [style.grid-row]="cell.RowSpan > 1 ? 'span ' + cell.RowSpan : ''"
+                                         (click)="OpenTreemapDrillIn(cell)">
+                                        <span class="at-tax-cell-name">{{ cell.Name }}</span>
+                                        <span class="at-tax-cell-count">{{ cell.ItemCount }} items</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        <!-- Treemap Drill-In Panel -->
+                        @if (ShowTreemapDrillIn && TreemapDrillInNode) {
+                            <div class="at-tax-drillin-overlay" (click)="CloseTreemapDrillIn()">
+                                <div class="at-tax-drillin-panel" (click)="$event.stopPropagation()">
+                                    <div class="at-tax-drillin-header">
+                                        <h3><i class="fa-solid fa-tag"></i> {{ TreemapDrillInNode.Name }}</h3>
+                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()" aria-label="Close">
+                                            <i class="fa-solid fa-times"></i>
+                                        </button>
+                                    </div>
+                                    <div class="at-tax-drillin-body">
+                                        <div class="at-tax-stats-row">
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.ItemCount }}</div>
+                                                <div class="at-tax-stat-label">Items Tagged</div>
+                                            </div>
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.AvgWeight.toFixed(2) }}</div>
+                                                <div class="at-tax-stat-label">Avg Weight</div>
+                                            </div>
+                                            <div class="at-tax-stat-item">
+                                                <div class="at-tax-stat-value">{{ TreemapDrillInNode.Children.length }}</div>
+                                                <div class="at-tax-stat-label">Children</div>
+                                            </div>
+                                        </div>
+
+                                        @if (TreemapDrillInNode.Children.length > 0) {
+                                            <div class="at-tax-detail-section">
+                                                <div class="at-tax-section-title">Child Tags</div>
+                                                <div class="at-tax-child-chips">
+                                                    @for (child of TreemapDrillInNode.Children; track child.ID) {
+                                                        <span class="at-tax-child-chip">{{ child.Name }} <span class="at-tax-chip-count">{{ child.ItemCount }}</span></span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+
+                                        @if (TaxRecentItems.length > 0) {
+                                            <div class="at-tax-detail-section">
+                                                <div class="at-tax-section-title">Recently Tagged Items</div>
+                                                <div class="at-tax-recent-list">
+                                                    @for (item of TaxRecentItems; track $index) {
+                                                        <div class="at-tax-recent-item">
+                                                            <div class="at-tax-recent-icon"><i [class]="item.Icon"></i></div>
+                                                            <div class="at-tax-recent-name">{{ item.Name }}</div>
+                                                            <div class="at-tax-recent-weight">{{ item.Weight.toFixed(2) }}</div>
+                                                            <div class="at-tax-recent-date">{{ item.Date }}</div>
+                                                        </div>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="at-tax-drillin-footer">
+                                        <button class="at-action-btn at-secondary-btn" (click)="DrillInToTreeView(TreemapDrillInNode)">
+                                            <i class="fa-solid fa-sitemap"></i> View in Tree
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    <!-- ══ SUB-TAB 5: AUDIT LOG ══ -->
+                    @if (TaxSubTab === 'audit') {
+                        <div class="at-tax-audit-filters">
+                            <span class="at-tax-audit-filter-label">Filter</span>
+                            <div class="at-tax-audit-checkbox-group">
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('created')" (change)="ToggleTaxAuditFilter('created')"> Created
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('merged')" (change)="ToggleTaxAuditFilter('merged')"> Merged
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('moved')" (change)="ToggleTaxAuditFilter('moved')"> Moved
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('deleted')" (change)="ToggleTaxAuditFilter('deleted')"> Deleted
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('renamed')" (change)="ToggleTaxAuditFilter('renamed')"> Renamed
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('deprecated')" (change)="ToggleTaxAuditFilter('deprecated')"> Deprecated
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('split')" (change)="ToggleTaxAuditFilter('split')"> Split
+                                </label>
+                                <label class="at-tax-audit-checkbox">
+                                    <input type="checkbox" [checked]="TaxAuditFilterTypes.has('reactivated')" (change)="ToggleTaxAuditFilter('reactivated')"> Reactivated
+                                </label>
+                            </div>
+                        </div>
+
+                        @if (GetFilteredAuditEvents().length === 0) {
+                            <div class="at-empty-state">
+                                <i class="fa-solid fa-scroll"></i>
+                                <p>No audit events match the current filters</p>
+                            </div>
+                        }
+
+                        <div class="at-tax-audit-timeline">
+                            @for (event of GetFilteredAuditEvents(); track $index) {
+                                <div class="at-tax-audit-event">
+                                    <div class="at-tax-audit-event-icon" [class]="event.Type">
+                                        <i [class]="GetTaxAuditIcon(event.Type)"></i>
+                                    </div>
+                                    <div class="at-tax-audit-event-body">
+                                        <div class="at-tax-audit-event-desc">
+                                            {{ event.Description }} <span class="at-tax-tag-ref">{{ event.TagRef }}</span>
+                                        </div>
+                                        <div class="at-tax-audit-event-meta">
+                                            <span>{{ event.User }}</span>
+                                            <span>{{ event.Timestamp }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB: SUGGESTIONS — server-driven inbox        -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'suggestions') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Suggestions Inbox</div>
+                        <div class="at-page-subtitle">{{ SuggestionRows.length }} pending · select rows for bulk approve / reject</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-secondary-btn" (click)="loadSuggestions()"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+                        <button class="at-action-btn at-primary-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
+                            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
+                            @else { <i class="fa-solid fa-heart-pulse"></i> Run Tag Health }
+                        </button>
+                    </div>
+                </div>
+
+                <div class="at-page-body">
+                    <div class="sg-shell">
+                        <div class="sg-main">
+                            <div class="sg-toolbar">
+                                <input class="at-search-input" style="width: 280px;" placeholder="Search proposed name, source text…"
+                                       [(ngModel)]="SuggestionSearch" (input)="applySuggestionFilters()" />
+                                <select class="at-search-input" style="width: 200px;"
+                                        [(ngModel)]="SuggestionFilterReason" (change)="applySuggestionFilters()">
+                                    <option value="">All reasons</option>
+                                    @for (r of ReasonOptions; track r) { <option [value]="r">{{ r }}</option> }
+                                </select>
+                                <input class="at-search-input" type="number" step="0.05" min="0" max="1"
+                                       style="width: 100px;" placeholder="Min score"
+                                       [ngModel]="SuggestionFilterMinScore"
+                                       (ngModelChange)="OnMinScoreChange($event)" />
+                                <span style="flex: 1;"></span>
+                                <span class="at-muted" style="font-size: 12px;">
+                                    Showing <strong>{{ SuggestionRowsFiltered.length }} of {{ SuggestionRows.length }}</strong>
+                                </span>
+                            </div>
+
+                            @if (SelectedSuggestionCount() > 0) {
+                                <div class="sg-bulk-bar">
+                                    <strong>{{ SelectedSuggestionCount() }} selected</strong>
+                                    <span style="flex: 1;"></span>
+                                    <button class="at-action-btn at-success-btn at-btn-sm" (click)="BulkApprove()" [disabled]="SuggestionBulkInProgress">
+                                        <i class="fa-solid fa-check"></i> Approve all (auto-pick best)
+                                    </button>
+                                    <button class="at-action-btn at-danger-btn at-btn-sm" (click)="BulkReject()" [disabled]="SuggestionBulkInProgress">
+                                        <i class="fa-solid fa-xmark"></i> Reject
+                                    </button>
+                                </div>
+                            }
+
+                            <div class="sg-table-body">
+                                @if (SuggestionRowsFiltered.length === 0) {
+                                    <div class="at-empty-state"><i class="fa-solid fa-inbox"></i><p>No pending suggestions.</p></div>
+                                } @else {
+                                    <table class="sg-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 30px;">
+                                                    <input type="checkbox"
+                                                           [checked]="SelectedSuggestionCount() === SuggestionRowsFiltered.length && SuggestionRowsFiltered.length > 0"
+                                                           (change)="ToggleAllSuggestions($any($event.target).checked)" />
+                                                </th>
+                                                <th>Proposed name</th>
+                                                <th>Reason</th>
+                                                <th>Best match</th>
+                                                <th>Score</th>
+                                                <th>Created</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (row of SuggestionRowsFiltered; track row.ID) {
+                                                <tr [class.sg-row-checked]="row.selected"
+                                                    [class.sg-row-selected]="SuggestionSelected && SuggestionSelected.ID === row.ID"
+                                                    (click)="SelectSuggestion(row)">
+                                                    <td><input type="checkbox" [checked]="row.selected" (click)="ToggleSuggestionSelected(row, $event)" /></td>
+                                                    <td><strong>{{ row.ProposedName }}</strong></td>
+                                                    <td><span class="sg-reason {{ ReasonClass(row.Reason) }}">{{ row.Reason }}</span></td>
+                                                    <td>
+                                                        @if (row.BestMatchName) {
+                                                            {{ row.BestMatchName }}
+                                                            <span class="at-muted" style="font-size: 11px;">{{ row.BestMatchPath }}</span>
+                                                        } @else {
+                                                            <span class="at-muted">— no match —</span>
+                                                        }
+                                                    </td>
+                                                    <td class="sg-score">
+                                                        @if (row.BestMatchScore != null) {
+                                                            <span class="sg-score-bar"><span [style.width.%]="row.BestMatchScore * 100"></span></span>
+                                                            {{ row.BestMatchScore | number: '1.3-3' }}
+                                                        } @else {
+                                                            <span class="at-muted">—</span>
+                                                        }
+                                                    </td>
+                                                    <td class="at-muted">{{ row.CreatedAt | date: 'short' }}</td>
+                                                    <td>
+                                                        @if (row.dispositionInProgress) {
+                                                            <span class="at-muted" style="font-size: 11px;">
+                                                                <i class="fa-solid fa-spinner fa-spin"></i> {{ row.dispositionInProgress }}…
+                                                            </span>
+                                                        } @else {
+                                                            <div class="sg-row-actions">
+                                                                <button class="at-action-btn at-btn-xs" title="Create as new tag"
+                                                                        (click)="DispositionSuggestion(row, 'create-new'); $event.stopPropagation()">
+                                                                    <i class="fa-solid fa-plus"></i>
+                                                                </button>
+                                                                @if (row.BestMatchTagID) {
+                                                                    <button class="at-action-btn at-primary-btn at-btn-xs" title="Merge into best match"
+                                                                            (click)="DispositionSuggestion(row, 'merge'); $event.stopPropagation()">
+                                                                        <i class="fa-solid fa-code-merge"></i>
+                                                                    </button>
+                                                                }
+                                                                <button class="at-action-btn at-danger-btn at-btn-xs" title="Reject"
+                                                                        (click)="DispositionSuggestion(row, 'reject'); $event.stopPropagation()">
+                                                                    <i class="fa-solid fa-xmark"></i>
+                                                                </button>
+                                                            </div>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                }
+                            </div>
+                        </div>
+
+                        @if (SuggestionSelected) {
+                            <aside class="sg-drawer">
+                                <div class="sg-drawer-hd">
+                                    <div>
+                                        <div style="font-weight: 600;">"{{ SuggestionSelected.ProposedName }}"</div>
+                                        <div class="at-muted" style="font-size: 11px;">{{ SuggestionSelected.CreatedAt | date: 'short' }}</div>
+                                    </div>
+                                    <button class="at-action-btn at-btn-xs" (click)="CloseDrawer()" title="Close" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+                                </div>
+                                <div class="sg-drawer-bd">
+                                    <span class="sg-reason {{ ReasonClass(SuggestionSelected.Reason) }}">
+                                        {{ SuggestionSelected.Reason }}
+                                        @if (SuggestionSelected.BestMatchScore != null) { · {{ SuggestionSelected.BestMatchScore | number: '1.3-3' }} }
+                                    </span>
+
+                                    @if (SuggestionSelected.BestMatchTagID) {
+                                        <h4>Proposes merge into</h4>
+                                        <div class="sg-candidate">
+                                            <div style="flex: 1;">
+                                                <div style="font-weight: 600;">{{ SuggestionSelected.BestMatchName }}</div>
+                                                <div class="at-muted" style="font-size: 11px;">{{ SuggestionSelected.BestMatchPath }}</div>
+                                            </div>
+                                        </div>
+                                    }
+
+                                    @if (SuggestionSelected.SourceText) {
+                                        <h4>Source text</h4>
+                                        <p class="sg-preview">"{{ SuggestionSelected.SourceText }}"</p>
+                                    }
+
+                                    <h4>If approved</h4>
+                                    <p class="sg-preview">
+                                        @if (SuggestionSelected.BestMatchTagID) {
+                                            Re-point any free-text ContentItemTag rows whose Tag matches "<strong>{{ SuggestionSelected.ProposedName }}</strong>" to <strong>{{ SuggestionSelected.BestMatchName }}</strong>, add it as a synonym (Source: Merged), and mark the suggestion as Merged.
+                                        } @else {
+                                            Create a new tag named "<strong>{{ SuggestionSelected.ProposedName }}</strong>" (subject to ValidateAutoGrow), inherit parent scope when applicable, and re-point any matching free-text ContentItemTag rows.
+                                        }
+                                    </p>
+                                </div>
+                                <div class="sg-drawer-ft">
+                                    @if (SuggestionSelected.BestMatchTagID) {
+                                        <button class="at-action-btn at-primary-btn" (click)="DispositionSuggestion(SuggestionSelected!, 'merge')"
+                                                [disabled]="!!SuggestionSelected.dispositionInProgress">
+                                            <i class="fa-solid fa-code-merge"></i> Merge
+                                        </button>
+                                    }
+                                    <button class="at-action-btn" (click)="DispositionSuggestion(SuggestionSelected!, 'create-new')"
+                                            [disabled]="!!SuggestionSelected.dispositionInProgress">
+                                        <i class="fa-solid fa-plus"></i> Create as new
+                                    </button>
+                                    <button class="at-action-btn at-danger-btn" (click)="DispositionSuggestion(SuggestionSelected!, 'reject')"
+                                            [disabled]="!!SuggestionSelected.dispositionInProgress">
+                                        <i class="fa-solid fa-xmark"></i> Reject
+                                    </button>
+                                </div>
+                            </aside>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- ════════════════════════════════════════════ -->
+            <!-- TAB: HEALTH — Tag Health 3-card summary       -->
+            <!-- ════════════════════════════════════════════ -->
+            @if (ActiveTab === 'health') {
+                <div class="at-page-header">
+                    <div>
+                        <div class="at-page-title">Tag Health</div>
+                        <div class="at-page-subtitle">Automated signals about taxonomy quality</div>
+                    </div>
+                    <div class="at-page-actions">
+                        <button class="at-action-btn at-secondary-btn" (click)="RebuildEmbeddings()" [disabled]="RebuildEmbeddingsRunning">
+                            @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Rebuilding… }
+                            @else { <i class="fa-solid fa-rotate"></i> Rebuild stale embeddings }
+                        </button>
+                        <button class="at-action-btn at-primary-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
+                            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
+                            @else { <i class="fa-solid fa-play"></i> Run now }
+                        </button>
+                    </div>
+                </div>
+
+                <div class="health-shell">
+                    <div class="runbar">
+                        <div class="stat">
+                            <div class="l">Last run</div>
+                            <div class="v">{{ LastHealthSummary.runAt ? (LastHealthSummary.runAt | date: 'short') : '—' }}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="l">Tags scanned</div>
+                            <div class="v">{{ tagsRaw.length }}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="l">Issues enqueued (last run)</div>
+                            <div class="v">{{ LastHealthSummary.mergeCount + LastHealthSummary.lowUsageCount + LastHealthSummary.wideNodeCount }}</div>
+                        </div>
+                        <div class="stat">
+                            <div class="l">Pending suggestions</div>
+                            <div class="v">{{ PendingSuggestionCount }}</div>
+                        </div>
+                        <span class="grow"></span>
+                        <div class="stat">
+                            <div class="l">Last duration</div>
+                            <div class="v">{{ LastHealthSummary.durationMs ? (LastHealthSummary.durationMs + 'ms') : '—' }}</div>
+                        </div>
+                    </div>
+
+                    <div class="health-cards">
+                        <div class="h-card merge">
+                            <div class="top">
+                                <div class="ic"><i class="fa-solid fa-code-merge"></i></div>
+                                <div>
+                                    <div class="name">Merge candidates</div>
+                                    <h3>Likely duplicate tags</h3>
+                                </div>
+                            </div>
+                            <div class="big">{{ LastHealthSummary.mergeCount }}</div>
+                            <p class="sub">Pairs with high embedding cosine + name similarity. Approving merges the source into the target and re-points existing ContentItemTag rows.</p>
+                            <div class="ft">
+                                <button class="at-action-btn at-primary-btn at-btn-sm" (click)="SwitchTab('suggestions'); SuggestionFilterReason = 'MergeCandidate'; applySuggestionFilters()">
+                                    Open in Suggestions
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="h-card lowusage">
+                            <div class="top">
+                                <div class="ic"><i class="fa-solid fa-leaf"></i></div>
+                                <div>
+                                    <div class="name">Low usage</div>
+                                    <h3>Deprecation candidates</h3>
+                                </div>
+                            </div>
+                            <div class="big">{{ LastHealthSummary.lowUsageCount }}</div>
+                            <p class="sub">Active tags used fewer than the threshold over the lookback window. Often abandoned imports or finished-project tags.</p>
+                            <div class="ft">
+                                <button class="at-action-btn at-primary-btn at-btn-sm" (click)="SwitchTab('suggestions'); SuggestionFilterReason = 'LowUsage'; applySuggestionFilters()">
+                                    Review
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="h-card widenode">
+                            <div class="top">
+                                <div class="ic"><i class="fa-solid fa-tree"></i></div>
+                                <div>
+                                    <div class="name">Wide nodes</div>
+                                    <h3>Parents with too many children</h3>
+                                </div>
+                            </div>
+                            <div class="big">{{ LastHealthSummary.wideNodeCount }}</div>
+                            <p class="sub">Parents whose direct-child count exceeds <strong>MaxChildren</strong> (or the implicit threshold {{ HealthThresholds.maxImplicitChildren }} when no cap is set).</p>
+                            <div class="ft">
+                                <button class="at-action-btn at-primary-btn at-btn-sm" (click)="SwitchTab('suggestions'); SuggestionFilterReason = 'WideNode'; applySuggestionFilters()">
+                                    Review
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="threshold-form">
+                        <h3>Health-job thresholds</h3>
+                        <div class="grid">
+                            <div class="field"><label>Merge: min co-occurrence</label>
+                                <input class="at-search-input" type="number" min="0" [(ngModel)]="HealthThresholds.minCoOccurrence" />
+                                <span class="at-hint">Pairs must appear together in ≥ this many items.</span>
+                            </div>
+                            <div class="field"><label>Merge: min embedding cosine</label>
+                                <input class="at-search-input" type="number" min="0" max="1" step="0.01" [(ngModel)]="HealthThresholds.minEmbeddingSimilarity" />
+                            </div>
+                            <div class="field"><label>Merge: min name similarity</label>
+                                <input class="at-search-input" type="number" min="0" max="1" step="0.05" [(ngModel)]="HealthThresholds.minNameSimilarity" />
+                                <span class="at-hint">Dice's-coefficient bigram similarity.</span>
+                            </div>
+                            <div class="field"><label>Low usage: max usage</label>
+                                <input class="at-search-input" type="number" min="0" [(ngModel)]="HealthThresholds.maxUsage" />
+                            </div>
+                            <div class="field"><label>Wide node: max implicit children</label>
+                                <input class="at-search-input" type="number" min="0" [(ngModel)]="HealthThresholds.maxImplicitChildren" />
+                                <span class="at-hint">Used when a tag has no explicit MaxChildren cap.</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="run-history">
+                        <div class="run-history-hd">
+                            <h3>Run history</h3>
+                            <span class="at-muted" style="font-size: 11px;">last {{ HealthRunHistory.length }} runs</span>
+                        </div>
+                        @if (HealthRunHistory.length === 0) {
+                            <div class="at-empty-state" style="padding: 32px;"><i class="fa-solid fa-clock-rotate-left"></i><p>No runs yet.</p></div>
+                        } @else {
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>When</th><th>Trigger</th><th>Tags scanned</th><th>Merge</th><th>Low usage</th><th>Wide node</th><th>Total</th><th>Duration</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (run of HealthRunHistory; track run.When) {
+                                        <tr>
+                                            <td class="at-muted">{{ run.When | date: 'short' }}</td>
+                                            <td>{{ run.Trigger }}</td>
+                                            <td>{{ run.TagsScanned }}</td>
+                                            <td>{{ run.Merge }}</td>
+                                            <td>{{ run.LowUsage }}</td>
+                                            <td>{{ run.WideNode }}</td>
+                                            <td><strong>{{ run.Merge + run.LowUsage + run.WideNode }}</strong></td>
+                                            <td>{{ run.DurationMs }}ms</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            }
+
+        <!-- end @if (!IsLoading) -->
+        }
+
+    </div>
+    <!-- end at-main-area -->
+
+    <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
+    @if (ShowItemDetail && SelectedFeedItem) {
+        <div class="at-slide-overlay" (click)="CloseItemDetail()"></div>
+        <div class="at-slide-panel at-detail-panel">
+            <div class="at-slide-header">
+                <h3><i class="fa-solid fa-file-lines"></i> Content Item</h3>
+                <button class="at-slide-close" aria-label="Close item detail" (click)="CloseItemDetail()"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="at-slide-body">
+                <!-- Header -->
+                <div class="at-detail-item-header">
+                    <h4 class="at-detail-item-name">{{ SelectedFeedItem.Name }}</h4>
+                    <div class="at-detail-badges">
+                        <span class="at-detail-badge at-detail-badge-source">{{ SelectedFeedItem.SourceName }}</span>
+                        @if (SelectedFeedItem.RequiresContentType) {
+                            <span class="at-detail-badge at-detail-badge-type">{{ SelectedFeedItem.ContentTypeName }}</span>
+                            @if (SelectedFeedItem.FileTypeName) {
+                                <span class="at-detail-badge at-detail-badge-file"><i class="fa-solid fa-file"></i> {{ SelectedFeedItem.FileTypeName }}</span>
+                            }
+                        }
+                    </div>
+                </div>
+
+                <!-- URL -->
+                @if (SelectedFeedItem.URL) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">URL</div>
+                        <a [href]="SelectedFeedItem.URL" target="_blank" class="at-detail-link">
+                            {{ SelectedFeedItem.URL }}
+                            <i class="fa-solid fa-external-link-alt" style="font-size: 0.65rem; margin-left: 4px;"></i>
+                        </a>
+                    </div>
+                }
+
+                <!-- Text Preview -->
+                @if (SelectedFeedItem.TextContent) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Content Preview</div>
+                        <div class="at-detail-text-preview">{{ SelectedFeedItem.TextContent }}</div>
+                    </div>
+                }
+
+                <!-- Tags (weighted) -->
+                @if (SelectedFeedItem.Tags.length > 0) {
+                    <div class="at-detail-section">
+                        <div class="at-detail-section-label">Tags ({{ SelectedFeedItem.Tags.length }})</div>
+                        <div class="at-detail-tags">
+                            @for (wt of SelectedFeedItem.Tags; track wt.Tag) {
+                                <span class="at-tag-pill at-tag-weighted" [style.font-size]="TagFontSize(wt.Weight)">
+                                    {{ wt.Tag }}
+                                    <span class="at-tag-weight">{{ FormatWeight(wt.Weight) }}</span>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- Metadata -->
+                <div class="at-detail-section">
+                    <div class="at-detail-section-label">Metadata</div>
+                    <div class="at-detail-meta-grid">
+                        @if (SelectedFeedItem.Checksum) {
+                            <div class="at-detail-meta-row">
+                                <span class="at-detail-meta-key">Checksum</span>
+                                <span class="at-detail-meta-value at-detail-meta-mono">{{ SelectedFeedItem.Checksum }}</span>
+                            </div>
+                        }
+                        <div class="at-detail-meta-row">
+                            <span class="at-detail-meta-key">Created</span>
+                            <span class="at-detail-meta-value">{{ SelectedFeedItem.CreatedAt }}</span>
+                        </div>
+                        <div class="at-detail-meta-row">
+                            <span class="at-detail-meta-key">Updated</span>
+                            <span class="at-detail-meta-value">{{ SelectedFeedItem.UpdatedAt }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Actions -->
+                <div class="at-detail-actions">
+                    <button class="at-action-btn at-primary-btn" (click)="OpenRecordFromItem(SelectedFeedItem)">
+                        <i class="fa-solid fa-external-link-alt"></i> Open Record
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" disabled>
+                        <i class="fa-solid fa-magnifying-glass"></i> See Similar Items
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ CONFIRMATION DIALOG ══════ -->
+    @if (ShowConfirmDialog) {
+        <div class="at-schedule-overlay" (click)="ConfirmDialogCancel()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-triangle-exclamation"></i> {{ ConfirmDialogTitle }}</h3>
+                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()" aria-label="Close">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <p class="at-confirm-message">{{ ConfirmDialogMessage }}</p>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-danger-btn" (click)="ConfirmDialogAccept()">
+                        <i class="fa-solid fa-check"></i> Confirm
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="ConfirmDialogCancel()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ SPLIT DIALOG ══════ -->
+    @if (ShowSplitDialog) {
+        <div class="at-schedule-overlay" (click)="CloseSplitDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-code-branch"></i> Split Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()" aria-label="Close">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-schedule-field">
+                        <label>New tag names (comma-separated)</label>
+                        <input type="text" class="mj-input" style="width: 100%;"
+                               [(ngModel)]="SplitChildNames"
+                               placeholder="Tag A, Tag B, Tag C" />
+                    </div>
+                    <p class="at-confirm-message">New tags will be created as siblings of the original tag under the same parent.</p>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteSplit()" [disabled]="!SplitChildNames.trim()">
+                        <i class="fa-solid fa-code-branch"></i> Create Tags
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseSplitDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ══════ MOVE DIALOG ══════ -->
+    @if (ShowCreateTagDialog) {
+        <div class="at-schedule-overlay" (click)="CloseCreateTagDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-plus"></i> Create Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()" aria-label="Close">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-tax-create-context">{{ CreateTagParentLabel }}</div>
+                    <div class="at-schedule-field">
+                        <label>Name</label>
+                        <input type="text" class="mj-input" style="width: 100%;" [(ngModel)]="CreateTagName"
+                               placeholder="Tag name" (keydown.enter)="SaveNewTag()">
+                    </div>
+                    <div class="at-schedule-field">
+                        <label>Description (optional)</label>
+                        <textarea class="mj-textarea" rows="3" style="width: 100%;" [(ngModel)]="CreateTagDescription"
+                                  placeholder="Brief description of this tag"></textarea>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="SaveNewTag()" [disabled]="!CreateTagName.trim()">
+                        <i class="fa-solid fa-check"></i> Create
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseCreateTagDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (ShowMoveDialog) {
+        <div class="at-schedule-overlay" (click)="CloseMoveDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-arrows-up-down"></i> Move Tag</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()" aria-label="Close">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <div class="at-schedule-field">
+                        <label>New parent tag</label>
+                        <select class="mj-input" style="width: 100%;" [(ngModel)]="MoveNewParentID">
+                            <option [ngValue]="null">(Root level &mdash; no parent)</option>
+                            @for (opt of GetMoveTargetOptions(); track opt.ID) {
+                                <option [ngValue]="opt.ID">{{ '\u00A0\u00A0'.repeat(opt.Depth) }}{{ opt.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteMove()">
+                        <i class="fa-solid fa-check"></i> Move
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseMoveDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (ShowMergeIntoDialog) {
+        <div class="at-schedule-overlay" (click)="CloseMergeIntoDialog()">
+            <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
+                <div class="at-schedule-dialog-header">
+                    <h3><i class="fa-solid fa-compress"></i> Merge "{{ MergeSourceTag?.Name }}" Into...</h3>
+                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()" aria-label="Close">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+                <div class="at-schedule-dialog-body">
+                    <p style="font-size: 0.85rem; color: var(--mj-text-secondary); margin: 0 0 12px;">
+                        All tagged items will be moved to the target tag, then "{{ MergeSourceTag?.Name }}" will be deleted.
+                    </p>
+                    <div class="at-schedule-field">
+                        <label>Merge into</label>
+                        <mj-combobox
+                            [Data]="MergeTargetData"
+                            TextField="Label"
+                            ValueField="ID"
+                            [Filterable]="true"
+                            [ValuePrimitive]="true"
+                            Placeholder="Search and select a tag..."
+                            (ValueChange)="OnMergeTargetSelected($event)">
+                        </mj-combobox>
+                    </div>
+                </div>
+                <div class="at-schedule-dialog-footer">
+                    <button class="at-action-btn at-primary-btn" (click)="ExecuteMergeInto()" [disabled]="!MergeTargetID || IsMerging">
+                        @if (IsMerging) { <i class="fa-solid fa-spinner fa-spin"></i> Merging... } @else { <i class="fa-solid fa-compress"></i> Merge }
+                    </button>
+                    <button class="at-action-btn at-secondary-btn" (click)="CloseMergeIntoDialog()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    }
+
+  </div>
+  </mj-page-body>
+</mj-page-layout>

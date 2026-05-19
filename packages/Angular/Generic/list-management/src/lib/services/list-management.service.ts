@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJListEntity, MJListDetailEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 import {
@@ -17,6 +17,9 @@ interface CacheEntry<T> {
 /**
  * Service for managing list operations including data loading, caching,
  * and batch add/remove operations.
+ *
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
 @Injectable({
   providedIn: 'root'
@@ -32,6 +35,15 @@ export class ListManagementService {
   // Loading state subjects
   private loadingSubject = new BehaviorSubject<boolean>(false);
   public loading$: Observable<boolean> = this.loadingSubject.asObservable();
+
+  private _provider: IMetadataProvider | null = null;
+
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   constructor() {}
 
@@ -56,7 +68,7 @@ export class ListManagementService {
     this.loadingSubject.next(true);
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       let filter = `EntityID = '${entityId}'`;
 
       if (userId) {
@@ -94,7 +106,7 @@ export class ListManagementService {
       return this.categoryCache.data;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJListCategoryEntity>({
       EntityName: 'MJ: List Categories',
       OrderBy: 'Name',
@@ -135,7 +147,7 @@ export class ListManagementService {
     this.loadingSubject.next(true);
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Get all list details for these records
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
@@ -175,7 +187,7 @@ export class ListManagementService {
     entityId: string,
     recordId: string
   ): Promise<MJListEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get list details for this record
     const detailsResult = await rv.RunView<MJListDetailEntity>({
@@ -205,7 +217,7 @@ export class ListManagementService {
    * Get item count for a list
    */
   async getListItemCount(listId: string): Promise<number> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView({
       EntityName: 'MJ: List Details',
       ExtraFilter: `ListID = '${listId}'`,
@@ -224,7 +236,7 @@ export class ListManagementService {
     membership: Map<string, string[]>
   ): Promise<ListItemViewModel[]> {
     const viewModels: ListItemViewModel[] = [];
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get item counts for all lists in one batch query
     const listIds = lists.map(l => l.ID);
@@ -289,12 +301,12 @@ export class ListManagementService {
       errors: []
     };
 
-    const md = new Metadata();
+    const md = this.Provider;
 
     // Get existing membership to skip duplicates
     let existingMembership = new Map<string, Set<string>>();
     if (skipDuplicates) {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
@@ -388,8 +400,8 @@ export class ListManagementService {
       errors: []
     };
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.Provider;
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Find existing list details to delete
     const listIdFilter = listIds.map(id => `'${id}'`).join(',');
@@ -433,10 +445,10 @@ export class ListManagementService {
    * Create a new list
    */
   async createList(config: CreateListConfig): Promise<MJListEntity | null> {
-    const md = new Metadata();
+    const md = this.Provider;
 
     try {
-      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
+      const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       list.NewRecord();
       list.Name = config.name;
       list.Description = config.description || '';

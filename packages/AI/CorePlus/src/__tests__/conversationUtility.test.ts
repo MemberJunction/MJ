@@ -248,17 +248,17 @@ describe('ConversationUtility', () => {
     });
 
     describe('BuildChatMessageContent', () => {
-        it('should return processed text when no attachments', () => {
-            const result = ConversationUtility.BuildChatMessageContent('Hello world', []);
+        it('should return processed text when no attachments', async () => {
+            const result = await ConversationUtility.BuildChatMessageContent('Hello world', []);
 
             expect(result).toBe('Hello world');
         });
 
-        it('should build content blocks when attachments present', () => {
+        it('should build content blocks when attachments present', async () => {
             const attachments: AttachmentData[] = [
                 { type: 'Image', mimeType: 'image/png', content: 'data:image/png;base64,abc' }
             ];
-            const result = ConversationUtility.BuildChatMessageContent('Look at this', attachments);
+            const result = await ConversationUtility.BuildChatMessageContent('Look at this', attachments);
 
             expect(Array.isArray(result)).toBe(true);
             const blocks = result as Array<{ type: string; content: string }>;
@@ -267,11 +267,11 @@ describe('ConversationUtility', () => {
             expect(blocks[1].type).toBe('image_url');
         });
 
-        it('should return string if only text block after processing', () => {
+        it('should return string if only text block after processing', async () => {
             const attachments: AttachmentData[] = [
                 { type: 'Image', mimeType: 'image/png', content: '' } // empty content = no block
             ];
-            const result = ConversationUtility.BuildChatMessageContent('Hello', attachments);
+            const result = await ConversationUtility.BuildChatMessageContent('Hello', attachments);
 
             // Empty content attachment should be filtered, only text remains
             expect(typeof result === 'string' || Array.isArray(result)).toBe(true);

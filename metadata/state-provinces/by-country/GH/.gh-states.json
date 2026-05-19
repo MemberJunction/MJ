@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Ashanti",
+      "Code": "AH",
+      "ISO3166_2": "GH-AH",
+      "Latitude": 6.7522,
+      "Longitude": -1.3296,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-AH.geojson",
+      "CommonAliases": [
+        "Ashanti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "4860D63E-A620-4D53-97E2-98802D5C60F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.853Z",
+      "checksum": "5d0a040ac284b71ea25edbf828d2ff0a29be12a720a2ed938f45f2b51f44d6c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brong-Ahafo",
+      "Code": "BA",
+      "ISO3166_2": "GH-BA",
+      "Latitude": 8.1656,
+      "Longitude": -1.428,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-BA.geojson",
+      "CommonAliases": [
+        "Brong-Ahafo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "0B144664-7BFA-496E-BAEB-BD0A344285C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.870Z",
+      "checksum": "ad96d4687c99b439d89a27064780746d29857a7dec2abb63dc8bf3fe154d9824"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "CP",
+      "ISO3166_2": "GH-CP",
+      "Latitude": 5.4948,
+      "Longitude": -1.2655,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-CP.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "C175D655-31D1-46F5-ADEC-C0A84B9AAD6C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.886Z",
+      "checksum": "e17ce85d12a614ca29ea91dce4b871b17ee431c3e25762fa97ecaa9ee2206305"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eastern",
+      "Code": "EP",
+      "ISO3166_2": "GH-EP",
+      "Latitude": 6.4258,
+      "Longitude": -0.4604,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-EP.geojson",
+      "CommonAliases": [
+        "Eastern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "6D9F94EC-2B65-454E-9680-655EFE27021E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.903Z",
+      "checksum": "14e1dd5976758c8d11e6711e6edc12a75e5193ed5ac2aeb31a597e19e387fc58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Greater Accra",
+      "Code": "AA",
+      "ISO3166_2": "GH-AA",
+      "Latitude": 5.8392,
+      "Longitude": 0.1053,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-AA.geojson",
+      "CommonAliases": [
+        "Greater Accra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "EE5AA674-90F7-47B4-9448-4DD6917B53BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.920Z",
+      "checksum": "1832cb2c8bda3d763a0e439d0db07c86504d9a5ada385c21c52b144d0d79a388"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern",
+      "Code": "NP",
+      "ISO3166_2": "GH-NP",
+      "Latitude": 9.2726,
+      "Longitude": -1.1191,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-NP.geojson",
+      "CommonAliases": [
+        "Northern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "1F6CD28B-AA0C-44F8-ACCB-26A4E3B4B09C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.937Z",
+      "checksum": "000e5fa0848b061e116249aeebdc308195acd32aa652d48fc389cf1880437dc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper East",
+      "Code": "UE",
+      "ISO3166_2": "GH-UE",
+      "Latitude": 10.8183,
+      "Longitude": -0.7798,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-UE.geojson",
+      "CommonAliases": [
+        "Upper East"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "853938B9-17BE-4198-9137-AA6F7B3B8D48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.953Z",
+      "checksum": "c1988e81b9bc158dc36c2e475eba78431d415fb3c4a6ef231af371ab30f9e0db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper West",
+      "Code": "UW",
+      "ISO3166_2": "GH-UW",
+      "Latitude": 10.404,
+      "Longitude": -2.1445,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-UW.geojson",
+      "CommonAliases": [
+        "Upper West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "FA852E01-BFD3-41BE-ACD6-7F8AEC1849E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.968Z",
+      "checksum": "ceb4be992885a930acabaac4fd1f895b602204111e75c98311fed3daba61203e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Volta",
+      "Code": "TV",
+      "ISO3166_2": "GH-TV",
+      "Latitude": 7.3386,
+      "Longitude": 0.3963,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-TV.geojson",
+      "CommonAliases": [
+        "Volta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "06AAE2AE-4813-4C3B-8260-61708747C9C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:55.990Z",
+      "checksum": "32adba52fcefd97aec0a15725aea040582332ff1baa019d04ddbd4f7da01a2e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "WP",
+      "ISO3166_2": "GH-WP",
+      "Latitude": 5.7002,
+      "Longitude": -2.3421,
+      "BoundaryGeoJSON": "@file:by-country/GH/boundaries/GH-WP.geojson",
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GH"
+    },
+    "primaryKey": {
+      "ID": "FCDB9CE2-F7AC-4436-BADC-C70BA8193EF7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:56.005Z",
+      "checksum": "0d8e420f72370766048900bc7a59441c4566de77893ad2ff468f857fea17624b"
+    }
+  }
+]

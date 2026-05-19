@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuration — Option A: Wizard-Style Setup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .wizard {
+    width: 100%;
+    max-width: 780px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.3);
+  }
+
+  /* Step indicator */
+  .steps-bar {
+    display: flex;
+    background: rgba(15,23,42,0.6);
+    border-bottom: 1px solid var(--border);
+    padding: 1.25rem 2rem;
+    gap: 0;
+  }
+  .step {
+    display: flex; align-items: center; gap: 0.5rem;
+    flex: 1;
+    position: relative;
+  }
+  .step:not(:last-child)::after {
+    content: '';
+    flex: 1;
+    height: 2px;
+    background: var(--border);
+    margin: 0 0.75rem;
+  }
+  .step.completed:not(:last-child)::after { background: var(--success); }
+  .step.active:not(:last-child)::after { background: var(--accent); }
+  .step-num {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700;
+    flex-shrink: 0;
+    border: 2px solid var(--border);
+    color: var(--text-muted);
+    transition: all 0.3s;
+  }
+  .step.completed .step-num {
+    background: var(--success); border-color: var(--success); color: white;
+  }
+  .step.active .step-num {
+    background: var(--accent); border-color: var(--accent); color: white;
+  }
+  .step-label {
+    font-size: 0.75rem; color: var(--text-muted); white-space: nowrap;
+    transition: color 0.2s;
+  }
+  .step.active .step-label { color: var(--accent); font-weight: 600; }
+  .step.completed .step-label { color: var(--success); }
+
+  /* Wizard content */
+  .wizard-body {
+    padding: 2rem 2.5rem;
+  }
+  .wizard-title {
+    font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem;
+  }
+  .wizard-desc {
+    font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.5;
+  }
+
+  /* Form elements */
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  .form-label {
+    display: block;
+    font-size: 0.82rem; font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-secondary);
+  }
+  .form-input {
+    width: 100%;
+    background: var(--bg-page);
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 1rem;
+    font-size: 0.88rem;
+    color: var(--text-primary);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--text-muted); }
+  .form-select {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24'%3E%3Cpath fill='%2364748b' d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    padding-right: 2.5rem;
+  }
+  .form-help {
+    font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;
+  }
+
+  /* Option cards */
+  .option-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .option-card {
+    background: var(--bg-page);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .option-card:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+  .option-card.selected { border-color: var(--accent); background: rgba(59,130,246,0.08); }
+  .option-card .icon {
+    width: 44px; height: 44px; border-radius: 10px;
+    margin: 0 auto 0.75rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem;
+  }
+  .option-card h4 { font-size: 0.88rem; font-weight: 600; margin-bottom: 0.25rem; }
+  .option-card p { font-size: 0.72rem; color: var(--text-muted); line-height: 1.4; }
+
+  /* Connection test */
+  .connection-test {
+    display: flex; align-items: center; gap: 0.75rem;
+    background: rgba(34,197,94,0.08);
+    border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: var(--success);
+  }
+  .connection-test i { font-size: 1rem; }
+
+  /* Footer */
+  .wizard-footer {
+    padding: 1.25rem 2.5rem;
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    background: rgba(15,23,42,0.3);
+  }
+  .btn {
+    padding: 0.6rem 1.25rem;
+    border-radius: 8px;
+    font-size: 0.85rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; gap: 0.5rem;
+    border: none;
+  }
+  .btn-ghost { background: transparent; color: var(--text-muted); }
+  .btn-ghost:hover { color: var(--text-primary); }
+  .btn-outline {
+    background: transparent; color: var(--text-secondary);
+    border: 1px solid var(--border);
+  }
+  .btn-outline:hover { border-color: var(--accent); color: var(--text-primary); }
+  .btn-primary { background: var(--accent); color: white; }
+  .btn-primary:hover { background: #2563eb; }
+  .progress-text {
+    font-size: 0.78rem; color: var(--text-muted);
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .wizard-body { padding: 1.5rem; }
+    .wizard-footer { padding: 1rem 1.5rem; }
+    .option-grid { grid-template-columns: 1fr; }
+    .steps-bar { padding: 1rem; }
+    .step-label { display: none; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="wizard">
+  <div class="steps-bar">
+    <div class="step completed">
+      <span class="step-num"><i class="fa-solid fa-check" style="font-size: 0.6rem;"></i></span>
+      <span class="step-label">Vector DB</span>
+    </div>
+    <div class="step completed">
+      <span class="step-num"><i class="fa-solid fa-check" style="font-size: 0.6rem;"></i></span>
+      <span class="step-label">Shared Index</span>
+    </div>
+    <div class="step active">
+      <span class="step-num">3</span>
+      <span class="step-label">Embedding Model</span>
+    </div>
+    <div class="step">
+      <span class="step-num">4</span>
+      <span class="step-label">Entity Docs</span>
+    </div>
+    <div class="step">
+      <span class="step-num">5</span>
+      <span class="step-label">Full-Text Index</span>
+    </div>
+    <div class="step">
+      <span class="step-num">6</span>
+      <span class="step-label">Review</span>
+    </div>
+  </div>
+
+  <div class="wizard-body">
+    <div class="wizard-title">Choose Your Embedding Model</div>
+    <div class="wizard-desc">
+      Select the embedding model that will convert your entity documents into vectors. This affects search quality, speed, and cost.
+    </div>
+
+    <div class="option-grid">
+      <div class="option-card selected">
+        <div class="icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-star"></i></div>
+        <h4>OpenAI text-embedding-3-large</h4>
+        <p>3072 dimensions<br>Best quality<br>$0.13 / 1M tokens</p>
+      </div>
+      <div class="option-card">
+        <div class="icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-bolt"></i></div>
+        <h4>OpenAI text-embedding-3-small</h4>
+        <p>1536 dimensions<br>Good balance<br>$0.02 / 1M tokens</p>
+      </div>
+      <div class="option-card">
+        <div class="icon" style="background: rgba(6,182,212,0.15); color: var(--cyan);"><i class="fa-solid fa-shield-halved"></i></div>
+        <h4>Cohere embed-v3</h4>
+        <p>1024 dimensions<br>Multilingual<br>$0.10 / 1M tokens</p>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">API Key</label>
+      <input type="password" class="form-input" value="sk-****************************abcX" placeholder="Enter your API key">
+      <div class="form-help">Your API key is encrypted and stored securely in the MJ configuration.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Similarity Threshold</label>
+      <input type="range" style="width: 100%; accent-color: var(--accent);" min="0" max="100" value="75">
+      <div style="display: flex; justify-content: space-between;">
+        <span class="form-help">More results (less relevant)</span>
+        <span class="form-help" style="font-weight: 600; color: var(--accent);">0.75</span>
+        <span class="form-help">Fewer results (more relevant)</span>
+      </div>
+    </div>
+
+    <div class="connection-test">
+      <i class="fa-solid fa-check-circle"></i>
+      <span>Connection verified &mdash; OpenAI API responding normally (142ms)</span>
+    </div>
+  </div>
+
+  <div class="wizard-footer">
+    <button class="btn btn-outline"><i class="fa-solid fa-arrow-left"></i> Back</button>
+    <span class="progress-text">Step 3 of 6</span>
+    <button class="btn btn-primary">Continue <i class="fa-solid fa-arrow-right"></i></button>
+  </div>
+</div>
+
+</body>
+</html>

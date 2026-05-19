@@ -35,6 +35,32 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
    */
   protected static readonly LW_MAX_PAGE_SIZE = 100;
 
+  // ── Rate-limit / retry constants ──────────────────────────────────
+  private static readonly MAX_RETRIES = 5;
+  private static readonly BASE_DELAY_MS = 1000;
+  private static readonly MAX_DELAY_MS = 30_000;
+  private static readonly RATE_LIMIT_WINDOW_MS = 10_000;
+  private static readonly RATE_LIMIT_MAX_REQUESTS = 25;
+  private static readonly INTER_BATCH_DELAY_MS = 2000;
+
+  /**
+   * Safety limit for pagination to prevent infinite loops if the API misbehaves.
+   */
+  protected static readonly MAX_PAGES = 100;
+
+  /**
+   * Sliding-window timestamps shared across all instances so concurrent
+   * actions against the same LearnWorlds school stay within the limit.
+   */
+  private static requestTimestamps: number[] = [];
+
+  /**
+   * Reset the global rate-limiter state. Intended for test teardown only.
+   */
+  public static ResetRateLimiter(): void {
+    LearnWorldsBaseAction.requestTimestamps = [];
+  }
+
   /**
    * Current action parameters (set by the framework or by SetCompanyContext)
    */
@@ -80,7 +106,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
 
     try {
       this.apiCallCount++;
-      const response = await fetch(requestUrl, {
+      const response = await this.sendRequestWithRetry(requestUrl, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
@@ -155,7 +181,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
 
     try {
       this.apiCallCount++;
-      const response = await fetch(requestUrl, {
+      const response = await this.sendRequestWithRetry(requestUrl, {
         method,
         headers,
         body: body ? JSON.stringify(body) : undefined,
@@ -211,6 +237,11 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
     const effectiveMax = maxResults ?? (this.getParamValue(this.params, 'MaxResults') as number | undefined);
 
     while (hasMore) {
+      if (page > LearnWorldsBaseAction.MAX_PAGES) {
+        console.warn(`Pagination safety limit reached (${LearnWorldsBaseAction.MAX_PAGES} pages). Returning partial results.`);
+        break;
+      }
+
       const paginatedParams: Record<string, string> = {};
       for (const [key, val] of Object.entries(queryParams)) {
         paginatedParams[key] = String(val);
@@ -402,6 +433,97 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   }
 
   // ----------------------------------------------------------------
+  // Rate-limit helpers
+  // ----------------------------------------------------------------
+
+  /**
+   * Returns a promise that resolves after `ms` milliseconds.
+   */
+  private async waitForRetryDelay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Pure calculation — determines how long to wait before the next retry.
+   * Prefers the Retry-After header (seconds → ms, capped); falls back to
+   * exponential backoff with random jitter.
+   */
+  private calculateRetryDelay(attempt: number, retryAfterHeader: string | null): number {
+    if (retryAfterHeader != null) {
+      const retryAfterSeconds = Number(retryAfterHeader);
+      if (!isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+        return Math.min(retryAfterSeconds * 1000, LearnWorldsBaseAction.MAX_DELAY_MS);
+      }
+    }
+
+    const exponential = LearnWorldsBaseAction.BASE_DELAY_MS * Math.pow(2, attempt);
+    if (exponential >= LearnWorldsBaseAction.MAX_DELAY_MS) {
+      return LearnWorldsBaseAction.MAX_DELAY_MS;
+    }
+    const jitter = Math.random() * LearnWorldsBaseAction.BASE_DELAY_MS;
+    return Math.min(exponential + jitter, LearnWorldsBaseAction.MAX_DELAY_MS);
+  }
+
+  /**
+   * Proactive throttle: if the sliding window is at capacity, sleep until
+   * the oldest request falls outside the window.
+   */
+  private async waitForRateLimitCapacity(): Promise<void> {
+    const now = Date.now();
+    const windowStart = now - LearnWorldsBaseAction.RATE_LIMIT_WINDOW_MS;
+
+    LearnWorldsBaseAction.requestTimestamps =
+      LearnWorldsBaseAction.requestTimestamps.filter(t => t > windowStart);
+
+    if (LearnWorldsBaseAction.requestTimestamps.length < LearnWorldsBaseAction.RATE_LIMIT_MAX_REQUESTS) {
+      return;
+    }
+
+    const oldestInWindow = LearnWorldsBaseAction.requestTimestamps[0];
+    const waitMs = oldestInWindow + LearnWorldsBaseAction.RATE_LIMIT_WINDOW_MS - now + 50;
+    if (waitMs > 0) {
+      await this.waitForRetryDelay(waitMs);
+    }
+  }
+
+  /**
+   * Stamps the current time into the sliding window.
+   */
+  private recordRequest(): void {
+    LearnWorldsBaseAction.requestTimestamps.push(Date.now());
+  }
+
+  /**
+   * Wraps `fetch` with 429-aware retry + proactive rate-limit throttling.
+   * Non-429 responses are returned immediately without retry.
+   * If all retries are exhausted the final 429 response is returned (not thrown).
+   */
+  private async sendRequestWithRetry(url: string, init: RequestInit): Promise<Response> {
+    await this.waitForRateLimitCapacity();
+    this.recordRequest();
+    let response = await fetch(url, init);
+
+    for (let attempt = 0; attempt < LearnWorldsBaseAction.MAX_RETRIES; attempt++) {
+      if (response.status !== 429) {
+        return response;
+      }
+
+      const retryAfter = response.headers.get('Retry-After');
+      const delay = this.calculateRetryDelay(attempt, retryAfter);
+      console.warn(
+        `429 rate limited on ${url} — retry ${attempt + 1}/${LearnWorldsBaseAction.MAX_RETRIES} after ${delay}ms`,
+      );
+      await this.waitForRetryDelay(delay);
+
+      await this.waitForRateLimitCapacity();
+      this.recordRequest();
+      response = await fetch(url, init);
+    }
+
+    return response;
+  }
+
+  // ----------------------------------------------------------------
   // Batch concurrency helper
   // ----------------------------------------------------------------
 
@@ -416,6 +538,9 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
   ): Promise<TResult[]> {
     const results: TResult[] = [];
     for (let i = 0; i < items.length; i += batchSize) {
+      if (i > 0) {
+        await this.waitForRetryDelay(LearnWorldsBaseAction.INTER_BATCH_DELAY_MS);
+      }
       const batch = items.slice(i, i + batchSize);
       const batchResults = await Promise.all(batch.map(processFn));
       results.push(...batchResults);
@@ -492,6 +617,7 @@ export abstract class LearnWorldsBaseAction extends BaseLMSAction {
    * Re-throws errors for network failures, auth errors, rate limiting, etc.
    */
   public async FindUserByEmail(email: string, contextUser: UserInfo): Promise<LearnWorldsUser | null> {
+    this.validateEmail(email, 'Email');
     const qs = new URLSearchParams({ search: email, limit: '50' });
     const response = await this.makeLearnWorldsRequest<LearnWorldsPaginatedResponse<LWApiUser>>(
       `users?${qs}`, 'GET', undefined, contextUser,

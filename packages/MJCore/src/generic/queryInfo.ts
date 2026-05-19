@@ -84,12 +84,12 @@ export class QuerySQLInfo extends BaseInfo {
 
     /** Gets the parent query info */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /** Gets the SQL dialect info */
     get SQLDialectInfo(): SQLDialectInfo {
-        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));
+        return Metadata.Provider.SQLDialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
@@ -302,7 +302,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Fields(): QueryFieldInfo[] {
         if (this._fields === null) {
-            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
+            this._fields = Metadata.Provider.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._fields;
     }
@@ -312,7 +312,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryPermissionInfo[]} Array of permission settings for the query
      */
     public get Permissions(): QueryPermissionInfo[] {
-        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
+        return Metadata.Provider.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     private _parameters: QueryParameterInfo[] = null;
@@ -323,7 +323,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Parameters(): QueryParameterInfo[] {
         if (this._parameters === null) {
-            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
+            this._parameters = Metadata.Provider.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._parameters;
     }
@@ -335,7 +335,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Entities(): QueryEntityInfo[] {
         if (this._entities === null) {
-            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
+            this._entities = Metadata.Provider.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._entities;
     }
@@ -362,7 +362,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryCategoryInfo} The category this query belongs to, or undefined if not categorized
      */
     get CategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.CategoryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -447,7 +447,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      */
     public get Dependencies(): QueryDependencyInfo[] {
         if (this._dependencies === null) {
-            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));
+            this._dependencies = Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.QueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
         }
         return this._dependencies;
     }
@@ -458,7 +458,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * @returns {QueryDependencyInfo[]} Array of dependency records where this query is the referenced query
      */
     public get Dependents(): QueryDependencyInfo[] {
-        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));
+        return Metadata.Provider.QueryDependencies.filter(d => UUIDsEqual(d.DependsOnQueryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     private _parsedVariants: PlatformVariantsJSON | null | undefined = undefined;
@@ -499,7 +499,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
      * Uses the SQLDialect table to map platform keys to dialect IDs.
      */
     private resolveQuerySQLForPlatform(platform: DatabasePlatform): string | null {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (!provider || !provider.SQLDialects || !provider.QuerySQLs) return null;
 
         const dialect = provider.SQLDialects.find(d => d.PlatformKey === platform);
@@ -586,7 +586,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryCategoryInfo} The parent category, or undefined if this is a top-level category
      */
     get ParentCategoryInfo(): QueryCategoryInfo {
-        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));
+        return Metadata.Provider.QueryCategories.find(c => UUIDsEqual(c.ID, this.ParentID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -594,7 +594,7 @@ export class QueryCategoryInfo extends BaseInfo {
      * @returns {QueryInfo[]} Array of queries in this category
      */
     get Queries(): QueryInfo[] {
-        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));
+        return Metadata.Provider.Queries.filter(q => UUIDsEqual(q.CategoryID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
@@ -685,7 +685,11 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {EntityInfo} The source entity metadata, or undefined if not linked to an entity
      */
     get SourceEntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        if (p.EntityByID) {
+            return p.EntityByID(this.SourceEntityID);
+        }
+        return p.Entities.find(e => UUIDsEqual(e.ID, this.SourceEntityID));
     }
 
     /**
@@ -693,7 +697,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.ID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
@@ -733,7 +737,7 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
      * @returns {QueryInfo} The query metadata this permission controls
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 }
 
@@ -789,7 +793,7 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -797,7 +801,11 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
      * @returns {EntityInfo} The entity metadata
      */
     get EntityInfo(): EntityInfo {
-        return Metadata.Provider.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        if (p.EntityByID) {
+            return p.EntityByID(this.EntityID);
+        }
+        return p.Entities.find(e => UUIDsEqual(e.ID, this.EntityID));
     }
 }
 
@@ -875,7 +883,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
      * @returns {QueryInfo} The parent query metadata
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
     
     /**
@@ -957,14 +965,14 @@ export class QueryDependencyInfo extends BaseInfo {
      * Gets the query that contains the {{query:"..."}} reference.
      */
     get QueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.QueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
      * Gets the referenced (depended-on) query.
      */
     get DependsOnQueryInfo(): QueryInfo {
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));
+        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.DependsOnQueryID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**

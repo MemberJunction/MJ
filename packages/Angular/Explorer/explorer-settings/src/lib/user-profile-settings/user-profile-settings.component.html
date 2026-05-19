@@ -261,7 +261,7 @@
   <!-- Action Buttons -->
   <div class="action-buttons">
     <button
-      class="mj-btn mj-btn-primary"
+      mjButton variant="primary"
       (click)="save()"
       [disabled]="isSaving || selectedTab === 'provider'"
     >
@@ -274,7 +274,7 @@
       }
     </button>
     <button
-      class="mj-btn mj-btn-secondary"
+      mjButton
       (click)="cancel()"
       [disabled]="isSaving"
     >

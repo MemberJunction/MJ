@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/schema-engine",
+  "type": "module",
+  "version": "5.34.1",
+  "description": "MemberJunction Schema Engine - generic, platform-aware DDL generation for any MJ consumer (integrations, agents, developers)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/global": "5.34.1",
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/sql-dialect": "5.34.1",
+    "@memberjunction/queue": "5.34.1",
+    "@octokit/rest": "^21.1.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "tsc-alias": "^1.8.16",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC"
+}

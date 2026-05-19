@@ -10,7 +10,7 @@ Per the Feb 3, 2025 UX design meeting, the team decided:
 - **All dashboard content uses the unified MJ token system** — same colors everywhere, regardless of which app you're in.
 - **No per-app content theming** — avoids the "rainbow effect" and keeps the product feeling unified.
 
-This guide serves as the team reference for the Kendo removal / token migration work.
+This guide serves as the team reference for the design token system. Kendo UI has been fully removed — all components now use `@memberjunction/ng-ui-components` with `--mj-*` semantic tokens.
 
 ---
 
@@ -333,7 +333,7 @@ The following files contain hardcoded hex colors that need migration. They are o
 
 ### Actions Dashboard (Already Migrated)
 
-The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) are already using Kendo theme variables (`--kendo-color-primary`, etc.). These will be updated to MJ tokens when Kendo is removed, but are not an urgent migration target.
+The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) have been migrated to MJ semantic tokens. All Kendo theme variables (`--kendo-color-primary`, etc.) have been removed.
 
 ---
 
@@ -403,36 +403,24 @@ This file maps legacy variable names to MJ tokens for backward compatibility:
 
 | Legacy Variable | Maps To | Used By |
 |---|---|---|
-| `--navy` | `--mj-color-brand-900` | Kendo overrides, older components |
-| `--light-blue` | `--mj-color-accent-300` | Kendo overrides |
-| `--mj-blue` | `--mj-color-brand-500` | Kendo overrides |
-| `--white-color` | `--mj-color-neutral-0` | Kendo overrides |
-| `--gray-600` | `--mj-color-neutral-100` | Kendo overrides |
-| `--gray-700` | `--mj-color-neutral-200` | Kendo overrides |
-| `--gray-800` | `--mj-color-neutral-400` | Kendo overrides |
-| `--gray-900` | `--mj-color-neutral-700` | Kendo overrides |
-| `--med-gray` | `--mj-color-neutral-200` | Kendo overrides |
+| `--navy` | `--mj-color-brand-900` | Legacy components |
+| `--light-blue` | `--mj-color-accent-300` | Legacy components |
+| `--mj-blue` | `--mj-color-brand-500` | Legacy components |
+| `--white-color` | `--mj-color-neutral-0` | Legacy components |
+| `--gray-600` | `--mj-color-neutral-100` | Legacy components |
+| `--gray-700` | `--mj-color-neutral-200` | Legacy components |
+| `--gray-800` | `--mj-color-neutral-400` | Legacy components |
+| `--gray-900` | `--mj-color-neutral-700` | Legacy components |
+| `--med-gray` | `--mj-color-neutral-200` | Legacy components |
 | `--shadow` | `--mj-shadow-md` | Various |
 | `--border-radius` | `--mj-radius-lg` | Various |
 | `--transition-time` | `--mj-transition-base` | Various |
 
-Additionally, five Kendo-specific variables are mapped:
-
-| Kendo Variable | Maps To |
-|---|---|
-| `--kendo-color-primary` | `--mj-color-brand-500` |
-| `--kendo-color-secondary` | `--mj-color-brand-900` |
-| `--kendo-color-primary-hover` | `--mj-color-brand-600` |
-| `--kendo-color-secondary-hover` | `--mj-color-brand-800` |
-| `--kendo-color-primary-on-surface` | `--mj-color-brand-500` |
+The five Kendo-specific variables (`--kendo-color-primary`, etc.) have been removed along with `_kendo-theme-override.scss` as part of the Kendo removal in Phase 2.1.
 
 ### Migration Path
 
-The primary consumer of these legacy variables is:
-
-> **`packages/Angular/Explorer/explorer-app/src/lib/styles/_kendo-theme-override.scss`**
-
-This file has 300+ references to legacy and Kendo variables. As Kendo components are replaced, these references should be updated directly to use MJ semantic tokens (not the primitive colors the bridge maps to). For example:
+All Kendo overrides have been removed. New components should use MJ semantic tokens directly. For example:
 
 ```css
 /* BEFORE — legacy variable */
@@ -525,5 +513,5 @@ Before writing custom card/button/badge/panel CSS, check `_shared-patterns.scss`
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_tokens.scss` | All MJ design tokens (primitives + semantic, light + dark) |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_shared-patterns.scss` | 60+ reusable token-based class patterns |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_variables.scss` | Legacy variable bridge (deprecated) |
-| `packages/Angular/Explorer/explorer-app/src/lib/styles/_kendo-theme-override.scss` | Kendo component overrides (being removed) |
+| ~~`_kendo-theme-override.scss`~~ | **Deleted** — Kendo overrides removed in Phase 2.1 |
 | `guides/THEMING.md` | Full theming system documentation |

@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Saint Kitts & Nevis",
+      "Code": "KN",
+      "ISO3166_2": "KN-KN",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Saint Kitts & Nevis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KN"
+    },
+    "primaryKey": {
+      "ID": "7D4610FF-3839-4086-95B9-EBBA874CCD6B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.707Z",
+      "checksum": "d38e5f7ea264b346aba87e26f8b0d28d370747741d9314dcd31cef09c7fe57b7"
+    }
+  }
+]

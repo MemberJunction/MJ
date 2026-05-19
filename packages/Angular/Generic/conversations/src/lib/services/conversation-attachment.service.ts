@@ -1,8 +1,12 @@
 import { Injectable } from '@angular/core';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   MJConversationDetailAttachmentEntity,
-  MJAIModalityEntity
+  MJConversationDetailArtifactEntity,
+  MJArtifactVersionEntity,
+  MJArtifactEntity,
+  MJAIModalityEntity,
+  ArtifactMetadataEngine
 } from '@memberjunction/core-entities';
 import {
   ConversationUtility,
@@ -22,7 +26,20 @@ import { UUIDsEqual } from '@memberjunction/global';
   providedIn: 'root'
 })
 export class ConversationAttachmentService {
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {}
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   /**
    * Load all attachments for a list of conversation detail IDs.
@@ -39,7 +56,7 @@ export class ConversationAttachmentService {
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
       const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
@@ -59,6 +76,75 @@ export class ConversationAttachmentService {
 
           const messageAttachment = this.convertToMessageAttachment(attachment);
           result.get(detailId)!.push(messageAttachment);
+        }
+      }
+
+      // Also load input artifacts (ConversationDetailArtifact with Direction='Input')
+      const artifactLinksResult = await rv.RunView<MJConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID IN (${idList}) AND Direction = 'Input'`,
+        ResultType: 'entity_object'
+      }, contextUser);
+
+      if (artifactLinksResult.Success && artifactLinksResult.Results && artifactLinksResult.Results.length > 0) {
+        // Load the referenced artifact versions AND their parent artifacts in parallel
+        // so we can resolve the semantic artifact-type name for the tile badge.
+        const versionIds = artifactLinksResult.Results.map(l => `'${l.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${versionIds})`,
+          ResultType: 'entity_object'
+        }, contextUser);
+
+        if (versionsResult.Success && versionsResult.Results) {
+          const versionMap = new Map<string, MJArtifactVersionEntity>();
+          for (const v of versionsResult.Results) {
+            versionMap.set(v.ID, v);
+          }
+
+          // Bulk-load parent artifacts to get TypeID, then resolve type names via cached engine.
+          const artifactIds = Array.from(new Set(versionsResult.Results.map(v => v.ArtifactID).filter(Boolean)));
+          const artifactMap = new Map<string, MJArtifactEntity>();
+          if (artifactIds.length > 0) {
+            const artifactIdList = artifactIds.map(id => `'${id}'`).join(',');
+            const artifactsResult = await rv.RunView<MJArtifactEntity>({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID IN (${artifactIdList})`,
+              ResultType: 'entity_object'
+            }, contextUser);
+            if (artifactsResult.Success && artifactsResult.Results) {
+              for (const a of artifactsResult.Results) {
+                artifactMap.set(a.ID, a);
+              }
+            }
+            // Ensure the artifact-type cache is populated so FindArtifactTypeByID resolves.
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+          }
+
+          for (const link of artifactLinksResult.Results) {
+            const version = versionMap.get(link.ArtifactVersionID);
+            if (version) {
+              const parentArtifact = artifactMap.get(version.ArtifactID);
+              const artifactType = parentArtifact
+                ? ArtifactMetadataEngine.Instance.FindArtifactTypeByID(parentArtifact.TypeID)
+                : undefined;
+              const detailId = link.ConversationDetailID;
+              if (!result.has(detailId)) {
+                result.set(detailId, []);
+              }
+              result.get(detailId)!.push({
+                id: link.ID,
+                type: version.ContentMode === 'File' ? this.getMimeAttachmentType(version.MimeType || '') : 'Document',
+                mimeType: version.MimeType || 'text/plain',
+                fileName: version.FileName || version.Name || 'Artifact',
+                sizeBytes: version.ContentSizeBytes || 0,
+                source: 'artifact',
+                artifactId: version.ArtifactID || undefined,
+                artifactVersionId: version.ID,
+                artifactTypeName: artifactType?.Name || undefined
+              } as MessageAttachment);
+            }
+          }
         }
       }
     } catch (error) {
@@ -93,7 +179,7 @@ export class ConversationAttachmentService {
     contextUser?: UserInfo
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
-    const md = new Metadata();
+    const md = this.Provider;
 
     for (let i = 0; i < pendingAttachments.length; i++) {
       const pending = pendingAttachments[i];
@@ -118,7 +204,24 @@ export class ConversationAttachmentService {
         attachment.DisplayOrder = i;
         attachment.ThumbnailBase64 = pending.thumbnailUrl ?? null;
 
-        // Store inline data - extract base64 from data URL
+        // For artifact references, create a ConversationDetailArtifact with Direction='Input'
+        // instead of a ConversationDetailAttachment
+        if (pending.source === 'artifact' && pending.artifactVersionId) {
+          const artifactLink = await md.GetEntityObject<MJConversationDetailArtifactEntity>(
+            'MJ: Conversation Detail Artifacts',
+            contextUser
+          );
+          artifactLink.ConversationDetailID = conversationDetailId;
+          artifactLink.ArtifactVersionID = pending.artifactVersionId;
+          artifactLink.Direction = 'Input';
+          const artifactSaved = await artifactLink.Save();
+          if (!artifactSaved) {
+            console.error('Failed to save artifact input link:', artifactLink.LatestResult);
+          }
+          continue; // Skip creating a ConversationDetailAttachment for artifacts
+        }
+
+        // Store inline data for uploaded files
         if (pending.dataUrl) {
           const base64Data = this.extractBase64FromDataUrl(pending.dataUrl);
           attachment.InlineData = base64Data;
@@ -210,6 +313,16 @@ export class ConversationAttachmentService {
     if (name === 'video') return 'Video';
     if (name === 'audio') return 'Audio';
 
+    return 'Document';
+  }
+
+  /**
+   * Get the AttachmentType from a MIME type string
+   */
+  private getMimeAttachmentType(mimeType: string): 'Image' | 'Video' | 'Audio' | 'Document' {
+    if (mimeType.startsWith('image/')) return 'Image';
+    if (mimeType.startsWith('video/')) return 'Video';
+    if (mimeType.startsWith('audio/')) return 'Audio';
     return 'Document';
   }
 

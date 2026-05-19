@@ -1,11 +1,10 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, NgZone, HostListener, ViewChild } from '@angular/core';
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
-import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
-import { takeUntil, filter } from 'rxjs/operators';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
+import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntity } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
@@ -62,7 +61,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Status filter toggles — which statuses to show in the tree */
     public StatusFilters: Record<string, boolean> = {
         'Approved': true,
-        'Pending': true,
+        'Pending': false,
         'Rejected': false,
         'Expired': false
     };
@@ -73,11 +72,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Tracks expanded state by category ID — persisted across sessions */
     private expandedState = new Map<string, boolean>();
 
-    private metadata = new Metadata();
-    private destroy$ = new Subject<void>();
+    private metadata = this.ProviderToUse;
+    protected override destroy$ = new Subject<void>();
     private dataLoaded = false;
-    private skipUrlUpdate = true; // Skip URL updates during initialization
-    private lastNavigatedUrl = ''; // Track URL to avoid reacting to our own navigation
 
     // Bound event handlers for resize (need references for removeEventListener)
     private boundOnResizeMove = this.onResizeMove.bind(this);
@@ -96,6 +93,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     public DrawerDescription = '';
     public DrawerCategoryID = '';
     public DrawerStatus: 'Pending' | 'Approved' | 'Rejected' | 'Expired' = 'Pending';
+    public DrawerReusable = false;
     public IsSavingDrawer = false;
     public DrawerNameError = false;
     public DrawerSaveError: string | null = null;
@@ -106,10 +104,27 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     private initialDrawerSnapshot = '';
 
+    /** The category ID of the most recently interacted-with folder in the tree */
+    private activeCategoryID: string | null = null;
+
+    /** Tree dropdown config for Query Categories (branches only, no leaves) */
+    public CategoryBranchConfig: TreeBranchConfig = {
+        EntityName: 'MJ: Query Categories',
+        DisplayField: 'Name',
+        IDField: 'ID',
+        ParentIDField: 'ParentID',
+        DefaultIcon: 'fa-solid fa-folder',
+        DescriptionField: 'Description',
+        OrderBy: 'Name ASC'
+    };
+
+    /** The DrawerCategoryID as a CompositeKey for the tree dropdown binding */
+    public get DrawerCategoryIDAsKey(): CompositeKey | null {
+        return this.DrawerCategoryID ? CompositeKey.FromID(this.DrawerCategoryID) : null;
+    }
+
     constructor(
         private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService,
-        private router: Router,
         private elementRef: ElementRef,
         private zone: NgZone
     ) {
@@ -117,26 +132,15 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadSavedPanelWidth();
         this.loadSavedStatusFilters();
         this.loadSavedExpandedState();
         this.loadData();
-
-        // Subscribe to router NavigationEnd events for back/forward button support
-        this.router.events
-            .pipe(
-                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-                takeUntil(this.destroy$)
-            )
-            .subscribe(event => {
-                const currentUrl = event.urlAfterRedirects || event.url;
-                if (currentUrl !== this.lastNavigatedUrl && this.dataLoaded) {
-                    this.onExternalNavigation(currentUrl);
-                }
-            });
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
         // Ensure any pending debounced settings are flushed
@@ -177,21 +181,14 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.applyFilters();
             this.buildCategoryTree();
 
-            // Mark data as loaded and apply any query params for deep linking
+            // Mark data as loaded
             this.dataLoaded = true;
 
-            // Parse initial URL state
-            const urlState = this.parseUrlState();
-            if (urlState?.queryId) {
-                const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
-                if (query) {
-                    this.selectedQuery = query;
-                    this.expandCategoryForQuery(query);
-                }
+            // Apply initial query params for deep linking
+            const params = this.GetQueryParams();
+            if (params['queryId']) {
+                this.selectQueryById(params['queryId']);
             }
-
-            // Enable URL updates after initialization
-            this.skipUrlUpdate = false;
 
         } catch (error) {
             console.error('Error loading queries:', error);
@@ -415,6 +412,10 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
         node.expanded = !node.expanded;
         this.expandedState.set(node.category.ID, node.expanded);
+        // Track the most recently expanded folder as the active category context
+        if (node.expanded && node.category.ID !== '__uncategorized__') {
+            this.activeCategoryID = node.category.ID;
+        }
         this.saveExpandedState();
         this.cdr.markForCheck();
     }
@@ -450,7 +451,11 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             event.stopPropagation();
         }
         this.selectedQuery = query;
-        this.updateUrl();
+        if (query.CategoryID) {
+            this.activeCategoryID = query.CategoryID;
+        }
+        this.UpdateQueryParams({ queryId: query.ID });
+        this.NotifyDisplayNameChanged(query.Name || 'Query');
         this.cdr.markForCheck();
     }
 
@@ -584,15 +589,17 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         }
     }
 
-    /** Open the drawer in create mode. */
-    public OpenCreateDrawer(): void {
+    /** Open the drawer in create mode, optionally pre-selecting a category. */
+    public OpenCreateDrawer(categoryID?: string): void {
         this.DrawerMode = 'create';
         this.DrawerQueryId = null;
         this.DrawerName = '';
         this.DrawerSQL = '';
         this.DrawerDescription = '';
-        this.DrawerCategoryID = '';
+        // Default to the explicit category, or the most recently active category
+        this.DrawerCategoryID = categoryID ?? this.activeCategoryID ?? '';
         this.DrawerStatus = 'Pending';
+        this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
         this.captureDrawerSnapshot();
@@ -614,6 +621,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerDescription = query.Description ?? '';
         this.DrawerCategoryID = query.CategoryID ?? '';
         this.DrawerStatus = query.Status ?? 'Pending';
+        this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
         this.captureDrawerSnapshot();
@@ -647,6 +655,15 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerSQL = value;
     }
 
+    /** Update DrawerCategoryID when the tree dropdown selection changes. */
+    public OnDrawerCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+        if (value instanceof CompositeKey && value.HasValue) {
+            this.DrawerCategoryID = value.KeyValuePairs[0]?.Value ?? '';
+        } else {
+            this.DrawerCategoryID = '';
+        }
+    }
+
     private get currentDrawerSnapshot(): string {
         return JSON.stringify({
             name: this.DrawerName,
@@ -654,6 +671,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             description: this.DrawerDescription,
             categoryID: this.DrawerCategoryID,
             status: this.DrawerStatus,
+            reusable: this.DrawerReusable,
         });
     }
 
@@ -697,6 +715,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             entity.Description = this.DrawerDescription;
             entity.CategoryID = this.DrawerCategoryID || null;
             entity.Status = this.DrawerStatus;
+            entity.Reusable = this.DrawerReusable;
 
             const saved = await entity.Save();
             if (saved) {
@@ -707,7 +726,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 if (refreshed) {
                     this.selectedQuery = refreshed;
                     this.expandCategoryForQuery(refreshed);
-                    this.updateUrl();
+                    this.UpdateQueryParams({ queryId: refreshed.ID });
                 }
             } else {
                 this.DrawerSaveError = 'Save failed. Please check your inputs and try again.';
@@ -753,6 +772,8 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
 
     public refresh(): void {
         this.selectedQuery = null;
+        this.UpdateQueryParams({ queryId: null });
+        this.NotifyDisplayNameChanged('Queries');
         this.loadData(true);
     }
 
@@ -769,86 +790,37 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     // ========================================
 
     /**
-     * Parse URL query string for query state.
-     * Query params: queryId
+     * Select a query by ID, expanding the tree to show it.
+     * Clears selection if no matching query is found.
      */
-    private parseUrlState(): { queryId?: string } | null {
-        return this.parseUrlFromString(this.router.url);
-    }
-
-    /**
-     * Update URL query string to reflect current state.
-     * Uses NavigationService for proper URL management that respects app-scoped routes.
-     */
-    private updateUrl(): void {
-        if (this.skipUrlUpdate) return;
-
-        const queryParams: Record<string, string | null> = {};
-
-        // Add query ID if selected, null to remove
-        if (this.selectedQuery?.ID) {
-            queryParams['queryId'] = this.selectedQuery.ID;
-        } else {
-            queryParams['queryId'] = null;
-        }
-
-        // Use NavigationService to update query params properly
-        this.navigationService.UpdateActiveTabQueryParams(queryParams);
-    }
-
-    /**
-     * Handle external navigation (back/forward buttons).
-     * Parses the URL and applies the state without triggering a new navigation.
-     */
-    private onExternalNavigation(url: string): void {
-        // Check if this URL is for our component (contains our base path)
-        const currentPath = this.router.url.split('?')[0];
-        const newPath = url.split('?')[0];
-
-        // Only handle if we're still on the same base path (same component instance)
-        if (currentPath !== newPath) {
-            return; // Different route entirely, shell will handle it
-        }
-
-        // Parse the new URL state
-        const urlState = this.parseUrlFromString(url);
-
-        // Apply the state without triggering URL updates
-        this.skipUrlUpdate = true;
-        if (urlState?.queryId) {
-            const query = this.queries.find(q => UUIDsEqual(q.ID, urlState.queryId));
-            if (query) {
-                if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
-                    this.selectedQuery = query;
-                    this.expandCategoryForQuery(query);
-                }
+    private selectQueryById(queryId: string): void {
+        const query = this.queries.find(q => UUIDsEqual(q.ID, queryId));
+        if (query) {
+            if (!UUIDsEqual(this.selectedQuery?.ID, query.ID)) {
+                this.selectedQuery = query;
+                this.expandCategoryForQuery(query);
+                this.NotifyDisplayNameChanged(query.Name || 'Query');
             }
         } else {
-            // No queryId means clear selection
             this.selectedQuery = null;
+            this.NotifyDisplayNameChanged('Queries');
         }
-        this.skipUrlUpdate = false;
-
-        // Update the tracked URL
-        this.lastNavigatedUrl = url;
-
         this.cdr.markForCheck();
     }
 
     /**
-     * Parse URL state from a URL string (used for external navigation).
+     * React to back/forward navigation or deep-link activation.
+     * Called by the base class when the URL query params change externally.
      */
-    private parseUrlFromString(url: string): { queryId?: string } | null {
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return null;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const queryId = params.get('queryId');
-
-        if (!queryId) return null;
-
-        return { queryId };
+    protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+        if (!this.dataLoaded) return;
+        if (params['queryId']) {
+            this.selectQueryById(params['queryId']);
+        } else {
+            this.selectedQuery = null;
+            this.NotifyDisplayNameChanged('Queries');
+            this.cdr.markForCheck();
+        }
     }
 
     /**

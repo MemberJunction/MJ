@@ -251,7 +251,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
     /**
      * Dynamically load the config panel component
      */
-    private loadConfigPanel(): void {
+    private async loadConfigPanel(): Promise<void> {
         this.destroyConfigPanel();
 
         if (!this.selectedPartType?.ConfigDialogClass) {
@@ -272,7 +272,7 @@ export class AddPanelDialogComponent implements AfterViewInit, OnDestroy {
 
         try {
             // Use ClassFactory to create the config panel instance
-            const panelInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseConfigPanel>(
+            const panelInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseConfigPanel>(
                 BaseConfigPanel,
                 this.selectedPartType.ConfigDialogClass
             );

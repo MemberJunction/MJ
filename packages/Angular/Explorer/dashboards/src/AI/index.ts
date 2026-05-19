@@ -16,3 +16,33 @@ export * from './components/charts/performance-heatmap.component';
 
 // Agent Requests
 export * from './components/requests/agent-requests-resource.component';
+
+// Autotagging Pipeline
+export * from './components/autotagging/autotagging-pipeline-resource.component';
+
+// Tags — canonical Knowledge Hub dashboard for everything tag-related
+// (Library + Taxonomy moved from Classify, plus Suggestions + Health).
+// Re-exported explicitly because the file is a clone of the autotag pipeline
+// and shares cron-helper module-level exports we don't want to re-export twice.
+export { TagsResourceComponent, LoadTagsResource } from './components/tags/tags-resource.component';
+
+// Vector Management
+export * from './components/vectors/vector-management-resource.component';
+
+// Duplicate Detection
+export * from './components/duplicates/duplicate-detection-resource.component';
+
+// AI Analytics
+export * from './interfaces/analytics-preferences.interface';
+export * from './components/analytics/analytics-filter-bar.component';
+export * from './components/analytics/ai-analytics-resource.component';
+export * from './components/analytics/executive-summary/executive-summary.component';
+export * from './components/analytics/prompt-runs/prompt-run-analysis.component';
+export * from './components/analytics/agent-runs/agent-run-analysis.component';
+export * from './components/analytics/model-performance/model-performance.component';
+export * from './components/analytics/cost-budget/cost-budget.component';
+export * from './components/analytics/error-analysis/error-analysis.component';
+export * from './components/analytics/usage-patterns/usage-patterns.component';
+
+// Overview Hub
+export * from './components/overview/ai-overview-hub.component';

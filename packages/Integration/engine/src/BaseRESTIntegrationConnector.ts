@@ -161,6 +161,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         );
 
         return objects.map(obj => ({
+            ID: obj.ID,
             Name: obj.Name,
             Label: obj.DisplayName ?? obj.Name,
             Description: obj.Description ?? undefined,
@@ -434,6 +435,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         const headers = this.BuildHeaders(auth);
         const response = await this.MakeHTTPRequest(auth, requestURL, 'GET', headers);
 
+        if (response.Status === 403) {
+            console.warn(
+                `[${this.IntegrationName}] HTTP 403 Forbidden for "${obj.Name}" — ` +
+                `this object requires additional API permissions/scopes. ` +
+                `Skipping this object for this sync run. URL: ${requestURL}`
+            );
+            return { Records: [], HasMore: false };
+        }
+
         this.ValidateHTTPResponse(response, requestURL);
         const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
         return { Records: records, HasMore: false };
@@ -468,6 +478,15 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             const requestURL = this.AppendDefaultQueryParams(url, obj);
             const headers = this.BuildHeaders(auth);
             const response = await this.MakeHTTPRequest(auth, requestURL, 'GET', headers);
+
+            if (response.Status === 403) {
+                console.warn(
+                    `[${this.IntegrationName}] HTTP 403 Forbidden for "${obj.Name}" — ` +
+                    `this object requires additional API permissions/scopes. ` +
+                    `Skipping this object for this sync run. URL: ${requestURL}`
+                );
+                return { Records: allRecords, HasMore: false };
+            }
 
             this.ValidateHTTPResponse(response, requestURL);
             const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
@@ -687,7 +706,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             Description: f.Description ?? undefined,
             DataType: f.Type,
             IsRequired: f.IsRequired,
-            IsUniqueKey: f.IsUniqueKey,
+            IsUniqueKey: f.IsUniqueKey || f.IsPrimaryKey,
             IsReadOnly: f.IsReadOnly,
             IsForeignKey: f.RelatedIntegrationObjectID != null,
             ForeignKeyTarget: f.RelatedIntegrationObject ?? null,

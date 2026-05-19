@@ -6,9 +6,9 @@ import {
   OnInit
 } from '@angular/core';
 import {
-  ViewGridAggregate,
-  AggregateValueFormat,
-  AggregateConditionalStyle
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate,
+  MJUserViewEntity_IAggregateValueFormat as AggregateValueFormat,
+  MJUserViewEntity_IAggregateConditionalStyle as AggregateConditionalStyle
 } from '@memberjunction/core-entities';
 import { AggregateValue } from '@memberjunction/core';
 

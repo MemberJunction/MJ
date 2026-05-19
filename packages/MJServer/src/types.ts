@@ -1,4 +1,4 @@
-import { AggregateExpression, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { AggregateExpression, CompositeKey, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -90,6 +90,11 @@ export type RunViewGenericParams = {
   ignoreMaxRows?: boolean;
   maxRows?: number;
   startRow?: number;
+  /**
+   * Keyset (seek) pagination cursor — see {@link RunViewParams.AfterKey}.
+   * When set, the entity must have a single-column PK; throws AfterKeyNotSupportedError otherwise.
+   */
+  afterKey?: CompositeKey;
   excludeDataFromAllPriorViewRuns?: boolean;
   forceAuditLog?: boolean;
   auditLogDescription?: string;

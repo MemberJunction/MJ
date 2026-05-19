@@ -1,4 +1,5 @@
 import { EntityInfo } from '@memberjunction/core';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 
 /**
  * Filter configuration for the Data Explorer
@@ -52,7 +53,7 @@ export interface BreadcrumbItem {
 /**
  * View mode options for the Data Explorer
  */
-export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline';
+export type DataExplorerViewMode = 'grid' | 'cards' | 'timeline' | 'map';
 
 /**
  * Timeline orientation options
@@ -68,10 +69,14 @@ export interface DataExplorerDeepLink {
   entity?: string;
   /** Record ID or composite key string to select */
   record?: string;
-  /** Filter text to apply */
+  /** Filter text to apply (omitted when viewId is present — view carries its own filter) */
   filter?: string;
-  /** View mode to use */
+  /** View mode to use (grid/cards/timeline/map) */
   viewMode?: DataExplorerViewMode;
+  /** Saved view ID to load (uses view's filters/sort/grid state) */
+  viewId?: string;
+  /** Map render mode (point/choropleth/heatmap) — only relevant when viewMode is 'map' */
+  mapMode?: string;
 }
 
 /**
@@ -178,6 +183,12 @@ export interface DataExplorerState {
   timelineDateFieldName: string | null;
   timelineSortOrder: 'asc' | 'desc';
 
+  // Map configuration (persisted across page reloads)
+  mapRenderMode: MapRenderMode;
+  mapZoom: number | null;
+  mapCenterLat: number | null;
+  mapCenterLng: number | null;
+
   // Detail panel
   detailPanelOpen: boolean;
   detailPanelWidth: number;
@@ -267,7 +278,7 @@ export interface AutoCardTemplate {
  */
 export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   navigationPanelWidth: 280,
-  navigationPanelCollapsed: false,
+  navigationPanelCollapsed: true,
   selectedEntityName: null,
   selectedViewId: null,
   viewModified: false,
@@ -279,6 +290,10 @@ export const DEFAULT_EXPLORER_STATE: DataExplorerState = {
   timelineOrientation: 'vertical',
   timelineDateFieldName: null,
   timelineSortOrder: 'desc',
+  mapRenderMode: 'point',
+  mapZoom: null,
+  mapCenterLat: null,
+  mapCenterLng: null,
   detailPanelOpen: false,
   detailPanelWidth: 400,
   selectedRecordId: null,

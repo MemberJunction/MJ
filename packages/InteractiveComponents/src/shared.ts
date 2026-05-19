@@ -134,6 +134,177 @@ export interface SimpleEmbedTextResult {
     vectorDimensions: number;
 }
  
+// =========================================================================
+// Search — Semantic + Full-Text + Storage Search
+// =========================================================================
+
+/**
+ * Parameters for executing a unified search across vector, full-text, entity, and storage sources.
+ */
+export interface SimpleSearchParams {
+    /** The search query text */
+    Query: string;
+    /** Maximum number of results to return */
+    MaxResults?: number;
+    /** Minimum relevance score threshold (0-1) */
+    MinScore?: number;
+    /** Optional filters to narrow search results */
+    Filters?: SimpleSearchFilters;
+}
+
+/**
+ * Filters that can be applied to narrow search results.
+ */
+export interface SimpleSearchFilters {
+    /** Filter to specific entity names */
+    EntityNames?: string[];
+    /** Filter to specific source types: 'Vector', 'FullText', 'Entity', 'Storage' */
+    SourceTypes?: string[];
+    /** Filter to results matching specific tags */
+    Tags?: string[];
+}
+
+/**
+ * A single search result item returned from a unified search.
+ */
+export interface SimpleSearchResultItem {
+    /** Unique identifier for this search result */
+    ID: string;
+    /** The entity name this result belongs to */
+    EntityName: string;
+    /** The primary key of the matched record */
+    RecordID: string;
+    /** The source type that produced this result: 'Vector', 'FullText', 'Entity', 'Storage' */
+    SourceType: string;
+    /** Discriminator for UI rendering: 'entity-record', 'storage-file', or 'content-item' */
+    ResultType: string;
+    /** Display title for the result */
+    Title: string;
+    /** A snippet of matching text or content preview */
+    Snippet: string;
+    /** Overall relevance score (0-1) */
+    Score: number;
+    /** Breakdown of the score by source type */
+    ScoreBreakdown: { Vector?: number; FullText?: number; Entity?: number; Storage?: number };
+    /** Tags associated with this result */
+    Tags: string[];
+    /** Icon class for the entity */
+    EntityIcon?: string;
+    /** Human-readable name of the matched record */
+    RecordName?: string;
+    /** ISO timestamp of when the match was found */
+    MatchedAt: string;
+    /** Raw metadata JSON from the search provider */
+    RawMetadata?: string;
+    /** ID of the SearchProvider metadata record that produced this result */
+    ProviderId?: string;
+    /** Display label from the SearchProvider metadata */
+    ProviderLabel?: string;
+    /** Font Awesome icon class from the SearchProvider metadata */
+    ProviderIcon?: string;
+}
+
+/**
+ * Breakdown of search result counts by source type.
+ */
+export interface SimpleSearchSourceCounts {
+    /** Number of results from vector search */
+    Vector: number;
+    /** Number of results from full-text search */
+    FullText: number;
+    /** Number of results from entity search */
+    Entity: number;
+    /** Number of results from file storage search */
+    Storage: number;
+}
+
+/**
+ * Metadata about an active search provider.
+ */
+export interface SimpleSearchProviderInfo {
+    /** SearchProvider record ID */
+    ID: string;
+    /** Provider name */
+    Name: string;
+    /** UI display label */
+    DisplayName: string;
+    /** Font Awesome icon class */
+    Icon: string;
+    /** The SourceType key this provider uses */
+    SourceType: string;
+    /** Priority (lower = higher) */
+    Priority: number;
+}
+
+/**
+ * Response from a search execution.
+ */
+export interface SimpleSearchResult {
+    /** Whether the search executed successfully */
+    Success: boolean;
+    /** The search result items */
+    Results: SimpleSearchResultItem[];
+    /** Total count of matching results */
+    TotalCount: number;
+    /** Time in milliseconds the search took to execute */
+    ElapsedMs: number;
+    /** Breakdown of results by source type */
+    SourceCounts: SimpleSearchSourceCounts;
+    /** Metadata for all active search providers */
+    Providers: SimpleSearchProviderInfo[];
+    /** Error message if Success is false */
+    ErrorMessage?: string;
+}
+
+/**
+ * Provides unified search across vector, full-text, entity, and storage sources.
+ * This allows Interactive Components to invoke semantic and keyword search at runtime
+ * against the host MJ instance's search infrastructure.
+ */
+export interface SimpleSearch {
+    /**
+     * Execute a full knowledge search with optional filters and scoring controls.
+     * Returns ranked results from multiple source types (vector, full-text, entity, storage).
+     */
+    Search: (params: SimpleSearchParams) => Promise<SimpleSearchResult>;
+    /**
+     * Execute a lightweight preview search suitable for autocomplete / type-ahead.
+     * @param query - The search query text
+     * @param maxResults - Optional maximum number of results (server default: 8)
+     */
+    PreviewSearch: (query: string, maxResults?: number) => Promise<SimpleSearchResult>;
+}
+
+// =========================================================================
+// GeoData — Coordinate-based geographic resolution
+// =========================================================================
+
+/**
+ * Result of resolving a coordinate to geographic regions.
+ */
+export interface SimpleGeoPointResolution {
+    Country?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
+    State?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
+}
+
+/**
+ * Provides coordinate-based geographic resolution via point-in-polygon.
+ * Used by map components to resolve lat/lng to country/state for choropleth rendering.
+ */
+export interface SimpleGeoDataEngine {
+    /**
+     * Resolve a coordinate pair to its containing country and state/province.
+     * Callers should `await EnsureLoaded()` first if the resolver lazy-loads.
+     */
+    ResolvePointToLocation(lat: number, lng: number): SimpleGeoPointResolution;
+
+    /** Idempotent loader for reference geometries. Optional for backwards compatibility. */
+    EnsureLoaded?: () => Promise<void>;
+
+    /** True once the underlying engine has finished loading reference geometries. */
+    Loaded?: boolean;
+}
+
 /**
  * Provides a simple interface for InteractiveComponents to perform a wide variety of common AI operations
  * such as prompt execution with LLMs, calculating embeddings on strings, and using vector search for small to mediun

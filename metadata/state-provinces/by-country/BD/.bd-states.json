@@ -1,0 +1,548 @@
+[
+  {
+    "fields": {
+      "Name": "Bandarban anchal",
+      "Code": "2A",
+      "ISO3166_2": "BD-2A",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bandarban anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "B9E538E8-6A55-478C-BD67-9D4BAB89AFA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.746Z",
+      "checksum": "48ab8d7d886c156b24eca27d9990430b1420357d0bf088a8c2e828f178967cb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barisal anchal",
+      "Code": "1B",
+      "ISO3166_2": "BD-1B",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Barisal anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "A96C901E-85CE-4AF7-9974-29AB6FA60B37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.761Z",
+      "checksum": "b79735f50621f58a4597db7071a712c6b60c532e07a790649a4f0dceeaf530da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Barisal bibhag",
+      "Code": "1",
+      "ISO3166_2": "BD-1",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Barisal bibhag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "CA2C31B3-D698-4598-A356-CDB6BD514768"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.777Z",
+      "checksum": "c2ac350b6fcec91c6470b4c0b89a9a5a0b0fb15a95fd11709af61348382c0343"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bogra anchal",
+      "Code": "5C",
+      "ISO3166_2": "BD-5C",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bogra anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "F24206F2-82E9-4C84-8117-C24A440F90F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.794Z",
+      "checksum": "ef6d4c9a149ab18b898d832bdb2805f6e016f9cc795be69a3293ca53f0b4358b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chittagong anchal",
+      "Code": "2D",
+      "ISO3166_2": "BD-2D",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chittagong anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "18BF1819-986B-4B94-975E-D6E418FA27E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.811Z",
+      "checksum": "aaea91913e3773ee5fc9f6ee8b3550e00d9041eb16a38a3e637a1b9f1ea0d7ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chittagong bibhag",
+      "Code": "2",
+      "ISO3166_2": "BD-2",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chittagong bibhag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "B9627D4C-9E2A-422A-89AD-3F682217CBC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.825Z",
+      "checksum": "9ab9e9c07222174874a3832d8b3fc31c3d7b863cbd46cb21ba159c9709060b4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chittagong Hill Tracts",
+      "Code": "2E",
+      "ISO3166_2": "BD-2E",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Chittagong Hill Tracts"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "F38D041B-39F6-431A-B8FE-3126A9B6BC5F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.841Z",
+      "checksum": "7a766d27089dfd2eedc2e031cb6cd9fa9976d28b346a1f4327a83676b332f630"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Comilla anchal",
+      "Code": "2F",
+      "ISO3166_2": "BD-2F",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Comilla anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "0F385AFA-0E12-40CD-B58F-78D1E7ADB9F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.857Z",
+      "checksum": "83d94c3b3d5f69677847d39dfe23e4050c2bce618e679bfe32518d425a875771"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dhaka anchal",
+      "Code": "3G",
+      "ISO3166_2": "BD-3G",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dhaka anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "9081AF83-426D-4705-A58C-74378CE9809A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.873Z",
+      "checksum": "6c3330bcf7b9287a593d3a047ce72142b403aec093ee4be284bc19b80152b4bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dhaka bibhag",
+      "Code": "3",
+      "ISO3166_2": "BD-3",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dhaka bibhag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "CFA70EEE-3623-44A3-80EB-BAA13784BC98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.886Z",
+      "checksum": "695d0810f3efd2e71fdb9fcb63277295284f848b42cd83bac67c6b7701a6aa2d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dinajpur anchal",
+      "Code": "5H",
+      "ISO3166_2": "BD-5H",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dinajpur anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "0AE1EEDE-D236-443D-9E27-610595030552"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.945Z",
+      "checksum": "81ebc8c3356601c8c3fb361ab4443842a3bc9ea0c3a93e5aa27ffbe3fddd5d74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Faridpur anchal",
+      "Code": "3I",
+      "ISO3166_2": "BD-3I",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Faridpur anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "1D610344-009E-428E-8805-B2A87D424BBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.961Z",
+      "checksum": "dcf78238ab46532637fdf12a3d5aafed9961b1e6016d68d4b77a1f32150aee82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jamalpur anchal",
+      "Code": "3J",
+      "ISO3166_2": "BD-3J",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jamalpur anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "11B42DA5-28DF-428C-B5BC-9960E74B17FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.979Z",
+      "checksum": "93feb15268e7ad95cc1480edffd5fe6778b7e438d6393bb669c83378d2701fdc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jessore anchal",
+      "Code": "4K",
+      "ISO3166_2": "BD-4K",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jessore anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "0AB51E8C-9E7B-4974-B48A-EE7F23671CFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:30.996Z",
+      "checksum": "03edf87d69472a2f02f73b5005f743001765527fd00228bdfe29576a949d65f7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khulna anchal",
+      "Code": "4L",
+      "ISO3166_2": "BD-4L",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khulna anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "1FFA94D8-67B2-45F9-BE3C-ABA2093F1509"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.013Z",
+      "checksum": "13218be2ecce3589408345286a2377978f5867e69ce9c52f912a94d20ec4facf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khulna bibhag",
+      "Code": "4",
+      "ISO3166_2": "BD-4",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khulna bibhag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "231E62A6-1D0B-4386-97D5-D202BE956392"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.030Z",
+      "checksum": "b10a81e57360fc10c9202046fbdf80949c421284db8d42a4b1ce24c12c673876"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khustia anchal",
+      "Code": "4M",
+      "ISO3166_2": "BD-4M",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Khustia anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "E353188C-0729-4FCB-B46D-BDB82658F11D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.047Z",
+      "checksum": "32672d59fcd5f5b5052a5235bd6e408e2308a701dd8224c4dfe12370f1c028cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mymensingh anchal",
+      "Code": "3N",
+      "ISO3166_2": "BD-3N",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mymensingh anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "2608964E-AAE7-48BE-9718-313AD7998D3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.062Z",
+      "checksum": "70de0a1aec9f8ea18ff6768bf977739215312a62124f867acdf74ea0dae3daee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Noakhali anchal",
+      "Code": "2O",
+      "ISO3166_2": "BD-2O",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Noakhali anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "ADB566A5-47A6-4A95-AE6F-0FB024369337"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.078Z",
+      "checksum": "d3ec585711856a809f9feee7787ed3c5293c4affbdec77ef98fa0cfcebea365e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pabna anchal",
+      "Code": "5P",
+      "ISO3166_2": "BD-5P",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pabna anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "84051410-C2FF-4BA1-8FDF-0DD0981EDF68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.094Z",
+      "checksum": "91117526972509a8a40df25c7ce8248c56b643877ed6724c1c9f9f490f4fb08d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Patuakhali anchal",
+      "Code": "1Q",
+      "ISO3166_2": "BD-1Q",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Patuakhali anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "611C82BC-136A-4E82-84E0-747BB2351C6E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.152Z",
+      "checksum": "0dd631eeb4c84c00d23ad770e02b9b637c7a09a0a68e7827ac147240c354225b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rajshahi anchal",
+      "Code": "5R",
+      "ISO3166_2": "BD-5R",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rajshahi anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "AF32BD99-DA96-48A7-B05F-9B20A7739945"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.170Z",
+      "checksum": "27b2509e4f10a428c5680f619b92b30d4d7ffaf06b3dc7cf6a040e7cb8256399"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rajshahi bibhag",
+      "Code": "5",
+      "ISO3166_2": "BD-5",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rajshahi bibhag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "63CA6946-A8B5-43CC-A403-AE439BFF4AF2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.188Z",
+      "checksum": "f471aa0a73da55237dd29b639333cddc2b8322b6ff00df59a50fe6edb72ab16c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rangpur anchal",
+      "Code": "5S",
+      "ISO3166_2": "BD-5S",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Rangpur anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "A1F3192B-5FBA-4803-9D8C-4EC06168E12C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.206Z",
+      "checksum": "dab015c3e753c41e25166d3966b5586c212222143c575f2a2d039fdd2f361519"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sylhet anchal",
+      "Code": "2T",
+      "ISO3166_2": "BD-2T",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sylhet anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "590D4F02-9286-4873-BC0A-099770E5F9BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.223Z",
+      "checksum": "5947136dbec1f3786591a0de8d1d466a81f2628585beee1e96d74f00567495fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tangail anchal",
+      "Code": "3U",
+      "ISO3166_2": "BD-3U",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tangail anchal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BD"
+    },
+    "primaryKey": {
+      "ID": "12905AE6-9E12-4D09-B189-5A974553D3BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.238Z",
+      "checksum": "843c40c85e91161f25c0246f25d1dd035c0470a1eceb9e64c4bef5e53f68476a"
+    }
+  }
+]

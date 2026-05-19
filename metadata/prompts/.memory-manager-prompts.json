@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/memory-manager/extract-notes.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -53,8 +56,8 @@
       "ID": "38129618-88C2-470F-9A32-A631AFB4371E"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.250Z",
-      "checksum": "cb008a909b79bf3033d490e861b106ed8c1d06a16c98f76ebf2f45d20abffb19"
+      "lastModified": "2026-04-27T18:51:14.075Z",
+      "checksum": "b4c0e9cc33327912e40db124941a2aedbfe4981e699b42f4f66821d5048d4176"
     }
   },
   {
@@ -65,6 +68,9 @@
       "TemplateText": "@file:templates/memory-manager/extract-examples.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -111,8 +117,8 @@
       "ID": "14BFD6A6-57E0-4A5B-9AE0-579123DA495B"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.252Z",
-      "checksum": "75e6b30c4d4d5c32d5901df9df29898d5900353738f366e4902e679dc4a569b1"
+      "lastModified": "2026-04-20T23:53:41.953Z",
+      "checksum": "5a20c07093e3075207749ca31474df154c8ac24ed0a1f0f8f3465d344f55af58"
     }
   },
   {
@@ -123,6 +129,9 @@
       "TemplateText": "@file:templates/memory-manager/deduplicate-example.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -169,8 +178,8 @@
       "ID": "DF15BA1D-59E2-4FE1-9469-DE6290C14B62"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.253Z",
-      "checksum": "7d00eea4f74ff80105b863b1a2eac03fbbca9c33a89b2532422f3e841ce6a054"
+      "lastModified": "2026-04-20T23:53:41.976Z",
+      "checksum": "00681320a0f04cebe8f473cd089b2f5951f7e2a290593f15fec37457852ef3c0"
     }
   },
   {
@@ -181,6 +190,9 @@
       "TemplateText": "@file:templates/memory-manager/deduplicate-note.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -227,8 +239,8 @@
       "ID": "078FC278-15E6-4264-82C7-EE19EB79100E"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.254Z",
-      "checksum": "fd91ff201533c1ca0a89e07834901b9b6e09e50851f96f137215fe2ed1f4fe05"
+      "lastModified": "2026-04-27T18:51:13.565Z",
+      "checksum": "9f44a3474cffeb8f7e43dcffde27e055a5a9b2d00a30d68d421efe5978ec4370"
     }
   },
   {
@@ -239,6 +251,9 @@
       "TemplateText": "@file:templates/memory-manager/consolidate-notes.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -285,8 +300,69 @@
       "ID": "084F28BE-2F7E-406D-B80B-20B8EDB88950"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:57.254Z",
-      "checksum": "a4c90fa66cf3478ca13c9ca8c45055a7363caa6d2b08faf2e459f3d72aa8d666"
+      "lastModified": "2026-04-27T18:51:13.404Z",
+      "checksum": "0d63d48791857c4307eaf5a11b85653251bb376053dac62fdc07e9f9fa89cd47"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Memory Manager - Detect Contradictions",
+      "Description": "Evaluates a pair of semantically similar notes to determine whether they contain conflicting facts about the same topic. Extracts entity-attribute-value triples and returns a structured contradiction judgment used by the Memory Manager to resolve or flag conflicts.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/memory-manager/detect-contradictions.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "EFEBE70B-43F2-44A0-B4AF-0FE2DD684373"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T20:54:30.924Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "12649118-ACFE-4589-8B80-51817822F602"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T20:54:30.937Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "828BE35D-6122-4C95-9AE4-F8C25D62CF50"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T20:54:30.770Z",
+      "checksum": "bdfb2bb7b1b5a6cedaa2a0f44402e761225b1d2c9679dd1a98f83b8b2ba405ab"
     }
   }
 ]

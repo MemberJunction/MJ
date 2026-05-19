@@ -8,6 +8,7 @@ import type {
     ExternalRecord,
     DefaultFieldMapping,
     SourceSchemaInfo,
+    IntrospectSchemaOptions,
     CreateRecordContext,
     UpdateRecordContext,
     DeleteRecordContext,
@@ -31,6 +32,8 @@ export interface ConnectionTestResult {
 
 /** Schema description of an object/table in an external system */
 export interface ExternalObjectSchema {
+    /** IntegrationObject ID from the MJ database */
+    ID?: string;
     /** API name of the object (e.g., "Contact", "Account") */
     Name: string;
     /** Human-readable label */
@@ -63,6 +66,14 @@ export interface ExternalFieldSchema {
     IsForeignKey?: boolean;
     /** If FK, which source object it references */
     ForeignKeyTarget?: string | null;
+    /** Maximum length for string types — surfaced when the source system reports it. */
+    MaxLength?: number | null;
+    /** Precision for numeric types — surfaced when the source system reports it. */
+    Precision?: number | null;
+    /** Scale for numeric types — surfaced when the source system reports it. */
+    Scale?: number | null;
+    /** Default value expression — surfaced when the source system reports it. */
+    DefaultValue?: string | null;
 }
 
 /** Context passed to FetchChanges for incremental data retrieval */
@@ -83,6 +94,8 @@ export interface FetchContext {
     CurrentOffset?: number;
     /** Current cursor for cursor-based pagination. Passed by engine on subsequent calls. */
     CurrentCursor?: string;
+    /** Optional list of source field names to request from the external API. When provided, the connector should limit the returned fields to this set. */
+    RequestedSourceFields?: string[];
 }
 
 /** Result of a FetchChanges call, containing a batch of records */
@@ -394,52 +407,86 @@ export abstract class BaseIntegrationConnector {
      *
      * @param companyIntegration - The company integration entity with connection credentials
      * @param contextUser - User context for authorization
-     * @returns Full schema info for all source objects
+     * @param options - Optional filter to restrict introspection to a subset of objects
+     * @returns Full schema info for all (or the requested subset of) source objects
      */
     public async IntrospectSchema(
         companyIntegration: MJCompanyIntegrationEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: IntrospectSchemaOptions
     ): Promise<SourceSchemaInfo> {
-        const objects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const allObjects = await this.DiscoverObjects(companyIntegration, contextUser);
+        const wanted = options?.ObjectNames && options.ObjectNames.length > 0
+            ? new Set(options.ObjectNames)
+            : null;
+        const objects = wanted ? allObjects.filter(o => wanted.has(o.Name)) : allObjects;
         const result: SourceSchemaInfo = { Objects: [] };
 
-        for (const obj of objects) {
-            let fields: ExternalFieldSchema[];
-            try {
-                fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
-            } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
-                continue;
-            }
-            result.Objects.push({
-                ExternalName: obj.Name,
-                ExternalLabel: obj.Label,
-                Description: obj.Description,
-                Fields: fields.map(f => ({
-                    Name: f.Name,
-                    Label: f.Label,
-                    Description: f.Description,
-                    SourceType: f.DataType,
-                    IsRequired: f.IsRequired,
-                    MaxLength: null,
-                    Precision: null,
-                    Scale: null,
-                    DefaultValue: null,
-                    IsPrimaryKey: f.IsUniqueKey,
-                    IsForeignKey: f.IsForeignKey ?? false,
-                    ForeignKeyTarget: f.ForeignKeyTarget ?? null,
-                })),
-                PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
-                Relationships: fields
-                    .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
-                    .map(f => ({
-                        FieldName: f.Name,
-                        TargetObject: f.ForeignKeyTarget!,
-                        TargetField: 'ID',
+        // Parallel describe — sequential is brutal when a connector has
+        // hundreds of objects to introspect (Sage Intacct can run ~30 minutes
+        // sequentially on a large catalog). 8-way is a safe default that
+        // mirrors the Salesforce override and respects most APIs' rate limits.
+        const CONCURRENCY = 8;
+        const total = objects.length;
+        const startMs = Date.now();
+        let nextIdx = 0;
+        let succeeded = 0;
+        let skipped = 0;
+
+        const worker = async (): Promise<void> => {
+            while (true) {
+                const myIdx = nextIdx++;
+                if (myIdx >= total) return;
+                const obj = objects[myIdx];
+                let fields: ExternalFieldSchema[];
+                try {
+                    fields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    console.warn(`WARNING: Skipping object "${obj.Name}" — DiscoverFields failed: ${msg}`);
+                    skipped++;
+                    continue;
+                }
+                result.Objects.push({
+                    ExternalName: obj.Name,
+                    ExternalLabel: obj.Label,
+                    Description: obj.Description,
+                    Fields: fields.map(f => ({
+                        Name: f.Name,
+                        Label: f.Label,
+                        Description: f.Description,
+                        SourceType: f.DataType,
+                        IsRequired: f.IsRequired,
+                        MaxLength: f.MaxLength ?? null,
+                        Precision: f.Precision ?? null,
+                        Scale: f.Scale ?? null,
+                        DefaultValue: f.DefaultValue ?? null,
+                        IsPrimaryKey: f.IsUniqueKey,
+                        IsForeignKey: f.IsForeignKey ?? false,
+                        ForeignKeyTarget: f.ForeignKeyTarget ?? null,
                     })),
-            });
-        }
+                    PrimaryKeyFields: fields.filter(f => f.IsUniqueKey).map(f => f.Name),
+                    Relationships: fields
+                        .filter(f => (f.IsForeignKey ?? false) && f.ForeignKeyTarget)
+                        .map(f => ({
+                            FieldName: f.Name,
+                            TargetObject: f.ForeignKeyTarget!,
+                            TargetField: 'ID',
+                        })),
+                });
+                succeeded++;
+                const done = succeeded + skipped;
+                if (done % 100 === 0 || done === total) {
+                    const elapsedSec = ((Date.now() - startMs) / 1000).toFixed(1);
+                    console.log(
+                        `[IntrospectSchema] progress: ${done}/${total} (ok=${succeeded}, skipped=${skipped}) — ${elapsedSec}s elapsed`
+                    );
+                }
+            }
+        };
+
+        const workerCount = Math.min(CONCURRENCY, total);
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
         return result;
     }

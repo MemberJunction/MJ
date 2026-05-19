@@ -2,7 +2,7 @@ import { Anthropic } from "@anthropic-ai/sdk";
 import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 
 @RegisterClass(BaseLLM, 'AnthropicLLM')
@@ -49,6 +49,18 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * Anthropic supports PDF and image file inputs natively.
+     */
+    public override GetFileCapabilities(): FileCapabilities | null {
+        return {
+            SupportedMimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+            MaxFileSize: 32 * 1024 * 1024,
+            MaxFilesPerRequest: 5,
+            HasFileAPI: false,
+        };
+    }
+
+    /**
      * Format message content for Anthropic API with optional caching.
      * Supports both text and image content blocks.
      * @param content The message content (string or content blocks)
@@ -90,8 +102,14 @@ export class AnthropicLLM extends BaseLLM {
                     if (imageBlock) {
                         formattedBlocks.push(imageBlock);
                     }
+                } else if (block.type === 'file_url') {
+                    // Convert to Anthropic's document format
+                    const docBlock = this.formatDocumentBlock(block);
+                    if (docBlock) {
+                        formattedBlocks.push(docBlock);
+                    }
                 }
-                // Other types (video_url, audio_url, file_url) are not yet supported by Anthropic
+                // Note: video_url, audio_url not yet supported by Anthropic
             }
         } else {
             // Fallback for any other type
@@ -164,6 +182,77 @@ export class AnthropicLLM extends BaseLLM {
                 data: content
             }
         };
+    }
+
+    /**
+     * Format a file content block as an Anthropic document block.
+     * Anthropic supports documents in the format:
+     * { type: "document", source: { type: "base64", media_type: "application/pdf", data: "..." } }
+     *
+     * Supported MIME types: application/pdf, text/plain, text/csv, text/html,
+     * application/vnd.openxmlformats-officedocument.wordprocessingml.document (docx),
+     * application/vnd.openxmlformats-officedocument.spreadsheetml.sheet (xlsx)
+     */
+    private formatDocumentBlock(block: ChatMessageContentBlock): any | null {
+        const content = block.content;
+
+        // Determine the MIME type
+        const mimeType = block.mimeType || this.inferDocumentMimeType(block.fileName) || 'application/octet-stream';
+
+        // Check if it's a data URL (data:application/pdf;base64,...)
+        const parsed = parseBase64DataUrl(content);
+        if (parsed) {
+            return {
+                type: "document",
+                source: {
+                    type: "base64",
+                    media_type: parsed.mediaType,
+                    data: parsed.data
+                }
+            };
+        }
+
+        // Raw base64 with mimeType — but guard against placeholder text that
+        // isn't actually base64 (e.g. "[File: ... — accessible via artifact tools]")
+        if (mimeType && !content.startsWith('http') && /^[A-Za-z0-9+/\r\n]+=*$/.test(content.substring(0, 100))) {
+            return {
+                type: "document",
+                source: {
+                    type: "base64",
+                    media_type: mimeType,
+                    data: content
+                }
+            };
+        }
+
+        // URL-based documents
+        if (content.startsWith('http://') || content.startsWith('https://')) {
+            return {
+                type: "document",
+                source: {
+                    type: "url",
+                    url: content
+                }
+            };
+        }
+
+        console.warn(`Document content block has unknown format (mime: ${mimeType}), skipping`);
+        return null;
+    }
+
+    /** Infer MIME type from file extension when mimeType is not provided */
+    private inferDocumentMimeType(fileName?: string): string | null {
+        if (!fileName) return null;
+        const ext = fileName.split('.').pop()?.toLowerCase();
+        switch (ext) {
+            case 'pdf': return 'application/pdf';
+            case 'csv': return 'text/csv';
+            case 'txt': return 'text/plain';
+            case 'html': case 'htm': return 'text/html';
+            case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            default: return null;
+        }
     }
 
     /**
@@ -459,9 +548,14 @@ export class AnthropicLLM extends BaseLLM {
     }
     
     /**
-     * Reset streaming state for a new request
+     * Reset streaming state for a new request. Overrides the base-class hook so
+     * `BaseLLM.handleStreamingChatCompletion` calls this both at the start of a
+     * request AND in its `finally` block — the latter releases accumulated
+     * thinking buffers (which can grow to 100k+ chars on extended-thinking
+     * outputs) and prevents state from a prior request bleeding into the next.
+     * See audit R2-C5.
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,

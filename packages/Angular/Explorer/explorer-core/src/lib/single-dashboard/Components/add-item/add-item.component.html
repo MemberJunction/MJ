@@ -1,47 +1,52 @@
 <div class="k-overlay"></div>
-<kendo-window class="modal-body-wrap" [width]="500" [minHeight]="300" [minWidth]="400" [resizable]="true" (close)="closeDialog()"
-  title="Add Item to Dashboard">
+<mj-window [Visible]="true" [Width]="500" [MinHeight]="300" [MinWidth]="400" [Resizable]="true" (Close)="closeDialog()"
+  Title="Add Item to Dashboard">
   <div class="k-d-flex k-flex-col resource-wrap">
-    <kendo-label text="Resource Type">
+    <label>Resource Type
       <br />
-      <kendo-dropdownlist [data]="ResourceTypes" [textField]="'DisplayName'" [valueField]="'ID'"
-        (valueChange)="onResourceTypeChange($event)" [(ngModel)]="resourceType">
-      </kendo-dropdownlist>
-    </kendo-label>
+      <mj-dropdown [Data]="ResourceTypes" [TextField]="'DisplayName'" [ValueField]="'ID'"
+        (ValueChange)="onResourceTypeChange($any($event))" [(ngModel)]="resourceType">
+      </mj-dropdown>
+    </label>
     <div class="user-view-wrap">
       @switch (resourceType.Entity ) {
         @case ('MJ: User Views') {
-          <kendo-label text="Entity">
+          <label>Entity
             <br />
-            <kendo-dropdownlist [data]="Entities" [textField]="'Name'" [valueField]="'ID'"
-              (valueChange)="onEntityChange($event)" [(ngModel)]="selectedEntity">
-            </kendo-dropdownlist>
-          </kendo-label>
-          @if (selectedEntity && Views.length) {
-            <kendo-label text="Views">
+            <mj-dropdown [Data]="Entities" [TextField]="'Name'" [ValueField]="'ID'"
+              (ValueChange)="onEntityChange($any($event))" [(ngModel)]="selectedEntity">
+            </mj-dropdown>
+          </label>
+          @if (selectedEntity && !showloader) {
+            @if (Views.length) {
+              <label>View
+                <span class="optional-hint">(optional — leave blank for default)</span>
+                <br />
+                <mj-dropdown [Data]="Views" [TextField]="'Name'" [ValueField]="'ID'"
+                  (ValueChange)="onViewChange($any($event))" [(ngModel)]="selectedView">
+                </mj-dropdown>
+              </label>
+            }
+            <!-- View Mode Selector -->
+            <label>View Mode
               <br />
-              <kendo-dropdownlist [data]="Views" [textField]="'Name'" [valueField]="'ID'"
-                (valueChange)="onViewChange($event)" [(ngModel)]="selectedView">
-              </kendo-dropdownlist>
-            </kendo-label>
+              <mj-dropdown [Data]="viewModeOptions" [TextField]="'label'" [ValueField]="'value'"
+                [(ngModel)]="selectedViewMode">
+              </mj-dropdown>
+            </label>
           }
-          @if (selectedEntity && !Views.length && showloader) {
+          @if (selectedEntity && showloader) {
             <mj-loading [showText]="false" size="medium"></mj-loading>
-          }
-          @if (selectedEntity && !Views.length && !showloader) {
-            <div class="no-views-message">
-              No views available for this entity
-            </div>
           }
         }
         @case ('Reports') {
           @if (Reports.length) {
-            <kendo-label text="Reports">
+            <label>Reports
               <br />
-              <kendo-dropdownlist [data]="Reports" [textField]="'Name'" [valueField]="'ID'"
-                (valueChange)="onViewChange($event)" [(ngModel)]="selectedReport">
-              </kendo-dropdownlist>
-            </kendo-label>
+              <mj-dropdown [Data]="Reports" [TextField]="'Name'" [ValueField]="'ID'"
+                (ValueChange)="onViewChange($any($event))" [(ngModel)]="selectedReport">
+              </mj-dropdown>
+            </label>
           }
           @if (!Reports.length && showloader) {
             <mj-loading [showText]="false" size="medium"></mj-loading>
@@ -56,9 +61,9 @@
     </div>
   </div>
   <div class="k-actions k-actions-end popup-actions customBtn">
-    <button themeColor="info" kendoButton (click)="addItem()">
+    <button mjButton variant="primary" (click)="addItem()">
       <span class="fa-solid fa-check"></span> Add
     </button>
-    <button themeColor="info" kendoButton fillMode="outline" (click)="closeDialog()">Cancel</button>
+    <button mjButton variant="outline" (click)="closeDialog()">Cancel</button>
   </div>
-</kendo-window>
+</mj-window>

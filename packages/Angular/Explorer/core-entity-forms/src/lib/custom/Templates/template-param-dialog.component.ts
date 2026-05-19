@@ -4,6 +4,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ParameterPair {
     key: string;
     value: string;
@@ -26,7 +27,7 @@ export interface TemplateRunResult {
     templateUrl: './template-param-dialog.component.html',
     styleUrls: ['./template-param-dialog.component.css']
 })
-export class TemplateParamDialogComponent implements OnInit {
+export class TemplateParamDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() template: MJTemplateEntity | null = null;
     
     public _isVisible: boolean = false;
@@ -69,7 +70,7 @@ export class TemplateParamDialogComponent implements OnInit {
 
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
@@ -168,7 +169,7 @@ export class TemplateParamDialogComponent implements OnInit {
             });
 
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
             
             // Execute the RunTemplate GraphQL mutation
             const query = `
@@ -246,7 +247,7 @@ export class TemplateParamDialogComponent implements OnInit {
         if (newParams.length === 0) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             
             for (const param of newParams) {
                 const templateParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');

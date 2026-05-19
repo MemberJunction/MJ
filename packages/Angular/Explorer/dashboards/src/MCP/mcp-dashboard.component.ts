@@ -10,24 +10,27 @@
  */
 
 import { Component, OnDestroy, ChangeDetectorRef, AfterViewInit, OnInit } from '@angular/core';
-import { Router, NavigationEnd, ActivatedRoute } from '@angular/router';
 import { Subject, BehaviorSubject, Subscription } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { RunView, Metadata, CompositeKey } from '@memberjunction/core';
-import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
+import { BaseDashboard } from '@memberjunction/ng-shared';
 import {
     ResourceData,
     MJMCPServerEntity,
     MJMCPServerConnectionEntity,
     MJMCPServerToolEntity,
     MJMCPToolExecutionLogEntity,
+    MJMCPToolFavoriteEntity,
     MCPEngine,
     UserInfoEngine,
     MJOAuthAuthorizationStateEntity,
     MJOAuthClientRegistrationEntity,
-    MJOAuthTokenEntity
+    MJOAuthTokenEntity,
+    MJCredentialEntity
 } from '@memberjunction/core-entities';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { CredentialEngine } from '@memberjunction/credentials';
+import { RegisterClass , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { MCPToolsService, MCPSyncState, MCPSyncResult } from './services/mcp-tools.service';
 
 /**
@@ -84,6 +87,7 @@ export interface MCPConnectionData {
     Description: string | null;
     Status: string;
     CompanyID: string | null;
+    CredentialID: string | null;
     AutoSyncTools: boolean;
     LogToolCalls: boolean;
     LastConnectedAt: Date | null;
@@ -113,6 +117,20 @@ export interface MCPServerGroup {
     server: MCPServerData;
     tools: MCPToolData[];
     expanded: boolean;
+}
+
+/**
+ * MCP tool summary returned by paginated GraphQL query (Part 3.2 scale path).
+ * Omits heavy fields like InputSchema so thousands of rows stay light.
+ */
+export interface MCPToolSummary {
+    ID: string;
+    MCPServerID: string;
+    ToolName: string;
+    ToolTitle: string | null;
+    ToolDescription: string | null;
+    Status: string;
+    ServerName: string | null;
 }
 
 /**
@@ -155,6 +173,14 @@ export interface MCPDashboardFilters {
     connectionStatus: string;
     toolStatus: string;
     logStatus: string;
+    /** Part 3.3 — tools tab server filter (ID of selected server, or 'all') */
+    toolsServer?: string;
+    /** Part 3.3 — tools tab category filter (derived from snake_case ToolName prefix, or 'all') */
+    toolsCategory?: string;
+    /** Part 3.6 — restrict Tools tab to favorited tools only */
+    favoritesOnly?: boolean;
+    /** Part 3.3 — restrict Tools tab to tools that appear in recent execution logs */
+    recentOnly?: boolean;
 }
 
 /**
@@ -175,6 +201,15 @@ export interface MCPDashboardStats {
  * Active tab type
  */
 export type MCPDashboardTab = 'servers' | 'connections' | 'tools' | 'logs';
+
+/** Parameter config for the inline test tool form */
+interface TestParamConfig {
+    name: string;
+    type: string;
+    description: string;
+    required: boolean;
+    enumValues: unknown[];
+}
 
 /**
  * MCP Management Dashboard Component
@@ -203,7 +238,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private settingsPersistSubject = new Subject<void>();
     private settingsLoaded = false;
 
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
 
     public servers: MCPServerData[] = [];
     public connections: MCPConnectionData[] = [];
@@ -214,6 +249,31 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public filteredConnections: MCPConnectionData[] = [];
     public filteredTools: MCPToolData[] = [];
     public filteredLogs: MCPExecutionLogData[] = [];
+
+    /** Part 3.2 — paginated tools (scales to thousands). Appended as user scrolls. */
+    public pagedTools: MCPToolSummary[] = [];
+    public toolsTotalCount = 0;
+    public toolsLoading = false;
+    public toolsSkip = 0;
+    public toolsPageSize = 50;
+    public useScalablePagination = false;
+
+    /** Part 3.6 — favorited tool IDs for the current user. */
+    public favoritedToolIDs = new Set<string>();
+
+    /** Part 3.5 — Test dialog search string for tool combobox-style filter */
+    public TestToolSearch = '';
+
+    /** Part 3.3 — derived data for the filter panel */
+    public toolsAvailableServers: Array<{ ID: string; Name: string }> = [];
+    public toolsAvailableCategories: Array<{ category: string; count: number }> = [];
+
+    /** Part 3.4 — tool counts from GetMCPToolCounts (global, respects search) */
+    public toolsGlobalCount: number = 0;
+    /** Per-server tool count map used for "(N tools)" badge on group headers */
+    public toolCountByServer: Record<string, number> = {};
+    /** Part 3.4 — auto-collapse threshold for server groups */
+    public readonly AUTO_COLLAPSE_THRESHOLD = 100;
 
     public stats: MCPDashboardStats = {
         totalServers: 0,
@@ -245,10 +305,49 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public EditingServer: MCPServerData | null = null;
     public EditingConnection: MCPConnectionData | null = null;
 
-    // Test tool dialog pre-selection
+    // Inline server form state (avoids sub-component DI issues)
+    public ServerForm = {
+        Name: '', Description: '', TransportType: 'StreamableHTTP',
+        ServerURL: '', Command: '', DefaultAuthType: 'None', Status: 'Active',
+        RateLimitPerMinute: null as number | null,
+        RateLimitPerHour: null as number | null,
+        RequestTimeoutMs: 60000
+    };
+    public ServerFormSaving = false;
+    public ServerFormError: string | null = null;
+    public readonly TransportTypes = [
+        { value: 'StreamableHTTP', label: 'Streamable HTTP' },
+        { value: 'SSE', label: 'Server-Sent Events' },
+        { value: 'Stdio', label: 'Standard I/O' },
+        { value: 'WebSocket', label: 'WebSocket' }
+    ];
+    public readonly AuthTypes = [
+        { value: 'None', label: 'None' },
+        { value: 'Bearer', label: 'Bearer Token' },
+        { value: 'APIKey', label: 'API Key' },
+        { value: 'OAuth2', label: 'OAuth 2.0' },
+        { value: 'Basic', label: 'Basic Auth' }
+    ];
+
+    // Inline connection form state
+    public ConnectionForm = {
+        MCPServerID: '', Name: '', Description: '', BearerToken: '', Status: 'Active'
+    };
+    public ConnectionFormSaving = false;
+    public ConnectionFormError: string | null = null;
+
+    // Inline test tool form state
+    public TestStep: 'select' | 'configure' | 'results' = 'select';
     public TestToolServerID: string | null = null;
     public TestToolConnectionID: string | null = null;
     public TestToolID: string | null = null;
+    public TestFilteredConnections: MCPConnectionData[] = [];
+    public TestFilteredTools: MCPToolData[] = [];
+    public TestSelectedTool: MCPToolData | null = null;
+    public TestParamConfigs: TestParamConfig[] = [];
+    public TestParamValues: Record<string, string> = {};
+    public TestIsExecuting = false;
+    public TestExecutionResult: { Success: boolean; ErrorMessage?: string; Result?: string; DurationMs?: number } | null = null;
 
     // Log detail panel state
     public ShowLogDetailPanel = false;
@@ -269,10 +368,6 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public ServerGroups: MCPServerGroup[] = [];
     public ExpandedToolId: string | null = null;
 
-    // Navigation state
-    private skipUrlUpdate = true;
-    private lastNavigatedUrl: string = '';
-
     // Sync state
     public SyncStates = new Map<string, MCPSyncState>();
     private syncSubscriptions = new Map<string, Subscription>();
@@ -284,13 +379,10 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     // Lifecycle
     // ========================================
 
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private router: Router,
-        private route: ActivatedRoute,
-        private navigationService: NavigationService,
         private mcpToolsService: MCPToolsService
     ) {
         super();
@@ -313,46 +405,26 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Load saved user preferences first
         this.loadUserPreferences();
 
-        // Parse initial URL state
-        this.parseAndApplyUrlState();
+        // Read initial tab from query params (deep link / direct URL)
+        const initialParams = this.GetQueryParams();
+        if (initialParams['tab'] && this.isValidTab(initialParams['tab'])) {
+            this.ActiveTab = initialParams['tab'] as MCPDashboardTab;
+        }
 
         // Apply configuration params if passed via NavigationService
         this.applyConfigurationParams();
-
-        // Enable URL updates after initialization
-        this.skipUrlUpdate = false;
-
-        // Subscribe to router events to handle browser back/forward
-        this.subscribeToRouterEvents();
     }
 
     /**
-     * Parses the current URL query string and applies the tab state
+     * Called by the framework when the URL query params change due to
+     * browser back/forward navigation or a deep link.
      */
-    private parseAndApplyUrlState(): void {
-        const urlState = this.parseUrlState();
-        if (urlState?.tab) {
-            this.ActiveTab = urlState.tab;
+    protected override OnQueryParamsChanged(params: Record<string, string>, source: 'popstate' | 'deeplink'): void {
+        const tab = params['tab'] as MCPDashboardTab | undefined;
+        if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
+            this.ActiveTab = tab;
+            this.cdr.detectChanges();
         }
-        this.lastNavigatedUrl = this.router.url;
-    }
-
-    /**
-     * Parses URL query string to extract navigation state
-     */
-    private parseUrlState(): { tab?: MCPDashboardTab } | null {
-        const url = this.router.url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return null;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const tab = params.get('tab') as MCPDashboardTab | null;
-
-        if (tab && this.isValidTab(tab)) {
-            return { tab };
-        }
-        return null;
     }
 
     /**
@@ -370,23 +442,6 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (config?.tab && this.isValidTab(config.tab as string)) {
             this.ActiveTab = config.tab as MCPDashboardTab;
         }
-    }
-
-    /**
-     * Subscribes to router NavigationEnd events to handle browser back/forward
-     */
-    private subscribeToRouterEvents(): void {
-        this.router.events
-            .pipe(
-                filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-                takeUntil(this.destroy$)
-            )
-            .subscribe(event => {
-                const currentUrl = event.urlAfterRedirects || event.url;
-                if (currentUrl !== this.lastNavigatedUrl) {
-                    this.onExternalNavigation(currentUrl);
-                }
-            });
     }
 
     // ========================================
@@ -485,57 +540,25 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
     }
 
-    /**
-     * Handles external navigation (browser back/forward)
-     */
-    private onExternalNavigation(url: string): void {
-        this.lastNavigatedUrl = url;
-        const queryIndex = url.indexOf('?');
-        if (queryIndex === -1) return;
-
-        const queryString = url.substring(queryIndex + 1);
-        const params = new URLSearchParams(queryString);
-        const tab = params.get('tab') as MCPDashboardTab | null;
-
-        if (tab && this.isValidTab(tab) && tab !== this.ActiveTab) {
-            this.skipUrlUpdate = true;
-            this.ActiveTab = tab;
-            this.cdr.detectChanges();
-            this.skipUrlUpdate = false;
-        }
-    }
-
-    /**
-     * Updates URL query string to reflect current state using NavigationService
-     */
-    private updateUrl(): void {
-        if (this.skipUrlUpdate) return;
-
-        const queryParams: Record<string, string | null> = {
-            tab: this.ActiveTab
-        };
-
-        this.navigationService.UpdateActiveTabQueryParams(queryParams);
-        this.lastNavigatedUrl = this.router.url;
-    }
-
     // Required by BaseResourceComponent
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
         return 'MCP Management';
     }
 
-    // Required by BaseDashboard
+    async GetResourceIconClass(data: ResourceData): Promise<string> {
+        return 'fa-solid fa-plug-circle-bolt';
+    }
+
     protected initDashboard(): void {
         this.setupFilterSubscription();
     }
 
-    // Required by BaseDashboard
     protected loadData(): void {
         this.loadAllData();
     }
 
     ngAfterViewInit(): void {
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
     }
 
     override ngOnDestroy(): void {
@@ -559,13 +582,13 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public async loadAllData(forceRefresh: boolean = false): Promise<void> {
         this.IsLoading = true;
         this.ErrorMessage = null;
-        this.cdr.detectChanges();
+        this.cdr.markForCheck();
 
         try {
             // Initialize MCPEngine and load execution logs in parallel
             // forceRefresh=true is needed after sync operations since backend changes
             // won't trigger local BaseEntity events
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MJMCPToolExecutionLogEntity>({
@@ -606,6 +629,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 Description: c.Description,
                 Status: c.Status,
                 CompanyID: c.CompanyID,
+                CredentialID: c.CredentialID ?? null,
                 AutoSyncTools: c.AutoSyncTools,
                 LogToolCalls: c.LogToolCalls,
                 LastConnectedAt: c.LastConnectedAt,
@@ -638,8 +662,15 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Calculate stats
             this.calculateStats();
 
+            // Populate filter dropdowns from loaded data (needed even outside Scale mode)
+            this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+            this.toolsAvailableCategories = this.computeCategoriesFromTools();
+
             // Apply filters
             this.applyFilters();
+
+            // Load user's favorites (Part 3.6) — fire and forget
+            this.loadFavorites();
 
         } catch (error) {
             this.ErrorMessage = `Failed to load data: ${error instanceof Error ? error.message : String(error)}`;
@@ -777,14 +808,20 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             return matchesSearch && matchesStatus;
         });
 
-        // Filter tools
+        // Filter tools (legacy grouped view — now also honors Server / Category / Favorites-only filters)
         this.filteredTools = this.tools.filter(t => {
             const matchesSearch = !search ||
                 t.ToolName.toLowerCase().includes(search) ||
                 (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
                 (t.ToolDescription?.toLowerCase().includes(search) ?? false);
             const matchesStatus = filters.toolStatus === 'all' || t.Status === filters.toolStatus;
-            return matchesSearch && matchesStatus;
+            const matchesServer = !filters.toolsServer || filters.toolsServer === 'all' ||
+                UUIDsEqual(t.MCPServerID, filters.toolsServer);
+            const cat = t.ToolName.indexOf('_') > 0 ? t.ToolName.substring(0, t.ToolName.indexOf('_')) : t.ToolName;
+            const matchesCategory = !filters.toolsCategory || filters.toolsCategory === 'all' || cat === filters.toolsCategory;
+            const matchesFavorite = !filters.favoritesOnly || this.isFavorited(t.ID);
+            const matchesRecent = !filters.recentOnly || this.recentToolIDSet().has(NormalizeUUID(t.ID));
+            return matchesSearch && matchesStatus && matchesServer && matchesCategory && matchesFavorite && matchesRecent;
         });
 
         // Build server groups for the tools tab
@@ -848,6 +885,250 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     public onFiltersChange(filters: MCPDashboardFilters): void {
         this.filters$.next(filters);
         this.saveUserPreferencesDebounced();
+        // Part 3.3/3.4 — when Tools tab is active in scale mode, reload the paginated list + counts
+        if (this.ActiveTab === 'tools' && this.useScalablePagination) {
+            this.loadToolsPage(true);
+            this.loadToolCounts();
+        }
+    }
+
+    /** Inlined filter panel — single-field update helper */
+    public onFilterFieldChange(field: keyof MCPDashboardFilters, value: unknown): void {
+        const updated = { ...this.filters$.value, [field]: value };
+        this.onFiltersChange(updated as MCPDashboardFilters);
+    }
+
+    /** Count of non-default filter dimensions, used for "Filters (N)" badge */
+    public activeFilterCount(): number {
+        const f = this.filters$.value;
+        let n = 0;
+        if (f.searchTerm) n++;
+        if (f.serverStatus && f.serverStatus !== 'all') n++;
+        if (f.connectionStatus && f.connectionStatus !== 'all') n++;
+        if (f.toolStatus && f.toolStatus !== 'all') n++;
+        if (f.logStatus && f.logStatus !== 'all') n++;
+        if (f.toolsServer && f.toolsServer !== 'all') n++;
+        if (f.toolsCategory && f.toolsCategory !== 'all') n++;
+        if (f.favoritesOnly) n++;
+        if (f.recentOnly) n++;
+        return n;
+    }
+
+    /** Derive category list (snake_case prefix) + counts from the currently loaded tools. */
+    public computeCategoriesFromTools(): Array<{ category: string; count: number }> {
+        const counts = new Map<string, number>();
+        for (const t of this.tools) {
+            const idx = t.ToolName.indexOf('_');
+            const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
+            counts.set(cat, (counts.get(cat) ?? 0) + 1);
+        }
+        return Array.from(counts.entries())
+            .map(([category, count]) => ({ category, count }))
+            .sort((a, b) => a.category.localeCompare(b.category));
+    }
+
+    public resetAllFilters(): void {
+        this.onFiltersChange({
+            searchTerm: '',
+            serverStatus: 'all',
+            connectionStatus: 'all',
+            toolStatus: 'all',
+            logStatus: 'all',
+            toolsServer: 'all',
+            toolsCategory: 'all',
+            favoritesOnly: false,
+            recentOnly: false
+        });
+    }
+
+    /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
+    public resetPopoverFilters(): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus: 'all',
+            connectionStatus: 'all',
+            toolStatus: 'all',
+            logStatus: 'all',
+            toolsServer: 'all',
+            toolsCategory: 'all',
+            favoritesOnly: false,
+            recentOnly: false
+        });
+    }
+
+    /** Tools-tab view-mode options for the shared <mj-view-toggle>. */
+    public readonly toolsViewOptions = [
+        { key: 'card', icon: 'fa-solid fa-grip', title: 'Card View' },
+        { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+    ];
+
+    /** Tab config consumed by the centralized <mj-tab-nav>. */
+    public get mcpTabs(): import('@memberjunction/ng-ui-components').TabConfig[] {
+        return [
+            { key: 'servers',     label: 'Servers',     icon: 'fa-solid fa-server',     badge: this.servers.length },
+            { key: 'connections', label: 'Connections', icon: 'fa-solid fa-link',       badge: this.connections.length },
+            { key: 'tools',       label: 'Tools',       icon: 'fa-solid fa-wrench',     badge: this.tools.length },
+            { key: 'logs',        label: 'Logs',        icon: 'fa-solid fa-list-check', badge: this.executionLogs.length, badgeVariant: this.stats.failedExecutions > 0 ? 'error' : 'default' },
+        ];
+    }
+
+    /** Active filter count excluding searchTerm (surfaced separately via toolbar mj-page-search). */
+    public get ActiveFilterCount(): number {
+        const f = this.filters$.value;
+        let n = 0;
+        if (f.serverStatus && f.serverStatus !== 'all') n++;
+        if (f.connectionStatus && f.connectionStatus !== 'all') n++;
+        if (f.toolStatus && f.toolStatus !== 'all') n++;
+        if (f.logStatus && f.logStatus !== 'all') n++;
+        if (f.toolsServer && f.toolsServer !== 'all') n++;
+        if (f.toolsCategory && f.toolsCategory !== 'all') n++;
+        if (f.favoritesOnly) n++;
+        if (f.recentOnly) n++;
+        return n;
+    }
+
+    /** Values record consumed by the centralized <mj-filter-panel>, scoped to the current tab. */
+    public get mcpFilterValues(): Record<string, unknown> {
+        const f = this.filters$.value;
+        return {
+            serverStatus:     f.serverStatus,
+            connectionStatus: f.connectionStatus,
+            toolStatus:       f.toolStatus,
+            logStatus:        f.logStatus,
+            toolsServer:      f.toolsServer,
+            toolsCategory:    f.toolsCategory,
+            favoritesOnly:    f.favoritesOnly,
+            recentOnly:       f.recentOnly,
+        };
+    }
+
+    /** Field config built dynamically based on the active tab. */
+    public get mcpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
+        const fields: import('@memberjunction/ng-ui-components').FilterFieldConfig[] = [];
+
+        if (this.ActiveTab === 'tools') {
+            fields.push({
+                key: 'toolsServer',
+                type: 'dropdown',
+                label: 'Server',
+                icon: 'fa-solid fa-server',
+                filterable: this.toolsAvailableServers.length > 10,
+                options: [
+                    { text: 'All Servers', value: 'all' },
+                    ...this.toolsAvailableServers.map(s => ({ text: s.Name, value: s.ID })),
+                ],
+            });
+            fields.push({
+                key: 'toolsCategory',
+                type: 'dropdown',
+                label: 'Category',
+                icon: 'fa-solid fa-tags',
+                filterable: this.toolsAvailableCategories.length > 10,
+                options: [
+                    { text: 'All Categories', value: 'all' },
+                    ...this.toolsAvailableCategories.map(c => ({ text: `${c.category} (${c.count})`, value: c.category })),
+                ],
+            });
+        }
+
+        // Per-tab status filter
+        if (this.ActiveTab === 'servers') {
+            fields.push({
+                key: 'serverStatus',
+                type: 'dropdown',
+                label: 'Server Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Inactive',     value: 'Inactive' },
+                ],
+            });
+        } else if (this.ActiveTab === 'connections') {
+            fields.push({
+                key: 'connectionStatus',
+                type: 'dropdown',
+                label: 'Connection Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Inactive',     value: 'Inactive' },
+                    { text: 'Error',        value: 'Error' },
+                ],
+            });
+        } else if (this.ActiveTab === 'tools') {
+            fields.push({
+                key: 'toolStatus',
+                type: 'dropdown',
+                label: 'Tool Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Deprecated',   value: 'Deprecated' },
+                ],
+            });
+            // Boolean toggles as chips (active = true, all = false)
+            fields.push({
+                key: 'favoritesOnly',
+                type: 'chips',
+                label: 'Favorites',
+                icon: 'fa-solid fa-star',
+                chipOptions: [
+                    { text: 'All',             value: false },
+                    { text: 'Favorites only',  value: true, icon: 'fa-solid fa-star' },
+                ],
+            });
+            fields.push({
+                key: 'recentOnly',
+                type: 'chips',
+                label: 'Recency',
+                icon: 'fa-solid fa-clock-rotate-left',
+                chipOptions: [
+                    { text: 'All',                  value: false },
+                    { text: 'Recently used only',   value: true, icon: 'fa-solid fa-clock-rotate-left' },
+                ],
+            });
+        } else if (this.ActiveTab === 'logs') {
+            fields.push({
+                key: 'logStatus',
+                type: 'dropdown',
+                label: 'Log Status',
+                icon: 'fa-solid fa-circle-check',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Success',      value: 'Success' },
+                    { text: 'Error',        value: 'Error' },
+                    { text: 'Running',      value: 'Running' },
+                ],
+            });
+        }
+
+        return fields;
+    }
+
+    /** Receive updated values from <mj-filter-panel> and propagate to filters$. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus:     (values['serverStatus']     as string) ?? current.serverStatus,
+            connectionStatus: (values['connectionStatus'] as string) ?? current.connectionStatus,
+            toolStatus:       (values['toolStatus']       as string) ?? current.toolStatus,
+            logStatus:        (values['logStatus']        as string) ?? current.logStatus,
+            toolsServer:      (values['toolsServer']      as string) ?? current.toolsServer,
+            toolsCategory:    (values['toolsCategory']    as string) ?? current.toolsCategory,
+            favoritesOnly:    (values['favoritesOnly']    as boolean) ?? false,
+            recentOnly:       (values['recentOnly']       as boolean) ?? false,
+        });
+    }
+
+    /** Update searchTerm from the toolbar mj-page-search. */
+    public onSearchTermChange(value: string): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({ ...current, searchTerm: value ?? '' });
     }
 
     /**
@@ -904,7 +1185,24 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (this.ActiveTab === tab) return;
 
         this.ActiveTab = tab;
-        this.updateUrl();
+
+        // Clear filters that belong to OTHER tabs — they're not applicable here
+        // and would otherwise stay stuck in state (counted in the badge, hidden from
+        // the popover form). searchTerm is universal and preserved.
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus:     'all',
+            connectionStatus: 'all',
+            toolStatus:       'all',
+            logStatus:        'all',
+            toolsServer:      'all',
+            toolsCategory:    'all',
+            favoritesOnly:    false,
+            recentOnly:       false,
+        });
+
+        this.UpdateQueryParams({ tab: this.ActiveTab });
         this.cdr.detectChanges();
     }
 
@@ -914,12 +1212,27 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public createServer(): void {
         this.EditingServer = null;
+        this.ServerForm = { Name: '', Description: '', TransportType: 'StreamableHTTP', ServerURL: '', Command: '', DefaultAuthType: 'None', Status: 'Active', RateLimitPerMinute: null, RateLimitPerHour: null, RequestTimeoutMs: 60000 };
+        this.ServerFormError = null;
         this.ShowServerDialog = true;
         this.cdr.detectChanges();
     }
 
     public editServer(server: MCPServerData): void {
         this.EditingServer = server;
+        this.ServerForm = {
+            Name: server.Name,
+            Description: server.Description ?? '',
+            TransportType: server.TransportType,
+            ServerURL: server.ServerURL ?? '',
+            Command: server.Command ?? '',
+            DefaultAuthType: server.DefaultAuthType,
+            Status: server.Status,
+            RateLimitPerMinute: server.RateLimitPerMinute,
+            RateLimitPerHour: server.RateLimitPerHour,
+            RequestTimeoutMs: 60000
+        };
+        this.ServerFormError = null;
         this.ShowServerDialog = true;
         this.cdr.detectChanges();
     }
@@ -973,7 +1286,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
             const loaded = await entity.Load(server.ID);
             if (!loaded) {
@@ -1001,7 +1314,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Internal helper to delete a tool by ID without confirmation
      */
     private async deleteToolInternal(toolId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJMCPServerToolEntity>('MJ: MCP Server Tools');
         const loaded = await entity.Load(toolId);
         if (!loaded) {
@@ -1024,11 +1337,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     private async deleteConnectionInternal(connectionId: string): Promise<void> {
         console.log(`[MCPDashboard] deleteConnectionInternal called for connectionId: ${connectionId}`);
-        const rv = new RunView();
-        const md = new Metadata();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const md = this.ProviderToUse;
+        const tg = await md.CreateTransactionGroup();
 
-        // Delete execution logs for this connection
-        console.log('[MCPDashboard] Deleting execution logs...');
+        // Queue deletes for execution logs
         const logsResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: MCP Tool Execution Logs',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1036,27 +1349,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (logsResult.Success && logsResult.Results) {
-            console.log(`[MCPDashboard] Found ${logsResult.Results.length} execution logs to delete`);
+            console.log(`[MCPDashboard] Queueing ${logsResult.Results.length} execution logs for delete`);
             for (const log of logsResult.Results) {
-                console.log(`[MCPDashboard] Loading execution log ${log.ID}...`);
                 const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>('MJ: MCP Tool Execution Logs');
-                const loaded = await logEntity.Load(log.ID);
-                console.log(`[MCPDashboard] Load result for execution log ${log.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await logEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete execution log ${log.ID}:`, logEntity.LatestResult);
-                        throw new Error(`Failed to delete execution log: ${logEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted execution log ${log.ID}`);
+                if (await logEntity.Load(log.ID)) {
+                    logEntity.TransactionGroup = tg;
+                    await logEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load execution log ${log.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Authorization States for this connection
-        console.log('[MCPDashboard] Deleting OAuth Authorization States...');
+        // Queue deletes for OAuth Authorization States
         const authStatesResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Authorization States',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1064,27 +1369,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (authStatesResult.Success && authStatesResult.Results) {
-            console.log(`[MCPDashboard] Found ${authStatesResult.Results.length} OAuth Authorization States to delete`);
+            console.log(`[MCPDashboard] Queueing ${authStatesResult.Results.length} OAuth Authorization States for delete`);
             for (const state of authStatesResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Authorization State ${state.ID}...`);
                 const stateEntity = await md.GetEntityObject<MJOAuthAuthorizationStateEntity>('MJ: O Auth Authorization States');
-                const loaded = await stateEntity.Load(state.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Authorization State ${state.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await stateEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Authorization State ${state.ID}:`, stateEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Authorization State: ${stateEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Authorization State ${state.ID}`);
+                if (await stateEntity.Load(state.ID)) {
+                    stateEntity.TransactionGroup = tg;
+                    await stateEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Authorization State ${state.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Client Registrations for this connection
-        console.log('[MCPDashboard] Deleting OAuth Client Registrations...');
+        // Queue deletes for OAuth Client Registrations
         const clientRegsResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Client Registrations',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1092,27 +1389,19 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (clientRegsResult.Success && clientRegsResult.Results) {
-            console.log(`[MCPDashboard] Found ${clientRegsResult.Results.length} OAuth Client Registrations to delete`);
+            console.log(`[MCPDashboard] Queueing ${clientRegsResult.Results.length} OAuth Client Registrations for delete`);
             for (const reg of clientRegsResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Client Registration ${reg.ID}...`);
                 const regEntity = await md.GetEntityObject<MJOAuthClientRegistrationEntity>('MJ: O Auth Client Registrations');
-                const loaded = await regEntity.Load(reg.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Client Registration ${reg.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await regEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Client Registration ${reg.ID}:`, regEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Client Registration: ${regEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Client Registration ${reg.ID}`);
+                if (await regEntity.Load(reg.ID)) {
+                    regEntity.TransactionGroup = tg;
+                    await regEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Client Registration ${reg.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Delete OAuth Tokens for this connection
-        console.log('[MCPDashboard] Deleting OAuth Tokens...');
+        // Queue deletes for OAuth Tokens
         const tokensResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: O Auth Tokens',
             ExtraFilter: `MCPServerConnectionID='${connectionId}'`,
@@ -1120,37 +1409,33 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             ResultType: 'simple'
         });
         if (tokensResult.Success && tokensResult.Results) {
-            console.log(`[MCPDashboard] Found ${tokensResult.Results.length} OAuth Tokens to delete`);
+            console.log(`[MCPDashboard] Queueing ${tokensResult.Results.length} OAuth Tokens for delete`);
             for (const token of tokensResult.Results) {
-                console.log(`[MCPDashboard] Loading OAuth Token ${token.ID}...`);
                 const tokenEntity = await md.GetEntityObject<MJOAuthTokenEntity>('MJ: O Auth Tokens');
-                const loaded = await tokenEntity.Load(token.ID);
-                console.log(`[MCPDashboard] Load result for OAuth Token ${token.ID}: ${loaded}`);
-                if (loaded) {
-                    const deleted = await tokenEntity.Delete();
-                    if (!deleted) {
-                        console.error(`[MCPDashboard] Failed to delete OAuth Token ${token.ID}:`, tokenEntity.LatestResult);
-                        throw new Error(`Failed to delete OAuth Token: ${tokenEntity.LatestResult?.Message || 'Unknown error'}`);
-                    }
-                    console.log(`[MCPDashboard] Deleted OAuth Token ${token.ID}`);
+                if (await tokenEntity.Load(token.ID)) {
+                    tokenEntity.TransactionGroup = tg;
+                    await tokenEntity.Delete();
                 } else {
                     console.warn(`[MCPDashboard] Could not load OAuth Token ${token.ID} - may have been already deleted`);
                 }
             }
         }
 
-        // Now delete the connection itself
-        console.log('[MCPDashboard] All related records deleted. Now deleting the connection itself...');
+        // Queue the connection delete last
         const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
         const loaded = await entity.Load(connectionId);
         if (!loaded) {
             throw new Error(`Connection not found`);
         }
-        const deleted = await entity.Delete();
-        if (!deleted) {
+        entity.TransactionGroup = tg;
+        await entity.Delete();
+
+        // Submit everything atomically — if anything fails, the whole cascade rolls back
+        if (!await tg.Submit()) {
             const errorMsg = entity.LatestResult?.Message || entity.LatestResult?.CompleteMessage || 'Delete failed';
-            throw new Error(errorMsg);
+            throw new Error(`Failed to delete connection and related records: ${errorMsg}`);
         }
+        console.log('[MCPDashboard] Connection and all related records deleted atomically');
     }
 
     public async onServerDialogClose(result: { saved: boolean }): Promise<void> {
@@ -1162,14 +1447,133 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.cdr.detectChanges();
     }
 
+    public cancelServerForm(): void {
+        this.ShowServerDialog = false;
+        this.ServerFormError = null;
+        this.cdr.detectChanges();
+    }
+
+    public async saveServerForm(): Promise<void> {
+        if (!this.ServerForm.Name?.trim()) {
+            this.ServerFormError = 'Name is required';
+            this.cdr.detectChanges();
+            return;
+        }
+        if ((this.ServerForm.TransportType === 'StreamableHTTP' || this.ServerForm.TransportType === 'SSE' || this.ServerForm.TransportType === 'WebSocket') && !this.ServerForm.ServerURL?.trim()) {
+            this.ServerFormError = 'Server URL is required for this transport type';
+            this.cdr.detectChanges();
+            return;
+        }
+        this.ServerFormSaving = true;
+        this.ServerFormError = null;
+        this.cdr.detectChanges();
+        try {
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
+            if (this.EditingServer?.ID) {
+                await entity.Load(this.EditingServer.ID);
+            } else {
+                entity.NewRecord();
+            }
+            entity.Name = this.ServerForm.Name.trim();
+            entity.Description = this.ServerForm.Description?.trim() || null;
+            entity.TransportType = this.ServerForm.TransportType as MJMCPServerEntity['TransportType'];
+            entity.ServerURL = this.ServerForm.ServerURL?.trim() || null;
+            entity.Command = this.ServerForm.Command?.trim() || null;
+            entity.DefaultAuthType = this.ServerForm.DefaultAuthType as MJMCPServerEntity['DefaultAuthType'];
+            entity.Status = this.ServerForm.Status as MJMCPServerEntity['Status'];
+            entity.RateLimitPerMinute = this.ServerForm.RateLimitPerMinute ?? null;
+            entity.RateLimitPerHour = this.ServerForm.RateLimitPerHour ?? null;
+            entity.RequestTimeoutMs = this.ServerForm.RequestTimeoutMs ?? 60000;
+            const saved = await entity.Save();
+            if (!saved) {
+                throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
+            }
+            this.ShowServerDialog = false;
+            await this.loadAllData();
+        } catch (err) {
+            this.ServerFormError = err instanceof Error ? err.message : String(err);
+        } finally {
+            this.ServerFormSaving = false;
+            this.cdr.detectChanges();
+        }
+    }
+
     // ========================================
     // Connection Operations
     // ========================================
 
     public createConnection(): void {
         this.EditingConnection = null;
+        this.ConnectionForm = { MCPServerID: this.servers[0]?.ID ?? '', Name: '', Description: '', BearerToken: '', Status: 'Active' };
+        this.ConnectionFormError = null;
         this.ShowConnectionDialog = true;
         this.cdr.detectChanges();
+    }
+
+    public cancelConnectionForm(): void {
+        this.ShowConnectionDialog = false;
+        this.ConnectionFormError = null;
+        this.cdr.detectChanges();
+    }
+
+    public async saveConnectionForm(): Promise<void> {
+        if (!this.ConnectionForm.MCPServerID) {
+            this.ConnectionFormError = 'Please select a server';
+            this.cdr.detectChanges();
+            return;
+        }
+        if (!this.ConnectionForm.Name?.trim()) {
+            this.ConnectionFormError = 'Name is required';
+            this.cdr.detectChanges();
+            return;
+        }
+        this.ConnectionFormSaving = true;
+        this.ConnectionFormError = null;
+        this.cdr.detectChanges();
+        try {
+            const md = this.ProviderToUse;
+            let credentialID: string | null = null;
+
+            // If a bearer token was provided, create a Credential record for it
+            if (this.ConnectionForm.BearerToken?.trim()) {
+                await CredentialEngine.Instance.Config();
+                const credType = CredentialEngine.Instance.CredentialTypes
+                    .find(t => /bearer|api/i.test(t.Name));
+                const credTypeID = credType?.ID ?? null;
+                if (credTypeID) {
+                    const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials');
+                    cred.NewRecord();
+                    cred.CredentialTypeID = credTypeID;
+                    cred.Name = `${this.ConnectionForm.Name.trim()} Token`;
+                    cred.Values = JSON.stringify({ apiKey: this.ConnectionForm.BearerToken.trim() });
+                    const credSaved = await cred.Save();
+                    if (!credSaved) throw new Error(cred.LatestResult?.CompleteMessage ?? 'Failed to save credential');
+                    credentialID = cred.ID;
+                }
+            }
+
+            const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
+            entity.NewRecord();
+            entity.MCPServerID = this.ConnectionForm.MCPServerID;
+            entity.Name = this.ConnectionForm.Name.trim();
+            entity.Description = this.ConnectionForm.Description?.trim() || null;
+            entity.Status = this.ConnectionForm.Status as MJMCPServerConnectionEntity['Status'];
+            entity.CredentialID = credentialID;
+            entity.AutoSyncTools = true;
+            entity.LogToolCalls = true;
+            entity.LogInputParameters = true;
+            entity.LogOutputContent = true;
+            const saved = await entity.Save();
+            if (!saved) throw new Error(entity.LatestResult?.CompleteMessage ?? 'Save failed');
+            this.ShowConnectionDialog = false;
+            await this.loadAllData();
+        } catch (err) {
+            this.ConnectionFormError = err instanceof Error ? err.message : String(err);
+        } finally {
+            this.ConnectionFormSaving = false;
+            this.cdr.detectChanges();
+        }
     }
 
     public editConnection(connection: MCPConnectionData): void {
@@ -1293,10 +1697,12 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
                 // Sort tools within group
                 this.sortTools(tools);
 
+                // Part 3.4 — auto-collapse groups exceeding the threshold
+                const startExpanded = tools.length <= this.AUTO_COLLAPSE_THRESHOLD;
                 this.ServerGroups.push({
                     server,
                     tools,
-                    expanded: true // Start expanded
+                    expanded: startExpanded
                 });
             }
         }
@@ -1364,6 +1770,9 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             this.TestToolConnectionID = null;
         }
 
+        this.TestStep = 'select';
+        this.TestExecutionResult = null;
+        this.testUpdateFilteredLists();
         this.ShowTestToolDialog = true;
         this.cdr.detectChanges();
     }
@@ -1372,11 +1781,458 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Close Test Tool dialog
      */
     public onTestToolDialogClose(): void {
-        this.ShowTestToolDialog = false;
-        this.TestToolServerID = null;
+        this.testCloseDialog();
+    }
+
+    // ========================================
+    // Inline Test Tool Methods
+    // ========================================
+
+    private testUpdateFilteredLists(): void {
+        if (this.TestToolServerID) {
+            this.TestFilteredConnections = this.connections.filter(
+                c => UUIDsEqual(c.MCPServerID, this.TestToolServerID!) && c.Status === 'Active'
+            );
+            this.TestFilteredTools = this.tools.filter(
+                t => UUIDsEqual(t.MCPServerID, this.TestToolServerID!) && t.Status === 'Active'
+            );
+            if (this.TestFilteredConnections.length > 0 && !this.TestToolConnectionID) {
+                this.TestToolConnectionID = this.TestFilteredConnections[0].ID;
+            }
+        } else {
+            this.TestFilteredConnections = [];
+            this.TestFilteredTools = [];
+        }
+    }
+
+    public onTestServerChange(value: string): void {
+        this.TestToolServerID = value || null;
         this.TestToolConnectionID = null;
         this.TestToolID = null;
+        this.testUpdateFilteredLists();
         this.cdr.detectChanges();
+    }
+
+    public onTestConnectionChange(value: string): void {
+        this.TestToolConnectionID = value || null;
+    }
+
+    public onTestToolSelectChange(value: string): void {
+        this.TestToolID = value || null;
+    }
+
+    public get TestCanProceed(): boolean {
+        return !!this.TestToolServerID && !!this.TestToolConnectionID && !!this.TestToolID;
+    }
+
+    public testProceedToConfig(): void {
+        if (!this.TestCanProceed) return;
+        this.TestSelectedTool = this.tools.find(t => UUIDsEqual(t.ID, this.TestToolID!)) ?? null;
+        if (!this.TestSelectedTool) return;
+        this.testParseSchema();
+        this.TestStep = 'configure';
+        this.cdr.detectChanges();
+    }
+
+    private testParseSchema(): void {
+        this.TestParamConfigs = [];
+        this.TestParamValues = {};
+        if (!this.TestSelectedTool?.InputSchema) return;
+        try {
+            const schema = JSON.parse(this.TestSelectedTool.InputSchema) as {
+                properties?: Record<string, { type?: string | string[]; description?: string; enum?: unknown[] }>;
+                required?: string[];
+            };
+            const required = schema.required ?? [];
+            for (const [name, prop] of Object.entries(schema.properties ?? {})) {
+                const rawType = prop.type;
+                const type = Array.isArray(rawType)
+                    ? (rawType.filter(t => t !== 'null')[0] ?? 'string')
+                    : (rawType ?? 'string');
+                this.TestParamConfigs.push({
+                    name, type, description: prop.description ?? '',
+                    required: required.includes(name), enumValues: prop.enum ?? []
+                });
+                this.TestParamValues[name] = '';
+            }
+            this.TestParamConfigs.sort((a, b) => (a.required === b.required ? 0 : a.required ? -1 : 1));
+        } catch (e) {
+            console.error('Failed to parse tool schema', e);
+        }
+    }
+
+    public testSetParam(name: string, value: string): void {
+        this.TestParamValues[name] = value;
+    }
+
+    public get TestIsValid(): boolean {
+        return this.TestParamConfigs.filter(p => p.required).every(p => !!this.TestParamValues[p.name]);
+    }
+
+    public async testExecuteTool(): Promise<void> {
+        if (!this.TestIsValid || !this.TestToolConnectionID || !this.TestToolID) return;
+        this.TestIsExecuting = true;
+        this.cdr.detectChanges();
+
+        const inputArgs: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(this.TestParamValues)) {
+            if (v !== '') inputArgs[k] = v;
+        }
+
+        const mutation = gql`
+            mutation ExecuteMCPTool($input: ExecuteMCPToolInput!) {
+                ExecuteMCPTool(input: $input) { Success ErrorMessage Result DurationMs }
+            }
+        `;
+
+        try {
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, {
+                input: {
+                    ConnectionID: this.TestToolConnectionID,
+                    ToolID: this.TestToolID,
+                    ToolName: this.TestSelectedTool?.ToolName,
+                    InputArgs: JSON.stringify(inputArgs)
+                }
+            });
+            this.TestExecutionResult = result?.ExecuteMCPTool ?? { Success: false, ErrorMessage: 'No result returned' };
+        } catch (e) {
+            this.TestExecutionResult = { Success: false, ErrorMessage: e instanceof Error ? e.message : String(e) };
+        } finally {
+            this.TestIsExecuting = false;
+            this.TestStep = 'results';
+            this.cdr.detectChanges();
+        }
+    }
+
+    public testGoBack(): void {
+        this.TestStep = this.TestStep === 'results' ? 'configure' : 'select';
+        this.cdr.detectChanges();
+    }
+
+    public testRunAgain(): void {
+        this.TestExecutionResult = null;
+        this.TestStep = 'configure';
+        this.cdr.detectChanges();
+    }
+
+    public testCloseDialog(): void {
+        this.ShowTestToolDialog = false;
+        this.TestStep = 'select';
+        this.TestSelectedTool = null;
+        this.TestParamConfigs = [];
+        this.TestParamValues = {};
+        this.TestExecutionResult = null;
+        this.cdr.detectChanges();
+    }
+
+    public formatTestResult(result: unknown): string {
+        if (result == null) return '';
+        if (typeof result === 'string') return result;
+        try {
+            return JSON.stringify(result, null, 2);
+        } catch {
+            return String(result);
+        }
+    }
+
+    /**
+     * Part 3.2 — loads a page of tools via the paginated resolver.
+     * Uses the same GraphQLDataProvider + gql pattern as testExecuteTool above.
+     */
+    public async loadToolsPage(reset: boolean = true): Promise<void> {
+        if (this.toolsLoading) return;
+        this.toolsLoading = true;
+        if (reset) {
+            this.toolsSkip = 0;
+            this.pagedTools = [];
+        }
+        try {
+            const filters = this.filters$.value;
+            const query = gql`
+                query GetMCPToolsPage($skip: Int!, $take: Int!, $searchText: String, $serverID: String, $category: String) {
+                    GetMCPToolsPage(skip: $skip, take: $take, searchText: $searchText, serverID: $serverID, category: $category) {
+                        items { ID MCPServerID ToolName ToolTitle ToolDescription Status ServerName }
+                        totalCount
+                        hasMore
+                    }
+                }
+            `;
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(query, {
+                skip: this.toolsSkip,
+                take: this.toolsPageSize,
+                searchText: filters.searchTerm || null,
+                serverID: (filters.toolsServer && filters.toolsServer !== 'all') ? filters.toolsServer : null,
+                category: (filters.toolsCategory && filters.toolsCategory !== 'all') ? filters.toolsCategory : null
+            });
+            const page = result?.GetMCPToolsPage;
+            if (page) {
+                this.pagedTools = reset ? page.items : [...this.pagedTools, ...page.items];
+                this.toolsTotalCount = page.totalCount;
+                this.toolsSkip = this.pagedTools.length;
+            }
+        } catch (e) {
+            console.error('[MCPDashboard] loadToolsPage failed:', e);
+        } finally {
+            this.toolsLoading = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public onToolsScrolledIndexChange(index: number): void {
+        if (!this.useScalablePagination || this.toolsLoading) return;
+        if (this.pagedTools.length >= this.toolsTotalCount) return;
+        if (index + 20 >= this.pagedTools.length) {
+            this.loadToolsPage(false);
+        }
+    }
+
+    /** Native-scroll infinite-load: triggers next page when user nears the bottom */
+    public onToolsScrollNative(event: Event): void {
+        if (!this.useScalablePagination || this.toolsLoading) return;
+        if (this.pagedTools.length >= this.toolsTotalCount) return;
+        const el = event.target as HTMLElement;
+        if (el.scrollTop + el.clientHeight >= el.scrollHeight - 200) {
+            this.loadToolsPage(false);
+        }
+    }
+
+    public toggleScalableMode(enabled: boolean): void {
+        this.useScalablePagination = enabled;
+        if (enabled && this.pagedTools.length === 0) {
+            this.loadToolsPage(true);
+            this.loadToolCounts();
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Part 3.4 — fetch global + per-server + per-category counts (used for badges
+     * and to populate the category filter dropdown). Respects current search filter.
+     */
+    public async loadToolCounts(): Promise<void> {
+        try {
+            const filters = this.filters$.value;
+            const query = gql`
+                query GetMCPToolCounts($serverID: String, $searchText: String) {
+                    GetMCPToolCounts(serverID: $serverID, searchText: $searchText) {
+                        totalCount
+                        countByServer { serverID serverName count }
+                        countByCategory { category count }
+                    }
+                }
+            `;
+            const result = await GraphQLDataProvider.Instance.ExecuteGQL(query, {
+                serverID: (filters.toolsServer && filters.toolsServer !== 'all') ? filters.toolsServer : null,
+                searchText: filters.searchTerm || null
+            });
+            const counts = result?.GetMCPToolCounts;
+            if (counts) {
+                this.toolsGlobalCount = counts.totalCount;
+                this.toolCountByServer = {};
+                (counts.countByServer || []).forEach((r: { serverID: string; count: number }) => {
+                    this.toolCountByServer[r.serverID] = r.count;
+                });
+                this.toolsAvailableCategories = (counts.countByCategory || [])
+                    .filter((c: { category: string }) => c.category && c.category.length > 0)
+                    .sort((a: { category: string }, b: { category: string }) => a.category.localeCompare(b.category));
+                // Available servers derived from the servers list (already loaded)
+                this.toolsAvailableServers = this.servers.map(s => ({ ID: s.ID, Name: s.Name }));
+                this.cdr.detectChanges();
+            }
+        } catch (e) {
+            console.warn('[MCPDashboard] loadToolCounts failed:', e);
+        }
+    }
+
+    /** Part 3.4 — returns tool count for a server (falls back to ServerGroups length for legacy view) */
+    public getServerToolCount(serverID: string): number {
+        return this.toolCountByServer[serverID] ?? this.tools.filter(t => UUIDsEqual(t.MCPServerID, serverID)).length;
+    }
+
+    public trackPagedTool(_index: number, tool: MCPToolSummary): string {
+        return tool.ID;
+    }
+
+    /** Part 3.6 — Scale mode display. When a client-side filter (Favorites/Recently-used) is active,
+     *  bypass server pagination and filter the fully-loaded local `this.tools` list so the filter
+     *  considers ALL tools, not just the current 50-row page. */
+    public get visiblePagedTools(): MCPToolSummary[] {
+        const f = this.filters$.value;
+        if (f.favoritesOnly || f.recentOnly) {
+            const search = (f.searchTerm || '').toLowerCase();
+            const recent = f.recentOnly ? this.recentToolIDSet() : null;
+            return this.tools
+                .filter(t => {
+                    if (f.favoritesOnly && !this.isFavorited(t.ID)) return false;
+                    if (recent && !recent.has(NormalizeUUID(t.ID))) return false;
+                    if (f.toolsServer && f.toolsServer !== 'all' && !UUIDsEqual(t.MCPServerID, f.toolsServer)) return false;
+                    if (f.toolsCategory && f.toolsCategory !== 'all') {
+                        const idx = t.ToolName.indexOf('_');
+                        const cat = idx > 0 ? t.ToolName.substring(0, idx) : t.ToolName;
+                        if (cat !== f.toolsCategory) return false;
+                    }
+                    if (search && !(
+                        t.ToolName.toLowerCase().includes(search) ||
+                        (t.ToolTitle?.toLowerCase().includes(search) ?? false) ||
+                        (t.ToolDescription?.toLowerCase().includes(search) ?? false)
+                    )) return false;
+                    return true;
+                })
+                .map(t => ({
+                    ID: t.ID,
+                    MCPServerID: t.MCPServerID,
+                    ToolName: t.ToolName,
+                    ToolTitle: t.ToolTitle ?? null,
+                    ToolDescription: t.ToolDescription ?? null,
+                    Status: t.Status,
+                    ServerName: t.ServerName ?? null
+                }));
+        }
+        return this.pagedTools;
+    }
+
+    /** Scale-mode denominator. In bypass-pagination mode (favorites/recent filters), the user
+     *  sees the fully filtered local list, so the "of N" reflects that filtered total.
+     *  Otherwise we show the server-side total for the current query. */
+    public scaleDenominator(): number {
+        const f = this.filters$.value;
+        if (f.favoritesOnly || f.recentOnly) {
+            return this.visiblePagedTools.length;
+        }
+        return this.toolsTotalCount;
+    }
+
+    /** Part 3.5 — recently used tool IDs derived from execution logs (dedup, max 5) */
+    public get TestRecentToolIDs(): string[] {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const log of this.executionLogs) {
+            if (!log.ToolID) continue;
+            if (seen.has(log.ToolID)) continue;
+            seen.add(log.ToolID);
+            out.push(log.ToolID);
+            if (out.length >= 5) break;
+        }
+        return out;
+    }
+
+    /** Part 3.5 — Test dialog combobox: filtered tools with recent-first ordering */
+    public get TestComboboxTools(): MCPToolData[] {
+        const term = this.TestToolSearch.trim().toLowerCase();
+        const base = this.TestFilteredTools.filter(t =>
+            !term ||
+            t.ToolName.toLowerCase().includes(term) ||
+            (t.ToolTitle && t.ToolTitle.toLowerCase().includes(term)) ||
+            (t.ToolDescription && t.ToolDescription.toLowerCase().includes(term))
+        );
+        const recentSet = new Set(this.TestRecentToolIDs);
+        const recent = base.filter(t => recentSet.has(t.ID));
+        const rest = base.filter(t => !recentSet.has(t.ID));
+        return [...recent, ...rest];
+    }
+
+    public isRecentTestTool(toolID: string): boolean {
+        return this.TestRecentToolIDs.includes(toolID);
+    }
+
+    public onTestToolSearchChange(value: string): void {
+        this.TestToolSearch = value;
+        this.cdr.detectChanges();
+    }
+
+    public pickTestTool(toolID: string): void {
+        this.TestToolID = toolID;
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Part 3.6 — load the current user's favorited tool IDs.
+     */
+    public async loadFavorites(): Promise<void> {
+        try {
+            const md = this.ProviderToUse;
+            const currentUserID = md.CurrentUser?.ID;
+            if (!currentUserID) return;
+            // MCPEngine caches MCP: Tool Favorites via BaseEngine CacheLocal — Config() is
+            // idempotent, and the cache auto-invalidates on Save/Delete via BaseEntity events,
+            // so repeat loads hit the Global Object Store with no DB round-trip.
+            await MCPEngine.Instance.Config();
+            const userFavorites = MCPEngine.Instance.GetFavoritesByUser(currentUserID);
+            this.favoritedToolIDs = new Set(userFavorites.map(f => NormalizeUUID(f.MCPServerToolID)));
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.warn('[MCPDashboard] loadFavorites failed:', e);
+        }
+    }
+
+    public isFavorited(toolID: string): boolean {
+        return this.favoritedToolIDs.has(NormalizeUUID(toolID));
+    }
+
+    /** Part 3.3 — set of tool IDs seen in recent execution logs (last N unique). */
+    public recentToolIDSet(): Set<string> {
+        const out = new Set<string>();
+        for (const log of this.executionLogs) {
+            if (log.ToolID) out.add(NormalizeUUID(log.ToolID));
+        }
+        return out;
+    }
+
+    public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
+        if (event) event.stopPropagation();
+        const md = this.ProviderToUse;
+        const currentUserID = md.CurrentUser?.ID;
+        if (!currentUserID) {
+            console.warn('[MCPDashboard] toggleFavorite: no current user');
+            return;
+        }
+        const normalizedID = NormalizeUUID(toolID);
+        const isFav = this.favoritedToolIDs.has(normalizedID);
+        try {
+            if (isFav) {
+                // Find the existing favorite in MCPEngine's cache and Delete via the entity —
+                // BaseEngine's event-driven cache sync will drop it from _Favorites automatically.
+                await MCPEngine.Instance.Config();
+                const entity = MCPEngine.Instance.GetFavoriteByUserAndTool(currentUserID, toolID);
+                if (!entity) {
+                    // Cache says it's missing but UI thought it was favorited — drop from the
+                    // local Set so the UI reconciles.
+                    this.favoritedToolIDs.delete(normalizedID);
+                } else {
+                    const deleted = await entity.Delete();
+                    if (!deleted) {
+                        console.warn('[MCPDashboard] Delete favorite failed:', entity.LatestResult?.CompleteMessage);
+                        return;
+                    }
+                    this.favoritedToolIDs.delete(normalizedID);
+                }
+            } else {
+                const entity = await md.GetEntityObject<MJMCPToolFavoriteEntity>('MJ: MCP Tool Favorites');
+                entity.NewRecord();
+                entity.UserID = currentUserID;
+                entity.MCPServerToolID = toolID;
+                const saved = await entity.Save();
+                if (!saved) {
+                    console.warn('[MCPDashboard] Save favorite failed:', entity.LatestResult?.CompleteMessage);
+                    return;
+                }
+                this.favoritedToolIDs.add(normalizedID);
+            }
+            // Force a new Set instance so Angular change detection picks it up
+            this.favoritedToolIDs = new Set(this.favoritedToolIDs);
+            this.cdr.detectChanges();
+        } catch (e) {
+            console.error('[MCPDashboard] toggleFavorite failed:', e);
+        }
+    }
+
+    public formatLogJson(value: string | null | undefined): string {
+        if (!value) return '';
+        try {
+            return JSON.stringify(JSON.parse(value), null, 2);
+        } catch {
+            return value;
+        }
     }
 
     /**
@@ -1492,7 +2348,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Checks for OAuth completion by looking for query params set by the OAuth callback
      */
     private checkOAuthCompletion(): void {
-        const params = this.route.snapshot.queryParams;
+        const params = this.GetQueryParams();
 
         if (params['oauth'] === 'success') {
             // OAuth completed successfully
@@ -1502,32 +2358,21 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Show success notification
             this.showSuccessNotification('OAuth authorization completed successfully');
 
-            // Clear the query params without triggering a full navigation
-            this.router.navigate([], {
-                relativeTo: this.route,
-                queryParams: {},
-                queryParamsHandling: 'merge',
-                replaceUrl: true
-            });
+            // Clear the OAuth query params, preserving the tab param
+            this.UpdateQueryParams({ oauth: null, connectionId: null, error: null, error_description: null });
 
             // Refresh data to pick up new OAuth state
             this.loadAllData(true);
         } else if (params['oauth'] === 'error') {
             // OAuth failed
-            const errorCode = params['error'] || 'unknown_error';
             const errorMessage = params['error_description'] || 'Authorization failed';
-            console.error(`[MCPDashboard] OAuth authorization failed: ${errorCode} - ${errorMessage}`);
+            console.error(`[MCPDashboard] OAuth authorization failed: ${params['error'] ?? 'unknown_error'} - ${errorMessage}`);
 
             // Show error message
             this.ErrorMessage = `OAuth authorization failed: ${errorMessage}`;
 
-            // Clear the query params
-            this.router.navigate([], {
-                relativeTo: this.route,
-                queryParams: {},
-                queryParamsHandling: 'merge',
-                replaceUrl: true
-            });
+            // Clear the OAuth query params
+            this.UpdateQueryParams({ oauth: null, connectionId: null, error: null, error_description: null });
         }
     }
 
@@ -1750,7 +2595,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Load full log details if needed (InputArgs, Result)
         if (!log.InputArgs && !log.Result) {
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `ID='${log.ID}'`,

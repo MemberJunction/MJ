@@ -14,6 +14,8 @@ import {
   stripTrailingChars,
   replaceAllSpaces,
   IsOnlyTimezoneShift,
+  EscapeHTML,
+  HighlightSearchMatches,
 } from '../util';
 
 describe('GetGlobalObjectStore', () => {
@@ -249,6 +251,31 @@ describe('CopyScalarsAndArrays', () => {
     expect(result.name).toBe('test');
     // Custom class instances are not plain objects, so skipped
     expect('data' in result).toBe(false);
+  });
+
+  it('should respect toJSON() on class instances', () => {
+    class Serializable {
+      toJSON() {
+        return { Kind: 'custom', N: 7 };
+      }
+    }
+    const input = { item: new Serializable(), name: 'test' };
+    const result = CopyScalarsAndArrays(input);
+    expect(result.name).toBe('test');
+    expect(result.item).toEqual({ Kind: 'custom', N: 7 });
+  });
+
+  it('should recurse into array items and honor toJSON()', () => {
+    class Node {
+      constructor(public n: number) {}
+      toJSON() {
+        return { N: this.n };
+      }
+    }
+    const input = { items: [new Node(1), new Node(2)], scalars: [10, 20] };
+    const result = CopyScalarsAndArrays(input);
+    expect(result.items).toEqual([{ N: 1 }, { N: 2 }]);
+    expect(result.scalars).toEqual([10, 20]);
   });
 
   describe('with resolveCircularReferences', () => {
@@ -572,5 +599,107 @@ describe('IsOnlyTimezoneShift', () => {
     const d1 = new Date('2025-12-25T00:00:00.000Z');
     const d2 = new Date('2025-12-26T00:00:00.000Z');
     expect(IsOnlyTimezoneShift(d1, d2)).toBe(false);
+  });
+});
+
+describe('EscapeHTML', () => {
+  it('escapes the five HTML-significant characters', () => {
+    expect(EscapeHTML('<script>alert("x")</script>')).toBe(
+      '&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;'
+    );
+    expect(EscapeHTML(`Tom & Jerry's`)).toBe('Tom &amp; Jerry&#039;s');
+  });
+
+  it('passes through empty/falsy values unchanged', () => {
+    expect(EscapeHTML('')).toBe('');
+    // Matches the existing contract: falsy passthrough.
+    expect(EscapeHTML(null as unknown as string)).toBe(null);
+    expect(EscapeHTML(undefined as unknown as string)).toBe(undefined);
+  });
+});
+
+describe('HighlightSearchMatches', () => {
+  it('wraps a single case-insensitive match in <mark>', () => {
+    expect(HighlightSearchMatches('Hello World', 'world')).toBe('Hello <mark>World</mark>');
+  });
+
+  it('preserves the original casing of the source text inside the highlight', () => {
+    expect(HighlightSearchMatches('Hello World', 'hello')).toBe('<mark>Hello</mark> World');
+  });
+
+  it('highlights every occurrence (not just the first)', () => {
+    expect(HighlightSearchMatches('abc abc abc', 'abc')).toBe(
+      '<mark>abc</mark> <mark>abc</mark> <mark>abc</mark>'
+    );
+  });
+
+  it('treats the query as a literal string, not a regex', () => {
+    // `.` and `$` would have special meaning if this were regex-based.
+    expect(HighlightSearchMatches('Price: $10.00', '$10')).toBe('Price: <mark>$10</mark>.00');
+    expect(HighlightSearchMatches('a.b.c', '.')).toBe('a<mark>.</mark>b<mark>.</mark>c');
+  });
+
+  it('applies the optional CSS class to every <mark>', () => {
+    expect(HighlightSearchMatches('hi hi', 'hi', 'search-hit')).toBe(
+      '<mark class="search-hit">hi</mark> <mark class="search-hit">hi</mark>'
+    );
+  });
+
+  it('escapes the supplied CSS class to prevent attribute injection', () => {
+    // A malicious class name must not break out of the attribute.
+    const out = HighlightSearchMatches('hi', 'hi', '" onclick="alert(1)');
+    expect(out).not.toContain('onclick="alert(1)"');
+    expect(out).toContain('class="&quot; onclick=&quot;alert(1)"');
+  });
+
+  // ---- The behavior that motivates this helper: XSS safety on `[innerHTML]` bindings. ----
+
+  it('escapes raw HTML in the source text when the query does not match', () => {
+    expect(HighlightSearchMatches('<script>alert(1)</script>', 'nope')).toBe(
+      '&lt;script&gt;alert(1)&lt;/script&gt;'
+    );
+  });
+
+  it('escapes raw HTML in the source text when the query is empty', () => {
+    expect(HighlightSearchMatches('<img src=x onerror=alert(1)>', '')).toBe(
+      '&lt;img src=x onerror=alert(1)&gt;'
+    );
+    expect(HighlightSearchMatches('<b>bold</b>', '   ')).toBe('&lt;b&gt;bold&lt;/b&gt;');
+  });
+
+  it('escapes raw HTML in segments around a real match (XSS regression)', () => {
+    // The match is "danger". The surrounding `<script>` tags must be escaped, NOT live HTML.
+    const result = HighlightSearchMatches('<script>danger</script>', 'danger');
+    expect(result).toBe('&lt;script&gt;<mark>danger</mark>&lt;/script&gt;');
+    // Sanity: the result must never contain a live <script> open or close tag.
+    expect(result).not.toContain('<script>');
+    expect(result).not.toContain('</script>');
+  });
+
+  it('escapes a raw match that itself contains HTML', () => {
+    // The query matches a substring that includes `<`. That match must be escaped inside <mark>.
+    const result = HighlightSearchMatches('a<b>c', '<b>');
+    expect(result).toBe('a<mark>&lt;b&gt;</mark>c');
+  });
+
+  it('does NOT corrupt the output when the search term overlaps an entity name', () => {
+    // The motivating "entity-corruption" failure mode: searching for "amp" in a string
+    // containing `&` must not wrap part of `&amp;`. Because we escape AFTER matching,
+    // the literal source `&` is matched safely and rendered as `&amp;`.
+    const result = HighlightSearchMatches('Tom & Jerry', 'amp');
+    // No match in the source text "Tom & Jerry" — `amp` is not present, so the whole
+    // string is escaped and returned untouched.
+    expect(result).toBe('Tom &amp; Jerry');
+    expect(result).not.toContain('<mark>');
+  });
+
+  it('returns the input unchanged when text is falsy', () => {
+    expect(HighlightSearchMatches('', 'anything')).toBe('');
+    expect(HighlightSearchMatches(null as unknown as string, 'x')).toBe(null);
+    expect(HighlightSearchMatches(undefined as unknown as string, 'x')).toBe(undefined);
+  });
+
+  it('returns escaped text when query is whitespace-only', () => {
+    expect(HighlightSearchMatches('<i>x</i>', '   ')).toBe('&lt;i&gt;x&lt;/i&gt;');
   });
 });

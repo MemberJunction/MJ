@@ -31,11 +31,11 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
       }
       
       <div class="dialog-actions">
-        <button kendoButton (click)="cancel()" [themeColor]="'base'">
-          Cancel
-        </button>
-        <button kendoButton (click)="import()" [themeColor]="'primary'" [disabled]="!componentJson">
+        <button mjButton (click)="import()" variant="primary" [disabled]="!componentJson">
           <i class="fa-solid fa-file-import"></i> Import
+        </button>
+        <button mjButton (click)="cancel()">
+          Cancel
         </button>
       </div>
     </div>

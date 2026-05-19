@@ -1,0 +1,791 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Duplicate Detection"
+    Icon="fa-solid fa-clone"
+    Subtitle="Find and merge near-duplicate records using semantic similarity">
+    <div actions>
+      <select class="mj-input kh-doc-select"
+              [(ngModel)]="SelectedEntityDocumentID"
+              [disabled]="IsDetecting">
+          <option value="">Select entity document…</option>
+          @for (doc of EntityDocuments; track doc.ID) {
+              <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
+          }
+      </select>
+      <button mjButton variant="primary" size="sm"
+              (click)="RunDetection()"
+              [disabled]="IsDetecting || !SelectedEntityDocumentID">
+          @if (IsDetecting) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Detecting…
+          } @else {
+              <i class="fa-solid fa-magnifying-glass"></i> Run Detection
+          }
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true">
+    <!-- Detection Progress (visible during run) -->
+    @if (IsDetecting) {
+        <div class="detection-progress-section">
+            <div class="progress-header">
+                <span class="progress-stage">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    {{ DetectionStage }}
+                </span>
+                <span class="progress-percent">{{ DetectionProgress }}%</span>
+            </div>
+            <div class="progress-bar-track">
+                <div class="progress-bar-fill" [style.width.%]="DetectionProgress"></div>
+            </div>
+            @if (DetectionCurrentItem) {
+                <span class="progress-current-item">{{ DetectionCurrentItem }}</span>
+            }
+        </div>
+    }
+
+    <!-- Threshold Controls (when entity doc selected) -->
+    @if (SelectedDocumentThresholds) {
+        <div class="threshold-controls">
+            <div class="threshold-slider-group">
+                <label class="threshold-label">
+                    <i class="fa-solid fa-adjust"></i>
+                    Potential Match
+                    <span class="threshold-value">{{ (RunPotentialThreshold * 100).toFixed(0) }}%</span>
+                </label>
+                <input type="range" class="threshold-slider"
+                    [min]="30" [max]="99" [step]="1"
+                    [value]="RunPotentialThreshold * 100"
+                    (input)="OnPotentialThresholdChanged($any($event.target).value / 100)"
+                    [disabled]="IsDetecting" />
+                <span class="threshold-hint">Score above which duplicates are flagged for review</span>
+            </div>
+            <div class="threshold-slider-group">
+                <label class="threshold-label">
+                    <i class="fa-solid fa-bullseye"></i>
+                    Absolute Match
+                    <span class="threshold-value">{{ (RunAbsoluteThreshold * 100).toFixed(0) }}%</span>
+                </label>
+                <input type="range" class="threshold-slider"
+                    [min]="50" [max]="100" [step]="1"
+                    [value]="RunAbsoluteThreshold * 100"
+                    (input)="OnAbsoluteThresholdChanged($any($event.target).value / 100)"
+                    [disabled]="IsDetecting" />
+                <span class="threshold-hint">Score above which duplicates are auto-confirmed</span>
+            </div>
+        </div>
+    }
+
+    <!-- KPI Strip -->
+    <div class="kpi-strip">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ TotalGroupCount }}</div>
+            <div class="kpi-label">Total Groups</div>
+        </div>
+        <div class="kpi-card kpi-pending">
+            <div class="kpi-value">{{ PendingCount }}</div>
+            <div class="kpi-label">Pending</div>
+        </div>
+        <div class="kpi-card kpi-approved">
+            <div class="kpi-value">{{ ApprovedCount }}</div>
+            <div class="kpi-label">Approved</div>
+        </div>
+        <div class="kpi-card kpi-rejected">
+            <div class="kpi-value">{{ RejectedCount }}</div>
+            <div class="kpi-label">Rejected</div>
+        </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+        <div class="filter-group">
+            <select class="filter-select"
+                    [(ngModel)]="Filters.EntityName"
+                    (ngModelChange)="OnFilterChange()"
+                    [disabled]="EntityNames.length <= 1">
+                @if (EntityNames.length > 1) {
+                    <option value="">All Entities</option>
+                }
+                @for (name of EntityNames; track name) {
+                    <option [value]="name">{{ name }}</option>
+                }
+            </select>
+
+            <div class="filter-range">
+                <label class="filter-label">Min Score</label>
+                <input type="number"
+                       class="filter-input filter-input-score"
+                       min="0" max="1" step="0.05"
+                       [placeholder]="DataMinScore"
+                       [(ngModel)]="Filters.MinScore"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">Max Score</label>
+                <input type="number"
+                       class="filter-input filter-input-score"
+                       min="0" max="1" step="0.05"
+                       [placeholder]="DataMaxScore"
+                       [(ngModel)]="Filters.MaxScore"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">From</label>
+                <input type="date"
+                       class="filter-input filter-input-date"
+                       [min]="DataMinDate" [max]="DataMaxDate"
+                       [(ngModel)]="Filters.DateFrom"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+
+            <div class="filter-range">
+                <label class="filter-label">To</label>
+                <input type="date"
+                       class="filter-input filter-input-date"
+                       [min]="DataMinDate" [max]="DataMaxDate"
+                       [(ngModel)]="Filters.DateTo"
+                       (ngModelChange)="OnFilterChange()">
+            </div>
+        </div>
+
+        @if (HasActiveFilters) {
+            <button class="clear-filters-btn" (click)="ClearFilters()">
+                <i class="fa-solid fa-times"></i> Clear Filters
+            </button>
+        }
+    </div>
+
+    <!-- Merge Warning Banner (non-blocking, shown when entity lacks AllowRecordMerge) -->
+    @if (ShowMergeWarningBanner) {
+        <div class="merge-warning-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            Merging is not available for this entity. Detection results are read-only.
+        </div>
+    }
+
+    <!-- Content -->
+    @if (IsLoading) {
+        <div class="loading-container">
+            <mj-loading text="Loading duplicate detection results..."></mj-loading>
+        </div>
+    } @else if (IsLoadingResults) {
+        <div class="loading-container">
+            <mj-loading text="Loading duplicate detection results..."></mj-loading>
+        </div>
+    } @else if (TotalGroupCount === 0) {
+        <div class="empty-state">
+            <i class="fa-solid fa-clone empty-icon"></i>
+            <p class="empty-text">No duplicate detection results found.</p>
+            <p class="empty-subtext">Select an entity document and click "Run Detection" to start.</p>
+        </div>
+    } @else {
+        <!-- Kanban Board -->
+        <div class="kanban-board">
+            <!-- Pending Column -->
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Pending' && DraggedGroup?.ApprovalStatus !== 'Pending'">
+                <div class="column-header column-header-pending">
+                    <i class="fa-solid fa-clock"></i>
+                    <span class="column-title">Pending Review</span>
+                    <span class="column-count">{{ PendingCount }}</span>
+                </div>
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Pending')"
+                     (dragleave)="OnDragLeave($event, 'Pending')"
+                     (drop)="OnDrop($event, 'Pending')">
+                    @for (group of PendingGroups; track group.DetailId) {
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
+                            <div class="card-header">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="card-actions">
+                                <button class="action-btn approve-btn"
+                                        [disabled]="IsSaving"
+                                        (click)="ApproveMatch(group); $event.stopPropagation()">
+                                    <i class="fa-solid fa-check"></i> Approve
+                                </button>
+                                <button class="action-btn reject-btn"
+                                        [disabled]="IsSaving"
+                                        (click)="RejectMatch(group); $event.stopPropagation()">
+                                    <i class="fa-solid fa-times"></i> Reject
+                                </button>
+                            </div>
+                        </div>
+                    }
+                    @if (PendingGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-check-circle"></i>
+                            <span>No pending items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Approved Column -->
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Approved' && DraggedGroup?.ApprovalStatus !== 'Approved'">
+                <div class="column-header column-header-approved">
+                    <i class="fa-solid fa-check-circle"></i>
+                    <span class="column-title">Approved</span>
+                    <span class="column-count">{{ ApprovedCount }}</span>
+                </div>
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Approved')"
+                     (dragleave)="OnDragLeave($event, 'Approved')"
+                     (drop)="OnDrop($event, 'Approved')">
+                    @for (group of ApprovedGroups; track group.DetailId) {
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
+                            <div class="card-header">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (ApprovedGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-inbox"></i>
+                            <span>No approved items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Rejected Column -->
+            <div class="kanban-column" [class.drop-target-active]="DragOverColumn === 'Rejected' && DraggedGroup?.ApprovalStatus !== 'Rejected'">
+                <div class="column-header column-header-rejected">
+                    <i class="fa-solid fa-ban"></i>
+                    <span class="column-title">Rejected</span>
+                    <span class="column-count">{{ RejectedCount }}</span>
+                </div>
+                <div class="column-body"
+                     (dragover)="OnDragOver($event, 'Rejected')"
+                     (dragleave)="OnDragLeave($event, 'Rejected')"
+                     (drop)="OnDrop($event, 'Rejected')">
+                    @for (group of RejectedGroups; track group.DetailId) {
+                        <div class="kanban-card"
+                             draggable="true"
+                             (dragstart)="OnDragStart($event, group)"
+                             (dragend)="OnDragEnd()"
+                             (click)="OpenComparison(group)">
+                            <div class="card-header">
+                                <div class="card-header-left">
+                                    <div class="card-icon">
+                                        <i [class]="group.EntityIcon"></i>
+                                    </div>
+                                    <div class="card-title-block">
+                                        <div class="card-record-name" [title]="group.RecordName">{{ group.RecordName }}</div>
+                                        <span class="entity-badge">{{ group.EntityName }}</span>
+                                    </div>
+                                </div>
+                                <span class="score-indicator" [class]="GetScoreClass(group.HighestScore)">
+                                    {{ (group.HighestScore * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <div class="card-body">
+                                @if (group.TopMatchSummaries.length > 0) {
+                                    <div class="match-summaries">
+                                        @for (ms of group.TopMatchSummaries; track ms.Name) {
+                                            <div class="match-summary-row">
+                                                <span class="match-score">{{ (ms.Score * 100).toFixed(0) }}%</span>
+                                                <span class="match-name">{{ ms.Name }}</span>
+                                            </div>
+                                        }
+                                        @if (group.MatchCount > group.TopMatchSummaries.length) {
+                                            <div class="match-summary-more">+{{ group.MatchCount - group.TopMatchSummaries.length }} more</div>
+                                        }
+                                    </div>
+                                }
+                                <div class="card-meta-row">
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        {{ group.MatchCount }} match{{ group.MatchCount !== 1 ? 'es' : '' }}
+                                    </span>
+                                    <span class="card-meta-item">
+                                        <i class="fa-solid fa-calendar"></i>
+                                        {{ FormatDate(group.MatchedAt) }}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    @if (RejectedGroups.length === 0) {
+                        <div class="column-empty">
+                            <i class="fa-solid fa-inbox"></i>
+                            <span>No rejected items</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Saving overlay -->
+    @if (IsSaving) {
+        <div class="saving-overlay">
+            <mj-loading text="Saving..." size="small"></mj-loading>
+        </div>
+    }
+
+    <!-- ═══ Comparison Slide-In Panel ═══ -->
+    @if (ComparisonGroup) {
+        <div class="slide-backdrop" [class.comparison-closing]="ComparisonClosing" (click)="CloseComparison()"></div>
+        <div class="comparison-panel" [class.comparison-closing]="ComparisonClosing" (click)="$event.stopPropagation()">
+            <!-- Header -->
+            <div class="comparison-header">
+                <div class="comparison-header-left">
+                    <div class="comparison-entity-icon">
+                        <i [class]="ComparisonGroup.EntityIcon"></i>
+                    </div>
+                    <div>
+                        <div class="comparison-title">{{ ComparisonGroup.RecordName }}</div>
+                        <span class="comparison-entity-badge">{{ ComparisonGroup.EntityName }}</span>
+                        <span class="comparison-match-count">
+                            {{ ComparisonGroup.MatchCount }} potential duplicate{{ ComparisonGroup.MatchCount !== 1 ? 's' : '' }}
+                        </span>
+                    </div>
+                </div>
+                <div class="comparison-header-right">
+                    <div class="comparison-toggle">
+                        <button class="toggle-btn" [class.toggle-active]="ComparisonShowAllFields"
+                                (click)="ComparisonShowAllFields = true">All Fields</button>
+                        <button class="toggle-btn" [class.toggle-active]="!ComparisonShowAllFields"
+                                (click)="ComparisonShowAllFields = false">Differences Only</button>
+                    </div>
+                    <button class="comparison-close-btn" (click)="CloseComparison()" title="Close (Esc)">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Grid -->
+            @if (ComparisonLoading) {
+                <div class="comparison-loading">
+                    <mj-loading text="Loading records for comparison..." size="medium"></mj-loading>
+                </div>
+            }
+            <div class="comparison-grid-wrapper" [hidden]="ComparisonLoading">
+                <div class="comparison-grid"
+                     [style.grid-template-columns]="'160px repeat(' + (1 + ComparisonMatches.length) + ', minmax(180px, 1fr))'">
+
+                    <!-- Corner cell -->
+                    <div class="grid-corner-cell">Field</div>
+
+                    <!-- Source column header -->
+                    <div class="grid-col-header grid-col-source">
+                        <span class="col-header-label">Source</span>
+                        <span class="col-header-name">{{ ComparisonGroup.RecordName }}</span>
+                        <div class="surviving-selector">
+                            <input type="radio" name="survivor" class="surviving-radio"
+                                   [checked]="SurvivorColumnIndex === 0"
+                                   (change)="SetSurvivor(0)">
+                            <span class="surviving-label" [class.is-survivor]="SurvivorColumnIndex === 0">
+                                {{ SurvivorColumnIndex === 0 ? 'Surviving Record' : 'Set as survivor' }}
+                            </span>
+                        </div>
+                        <button class="use-all-btn" [class.all-selected]="AllFieldsSelectedFrom(0)"
+                                (click)="UseAllFieldsFrom(0)">
+                            <i class="fa-solid" [class.fa-check-double]="AllFieldsSelectedFrom(0)" [class.fa-clone]="!AllFieldsSelectedFrom(0)"></i>
+                            {{ AllFieldsSelectedFrom(0) ? 'Using all fields' : 'Use all fields' }}
+                        </button>
+                        <!-- Dependencies Summary -->
+                        <div class="deps-summary">
+                            <div class="deps-total">
+                                <i class="fa-solid fa-link"></i>
+                                <span class="deps-total-number">{{ GetTotalDeps(0) }}</span>
+                                {{ GetTotalDeps(0) === 1 ? 'dependency' : 'dependencies' }}
+                                @if (GetMaxDepsColumnIndex() === 0 && GetTotalDeps(0) > 0) {
+                                    <span class="deps-total-recommended"><i class="fa-solid fa-star"></i> Most deps</span>
+                                }
+                            </div>
+                            @if (GetGroupedDeps(0).length > 0) {
+                                <div class="deps-header" (click)="ToggleDepsExpanded(0)">
+                                    <span>{{ IsDepsExpanded(0) ? 'Hide details' : 'Show details' }}</span>
+                                    <i class="fa-solid" [class.fa-chevron-down]="!IsDepsExpanded(0)" [class.fa-chevron-up]="IsDepsExpanded(0)"></i>
+                                </div>
+                                @if (IsDepsExpanded(0)) {
+                                    <div class="deps-detail-list">
+                                        @for (dep of GetGroupedDeps(0); track dep.Entity) {
+                                            <div class="deps-detail-group">
+                                                <div class="deps-detail-row" (click)="ToggleDepEntityGroup(0, dep.Entity); $event.stopPropagation()">
+                                                    <span class="deps-detail-entity">
+                                                        <i class="fa-solid deps-expand-icon"
+                                                           [class.fa-chevron-right]="!IsDepEntityGroupExpanded(0, dep.Entity)"
+                                                           [class.fa-chevron-down]="IsDepEntityGroupExpanded(0, dep.Entity)"></i>
+                                                        {{ dep.Entity }}
+                                                    </span>
+                                                    <span class="deps-detail-count">{{ dep.Count }}</span>
+                                                </div>
+                                                @if (IsDepEntityGroupExpanded(0, dep.Entity)) {
+                                                    <div class="deps-records-list">
+                                                        @if (IsDepRecordsLoading(0, dep.Entity)) {
+                                                            <div class="deps-record-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
+                                                        }
+                                                        @for (record of GetDepRecords(0, dep.Entity); track $index) {
+                                                            <div class="deps-record-row" (click)="OpenDepRecord(record); $event.stopPropagation()">
+                                                                <i class="fa-solid fa-arrow-up-right-from-square deps-record-icon"></i>
+                                                                <span class="deps-record-name">{{ record.Name }}</span>
+                                                            </div>
+                                                        }
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Match column headers -->
+                    @for (match of ComparisonMatches; track match.Match.ID; let mi = $index) {
+                        <div class="grid-col-header"
+                             [class.match-approved]="match.Match.ApprovalStatus === 'Approved'"
+                             [class.match-rejected]="match.Match.ApprovalStatus === 'Rejected'">
+                            <div class="col-header-top">
+                                <span class="col-header-name">{{ match.Name }}</span>
+                                <span class="score-indicator" [class]="GetScoreClass(match.Score)">
+                                    {{ (match.Score * 100).toFixed(0) }}%
+                                </span>
+                            </div>
+                            <span class="col-header-diff-count">{{ match.DiffCount }} difference{{ match.DiffCount !== 1 ? 's' : '' }}</span>
+                            <div class="surviving-selector">
+                                <input type="radio" name="survivor" class="surviving-radio"
+                                       [checked]="SurvivorColumnIndex === mi + 1"
+                                       (change)="SetSurvivor(mi + 1)">
+                                <span class="surviving-label" [class.is-survivor]="SurvivorColumnIndex === mi + 1">
+                                    {{ SurvivorColumnIndex === mi + 1 ? 'Surviving Record' : 'Set as survivor' }}
+                                </span>
+                            </div>
+                            <button class="use-all-btn" [class.all-selected]="AllFieldsSelectedFrom(mi + 1)"
+                                    (click)="UseAllFieldsFrom(mi + 1)">
+                                <i class="fa-solid" [class.fa-check-double]="AllFieldsSelectedFrom(mi + 1)" [class.fa-clone]="!AllFieldsSelectedFrom(mi + 1)"></i>
+                                {{ AllFieldsSelectedFrom(mi + 1) ? 'Using all fields' : 'Use all fields' }}
+                            </button>
+                            <!-- Dependencies Summary -->
+                            <div class="deps-summary">
+                                <div class="deps-total">
+                                    <i class="fa-solid fa-link"></i>
+                                    <span class="deps-total-number">{{ GetTotalDeps(mi + 1) }}</span>
+                                    {{ GetTotalDeps(mi + 1) === 1 ? 'dependency' : 'dependencies' }}
+                                    @if (GetMaxDepsColumnIndex() === mi + 1 && GetTotalDeps(mi + 1) > 0) {
+                                        <span class="deps-total-recommended"><i class="fa-solid fa-star"></i> Most deps</span>
+                                    }
+                                </div>
+                                @if (GetGroupedDeps(mi + 1).length > 0) {
+                                    <div class="deps-header" (click)="ToggleDepsExpanded(mi + 1)">
+                                        <span>{{ IsDepsExpanded(mi + 1) ? 'Hide details' : 'Show details' }}</span>
+                                        <i class="fa-solid" [class.fa-chevron-down]="!IsDepsExpanded(mi + 1)" [class.fa-chevron-up]="IsDepsExpanded(mi + 1)"></i>
+                                    </div>
+                                    @if (IsDepsExpanded(mi + 1)) {
+                                        <div class="deps-detail-list">
+                                            @for (dep of GetGroupedDeps(mi + 1); track dep.Entity) {
+                                                <div class="deps-detail-group">
+                                                    <div class="deps-detail-row" (click)="ToggleDepEntityGroup(mi + 1, dep.Entity); $event.stopPropagation()">
+                                                        <span class="deps-detail-entity">
+                                                            <i class="fa-solid deps-expand-icon"
+                                                               [class.fa-chevron-right]="!IsDepEntityGroupExpanded(mi + 1, dep.Entity)"
+                                                               [class.fa-chevron-down]="IsDepEntityGroupExpanded(mi + 1, dep.Entity)"></i>
+                                                            {{ dep.Entity }}
+                                                        </span>
+                                                        <span class="deps-detail-count">{{ dep.Count }}</span>
+                                                    </div>
+                                                    @if (IsDepEntityGroupExpanded(mi + 1, dep.Entity)) {
+                                                        <div class="deps-records-list">
+                                                            @if (IsDepRecordsLoading(mi + 1, dep.Entity)) {
+                                                                <div class="deps-record-loading"><i class="fa-solid fa-spinner fa-spin"></i> Loading...</div>
+                                                            }
+                                                            @for (record of GetDepRecords(mi + 1, dep.Entity); track $index) {
+                                                                <div class="deps-record-row" (click)="OpenDepRecord(record); $event.stopPropagation()">
+                                                                    <i class="fa-solid fa-arrow-up-right-from-square deps-record-icon"></i>
+                                                                    <span class="deps-record-name">{{ record.Name }}</span>
+                                                                </div>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </div>
+                            <!-- Per-match approval actions -->
+                            <div class="match-approval-actions">
+                                @if (match.Match.ApprovalStatus === 'Pending') {
+                                    <button class="match-action-btn match-skip-btn"
+                                            title="Skip this match (exclude from merge)"
+                                            (click)="RejectIndividualMatch(match)">
+                                        <i class="fa-solid fa-ban"></i> Skip
+                                    </button>
+                                } @else {
+                                    <span class="match-status-badge"
+                                          [class.status-approved]="match.Match.ApprovalStatus === 'Approved'"
+                                          [class.status-rejected]="match.Match.ApprovalStatus === 'Rejected'">
+                                        <i class="fa-solid" [class.fa-check]="match.Match.ApprovalStatus === 'Approved'"
+                                           [class.fa-times]="match.Match.ApprovalStatus === 'Rejected'"></i>
+                                        {{ match.Match.ApprovalStatus === 'Rejected' ? 'Skipped' : match.Match.ApprovalStatus }}
+                                    </span>
+                                    @if (match.Match.ApprovalStatus === 'Rejected') {
+                                        <button class="match-action-btn match-undo-btn"
+                                                title="Undo skip"
+                                                (click)="UndoRejectIndividualMatch(match)">
+                                            <i class="fa-solid fa-undo"></i> Undo
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Field rows -->
+                    @for (field of GetVisibleFields(); track field.FieldName; let odd = $odd) {
+                        <!-- Label cell -->
+                        <div class="grid-label-cell" [class.grid-row-odd]="odd">
+                            {{ field.DisplayName }}
+                        </div>
+                        <!-- Source value cell -->
+                        <div class="grid-value-cell grid-source-cell"
+                             [class.grid-row-odd]="odd"
+                             [class.has-diff-in-row]="field.HasDifference"
+                             [class.field-selected]="field.SelectedColumnIndex === 0"
+                             (click)="SelectFieldValue(field, 0)">
+                            @if (field.SourceValue != null) {
+                                {{ field.SourceValue }}
+                            } @else {
+                                <span class="field-not-available">(not available)</span>
+                            }
+                            @if (field.HasDifference || field.SelectedColumnIndex === 0) {
+                                <input type="radio" [name]="'field-' + field.FieldName" class="field-select-radio"
+                                       [checked]="field.SelectedColumnIndex === 0"
+                                       (click)="$event.stopPropagation()"
+                                       (change)="SelectFieldValue(field, 0)">
+                            }
+                        </div>
+                        <!-- Match value cells -->
+                        @for (matchVal of field.MatchValues; track $index; let mi = $index) {
+                            <div class="grid-value-cell"
+                                 [class.grid-row-odd]="odd"
+                                 [class.value-same]="AreValuesEqual(field.SourceValue, matchVal)"
+                                 [class.value-different]="matchVal != null && field.SourceValue != null && !AreValuesEqual(field.SourceValue, matchVal)"
+                                 [class.field-selected]="field.SelectedColumnIndex === mi + 1"
+                                 (click)="matchVal != null ? SelectFieldValue(field, mi + 1) : null">
+                                @if (matchVal != null) {
+                                    {{ matchVal }}
+                                    @if (field.HasDifference || field.SelectedColumnIndex === mi + 1) {
+                                        <input type="radio" [name]="'field-' + field.FieldName" class="field-select-radio"
+                                               [checked]="field.SelectedColumnIndex === mi + 1"
+                                               (click)="$event.stopPropagation()"
+                                               (change)="SelectFieldValue(field, mi + 1)">
+                                    }
+                                } @else {
+                                    <span class="field-not-available">(not available)</span>
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="comparison-footer">
+                <div class="comparison-footer-left">
+                    <span class="comparison-summary">
+                        Showing {{ GetVisibleFields().length }} of {{ ComparisonFields.length }} fields
+                    </span>
+                    <span class="merge-summary">
+                        <i class="fa-solid fa-code-merge"></i>
+                        Surviving: <strong>{{ SurvivorName() }}</strong>
+                        @if (CherryPickedCount() > 0) {
+                            &middot; {{ CherryPickedCount() }} field{{ CherryPickedCount() !== 1 ? 's' : '' }} cherry-picked
+                        }
+                    </span>
+                </div>
+                <div class="comparison-footer-right">
+                    <button class="action-btn reject-btn" [disabled]="IsSaving"
+                            (click)="RejectMatch(ComparisonGroup!); CloseComparison()">
+                        <i class="fa-solid fa-times"></i> Reject All
+                    </button>
+                    <button class="action-btn merge-btn" [disabled]="IsSaving || !HasMergeableMatches || !MergeEnabled"
+                            (click)="OpenMergeConfirm()"
+                            [title]="!MergeEnabled ? 'Merging is not enabled for this entity' : HasMergeableMatches ? 'Merge non-skipped records' : 'All matches have been skipped'">
+                        <i class="fa-solid fa-code-merge"></i> Merge Records
+                    </button>
+                    @if (!MergeEnabled) {
+                        <span class="merge-disabled-hint"><i class="fa-solid fa-info-circle"></i> Merging disabled for this entity</span>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- ═══ Merge Confirmation Panel ═══ -->
+    @if (ShowMergeConfirm && ComparisonGroup) {
+        <div class="merge-confirm-backdrop" (click)="CloseMergeConfirm()">
+            <div class="merge-confirm-panel" (click)="$event.stopPropagation()">
+                <div class="merge-confirm-header">
+                    <div class="merge-confirm-icon"><i class="fa-solid fa-code-merge"></i></div>
+                    <div>
+                        <div class="merge-confirm-title">Confirm Record Merge</div>
+                        <div class="merge-confirm-subtitle">This action cannot be undone. Please review carefully.</div>
+                    </div>
+                </div>
+
+                <div class="merge-confirm-body">
+                    <!-- Surviving Record -->
+                    <div class="merge-survivor-card">
+                        <div class="merge-survivor-label"><i class="fa-solid fa-shield-halved"></i> Surviving Record</div>
+                        <div class="merge-survivor-name">{{ SurvivorName() }}</div>
+                        <div class="merge-survivor-pk">
+                            <i class="fa-solid fa-key"></i>
+                            {{ SurvivorKeyDisplay() }}
+                        </div>
+                        <div class="merge-survivor-detail">This record's ID will be retained. All dependencies from merged records will be transferred here.</div>
+                    </div>
+
+                    <!-- Cherry-picked field overrides -->
+                    @if (GetCherryPickedFields().length > 0) {
+                        <div>
+                            <div class="merge-section-label">Field Value Overrides ({{ GetCherryPickedFields().length }} field{{ GetCherryPickedFields().length !== 1 ? 's' : '' }})</div>
+                            @for (field of GetCherryPickedFields(); track field.FieldName) {
+                                <div class="merge-field-override">
+                                    <span class="merge-field-name">{{ field.DisplayName }}</span>
+                                    <span class="merge-field-value">"{{ field.Value }}"</span>
+                                    <span class="merge-field-source">from {{ field.SourceName }}</span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Dependency transfer -->
+                    @if (GetNonSurvivorColumns().length > 0) {
+                        <div class="merge-deps-transfer">
+                            <div class="merge-deps-transfer-label"><i class="fa-solid fa-arrow-right-arrow-left"></i> Dependencies to Transfer</div>
+                            @for (col of GetNonSurvivorColumns(); track col.ColumnIndex) {
+                                <div class="merge-deps-transfer-row">
+                                    <i class="fa-solid fa-arrow-right"></i>
+                                    <span>
+                                        @if (col.DepCount > 0) {
+                                            <strong>{{ col.DepCount }}</strong> {{ col.DepCount === 1 ? 'dependency' : 'dependencies' }} from <strong>{{ col.Name }}</strong> &rarr; {{ SurvivorName() }}
+                                        } @else {
+                                            <strong>0</strong> dependencies from <strong>{{ col.Name }}</strong>
+                                        }
+                                    </span>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Records to be deleted -->
+                    <div class="merge-delete-card">
+                        <div class="merge-delete-label"><i class="fa-solid fa-trash"></i> Records to Delete After Merge</div>
+                        @for (col of GetNonSurvivorColumns(); track col.ColumnIndex) {
+                            <div class="merge-delete-item">
+                                <span class="merge-delete-name">{{ col.Name }}</span>
+                                <span class="merge-delete-deps">
+                                    @if (col.DepCount > 0) {
+                                        {{ col.DepCount }} dep{{ col.DepCount !== 1 ? 's' : '' }} transferring
+                                    } @else {
+                                        no deps
+                                    }
+                                </span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="merge-confirm-footer">
+                    <button class="action-btn cancel-btn" (click)="CloseMergeConfirm()" [disabled]="IsMerging">
+                        <i class="fa-solid fa-arrow-left"></i> Back
+                    </button>
+                    <button class="action-btn confirm-merge-btn" (click)="ExecuteMerge()" [disabled]="IsMerging">
+                        @if (IsMerging) {
+                            <i class="fa-solid fa-spinner fa-spin"></i> Merging...
+                        } @else {
+                            <i class="fa-solid fa-code-merge"></i> Confirm Merge ({{ GetNonSurvivorColumns().length + 1 }} records &rarr; 1)
+                        }
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+
+  </mj-page-body>
+</mj-page-layout>

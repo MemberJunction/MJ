@@ -53,6 +53,30 @@ export const RUN_QUERY_SQL_FILTERS: RunQuerySQLFilter[] = [
         notes: 'Automatically escapes string values. Returns (NULL) for empty arrays which will match no records. Supports mixed types (strings, numbers, nulls).'
     },
     {
+        name: 'sqlLikeContains',
+        description: 'Wraps a string value with % wildcards on both sides for SQL LIKE contains matching',
+        exampleSyntax: "WHERE Name LIKE {{ searchTerm | sqlLikeContains }}",
+        exampleInput: "Leadership Conference",
+        exampleOutput: "'%Leadership Conference%'",
+        notes: 'Returns NULL for null/undefined values. Escapes single quotes, and escapes literal % and _ characters in the value so they are not treated as wildcards.'
+    },
+    {
+        name: 'sqlLikeBegins',
+        description: 'Appends a % wildcard after the string value for SQL LIKE begins-with matching',
+        exampleSyntax: "WHERE Name LIKE {{ searchTerm | sqlLikeBegins }}",
+        exampleInput: "Leadership",
+        exampleOutput: "'Leadership%'",
+        notes: 'Returns NULL for null/undefined values. Escapes single quotes, and escapes literal % and _ characters in the value so they are not treated as wildcards.'
+    },
+    {
+        name: 'sqlLikeEnds',
+        description: 'Prepends a % wildcard before the string value for SQL LIKE ends-with matching',
+        exampleSyntax: "WHERE Name LIKE {{ searchTerm | sqlLikeEnds }}",
+        exampleInput: "Conference",
+        exampleOutput: "'%Conference'",
+        notes: 'Returns NULL for null/undefined values. Escapes single quotes, and escapes literal % and _ characters in the value so they are not treated as wildcards.'
+    },
+    {
         name: 'sqlNoKeywordsExpression',
         description: 'Validates and formats a SQL expression by ensuring it contains no dangerous keywords',
         exampleSyntax: "ORDER BY {{ orderClause | sqlNoKeywordsExpression }}",

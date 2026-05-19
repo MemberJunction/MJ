@@ -1,0 +1,71 @@
+<div class="mj-entity-card"
+     [class]="'mj-entity-card--' + Variant + ' ' + CssClass"
+     (click)="OnCardClick()">
+
+    <!-- Avatar / Thumbnail -->
+    @if (ShouldShowAvatar) {
+        <div class="mj-ec-avatar-area">
+            @if (HasThumbnail && ThumbnailIsImage) {
+                <div class="mj-ec-thumbnail">
+                    <img [src]="ThumbnailValue" alt="" />
+                </div>
+            } @else if (HasThumbnail && ThumbnailIsIcon) {
+                <div class="mj-ec-avatar" [style.background]="AvatarColor">
+                    <i [class]="ThumbnailValue"></i>
+                </div>
+            } @else if (EntityIcon) {
+                <div class="mj-ec-avatar" [style.background]="AvatarColor">
+                    <i [class]="EntityIcon"></i>
+                </div>
+            } @else {
+                <div class="mj-ec-avatar" [style.background]="AvatarColor">
+                    {{ Initials }}
+                </div>
+            }
+        </div>
+    }
+
+    <!-- Content -->
+    <div class="mj-ec-content">
+        <!-- Header: Title + Entity -->
+        <div class="mj-ec-header">
+            <div class="mj-ec-title">{{ Title }}</div>
+            @if (EntityDisplayName && Variant !== 'compact') {
+                <div class="mj-ec-entity">{{ EntityDisplayName }}</div>
+            }
+        </div>
+
+        <!-- Subtitle -->
+        @if (Subtitle && Variant !== 'compact') {
+            <div class="mj-ec-subtitle">{{ Subtitle }}</div>
+        }
+
+        <!-- Description (detail variant only) -->
+        @if (Description && Variant === 'detail') {
+            <div class="mj-ec-description">{{ Description }}</div>
+        }
+
+        <!-- Display Fields -->
+        @if (DisplayFields.length > 0) {
+            <div class="mj-ec-fields" [class.mj-ec-fields--labeled]="ShouldShowLabels">
+                @for (field of DisplayFields; track field.Name) {
+                    @if (GetFieldValue(field); as value) {
+                        <div class="mj-ec-field">
+                            @if (ShouldShowLabels) {
+                                <span class="mj-ec-field-label">{{ field.Label }}</span>
+                            }
+                            <span class="mj-ec-field-value">{{ value }}</span>
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Open Button -->
+    @if (ShowOpenButton) {
+        <button class="mj-ec-open-btn" (click)="OnOpenClick($event)" title="Open record">
+            <i class="fa-solid fa-external-link-alt"></i>
+        </button>
+    }
+</div>

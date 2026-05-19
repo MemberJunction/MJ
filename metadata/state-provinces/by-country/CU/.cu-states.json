@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Camagüey",
+      "Code": "09",
+      "ISO3166_2": "CU-09",
+      "Latitude": 21.3675,
+      "Longitude": -77.9304,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-09.geojson",
+      "CommonAliases": [
+        "Camagüey"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "D47754ED-9A9A-4204-AB3A-5098406ADD12"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.960Z",
+      "checksum": "83af57515d2ee3ce1e534962f62ae1f4988f868e42f951354b187628f194bef8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ciudad de La Habana",
+      "Code": "03",
+      "ISO3166_2": "CU-03",
+      "Latitude": 23.0737,
+      "Longitude": -82.3075,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-03.geojson",
+      "CommonAliases": [
+        "Ciudad de La Habana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "4D7B3F00-5462-4284-A3DE-D30F1D564CF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.977Z",
+      "checksum": "1efa0436ccc18b3ac29621c0ad8c0c28a09b51d20fc6de415c98e1c8a0592021"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Granma",
+      "Code": "12",
+      "ISO3166_2": "CU-12",
+      "Latitude": 20.3212,
+      "Longitude": -76.8386,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-12.geojson",
+      "CommonAliases": [
+        "Granma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "603869C6-1564-452E-8692-6E4B1E66C161"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:39.995Z",
+      "checksum": "473d9a0a0e7e2deb6f40e893b3db8a2219fe0588db91ab7244468ad6e89f0c1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guantánamo",
+      "Code": "14",
+      "ISO3166_2": "CU-14",
+      "Latitude": 20.2358,
+      "Longitude": -74.8112,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-14.geojson",
+      "CommonAliases": [
+        "Guantánamo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "0C155021-92ED-4084-AF76-665EB285DB85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.011Z",
+      "checksum": "26342cc9600a312c5349491d696ec497a42bc2eb14619933449121974290c585"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Holguín",
+      "Code": "11",
+      "ISO3166_2": "CU-11",
+      "Latitude": 20.808,
+      "Longitude": -76.1892,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-11.geojson",
+      "CommonAliases": [
+        "Holguín"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "DCD47CAA-18F3-4705-8B0B-D4644C25B6E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.030Z",
+      "checksum": "a15abac7d155c631ade775739df118b91f28deffafa7158263eafd8f8a202753"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isla de la Juventud",
+      "Code": "99",
+      "ISO3166_2": "CU-99",
+      "Latitude": 21.6754,
+      "Longitude": -82.8148,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-99.geojson",
+      "CommonAliases": [
+        "Isla de la Juventud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "4BB9AB05-B521-4BB3-94DE-A3A8676433FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.046Z",
+      "checksum": "df6d0d2d3c2bc3127e49271923d6aa8a8399a5ba216d30888b09b2d48be81a8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Habana",
+      "Code": "02",
+      "ISO3166_2": "CU-02",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "La Habana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "3A3A0035-0631-4C31-A552-28EAFDE7B03E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.063Z",
+      "checksum": "65a4aed5def5fbeb28124c791609673fa06474c676c3af92e640b02bc6814aa3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Las Tunas",
+      "Code": "10",
+      "ISO3166_2": "CU-10",
+      "Latitude": 21.0299,
+      "Longitude": -77.0723,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-10.geojson",
+      "CommonAliases": [
+        "Las Tunas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "C7A8AAED-07D1-40EF-AAA1-2858CEC367DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.079Z",
+      "checksum": "6a45a482c6d7e397b8a87dab0b320e98ba81ac1ff88ebb8e2f6fcb46c22cbaac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matanzas",
+      "Code": "04",
+      "ISO3166_2": "CU-04",
+      "Latitude": 22.6152,
+      "Longitude": -81.186,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-04.geojson",
+      "CommonAliases": [
+        "Matanzas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "2D4BADB9-8AEA-44A8-A325-9A8512795D54"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.101Z",
+      "checksum": "fd43cd8fc4066282b3e17b7b531cca429438f889dea122e8a0dfcf3768929dcb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pinar del Río",
+      "Code": "01",
+      "ISO3166_2": "CU-01",
+      "Latitude": 22.4952,
+      "Longitude": -83.674,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-01.geojson",
+      "CommonAliases": [
+        "Pinar del Río"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "8ABBC0F2-9BF3-40A4-806D-2394C0415B03"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.120Z",
+      "checksum": "0b2a91fe72e4539673828396b2380394c427a719643d57acee06973e4d73ccf9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sancti Spíritus",
+      "Code": "07",
+      "ISO3166_2": "CU-07",
+      "Latitude": 21.9618,
+      "Longitude": -79.3804,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-07.geojson",
+      "CommonAliases": [
+        "Sancti Spíritus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "F46950DC-B9AE-4994-9614-C10F061D0DAE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.161Z",
+      "checksum": "86572c92261c499c114f7b7738cf34ef025ec3f7c5059cdf4efcf4da11c8ae9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santiago de Cuba",
+      "Code": "13",
+      "ISO3166_2": "CU-13",
+      "Latitude": 20.1959,
+      "Longitude": -76.2117,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-13.geojson",
+      "CommonAliases": [
+        "Santiago de Cuba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "21C4FD32-C4C4-4DEE-B7A5-AC3A139AE026"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.179Z",
+      "checksum": "0065a2989e137920fc6e72eb8305df04647ad1bb6c20172ceb27cd70e063e68a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Villa Clara",
+      "Code": "05",
+      "ISO3166_2": "CU-05",
+      "Latitude": 22.601,
+      "Longitude": -79.9527,
+      "BoundaryGeoJSON": "@file:by-country/CU/boundaries/CU-05.geojson",
+      "CommonAliases": [
+        "Villa Clara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CU"
+    },
+    "primaryKey": {
+      "ID": "DC69869B-293F-4891-8F71-00D0370F5857"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.194Z",
+      "checksum": "513de8c0ae7666cae13c9a1045268f7196df5e7ab90f55ffa6b6951c48705e22"
+    }
+  }
+]

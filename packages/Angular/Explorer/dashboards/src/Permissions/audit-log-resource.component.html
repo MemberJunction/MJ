@@ -1,0 +1,138 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Audit Log"
+    Icon="fa-solid fa-clock-rotate-left"
+    Subtitle="Chronological log of Create / Update / Delete events across every permission domain">
+  </mj-page-header>
+
+  <mj-page-body>
+
+  @if (ErrorMessage) {
+    <div class="message error-message">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <div class="selector-row wrap">
+    <label class="selector-label" for="audit-domain-select">Domain:</label>
+    <select
+      id="audit-domain-select"
+      class="mj-input"
+      [(ngModel)]="DomainFilter"
+      [disabled]="IsLoading"
+    >
+      <option [ngValue]="''">All domains</option>
+      @for (d of Domains; track d.ID) {
+        <option [ngValue]="d.Name">{{ d.Name }}</option>
+      }
+    </select>
+
+    <label class="selector-label" for="audit-user-select">Changed by:</label>
+    <select
+      id="audit-user-select"
+      class="mj-input"
+      [(ngModel)]="UserFilter"
+      [disabled]="IsLoading"
+    >
+      <option [ngValue]="''">Any user</option>
+      @for (user of Users; track user.ID) {
+        <option [ngValue]="user.ID">{{ user.Name }}</option>
+      }
+    </select>
+
+    <label class="selector-label" for="audit-start-date">From:</label>
+    <input
+      id="audit-start-date"
+      type="date"
+      class="mj-input"
+      [(ngModel)]="StartDate"
+      [disabled]="IsLoading"
+    />
+
+    <label class="selector-label" for="audit-end-date">To:</label>
+    <input
+      id="audit-end-date"
+      type="date"
+      class="mj-input"
+      [(ngModel)]="EndDate"
+      [disabled]="IsLoading"
+    />
+
+    <button mjButton variant="primary" (click)="OnRunQuery()" [disabled]="IsLoading">
+      @if (IsLoading) {
+        <i class="fa-solid fa-spinner fa-spin"></i> Querying...
+      } @else {
+        <i class="fa-solid fa-magnifying-glass"></i> Query
+      }
+    </button>
+
+    <button mjButton variant="secondary" (click)="OnResetFilters()" [disabled]="IsLoading">
+      <i class="fa-solid fa-rotate-left"></i> Reset
+    </button>
+  </div>
+
+  @if (IsLoading) {
+    <mj-loading text="Loading audit entries..." size="medium"></mj-loading>
+  } @else if (!HasRunQuery) {
+    <div class="empty-state">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+      <p>Set your filters and press Query to see audit entries.</p>
+    </div>
+  } @else if (Entries.length === 0) {
+    <div class="empty-state">
+      <i class="fa-solid fa-folder-open"></i>
+      <p>No audit entries match your filters.</p>
+    </div>
+  } @else {
+    <div class="total-summary">
+      <strong>{{ Entries.length }}</strong> entr{{ Entries.length === 1 ? 'y' : 'ies' }}
+      @if (Entries.length === 500) {
+        <span class="muted">(capped at 500 — narrow the filters to see more)</span>
+      }
+    </div>
+
+    <div class="domain-body">
+      <table class="perms-table">
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Who</th>
+            <th>Change</th>
+            <th>Domain</th>
+            <th>Entity</th>
+            <th>Record</th>
+            <th>Summary</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (entry of Entries; track TrackByAuditEntry($index, entry)) {
+            <tr>
+              <td>{{ entry.ChangedAt | date:'medium' }}</td>
+              <td>{{ entry.ChangedByUserName || entry.ChangedByUserID || 'System' }}</td>
+              <td>
+                <span class="action-chip">
+                  <i [class]="ChangeIcon(entry.ChangeType)"></i>
+                  {{ entry.ChangeType }}
+                </span>
+              </td>
+              <td>{{ entry.DomainName }}</td>
+              <td><span class="muted">{{ entry.EntityName }}</span></td>
+              <td class="resource-cell">
+                <span class="resource-id">{{ entry.RecordID }}</span>
+              </td>
+              <td>
+                @if (entry.Summary) {
+                  <span>{{ entry.Summary }}</span>
+                } @else {
+                  <span class="muted">—</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  </mj-page-body>
+</mj-page-layout>

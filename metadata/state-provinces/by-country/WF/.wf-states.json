@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Wallis & Futuna Islands",
+      "Code": "WF",
+      "ISO3166_2": "WF-WF",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wallis & Futuna Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=WF"
+    },
+    "primaryKey": {
+      "ID": "D6E5F642-D539-4927-B329-3CACE2C24EB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.454Z",
+      "checksum": "1bff47f5b2b5f32a43a52689a504fc1f44fc212d3473006a1f9180cb9aacf1d6"
+    }
+  }
+]

@@ -2,7 +2,7 @@ import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -86,40 +86,84 @@ export type ProviderType = typeof ProviderType[keyof typeof ProviderType];
  */
 export class PotentialDuplicate extends CompositeKey {
     ProbabilityScore: number;
+    /** Full vector metadata snapshot from the vector DB (Name, Description, EntityIcon, etc.) */
+    VectorMetadata?: Record<string, string>;
+}
+
+/**
+ * Configuration options for duplicate detection behavior.
+ * Controls retrieval, scoring, hybrid search, and reranking parameters.
+ */
+export interface DuplicateDetectionOptions {
+    /** ID of an existing Duplicate Run record to continue */
+    DuplicateRunID?: string;
+    /** Number of nearest neighbors to retrieve per record (default: 5) */
+    TopK?: number;
+    /** Enable post-retrieval reranking via BaseReranker (default: false) */
+    ReRankingEnabled?: boolean;
+    /** AI Model ID for the reranker; if omitted, uses default reranker */
+    ReRankingModelID?: string;
+    /** Max candidates to send to reranker per record (default: all retrieved) */
+    ReRankingTopK?: number;
+    /** Fusion method when combining vector + keyword results (default: 'rrf') */
+    FusionMethod?: 'rrf' | 'weighted';
+    /** Weight for keyword search in hybrid mode: 0.0 = pure vector, 1.0 = pure keyword (default: 0.3) */
+    KeywordSearchWeight?: number;
+    /** Enable incremental mode — only check records not in a completed prior run (default: false) */
+    IncrementalOnly?: boolean;
+    /**
+     * Re-vectorize records before detection (default: false).
+     * When false, assumes vectors already exist in the index from a prior sync.
+     * Set to true to force a fresh vectorization pass before running detection.
+     */
+    Revectorize?: boolean;
+    /** Progress callback invoked at natural milestones during detection */
+    OnProgress?: (progress: DuplicateDetectionProgress) => void;
+    /**
+     * Override the entity document's PotentialMatchThreshold for this run.
+     * Value between 0 and 1 (e.g., 0.30 = 30%). If omitted, uses the entity document's value.
+     */
+    PotentialMatchThreshold?: number;
+    /**
+     * Override the entity document's AbsoluteMatchThreshold for this run.
+     * Value between 0 and 1. If omitted, uses the entity document's value.
+     */
+    AbsoluteMatchThreshold?: number;
+}
+
+/**
+ * Progress information emitted during long-running duplicate detection operations.
+ */
+export interface DuplicateDetectionProgress {
+    Phase: 'Vectorizing' | 'Loading' | 'Embedding' | 'Querying' | 'Matching' | 'Merging';
+    TotalRecords: number;
+    ProcessedRecords: number;
+    MatchesFound: number;
+    CurrentRecordID?: string;
+    ElapsedMs: number;
 }
 
 /**
  * Request parameters for finding potential duplicate records.
- * Supports various matching strategies including list-based and document-based comparisons.
- * Can use either a pre-defined list or entity document for duplicate detection.
+ * Supports list-based batch detection and single-record checks.
  */
 export class PotentialDuplicateRequest {
-    /**
-    * The ID of the entity the record belongs to
-    **/
+    /** The ID of the entity the record belongs to */
     EntityID: string;
-    /**
-    * The ID of the List entity to use
-    **/
-    ListID: string;
-    /**
-     * The Primary Key values of each record
-     * we're checking for duplicates
-     */
-    RecordIDs: CompositeKey[]; 
-    /**
-    * The ID of the entity document to use
-    **/
+    /** The ID of the List entity to use for batch detection (optional — if omitted, records are loaded directly from the entity) */
+    ListID?: string;
+    /** The Primary Key values of each record being checked for duplicates */
+    RecordIDs: CompositeKey[];
+    /** The ID of the entity document defining the vectorization template */
     EntityDocumentID?: string;
-    /**
-    * The minimum score in order to consider a record a potential duplicate
-    **/
+    /** Optional saved view ID — run this view to determine which records to check */
+    ViewID?: string;
+    /** Optional SQL filter applied to the entity to determine which records to check */
+    ExtraFilter?: string;
+    /** Minimum score to consider a record a potential duplicate */
     ProbabilityScore?: number;
-
-    /**
-    * Additional options to pass to the provider
-    **/
-    Options?: any;
+    /** Detection options controlling retrieval, scoring, and behavior */
+    Options?: DuplicateDetectionOptions;
 }
 
 /**
@@ -344,19 +388,63 @@ export class EntityRecordNameResult  {
  */
 export interface ILocalStorageProvider {
     /**
-     * Retrieves an item from storage.
+     * Retrieves a value from storage. The implementation is responsible for any
+     * deserialization required by the underlying medium:
+     *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
+     *  - **localStorage / Redis**: deserializes from JSON internally
+     *  - **In-memory**: returns the stored reference
+     *
+     * Returns `null` for missing keys or corrupt entries.
+     *
+     * @typeParam T - Expected type of the stored value. Caller-controlled — the provider does
+     *                not validate the runtime shape against this type. Falls back to `unknown`.
      * @param key - The key to retrieve
      * @param category - Optional category for key isolation (e.g., 'RunViewCache', 'Metadata')
      */
-    GetItem(key: string, category?: string): Promise<string | null>;
+    GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
 
     /**
-     * Stores an item in storage.
+     * Batched retrieval — reads N values for N keys in one logical operation.
+     *
+     * Returns a `Map` keyed by the input key strings. Missing keys map to `null`.
+     * The map preserves the original key set so callers can index by key without
+     * relying on array-position alignment.
+     *
+     * **Why batch?** IndexedDB serializes transactions on the same object store —
+     * `Promise.all([...N GetItem calls])` looks parallel but pays per-transaction
+     * setup cost (~3–10ms each) for every key. A single transaction with N
+     * `get()` calls amortizes that overhead. Redis can use `MGET`/pipelines.
+     * In-memory implementations have no real win but implement consistently for
+     * a uniform API.
+     *
+     * Implementations are free to fall back to per-key reads internally if the
+     * underlying medium doesn't support batching — the contract is just "read
+     * all of these as efficiently as you can". An empty `keys` array returns
+     * an empty map without touching the storage backend.
+     *
+     * @typeParam T - Expected type of all stored values. Caller-controlled.
+     * @param keys - The keys to retrieve. Duplicates are deduplicated; the
+     *               returned map has one entry per unique key.
+     * @param category - Optional category for key isolation (applies to all keys)
+     */
+    GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+
+    /**
+     * Stores a value. Callers should pass plain data (objects/arrays/primitives/Date/etc).
+     * Implementations handle any serialization required by the medium:
+     *  - **IndexedDB**: stores natively via structured clone (no string conversion)
+     *  - **localStorage / Redis**: serializes to JSON internally
+     *  - **In-memory**: stores the reference directly
+     *
+     * **Class instances lose their prototype on retrieval** — store the underlying data
+     * (e.g. via `entity.GetAll()`) and reconstruct on read if needed.
+     *
+     * @typeParam T - Type of the value being stored. Caller-controlled.
      * @param key - The key to store under
      * @param value - The value to store
      * @param category - Optional category for key isolation
      */
-    SetItem(key: string, value: string, category?: string): Promise<void>;
+    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
 
     /**
      * Removes an item from storage.
@@ -431,6 +519,18 @@ export interface IMetadataProvider {
 
     get Entities(): EntityInfo[]
 
+    /**
+     * O(1) entity lookup by name (case-insensitive, trimmed).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByName(entityName: string): EntityInfo | undefined
+
+    /**
+     * O(1) entity lookup by ID (UUID-normalized).
+     * Falls back to linear search if the internal Map hasn't been built yet.
+     */
+    EntityByID(entityID: string): EntityInfo | undefined
+
     get Applications(): ApplicationInfo[]
 
     get CurrentUser(): UserInfo
@@ -442,6 +542,12 @@ export interface IMetadataProvider {
     get AuditLogTypes(): AuditLogTypeInfo[]
 
     get Authorizations(): AuthorizationInfo[]
+
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Consumed by `AuthorizationInfo.Roles` for lazy per-auth filtering.
+     */
+    get AuthorizationRoles(): AuthorizationRoleInfo[]
 
     get Queries(): QueryInfo[]
 
@@ -793,6 +899,118 @@ export interface IRunViewProvider {
      * @returns Response containing status and fresh data only for stale caches
      */
     RunViewsWithCacheCheck?<T = unknown>(params: RunViewWithCacheCheckParams[], contextUser?: UserInfo): Promise<RunViewsWithCacheCheckResponse<T>>
+
+    /**
+     * Performs a full-text search across all entities that have FullTextSearchEnabled=true in their metadata.
+     * Uses the database-native full-text search capabilities (SQL Server FREETEXT via CodeGen-generated functions,
+     * PostgreSQL tsvector/GIN indexes, etc.) through the existing RunView + UserSearchString infrastructure.
+     *
+     * @param params Search parameters including the search text and optional entity name filter
+     * @param contextUser Optional user context for permissions and row-level security
+     * @returns Array of search results grouped by entity, with title, snippet, and relevance score
+     *
+     * @see {@link FullTextSearchParams} for parameter details
+     * @see {@link FullTextSearchResult} for result structure
+     * @see /packages/MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md for comprehensive documentation
+     */
+    FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult>
+}
+
+// ============================================================================
+// FULL-TEXT SEARCH TYPES
+// ============================================================================
+
+/**
+ * Parameters for the FullTextSearch method.
+ */
+export type FullTextSearchParams = {
+    /**
+     * The search text to find across entities. This is passed as UserSearchString to RunView,
+     * which routes it through the database-native full-text search infrastructure
+     * (SQL Server FREETEXT functions or PostgreSQL tsvector queries).
+     */
+    SearchText: string;
+
+    /**
+     * Optional list of entity names to restrict the search to. Each entity in this list
+     * MUST have FullTextSearchEnabled=true — entities without FTS enabled will be silently skipped.
+     * If not provided, ALL entities with FullTextSearchEnabled=true are searched.
+     */
+    EntityNames?: string[];
+
+    /**
+     * Maximum number of rows to return per entity. Defaults to 10 if not specified.
+     * Helps control result set size when searching across many entities.
+     */
+    MaxRowsPerEntity?: number;
+}
+
+/**
+ * A single matched record from a full-text search.
+ */
+export type FullTextSearchResultItem = {
+    /**
+     * The name of the entity this result came from (e.g., "MJ: AI Models")
+     */
+    EntityName: string;
+
+    /**
+     * The primary key value of the matched record
+     */
+    RecordID: string;
+
+    /**
+     * The display title for this result, sourced from the entity's best "name" field
+     * (Name, Title, Subject, etc.)
+     */
+    Title: string;
+
+    /**
+     * A text snippet providing context for the match, sourced from the entity's best
+     * "description" field (Description, Summary, Body, etc.). Truncated to ~200 chars.
+     */
+    Snippet: string;
+
+    /**
+     * Relevance score for ranking. Uses rank-based scoring (1/(rank+1)) to be
+     * compatible with Reciprocal Rank Fusion (RRF) when combined with vector search results.
+     */
+    Score: number;
+}
+
+/**
+ * Result of a FullTextSearch operation across multiple entities.
+ */
+export type FullTextSearchResult = {
+    /**
+     * Whether the search completed successfully
+     */
+    Success: boolean;
+
+    /**
+     * Error message if Success is false
+     */
+    ErrorMessage?: string;
+
+    /**
+     * All matched records across all searched entities, ordered by relevance score descending
+     */
+    Results: FullTextSearchResultItem[];
+
+    /**
+     * Total number of results found
+     */
+    TotalCount: number;
+
+    /**
+     * Number of entities that were searched
+     */
+    EntitiesSearched: number;
+
+    /**
+     * Time taken to execute the search in milliseconds
+     */
+    ElapsedMs: number;
 }
 
 // ============================================================================
@@ -1207,6 +1425,12 @@ export class AllMetadata {
     AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
     AllAuditLogTypes: AuditLogTypeInfo[] = [];
     AllAuthorizations: AuthorizationInfo[] = [];
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Loaded via `AllMetadataArrays` and used by `AuthorizationInfo.Roles`
+     * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
+     */
+    AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
     AllQueryCategories: QueryCategoryInfo[] = [];
     AllQueries: QueryInfo[] = [];
     AllQueryFields: QueryFieldInfo[] = [];

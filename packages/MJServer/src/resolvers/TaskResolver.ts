@@ -1,8 +1,9 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { TaskOrchestrator, TaskGraphResponse, TaskExecutionResult } from '../services/TaskOrchestrator.js';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class TaskExecutionResultType {
@@ -53,7 +54,7 @@ export class TaskOrchestrationResolver extends ResolverBase {
         @Arg('environmentId') environmentId: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
-        @Ctx() { userPayload }: AppContext,
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('createNotifications', { nullable: true }) createNotifications?: boolean
     ): Promise<ExecuteTaskGraphResult> {
         // Check API key scope authorization for task execution
@@ -82,7 +83,8 @@ export class TaskOrchestrationResolver extends ResolverBase {
             }
 
             // Create task orchestrator with PubSub for progress updates
-            const orchestrator = new TaskOrchestrator(currentUser, pubSub, sessionId, userPayload, createNotifications || false, conversationDetailId);
+            const provider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const orchestrator = new TaskOrchestrator(currentUser, pubSub, sessionId, userPayload, createNotifications || false, conversationDetailId, provider);
 
             // Create parent task and child tasks with dependencies
             const { parentTaskId, taskIdMap } = await orchestrator.createTasksFromGraph(

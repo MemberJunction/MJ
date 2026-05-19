@@ -1,0 +1,31 @@
+{
+  "name": "@memberjunction/auth-providers",
+  "version": "5.34.1",
+  "description": "Authentication provider interfaces, base classes, and implementations for MemberJunction",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/global": "5.34.1",
+    "graphql": "^16.12.0",
+    "jsonwebtoken": "9.0.3",
+    "jwks-rsa": "^3.2.2"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "9.0.10",
+    "@types/node": "24.10.11",
+    "tsc-alias": "^1.8.15",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

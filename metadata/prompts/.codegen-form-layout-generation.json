@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/form-layout-generation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "ParallelizationMode": "None",
@@ -95,6 +98,36 @@
             "lastModified": "2026-02-13T20:48:55.588Z",
             "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "FCC0DEA0-E730-4200-96E7-23CEB6534CDA"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:54.809Z",
+            "checksum": "3cbb3c7087d324e59daa930e998fc01a358b966b00a03e71afeeb333116e1743"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "10585456-E4C7-46BD-8066-974D94D122AE"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:54.823Z",
+            "checksum": "49a2b5a9b8c939050b947281568da42303aa6e836bf5bb619843c881494a9a26"
+          }
         }
       ]
     },
@@ -102,8 +135,8 @@
       "ID": "910D617C-56CE-4698-A938-E2E982BB91FD"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.457Z",
-      "checksum": "41fa51fcc497dcdd724bdd74a6d31330613ba8e3ab62ad6e71c293d9376deabb"
+      "lastModified": "2026-04-20T23:53:38.175Z",
+      "checksum": "409bb7d645105c16ab72d40435f396ee98e0d643d89179d3dab9872fa18ab7e6"
     }
   }
 ]

@@ -136,4 +136,108 @@ describe('Metadata', () => {
             expect(mockProvider.Refresh).toHaveBeenCalled();
         });
     });
+
+    // Perf-bundle: Metadata.EntityByName/ByID fall back to a lazy Map cache
+    // when the provider doesn't implement those methods directly. These tests
+    // exercise that fallback code path.
+    describe('EntityByName/ByID cache (perf-bundle)', () => {
+        // Isolated provider mutation — don't share across suites
+        const buildMutableProvider = () => {
+            const entities = [
+                { ID: '11111111-1111-1111-1111-111111111111', Name: 'Users', SchemaName: 'admin', BaseTable: 'User', Fields: [] },
+                { ID: '22222222-2222-2222-2222-222222222222', Name: 'Roles', SchemaName: 'admin', BaseTable: 'Role', Fields: [] }
+            ];
+            return {
+                get Entities() { return entities; },
+                _entitiesRef: entities,
+                CurrentUser: { ID: 'u-1', Name: 'TestUser' },
+                Applications: [],
+                Roles: [],
+                Authorizations: [],
+                RowLevelSecurityFilters: [],
+                AuditLogTypes: [],
+                Queries: [],
+                QueryCategories: [],
+                QueryFields: [],
+                QueryPermissions: [],
+                Libraries: [],
+                ExplorerNavigationItems: [],
+                LatestRemoteMetadata: null,
+                LocalMetadataStore: null,
+                Refresh: vi.fn().mockResolvedValue(true),
+                GetEntityObject: vi.fn().mockResolvedValue({}),
+                GetEntityObjectByID: vi.fn().mockResolvedValue({})
+                // intentionally NO EntityByName/EntityByID on provider — forces fallback
+            };
+        };
+
+        it('EntityByName: returns the same reference across repeated lookups (cache hit)', () => {
+            Metadata.Provider = buildMutableProvider() as never;
+            const md = new Metadata();
+
+            const first = md.EntityByName('Users');
+            const second = md.EntityByName('Users');
+
+            expect(first).toBeDefined();
+            expect(first).toBe(second); // identity equality — cache returned same object
+            expect(first?.Name).toBe('Users');
+        });
+
+        it('EntityByName: lowercases and trims the key', () => {
+            Metadata.Provider = buildMutableProvider() as never;
+            const md = new Metadata();
+
+            expect(md.EntityByName('  users  ')?.Name).toBe('Users');
+            expect(md.EntityByName('USERS')?.Name).toBe('Users');
+        });
+
+        it('EntityByID: resolves SQL-Server-style uppercase UUID', () => {
+            Metadata.Provider = buildMutableProvider() as never;
+            const md = new Metadata();
+
+            const upper = '11111111-1111-1111-1111-111111111111'.toUpperCase();
+            expect(md.EntityByID(upper)?.Name).toBe('Users');
+        });
+
+        it('EntityByID: resolves PostgreSQL-style lowercase UUID', () => {
+            Metadata.Provider = buildMutableProvider() as never;
+            const md = new Metadata();
+
+            expect(md.EntityByID('22222222-2222-2222-2222-222222222222')?.Name).toBe('Roles');
+        });
+
+        it('EntityByID: returns undefined for empty/null id without throwing', () => {
+            Metadata.Provider = buildMutableProvider() as never;
+            const md = new Metadata();
+
+            expect(md.EntityByID('')).toBeUndefined();
+            expect(md.EntityByID(null as unknown as string)).toBeUndefined();
+        });
+
+        it('Refresh() invalidates the entity cache so new entities become visible', async () => {
+            const provider = buildMutableProvider();
+            Metadata.Provider = provider as never;
+            const md = new Metadata();
+
+            // Populate the cache
+            expect(md.EntityByName('Users')).toBeDefined();
+
+            // Mutate the underlying entity array AFTER the cache is warm
+            provider._entitiesRef.push({
+                ID: '33333333-3333-3333-3333-333333333333',
+                Name: 'Permissions',
+                SchemaName: 'admin',
+                BaseTable: 'Permission',
+                Fields: []
+            });
+
+            // Pre-Refresh the cache still reflects the old set
+            expect(md.EntityByName('Permissions')).toBeUndefined();
+
+            await md.Refresh();
+
+            // Post-Refresh the cache is invalidated and the new entity resolves
+            expect(md.EntityByName('Permissions')?.Name).toBe('Permissions');
+        });
+    });
 });

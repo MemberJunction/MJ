@@ -37,16 +37,34 @@ export class SchemaEvolution {
 
         // Standard columns to ignore in the diff (managed by Schema Builder / CodeGen)
         const standardCols = new Set(['id', 'sourcerecordid', 'sourcejson', 'syncstatus', 'lastsyncedat',
-                                       '__mj_createdat', '__mj_updatedat']);
+                                       '__mj_createdat', '__mj_updatedat',
+                                       '__mj_integration_syncstatus', '__mj_integration_lastsyncedat']);
 
         const added: TargetColumnConfig[] = [];
         const modified: ColumnModification[] = [];
         const removed: string[] = [];
+        const warnings: string[] = [];
+
+        // Build set of PK column names — changes are warned but not executed
+        const pkNames = new Set(
+            (targetConfig.PrimaryKeyFields ?? []).map(f => f.toLowerCase())
+        );
 
         // Find added and modified columns
         for (const col of targetConfig.Columns) {
             const lowerName = col.TargetColumnName.toLowerCase();
             if (standardCols.has(lowerName)) continue;
+
+            // PK columns: detect changes but only warn, never alter
+            if (pkNames.has(lowerName)) {
+                if (existingNames.has(lowerName)) {
+                    const existingCol = existing.Columns.find(c => c.Name.toLowerCase() === lowerName);
+                    if (existingCol && this.HasColumnChanged(existingCol, col)) {
+                        warnings.push(`PK column '${col.TargetColumnName}' type changed from ${existingCol.SqlType} to ${col.TargetSqlType} — skipped (requires manual constraint drop/recreate)`);
+                    }
+                }
+                continue;
+            }
 
             if (!existingNames.has(lowerName)) {
                 added.push(col);
@@ -73,7 +91,7 @@ export class SchemaEvolution {
             }
         }
 
-        return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed };
+        return { AddedColumns: added, ModifiedColumns: modified, RemovedColumns: removed, Warnings: warnings };
     }
 
     /**

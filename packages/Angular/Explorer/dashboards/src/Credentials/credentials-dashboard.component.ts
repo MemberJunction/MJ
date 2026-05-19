@@ -61,12 +61,13 @@ export class CredentialsDashboardComponent extends BaseDashboard implements Afte
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.stateChangeSubject.complete();
     }
 
     private async loadCounts(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             // Load credential count
             const credResult = await rv.RunView({

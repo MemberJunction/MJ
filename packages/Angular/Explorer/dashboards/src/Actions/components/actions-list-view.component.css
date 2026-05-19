@@ -2,13 +2,13 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--kendo-color-app-surface);
+  background: var(--mj-bg-page);
   position: relative; /* Required for scoped loading overlay */
 }
 .actions-list-view .list-header {
   padding: 1.5rem;
-  border-bottom: 1px solid var(--kendo-color-border);
-  background: var(--kendo-color-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface);
 }
 .actions-list-view .list-header .header-title {
   display: flex;
@@ -25,11 +25,11 @@
   gap: 0.5rem;
 }
 .actions-list-view .list-header .header-title h2 i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
 }
 .actions-list-view .list-header .header-title .results-count {
   font-size: 0.875rem;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   font-weight: 600;
 }
 .actions-list-view .list-header .filters-row {
@@ -42,15 +42,9 @@
   flex: 1;
   min-width: 200px;
 }
-.actions-list-view .list-header .filters-row .search-container kendo-textbox {
-  width: 100%;
-}
 .actions-list-view .list-header .filters-row .filter-group {
   display: flex;
   gap: 0.75rem;
-}
-.actions-list-view .list-header .filters-row .filter-group kendo-dropdownlist {
-  min-width: 140px;
 }
 .actions-list-view .list-header .filters-row .filter-group .category-filter-button {
   display: flex;
@@ -61,8 +55,8 @@
   font-size: 14px;
 }
 .actions-list-view .list-header .filters-row .filter-group .category-filter-button .badge {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 12px;
@@ -74,8 +68,8 @@
   right: 20px;
   width: 350px;
   max-height: 70vh;
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   z-index: 100;
@@ -87,7 +81,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--kendo-color-border);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 .actions-list-view .category-tree-panel .tree-header h3 {
   margin: 0;
@@ -96,19 +90,19 @@
 }
 .actions-list-view .category-tree-panel .tree-actions {
   padding: 8px;
-  border-bottom: 1px solid var(--kendo-color-border);
+  border-bottom: 1px solid var(--mj-border-default);
 }
 .actions-list-view .category-tree-panel .tree-actions button {
   width: 100%;
   justify-content: flex-start;
 }
 .actions-list-view .category-tree-panel .tree-actions button.selected {
-  background: var(--kendo-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }
 .actions-list-view .category-tree-panel .tree-actions button .badge {
   margin-left: auto;
-  background: var(--kendo-color-base-subtle);
-  color: var(--kendo-color-on-app-surface);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -125,8 +119,8 @@
   margin-bottom: 2px;
 }
 .actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button.selected {
-  background: var(--kendo-color-primary-subtle);
-  color: var(--kendo-color-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
 }
 .actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .expand-button {
   padding: 0;
@@ -144,12 +138,12 @@
 }
 .actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button i.fa-folder {
   margin-right: 6px;
-  color: var(--kendo-color-warning);
+  color: var(--mj-status-warning);
 }
 .actions-list-view .category-tree-panel .tree-content .tree-node .tree-node-button .badge {
   margin-left: auto;
-  background: var(--kendo-color-base-subtle);
-  color: var(--kendo-color-on-app-surface);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-primary);
   padding: 2px 6px;
   border-radius: 12px;
   font-size: 11px;
@@ -165,16 +159,16 @@
   align-items: flex-start;
   gap: 1rem;
   padding: 1.5rem;
-  background: var(--kendo-color-surface);
-  border: 1px solid var(--kendo-color-border);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
   border-radius: 0.75rem;
   margin-bottom: 1rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 .actions-list-view .actions-list .action-card:hover {
-  background: var(--kendo-color-base-hover);
-  border-color: var(--kendo-color-primary);
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-brand-primary);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -185,11 +179,11 @@
   width: 3rem;
   height: 3rem;
   border-radius: 0.5rem;
-  background: var(--kendo-color-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   flex-shrink: 0;
 }
 .actions-list-view .actions-list .action-card .action-icon i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
   font-size: 1.25rem;
 }
 .actions-list-view .actions-list .action-card .action-main {
@@ -205,20 +199,15 @@
   margin: 0;
   font-size: 1.125rem;
   font-weight: 600;
-  color: var(--kendo-color-on-app-surface);
+  color: var(--mj-text-primary);
 }
 .actions-list-view .actions-list .action-card .action-main .action-header .action-badges {
   display: flex;
   gap: 0.5rem;
   flex-shrink: 0;
 }
-.actions-list-view .actions-list .action-card .action-main .action-header .action-badges kendo-chip:has(i) {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
 .actions-list-view .actions-list .action-card .action-main .action-description {
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
   line-height: 1.5;
   margin-bottom: 1rem;
 }
@@ -232,10 +221,10 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.75rem;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 .actions-list-view .actions-list .action-card .action-main .action-details .detail-item i {
-  color: var(--kendo-color-primary);
+  color: var(--mj-brand-primary);
   width: 0.75rem;
 }
 .actions-list-view .actions-list .action-card .action-actions {
@@ -255,7 +244,7 @@
   justify-content: center;
   padding: 3rem 2rem;
   text-align: center;
-  color: var(--kendo-color-subtle);
+  color: var(--mj-text-muted);
 }
 .actions-list-view .actions-list .empty-state i {
   font-size: 3rem;

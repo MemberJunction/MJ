@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Adamaoua",
+      "Code": "AD",
+      "ISO3166_2": "CM-AD",
+      "Latitude": 6.8047,
+      "Longitude": 13.217,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-AD.geojson",
+      "CommonAliases": [
+        "Adamaoua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "255FC0A1-A203-4175-81A1-5EA7E3B6948F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.141Z",
+      "checksum": "62a001853cb6deaa79372e815ea77f63b63f1e00f0a9c72f27576c20e79493c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centre",
+      "Code": "CE",
+      "ISO3166_2": "CM-CE",
+      "Latitude": 4.7327,
+      "Longitude": 11.7383,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-CE.geojson",
+      "CommonAliases": [
+        "Centre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "75F40705-65D5-4ECD-9C28-60BD8F500715"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.162Z",
+      "checksum": "8fc8b41bee8be3ff728b1d24bbcb053375bc1e3498965c7567cb39a5ecb63905"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Est",
+      "Code": "ES",
+      "ISO3166_2": "CM-ES",
+      "Latitude": 3.7838,
+      "Longitude": 14.1674,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-ES.geojson",
+      "CommonAliases": [
+        "Est"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "E36F02FB-DE73-494C-BA09-D056BE664E87"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.182Z",
+      "checksum": "01b1fdb63fa922c451e3c8fda089473d22f0beb4092df2a1c4d49e4841783d74"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Far North",
+      "Code": "EN",
+      "ISO3166_2": "CM-EN",
+      "Latitude": 10.7227,
+      "Longitude": 14.5367,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-EN.geojson",
+      "CommonAliases": [
+        "Far North"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "E2257EF4-31B9-406F-9E93-7546255EC8D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.202Z",
+      "checksum": "a55707fb053a2a4ca97f8d43f0310b7108505ee065b496b72a7ac17fcf54a149"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Littoral",
+      "Code": "LT",
+      "ISO3166_2": "CM-LT",
+      "Latitude": 4.1938,
+      "Longitude": 10.0932,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-LT.geojson",
+      "CommonAliases": [
+        "Littoral"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "3E6ED73A-DE5F-4A1A-91C6-97BB31AEF32E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.220Z",
+      "checksum": "c088fbd5554a94e4c825fb6bd8060b3ce3f6fc7b21e78148fb060208c61c693a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North",
+      "Code": "NO",
+      "ISO3166_2": "CM-NO",
+      "Latitude": 8.9098,
+      "Longitude": 13.8908,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-NO.geojson",
+      "CommonAliases": [
+        "North"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "1BD73FE9-289B-4977-9C91-1B49959D079E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.238Z",
+      "checksum": "056b21460af47e8047431a23482f2e657b4d733c7fac2e19f52200f20d81870e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North-West",
+      "Code": "NW",
+      "ISO3166_2": "CM-NW",
+      "Latitude": 6.3455,
+      "Longitude": 10.4002,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-NW.geojson",
+      "CommonAliases": [
+        "North-West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "F7A07BAA-770D-4246-88E5-F298CE6B118D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.256Z",
+      "checksum": "19d2761833ecb67e44c34abd2d8eab1eafd2c0a35c6b012b5273fa87e6974dfd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South",
+      "Code": "SU",
+      "ISO3166_2": "CM-SU",
+      "Latitude": 2.7926,
+      "Longitude": 11.731,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-SU.geojson",
+      "CommonAliases": [
+        "South"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "D39A6132-BCE8-4B67-A593-C7499C141D0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.273Z",
+      "checksum": "b2b8ff1dd63c14c55dcd9a311d010c7a95745e7c054578e161cafbbf120f32a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South-West",
+      "Code": "SW",
+      "ISO3166_2": "CM-SW",
+      "Latitude": 5.1282,
+      "Longitude": 9.2448,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-SW.geojson",
+      "CommonAliases": [
+        "South-West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "8D0422B1-90C0-47A2-8EEC-46B33B31B111"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.290Z",
+      "checksum": "434f06c8fd1550be5c80a80dc441456f4483d27f0a4d75b58132e805b4ee299a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West",
+      "Code": "OU",
+      "ISO3166_2": "CM-OU",
+      "Latitude": 5.3669,
+      "Longitude": 10.5889,
+      "BoundaryGeoJSON": "@file:by-country/CM/boundaries/CM-OU.geojson",
+      "CommonAliases": [
+        "West"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CM"
+    },
+    "primaryKey": {
+      "ID": "9F1CA4E7-D2CA-4EBD-AF6F-BDEFDE67D69B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.304Z",
+      "checksum": "c237a2cf6ca58610c86aba0e081d485ebbbb8bd5b3c43835f0f4bdb17dd8ce97"
+    }
+  }
+]

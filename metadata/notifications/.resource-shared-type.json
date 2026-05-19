@@ -1,0 +1,23 @@
+{
+  "fields": {
+    "Name": "Resource Shared",
+    "Description": "Sent when another user shares a resource (conversation, dashboard, artifact, collection, etc.) with you",
+    "DefaultInApp": true,
+    "DefaultEmail": true,
+    "DefaultSMS": false,
+    "AllowUserPreference": true,
+    "EmailTemplateID": "@lookup:MJ: Templates.Name=Resource Shared - Email",
+    "SMSTemplateID": null,
+    "Icon": "fa-share-nodes",
+    "Color": "#2196F3",
+    "AutoExpireDays": 30,
+    "Priority": 10
+  },
+  "primaryKey": {
+    "ID": "818FF354-9067-4FF5-AEB3-D49EADD4E067"
+  },
+  "sync": {
+    "lastModified": "2026-04-23T20:24:33.593Z",
+    "checksum": "5382695e958466f2b5ec26292f681c02508fa2d4c29b353564798ca13919cf69"
+  }
+}

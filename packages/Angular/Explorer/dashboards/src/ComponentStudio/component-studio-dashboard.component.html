@@ -1,4 +1,4 @@
-<div class="component-studio" [class.resizing]="IsResizing" kendoDialogContainer>
+<div class="component-studio" [class.resizing]="IsResizing">
 
   <!-- ============================================================
        TOOLBAR — Unified bar with integrated breadcrumb
@@ -165,10 +165,10 @@
             <h2>Ready to Build</h2>
             <p>Select a component from the browser or create a new one to get started</p>
             <div class="empty-state-actions">
-              <button kendoButton [themeColor]="'primary'" (click)="OnNewComponent()">
+              <button mjButton variant="primary" (click)="OnNewComponent()">
                 <span class="fa-solid fa-plus"></span> New Component
               </button>
-              <button kendoButton [themeColor]="'base'" (click)="ImportFromFile()">
+              <button mjButton (click)="ImportFromFile()">
                 <span class="fa-solid fa-file-import"></span> Import
               </button>
             </div>
@@ -282,5 +282,31 @@
       (Save)="OnSaveVersionConfirm($event)"
       (Cancel)="ShowSaveVersionDialog = false">
     </mj-save-version-dialog>
+  }
+
+  <!-- Text Import Dialog -->
+  @if (ShowTextImportDialog) {
+    <mj-dialog [Visible]="true" Title="Import Component from Text" (Close)="OnTextImportCancel()" [Width]="700" [MinWidth]="500">
+      <app-text-import-dialog
+        (importSpec)="OnTextImportSpec($event)"
+        (cancelDialog)="OnTextImportCancel()">
+      </app-text-import-dialog>
+    </mj-dialog>
+  }
+
+  <!-- Artifact Load Dialog -->
+  @if (ShowArtifactLoadDialog) {
+    <app-artifact-load-dialog
+      [Visible]="ShowArtifactLoadDialog"
+      (Close)="OnArtifactLoadClose($event)">
+    </app-artifact-load-dialog>
+  }
+
+  <!-- Artifact Selection Dialog -->
+  @if (ShowArtifactSelectionDialog) {
+    <app-artifact-selection-dialog
+      [Visible]="ShowArtifactSelectionDialog"
+      (Close)="OnArtifactSelectionClose($event)">
+    </app-artifact-selection-dialog>
   }
 </div>

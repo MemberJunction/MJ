@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Almaty",
+      "Code": "ALA",
+      "ISO3166_2": "KZ-ALA",
+      "Latitude": 43.2709,
+      "Longitude": 76.9424,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-ALA.geojson",
+      "CommonAliases": [
+        "Almaty"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "DC0FDA3E-7D05-40F6-8796-C125DADAAEBF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.547Z",
+      "checksum": "cd0ec148b1b23eb4cbf3df8661f5910f2937eeb1cbc16bea5b90370eb30e00f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Almaty oblysy (Almatinskaya oblast')",
+      "Code": "ALM",
+      "ISO3166_2": "KZ-ALM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Almaty oblysy (Almatinskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "A38F9541-E4CA-48A9-A028-C4205F4812DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.564Z",
+      "checksum": "5398244e40e8a02e71a085ead8d352a28874f21647cab234429bb25f7230e6c4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aqmola oblysy (Akmolinskaya oblast')",
+      "Code": "AKM",
+      "ISO3166_2": "KZ-AKM",
+      "Latitude": 51.928,
+      "Longitude": 69.8519,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-AKM.geojson",
+      "CommonAliases": [
+        "Aqmola oblysy (Akmolinskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "3B8D7A0C-AC6E-42E7-8317-B128DAA00ADF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.582Z",
+      "checksum": "aef5ddcabd05503eb5431570ee402a846b8a5b1294d9df6e0e28cbcc144ffd8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aqtöbe oblysy (Aktyubinskaya oblast')",
+      "Code": "AKT",
+      "ISO3166_2": "KZ-AKT",
+      "Latitude": 48.0288,
+      "Longitude": 58.9373,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-AKT.geojson",
+      "CommonAliases": [
+        "Aqtöbe oblysy (Aktyubinskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "FF2B4F89-E52B-4D4D-94BF-56970F475283"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.599Z",
+      "checksum": "6365945df91b4fa6808fe21dc51a8d26aef3cf4056241189ced9240ebb3d58f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atyraü oblysy (Atyrauskaya oblast')",
+      "Code": "ATY",
+      "ISO3166_2": "KZ-ATY",
+      "Latitude": 47.7744,
+      "Longitude": 51.7585,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-ATY.geojson",
+      "CommonAliases": [
+        "Atyraü oblysy (Atyrauskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "2E8CB750-23FC-4EA0-B193-6904D0763FC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.615Z",
+      "checksum": "769bef0f7f5a376db061d8bf538923cd0403fa105a3de93003d935d0d6c5ef1c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Batys Kazakstan oblysy (Zapadno-Kazakhstanskaya oblast')",
+      "Code": "ZAP",
+      "ISO3166_2": "KZ-ZAP",
+      "Latitude": 49.8909,
+      "Longitude": 50.5145,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-ZAP.geojson",
+      "CommonAliases": [
+        "Batys Kazakstan oblysy (Zapadno-Kazakhstanskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "D647E999-8A33-4DC5-9B86-A206A7B72AE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.631Z",
+      "checksum": "60ee4bb3f4fadefa26360f62723e0a1d4778221b0a2845bdc042d29a4070494d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bayqonyr (Baykonyr)",
+      "Code": "BAY",
+      "ISO3166_2": "KZ-BAY",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bayqonyr (Baykonyr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "92AA01BF-2EC9-46B0-B46D-8167E4CD02F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.647Z",
+      "checksum": "7c066dd4106190de97c4881ba21cdad4882c697168eedb022c95a3c08a4fdc52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mangghystaū oblysy (Mangystauskaya oblast')",
+      "Code": "MAN",
+      "ISO3166_2": "KZ-MAN",
+      "Latitude": 44.0351,
+      "Longitude": 53.8538,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-MAN.geojson",
+      "CommonAliases": [
+        "Mangghystaū oblysy (Mangystauskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "55ABA9C5-145A-4144-966D-5415EBD37F52"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.663Z",
+      "checksum": "be826c8f7aa0dbfbd57a454da0f3567381fa0f4dec8ad4e5a4800ca797b40b64"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ongtüstik Kazakstan oblysy (Yuzhno-Kazakhstanskaya oblast')",
+      "Code": "YUZ",
+      "ISO3166_2": "KZ-YUZ",
+      "Latitude": 42.7187,
+      "Longitude": 68.7533,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-YUZ.geojson",
+      "CommonAliases": [
+        "Ongtüstik Kazakstan oblysy (Yuzhno-Kazakhstanskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "A37EA9C1-86F9-41EA-81B4-04C0267E73C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.682Z",
+      "checksum": "5f2bc9ac0fad8d26dfc5740e99b052bea030111a9660fb41a5f47753d132d01e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pavlodar oblysy (Pavlodarskaya oblast')",
+      "Code": "PAV",
+      "ISO3166_2": "KZ-PAV",
+      "Latitude": 52.2076,
+      "Longitude": 76.3751,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-PAV.geojson",
+      "CommonAliases": [
+        "Pavlodar oblysy (Pavlodarskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "ABCBC7A0-1554-46DD-9179-16194FEB932C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.696Z",
+      "checksum": "cedb6e871023d245f9c6bb64828cf4b43d26be22d317538e19bf2b1e5202c9c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qaraghandy oblysy (Karagandinskaya oblast')",
+      "Code": "KAR",
+      "ISO3166_2": "KZ-KAR",
+      "Latitude": 48.0823,
+      "Longitude": 70.1925,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-KAR.geojson",
+      "CommonAliases": [
+        "Qaraghandy oblysy (Karagandinskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "559A43AD-25C8-4140-A019-7F509BCCFA27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.740Z",
+      "checksum": "30ae62140af8b22dfd50d24c75c3d07fc369934d40271c0b68e75d3a7e2f2a9d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qostanay oblysy (Kustanayskaya oblast')",
+      "Code": "KUS",
+      "ISO3166_2": "KZ-KUS",
+      "Latitude": 51.2854,
+      "Longitude": 64.1291,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-KUS.geojson",
+      "CommonAliases": [
+        "Qostanay oblysy (Kustanayskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "6A978C27-B75E-4BF4-B29A-768C3DFBC4D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.756Z",
+      "checksum": "62988cc3f7ee4e4ba71859ea8487432d246718e9e9e23bf7111159295c5ab9b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qyzylorda oblysy (Kzylordinskaya oblast')",
+      "Code": "KZY",
+      "ISO3166_2": "KZ-KZY",
+      "Latitude": 44.6012,
+      "Longitude": 63.6151,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-KZY.geojson",
+      "CommonAliases": [
+        "Qyzylorda oblysy (Kzylordinskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "1CEE2C6B-CBB2-4822-9BDC-76B19C6463EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.773Z",
+      "checksum": "20d2fcae2ff510ce7f8c988d62df9c057f6d1e937a88b6afc399ead899a12362"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shyghys Kazakstan oblysy (Vostochno-Kazakhstanskaya oblast')",
+      "Code": "VOS",
+      "ISO3166_2": "KZ-VOS",
+      "Latitude": 48.3405,
+      "Longitude": 81.9768,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-VOS.geojson",
+      "CommonAliases": [
+        "Shyghys Kazakstan oblysy (Vostochno-Kazakhstanskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "972EE6AA-F146-4F61-B022-16776F69BD78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.789Z",
+      "checksum": "487049eab5985460b7ce8a2efe2b72c9bd4fbfab86ba61a817c3ce4c6628074a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Soltüstik Kazakstan oblysy (Severo-Kazakhstanskaya oblast')",
+      "Code": "SEV",
+      "ISO3166_2": "KZ-SEV",
+      "Latitude": 54.4528,
+      "Longitude": 69.0682,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-SEV.geojson",
+      "CommonAliases": [
+        "Soltüstik Kazakstan oblysy (Severo-Kazakhstanskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "70BBE5EC-EB18-4E5D-8155-637A12434C3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.807Z",
+      "checksum": "34e3f973e8da55a1377c51c6e1e025ad337c9ef859e06fa6c351e65325ea5708"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zhambyl oblysy (Zhambylskaya Oblast')",
+      "Code": "ZHA",
+      "ISO3166_2": "KZ-ZHA",
+      "Latitude": 44.3152,
+      "Longitude": 72.4888,
+      "BoundaryGeoJSON": "@file:by-country/KZ/boundaries/KZ-ZHA.geojson",
+      "CommonAliases": [
+        "Zhambyl oblysy (Zhambylskaya Oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KZ"
+    },
+    "primaryKey": {
+      "ID": "08AB67DE-3E38-4352-942C-2CD213B19256"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.821Z",
+      "checksum": "b2e066c5026a48e9283346fd491ec02a06081881be9f706f71d618a8b9c53360"
+    }
+  }
+]

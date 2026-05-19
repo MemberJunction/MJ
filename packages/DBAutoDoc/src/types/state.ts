@@ -130,6 +130,33 @@ export interface ColumnDefinition {
   descriptionIterations: DescriptionIteration[];
   userDescription?: string;
   userApproved?: boolean;
+  /** LLM-driven enum/value-list verdict for this column */
+  valueListVerdict?: ValueListVerdict;
+}
+
+/**
+ * LLM verdict on whether a column represents a finite value list (enum).
+ * Persisted on ColumnDefinition for downstream emission into additionalSchemaInfo.
+ */
+export interface ValueListVerdict {
+  /** Whether the LLM determined this column is an enum */
+  isEnum: boolean;
+  /** 'List' = closed set, 'ListOrUserEntry' = dropdown that also accepts new values */
+  type: 'List' | 'ListOrUserEntry';
+  /** LLM confidence 0–1 */
+  confidence: number;
+  /** The enum values the LLM confirmed */
+  values: string[];
+  /** LLM reasoning for the verdict */
+  reasoning: string;
+  /** How the verdict was produced */
+  source: 'llm' | 'check_constraint' | 'user_override';
+  /** Cardinality snapshot at decision time for audit on re-run */
+  cardinalityAtDecision?: { distinct: number; total: number };
+  /** ISO timestamp when the verdict was made */
+  decidedAt: string;
+  /** Which model produced the verdict */
+  modelUsed?: string;
 }
 
 export interface ForeignKeyReference {

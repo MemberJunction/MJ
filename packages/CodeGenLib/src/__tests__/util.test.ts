@@ -39,7 +39,7 @@ vi.mock('../Misc/status_logging', () => ({
     logStatus: vi.fn()
 }));
 
-import { makeDir, makeDirs, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
+import { makeDir, makeDirs, logIf, sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
 
 describe('makeDir', () => {
     beforeEach(() => {
@@ -135,13 +135,16 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[2].Name).toBe('C');
     });
 
-    it('should use __mj_CreatedAt as secondary sort', () => {
+    it('should ignore __mj_CreatedAt and sort alphabetically by Name when Sequence matches', () => {
+        // Regression: __mj_CreatedAt was previously a secondary sort key, which made codegen
+        // output a function of DB-resident insertion timestamps and produced different output
+        // across environments. The function now ignores __mj_CreatedAt entirely.
         const items = [
-            { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-02-01') },
-            { Sequence: 1, Name: 'A', __mj_CreatedAt: new Date('2025-01-01') }
+            { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-01-01') }, // earlier date but later name
+            { Sequence: 1, Name: 'A', __mj_CreatedAt: new Date('2025-02-01') }  // later date but earlier name
         ];
         const result = sortBySequenceAndCreatedAt(items);
-        expect(result[0].Name).toBe('A');
+        expect(result[0].Name).toBe('A'); // alphabetical wins; date is irrelevant
         expect(result[1].Name).toBe('B');
     });
 
@@ -167,13 +170,16 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[0].Name).toBe('A');
     });
 
-    it('should prioritize items with dates over items without when sequences match', () => {
+    it('should not prioritize items with dates — date presence is irrelevant to ordering', () => {
+        // Regression: previously items with a date were prioritized over items without one.
+        // That behavior leaked DB insertion history into codegen output. Date presence is now
+        // ignored entirely; ordering falls through to alphabetical.
         const items = [
             { Sequence: 1, Name: 'NoDate' },
             { Sequence: 1, Name: 'HasDate', __mj_CreatedAt: new Date('2025-01-01') }
         ];
         const result = sortBySequenceAndCreatedAt(items);
-        expect(result[0].Name).toBe('HasDate');
+        expect(result[0].Name).toBe('HasDate'); // alphabetical: HasDate < NoDate
         expect(result[1].Name).toBe('NoDate');
     });
 
@@ -187,17 +193,18 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[1].Name).toBe('Zebra');
     });
 
-    it('should sort correctly with mixed sequences', () => {
+    it('should sort correctly with mixed sequences, alphabetically within a Sequence', () => {
         const items = [
             { Sequence: 5, Name: 'E' },
-            { Sequence: 1, Name: 'A', __mj_CreatedAt: new Date('2025-06-01') },
+            { Sequence: 1, Name: 'A', __mj_CreatedAt: new Date('2025-06-01') }, // later date
             { Sequence: 3, Name: 'C' },
-            { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-01-01') },
+            { Sequence: 1, Name: 'B', __mj_CreatedAt: new Date('2025-01-01') }, // earlier date
             { Sequence: 2, Name: 'D' }
         ];
         const result = sortBySequenceAndCreatedAt(items);
-        expect(result[0].Name).toBe('B'); // Seq 1, earlier date
-        expect(result[1].Name).toBe('A'); // Seq 1, later date
+        // Within Seq 1, alphabetical (date ignored): A before B
+        expect(result[0].Name).toBe('A');
+        expect(result[1].Name).toBe('B');
         expect(result[2].Name).toBe('D'); // Seq 2
         expect(result[3].Name).toBe('C'); // Seq 3
         expect(result[4].Name).toBe('E'); // Seq 5
@@ -233,5 +240,104 @@ describe('sortBySequenceAndCreatedAt', () => {
         expect(result[0].Name).toBe('Negative');
         expect(result[1].Name).toBe('Zero');
         expect(result[2].Name).toBe('Positive');
+    });
+});
+
+describe('sortRelatedEntities', () => {
+    it('should sort by Sequence ascending', () => {
+        const items = [
+            { Sequence: 2, RelatedEntity: 'B', RelatedEntityJoinField: 'BID' },
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('A');
+        expect(result[1].RelatedEntity).toBe('B');
+    });
+
+    it('should ignore __mj_CreatedAt and tiebreak alphabetically by RelatedEntity name', () => {
+        // Regression: __mj_CreatedAt was previously a secondary sort key. That made generated.ts
+        // depend on DB-resident insertion timestamps, which differ between environments
+        // (e.g. dev iterating over days vs. a Flyway batch install that lands all rows in the
+        // same SQL Server tick). The function now ignores __mj_CreatedAt entirely.
+        const items = [
+            { Sequence: 1, RelatedEntity: 'B', RelatedEntityJoinField: 'BID', __mj_CreatedAt: new Date('2026-03-23') }, // earlier date
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID', __mj_CreatedAt: new Date('2026-03-24') }  // later date
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('A'); // alphabetical wins
+        expect(result[1].RelatedEntity).toBe('B');
+    });
+
+    it('should produce identical output for the same metadata regardless of timestamps', () => {
+        // Cross-environment determinism regression: simulate the same logical relationships
+        // existing in two databases — one where rows were created over time (well-spaced
+        // timestamps in arbitrary order) and one where rows landed in a single Flyway batch
+        // (timestamps tied or near-tied). Both must produce identical output.
+        const devEnvironment = [
+            { Sequence: 1, RelatedEntity: 'External Indexes', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-ext', __mj_CreatedAt: new Date('2026-05-10T09:00:00Z') },
+            { Sequence: 1, RelatedEntity: 'Entities', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-ent', __mj_CreatedAt: new Date('2026-05-10T09:00:01Z') },
+            { Sequence: 1, RelatedEntity: 'Permissions', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-prm', __mj_CreatedAt: new Date('2026-05-10T09:00:02Z') },
+            { Sequence: 1, RelatedEntity: 'Test Queries', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-tst', __mj_CreatedAt: new Date('2026-05-10T09:00:03Z') }
+        ];
+        const sameMillisecond = new Date('2026-05-14T16:10:49.123Z');
+        const cleanInstallEnvironment = [
+            { Sequence: 1, RelatedEntity: 'Test Queries', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-tst', __mj_CreatedAt: sameMillisecond },
+            { Sequence: 1, RelatedEntity: 'Entities', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-ent', __mj_CreatedAt: sameMillisecond },
+            { Sequence: 1, RelatedEntity: 'External Indexes', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-ext', __mj_CreatedAt: sameMillisecond },
+            { Sequence: 1, RelatedEntity: 'Permissions', RelatedEntityJoinField: 'SearchScopeID', ID: 'id-prm', __mj_CreatedAt: sameMillisecond }
+        ];
+        const devSorted = sortRelatedEntities(devEnvironment).map(r => r.ID);
+        const cleanSorted = sortRelatedEntities(cleanInstallEnvironment).map(r => r.ID);
+        expect(cleanSorted).toEqual(devSorted);
+        // And the result is alphabetical by RelatedEntity name
+        expect(devSorted).toEqual(['id-ent', 'id-ext', 'id-prm', 'id-tst']);
+    });
+
+    it('should use RelatedEntity name as tiebreaker when Sequence and CreatedAt match', () => {
+        const sameDate = new Date('2026-03-23T16:36:28.223Z');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Entity Organic Key Related Entities', RelatedEntityJoinField: 'RelatedEntityID', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Entity Organic Keys', RelatedEntityJoinField: 'EntityID', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntity).toBe('Entity Organic Key Related Entities');
+        expect(result[1].RelatedEntity).toBe('Entity Organic Keys');
+    });
+
+    it('should use RelatedEntityJoinField after RelatedEntity when entity names also match', () => {
+        const sameDate = new Date('2026-03-23');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'ParentRunID', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Same Entity', RelatedEntityJoinField: 'LastRunID', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].RelatedEntityJoinField).toBe('LastRunID');
+        expect(result[1].RelatedEntityJoinField).toBe('ParentRunID');
+    });
+
+    it('should use ID as last resort', () => {
+        const sameDate = new Date('2026-03-23');
+        const items = [
+            { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'ZZZ', __mj_CreatedAt: sameDate },
+            { Sequence: 1, RelatedEntity: 'Same', RelatedEntityJoinField: 'SameField', ID: 'AAA', __mj_CreatedAt: sameDate }
+        ];
+        const result = sortRelatedEntities(items);
+        expect(result[0].ID).toBe('AAA');
+        expect(result[1].ID).toBe('ZZZ');
+    });
+
+    it('should not mutate the original array', () => {
+        const items = [
+            { Sequence: 2, RelatedEntity: 'B', RelatedEntityJoinField: 'BID' },
+            { Sequence: 1, RelatedEntity: 'A', RelatedEntityJoinField: 'AID' }
+        ];
+        const original = [...items];
+        sortRelatedEntities(items);
+        expect(items[0]).toEqual(original[0]);
+    });
+
+    it('should handle empty array', () => {
+        const result = sortRelatedEntities([]);
+        expect(result).toEqual([]);
     });
 });

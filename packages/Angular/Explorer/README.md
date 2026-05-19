@@ -2,6 +2,11 @@
 
 These packages comprise the **MJExplorer** application, MemberJunction's primary Angular-based UI for browsing, editing, and managing data. They are published individually under the `@memberjunction` npm scope and consumed together by the MJExplorer host application.
 
+## Guides
+
+- **[Navigation & Routing Guide](/guides/NAVIGATION_AND_ROUTING_GUIDE.md)** — How navigation, URL sync, back/forward, and query param sub-navigation work in MJ Explorer
+- **[Dashboard Best Practices](/guides/DASHBOARD_BEST_PRACTICES.md)** — Architecture patterns for building dashboards
+
 ## Packages
 
 ### Core / Shell
@@ -13,7 +18,6 @@ Foundational packages that provide the application shell, routing, authenticatio
 | [explorer-app](./explorer-app/) | `@memberjunction/ng-explorer-app` | Complete branded entry point for Explorer-style applications |
 | [explorer-core](./explorer-core/) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./explorer-modules/) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
-| [kendo-modules](./kendo-modules/) | `@memberjunction/ng-kendo-modules` | Consolidated Kendo UI NgModule bundle for shared Kendo component imports |
 | [base-application](./base-application/) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
 | [auth-services](./auth-services/) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, and Okta provider support |
 | [shared](./shared/) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
@@ -86,24 +90,24 @@ export class ModelManagementComponent extends BaseResourceComponent { }
 ```
 
 When a tab becomes visible, `ResourceContainerComponent` does:
-1. `ClassFactory.GetRegistration(BaseResourceComponent, 'AIModelsResource')` — looks up the component by string key
+1. `ClassFactory.GetRegistrationAsync(BaseResourceComponent, 'AIModelsResource')` — async lookup that triggers lazy loading if needed
 2. `viewContainerRef.createComponent(registeredClass)` — Angular's dynamic component API instantiates it
 3. Wires up `Data` input and event callbacks
 
-### Lazy Loading with Fallback
+### Universal Lazy Loading via ClassFactory
 
-With the bundle-optimization work, not all components are in the initial bundle. The lazy loading infrastructure handles this transparently:
+Not all components are in the initial bundle. Lazy loading is handled universally by `ClassFactory` itself — no consumer-specific retry logic needed:
 
-1. `ClassFactory.GetRegistration()` returns `null` — the class hasn't been loaded yet
-2. `LazyModuleRegistry.Load('AIModelsResource')` fires, looking up the resource type in `LAZY_FEATURE_CONFIG`
-3. The config maps to a dynamic import: `import('@memberjunction/ng-dashboards/ai-dashboards.module')`
-4. The chunk loads, the module initializes, and `@RegisterClass` decorators execute — registering the components
-5. Retry `ClassFactory.GetRegistration()` — now succeeds
-6. Component renders normally
+1. `ClassFactory.GetRegistrationAsync()` tries sync lookup first
+2. If `null`, calls registered lazy loaders with `('BaseResourceComponent', 'AIModelsResource')`
+3. `LazyModuleRegistry` builds the compound key `'BaseResourceComponent::AIModelsResource'` and looks it up in `LAZY_FEATURE_CONFIG`
+4. The config maps to a dynamic import: `import('@memberjunction/ng-dashboards/ai-dashboards.module')`
+5. The chunk loads, `@RegisterClass` decorators execute — ClassFactory now has the class
+6. Retry succeeds, component renders normally
 
-A `<mj-loading>` spinner displays during steps 2–4.
+This works for ALL base classes (`BaseResourceComponent`, `BaseDashboard`, `BaseApplication`, etc.), not just resource components. Any consumer using `CreateInstanceAsync` or `GetRegistrationAsync` gets lazy loading automatically.
 
-This fallback is wired into all three ClassFactory lookup sites: `ResourceContainerComponent.loadComponent()`, `TabContainerComponent` (tab content + display name), and `DashboardResource.loadCodeBasedDashboard()`.
+See `guides/LAZY_LOADING_GUIDE.md` for the complete guide.
 
 ### Tree-Shaking Prevention via Manifests
 

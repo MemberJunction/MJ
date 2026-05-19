@@ -1,14 +1,13 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { ConversationDataService, ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService } from '@memberjunction/ng-conversations';
+import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { ConversationChatAreaComponent, ConversationListComponent, MentionAutocompleteService, ConversationStreamingService, ActiveTasksService, PendingAttachment, UICommandHandlerService, ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { ActionableCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subject, takeUntil, filter } from 'rxjs';
+import { Subject, takeUntil } from 'rxjs';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -16,7 +15,7 @@ import { Subject, takeUntil, filter } from 'rxjs';
  * Designed to work with the tab system for multi-tab conversation management
  *
  * This component manages its own selection state locally, following the encapsulation pattern:
- * - Services (ConversationDataService) are used for shared DATA (caching, loading, saving)
+ * - ConversationEngine singleton is used for shared DATA (caching, loading, saving)
  * - Local state variables manage SELECTION state (which conversation is active)
  * - State flows down to children via @Input, events flow up via @Output
  */
@@ -185,9 +184,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   @ViewChild('chatArea') chatArea?: ConversationChatAreaComponent;
 
   public currentUser: any = null;
-  private destroy$ = new Subject<void>();
   private skipUrlUpdate = true; // Skip URL updates during initialization
-  private lastNavigatedUrl: string = ''; // Track URL to avoid reacting to our own navigation
 
   // Ready flag - blocks child rendering until AIEngine is initialized
   public isReady: boolean = false;
@@ -222,21 +219,22 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
-    private navigationService: NavigationService,
-    private conversationData: ConversationDataService,
-    private router: Router,
     private mentionAutocompleteService: MentionAutocompleteService,
     private cdr: ChangeDetectorRef,
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private bridge: ConversationBridgeService
   ) {
     super();
   }
 
   async ngOnInit() {
-    const md = new Metadata();
+    super.ngOnInit();
+    const md = this.ProviderToUse;
     this.currentUser = md.CurrentUser;
 
     // Check initial mobile state and set default collapsed
@@ -267,45 +265,28 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // This enables reconnection to in-progress agents after browser refresh
     this.streamingService.initialize();
 
-    // CRITICAL: Set selectedConversationId SYNCHRONOUSLY before child components initialize
-    // Parse URL first and apply state synchronously for the ID
-    const urlState = this.parseUrlState();
-
-    if (urlState) {
-      // Set conversationId synchronously so child components see it immediately
-      if (urlState.conversationId) {
-        this.selectedConversationId = urlState.conversationId;
-        this.isNewUnsavedConversation = false;
-      }
-      if (urlState.artifactId) {
-        this.pendingArtifactId = urlState.artifactId;
-        this.pendingArtifactVersionNumber = urlState.versionNumber || null;
-      }
-      // Load the conversation entity asynchronously (non-blocking)
-      this.loadConversationEntity(urlState.conversationId);
-    } else {
-      // Check if we have navigation params from config (e.g., from Collections linking here)
-      this.applyConfigurationParams();
-    }
-
-    // Subscribe to router NavigationEnd events for back/forward button support
-    this.router.events
-      .pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(event => {
-        const currentUrl = event.urlAfterRedirects || event.url;
-        if (currentUrl !== this.lastNavigatedUrl) {
-          this.onExternalNavigation(currentUrl);
-        }
-      });
+    // Apply initial state from tab configuration (populated by shell from URL or nav params)
+    this.applyConfigurationParams();
 
     // Subscribe to actionable commands (open:resource) from the UI command handler service.
     // open:url commands are handled directly by the service; open:resource needs NavigationService.
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
       .subscribe(command => this.handleActionableCommand(command));
+
+    // Subscribe to bridge switch events so the overlay can hand off a conversation to this workspace
+    this.bridge.SwitchEvent$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(event => {
+        if (event.Target === 'workspace' && event.ConversationID) {
+          void this.selectConversation(event.ConversationID);
+          this.updateTabTitle();
+          this.cdr.detectChanges();
+        }
+      });
+
+    // Notify the bridge that the workspace is active
+    this.bridge.NotifyWorkspaceActive(true);
 
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
@@ -320,8 +301,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
+    super.ngOnDestroy();
+    this.bridge.NotifyWorkspaceActive(false);
 
     // Clear any pending save timeout
     if (this.saveSettingsTimeout) {
@@ -343,7 +324,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       // Initialize AIEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.conversationData.loadConversations(this.environmentId, this.currentUser),
+        this.engine.LoadConversations(this.environmentId, this.currentUser, false),
         this.mentionAutocompleteService.initialize(this.currentUser)
       ]);
 
@@ -362,30 +343,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Parse URL query string for conversation state.
-   * Query params: conversationId, artifactId, versionNumber
-   */
-  private parseUrlState(): { conversationId?: string; artifactId?: string; versionNumber?: number } | null {
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const conversationId = params.get('conversationId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!conversationId && !artifactId) return null;
-
-    return {
-      conversationId: conversationId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
-
-  /**
    * Load the conversation entity asynchronously (non-blocking).
    * The conversationId is already set synchronously, this just loads the full entity.
    */
@@ -393,33 +350,43 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     if (!conversationId) return;
 
     // Try to get from cache first
-    const conversation = this.conversationData.getConversationById(conversationId);
+    const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
       this.selectedConversation = conversation;
+      this.updateTabTitle();
     }
     // If not in cache, the chat area component will handle loading it
   }
 
   /**
-   * Apply configuration params from resource data (e.g., from deep-linking via Collections).
+   * Apply initial state from tab configuration.
+   * The shell populates queryParams from the URL, and nav params come from cross-resource linking.
    * Sets state synchronously so child components see values immediately.
    */
   private applyConfigurationParams(): void {
     const config = this.Data?.Configuration;
     if (!config) return;
 
+    // Check queryParams first (shell populates these from the URL for deep-linking)
+    const qp = config['queryParams'] as Record<string, string> | undefined;
+    const conversationId = qp?.['conversationId'] || (config.conversationId as string);
+    const artifactId = qp?.['artifactId'] || (config.artifactId as string);
+    const versionNumber = qp?.['versionNumber'] ? parseInt(qp['versionNumber'], 10)
+      : config.versionNumber ? (config.versionNumber as number) : null;
+
     // Set pending artifact if provided
-    if (config.artifactId) {
-      this.pendingArtifactId = config.artifactId as string;
-      this.pendingArtifactVersionNumber = (config.versionNumber as number) || null;
+    if (artifactId) {
+      this.pendingArtifactId = artifactId;
+      this.pendingArtifactVersionNumber = versionNumber;
     }
 
     // Set conversationId synchronously so child components see it immediately
-    if (config.conversationId) {
-      this.selectedConversationId = config.conversationId as string;
+    if (conversationId) {
+      this.selectedConversationId = conversationId;
+      this.bridge.SetActiveFromWorkspace(conversationId);
       this.isNewUnsavedConversation = false;
       // Load entity asynchronously
-      this.loadConversationEntity(config.conversationId as string);
+      this.loadConversationEntity(conversationId);
     }
   }
 
@@ -427,21 +394,6 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Apply navigation state to local selection state.
    * Sets state synchronously so child components see values immediately.
    */
-  private applyNavigationState(state: { conversationId?: string; artifactId?: string; versionNumber?: number }): void {
-    // Set pending artifact if provided (will be consumed by chat area after loading)
-    if (state.artifactId) {
-      this.pendingArtifactId = state.artifactId;
-      this.pendingArtifactVersionNumber = state.versionNumber || null;
-    }
-
-    // Set the conversation synchronously
-    if (state.conversationId) {
-      this.selectedConversationId = state.conversationId;
-      this.isNewUnsavedConversation = false;
-      this.loadConversationEntity(state.conversationId);
-    }
-  }
-
   /**
    * Select a conversation by ID - loads the entity and updates local state
    */
@@ -449,8 +401,12 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedConversationId = conversationId;
     this.isNewUnsavedConversation = false;
 
+    // Keep bridge in sync so other consumers (toast suppression, overlay) know
+    // which conversation the workspace is viewing
+    this.bridge.SetActiveFromWorkspace(conversationId);
+
     // Load the conversation entity from data service
-    const conversation = this.conversationData.getConversationById(conversationId);
+    const conversation = this.engine.GetConversation(conversationId);
     if (conversation) {
       this.selectedConversation = conversation;
     } else {
@@ -494,61 +450,19 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
-   * Handle external navigation (back/forward buttons).
-   * Parses the URL and applies the state without triggering a new navigation.
+   * Update the tab/browser title based on the currently selected conversation.
    */
-  private onExternalNavigation(url: string): void {
-    // Check if this URL is for our component (contains our base path)
-    const currentPath = this.router.url.split('?')[0];
-    const newPath = url.split('?')[0];
-
-    // Only handle if we're still on the same base path (same component instance)
-    if (currentPath !== newPath) {
-      return; // Different route entirely, shell will handle it
+  private updateTabTitle(): void {
+    if (this.isNewUnsavedConversation || !this.selectedConversation) {
+      this.NotifyDisplayNameChanged('Conversations');
+      return;
     }
-
-    // Parse the new URL state
-    const urlState = this.parseUrlFromString(url);
-
-    // Apply the state without triggering URL updates
-    this.skipUrlUpdate = true;
-    if (urlState) {
-      this.applyNavigationState(urlState);
-    } else {
-      // No params means clear state
-      this.selectedConversationId = null;
-      this.selectedConversation = null;
-      this.selectedThreadId = null;
-      this.pendingArtifactId = null;
-      this.pendingArtifactVersionNumber = null;
+    const name = this.selectedConversation.Name;
+    if (name) {
+      this.NotifyDisplayNameChanged(name);
     }
-    this.skipUrlUpdate = false;
-
-    // Update the tracked URL
-    this.lastNavigatedUrl = url;
   }
 
-  /**
-   * Parse URL state from a URL string (used for external navigation).
-   */
-  private parseUrlFromString(url: string): { conversationId?: string; artifactId?: string; versionNumber?: number } | null {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) return null;
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const conversationId = params.get('conversationId');
-    const artifactId = params.get('artifactId');
-    const versionNumber = params.get('versionNumber');
-
-    if (!conversationId && !artifactId) return null;
-
-    return {
-      conversationId: conversationId || undefined,
-      artifactId: artifactId || undefined,
-      versionNumber: versionNumber ? parseInt(versionNumber, 10) : undefined
-    };
-  }
 
   /**
    * Get the environment ID from configuration or use default
@@ -595,7 +509,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   onConversationDeleted(deletedId: string): void {
     if (this.selectedConversationId === deletedId) {
-      const remaining = this.conversationData.conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
+      const remaining = this.engine.Conversations.filter(c => !UUIDsEqual(c.ID, deletedId));
       if (remaining.length > 0) {
         void this.selectConversation(remaining[0].ID);
         this.updateUrl();
@@ -617,6 +531,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null; // Clear thread when switching conversations
     this.isNewUnsavedConversation = false;
     this.updateUrl();
+    this.updateTabTitle();
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -777,7 +692,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       };
 
       const engine = UserInfoEngine.Instance;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Find existing setting from cached user settings
       let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
@@ -846,6 +761,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedThreadId = null;
     this.isNewUnsavedConversation = true;
     this.updateUrl();
+    this.NotifyDisplayNameChanged('New Conversation');
 
     // Auto-collapse if mobile OR if sidebar is not pinned
     if (this.isMobileView || !this.isSidebarPinned) {
@@ -868,7 +784,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.selectedConversationId = event.conversation.ID;
     this.selectedConversation = event.conversation;
     this.isNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(event.conversation.ID);
     this.updateUrl();
+    this.updateTabTitle();
   }
 
   /**
@@ -877,6 +795,11 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
     // Trigger rename animation in the list
     this.renamedConversationId = event.conversationId;
+
+    // Update tab title with the new name
+    if (event.name) {
+      this.NotifyDisplayNameChanged(event.name);
+    }
 
     // Clear the animation trigger after it completes
     setTimeout(() => {
@@ -981,7 +904,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Resolve an application name to its ID.
    */
   private resolveAppId(appName: string): string | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const apps = md.Applications;
     const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
     return app?.ID;

@@ -2,7 +2,7 @@
 
 This directory contains all provider-specific implementations of the MemberJunction AI framework interfaces. Each provider package implements the abstract base classes defined in `@memberjunction/ai` to integrate with a specific AI service, translating MJ's common interfaces into provider-specific API calls.
 
-There are 23 packages in total, grouped by category below.
+There are 24 packages in total, grouped by category below.
 
 ## Packages
 
@@ -44,6 +44,7 @@ Run models locally without external API calls.
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [LlamaCpp](./LlamaCpp/README.md) | `@memberjunction/ai-llamacpp` | Wrapper for llama.cpp - Local Inference via `llama-server` |
 | [LMStudio](./LMStudio/README.md) | `@memberjunction/ai-lmstudio` | Wrapper for LM Studio AI - Local Inference Engine |
 | [Ollama](./Ollama/README.md) | `@memberjunction/ai-ollama` | Wrapper for Ollama - Local Inference |
 

@@ -1063,6 +1063,23 @@
                   </div>
                 </div>
               </div>
+              <div class="tracking-config">
+                <h3 class="panel-title">
+                  <i class="fa-solid fa-map-location-dot"></i>
+                  Geocoding
+                </h3>
+                <p class="helper-text">When enabled, CodeGen auto-detects geo fields and generates map view support</p>
+                <div class="config-grid">
+                  <div class="config-item" [class.enabled]="entity.SupportsGeoCoding">
+                    <i class="fa-solid" [ngClass]="entity.SupportsGeoCoding ? 'fa-check' : 'fa-xmark'"></i>
+                    <span>Supports Geocoding</span>
+                  </div>
+                  <div class="config-item" [class.enabled]="entity.AutoUpdateSupportsGeoCoding">
+                    <i class="fa-solid" [ngClass]="entity.AutoUpdateSupportsGeoCoding ? 'fa-check' : 'fa-xmark'"></i>
+                    <span>Auto-Detect Geocoding</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         }

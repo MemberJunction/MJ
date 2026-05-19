@@ -1,50 +1,38 @@
-<div class="actions-overview" >
-  <!-- Header with search and filters -->
-  <div class="overview-header">
-    <div class="filters-row">
-      <div class="search-container">
-        <kendo-textbox 
-          placeholder="Search actions..." 
-          [value]="searchTerm$.value"
-          (valueChange)="onSearchChange($event)">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
-        </kendo-textbox>
-      </div>
-      
-      <div class="filter-container">
-        <kendo-dropdownlist 
-          [data]="[
-            { text: 'All Statuses', value: 'all' },
-            { text: 'Active', value: 'Active' },
-            { text: 'Pending', value: 'Pending' },
-            { text: 'Disabled', value: 'Disabled' }
-          ]"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedStatus$.value"
-          (valueChange)="onStatusFilterChange($event)">
-        </kendo-dropdownlist>
-      </div>
-      
-      <div class="filter-container">
-        <kendo-dropdownlist 
-          [data]="[
-            { text: 'All Types', value: 'all' },
-            { text: 'AI Generated', value: 'Generated' },
-            { text: 'Custom', value: 'Custom' }
-          ]"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedType$.value"
-          (valueChange)="onTypeFilterChange($event)">
-        </kendo-dropdownlist>
-      </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Actions Overview"
+    Icon="fa-solid fa-bolt"
+    Subtitle="Health and activity for all configured actions">
+    <div meta>
+      <mj-stat-badge
+        [Count]="metrics.totalActions"
+        Label="actions">
+      </mj-stat-badge>
     </div>
-  </div>
+    <div actions>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search actions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+  <div class="actions-overview" >
 
   <!-- Metrics Cards -->
   <div class="metrics-grid">
@@ -174,11 +162,9 @@
                   <div class="action-description">{{ action.Description || 'No description' }}</div>
                 </div>
                 <div class="action-status">
-                  <kendo-chip 
-                    [themeColor]="getStatusColor(action.Status)"
-                    [size]="'small'">
+                  <span class="status-chip" [attr.data-color]="getStatusColor(action.Status)">
                     {{ action.Status }}
-                  </kendo-chip>
+                  </span>
                 </div>
               </div>
             }
@@ -211,11 +197,9 @@
                     <div class="execution-user">{{ execution.User || 'User ID: ' + execution.UserID }}</div>
                   </div>
                   <div class="execution-result">
-                    <kendo-chip 
-                      [themeColor]="isExecutionSuccess(execution) ? 'success' : 'error'"
-                      [size]="'small'">
+                    <span class="status-chip" [attr.data-color]="isExecutionSuccess(execution) ? 'success' : 'error'">
                       {{ execution.ResultCode || 'Unknown' }}
-                    </kendo-chip>
+                    </span>
                   </div>
                   <div class="execution-expand-icon">
                     <i [class]="execution.isExpanded ? 'fa-solid fa-chevron-up' : 'fa-solid fa-chevron-down'"></i>
@@ -234,9 +218,9 @@
                       </mj-code-editor>
                     </div>
                     <div class="execution-actions">
-                      <button kendoButton 
-                        themeColor="primary" 
-                        size="small"
+                      <button mjButton
+                        variant="primary"
+                        size="sm"
                         (click)="openExecution(execution)">
                         <i class="fa-solid fa-external-link"></i> Open Details
                       </button>
@@ -262,3 +246,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

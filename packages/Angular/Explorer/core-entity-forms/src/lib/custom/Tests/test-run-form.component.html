@@ -70,11 +70,11 @@
       </div>
 
       <div class="header-actions">
-        <button kendoButton (click)="reRunTest()" [disabled]="!record.TestID" title="Re-run this test (Cmd+Shift+R)">
+        <button mjButton (click)="reRunTest()" [disabled]="!record.TestID" title="Re-run this test (Cmd+Shift+R)">
           <i class="fas fa-redo"></i>
           <span class="btn-text">Re-run</span>
         </button>
-        <button kendoButton (click)="refresh()" [disabled]="isRefreshing" title="Refresh (Cmd+R)">
+        <button mjButton (click)="refresh()" [disabled]="isRefreshing" title="Refresh (Cmd+R)">
           <i class="fas fa-sync-alt" [class.fa-spin]="isRefreshing"></i>
           <span class="btn-text">Refresh</span>
         </button>
@@ -218,19 +218,19 @@
               placeholder="Type a tag and press Enter..."
               (keyup.enter)="addTag()"
               class="tag-text-input" />
-            <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+            <button mjButton (click)="addTag()" [disabled]="!newTag.trim()" variant="flat">
               <i class="fas fa-plus"></i>
             </button>
           </div>
         </div>
         <div class="tags-editor-footer">
-          <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+          <button mjButton (click)="saveTags()" variant="primary" [disabled]="savingTags">
             @if (savingTags) {
               <i class="fas fa-spinner fa-spin"></i>
             }
             {{ savingTags ? 'Saving...' : 'Save' }}
           </button>
-          <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+          <button mjButton (click)="cancelEditingTags()" variant="flat">Cancel</button>
         </div>
       </div>
     }
@@ -640,7 +640,7 @@
             <h3>Execution Log</h3>
           </div>
           <div class="log-actions">
-            <button kendoButton (click)="copyLogToClipboard()" look="flat">
+            <button mjButton (click)="copyLogToClipboard()" variant="flat">
               <i class="fas fa-copy"></i>
               <span class="btn-text">Copy</span>
             </button>

@@ -2,31 +2,20 @@ import { Component, OnInit } from '@angular/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+
 /**
- * Scheduling Dashboard Resource - displays the overview dashboard with KPIs, health, and alerts
+ * Scheduling Dashboard Resource — thin shim. The inner component owns its own
+ * `<mj-page-layout>` + `<mj-page-header>` chrome (see scheduling-overview.component.html).
  */
 @RegisterClass(BaseResourceComponent, 'SchedulingDashboardResource')
 @Component({
   standalone: false,
   selector: 'mj-scheduling-dashboard-resource',
-  template: `
-    <div class="resource-container">
-      <app-scheduling-overview></app-scheduling-overview>
-    </div>
-  `,
-  styles: [`
-    .resource-container {
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      padding: 7px;
-      box-sizing: border-box;
-    }
-  `]
+  template: `<app-scheduling-overview></app-scheduling-overview>`
 })
 export class SchedulingOverviewResourceComponent extends BaseResourceComponent implements OnInit {
-
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

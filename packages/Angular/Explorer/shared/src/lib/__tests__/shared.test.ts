@@ -74,10 +74,6 @@ vi.mock('@memberjunction/graphql-dataprovider', () => ({
   GraphQLDataProvider: class {},
 }));
 
-vi.mock('@progress/kendo-angular-notification', () => ({
-  NotificationService: class {},
-}));
-
 vi.mock('@memberjunction/ng-notifications', () => ({
   MJNotificationService: class {
     static UserNotifications: never[] = [];
@@ -253,10 +249,9 @@ describe('SharedService resource type mapping', () => {
   it('should map resource type names to route segments', async () => {
     const { SharedService } = await import('../shared.service');
     // Construct with mocked dependencies
-    const notif = { show: vi.fn() };
     const mjNotif = { CreateNotification: vi.fn(), CreateSimpleNotification: vi.fn() };
     const injector = { get: vi.fn() };
-    const svc = new SharedService(notif as never, mjNotif as never, injector as never);
+    const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('Records')).toBe('record');
     expect(svc.mapResourceTypeNameToRouteSegment('MJ: User Views')).toBe('view');
@@ -270,10 +265,9 @@ describe('SharedService resource type mapping', () => {
 
   it('should map route segments to resource type names', async () => {
     const { SharedService } = await import('../shared.service');
-    const notif = { show: vi.fn() };
     const mjNotif = { CreateNotification: vi.fn(), CreateSimpleNotification: vi.fn() };
     const injector = { get: vi.fn() };
-    const svc = new SharedService(notif as never, mjNotif as never, injector as never);
+    const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeRouteSegmentToName('record')).toBe('records');
     expect(svc.mapResourceTypeRouteSegmentToName('view')).toBe('user views');
@@ -283,10 +277,9 @@ describe('SharedService resource type mapping', () => {
 
   it('should be case-insensitive for resource type mapping', async () => {
     const { SharedService } = await import('../shared.service');
-    const notif = { show: vi.fn() };
     const mjNotif = { CreateNotification: vi.fn(), CreateSimpleNotification: vi.fn() };
     const injector = { get: vi.fn() };
-    const svc = new SharedService(notif as never, mjNotif as never, injector as never);
+    const svc = new SharedService(mjNotif as never, injector as never);
 
     expect(svc.mapResourceTypeNameToRouteSegment('RECORDS')).toBe('record');
     expect(svc.mapResourceTypeNameToRouteSegment('  Records  ')).toBe('record');

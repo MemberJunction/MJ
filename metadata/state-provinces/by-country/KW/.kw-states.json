@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "Al Aḩmadi",
+      "Code": "AH",
+      "ISO3166_2": "KW-AH",
+      "Latitude": 28.8653,
+      "Longitude": 47.9393,
+      "BoundaryGeoJSON": "@file:by-country/KW/boundaries/KW-AH.geojson",
+      "CommonAliases": [
+        "Al Aḩmadi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KW"
+    },
+    "primaryKey": {
+      "ID": "7254ABA4-1B88-41C7-8549-76689E02A185"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.396Z",
+      "checksum": "70fbaa47e7c6fb90864ebbad8d659726afe317bc967a992e52ba605b228bd956"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Farwānīyah",
+      "Code": "FA",
+      "ISO3166_2": "KW-FA",
+      "Latitude": 29.2592,
+      "Longitude": 47.9381,
+      "BoundaryGeoJSON": "@file:by-country/KW/boundaries/KW-FA.geojson",
+      "CommonAliases": [
+        "Al Farwānīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KW"
+    },
+    "primaryKey": {
+      "ID": "A27C2477-882D-4610-AE0E-309DCB80B316"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.411Z",
+      "checksum": "53058a68395ec51273e342e02641442e9d76d7f6d9429027cc27e4effa859e3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Jahrah",
+      "Code": "JA",
+      "ISO3166_2": "KW-JA",
+      "Latitude": 29.7843,
+      "Longitude": 48.2027,
+      "BoundaryGeoJSON": "@file:by-country/KW/boundaries/KW-JA.geojson",
+      "CommonAliases": [
+        "Al Jahrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KW"
+    },
+    "primaryKey": {
+      "ID": "68D7A78B-6BA6-43DF-B827-09034403B048"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.428Z",
+      "checksum": "7d86a4305a1617c4c70302073bc03ad0c46c72321656cfff257c7b834f116680"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Kuwayt",
+      "Code": "KU",
+      "ISO3166_2": "KW-KU",
+      "Latitude": 29.4497,
+      "Longitude": 48.3318,
+      "BoundaryGeoJSON": "@file:by-country/KW/boundaries/KW-KU.geojson",
+      "CommonAliases": [
+        "Al Kuwayt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KW"
+    },
+    "primaryKey": {
+      "ID": "4E1E6316-44B1-4772-BB74-68841EC84E37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.446Z",
+      "checksum": "704e0343f5a5651e1442c23a56d49380eb548ff1f7189544045df83c0d7d7b70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ḩawallī",
+      "Code": "HA",
+      "ISO3166_2": "KW-HA",
+      "Latitude": 29.3243,
+      "Longitude": 48.0306,
+      "BoundaryGeoJSON": "@file:by-country/KW/boundaries/KW-HA.geojson",
+      "CommonAliases": [
+        "Ḩawallī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KW"
+    },
+    "primaryKey": {
+      "ID": "34ECFBE9-E86B-4600-91BE-B78C15609D37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.459Z",
+      "checksum": "8a0a7755d4d153baaba3c9393c3e0f510eaa437846b2ecd9f5299b96b0cd5043"
+    }
+  }
+]

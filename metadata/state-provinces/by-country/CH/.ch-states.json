@@ -1,0 +1,548 @@
+[
+  {
+    "fields": {
+      "Name": "Aargau",
+      "Code": "AG",
+      "ISO3166_2": "CH-AG",
+      "Latitude": 47.4176,
+      "Longitude": 8.2,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-AG.geojson",
+      "CommonAliases": [
+        "Aargau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "ADA93189-76F4-4C72-9B5D-519A552EA2C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.954Z",
+      "checksum": "b89022b864a0854aacb1b7e5f00d9ed28f03dbbac98cf9d7dbdea89a04977390"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Appenzell Ausser-Rhoden",
+      "Code": "AR",
+      "ISO3166_2": "CH-AR",
+      "Latitude": 47.3911,
+      "Longitude": 9.3973,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-AR.geojson",
+      "CommonAliases": [
+        "Appenzell Ausser-Rhoden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "F8BCE110-406E-4587-9D63-FB126FEF4060"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.971Z",
+      "checksum": "a77cad8926f48ad6e98a761293dab497c20e353aad6c40e7318df8ca23f89eca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Appenzell Inner-Rhoden",
+      "Code": "AI",
+      "ISO3166_2": "CH-AI",
+      "Latitude": 47.3092,
+      "Longitude": 9.3955,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-AI.geojson",
+      "CommonAliases": [
+        "Appenzell Inner-Rhoden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "BBB58470-D32D-4B23-81E0-0E885E15A671"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.991Z",
+      "checksum": "8d172e6759eb8deecd2f70188fa014ff57e81339186a7dc5dbeadeda424c29ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Basel-Landschaft",
+      "Code": "BL",
+      "ISO3166_2": "CH-BL",
+      "Latitude": 47.5056,
+      "Longitude": 7.7266,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-BL.geojson",
+      "CommonAliases": [
+        "Basel-Landschaft"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "593DBCAA-2529-44AD-99C0-830476653724"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.007Z",
+      "checksum": "4d0f57c0532791647fd5506eaf66b31d122a19394d721a83822e7fe5bdee56f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Basel-Stadt",
+      "Code": "BS",
+      "ISO3166_2": "CH-BS",
+      "Latitude": 47.5605,
+      "Longitude": 7.5898,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-BS.geojson",
+      "CommonAliases": [
+        "Basel-Stadt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "BF530D56-119E-4E4E-B63A-51E5CD22B458"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.023Z",
+      "checksum": "453c7da2fbfdcd79548e02c63717a6087c96747a3df6e7e95e485fec96d47e6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bern",
+      "Code": "BE",
+      "ISO3166_2": "CH-BE",
+      "Latitude": 46.7988,
+      "Longitude": 7.6503,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-BE.geojson",
+      "CommonAliases": [
+        "Bern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "AE42368A-B4A5-471D-B21C-C807130D3675"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.039Z",
+      "checksum": "a9a595d115791f653bdb92d05123ec3f4fbdd8784669d3cd5f71cff11540a9bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Freiburg",
+      "Code": "FR",
+      "ISO3166_2": "CH-FR",
+      "Latitude": 46.8411,
+      "Longitude": 6.8522,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-FR.geojson",
+      "CommonAliases": [
+        "Freiburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "6E7BF739-1571-461C-9CCC-1EEC1414D94A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.057Z",
+      "checksum": "cd536a3b43daf39c05ce11dbb3730e9a5a55a570b0b463a70c28fbd080184537"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Geneve",
+      "Code": "GE",
+      "ISO3166_2": "CH-GE",
+      "Latitude": 46.237,
+      "Longitude": 6.1176,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-GE.geojson",
+      "CommonAliases": [
+        "Geneve"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "CCC5D182-4411-4CC4-83CD-F2E26AB1FDC4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.074Z",
+      "checksum": "865b3fb3601dcb8e5e85191e59017202596efe3be0c0fc908c9c64252d34a243"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Glarus",
+      "Code": "GL",
+      "ISO3166_2": "CH-GL",
+      "Latitude": 47.0096,
+      "Longitude": 9.0565,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-GL.geojson",
+      "CommonAliases": [
+        "Glarus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "13EC8276-8E37-4779-A7F7-23D9D15EE698"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.090Z",
+      "checksum": "f0c8a0a13b6e18eeebca7af029266f38bf3ff55708e96e4be20f3f48ca7ea473"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Graubünden",
+      "Code": "GR",
+      "ISO3166_2": "CH-GR",
+      "Latitude": 46.6729,
+      "Longitude": 9.5595,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-GR.geojson",
+      "CommonAliases": [
+        "Graubünden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "C6949932-557F-48B6-ACD6-4639CE6A8CC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.109Z",
+      "checksum": "6f4c551bff68c60e66b8331fbd174586afe247651aea9b1e42c7a28dd4281f53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jura",
+      "Code": "JU",
+      "ISO3166_2": "CH-JU",
+      "Latitude": 47.3636,
+      "Longitude": 7.1982,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-JU.geojson",
+      "CommonAliases": [
+        "Jura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "BA3D4015-622D-49A9-A04A-B2351829EA08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.173Z",
+      "checksum": "bdc0f9c741842b2a9e512ef6a7eb25ca5db0bdfd088393b6f9eb558d7df41732"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luzern",
+      "Code": "LU",
+      "ISO3166_2": "CH-LU",
+      "Latitude": 47.096,
+      "Longitude": 8.1722,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-LU.geojson",
+      "CommonAliases": [
+        "Luzern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "86C34701-7D66-4204-9B88-4674E290172A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.191Z",
+      "checksum": "341567b4d31fee8b1686030026914635d1b45bbc5ffe7fc8b119db9a614ef734"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neuchatel",
+      "Code": "NE",
+      "ISO3166_2": "CH-NE",
+      "Latitude": 46.9893,
+      "Longitude": 6.7608,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-NE.geojson",
+      "CommonAliases": [
+        "Neuchatel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "91F930F7-23C2-4DDD-873F-CF2A05D35FA8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.208Z",
+      "checksum": "458ab9cc18b328d63956179ea8f8bfaaf7a3d727ba42680ec570deb6a00bc5b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nidwalden",
+      "Code": "NW",
+      "ISO3166_2": "CH-NW",
+      "Latitude": 46.934,
+      "Longitude": 8.4034,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-NW.geojson",
+      "CommonAliases": [
+        "Nidwalden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "62D0FC67-B59E-4EFA-B214-F903F5E53FA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.229Z",
+      "checksum": "fbd9113dc0e4f65886a5b3a968d5aec37beeeb38ca96db129b14538f065c861b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Obwalden",
+      "Code": "OW",
+      "ISO3166_2": "CH-OW",
+      "Latitude": 46.8686,
+      "Longitude": 8.2059,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-OW.geojson",
+      "CommonAliases": [
+        "Obwalden"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "8950DDC2-72E0-486D-926F-49179749EE4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.246Z",
+      "checksum": "05c9218e51749327010d6d7e651c75179ed5fbad052bbf74e6767175bc2e0cff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sankt Gallen",
+      "Code": "SG",
+      "ISO3166_2": "CH-SG",
+      "Latitude": 47.1524,
+      "Longitude": 9.2127,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-SG.geojson",
+      "CommonAliases": [
+        "Sankt Gallen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "C26CEFE2-7B14-4DB4-B987-ACA42BA2218C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.266Z",
+      "checksum": "11e5582919954832117e1253a5f03cac1d3e4f8a25978699523f3d5e6ad547bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Schaffhausen",
+      "Code": "SH",
+      "ISO3166_2": "CH-SH",
+      "Latitude": 47.7205,
+      "Longitude": 8.6232,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-SH.geojson",
+      "CommonAliases": [
+        "Schaffhausen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "493FD52E-B408-41BC-A1C3-D54186F94AFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.288Z",
+      "checksum": "e727bfaf3b36e86c55249fa060696f218b1520853d989acadcc27eb55a1a9ba4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Schwyz",
+      "Code": "SZ",
+      "ISO3166_2": "CH-SZ",
+      "Latitude": 47.0455,
+      "Longitude": 8.6857,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-SZ.geojson",
+      "CommonAliases": [
+        "Schwyz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "4006FE83-F1F6-42BA-960F-1E31AE7EF202"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.305Z",
+      "checksum": "742b05907a99e23ac5323381eb98ab73c3654dbca69ff2caed6db6d91c30b18d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Solothurn",
+      "Code": "SO",
+      "ISO3166_2": "CH-SO",
+      "Latitude": 47.4325,
+      "Longitude": 7.42,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-SO.geojson",
+      "CommonAliases": [
+        "Solothurn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "4894DECA-24FC-4ED6-9F15-10ABE6C32639"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.321Z",
+      "checksum": "b978d4154a4fee73b5c515d88fa917b7273576f139d4e5e1c27e141fc9795bf9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thurgau",
+      "Code": "TG",
+      "ISO3166_2": "CH-TG",
+      "Latitude": 47.5858,
+      "Longitude": 9.1459,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-TG.geojson",
+      "CommonAliases": [
+        "Thurgau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "BEFF8DAE-A133-4C8A-A700-5EF7D70D2F56"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.334Z",
+      "checksum": "916913eada8c18a9431ae87eba321f24066a2a5484d3fbddc257d14b52783b01"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ticino",
+      "Code": "TI",
+      "ISO3166_2": "CH-TI",
+      "Latitude": 46.3604,
+      "Longitude": 8.7902,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-TI.geojson",
+      "CommonAliases": [
+        "Ticino"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "EC34DB07-FADB-45A4-A118-4BD2988EA32E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.374Z",
+      "checksum": "2e8b3ba159d9a28f321b80261caf7724b9acc90447ac6728dfacac76d933ba62"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uri",
+      "Code": "UR",
+      "ISO3166_2": "CH-UR",
+      "Latitude": 46.809,
+      "Longitude": 8.633,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-UR.geojson",
+      "CommonAliases": [
+        "Uri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "46CB1805-7D3F-4E30-9FA3-8AF2B2E6DA3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.388Z",
+      "checksum": "a89d281b2ef2bf2fcd6a5e866bf2ddeb9eed7d4e3bc77ea14dcda912a04ce662"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vaud",
+      "Code": "VD",
+      "ISO3166_2": "CH-VD",
+      "Latitude": 46.6204,
+      "Longitude": 6.5118,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-VD.geojson",
+      "CommonAliases": [
+        "Vaud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "C9FC9473-ADC2-4315-85E7-D8F99D24BE5D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.402Z",
+      "checksum": "b8f62ce9dc627776469cf06b6a371bc1a3c1c6087bd1ba59138d416365737648"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wallis",
+      "Code": "VS",
+      "ISO3166_2": "CH-VS",
+      "Latitude": 46.2023,
+      "Longitude": 7.6135,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-VS.geojson",
+      "CommonAliases": [
+        "Wallis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "176671C7-EE68-4F0B-BC37-FB70F8A62DAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.416Z",
+      "checksum": "b7d115dd1b2b2f5939615fd42438058ef3175f891f1b92df5a74300259e003f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zug",
+      "Code": "ZG",
+      "ISO3166_2": "CH-ZG",
+      "Latitude": 47.1578,
+      "Longitude": 8.5475,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-ZG.geojson",
+      "CommonAliases": [
+        "Zug"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "42AAB87C-B991-4E2F-924F-1541DD51E4EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.430Z",
+      "checksum": "88444049e4f611b8efa145949a6dbe8b5c66a62ae1694c706c63caadcb142d3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zürich",
+      "Code": "ZH",
+      "ISO3166_2": "CH-ZH",
+      "Latitude": 47.4297,
+      "Longitude": 8.6609,
+      "BoundaryGeoJSON": "@file:by-country/CH/boundaries/CH-ZH.geojson",
+      "CommonAliases": [
+        "Zürich"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CH"
+    },
+    "primaryKey": {
+      "ID": "D64FBC2E-208B-4E98-BC2C-46E6A6ACA015"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.443Z",
+      "checksum": "f1c146e03c66f08394646a1f88ef8aa023221e1f46072f17da6f0f6f65387ea1"
+    }
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Faroe Islands",
+      "Code": "FO",
+      "ISO3166_2": "FO-FO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Faroe Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=FO"
+    },
+    "primaryKey": {
+      "ID": "A1B1305D-AC05-4A9E-A8E9-C54A96236B0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.887Z",
+      "checksum": "31352c44cfa5650e1d97e9c32451fad2f7081677ee7666c86c6b3a23fa683a22"
+    }
+  }
+]

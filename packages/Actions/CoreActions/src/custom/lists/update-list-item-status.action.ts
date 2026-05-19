@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { RunView } from "@memberjunction/core";
+import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
 import { MJListDetailEntity } from "@memberjunction/core-entities";
 
 type ListItemStatus = 'Active' | 'Complete' | 'Disabled' | 'Error' | 'Other' | 'Pending' | 'Rejected';
@@ -130,41 +130,36 @@ export class UpdateListItemStatusAction extends BaseAction {
         };
       }
 
-      // Update status on all matching records
-      let updatedCount = 0;
-      let failedCount = 0;
-      const errors: string[] = [];
-
-      for (const detail of details) {
-        try {
+      // Update status on all matching records atomically — any failure rolls back the whole batch
+      const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
+      await provider.BeginTransaction();
+      try {
+        for (const detail of details) {
           detail.Status = newStatus as ListItemStatus;
-          const saveResult = await detail.Save();
-
-          if (saveResult) {
-            updatedCount++;
-          } else {
-            failedCount++;
-            errors.push(`Failed to update record '${detail.RecordID}'`);
+          if (!await detail.Save()) {
+            throw new Error(`Failed to update record '${detail.RecordID}': ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
           }
-        } catch (error) {
-          failedCount++;
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          errors.push(`Error updating record '${detail.RecordID}': ${errorMessage}`);
         }
+        await provider.CommitTransaction();
+      } catch (error) {
+        await provider.RollbackTransaction();
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.addOutputParam(params, 'Updated', 0);
+        this.addOutputParam(params, 'Failed', details.length);
+        return {
+          Success: false,
+          ResultCode: 'UPDATE_FAILED',
+          Message: `Failed to update list items (all changes rolled back): ${errorMessage}`
+        };
       }
 
-      // Add output parameters
-      this.addOutputParam(params, 'Updated', updatedCount);
-      this.addOutputParam(params, 'Failed', failedCount);
-      this.addOutputParam(params, 'Errors', errors);
+      this.addOutputParam(params, 'Updated', details.length);
+      this.addOutputParam(params, 'Failed', 0);
 
-      const success = failedCount === 0;
       return {
-        Success: success,
-        ResultCode: success ? 'SUCCESS' : 'PARTIAL_SUCCESS',
-        Message: success
-          ? `Successfully updated ${updatedCount} record(s) to status '${newStatus}'`
-          : `Updated ${updatedCount}, failed ${failedCount}. Errors: ${errors.join('; ')}`
+        Success: true,
+        ResultCode: 'SUCCESS',
+        Message: `Successfully updated ${details.length} record(s) to status '${newStatus}'`
       };
 
     } catch (error) {

@@ -1,5 +1,3 @@
-import { MJGlobal } from ".";
-import { IMJComponent, MJEventType } from "./interface";
 import { v4 } from 'uuid';
 import _ from 'lodash';
 
@@ -49,12 +47,19 @@ export function GetGlobalObjectStore(): GlobalObjectStore | null {
 
 /**
  * This utility function will copy all scalar and array properties from an object to a new object and return the new object.
- * This function will NOT copy functions or non-plain objects (unless resolveCircularReferences is true).
+ * This function will NOT copy non-plain object instances (unless they implement `toJSON()` or `resolveCircularReferences` is true).
+ *
+ * The function respects the standard JavaScript `toJSON()` protocol: if a value exposes a `toJSON()` method
+ * (as `Date`, `BaseInfo` subclasses, and user-defined classes can), the method is invoked and its return value
+ * is processed in place of the original. This mirrors how `JSON.stringify()` handles serialization.
+ *
+ * Arrays are recursively processed — each item is copied/toJSON'd individually — so nested objects with
+ * `toJSON()` are unwrapped to their serializable form.
  *
  * @param input - The object to copy
  * @param resolveCircularReferences - If true, handles circular references and complex objects for safe JSON serialization.
  *                                     When enabled, circular references are replaced with '[Circular Reference]',
- *                                     complex objects (Sockets, Streams, etc.) are replaced with their type names,
+ *                                     complex objects without `toJSON()` are replaced with their type names,
  *                                     Error objects are specially handled to extract name/message/stack,
  *                                     and Dates are converted to ISO strings. Default: false
  * @param maxDepth - Maximum recursion depth when resolveCircularReferences is true (default: 10)
@@ -101,12 +106,8 @@ export function CopyScalarsAndArrays<T extends object>(
                 return value.map(item => copy(item, depth + 1));
             }
 
-            // Handle Date objects
-            if (_.isDate(value)) {
-                return value.toISOString();
-            }
-
             // Handle Error objects specially to get their properties
+            // (checked before toJSON so we always get name/message/stack, even if Error subclasses define toJSON)
             if (value instanceof Error) {
                 return {
                     name: value.name,
@@ -115,6 +116,11 @@ export function CopyScalarsAndArrays<T extends object>(
                     // Spread any custom properties added to the error
                     ...copy(_.omit(value, ['name', 'message', 'stack']), depth + 1)
                 };
+            }
+
+            // Respect the toJSON() protocol (covers Date, BaseInfo subclasses, and any class that implements it)
+            if (typeof value.toJSON === 'function') {
+                return copy(value.toJSON(), depth + 1);
             }
 
             // Handle plain objects (POJOs)
@@ -128,7 +134,7 @@ export function CopyScalarsAndArrays<T extends object>(
                 return result;
             }
 
-            // For complex objects (Socket, Stream, Buffer, etc.), just use the type name
+            // For complex objects without toJSON (Socket, Stream, Buffer, etc.), just use the type name
             const typeName = value.constructor?.name || 'Object';
             if (typeName !== 'Object') {
                 return `[${typeName}]`;
@@ -139,21 +145,41 @@ export function CopyScalarsAndArrays<T extends object>(
 
         return copy(input, 0);
     } else {
-        // Original implementation for backward compatibility
+        // Simple mode: preserves existing behavior (primitives/functions pass through, class instances
+        // without toJSON get their keys dropped) while honoring the toJSON() protocol and recursing
+        // into array items so nested objects with toJSON are unwrapped.
         const result: Partial<T> = {};
         Object.keys(input).forEach((key) => {
             const value = input[key as keyof T];
-            // Check for null or scalar types directly
+            // Primitives, null, functions — pass through
             if (value === null || typeof value !== 'object') {
                 result[key as keyof T] = value;
-            } else if (Array.isArray(value)) {
-                // Handle arrays by creating a new array with the same elements
-                result[key as keyof T] = [...value] as any;
-            } else if (typeof value === 'object' && value.constructor === Object) {
-                // Recursively copy plain objects
-                result[key as keyof T] = CopyScalarsAndArrays(value) as any;
+                return;
             }
-            // Functions and non-plain objects are intentionally ignored
+            // toJSON protocol — use the method's output
+            const valueToJSON = (value as { toJSON?: unknown }).toJSON;
+            if (typeof valueToJSON === 'function') {
+                result[key as keyof T] = (valueToJSON as () => unknown).call(value) as T[keyof T];
+                return;
+            }
+            // Arrays — process each item; items with toJSON are unwrapped, class instances without it are replaced with null to preserve array length
+            if (Array.isArray(value)) {
+                result[key as keyof T] = value.map(item => {
+                    if (item === null || typeof item !== 'object') return item;
+                    const itemToJSON = (item as { toJSON?: unknown }).toJSON;
+                    if (typeof itemToJSON === 'function') return (itemToJSON as () => unknown).call(item);
+                    if ((item as object).constructor === Object) return CopyScalarsAndArrays(item as object);
+                    // Non-plain, non-toJSON class instances inside an array — can't drop without changing
+                    // array length, so fall back to null (sanitized placeholder)
+                    return null;
+                }) as T[keyof T];
+                return;
+            }
+            // Plain objects — recurse (key omitted for class instances without toJSON)
+            if ((value as object).constructor === Object) {
+                result[key as keyof T] = CopyScalarsAndArrays(value as object) as T[keyof T];
+            }
+            // else: non-plain class instance without toJSON → key is dropped entirely (matches legacy)
         });
         return result;
     }
@@ -1116,22 +1142,6 @@ export function replaceAllSpaces(s: string): string {
     return s;
 }
  
-/**
- * This utility function sends a message to all components that are listening requesting a window resize. This is a cross-platform method of requesting a resize and is loosely coupled from
- * the actual implementation on a specific device/browser/etc.
- * @param delay 
- * @param component 
- */
-export function InvokeManualResize(delay: number = 50, component: IMJComponent | null = null) {
-    setTimeout(() => {
-      MJGlobal.Instance.RaiseEvent({
-        event: MJEventType.ManualResizeRequest,
-        eventCode: '',
-        args: null,
-        component: component!
-      })
-    }, delay ); // give the tabstrip time to render
-}
 
 /**
  * Generates a version 4 UUID (Universally Unique Identifier) using the uuid library.
@@ -1338,6 +1348,77 @@ function recursiveReplaceKey(value: any, options: Required<ParseJSONOptions>, de
   else {
     return value; // return as-is for non-string, non-array, and non-object types
   }
+}
+
+/**
+ * Escape HTML entities in a string to prevent Cross-Site Scripting (XSS) attacks.
+ * This is particularly important when rendering un-sanitized user input via mechanisms
+ * like Angular's `[innerHTML]`.
+ *
+ * @param text - The string to escape.
+ * @returns The escaped HTML string.
+ */
+export function EscapeHTML(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
+ * Build an HTML-safe string with every case-insensitive occurrence of `query` inside
+ * `text` wrapped in the supplied `<mark>` tag. Designed for search-result UIs whose
+ * output is bound to Angular's `[innerHTML]` (or any equivalent that trusts raw HTML).
+ *
+ * SECURITY: The result IS raw HTML. Each text segment (before / match / after) is
+ * HTML-escaped *individually* before concatenation. Callers must pass plain text,
+ * not pre-escaped HTML — escaping the input up-front would corrupt entity codes
+ * when the search term overlaps an entity (e.g. searching "amp" inside `&amp;`)
+ * and is the exact failure mode this helper is built to prevent.
+ *
+ * Behavior notes:
+ *  - Case-insensitive match; original casing of `text` is preserved in the output.
+ *  - All occurrences are highlighted (matches the behavior of a `/.../gi` regex).
+ *  - `query` is treated as a literal string — no regex semantics, so search terms
+ *    like `.` or `$10` work as users expect.
+ *  - Empty/falsy `query` returns `EscapeHTML(text)` so the result is always
+ *    `[innerHTML]`-safe.
+ *
+ * @param text - The plain text to search and render.
+ * @param query - The substring to highlight (literal match, case-insensitive).
+ * @param markClass - Optional CSS class to apply to the `<mark>` element.
+ * @returns An HTML string safe for `[innerHTML]` binding.
+ */
+export function HighlightSearchMatches(text: string, query: string, markClass?: string): string {
+  if (!text) return text;
+  const trimmed = query?.trim() ?? '';
+  if (!trimmed) return EscapeHTML(text);
+
+  const queryLower = trimmed.toLowerCase();
+  const queryLen = trimmed.length;
+  const textLower = text.toLowerCase();
+
+  let cursor = 0;
+  let result = '';
+  let matchIndex = textLower.indexOf(queryLower, cursor);
+
+  if (matchIndex === -1) return EscapeHTML(text);
+
+  const openTag = markClass ? `<mark class="${EscapeHTML(markClass)}">` : '<mark>';
+
+  while (matchIndex !== -1) {
+    const before = text.substring(cursor, matchIndex);
+    const match = text.substring(matchIndex, matchIndex + queryLen);
+    result += `${EscapeHTML(before)}${openTag}${EscapeHTML(match)}</mark>`;
+    cursor = matchIndex + queryLen;
+    matchIndex = textLower.indexOf(queryLower, cursor);
+  }
+
+  result += EscapeHTML(text.substring(cursor));
+  return result;
 }
 
 /**

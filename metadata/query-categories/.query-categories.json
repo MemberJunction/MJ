@@ -88,5 +88,35 @@
       "lastModified": "2026-03-11T20:52:35.200Z",
       "checksum": "0f2b8f7b20598d44397e27a1c8049b5f73fd0654757cfce55a8600378cc8ea5b"
     }
+  },
+  {
+    "fields": {
+      "Name": "Tags",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Reusable queries for the MJ tag taxonomy and cross-entity tagging system. These composable building blocks let consumers enrich any entity with tag metadata.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "234B1C83-1A97-4BF4-ABE8-18A3C53501AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T22:21:09.541Z",
+      "checksum": "b9e0e6234839ff539f8714255e678f42159e8f39c8e088ff7487b87f0dca2700"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lists",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Reusable queries for user-curated lists and list membership. These composable building blocks let consumers resolve list contents and join them to target entities.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "2027CE0E-3160-4061-88E6-58DBAE9256E8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T22:21:09.550Z",
+      "checksum": "dbe0cc1ccebcec6e1b3c3baaf7f80199f029d71bf0bbca156bf2be526437c1ec"
+    }
   }
 ]

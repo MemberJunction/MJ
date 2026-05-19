@@ -1,0 +1,40 @@
+{
+  "name": "@memberjunction/ng-word-cloud",
+  "version": "5.34.1",
+  "description": "MemberJunction: Reusable SVG-based word cloud component for Angular.",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "npm run clean && ngc",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "MemberJunction",
+    "Angular",
+    "word-cloud"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@angular/compiler": "21.1.3",
+    "@angular/compiler-cli": "21.1.3",
+    "vitest": "^4.0.18"
+  },
+  "peerDependencies": {
+    "@angular/common": "21.1.3",
+    "@angular/core": "21.1.3"
+  },
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

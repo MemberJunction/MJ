@@ -13,14 +13,14 @@ import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
 import { ResolveDependencies } from '../dependency/dependency-resolver.js';
 import type { InstalledAppMap, DependencyNode, DependencyValue } from '../dependency/dependency-resolver.js';
-import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, type GitHubClientOptions } from '../github/github-client.js';
+import { FetchManifestFromGitHub, DownloadMigrations, GetLatestVersion, ValidateGitHubTag, type GitHubClientOptions } from '../github/github-client.js';
 import { CreateAppSchema, DropAppSchema, SchemaExists, EscapeSqlString } from './schema-manager.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
-import { AddAppPackages, RemoveAppPackages, RunPackageInstall, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
@@ -64,6 +64,10 @@ export interface OrchestratorContext {
   AdditionalTargets?: WorkspaceTarget[];
   /** File subpath within client workspace for bootstrap file (default: 'src/app/generated/open-app-bootstrap.generated.ts') */
   ClientBootstrapSubpath?: string;
+  /** MJ core schema name. Used to resolve `${mjSchema}` placeholder in app migrations. Defaults to '__mj'. */
+  MJCoreSchema?: string;
+  /** Extra user placeholders merged into the Skyway Placeholders map for migration SQL substitution. */
+  MigrationPlaceholders?: Record<string, string>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -97,9 +101,19 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   let manifest: MJAppManifest | undefined;
 
   try {
-    // Step 1: Fetch manifest
+    // Step 1a: If an explicit version was requested, validate the tag exists on GitHub
+    const explicitVersion = options.Version;
+    if (explicitVersion) {
+      Callbacks?.OnProgress?.('Fetch', `Validating version tag v${explicitVersion.replace(/^v/, '')} exists...`);
+      const tagResult = await ValidateGitHubTag(options.Source, explicitVersion, context.GitHubOptions);
+      if (!tagResult.Exists) {
+        return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${explicitVersion} not found`);
+      }
+    }
+
+    // Step 1b: Fetch manifest
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
-    const fetchResult = await FetchManifestFromGitHub(options.Source, options.Version, context.GitHubOptions);
+    const fetchResult = await FetchManifestFromGitHub(options.Source, explicitVersion, context.GitHubOptions);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -111,6 +125,12 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, `Invalid manifest: ${parseResult.Errors?.join(', ')}`);
     }
     manifest = parseResult.Manifest;
+
+    // When an explicit version is requested, use that version for package pins
+    // (not the manifest's version field, which may be a base version like "1.0.0").
+    // Also switch to 'exact' version strategy so packages are pinned without ^ prefix.
+    const effectivePackageVersion = explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version;
+    const effectiveVersionStrategy: VersionStrategy | undefined = explicitVersion ? 'exact' : context.VersionStrategy;
 
     // Steps 3-4: Validate MJ compatibility and resolve dependencies (parallel)
     Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility and resolving dependencies...');
@@ -153,7 +173,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     // Steps 6-7: Schema
     if (manifest.schema) {
-      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall);
+      const schemaResult = await HandleSchemaCreation(manifest, context, isReinstall, options.AllowDoubleUnderscoreSchema === true);
       if (!schemaResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, schemaResult.ErrorMessage ?? 'Schema creation failed');
       }
@@ -164,7 +184,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     if (manifest.migrations && manifest.schema) {
       const migrationResult = await HandleMigrations(manifest, context);
       if (!migrationResult.Success) {
-        await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+        await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Migration', startTime, migrationResult.ErrorMessage ?? 'Migration failed');
       }
     }
@@ -173,7 +193,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Record', 'Recording app installation...');
     const recordResult = await RecordInstallationAtomically(context.ContextUser, manifest, Callbacks);
     if (!recordResult.Success) {
-      await CompensateSchemaOnFailure(manifest, context, schemaCreated, Callbacks);
+      await CompensateSchemaOnFailure(manifest, context, schemaCreated, options.AllowDoubleUnderscoreSchema === true, Callbacks);
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Record', startTime, recordResult.ErrorMessage ?? 'Failed to record installation');
     }
     createdAppId = recordResult.AppId;
@@ -182,11 +202,20 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     Callbacks?.OnProgress?.('Config', 'Updating configuration files...');
 
     // Steps 10-11: Packages
-    const pkgResult = await HandlePackageInstallation(manifest, context);
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectivePackageVersion, effectiveVersionStrategy);
+    let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
-      await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
-      await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
+      if (pkgResult.PackageJsonUpdated) {
+        // package.json was updated successfully but `npm install` failed (e.g., missing npm auth).
+        // Continue with the rest of the install — the user can run `npm install` manually once
+        // they fix their npm credentials.
+        npmInstallWarning = pkgResult.ErrorMessage;
+        Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were added but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
+      } else {
+        await SetAppStatus(context.ContextUser, createdAppId!, 'Error');
+        await RecordFailureHistory(context.ContextUser, createdAppId!, 'Install', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package installation failed', startTime);
+        return BuildFailureResult('Install', manifest.name, manifest.version, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package installation failed');
+      }
     }
 
     // Step 12: Update server config
@@ -197,18 +226,20 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', manifest.name, manifest.version, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 13: Update client imports
+    // Step 13: Flip status to Active BEFORE regenerating the client bootstrap,
+    // so the regen reads the new status and emits enabled imports.
+    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
+    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
+
+    // Step 14: Update client imports (reads current app status from DB)
     await HandleClientBootstrapRegeneration(context);
 
-    // Step 14: Execute hooks
+    // Step 15: Execute hooks
     if (manifest.hooks?.postInstall) {
       Callbacks?.OnProgress?.('Hooks', 'Running postInstall hook...');
       await ExecuteHook(manifest.hooks.postInstall, context.RepoRoot);
     }
 
-    // Step 15: Finalize — set status to Active and record success history
-    Callbacks?.OnProgress?.('Record', 'Finalizing installation...');
-    await SetAppStatus(context.ContextUser, createdAppId!, 'Active');
     await RecordInstallHistoryEntry(context.ContextUser, createdAppId!, 'Install', manifest, {
       Success: true,
       DurationSeconds: GetDurationSeconds(startTime),
@@ -219,13 +250,18 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
 
     Callbacks?.OnSuccess?.('Install', `Successfully installed ${manifest.name} v${manifest.version}`);
 
+    const baseSummary = 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.';
+    const summary = npmInstallWarning
+      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
+      : baseSummary;
+
     return {
       Success: true,
       Action: 'Install',
       AppName: manifest.name,
       Version: manifest.version,
       DurationSeconds: GetDurationSeconds(startTime),
-      Summary: 'App installed successfully. Restart MJAPI and rebuild MJExplorer to activate.',
+      Summary: summary,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -251,8 +287,9 @@ async function RecordInstallationAtomically(
   contextUser: UserInfo,
   manifest: MJAppManifest,
   callbacks?: AppInstallCallbacks,
+  provider?: IMetadataProvider,
 ): Promise<InternalResult> {
-  const md = new Metadata();
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const tg = await md.CreateTransactionGroup();
 
   try {
@@ -285,6 +322,7 @@ async function CompensateSchemaOnFailure(
   manifest: MJAppManifest,
   context: OrchestratorContext,
   schemaWasCreated: boolean,
+  allowDoubleUnderscore: boolean,
   callbacks?: AppInstallCallbacks,
 ): Promise<void> {
   if (!schemaWasCreated || !manifest.schema) {
@@ -292,7 +330,7 @@ async function CompensateSchemaOnFailure(
   }
   try {
     callbacks?.OnProgress?.('Rollback', `Rolling back: dropping schema '${manifest.schema.name}'...`);
-    await DropAppSchema(manifest.schema.name, context.DatabaseProvider);
+    await DropAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     callbacks?.OnProgress?.('Rollback', `Schema '${manifest.schema.name}' dropped successfully`);
   } catch (rollbackError: unknown) {
     const msg = rollbackError instanceof Error ? rollbackError.message : String(rollbackError);
@@ -325,9 +363,18 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     previousVersion = existingApp.Version;
 
     // Step 1: Fetch new manifest
-    const targetVersion = options.Version ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions));
+    const explicitUpgradeVersion = options.Version;
+    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions));
     if (!targetVersion) {
       return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
+    }
+
+    // If an explicit version was requested, validate the tag exists on GitHub
+    if (explicitUpgradeVersion) {
+      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);
+      if (!tagResult.Exists) {
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${targetVersion} not found`);
+      }
     }
 
     // Verify target is actually newer than installed version
@@ -397,11 +444,20 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     }
 
     // Steps 5-6: Update packages
-    const pkgResult = await HandlePackageInstallation(manifest, context);
+    // When upgrading to an explicit version, pin packages exactly; otherwise use default strategy
+    const effectiveUpgradeVersion = explicitUpgradeVersion ? targetVersion.replace(/^v/, '') : manifest.version;
+    const effectiveUpgradeStrategy: VersionStrategy | undefined = explicitUpgradeVersion ? 'exact' : context.VersionStrategy;
+    const pkgResult = await HandlePackageInstallation(manifest, context, effectiveUpgradeVersion, effectiveUpgradeStrategy);
+    let npmInstallWarning: string | undefined;
     if (!pkgResult.Success) {
-      await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package update failed', startTime, previousVersion);
-      await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
-      return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package update failed');
+      if (pkgResult.PackageJsonUpdated) {
+        npmInstallWarning = pkgResult.ErrorMessage;
+        Callbacks?.OnWarn?.('Packages', `npm install failed — package.json entries were updated but dependencies were not resolved. Run 'npm install' manually after fixing npm auth.\n  Detail: ${pkgResult.ErrorMessage}`);
+      } else {
+        await RecordFailureHistory(context.ContextUser, existingApp.ID, 'Upgrade', manifest, 'Packages', pkgResult.ErrorMessage ?? 'Package update failed', startTime, previousVersion);
+        await SetAppStatus(context.ContextUser, existingApp.ID, 'Error');
+        return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Packages', startTime, pkgResult.ErrorMessage ?? 'Package update failed');
+      }
     }
 
     // Step 7: Update server config if changed
@@ -412,21 +468,22 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Config', startTime, configResult.ErrorMessage ?? 'Config update failed');
     }
 
-    // Step 8: Regenerate client imports
-    await HandleClientBootstrapRegeneration(context);
-
-    // Step 9: Execute hooks
-    if (manifest.hooks?.postUpgrade) {
-      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
-      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
-    }
-
-    // Step 10: Update records
+    // Step 8: Update app record first (including Status: Active) so the
+    // bootstrap regen below reads the final status from the DB.
     await UpdateAppRecord(context.ContextUser, existingApp.ID, {
       Version: manifest.version,
       ManifestJSON: JSON.stringify(manifest),
       Status: 'Active',
     });
+
+    // Step 9: Regenerate client imports
+    await HandleClientBootstrapRegeneration(context);
+
+    // Step 10: Execute hooks
+    if (manifest.hooks?.postUpgrade) {
+      Callbacks?.OnProgress?.('Hooks', 'Running postUpgrade hook...');
+      await ExecuteHook(manifest.hooks.postUpgrade, context.RepoRoot);
+    }
 
     // Update dependency records to reflect new manifest
     if (manifest.dependencies) {
@@ -445,13 +502,18 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     Callbacks?.OnSuccess?.('Upgrade', `Successfully upgraded ${options.AppName} to v${manifest.version}`);
 
+    const baseSummary = `Upgraded from ${previousVersion} to ${manifest.version}. Restart MJAPI and rebuild MJExplorer.`;
+    const summary = npmInstallWarning
+      ? `${baseSummary}\n\n⚠ npm install failed — package.json and config files were updated but dependencies were not installed. Log in to npm ('npm login') or configure your .npmrc, then run 'npm install' to complete the setup.`
+      : baseSummary;
+
     return {
       Success: true,
       Action: 'Upgrade',
       AppName: options.AppName,
       Version: manifest.version,
       DurationSeconds: GetDurationSeconds(startTime),
-      Summary: `Upgraded from ${previousVersion} to ${manifest.version}. Restart MJAPI and rebuild MJExplorer.`,
+      Summary: summary,
     };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
@@ -552,7 +614,9 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
     // Step 7: Drop schema (unless --keep-data)
     if (!options.KeepData && existingApp.SchemaName) {
       Callbacks?.OnProgress?.('Schema', `Dropping schema '${existingApp.SchemaName}'...`);
-      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider);
+      const dropResult = await DropAppSchema(existingApp.SchemaName, context.DatabaseProvider, {
+        allowDoubleUnderscore: options.AllowDoubleUnderscoreSchema === true,
+      });
       if (!dropResult.Success) {
         Callbacks?.OnWarn?.('Schema', `Failed to drop schema: ${dropResult.ErrorMessage}`);
       }
@@ -613,8 +677,8 @@ export async function DisableApp(appName: string, context: OrchestratorContext):
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, false);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Disabled');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -637,8 +701,8 @@ export async function EnableApp(appName: string, context: OrchestratorContext): 
   }
 
   ToggleServerDynamicPackages(context.RepoRoot, appName, true);
-  await HandleClientBootstrapRegeneration(context);
   await SetAppStatus(context.ContextUser, app.ID, 'Active');
+  await HandleClientBootstrapRegeneration(context);
 
   return {
     Success: true,
@@ -662,6 +726,8 @@ interface InternalResult {
   ErrorMessage?: string;
   AppId?: string;
   DepsToInstall?: Array<{ AppName: string; Repository: string; VersionRange: string }>;
+  /** True when package.json was updated but npm install failed (e.g., auth issue) */
+  PackageJsonUpdated?: boolean;
 }
 
 /**
@@ -728,7 +794,7 @@ async function InstallDependencies(
 /**
  * Handles schema creation for an app, including collision checks and reinstall reuse.
  */
-async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false): Promise<InternalResult> {
+async function HandleSchemaCreation(manifest: MJAppManifest, context: OrchestratorContext, isReinstall: boolean = false, allowDoubleUnderscore: boolean = false): Promise<InternalResult> {
   if (!manifest.schema) {
     return { Success: true };
   }
@@ -737,9 +803,10 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
   const exists = await SchemaExists(manifest.schema.name, context.DatabaseProvider);
 
   if (exists) {
-    if (isReinstall) {
-      // Schema left over from a previous install (e.g. --keep-data removal).
-      // Reuse it rather than failing.
+    if (isReinstall || manifest.schema.createIfNotExists !== false) {
+      // Schema already exists — either a reinstall (previously removed app),
+      // or createIfNotExists is set (the app expects to adopt an existing schema).
+      // Reuse it and let Skyway apply only new migrations.
       context.Callbacks?.OnProgress?.('Schema', `Reusing existing schema '${manifest.schema.name}'`);
       return { Success: true };
     }
@@ -748,7 +815,7 @@ async function HandleSchemaCreation(manifest: MJAppManifest, context: Orchestrat
 
   if (manifest.schema.createIfNotExists !== false) {
     context.Callbacks?.OnProgress?.('Schema', `Creating schema '${manifest.schema.name}'...`);
-    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider);
+    const result = await CreateAppSchema(manifest.schema.name, context.DatabaseProvider, { allowDoubleUnderscore });
     return { Success: result.Success, ErrorMessage: result.ErrorMessage };
   }
 
@@ -779,6 +846,8 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
     MigrationsDir: tempDir,
     SchemaName: manifest.schema.name,
     DatabaseConfig: context.DatabaseConfig,
+    MJCoreSchema: context.MJCoreSchema,
+    ExtraPlaceholders: context.MigrationPlaceholders,
   });
 
   return { Success: migrationResult.Success, ErrorMessage: migrationResult.ErrorMessage };
@@ -786,8 +855,16 @@ async function HandleMigrations(manifest: MJAppManifest, context: OrchestratorCo
 
 /**
  * Adds app npm packages to the appropriate workspace package.json files and runs npm install.
+ *
+ * @param packageVersion - The version string to write (may differ from manifest.version when an explicit version is requested)
+ * @param versionStrategy - Override for version strategy (e.g., 'exact' when explicit version is requested)
  */
-async function HandlePackageInstallation(manifest: MJAppManifest, context: OrchestratorContext): Promise<InternalResult> {
+async function HandlePackageInstallation(
+  manifest: MJAppManifest,
+  context: OrchestratorContext,
+  packageVersion?: string,
+  versionStrategy?: VersionStrategy,
+): Promise<InternalResult> {
   if (!manifest.packages) {
     return { Success: true };
   }
@@ -798,11 +875,11 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
     ServerPackages: manifest.packages.server ?? [],
     ClientPackages: manifest.packages.client ?? [],
     SharedPackages: manifest.packages.shared ?? [],
-    Version: manifest.version,
+    Version: packageVersion ?? manifest.version,
     ServerPackagePath: context.ServerPackagePath,
     ClientPackagePath: context.ClientPackagePath,
     PackageManager: context.PackageManager,
-    VersionStrategy: context.VersionStrategy,
+    VersionStrategy: versionStrategy ?? context.VersionStrategy,
     AdditionalTargets: context.AdditionalTargets,
   });
 
@@ -810,9 +887,24 @@ async function HandlePackageInstallation(manifest: MJAppManifest, context: Orche
     return { Success: false, ErrorMessage: addResult.ErrorMessage };
   }
 
+  // If the manifest declares a package prefix, bump ALL matching dependencies
+  // across the workspace (not just the manifest-declared ones). This handles
+  // consumer-added packages like bcsaas-settings, bcsaas-credentials, etc.
+  const prefix = manifest.packages.prefix;
+  if (prefix) {
+    const bareVersion = packageVersion ?? manifest.version;
+    const updatedCount = BumpPrefixedDependencies(context.RepoRoot, prefix, bareVersion);
+    if (updatedCount > 0) {
+      context.Callbacks?.OnProgress?.('Packages', `Bumped ${updatedCount} workspace package.json file(s) with prefix '${prefix}' to ${bareVersion}`);
+    }
+  }
+
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
   const installResult = RunPackageInstall(context.RepoRoot, undefined, manifest.packages.registry, context.PackageManager);
-  return { Success: installResult.Success, ErrorMessage: installResult.ErrorMessage };
+  if (!installResult.Success) {
+    return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
+  }
+  return { Success: true };
 }
 
 /**

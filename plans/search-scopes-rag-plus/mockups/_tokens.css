@@ -1,0 +1,257 @@
+/* Shared design tokens for Search Scopes & RAG+ mockups.
+ *
+ * Mirrors the semantic layer from packages/Angular/Generic/shared/src/lib/_tokens.scss
+ * so these HTML mockups look and feel identical to what the real Angular components
+ * will render in MJExplorer. When the live tokens evolve, update these too.
+ */
+
+:root {
+    /* Text */
+    --mj-text-primary: #1f2937;
+    --mj-text-secondary: #475569;
+    --mj-text-muted: #64748b;
+    --mj-text-disabled: #94a3b8;
+    --mj-text-inverse: #ffffff;
+    --mj-text-link: #2563eb;
+
+    /* Surfaces */
+    --mj-bg-page: #f8fafc;
+    --mj-bg-surface: #ffffff;
+    --mj-bg-surface-card: #f8f9fa;
+    --mj-bg-surface-sunken: #f1f5f9;
+    --mj-bg-surface-elevated: #ffffff;
+    --mj-bg-surface-hover: #f1f5f9;
+    --mj-bg-surface-active: #e2e8f0;
+    --mj-bg-overlay: rgba(15, 23, 42, 0.5);
+
+    /* Borders */
+    --mj-border-subtle: #f1f5f9;
+    --mj-border-default: #e2e8f0;
+    --mj-border-strong: #cbd5e1;
+    --mj-border-focus: #2563eb;
+
+    /* Brand */
+    --mj-brand-primary: #264faf;
+    --mj-brand-primary-hover: #1f3f91;
+    --mj-brand-primary-active: #172f6e;
+
+    /* Status */
+    --mj-status-success: #15803d;
+    --mj-status-success-bg: #dcfce7;
+    --mj-status-success-text: #166534;
+    --mj-status-warning: #b45309;
+    --mj-status-warning-bg: #fef3c7;
+    --mj-status-warning-text: #92400e;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fee2e2;
+    --mj-status-error-text: #991b1b;
+    --mj-status-info: #0369a1;
+    --mj-status-info-bg: #e0f2fe;
+    --mj-status-info-text: #075985;
+
+    /* Spacing scale */
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 24px;
+    --sp-6: 32px;
+}
+
+[data-theme='dark'] {
+    --mj-text-primary: #e5e7eb;
+    --mj-text-secondary: #cbd5e1;
+    --mj-text-muted: #94a3b8;
+    --mj-text-disabled: #64748b;
+    --mj-text-inverse: #0f172a;
+
+    --mj-bg-page: #0f172a;
+    --mj-bg-surface: #1e293b;
+    --mj-bg-surface-card: #172033;
+    --mj-bg-surface-sunken: #0b1120;
+    --mj-bg-surface-elevated: #1e293b;
+    --mj-bg-surface-hover: #243046;
+    --mj-bg-surface-active: #334155;
+    --mj-bg-overlay: rgba(0, 0, 0, 0.7);
+
+    --mj-border-subtle: #1e293b;
+    --mj-border-default: #334155;
+    --mj-border-strong: #475569;
+    --mj-border-focus: #60a5fa;
+
+    --mj-brand-primary: #60a5fa;
+    --mj-brand-primary-hover: #93c5fd;
+    --mj-brand-primary-active: #3b82f6;
+
+    --mj-status-success-bg: #14532d;
+    --mj-status-success-text: #86efac;
+    --mj-status-warning-bg: #78350f;
+    --mj-status-warning-text: #fde68a;
+    --mj-status-error-bg: #7f1d1d;
+    --mj-status-error-text: #fecaca;
+    --mj-status-info-bg: #0c4a6e;
+    --mj-status-info-text: #bae6fd;
+}
+
+body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-page);
+}
+
+.mock-frame {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: var(--sp-5);
+}
+
+.mock-header {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    margin-bottom: var(--sp-5);
+}
+
+.mock-header h1 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.mock-header .mock-breadcrumb {
+    color: var(--mj-text-muted);
+    font-size: 0.75rem;
+}
+
+.card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: var(--sp-5);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 6px;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.btn.primary {
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-1);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.badge.info {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+}
+
+.badge.success {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+}
+
+.badge.warning {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+}
+
+.badge.neutral {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-secondary);
+}
+
+.icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+}
+
+.label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+input[type="text"],
+input[type="number"],
+textarea,
+select {
+    font-family: inherit;
+    font-size: 0.875rem;
+    padding: 6px 10px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 6px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+input[type="text"]:focus,
+textarea:focus,
+select:focus {
+    outline: 2px solid var(--mj-brand-primary);
+    outline-offset: -1px;
+    border-color: var(--mj-brand-primary);
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+}
+
+.row {
+    display: flex;
+    gap: var(--sp-3);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.grid {
+    display: grid;
+    gap: var(--sp-3);
+}
+
+.muted {
+    color: var(--mj-text-muted);
+}

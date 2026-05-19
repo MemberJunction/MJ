@@ -1,0 +1,17 @@
+@if (HasArchivedFields) {
+  <span
+    class="badge badge-warning badge-pill badge-icon badge-clickable"
+    [title]="TooltipText"
+    (click)="OnBadgeClick()"
+    (keydown.enter)="OnBadgeClick()"
+    tabindex="0"
+    role="button"
+    [attr.aria-label]="'Archived: ' + TooltipText">
+    <i class="fa-solid fa-box-archive"></i>
+    <span class="badge-text">Archived</span>
+  </span>
+}
+
+@if (IsLoading) {
+  <mj-loading [showText]="false" size="small"></mj-loading>
+}

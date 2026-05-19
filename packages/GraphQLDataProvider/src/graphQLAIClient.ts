@@ -2,7 +2,7 @@ import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
-import { SafeJSONParse } from "@memberjunction/global";
+import { SafeJSONParse, CleanAndParseJSON } from "@memberjunction/global";
 import { FireAndForgetHelper } from "./fireAndForgetHelper";
 
 /**
@@ -214,7 +214,7 @@ export class GraphQLAIClient {
 
         try {
             if (promptResult.parsedResult) {
-                parsedResult = JSON.parse(promptResult.parsedResult);
+                parsedResult = CleanAndParseJSON(promptResult.parsedResult);
             }
         } catch (e) {
             // Keep as string if parsing fails
@@ -906,6 +906,457 @@ export class GraphQLAIClient {
             };
         }
     }
+
+    /**
+     * Trigger the autotagging pipeline (fire-and-forget).
+     * Returns a PipelineRunID that can be used to subscribe to PipelineProgress.
+     */
+    public async RunAutotagPipeline(options?: {
+        contentSourceIDs?: string[];
+        forceReprocess?: boolean;
+    }): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation RunAutotagPipeline($contentSourceIDs: [String!], $forceReprocess: Boolean) {
+                    RunAutotagPipeline(contentSourceIDs: $contentSourceIDs, forceReprocess: $forceReprocess) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {};
+            if (options?.contentSourceIDs?.length) {
+                variables['contentSourceIDs'] = options.contentSourceIDs;
+            }
+            if (options?.forceReprocess) {
+                variables['forceReprocess'] = true;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            if (!result?.RunAutotagPipeline) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.RunAutotagPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RunAutotagPipeline failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Pause a running classification pipeline.
+     * Sets CancellationRequested on the process run so the engine pauses after the current batch.
+     */
+    public async PauseClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation PauseClassificationPipeline($processRunID: String!) {
+                    PauseClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.PauseClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.PauseClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.PauseClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Resume a paused classification pipeline from its last completed offset.
+     */
+    public async ResumeClassificationPipeline(processRunID: string): Promise<AutotagPipelineResult> {
+        try {
+            const mutation = gql`
+                mutation ResumeClassificationPipeline($processRunID: String!) {
+                    ResumeClassificationPipeline(processRunID: $processRunID) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, { processRunID });
+            if (!result?.ResumeClassificationPipeline) {
+                throw new Error('Invalid response from server');
+            }
+            return result.ResumeClassificationPipeline as AutotagPipelineResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.ResumeClassificationPipeline failed', undefined, e);
+            return { Success: false, Status: 'Error', ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    // ========================================================================
+    // Tag Governance — Suggestion Inbox + Tag Health
+    // ========================================================================
+
+    /**
+     * Approve a pending tag suggestion. The server-side TagGovernanceEngine
+     * either creates a new tag (when strategy is 'create-new') or merges into
+     * an existing tag (when strategy is 'merge-into-existing'), then re-points
+     * any existing free-text ContentItemTag rows whose Tag matches ProposedName.
+     */
+    public async PromoteTagSuggestion(params: {
+        suggestionID: string;
+        strategy: 'create-new' | 'merge-into-existing';
+        targetTagID?: string;
+    }): Promise<PromoteSuggestionResult> {
+        try {
+            const mutation = gql`
+                mutation PromoteTagSuggestion($suggestionID: String!, $strategy: String!, $targetTagID: String) {
+                    PromoteTagSuggestion(suggestionID: $suggestionID, strategy: $strategy, targetTagID: $targetTagID) {
+                        Success
+                        ResolvedTagID
+                        ResolvedTagName
+                        ErrorMessage
+                    }
+                }
+            `;
+            const variables: Record<string, unknown> = {
+                suggestionID: params.suggestionID,
+                strategy: params.strategy,
+            };
+            if (params.targetTagID) variables['targetTagID'] = params.targetTagID;
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            if (!result?.PromoteTagSuggestion) throw new Error('Invalid response from server');
+            return result.PromoteTagSuggestion as PromoteSuggestionResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.PromoteTagSuggestion failed', undefined, e);
+            return { Success: false, ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /** Reject a pending tag suggestion with optional reviewer notes. */
+    public async RejectTagSuggestion(params: { suggestionID: string; reviewerNotes?: string }): Promise<RejectSuggestionResult> {
+        try {
+            const mutation = gql`
+                mutation RejectTagSuggestion($suggestionID: String!, $reviewerNotes: String) {
+                    RejectTagSuggestion(suggestionID: $suggestionID, reviewerNotes: $reviewerNotes) {
+                        Success
+                        ErrorMessage
+                    }
+                }
+            `;
+            const variables: Record<string, unknown> = { suggestionID: params.suggestionID };
+            if (params.reviewerNotes) variables['reviewerNotes'] = params.reviewerNotes;
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            if (!result?.RejectTagSuggestion) throw new Error('Invalid response from server');
+            return result.RejectTagSuggestion as RejectSuggestionResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RejectTagSuggestion failed', undefined, e);
+            return { Success: false, ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Rebuild persisted tag embeddings for tags whose EmbeddingModelID doesn't
+     * match the configured embedding model. Run after a global model change.
+     */
+    public async RebuildTagEmbeddings(): Promise<RebuildTagEmbeddingsResult> {
+        try {
+            const mutation = gql`
+                mutation RebuildTagEmbeddings {
+                    RebuildTagEmbeddings {
+                        Success
+                        Refreshed
+                        Total
+                        ErrorMessage
+                    }
+                }
+            `;
+            const result = await this._dataProvider.ExecuteGQL(mutation, {});
+            if (!result?.RebuildTagEmbeddings) throw new Error('Invalid response from server');
+            return result.RebuildTagEmbeddings as RebuildTagEmbeddingsResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RebuildTagEmbeddings failed', undefined, e);
+            return { Success: false, Refreshed: 0, Total: 0, ErrorMessage: e.message || 'Unknown error' };
+        }
+    }
+
+    /**
+     * Run the Tag Health emitters (merge / low-usage / wide-node) on demand.
+     * All threshold parameters fall back to DEFAULT_TAG_HEALTH_THRESHOLDS server-side.
+     */
+    public async RunTagHealth(params?: {
+        minCoOccurrence?: number;
+        minNameSimilarity?: number;
+        minEmbeddingSimilarity?: number;
+        maxUsage?: number;
+        maxImplicitChildren?: number;
+    }): Promise<RunTagHealthResult> {
+        try {
+            const mutation = gql`
+                mutation RunTagHealth(
+                    $minCoOccurrence: Int,
+                    $minNameSimilarity: Float,
+                    $minEmbeddingSimilarity: Float,
+                    $maxUsage: Int,
+                    $maxImplicitChildren: Int
+                ) {
+                    RunTagHealth(
+                        minCoOccurrence: $minCoOccurrence,
+                        minNameSimilarity: $minNameSimilarity,
+                        minEmbeddingSimilarity: $minEmbeddingSimilarity,
+                        maxUsage: $maxUsage,
+                        maxImplicitChildren: $maxImplicitChildren
+                    ) {
+                        Success
+                        MergeCount
+                        LowUsageCount
+                        WideNodeCount
+                        DurationMs
+                        ErrorMessage
+                    }
+                }
+            `;
+            const variables: Record<string, unknown> = {};
+            if (params?.minCoOccurrence != null) variables['minCoOccurrence'] = params.minCoOccurrence;
+            if (params?.minNameSimilarity != null) variables['minNameSimilarity'] = params.minNameSimilarity;
+            if (params?.minEmbeddingSimilarity != null) variables['minEmbeddingSimilarity'] = params.minEmbeddingSimilarity;
+            if (params?.maxUsage != null) variables['maxUsage'] = params.maxUsage;
+            if (params?.maxImplicitChildren != null) variables['maxImplicitChildren'] = params.maxImplicitChildren;
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+            if (!result?.RunTagHealth) throw new Error('Invalid response from server');
+            return result.RunTagHealth as RunTagHealthResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.RunTagHealth failed', undefined, e);
+            return {
+                Success: false,
+                MergeCount: 0,
+                LowUsageCount: 0,
+                WideNodeCount: 0,
+                DurationMs: 0,
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Trigger vectorization for an entity document.
+     * Calls the server-side EntityVectorSyncer to embed and upsert entity records.
+     */
+    public async VectorizeEntity(params: VectorizeEntityParams): Promise<VectorizeEntityResult> {
+        try {
+            const mutation = gql`
+                mutation VectorizeEntity(
+                    $entityDocumentID: String!,
+                    $entityID: String!,
+                    $batchSize: Float
+                ) {
+                    VectorizeEntity(
+                        entityDocumentID: $entityDocumentID,
+                        entityID: $entityID,
+                        batchSize: $batchSize
+                    ) {
+                        Success
+                        Status
+                        ErrorMessage
+                        PipelineRunID
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+                entityID: params.entityID
+            };
+            if (params.batchSize !== undefined) {
+                variables['batchSize'] = params.batchSize;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(mutation, variables);
+
+            if (!result?.VectorizeEntity) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.VectorizeEntity as VectorizeEntityResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.VectorizeEntity failed', undefined, e);
+            return {
+                Success: false,
+                Status: 'Error',
+                ErrorMessage: e.message || 'Unknown error'
+            };
+        }
+    }
+
+    /**
+     * Fetch vectors with metadata from Pinecone for a given entity document.
+     * Returns the vector IDs, embedding values, and metadata stored in the vector index.
+     *
+     * @param params The parameters for fetching entity vectors
+     * @returns A Promise that resolves to a FetchEntityVectorsResult
+     */
+    public async FetchEntityVectors(params: FetchEntityVectorsParams): Promise<FetchEntityVectorsResult> {
+        try {
+            const query = gql`
+                query FetchEntityVectors(
+                    $entityDocumentID: String!,
+                    $maxRecords: Int,
+                    $filter: String
+                ) {
+                    FetchEntityVectors(
+                        entityDocumentID: $entityDocumentID,
+                        maxRecords: $maxRecords,
+                        filter: $filter
+                    ) {
+                        Success
+                        TotalCount
+                        ElapsedMs
+                        ErrorMessage
+                        Results {
+                            ID
+                            Values
+                            Metadata
+                        }
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = {
+                entityDocumentID: params.entityDocumentID,
+            };
+            if (params.maxRecords !== undefined) {
+                variables['maxRecords'] = params.maxRecords;
+            }
+            if (params.filter !== undefined) {
+                variables['filter'] = params.filter;
+            }
+
+            const result = await this._dataProvider.ExecuteGQL(query, variables);
+
+            if (!result?.FetchEntityVectors) {
+                throw new Error('Invalid response from server');
+            }
+
+            return result.FetchEntityVectors as FetchEntityVectorsResult;
+        } catch (error: unknown) {
+            const e = error as Error;
+            LogError('GraphQLAIClient.FetchEntityVectors failed', undefined, e);
+            return {
+                Success: false,
+                Results: [],
+                TotalCount: 0,
+                ElapsedMs: 0,
+                ErrorMessage: e.message || 'Unknown error',
+            };
+        }
+    }
+}
+
+/** Result from RunAutotagPipeline */
+export interface AutotagPipelineResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
+}
+
+/** Result from PromoteTagSuggestion. */
+export interface PromoteSuggestionResult {
+    Success: boolean;
+    ResolvedTagID?: string;
+    ResolvedTagName?: string;
+    ErrorMessage?: string;
+}
+
+/** Result from RejectTagSuggestion. */
+export interface RejectSuggestionResult {
+    Success: boolean;
+    ErrorMessage?: string;
+}
+
+/** Result from RebuildTagEmbeddings. */
+export interface RebuildTagEmbeddingsResult {
+    Success: boolean;
+    Refreshed: number;
+    Total: number;
+    ErrorMessage?: string;
+}
+
+/** Result from RunTagHealth. */
+export interface RunTagHealthResult {
+    Success: boolean;
+    MergeCount: number;
+    LowUsageCount: number;
+    WideNodeCount: number;
+    DurationMs: number;
+    ErrorMessage?: string;
+}
+
+/** Parameters for VectorizeEntity */
+export interface VectorizeEntityParams {
+    entityDocumentID: string;
+    entityID: string;
+    batchSize?: number;
+}
+
+/** Result from VectorizeEntity */
+export interface VectorizeEntityResult {
+    Success: boolean;
+    Status?: string;
+    ErrorMessage?: string;
+    PipelineRunID?: string;
+    RecordsProcessed?: number;
+}
+
+/** Parameters for FetchEntityVectors */
+export interface FetchEntityVectorsParams {
+    /** The ID of the EntityDocument whose vectors to fetch */
+    entityDocumentID: string;
+    /** Maximum number of vectors to return (default 1000) */
+    maxRecords?: number;
+    /** Optional additional filter string */
+    filter?: string;
+}
+
+/** A single vector record with its embedding and metadata */
+export interface EntityVectorItemResult {
+    /** The vector ID in the index */
+    ID: string;
+    /** The embedding vector values */
+    Values: number[];
+    /** JSON-serialized metadata stored with the vector */
+    Metadata: string;
+}
+
+/** Result from FetchEntityVectors */
+export interface FetchEntityVectorsResult {
+    Success: boolean;
+    Results: EntityVectorItemResult[];
+    TotalCount: number;
+    ElapsedMs: number;
+    ErrorMessage?: string;
 }
 
 /**

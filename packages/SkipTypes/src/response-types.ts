@@ -18,11 +18,20 @@
 
 import { SkipAPIResponse } from './api-types';
 import type { SkipSubProcessResponse } from './conversation-types';
-import type { SkipColumnInfo } from './entity-metadata-types';
 import type { SkipDataRequest } from './query-types';
 import type { SkipAPIArtifactRequest } from './artifact-types';
 import { ComponentOption, SimpleDataContext } from '@memberjunction/interactive-component-types';
 import { AgentResponseForm } from '@memberjunction/ai-core-plus';
+
+/**
+ * For each Skip API Analysis result, it is possible for Skip to provide a set of tableDataColumns that describe the data that is being returned in this shape.
+ */
+export interface SkipColumnInfo {
+    fieldName: string;
+    displayName: string;
+    simpleDataType: 'string' | 'number' | 'date' | 'boolean';
+    description: string;
+}
 
 /**
  * Defines an individual filter that will be used to filter the data in the view to the specific row or rows that the user clicked on for a drill down

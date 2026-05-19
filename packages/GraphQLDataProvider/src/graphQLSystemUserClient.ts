@@ -2,15 +2,22 @@ import { CompositeKey, LogError, KeyValuePair, IsVerboseLoggingEnabled, Platform
 import { SafeJSONParse } from '@memberjunction/global';
 import { gql, GraphQLClient } from 'graphql-request'
 import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersResult } from './rolesAndUsersType';
-import { 
-    RunAIPromptParams, 
-    RunAIPromptResult, 
+import {
+    RunAIPromptParams,
+    RunAIPromptResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
     EmbedTextResult
 } from './graphQLAIClient';
 import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import {
+    SearchClientResponse,
+    SearchClientResultItem,
+    SearchScoreBreakdown,
+    SearchSourceCounts,
+    SearchClientProviderInfo
+} from './graphQLSearchClient';
 
 /**
  * Specialized client that is designed to be used exclusively on the server side
@@ -1421,6 +1428,231 @@ export class GraphQLSystemUserClient {
         }
     }
 
+    /**
+     * Execute a full knowledge search as the system user. Invokes the
+     * `SearchKnowledgeAsSystemUser` mutation which delegates to `SearchEngine.Instance`.
+     *
+     * @param input - Search parameters (query, optional filters, max results, min score)
+     * @returns A SearchClientResponse with ranked, fused results from all active search providers
+     */
+    public async SearchKnowledge(input: SearchKnowledgeSystemUserInput): Promise<SearchClientResponse> {
+        try {
+            const mutation = gql`
+                mutation SearchKnowledgeAsSystemUser($query: String!, $maxResults: Float, $filters: SearchFiltersInput, $minScore: Float) {
+                    SearchKnowledgeAsSystemUser(query: $query, maxResults: $maxResults, filters: $filters, minScore: $minScore) {
+                        Success
+                        Results {
+                            ID
+                            EntityName
+                            RecordID
+                            SourceType
+                            ResultType
+                            Title
+                            Snippet
+                            Score
+                            ScoreBreakdown {
+                                Vector
+                                FullText
+                                Entity
+                                Storage
+                            }
+                            Tags
+                            EntityIcon
+                            RecordName
+                            MatchedAt
+                            RawMetadata
+                            ProviderId
+                            ProviderLabel
+                            ProviderIcon
+                        }
+                        TotalCount
+                        ElapsedMs
+                        SourceCounts {
+                            Vector
+                            FullText
+                            Entity
+                            Storage
+                        }
+                        Providers {
+                            ID
+                            Name
+                            DisplayName
+                            Icon
+                            SourceType
+                            Priority
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = { query: input.Query };
+            if (input.MaxResults !== undefined) variables.maxResults = input.MaxResults;
+            if (input.MinScore !== undefined) variables.minScore = input.MinScore;
+            if (input.Filters !== undefined) {
+                const filters: Record<string, unknown> = {};
+                if (input.Filters.EntityNames?.length) filters.EntityNames = input.Filters.EntityNames;
+                if (input.Filters.SourceTypes?.length) filters.SourceTypes = input.Filters.SourceTypes;
+                if (input.Filters.Tags?.length) filters.Tags = input.Filters.Tags;
+                variables.filters = filters;
+            }
+
+            const result = await this.Client.request(mutation, variables) as { SearchKnowledgeAsSystemUser: SearchKnowledgeGQLResponse };
+            if (result?.SearchKnowledgeAsSystemUser) {
+                return this.mapSearchResponse(result.SearchKnowledgeAsSystemUser);
+            }
+            return this.searchErrorResponse('Invalid response from server');
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::SearchKnowledge - Error executing search - ${e}`);
+            return this.searchErrorResponse(e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    /**
+     * Execute a lightweight preview search as the system user. Suitable for
+     * autocomplete / type-ahead scenarios with smaller payloads.
+     *
+     * @param input - Preview search parameters (query, optional max results)
+     * @returns A SearchClientResponse with preview results
+     */
+    public async PreviewSearch(input: PreviewSearchSystemUserInput): Promise<SearchClientResponse> {
+        try {
+            const mutation = gql`
+                mutation PreviewSearchAsSystemUser($query: String!, $maxResults: Float) {
+                    PreviewSearchAsSystemUser(query: $query, maxResults: $maxResults) {
+                        Success
+                        Results {
+                            ID
+                            EntityName
+                            RecordID
+                            SourceType
+                            ResultType
+                            Title
+                            Snippet
+                            Score
+                            ScoreBreakdown {
+                                Vector
+                                FullText
+                                Entity
+                                Storage
+                            }
+                            Tags
+                            EntityIcon
+                            RecordName
+                            MatchedAt
+                            RawMetadata
+                            ProviderId
+                            ProviderLabel
+                            ProviderIcon
+                        }
+                        TotalCount
+                        ElapsedMs
+                        SourceCounts {
+                            Vector
+                            FullText
+                            Entity
+                            Storage
+                        }
+                        Providers {
+                            ID
+                            Name
+                            DisplayName
+                            Icon
+                            SourceType
+                            Priority
+                        }
+                        ErrorMessage
+                    }
+                }
+            `;
+
+            const variables: Record<string, unknown> = { query: input.Query };
+            if (input.MaxResults !== undefined) variables.maxResults = input.MaxResults;
+
+            const result = await this.Client.request(mutation, variables) as { PreviewSearchAsSystemUser: SearchKnowledgeGQLResponse };
+            if (result?.PreviewSearchAsSystemUser) {
+                return this.mapSearchResponse(result.PreviewSearchAsSystemUser);
+            }
+            return this.searchErrorResponse('Invalid response from server');
+        } catch (e) {
+            LogError(`GraphQLSystemUserClient::PreviewSearch - Error executing preview search - ${e}`);
+            return this.searchErrorResponse(e instanceof Error ? e.message : String(e));
+        }
+    }
+
+    /**
+     * Maps a raw GraphQL search response to the public SearchClientResponse type.
+     * Shared between SearchKnowledge and PreviewSearch to avoid duplication.
+     */
+    private mapSearchResponse(data: SearchKnowledgeGQLResponse): SearchClientResponse {
+        return {
+            Success: data.Success,
+            Results: (data.Results || []).map((item): SearchClientResultItem => ({
+                ID: item.ID,
+                EntityName: item.EntityName,
+                RecordID: item.RecordID,
+                SourceType: item.SourceType,
+                ResultType: item.ResultType,
+                Title: item.Title,
+                Snippet: item.Snippet,
+                Score: item.Score,
+                ScoreBreakdown: this.mapScoreBreakdown(item.ScoreBreakdown),
+                Tags: item.Tags || [],
+                EntityIcon: item.EntityIcon,
+                RecordName: item.RecordName,
+                MatchedAt: item.MatchedAt,
+                RawMetadata: item.RawMetadata,
+                ProviderId: item.ProviderId,
+                ProviderLabel: item.ProviderLabel,
+                ProviderIcon: item.ProviderIcon,
+            })),
+            TotalCount: data.TotalCount,
+            ElapsedMs: data.ElapsedMs,
+            SourceCounts: this.mapSourceCounts(data.SourceCounts),
+            Providers: (data.Providers || []).map((p): SearchClientProviderInfo => ({
+                ID: p.ID,
+                Name: p.Name,
+                DisplayName: p.DisplayName,
+                Icon: p.Icon,
+                SourceType: p.SourceType,
+                Priority: p.Priority,
+            })),
+            ErrorMessage: data.ErrorMessage,
+        };
+    }
+
+    private mapScoreBreakdown(breakdown: SearchScoreBreakdownGQLResponse | undefined): SearchScoreBreakdown {
+        if (!breakdown) return {};
+        const result: SearchScoreBreakdown = {};
+        if (breakdown.Vector !== undefined) result.Vector = breakdown.Vector;
+        if (breakdown.FullText !== undefined) result.FullText = breakdown.FullText;
+        if (breakdown.Entity !== undefined) result.Entity = breakdown.Entity;
+        if (breakdown.Storage !== undefined) result.Storage = breakdown.Storage;
+        return result;
+    }
+
+    private mapSourceCounts(counts: SearchSourceCountsGQLResponse | undefined): SearchSourceCounts {
+        if (!counts) return { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+        return {
+            Vector: counts.Vector ?? 0,
+            FullText: counts.FullText ?? 0,
+            Entity: counts.Entity ?? 0,
+            Storage: counts.Storage ?? 0,
+        };
+    }
+
+    private searchErrorResponse(message: string): SearchClientResponse {
+        return {
+            Success: false,
+            Results: [],
+            TotalCount: 0,
+            ElapsedMs: 0,
+            SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+            Providers: [],
+            ErrorMessage: `Error: ${message}`,
+        };
+    }
+
 }
 
 /**
@@ -2024,6 +2256,26 @@ export interface CreateQueryInput {
      * Optional array of permissions to create for the query
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline. Each entry maps a
+     * parameter name to a tested/validated sample value.
+     */
+    ParameterHints?: QueryParameterHintInput[];
+    /**
+     * When true, the server will automatically resolve name collisions by appending
+     * sequential numeric suffixes (e.g., "Name (1)", "Name (2)") instead of returning an error.
+     * The resolved name is returned in the result's Query.Name field.
+     */
+    AutoResolveCollision?: boolean;
+}
+
+/**
+ * A single parameter hint entry mapping a parameter name to a tested sample value.
+ */
+export interface QueryParameterHintInput {
+    Name: string;
+    Value: string;
 }
 
 /**
@@ -2199,6 +2451,11 @@ export interface UpdateQueryInput {
      * Optional array of permissions to update for the query (replaces existing permissions)
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline.
+     */
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /** @deprecated Use QueryMutationResult instead */
@@ -2322,4 +2579,114 @@ export interface TestQuerySQLClientResult {
     ErrorMessage?: string;
     /** Parsed applied parameters including defaults */
     AppliedParameters?: Record<string, string>;
+}
+
+// =========================================================================
+// Search — System User Types
+// =========================================================================
+
+/**
+ * Input for `SearchKnowledge` on the system-user client.
+ * Mirrors `SearchClientParams` from `graphQLSearchClient` but is used
+ * exclusively through the system-user transport.
+ */
+export interface SearchKnowledgeSystemUserInput {
+    /** The search query text */
+    Query: string;
+    /** Maximum number of results to return */
+    MaxResults?: number;
+    /** Minimum relevance score threshold (0-1) */
+    MinScore?: number;
+    /** Optional filters to narrow search results */
+    Filters?: {
+        /** Filter to specific entity names */
+        EntityNames?: string[];
+        /** Filter to specific source types (e.g., 'Vector', 'FullText', 'Entity', 'Storage') */
+        SourceTypes?: string[];
+        /** Filter to results matching specific tags */
+        Tags?: string[];
+    };
+}
+
+/**
+ * Input for `PreviewSearch` on the system-user client.
+ */
+export interface PreviewSearchSystemUserInput {
+    /** The search query text */
+    Query: string;
+    /** Maximum number of preview results (server default: 8) */
+    MaxResults?: number;
+}
+
+/**
+ * Internal GraphQL response shape for search score breakdown.
+ * @internal
+ */
+interface SearchScoreBreakdownGQLResponse {
+    Vector?: number;
+    FullText?: number;
+    Entity?: number;
+    Storage?: number;
+}
+
+/**
+ * Internal GraphQL response shape for source counts.
+ * @internal
+ */
+interface SearchSourceCountsGQLResponse {
+    Vector: number;
+    FullText: number;
+    Entity: number;
+    Storage: number;
+}
+
+/**
+ * Internal GraphQL response shape for provider info.
+ * @internal
+ */
+interface SearchProviderInfoGQLResponse {
+    ID: string;
+    Name: string;
+    DisplayName: string;
+    Icon: string;
+    SourceType: string;
+    Priority: number;
+}
+
+/**
+ * Internal GraphQL response shape for a single search result item.
+ * @internal
+ */
+interface SearchResultItemGQLResponse {
+    ID: string;
+    EntityName: string;
+    RecordID: string;
+    SourceType: string;
+    ResultType: string;
+    Title: string;
+    Snippet: string;
+    Score: number;
+    ScoreBreakdown: SearchScoreBreakdownGQLResponse;
+    Tags: string[];
+    EntityIcon?: string;
+    RecordName?: string;
+    MatchedAt: string;
+    RawMetadata?: string;
+    ProviderId?: string;
+    ProviderLabel?: string;
+    ProviderIcon?: string;
+}
+
+/**
+ * Internal GraphQL response shape for the full search mutation response.
+ * @internal
+ */
+interface SearchKnowledgeGQLResponse {
+    Success: boolean;
+    Results: SearchResultItemGQLResponse[];
+    TotalCount: number;
+    ElapsedMs: number;
+    SourceCounts: SearchSourceCountsGQLResponse;
+    Providers: SearchProviderInfoGQLResponse[];
+    ErrorMessage?: string;
 }

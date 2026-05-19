@@ -193,13 +193,57 @@ class ChangeDetectionResult {
 
 ## Eligible Entities
 
-For an entity to be eligible for external change detection:
+For an entity to be eligible for external change detection, **all** of the following must be true:
 
-1. The entity must have `TrackRecordChanges` property set to 1
-2. The entity must have the special `__mj_UpdatedAt` and `__mj_CreatedAt` fields (automatically added by CodeGen)
-3. The entity must not be in the `IneligibleEntities` list
+1. `TrackRecordChanges` is set to 1 (entity has audit logging enabled)
+2. `DetectExternalChanges` is set to 1 (entity has opted into external change scanning)
+3. The entity has `__mj_UpdatedAt` and `__mj_CreatedAt` fields (automatically added by CodeGen)
+4. The entity is not in the `IneligibleEntities` list
 
 The eligible entities are determined by the database view `vwEntitiesWithExternalChangeTracking`.
+
+### Opt-In Model
+
+External change detection is **opt-in by default** (`DetectExternalChanges = 0`). Most entities — especially `__mj` schema metadata tables — are managed exclusively by SQL migrations and CodeGen. Scanning them produces false positives because their records are intentionally created outside the MJ `Save()` flow.
+
+To enable external change detection for specific entities, create a metadata JSON file in `metadata/entities/` and push it with `mj sync`. For example, create `metadata/entities/.external-change-detection.json`:
+
+```json
+[
+  {
+    "fields": { "Name": "Contacts", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Contacts" }
+  },
+  {
+    "fields": { "Name": "Companies", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Companies" }
+  },
+  {
+    "fields": { "Name": "Invoices", "DetectExternalChanges": true },
+    "primaryKey": { "ID": "@lookup:MJ: Entities.Name=Invoices" }
+  }
+]
+```
+
+Then push from the repository root:
+
+```bash
+npx mj sync push --dir=metadata --include="entities"
+```
+
+Alternatively, you can toggle `DetectExternalChanges` directly in the Entity form within MJ Explorer.
+
+### Good Candidates
+
+- **User-facing data** that may be modified by third-party integrations (CRM sync, ETL tools)
+- **Entities loaded via bulk import** that bypass the MJ application layer
+- **Tables with direct SQL edits** from administrative tools or scripts
+
+### Bad Candidates
+
+- **`__mj` schema tables** — managed by migrations/CodeGen, no external changes by design
+- **System configuration entities** — changes should go through the MJ API
+- **High-volume logging tables** — detection scans would be expensive with no benefit
 
 ## How It Works
 

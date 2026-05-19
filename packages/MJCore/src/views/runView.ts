@@ -3,7 +3,73 @@ import { IMetadataProvider, IRunViewProvider, RunViewResult } from '../generic/i
 import { UserInfo } from '../generic/securityInfo';
 import { BaseEntity } from '../generic/baseEntity';
 import { PlatformSQL, IsPlatformSQL } from '../generic/platformSQL';
+import { CompositeKey } from '../generic/compositeKey';
 import type { CacheChangedEvent } from '../generic/localCacheManager';
+
+/**
+ * Reason codes for {@link AfterKeyNotSupportedError}. Use these to make caller
+ * fallback logic explicit (e.g., "if reason is CompositePK, fall back to OFFSET pagination").
+ */
+export type AfterKeyNotSupportedReason =
+    | 'CompositePK'             // Entity has > 1 PK column
+    | 'UnsupportedPKType'       // PK column type is not in the orderable allowlist
+    | 'IncompatibleOrderBy'     // OrderBy references columns other than the PK
+    | 'StartRowConflict'        // AfterKey was combined with StartRow
+    | 'AfterKeyShape';          // AfterKey CompositeKey doesn't match the entity's PK shape
+
+/**
+ * Thrown by {@link RunView} / RunViews when `AfterKey` is provided but cannot be honored.
+ *
+ * See the keyset-pagination guide for caller patterns. The most common case is `CompositePK`:
+ * an entity with a composite primary key cannot use keyset pagination in v1 — callers should
+ * either iterate with OFFSET-based `StartRow` (acceptable for small result sets) or restructure
+ * the workload around a single-PK projection.
+ *
+ * @since v5.x
+ */
+export class AfterKeyNotSupportedError extends Error {
+    constructor(
+        public readonly EntityName: string,
+        public readonly Reason: AfterKeyNotSupportedReason,
+        message: string
+    ) {
+        super(message);
+        this.name = 'AfterKeyNotSupportedError';
+    }
+}
+
+/**
+ * Orderable SQL types that can be used as the primary key column for keyset pagination.
+ *
+ * Excludes types where `WHERE pk > @last` is either unsupported or semantically meaningless
+ * (`xml`, `sql_variant`, large binary types, etc.). In practice every reasonable primary key
+ * type is on this list — this is defensive against exotic future PKs, not a real constraint
+ * for any standard MJ entity.
+ *
+ * Case-insensitive comparison via the helper {@link IsKeysetPaginationOrderableType}.
+ */
+export const KEYSET_PAGINATION_ORDERABLE_PK_TYPES: ReadonlyArray<string> = [
+    'uniqueidentifier',
+    'int', 'bigint', 'smallint', 'tinyint',
+    'decimal', 'numeric', 'money', 'smallmoney',
+    'float', 'real', 'double precision',
+    'char', 'varchar', 'nchar', 'nvarchar', 'text', 'ntext',
+    'date', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime', 'time',
+    'bit',
+    // PostgreSQL native names that may appear in EntityField.Type when running on PG
+    'uuid', 'integer', 'bigserial', 'serial', 'numeric', 'character varying', 'character', 'timestamp', 'timestamp with time zone', 'timestamp without time zone', 'boolean'
+];
+
+/**
+ * Returns true if the given SQL type name is acceptable as a keyset-pagination PK column.
+ * Comparison is case-insensitive and trims any precision/scale parens (e.g. `nvarchar(255)` → `nvarchar`).
+ */
+export function IsKeysetPaginationOrderableType(sqlTypeName: string | null | undefined): boolean {
+    if (!sqlTypeName) return false;
+    // Strip parameterization like "nvarchar(255)" or "decimal(10, 2)"
+    const normalized = sqlTypeName.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+    return KEYSET_PAGINATION_ORDERABLE_PK_TYPES.includes(normalized);
+}
 
 /**
  * Single aggregate expression to compute alongside the main view query.
@@ -123,8 +189,67 @@ export class RunViewParams {
     MaxRows?: number;
     /**
      * optional - if provided, this value will be used to offset the rows returned.
+     *
+     * **Note on deep pagination**: `StartRow` is implemented via SQL `OFFSET` semantics,
+     * which is O(N) in the offset value — early pages are fine, but deep pages (offset
+     * in the tens or hundreds of thousands) get progressively slower because the server
+     * has to enumerate and discard the skipped rows.
+     *
+     * For background jobs and bulk processing that iterate through entire tables, prefer
+     * {@link AfterKey} (keyset / seek pagination), which stays O(log N) regardless of depth.
+     * UI grid pagination (a few hundred pages at most) is fine to keep on `StartRow`.
      */
     StartRow?: number;
+    /**
+     * optional - keyset (a.k.a. "seek") pagination using the entity's primary key.
+     *
+     * When set, the query returns the next page of records **after** the given PK value,
+     * ordered by the PK column. Unlike `StartRow` (which uses `OFFSET` and is O(N) in
+     * the offset), keyset pagination stays O(log N) regardless of how deep you go —
+     * making it the right choice for jobs that walk entire large tables.
+     *
+     * @example Single-column PK (the only shape supported in v1)
+     * ```typescript
+     * // Page 1
+     * let result = await rv.RunView({
+     *     EntityName: 'Tax Returns',
+     *     ExtraFilter: 'AddressLine1 IS NOT NULL',
+     *     MaxRows: 500,
+     *     ResultType: 'entity_object'
+     * }, contextUser);
+     *
+     * // Page 2+
+     * while (result.Results.length === 500) {
+     *     const lastId = result.Results[result.Results.length - 1].ID;
+     *     result = await rv.RunView({
+     *         EntityName: 'Tax Returns',
+     *         ExtraFilter: 'AddressLine1 IS NOT NULL',
+     *         AfterKey: CompositeKey.FromID(lastId),
+     *         MaxRows: 500,
+     *         ResultType: 'entity_object'
+     *     }, contextUser);
+     * }
+     * ```
+     *
+     * **Constraints (throw {@link AfterKeyNotSupportedError} when violated):**
+     * - Entity must have a single-column primary key (use `RunViewParams.StartRow`
+     *   for composite-PK entities).
+     * - The PK column type must be in {@link KEYSET_PAGINATION_ORDERABLE_PK_TYPES}
+     *   (essentially all standard SQL types).
+     * - `OrderBy`, if set, must reference only the PK column (any `ASC`/`DESC` direction).
+     * - Cannot be combined with `StartRow`.
+     *
+     * **Caching behavior**: When `AfterKey` is present, the query bypasses the server
+     * cache (both read and write) — keyset queries are inherently single-use (each call
+     * uses a different seek key), so caching them is pure overhead.
+     *
+     * **End-of-data signal**: When a page returns fewer rows than `MaxRows`, you've
+     * reached the end of the result set.
+     *
+     * @see {@link AfterKeyNotSupportedError}
+     * @since v5.x
+     */
+    AfterKey?: CompositeKey;
     /**
      * optional - if set to true, the view run will ALWAYS be logged to the Audit Log, regardless of the entity's property settings for logging view runs.
      */
@@ -161,6 +286,19 @@ export class RunViewParams {
      * @default false
      */
     CacheLocal?: boolean;
+
+    /**
+     * When set to true, bypasses ALL server-side caching — both the PreRunView cache
+     * check and the post-query auto-cache storage. The query always hits the database
+     * and the result is NOT stored in the cache.
+     *
+     * Use this for maintenance/audit operations that need to see the true database state,
+     * especially when querying for records that were inserted via direct SQL (bypassing
+     * BaseEntity.Save() and its cache invalidation events).
+     *
+     * @default false
+     */
+    BypassCache?: boolean;
 
     /**
      * Optional TTL (time-to-live) in milliseconds for cached results when CacheLocal is true.
@@ -248,6 +386,7 @@ export class RunViewParams {
         if (a.IgnoreMaxRows !== b.IgnoreMaxRows) return false;
         if (a.MaxRows !== b.MaxRows) return false;
         if (a.StartRow !== b.StartRow) return false;
+        if (!RunViewParams.afterKeyEqual(a.AfterKey, b.AfterKey)) return false;
         if (a.ForceAuditLog !== b.ForceAuditLog) return false;
         if (a.AuditLogDescription !== b.AuditLogDescription) return false;
         if (a.ResultType !== b.ResultType) return false;
@@ -275,6 +414,23 @@ export class RunViewParams {
         if (a.length !== b.length) return false;
         for (let i = 0; i < a.length; i++) {
             if (a[i] !== b[i]) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Helper method to compare two AfterKey (CompositeKey) values for equality.
+     * Two AfterKeys are equal if they contain the same key/value pairs (order-insensitive).
+     */
+    private static afterKeyEqual(a: CompositeKey | undefined, b: CompositeKey | undefined): boolean {
+        if (a === b) return true;
+        if (!a || !b) return false;
+        const aPairs = a.KeyValuePairs ?? [];
+        const bPairs = b.KeyValuePairs ?? [];
+        if (aPairs.length !== bPairs.length) return false;
+        for (const pair of aPairs) {
+            const match = bPairs.find(p => p.FieldName === pair.FieldName);
+            if (!match || match.Value !== pair.Value) return false;
         }
         return true;
     }
@@ -324,6 +480,18 @@ export class RunView  {
     constructor(Provider: IRunViewProvider | null = null) {
         if (Provider)
             this._provider = Provider;
+    }
+
+    /**
+     * Creates a RunView instance from an IMetadataProvider. At runtime the provider object
+     * (ProviderBase) implements both IMetadataProvider and IRunViewProvider, but TypeScript
+     * doesn't know that statically. This factory centralizes the cast so callers don't need
+     * their own helper methods.
+     * @param provider An IMetadataProvider instance (typically from Metadata.Provider or a contextUser's provider)
+     * @returns A new RunView wired to the given provider
+     */
+    public static FromMetadataProvider(provider: IMetadataProvider): RunView {
+        return new RunView(provider as unknown as IRunViewProvider);
     }
 
     /**
@@ -390,13 +558,13 @@ export class RunView  {
             return params.EntityName;
         else if (params.ViewEntity) {
             const entityID = params.ViewEntity.Get('EntityID'); // using weak typing because this is MJCore and we don't want to use the sub-classes from core-entities as that would create a circular dependency
-            const entity = p.Entities.find(e => UUIDsEqual(e.ID, entityID));
+            const entity = p.EntityByID(entityID);
             if (entity)
                 return entity.Name
         }
         else if (params.ViewID || params.ViewName) {
             // we don't have a view entity loaded, so load it up now
-            const rv = new RunView(<IRunViewProvider><any>p);
+            const rv = RunView.FromMetadataProvider(p);
             const result = await rv.RunView({
                 EntityName: "MJ: User Views",
                 ExtraFilter: params.ViewID ? `ID = '${params.ViewID}'` : `Name = '${params.ViewName}'`,

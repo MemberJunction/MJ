@@ -7,6 +7,7 @@ import {
   BaseEntity, EntityInfo, EntityFieldInfo, Metadata, CompositeKey
 } from '@memberjunction/core';
 import { EntityHierarchyNavigationEvent } from '../types/navigation-events';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IsaRelatedItem } from './isa-hierarchy-utils';
 
 /**
@@ -35,7 +36,7 @@ export interface IsaCardFieldDisplay {
   templateUrl: './isa-related-card.component.html',
   styleUrls: ['./isa-related-card.component.css']
 })
-export class MjIsaRelatedCardComponent implements OnInit, OnChanges {
+export class MjIsaRelatedCardComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   private cdr = inject(ChangeDetectorRef);
 
   /** The entity name for the related record (e.g., "Members", "Speakers") */
@@ -109,8 +110,8 @@ export class MjIsaRelatedCardComponent implements OnInit, OnChanges {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
-      this.EntityInfoRef = md.EntityByName(this.EntityName);
+      const md = this.ProviderToUse;
+      this.EntityInfoRef = md.EntityByName(this.EntityName) ?? null;
       if (!this.EntityInfoRef) {
         this.LoadError = true;
         return;
@@ -196,7 +197,7 @@ export class MjIsaRelatedCardComponent implements OnInit, OnChanges {
 
     // Number formatting
     if (typeof value === 'number') {
-      if (field.ExtendedType === 'money' || field.Type?.toLowerCase().includes('money')) {
+      if (field.Type?.toLowerCase().includes('money')) {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
       }
       return value.toLocaleString();

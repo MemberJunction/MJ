@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Malta",
+      "Code": "MT",
+      "ISO3166_2": "MT-MT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Malta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MT"
+    },
+    "primaryKey": {
+      "ID": "9EBB79B7-A34A-4929-8E31-93F9544AD4F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.228Z",
+      "checksum": "ae7cb6e6db0188b64d0bea11ef3883b7f865be33f8fce5ce755e3654210d4607"
+    }
+  }
+]

@@ -1,0 +1,378 @@
+[
+  {
+    "fields": {
+      "Name": "Record Changes - 12 Month",
+      "Description": "Archives Record Changes data older than 12 months. Strips ChangesJSON, FullRecordJSON, and ChangesDescription fields to reclaim storage while preserving row skeletons.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"ChangesJSON\",\"IsActive\":true},{\"FieldName\":\"FullRecordJSON\",\"IsActive\":true},{\"FieldName\":\"ChangesDescription\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"ChangesJSON\",\"FullRecordJSON\",\"ChangesDescription\"]}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "C565F3D7-9884-4F25-A98D-B78922BF0F89"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.616Z",
+            "checksum": "99ef3b490d30174bc52d1e3dff83aa2961755c05091472bcd68a2767e401f00f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AE652D18-D0DE-443C-852F-0F4502DAD616"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.456Z",
+      "checksum": "0bd3d286b93c503f6b8c48406be3fbcba669c3dc7a06e56f11513369dc315d8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Prompt Runs - 6 Month",
+      "Description": "Archives AI Prompt Runs data older than 6 months. Strips Messages, Result, ErrorMessage, and ValidationAttempts fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Messages\",\"IsActive\":true},{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"ValidationAttempts\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Messages\",\"Result\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "814BD691-F65A-422E-B3C7-71C427F39D8F"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.634Z",
+            "checksum": "20e801bf78fbf41fa248507802465fa8611f3b43813c54cd1af1a2b96ce615fd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6FBE6011-9E84-48DC-B407-14746F5BBA60"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.472Z",
+      "checksum": "1840b6a62dde6fec294452db93b463fdebfac8a1f13312a0cf92946689634bba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agent Run Steps - 6 Month",
+      "Description": "Archives AI Agent Run Steps data older than 6 months. Strips InputData, OutputData, PayloadAtStart, PayloadAtEnd, ErrorMessage, and Comments fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"InputData\",\"IsActive\":true},{\"FieldName\":\"OutputData\",\"IsActive\":true},{\"FieldName\":\"PayloadAtStart\",\"IsActive\":true},{\"FieldName\":\"PayloadAtEnd\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"Comments\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"InputData\",\"OutputData\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "3D2BB940-D0E2-4D5A-9B68-E6576178E1B2"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.649Z",
+            "checksum": "b46a00634d160ae586ad524ce3cb9bb664bb608086baefaf8b09661bafc80370"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "367C6EC3-AFAC-456D-B144-18964BEA8198"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.486Z",
+      "checksum": "7a7b7da191c847e48fa080c64193956e198799f75ce0127ff76363637f6e2008"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AI Agent Runs - 6 Month",
+      "Description": "Archives AI Agent Runs data older than 6 months. Strips Result, FinalPayload, StartingPayload, Data, Message, ErrorMessage, and AgentState fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 180,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": true,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 180,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 2,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Result\",\"IsActive\":true},{\"FieldName\":\"FinalPayload\",\"IsActive\":true},{\"FieldName\":\"StartingPayload\",\"IsActive\":true},{\"FieldName\":\"Data\",\"IsActive\":true},{\"FieldName\":\"Message\",\"IsActive\":true},{\"FieldName\":\"ErrorMessage\",\"IsActive\":true},{\"FieldName\":\"AgentState\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Result\",\"FinalPayload\"]}",
+            "ArchiveRelatedRecordChanges": true,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "B9A29F34-A24D-4116-BF61-91CEEC223631"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.665Z",
+            "checksum": "bcf5ac75796080a435776ea83aa2498b5bd155262e0a07e4c90a4afe2147f91d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E15BED22-6CD2-456F-810F-548B182DAA70"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.503Z",
+      "checksum": "9051ba56000e7429994fd5bae449169b2c54c2d9b0318860d2f2a1adde1ca9ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Audit Logs - 18 Month",
+      "Description": "Archives Audit Logs data older than 18 months. Strips Details and Description fields.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 540,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Audit Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 540,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[{\"FieldName\":\"Details\",\"IsActive\":true},{\"FieldName\":\"Description\",\"IsActive\":true}],\"ArchiveFullRecord\":true,\"SkipIfAllNullFields\":[\"Details\",\"Description\"]}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "1255BA77-A7D8-4465-8A82-928D411FC1E9"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.683Z",
+            "checksum": "fa75c0354e1b4b758a6b3ddb6e48f49afad5acbd36222574653173df63f9976b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C897004A-0BD3-4DC8-8EC1-CB50A9A51750"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.519Z",
+      "checksum": "a04429ddae06f5ebbc82288c1db23dc5ce85c1b0f38c18ce57eeeeab33d1fbcb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Action Execution Logs - 12 Month",
+      "Description": "Archives Action Execution Logs data older than 12 months. Archives the full record to external storage.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "A9D89163-89EB-478A-8896-F00DCBEBB61F"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.698Z",
+            "checksum": "ed2d817862de010f2bae9a573a6f639486e9e64ded29c58e97243663fcd8055f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2605E84A-EF49-4547-821A-A0EF485F4AF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.534Z",
+      "checksum": "5fd97fc38abd88348a130cde84512e6623bb053239eae77f8057326293fae58a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Scheduled Job Runs - 12 Month",
+      "Description": "Archives Scheduled Job Runs data older than 12 months. Archives the full record to external storage.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "915A1211-3846-4568-948E-580257BDDBCF"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.713Z",
+            "checksum": "166016c8e3d2afd726cb17294ffe2f32d13796fe13e4b8c5d275beb87f8fe909"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C178E370-4CF2-4775-A46C-417AACAB1E06"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.550Z",
+      "checksum": "bd5d2fc88f10d641bcb4c72d8b403232841264155a846fc34d08cf4f85e2b26e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Communication Logs - 12 Month",
+      "Description": "Archives Communication Logs data older than 12 months. Archives the full record to external storage.",
+      "RootPath": "/archives",
+      "ArchiveFormat": "JSON",
+      "IsActive": false,
+      "DefaultRetentionDays": 365,
+      "DefaultMode": "StripFields",
+      "DefaultBatchSize": 100,
+      "ArchiveRelatedRecordChanges": false,
+      "Status": "Disabled",
+      "CreatedByUserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"
+    },
+    "relatedEntities": {
+      "MJ: Archive Configuration Entities": [
+        {
+          "fields": {
+            "ArchiveConfigurationID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Communication Logs",
+            "Mode": "StripFields",
+            "RetentionDays": 365,
+            "DateField": "__mj_CreatedAt",
+            "BatchSize": 100,
+            "Priority": 1,
+            "FieldConfiguration": "{\"Fields\":[],\"ArchiveFullRecord\":true}",
+            "ArchiveRelatedRecordChanges": false,
+            "IsActive": true
+          },
+          "primaryKey": {
+            "ID": "F897AC54-829F-4F38-90C7-13299B068542"
+          },
+          "sync": {
+            "lastModified": "2026-04-22T21:09:54.726Z",
+            "checksum": "165cecd6050f85a2a821157f223fa897fa3e4277aec76a4a9f2cba032d93aecd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0C59A60E-74DC-41D4-9CE6-0DA533DF4D8D"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:54.562Z",
+      "checksum": "dc34df4df8f566d82918114a1c5acb23a0264d097e616ec8407ab575c1e4c2b6"
+    }
+  }
+]

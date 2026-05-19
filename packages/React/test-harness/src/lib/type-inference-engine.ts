@@ -55,6 +55,8 @@ export class TypeInferenceEngine {
   private componentSpec?: ComponentSpec;
   private contextUser?: UserInfo;
   private functionReturnTypes: Map<string, TypeInfo> = new Map();
+  /** Maps setState setter names to their corresponding state variable names */
+  private stateSetterMap: Map<string, string> = new Map();
 
   constructor(componentSpec?: ComponentSpec, contextUser?: UserInfo) {
     this.componentSpec = componentSpec;
@@ -118,6 +120,21 @@ export class TypeInferenceEngine {
         self.inferAssignmentType(path);
       },
 
+      // Track setState calls to update state variable types
+      CallExpression(path: NodePath<t.CallExpression>) {
+        if (t.isIdentifier(path.node.callee)) {
+          const setterName = path.node.callee.name;
+          const stateVarName = self.stateSetterMap.get(setterName);
+          if (stateVarName && path.node.arguments.length > 0) {
+            const argType = self.inferExpressionType(path.node.arguments[0], path);
+            // Only update if we inferred a meaningful type (not unknown)
+            if (argType.type !== 'unknown') {
+              self.typeContext.setVariableType(stateVarName, argType);
+            }
+          }
+        }
+      },
+
       // Track function parameters and return types with scoping
       FunctionDeclaration: {
         enter(path: NodePath<t.FunctionDeclaration>) {
@@ -146,7 +163,11 @@ export class TypeInferenceEngine {
           }
 
           self.typeContext.enterScope(functionName);
-          self.inferArrowFunctionParameterTypes(path);
+          // Try to infer callback parameter types from array method context first
+          const inferredFromCallback = self.inferCallbackParameterTypes(path);
+          if (!inferredFromCallback) {
+            self.inferArrowFunctionParameterTypes(path);
+          }
         },
         exit(path: NodePath<t.ArrowFunctionExpression>) {
           self.typeContext.exitScope();
@@ -220,6 +241,78 @@ export class TypeInferenceEngine {
         this.inferComponentPropsTypes(param);
       }
     }
+  }
+
+  /**
+   * Infer callback parameter types from array method context.
+   * When an arrow function is a callback to .map(), .filter(), .reduce(), etc.,
+   * the first parameter inherits the array's element type.
+   *
+   * Example: results.map(m => m.Salary)
+   *   → `results` is array of entity-row(Members) → `m` is entity-row(Members)
+   *
+   * Returns true if callback parameters were inferred, false if not applicable.
+   */
+  private inferCallbackParameterTypes(path: NodePath<t.ArrowFunctionExpression>): boolean {
+    const parent = path.parent;
+
+    // Check if this arrow function is the first argument to a method call
+    // Pattern: someArray.method(callback) or someArray?.method(callback)
+    if (!t.isCallExpression(parent) && !t.isOptionalCallExpression(parent)) return false;
+    if (parent.arguments[0] !== path.node && parent.arguments[1] !== path.node) return false;
+
+    const callee = parent.callee;
+    if ((!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) || !t.isIdentifier(callee.property)) return false;
+
+    const methodName = callee.property.name;
+    const arrayIterMethods = ['map', 'filter', 'forEach', 'find', 'some', 'every', 'flatMap', 'sort'];
+    const isReduce = methodName === 'reduce';
+
+    if (!arrayIterMethods.includes(methodName) && !isReduce) return false;
+
+    // Infer the type of the array being iterated
+    const arrayType = this.inferExpressionType(callee.object, path.parentPath ?? undefined);
+    if (arrayType.type !== 'array' || !arrayType.arrayElementType) return false;
+
+    const elementType = arrayType.arrayElementType;
+    const params = path.node.params;
+
+    if (isReduce) {
+      // reduce((accumulator, currentValue, index, array) => ...)
+      // First param is accumulator (unknown type), second param is the element
+      if (params.length >= 1 && t.isIdentifier(params[0])) {
+        this.typeContext.setVariableType(params[0].name, StandardTypes.unknown);
+      }
+      if (params.length >= 2 && t.isIdentifier(params[1])) {
+        this.typeContext.setVariableType(params[1].name, elementType);
+      }
+    } else if (methodName === 'sort') {
+      // sort((a, b) => ...) — both params are elements
+      if (params.length >= 1 && t.isIdentifier(params[0])) {
+        this.typeContext.setVariableType(params[0].name, elementType);
+      }
+      if (params.length >= 2 && t.isIdentifier(params[1])) {
+        this.typeContext.setVariableType(params[1].name, elementType);
+      }
+    } else {
+      // map/filter/forEach/find/some/every/flatMap: (element, index, array) => ...
+      if (params.length >= 1 && t.isIdentifier(params[0])) {
+        this.typeContext.setVariableType(params[0].name, elementType);
+      }
+      if (params.length >= 2 && t.isIdentifier(params[1])) {
+        this.typeContext.setVariableType(params[1].name, StandardTypes.number); // index
+      }
+    }
+
+    // Handle remaining params as unknown
+    for (let i = 2; i < params.length; i++) {
+      const param = params[i];
+      if (t.isIdentifier(param)) {
+        this.typeContext.setVariableType(param.name, StandardTypes.unknown);
+      }
+    }
+
+    return true;
   }
 
   /**
@@ -468,12 +561,22 @@ export class TypeInferenceEngine {
   private inferArrayDestructuringTypes(pattern: t.ArrayPattern, init: t.Expression, path: NodePath): void {
     const sourceType = this.inferExpressionType(init, path);
 
+    // Detect useState pattern: const [state, setState] = useState(initialValue)
+    const isUseState = t.isCallExpression(init) &&
+      t.isIdentifier(init.callee) && init.callee.name === 'useState';
+
     for (let i = 0; i < pattern.elements.length; i++) {
       const element = pattern.elements[i];
 
       if (t.isIdentifier(element)) {
-        // Get element type from array
-        if (sourceType.arrayElementType) {
+        if (isUseState && i === 1) {
+          // Second element is the setter function — register the state/setter pair
+          this.typeContext.setVariableType(element.name, StandardTypes.function);
+          const stateVar = pattern.elements[0];
+          if (t.isIdentifier(stateVar)) {
+            this.stateSetterMap.set(element.name, stateVar.name);
+          }
+        } else if (sourceType.arrayElementType) {
           this.typeContext.setVariableType(element.name, sourceType.arrayElementType);
         } else {
           this.typeContext.setVariableType(element.name, StandardTypes.unknown);
@@ -526,8 +629,8 @@ export class TypeInferenceEngine {
       return StandardTypes.function;
     }
 
-    // Call expressions
-    if (t.isCallExpression(node)) {
+    // Call expressions (including optional: a?.b())
+    if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
       return this.inferCallExpressionType(node, path);
     }
 
@@ -536,8 +639,8 @@ export class TypeInferenceEngine {
       return this.inferNewExpressionType(node, path);
     }
 
-    // Member expressions
-    if (t.isMemberExpression(node)) {
+    // Member expressions (including optional chaining: a?.b, a?.[0])
+    if (t.isMemberExpression(node) || t.isOptionalMemberExpression(node)) {
       return this.inferMemberExpressionType(node, path);
     }
 
@@ -636,7 +739,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for call expressions
    */
-  private inferCallExpressionType(node: t.CallExpression, path?: NodePath): TypeInfo {
+  private inferCallExpressionType(node: t.CallExpression | t.OptionalCallExpression, path?: NodePath): TypeInfo {
     // Check for user-defined function calls
     if (t.isIdentifier(node.callee)) {
       const functionName = node.callee.name;
@@ -673,17 +776,35 @@ export class TypeInferenceEngine {
         }
       }
 
-      // useCallback returns a function, but we don't track function return types
-      // Other hooks (useState, useEffect, etc.) have specific return types we could handle
+      // useCallback returns a function
+      if (functionName === 'useCallback') {
+        return StandardTypes.function;
+      }
+
+      // useState(initialValue) — return the type of the initial value so that
+      // array destructuring `const [state, setState] = useState(X)` propagates X's type to `state`
+      if (functionName === 'useState') {
+        if (node.arguments.length > 0) {
+          const initType = this.inferExpressionType(node.arguments[0], path);
+          // For null/undefined initializers, use unknown+nullable to avoid false positives
+          // (the actual type will be set by setState calls later)
+          if (initType.type === 'null' || initType.type === 'undefined') {
+            return { type: 'array', arrayElementType: { ...StandardTypes.unknown, nullable: true } };
+          }
+          return { type: 'array', arrayElementType: initType };
+        }
+        // useState() with no argument — state is undefined/nullable
+        return { type: 'array', arrayElementType: { ...StandardTypes.unknown, nullable: true } };
+      }
     }
 
     // Check for RunView/RunQuery calls
-    if (t.isMemberExpression(node.callee)) {
+    if (t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) {
       const calleeObj = node.callee.object;
       const calleeProp = node.callee.property;
 
       // utilities.rv.RunView or utilities.rv.RunViews
-      if (t.isMemberExpression(calleeObj) &&
+      if ((t.isMemberExpression(calleeObj) || t.isOptionalMemberExpression(calleeObj)) &&
           t.isIdentifier(calleeObj.property) &&
           t.isIdentifier(calleeProp)) {
 
@@ -701,7 +822,7 @@ export class TypeInferenceEngine {
     }
 
     // Object.values() - returns array of object's values
-    if (t.isMemberExpression(node.callee) &&
+    if ((t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) &&
         t.isIdentifier(node.callee.object) &&
         node.callee.object.name === 'Object' &&
         t.isIdentifier(node.callee.property) &&
@@ -721,7 +842,7 @@ export class TypeInferenceEngine {
     }
 
     // Array methods that return arrays
-    if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
+    if ((t.isMemberExpression(node.callee) || t.isOptionalMemberExpression(node.callee)) && t.isIdentifier(node.callee.property)) {
       const methodName = node.callee.property.name;
       const arrayMethods = ['filter', 'map', 'slice', 'concat', 'flat', 'flatMap', 'sort', 'reverse'];
 
@@ -808,7 +929,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for RunView result
    */
-  private inferRunViewResultType(node: t.CallExpression): TypeInfo {
+  private inferRunViewResultType(node: t.CallExpression | t.OptionalCallExpression): TypeInfo {
     // Try to extract EntityName from the arguments
     let entityName: string | undefined;
 
@@ -830,7 +951,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for RunQuery result
    */
-  private inferRunQueryResultType(node: t.CallExpression): TypeInfo {
+  private inferRunQueryResultType(node: t.CallExpression | t.OptionalCallExpression): TypeInfo {
     // Try to extract QueryName and Parameters from the arguments
     let queryName: string | undefined;
     let parametersNode: t.ObjectExpression | undefined;
@@ -1064,7 +1185,7 @@ export class TypeInferenceEngine {
   /**
    * Infer type for member expressions
    */
-  private inferMemberExpressionType(node: t.MemberExpression, path?: NodePath): TypeInfo {
+  private inferMemberExpressionType(node: t.MemberExpression | t.OptionalMemberExpression, path?: NodePath): TypeInfo {
     const objectType = this.inferExpressionType(node.object, path);
 
     // Array index access
@@ -1078,33 +1199,39 @@ export class TypeInferenceEngine {
     if (t.isIdentifier(node.property)) {
       const propName = node.property.name;
 
-      // Check if the object has known fields
-      if (objectType.fields?.has(propName)) {
-        const field = objectType.fields.get(propName)!;
-        return { type: field.type, nullable: field.nullable };
-      }
-
-      // Special case: Results property on RunView/RunQuery result
+      // Special case: .Results property on RunView/RunQuery result
+      // Must be checked BEFORE generic field lookup, because FieldTypeInfo
+      // can't carry arrayElementType (it's a simplified type), so the generic
+      // lookup would return bare { type: 'array' } without entity-row info.
       if (propName === 'Results' && objectType.type === 'object') {
-        // This should be an array of entity/query rows
         if (objectType.entityName) {
+          const entityFields = this.typeContext.getEntityFieldTypesSync(objectType.entityName);
           return {
             type: 'array',
             arrayElementType: {
               type: 'entity-row',
-              entityName: objectType.entityName
+              entityName: objectType.entityName,
+              fields: entityFields.size > 0 ? entityFields : undefined
             }
           };
         }
         if (objectType.queryName) {
+          const queryFields = this.typeContext.getQueryFieldTypes(objectType.queryName);
           return {
             type: 'array',
             arrayElementType: {
               type: 'query-row',
-              queryName: objectType.queryName
+              queryName: objectType.queryName,
+              fields: queryFields ?? undefined
             }
           };
         }
+      }
+
+      // Check if the object has known fields
+      if (objectType.fields?.has(propName)) {
+        const field = objectType.fields.get(propName)!;
+        return { type: field.type, nullable: field.nullable };
       }
 
       // Array length

@@ -9,6 +9,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 /* ---------------------------------------------------------------------------
    Container
    --------------------------------------------------------------------------- */
@@ -638,6 +640,15 @@
 }
 
 .ve-btn-danger:hover { background: var(--mj-color-error-100); }
+
+.ve-error-msg {
+  color: var(--mj-status-error);
+  font-size: 0.8125rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
 
 .ve-save-success {
   font-size: 12px;

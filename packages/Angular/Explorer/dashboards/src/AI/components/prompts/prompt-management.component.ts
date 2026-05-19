@@ -10,6 +10,7 @@ import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface PromptWithTemplate extends Omit<MJAIPromptEntityExtended, 'Template'> {
   Template: string; // From MJAIPromptEntityExtended (view field)
@@ -88,13 +89,13 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   public selectedPromptForTest: MJAIPromptEntityExtended | null = null;
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
   private _permissionCache = new Map<string, boolean>();
-  private _metadata = new Metadata();
+  private _metadata = this.ProviderToUse;
 
   /** Check if user can create AI Prompts */
   public get UserCanCreatePrompts(): boolean {
@@ -175,7 +176,6 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   constructor(
     private sharedService: SharedService,
     private testHarnessService: AITestHarnessDialogService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -190,6 +190,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     // Load saved user preferences first
     this.loadUserPreferences();
 
@@ -204,6 +205,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     if (this.loadingMessageInterval) {
@@ -443,7 +445,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
 
     // Apply sorting
     this.filteredPrompts = this.applySorting(this.filteredPrompts);
-    this.cdr.detectChanges();
+    this.cdr.markForCheck();
   }
 
   /**
@@ -593,10 +595,90 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   public get hasActiveFilters(): boolean {
-    return this.searchTerm !== '' || 
-           this.selectedCategory !== 'all' || 
-           this.selectedType !== 'all' || 
+    return this.searchTerm !== '' ||
+           this.selectedCategory !== 'all' ||
+           this.selectedType !== 'all' ||
            this.selectedStatus !== 'all';
+  }
+
+  /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header toolbar). */
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedCategory && this.selectedCategory !== 'all') n++;
+    if (this.selectedType && this.selectedType !== 'all') n++;
+    if (this.selectedStatus && this.selectedStatus !== 'all') n++;
+    return n;
+  }
+
+  /** Reset only the filters inside the popover (not the toolbar search). */
+  public resetPopoverFilters(): void {
+    this.selectedCategory = 'all';
+    this.selectedType = 'all';
+    this.selectedStatus = 'all';
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly promptViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+  ];
+
+  /** Values record consumed by the centralized <mj-filter-panel> (excludes searchTerm — surfaced in the page-header toolbar). */
+  public get promptFilterValues(): Record<string, unknown> {
+    return {
+      categoryId: this.selectedCategory,
+      typeId: this.selectedType,
+      status: this.selectedStatus,
+    };
+  }
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get promptFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'categoryId',
+        type: 'dropdown',
+        label: 'Category',
+        icon: 'fa-solid fa-folder',
+        filterable: this.categories.length > 10,
+        options: [
+          { text: 'All Categories', value: 'all' },
+          ...this.categories.map(c => ({ text: c.Name ?? '', value: c.ID })),
+        ],
+      },
+      {
+        key: 'typeId',
+        type: 'dropdown',
+        label: 'Type',
+        icon: 'fa-solid fa-tag',
+        options: [
+          { text: 'All Types', value: 'all' },
+          ...this.types.map(t => ({ text: t.Name ?? '', value: t.ID })),
+        ],
+      },
+      {
+        key: 'status',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-toggle-on',
+        options: [
+          { text: 'All Statuses', value: 'all' },
+          { text: 'Active',       value: 'active' },
+          { text: 'Inactive',     value: 'inactive' },
+        ],
+      },
+    ];
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    this.selectedCategory = (values['categoryId'] as string) ?? 'all';
+    this.selectedType     = (values['typeId']     as string) ?? 'all';
+    this.selectedStatus   = (values['status']     as string) ?? 'all';
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public get filteredPromptsAsEntities(): MJAIPromptEntityExtended[] {

@@ -1,0 +1,38 @@
+{
+  "name": "EntityFieldCaseBroken",
+  "type": "generic",
+  "title": "Entity Field Case Mismatch - Broken Pattern",
+  "description": "Tests linter detection of wrong case in entity field name (camelCase vs PascalCase)",
+  "code": "function EntityFieldCaseBroken({ utilities }) {\n  const [emails, setEmails] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ Case mismatch: email should be Email (PascalCase)\n        const emailList = result.Results\n          .filter(m => m.email)\n          .map(m => m.email);\n        setEmails(emailList);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Employee Emails</h3>\n      {emails.map((email, i) => <div key={i}>{email}</div>)}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [{
+      "name": "MJ: Employees",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Phone", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"},
+        {"name": "Active", "type": "bit"},
+        {"name": "CompanyID", "type": "uniqueidentifier"},
+        {"name": "SupervisorID", "type": "uniqueidentifier"},
+        {"name": "FirstLast", "type": "nvarchar"},
+        {"name": "Supervisor", "type": "nvarchar"},
+        {"name": "SupervisorEmail", "type": "nvarchar"},
+        {"name": "SupervisorFirstName", "type": "nvarchar"},
+        {"name": "SupervisorLastName", "type": "nvarchar"},
+        {"name": "BCMID", "type": "uniqueidentifier"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
+    }]
+  }
+}

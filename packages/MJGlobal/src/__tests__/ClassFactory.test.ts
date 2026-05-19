@@ -395,4 +395,141 @@ describe('ClassFactory', () => {
       expect(reg.RootClass).toBe(Animal);
     });
   });
+
+  // ====================================================================
+  // Async Lazy Loading API
+  // ====================================================================
+
+  describe('RegisterLazyLoader', () => {
+    it('should register a lazy loader callback', () => {
+      const factory = new ClassFactory();
+      const loader = vi.fn().mockResolvedValue(false);
+      // Should not throw
+      factory.RegisterLazyLoader(loader);
+    });
+
+    it('should support multiple lazy loaders', () => {
+      const factory = new ClassFactory();
+      const loader1 = vi.fn().mockResolvedValue(false);
+      const loader2 = vi.fn().mockResolvedValue(false);
+      factory.RegisterLazyLoader(loader1);
+      factory.RegisterLazyLoader(loader2);
+      // Both registered without error
+    });
+  });
+
+  describe('GetRegistrationAsync', () => {
+    it('should return sync registration without calling lazy loaders', async () => {
+      const factory = new ClassFactory();
+      factory.Register(Animal, Dog, 'canine');
+      const loader = vi.fn().mockResolvedValue(false);
+      factory.RegisterLazyLoader(loader);
+
+      const reg = await factory.GetRegistrationAsync(Animal, 'canine');
+      expect(reg).not.toBeNull();
+      expect(reg!.SubClass).toBe(Dog);
+      expect(loader).not.toHaveBeenCalled();
+    });
+
+    it('should call lazy loaders when registration not found', async () => {
+      const factory = new ClassFactory();
+      const loader = vi.fn().mockImplementation(async (baseClassName: string, key: string) => {
+        // Simulate loading a module that registers the class
+        factory.Register(Animal, Cat, key);
+        return true;
+      });
+      factory.RegisterLazyLoader(loader);
+
+      const reg = await factory.GetRegistrationAsync(Animal, 'feline');
+      expect(loader).toHaveBeenCalledWith('Animal', 'feline');
+      expect(reg).not.toBeNull();
+      expect(reg!.SubClass).toBe(Cat);
+    });
+
+    it('should call loaders in order and stop at first success', async () => {
+      const factory = new ClassFactory();
+      const loader1 = vi.fn().mockResolvedValue(false);
+      const loader2 = vi.fn().mockImplementation(async (_base: string, key: string) => {
+        factory.Register(Animal, Dog, key);
+        return true;
+      });
+      const loader3 = vi.fn().mockResolvedValue(false);
+
+      factory.RegisterLazyLoader(loader1);
+      factory.RegisterLazyLoader(loader2);
+      factory.RegisterLazyLoader(loader3);
+
+      const reg = await factory.GetRegistrationAsync(Animal, 'pet');
+      expect(loader1).toHaveBeenCalled();
+      expect(loader2).toHaveBeenCalled();
+      expect(loader3).not.toHaveBeenCalled(); // Stopped after loader2 succeeded
+      expect(reg!.SubClass).toBe(Dog);
+    });
+
+    it('should return null when no loaders succeed', async () => {
+      const factory = new ClassFactory();
+      const loader = vi.fn().mockResolvedValue(false);
+      factory.RegisterLazyLoader(loader);
+
+      const reg = await factory.GetRegistrationAsync(Animal, 'unknown');
+      expect(loader).toHaveBeenCalledWith('Animal', 'unknown');
+      expect(reg).toBeNull();
+    });
+
+    it('should not call lazy loaders when key is null', async () => {
+      const factory = new ClassFactory();
+      const loader = vi.fn().mockResolvedValue(false);
+      factory.RegisterLazyLoader(loader);
+
+      const reg = await factory.GetRegistrationAsync(Animal, null);
+      expect(loader).not.toHaveBeenCalled();
+      expect(reg).toBeNull();
+    });
+
+    it('should not call lazy loaders when no loaders registered', async () => {
+      const factory = new ClassFactory();
+      // No loaders registered
+      const reg = await factory.GetRegistrationAsync(Animal, 'canine');
+      expect(reg).toBeNull();
+    });
+  });
+
+  describe('CreateInstanceAsync', () => {
+    it('should create instance from sync registration', async () => {
+      const factory = new ClassFactory();
+      factory.Register(Animal, Dog, 'canine');
+
+      const instance = await factory.CreateInstanceAsync<Animal>(Animal, 'canine', 'Rex');
+      expect(instance).toBeInstanceOf(Dog);
+      expect(instance!.Name).toBe('Rex');
+    });
+
+    it('should trigger lazy load and create instance', async () => {
+      const factory = new ClassFactory();
+      factory.RegisterLazyLoader(async (_base: string, key: string) => {
+        factory.Register(Animal, Cat, key);
+        return true;
+      });
+
+      const instance = await factory.CreateInstanceAsync<Animal>(Animal, 'feline', 'Whiskers');
+      expect(instance).toBeInstanceOf(Cat);
+      expect(instance!.Name).toBe('Whiskers');
+    });
+
+    it('should fall back to base class when lazy load fails', async () => {
+      const factory = new ClassFactory();
+      factory.RegisterLazyLoader(async () => false);
+
+      const instance = await factory.CreateInstanceAsync<Animal>(Animal, 'unknown', 'Mystery');
+      expect(instance).toBeInstanceOf(Animal);
+      expect(instance).not.toBeInstanceOf(Dog);
+      expect(instance!.Name).toBe('Mystery');
+    });
+
+    it('should return null when baseClass is null', async () => {
+      const factory = new ClassFactory();
+      const instance = await factory.CreateInstanceAsync(null);
+      expect(instance).toBeNull();
+    });
+  });
 });

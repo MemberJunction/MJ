@@ -52,8 +52,8 @@ type MainTab = 'keys' | 'applications' | 'scopes' | 'usage';
 export class APIKeysResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
     @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
 
-    private destroy$ = new Subject<void>();
-    private md = new Metadata();
+    protected override destroy$ = new Subject<void>();
+    private md = this.ProviderToUse;
     private cdr: ChangeDetectorRef;
 
     // View state
@@ -107,10 +107,12 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     }
 
     async ngOnInit(): Promise<void> {
+        super.ngOnInit();
         await this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -161,7 +163,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * Load all API keys
      */
     private async loadAPIKeys(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             OrderBy: '__mj_CreatedAt DESC',
@@ -215,7 +217,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * Load recent activity from usage logs and key changes
      */
     private async loadRecentActivity(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
         // Load usage logs
         const usageResult = await rv.RunView<MJAPIKeyUsageLogEntity>({

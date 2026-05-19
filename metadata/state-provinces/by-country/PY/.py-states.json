@@ -1,0 +1,380 @@
+[
+  {
+    "fields": {
+      "Name": "Alto Paraguay",
+      "Code": "16",
+      "ISO3166_2": "PY-16",
+      "Latitude": -21.796,
+      "Longitude": -59.8709,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-16.geojson",
+      "CommonAliases": [
+        "Alto Paraguay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "4BE3C1C6-E040-4920-B987-0E7FDA718776"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.351Z",
+      "checksum": "2924d1f3903a2ebb6d3dce2bb96f2781fb62bdd7ac333d445e1613266802059d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Alto Parang",
+      "Code": "10",
+      "ISO3166_2": "PY-10",
+      "Latitude": -25.3757,
+      "Longitude": -54.9426,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-10.geojson",
+      "CommonAliases": [
+        "Alto Parang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "BCC28352-1ED5-45E7-A0F5-6F72EE595545"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.369Z",
+      "checksum": "7d0834813a3a418a745c239a7dd8effa8e76a21863b3e1679a6d9c4ed463b23a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amambay",
+      "Code": "13",
+      "ISO3166_2": "PY-13",
+      "Latitude": -23.2295,
+      "Longitude": -56.1788,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-13.geojson",
+      "CommonAliases": [
+        "Amambay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "8E602858-C830-4FA5-904F-673737CADD35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.387Z",
+      "checksum": "1e5d6393b6dbc92d726a9a20fc1811788251c4daf4714133209313f5e749ef1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Asunción",
+      "Code": "ASU",
+      "ISO3166_2": "PY-ASU",
+      "Latitude": -25.3096,
+      "Longitude": -57.5735,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-ASU.geojson",
+      "CommonAliases": [
+        "Asunción"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "DFB09B59-446A-42F4-AFB3-68CD8E04F3F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.404Z",
+      "checksum": "161a8d912fad4c72b187ddfb538d43ddae78fd87ea17d153b0d95e82c66c9b3a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Boquerón",
+      "Code": "19",
+      "ISO3166_2": "PY-19",
+      "Latitude": -22.0943,
+      "Longitude": -60.9776,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-19.geojson",
+      "CommonAliases": [
+        "Boquerón"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "B0E99DB3-2B28-4403-9F33-2478BE8637CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.420Z",
+      "checksum": "ef295c543541faa52bfac1273fd8924e22c0f5a019ad8f36deabe69d01b5da1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caaguazú",
+      "Code": "5",
+      "ISO3166_2": "PY-5",
+      "Latitude": -25.2234,
+      "Longitude": -55.8821,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-5.geojson",
+      "CommonAliases": [
+        "Caaguazú"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "ECF82178-059D-439B-AA84-77ABC63E033E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.437Z",
+      "checksum": "0838bfe08319a3ce06cb60e4158da7efd248b450eca3da57d82ace0c2abfd7a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caazapá",
+      "Code": "6",
+      "ISO3166_2": "PY-6",
+      "Latitude": -26.2005,
+      "Longitude": -56.0049,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-6.geojson",
+      "CommonAliases": [
+        "Caazapá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "EDED3A03-12F8-40BE-9097-A1E86F6918BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.454Z",
+      "checksum": "680de1ddd9d159f45a396298fb58543b88c53c237a18351b4c645a9d835ec942"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Canindeyú",
+      "Code": "14",
+      "ISO3166_2": "PY-14",
+      "Latitude": -24.2567,
+      "Longitude": -55.2022,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-14.geojson",
+      "CommonAliases": [
+        "Canindeyú"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "CA8C54C6-492C-4EB9-80CC-2E94FA7338CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.471Z",
+      "checksum": "cc196139ecd079572d0b3c3184991ee8476da915f6cfab05b076631af797309b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "11",
+      "ISO3166_2": "PY-11",
+      "Latitude": -25.6711,
+      "Longitude": -57.5265,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-11.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "0393D621-668D-4F94-85B2-E8FE64FCE853"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.490Z",
+      "checksum": "4cccff6c0d78a6d4fff250bfb5db89ae46fed4cbfbc7b1c5c9a45f4bf5a56ecc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Concepción",
+      "Code": "1",
+      "ISO3166_2": "PY-1",
+      "Latitude": -22.8458,
+      "Longitude": -57.0543,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-1.geojson",
+      "CommonAliases": [
+        "Concepción"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "3D47B69D-BE0A-4B92-8E5A-959FBAAEFE7E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.503Z",
+      "checksum": "f69aa9805208197408edd87012691172761ad90dcee0b2fa8b1e6baa0202ee40"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cordillera",
+      "Code": "3",
+      "ISO3166_2": "PY-3",
+      "Latitude": -25.2506,
+      "Longitude": -56.9747,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-3.geojson",
+      "CommonAliases": [
+        "Cordillera"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "1316B643-E056-4DEA-8FCE-CEDD82765B99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.555Z",
+      "checksum": "83388aae1218b975854420e2b36d7d954d45b41861ae6ea6ac3654eeb19abf20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Guairá",
+      "Code": "4",
+      "ISO3166_2": "PY-4",
+      "Latitude": -25.8137,
+      "Longitude": -56.1486,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-4.geojson",
+      "CommonAliases": [
+        "Guairá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "919936F1-C34C-491E-8E21-28DE9B0695BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.571Z",
+      "checksum": "59c21725ed7426a6607e422a59d4985c41fd9410ed3d51cabf29bc4f3d846911"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Itapúa",
+      "Code": "7",
+      "ISO3166_2": "PY-7",
+      "Latitude": -26.8545,
+      "Longitude": -55.6773,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-7.geojson",
+      "CommonAliases": [
+        "Itapúa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "548EDBF0-8353-4A42-B679-AB64456FD978"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.588Z",
+      "checksum": "40a35797b925a480f8d7ff0969b42a08044c2c34b1bc472e5590925363695b23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Misiones",
+      "Code": "8",
+      "ISO3166_2": "PY-8",
+      "Latitude": -26.9861,
+      "Longitude": -57.1187,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-8.geojson",
+      "CommonAliases": [
+        "Misiones"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "969D2964-6EB1-4CCE-9590-A41FA3A4F17E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.605Z",
+      "checksum": "d177c364d0560d155ab68cd74cf13bbc36618aadad1273be01b659fbc7fd5bf7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neembucú",
+      "Code": "12",
+      "ISO3166_2": "PY-12",
+      "Latitude": -26.6639,
+      "Longitude": -57.9275,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-12.geojson",
+      "CommonAliases": [
+        "Neembucú"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "97656AC0-856A-457E-8CBC-CBE6DE6331E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.622Z",
+      "checksum": "8c4d449c2dfe16caf5de8017c9503459496a9b34df0f8ff35167361eb543d470"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paraguarī",
+      "Code": "9",
+      "ISO3166_2": "PY-9",
+      "Latitude": -25.9805,
+      "Longitude": -57.146,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-9.geojson",
+      "CommonAliases": [
+        "Paraguarī"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "D45DD94B-0484-458C-B4D6-2596AB7C0C70"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.638Z",
+      "checksum": "57d924d26cbe309d0f8e05112e3406c446cfb8fe0fbda024394ccaf5158633a6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Presidente Hayes",
+      "Code": "15",
+      "ISO3166_2": "PY-15",
+      "Latitude": -23.4234,
+      "Longitude": -58.9417,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-15.geojson",
+      "CommonAliases": [
+        "Presidente Hayes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "DB477F88-E62B-4C53-8AED-221212AEC409"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.655Z",
+      "checksum": "bb989358c413ab19d01d060cc1f3dab3b41e0de8cc5723d4768929d8310156f1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Pedro",
+      "Code": "2",
+      "ISO3166_2": "PY-2",
+      "Latitude": -24.2001,
+      "Longitude": -56.6053,
+      "BoundaryGeoJSON": "@file:by-country/PY/boundaries/PY-2.geojson",
+      "CommonAliases": [
+        "San Pedro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PY"
+    },
+    "primaryKey": {
+      "ID": "CE248BAA-4DFA-494E-8058-6D54405E913A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.669Z",
+      "checksum": "02eeeebfc99d36d8578527492a6078b0ae429c97c05e4e48172ff9c41cd4b458"
+    }
+  }
+]

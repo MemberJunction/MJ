@@ -43,24 +43,29 @@ interface FilteredStats {
   selector: 'app-testing-runs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Page Header -->
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Test Runs"
+          Icon="fa-solid fa-list-check"
+          Subtitle="Test execution history and monitoring">
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+            <button mjButton variant="primary" size="sm" (click)="StartNewTest()">
+              <i class="fa-solid fa-play"></i> Run Test
+            </button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
     <div class="runs-container" (keydown.escape)="CloseDetailPanel()">
-      <div class="page-header">
-        <div class="header-title">
-          <i class="fa-solid fa-list-check"></i>
-          <h2>Test Runs</h2>
-        </div>
-        <div class="header-actions">
-          <button class="btn btn-secondary" (click)="Refresh()" [disabled]="IsRefreshing">
-            <i class="fa-solid fa-sync-alt" [class.spinning]="IsRefreshing"></i>
-            Refresh
-          </button>
-          <button class="btn btn-primary" (click)="StartNewTest()">
-            <i class="fa-solid fa-play"></i>
-            Run Test
-          </button>
-        </div>
-      </div>
 
       <!-- Filter Bar -->
       <div class="filter-bar">
@@ -286,9 +291,9 @@ interface FilteredStats {
                   <span class="feedback-label">Correct:</span>
                   <span class="feedback-value">
                     @if (SelectedRun.humanIsCorrect === true) {
-                      <i class="fa-solid fa-check" style="color: #22c55e"></i> Yes
+                      <i class="fa-solid fa-check" style="color: var(--mj-status-success)"></i> Yes
                     } @else if (SelectedRun.humanIsCorrect === false) {
-                      <i class="fa-solid fa-times" style="color: #ef4444"></i> No
+                      <i class="fa-solid fa-times" style="color: var(--mj-status-error)"></i> No
                     } @else {
                       --
                     }
@@ -356,6 +361,7 @@ interface FilteredStats {
         </div>
       }
     </div>
+    </ng-template>
   `,
   styles: [`
     /* ==========================================
@@ -471,6 +477,7 @@ interface FilteredStats {
 
     .filter-chips {
       display: flex;
+      flex-wrap: wrap;
       gap: 6px;
     }
 
@@ -1098,10 +1105,31 @@ interface FilteredStats {
         max-width: 100vw;
       }
     }
+
+    @media (max-width: 480px) {
+      .table-header, .table-row {
+        grid-template-columns: 1fr 80px 60px;
+      }
+
+      .col-score, .col-duration {
+        display: none;
+      }
+
+      .chip {
+        min-height: 44px;
+        padding: 8px 14px;
+      }
+
+      .table-row {
+        min-height: 44px;
+      }
+    }
   `]
 })
 export class TestingRunsComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();
@@ -1207,7 +1235,9 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
   }
 
   StartNewTest(): void {
-    this.testingDialogService.OpenTestRunDialog({ viewContainerRef: this.viewContainerRef });
+    console.log('[TestingRuns] StartNewTest called, service IsPanelOpen before:', this.testingDialogService.IsPanelOpen);
+    this.testingDialogService.OpenAsPanel();
+    console.log('[TestingRuns] After OpenAsPanel, IsPanelOpen:', this.testingDialogService.IsPanelOpen);
   }
 
   SelectRun(run: TestRunWithFeedbackSummary): void {
@@ -1228,7 +1258,7 @@ export class TestingRunsComponent implements OnInit, OnDestroy {
 
   RerunTest(run: TestRunWithFeedbackSummary): void {
     if (!run.testId) return;
-    this.testingDialogService.OpenTestDialog(run.testId, this.viewContainerRef);
+    this.testingDialogService.OpenTestPanel(run.testId);
   }
 
   async SubmitFeedback(): Promise<void> {

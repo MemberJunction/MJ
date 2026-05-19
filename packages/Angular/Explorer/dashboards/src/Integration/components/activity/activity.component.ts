@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ResourceData } from '@memberjunction/core-entities';
 import { IRunViewProvider, RunView } from '@memberjunction/core';
 import {
@@ -64,17 +65,20 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   StatusOptions: StatusFilterType[] = ['All', 'Success', 'Failed', 'In Progress', 'Pending'];
   DateOptions: { Value: DateFilterType; Label: string }[] = [
+    { Value: 'all', Label: 'All' },
     { Value: 'today', Label: 'Today' },
     { Value: '7d', Label: '7 Days' },
-    { Value: '30d', Label: '30 Days' },
-    { Value: 'all', Label: 'All' }
+    { Value: '30d', Label: '30 Days' }
   ];
 
   private dataService = inject(IntegrationDataService);
   private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   // ── Data Loading ──────────────────────────────────────────
@@ -237,6 +241,48 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   OnSearchChange(): void {
     this.ApplyFilters();
+  }
+
+  /** Bridge for <mj-page-search> which emits a plain string. */
+  OnSearchValueChange(value: string): void {
+    this.SearchQuery = value;
+    this.ApplyFilters();
+  }
+
+  // ---- Integration filter popover wiring ---------------------------------
+
+  get ActivityFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'integration',
+        type: 'dropdown',
+        label: 'Integration',
+        icon: 'fa-solid fa-plug',
+        placeholder: 'All Integrations',
+        filterable: this.Integrations.length > 10,
+        options: [
+          { text: 'All Integrations', value: '' },
+          ...this.Integrations.map(i => ({ text: i.Name, value: i.ID })),
+        ],
+      },
+    ];
+  }
+
+  get ActivityFilterValues(): Record<string, unknown> {
+    return { integration: this.IntegrationFilter ?? '' };
+  }
+
+  get ActiveFilterCount(): number {
+    return this.IntegrationFilter ? 1 : 0;
+  }
+
+  OnFilterValuesChange(values: Record<string, unknown>): void {
+    const next = ((values ?? {}) as { integration?: string }).integration ?? '';
+    this.SetIntegrationFilter(next || null);
+  }
+
+  ResetIntegrationFilter(): void {
+    if (this.IntegrationFilter) this.SetIntegrationFilter(null);
   }
 
   async Refresh(): Promise<void> {

@@ -1,8 +1,6 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ViewContainerRef, ChangeDetectorRef } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { TextAreaComponent } from '@progress/kendo-angular-inputs';
-import { WindowService, WindowRef, WindowCloseResult } from '@progress/kendo-angular-dialog';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
@@ -153,21 +151,17 @@ export interface SavedConversation {
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
 })
-export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
+export class AITestHarnessComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked  {
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
-     * @param windowService - Kendo WindowService for creating modal windows
-     * @param viewContainerRef - Angular ViewContainerRef for window positioning
      * @param cdr - Angular ChangeDetectorRef for managing change detection
      */
     constructor(
         private sanitizer: DomSanitizer,
-        private windowService: WindowService,
-        private viewContainerRef: ViewContainerRef,
-        private cdr: ChangeDetectorRef,
-        private router: Router
-    ) {}
+        private cdr: ChangeDetectorRef
+    ) {
+    super();}
     
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() mode: TestHarnessMode = 'agent';
@@ -237,7 +231,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     @ViewChild('fileInput') private fileInput!: ElementRef;
     
     /** Reference to the message input textarea */
-    @ViewChild('messageInput') private messageInput!: TextAreaComponent;
+    @ViewChild('messageInput') private messageInput!: ElementRef<HTMLTextAreaElement>;
     
     /** Reference to the save dialog input */
     @ViewChild('saveDialogInput') private saveDialogInput?: ElementRef;
@@ -341,8 +335,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     /** Current JSON content to display in the dialog */
     public currentJsonContent: string = '';
     
-    /** Reference to the JSON window when open */
-    private jsonWindowRef: WindowRef | null = null;
+    /** Whether the JSON viewer window is visible */
+    public showJsonWindow = false;
     
     // === Execution Monitor Properties ===
     /** Mode for the execution monitor component */
@@ -397,7 +391,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private elapsedTimeInterval: any;
     
     /** MemberJunction metadata instance for entity operations */
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     
     /** Track if input has been focused to prevent repeated focusing */
     private _hasFocused = false;
@@ -505,14 +499,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         if (this.isVisible && !this._hasFocused && this.messageInput) {
             this._hasFocused = true;
             Promise.resolve().then(() => {
-                this.messageInput?.focus();
+                this.messageInput?.nativeElement?.focus();
             });
         }
     }
 
     private subscribeToEvents() {
         // Set up direct GraphQL subscription for agent execution stream
-        const dataProvider = Metadata.Provider as GraphQLDataProvider;
+        const dataProvider = this.ProviderToUse as GraphQLDataProvider;
         const _providerPushStatusSub = dataProvider.PushStatusUpdates().subscribe(async (status: any) => {
             const message = JSON.parse(status.message || '{}');
             if (message?.resolver === 'RunAIAgentResolver') {
@@ -541,7 +535,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     // Update or create the agent run entity from the serialized data
                     if (!this.currentAgentRun) {
                         // First time - create the entity
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
                     }
                     
@@ -779,7 +773,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadAvailableConfigurations() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAIConfigurationEntity>({
                 EntityName: 'MJ: AI Configurations',
                 ExtraFilter: `Status IN ('Active', 'Preview')`,
@@ -910,7 +904,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
 
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJTemplateParamEntity>({
                     EntityName: 'MJ: Template Params',
                     ExtraFilter: `TemplateID='${prompt.TemplateID}'`,
@@ -1197,14 +1191,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param runId - The ID of the agent run to load
      */
     private async loadAgentRun(runId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.Load(runId);
         await this.internalLoadAgenRun(agentRunEntity);
     }
 
     private async loadAgentRunFromData(agentRunData: any): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.LoadFromData(agentRunData);
         await this.internalLoadAgenRun(agentRunEntity);
@@ -1328,7 +1322,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         // Clear previous execution data when starting a new run
         // Create a proper agent run entity for live tracking
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         this.currentAgentRun.ID = `temp-${Date.now()}`;
         this.currentAgentRun.Status = 'Running';
@@ -1360,7 +1354,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         try {
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
  
             // Build data context - include conversation state if available
             const dataContext = this.buildDataContext();
@@ -1571,7 +1565,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         try {
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
 
             // Build template variables from user input
             const templateVariables = this.buildTemplateVariables();
@@ -2470,65 +2464,25 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     public showRawJsonDialog(message: ConversationMessage) {
         if (message.rawContent) {
-            // Close any existing window
-            if (this.jsonWindowRef) {
-                this.jsonWindowRef.close();
-            }
-
             try {
-                // Try to parse and format the JSON
                 const parsed = JSON.parse(message.rawContent);
-                
-                // If this is an agent result with execution tree, enhance the display
                 if (parsed.agentRunID) {
-                    // Add agent run ID for reference
-                    const enhancedParsed = {
-                        ...parsed,
-                        _agentRunID: parsed.agentRunID
-                    };
+                    const enhancedParsed = { ...parsed, _agentRunID: parsed.agentRunID };
                     this.currentJsonContent = this.formatJson(enhancedParsed);
                 } else {
-                    // Apply recursive JSON parsing
                     this.currentJsonContent = this.formatJson(parsed);
                 }
             } catch {
-                // If not valid JSON, show as-is
                 this.currentJsonContent = message.rawContent;
             }
-
-            // Import the JsonViewerWindowComponent dynamically
-            import('./json-viewer-window.component').then(({ JsonViewerWindowComponent }) => {
-                // Create the window using WindowService
-                // Calculate center position accounting for scroll
-                const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-                const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-                const centerTop = Math.max(50, (window.innerHeight - 700) / 2 + scrollTop);
-                const centerLeft = Math.max(50, (window.innerWidth - 900) / 2 + scrollLeft);
-
-                this.jsonWindowRef = this.windowService.open({
-                    title: 'Raw JSON Response',
-                    content: JsonViewerWindowComponent,
-                    width: 900,
-                    height: 700,
-                    minWidth: 600,
-                    minHeight: 400,
-                    resizable: true,
-                    draggable: true,
-                    top: centerTop,
-                    left: centerLeft
-                });
-
-                // Pass the JSON content to the component
-                const windowContent = this.jsonWindowRef.content.instance;
-                windowContent.jsonContent = this.currentJsonContent;
-
-                // Handle window close
-                this.jsonWindowRef.result.subscribe((result: WindowCloseResult) => {
-                    this.jsonWindowRef = null;
-                    this.currentJsonContent = '';
-                });
-            });
+            this.showJsonWindow = true;
         }
+    }
+
+    /** Closes the JSON viewer window */
+    public closeJsonWindow(): void {
+        this.showJsonWindow = false;
+        this.currentJsonContent = '';
     }
     
     /**
@@ -2602,7 +2556,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private focusMessageInput(): void {
         if (this.messageInput) {
             setTimeout(() => {
-                this.messageInput.focus();
+                this.messageInput.nativeElement.focus();
             }, 100);
         }
     }
@@ -2881,11 +2835,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * Closes the JSON dialog
      */
     public closeJsonDialog() {
-        if (this.jsonWindowRef) {
-            this.jsonWindowRef.close();
-            this.jsonWindowRef = null;
-        }
-        this.showJsonDialog = false;
+        this.showJsonWindow = false;
         this.currentJsonContent = '';
     }
     
@@ -3157,7 +3107,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadFromPromptRun(promptRunId: string): Promise<void> {
         console.log('🔄 Loading from prompt run:', promptRunId);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
         
         if (await promptRun.Load(promptRunId)) {

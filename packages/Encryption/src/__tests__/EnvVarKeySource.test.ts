@@ -198,4 +198,94 @@ describe('EnvVarKeySource', () => {
             });
         });
     });
+
+    describe('ValidateKeyAccessibility', () => {
+        it('should return IsAccessible true when env var exists with valid key', async () => {
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            process.env.MJ_VALID_KEY = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_VALID_KEY', undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+            expect(result.Error).toBeUndefined();
+        });
+
+        it('should return error when env var is not set', async () => {
+            delete process.env.MJ_MISSING_KEY;
+
+            const result = await source.ValidateKeyAccessibility('MJ_MISSING_KEY');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('MJ_MISSING_KEY');
+            expect(result.Error).toContain('not set');
+            expect(result.Error).toContain('export');
+        });
+
+        it('should return error when env var is empty', async () => {
+            process.env.MJ_EMPTY_KEY = '';
+
+            const result = await source.ValidateKeyAccessibility('MJ_EMPTY_KEY');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('empty');
+        });
+
+        it('should return error for invalid env var name', async () => {
+            const result = await source.ValidateKeyAccessibility('invalid-name');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('Invalid environment variable name');
+        });
+
+        it('should validate key length when expectedKeyLengthBytes provided', async () => {
+            const keyBytes = Buffer.alloc(16, 0xAB); // 16 bytes
+            process.env.MJ_SHORT_KEY = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_SHORT_KEY', undefined, 32);
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('16 bytes');
+            expect(result.Error).toContain('32 bytes');
+        });
+
+        it('should pass without expectedKeyLengthBytes', async () => {
+            const keyBytes = Buffer.alloc(16, 0xAB);
+            process.env.MJ_ANY_LEN = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_ANY_LEN');
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should handle versioned key names', async () => {
+            const keyBytes = Buffer.alloc(32, 0xCD);
+            process.env.MJ_KEY_V2 = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_KEY', '2', 32);
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should reject non-base64 content that Buffer.from silently accepts', async () => {
+            // Node's Buffer.from('not!valid@base64', 'base64') silently ignores
+            // non-base64 characters — the round-trip check should catch this
+            process.env.MJ_BAD_B64 = 'not!valid@base64###data';
+
+            const result = await source.ValidateKeyAccessibility('MJ_BAD_B64');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('valid base64');
+        });
+
+        it('should accept valid base64 that passes round-trip check', async () => {
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            process.env.MJ_GOOD_B64 = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_GOOD_B64', undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+        });
+
+        it('should not return key material in the result', async () => {
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            process.env.MJ_SECRET_KEY = keyBytes.toString('base64');
+
+            const result = await source.ValidateKeyAccessibility('MJ_SECRET_KEY', undefined, 32);
+            // Result should only have IsAccessible and possibly Error
+            const resultStr = JSON.stringify(result);
+            expect(resultStr).not.toContain(keyBytes.toString('base64'));
+            expect(Object.keys(result).every(k => k === 'IsAccessible' || k === 'Error')).toBe(true);
+        });
+    });
 });

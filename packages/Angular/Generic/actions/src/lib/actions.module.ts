@@ -12,7 +12,7 @@ import { ActionResultCodeDialogComponent } from './action-result-code-dialog/act
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionParamDialogComponent,
-        ActionResultCodeDialogComponent
+        ActionResultCodeDialogComponent,
     ],
     imports: [
         CommonModule,
@@ -22,7 +22,7 @@ import { ActionResultCodeDialogComponent } from './action-result-code-dialog/act
         ActionTestHarnessComponent,
         ActionTestHarnessDialogComponent,
         ActionParamDialogComponent,
-        ActionResultCodeDialogComponent
+        ActionResultCodeDialogComponent,
     ]
 })
 export class ActionsModule { }

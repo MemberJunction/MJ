@@ -1,5 +1,166 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.34.1
+- @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- Updated dependencies [389d356]
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [5cc5326]
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.32.0
+- @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/global@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.0
+- @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.29.0
+- @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.28.0
+- @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.27.0
+- @memberjunction/global@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.26.0
+- @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.25.0
+- @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.24.0
+- @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- Updated dependencies [247df16]
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [f2a6bec]
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.21.0
+- @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.20.0
+- @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.18.0
+- @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.17.0
+- @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.16.0
+- @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Minor Changes

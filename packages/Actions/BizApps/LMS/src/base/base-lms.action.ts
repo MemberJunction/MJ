@@ -45,6 +45,17 @@ export abstract class BaseLMSAction extends BaseAction {
   private static readonly uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
   /**
+   * Validates that a string is a valid UUID format to prevent SQL injection.
+   * Exposed as a reusable helper for subclasses to validate CompanyID, UserID, etc.
+   */
+  protected validateUUID(value: string, paramName: string): string {
+    if (!BaseLMSAction.uuidRegex.test(value)) {
+      throw new Error(`${paramName} must be a valid UUID`);
+    }
+    return value;
+  }
+
+  /**
    * Validates that an integration name contains only safe characters (alphanumeric, spaces, hyphens, underscores).
    */
   private validateIntegrationName(name: string): string {
@@ -58,10 +69,7 @@ export abstract class BaseLMSAction extends BaseAction {
    * Gets the company integration record for the specified company and LMS
    */
   protected async getCompanyIntegration(companyId: string, contextUser: UserInfo): Promise<MJCompanyIntegrationEntity> {
-    // Validate companyId format to prevent SQL injection
-    if (!BaseLMSAction.uuidRegex.test(companyId)) {
-      throw new Error('CompanyID must be a valid UUID');
-    }
+    this.validateUUID(companyId, 'CompanyID');
 
     // Validate integration name before SQL interpolation
     const safeIntegrationName = this.validateIntegrationName(this.integrationName);

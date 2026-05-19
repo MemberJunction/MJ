@@ -61,6 +61,11 @@
         }
       </div>
       <div class="toolbar-right">
+        <!-- Recycle Bin chip — auto-hides when no deleted records, no tracking,
+             or user lacks Delete permission. -->
+        @if (ShowRecycleBin) {
+          <mj-recycle-bin-chip [EntityName]="entityInfoName"></mj-recycle-bin-chip>
+        }
         <!-- New/Add Button (predefined) -->
         @if (ShowNewButton) {
           <button

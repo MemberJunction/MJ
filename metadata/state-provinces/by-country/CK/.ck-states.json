@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Cook Islands",
+      "Code": "CK",
+      "ISO3166_2": "CK-CK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cook Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CK"
+    },
+    "primaryKey": {
+      "ID": "83E0A3B4-0DF7-4771-8583-6CB1AFBA2239"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.465Z",
+      "checksum": "9b14412d244b753b1bdf06ac739de5d29fb1399e6be6a54a2753077360dfe789"
+    }
+  }
+]

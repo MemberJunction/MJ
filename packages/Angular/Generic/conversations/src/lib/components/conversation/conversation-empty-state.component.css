@@ -247,6 +247,35 @@
   font-weight: 600;
 }
 
+/* Overlay Mode — compact layout for floating chat widget */
+.conversation-empty-state.overlay-mode {
+  padding: 1rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.overlay-mode .empty-state-container {
+  gap: 0.75rem;
+  max-width: 100%;
+  justify-content: center;
+}
+
+.overlay-greeting {
+  text-align: center;
+  padding: 1rem 0 0;
+}
+
+.overlay-greeting-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  margin: 0;
+}
+
+.overlay-mode .message-input-wrapper {
+  margin: 0.5rem 0;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .empty-state-container {

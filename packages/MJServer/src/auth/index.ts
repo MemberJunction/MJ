@@ -6,12 +6,9 @@ import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { MJUserEntity, MJUserEntityType } from '@memberjunction/core-entities';
-import { AuthProviderFactory } from './AuthProviderFactory.js';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import { initializeAuthProviders } from './initializeProviders.js';
 
-export { TokenExpiredError } from './tokenExpiredError.js';
-export { IAuthProvider } from './IAuthProvider.js';
-export { AuthProviderFactory } from './AuthProviderFactory.js';
 export * from './APIKeyScopeAuth.js';
 
 // This is a hard-coded forever constant due to internal migrations
@@ -53,7 +50,7 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
  * are aggregated into an array. jwt.verify() natively accepts string | string[].
  */
 export const getValidationOptions = (issuer: string): { audience: string | string[]; jwksUri: string } | undefined => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const providers = factory.getAllByIssuer(issuer);
 
   if (providers.length === 0) {
@@ -81,7 +78,7 @@ export const validationOptions: Record<string, { audience: string | string[]; jw
     return getValidationOptions(prop) !== undefined;
   },
   ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
+    const factory = AuthProviderFactory.Instance;
     return factory.getAllProviders().map(p => p.issuer);
   }
 });
@@ -112,7 +109,7 @@ export class UserPayload {
  * Gets signing keys for JWT validation
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
@@ -142,7 +139,7 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
   fullName?: string;
   preferredUsername?: string;
 } => {
-  const factory = AuthProviderFactory.getInstance();
+  const factory = AuthProviderFactory.Instance;
   const issuer = payload.iss;
   
   if (!issuer) {
@@ -236,7 +233,7 @@ export const verifyUserRecord = async (
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
-          const md: Metadata = new Metadata();
+          const md: Metadata = new Metadata(); // global-provider-ok: JWT validation + role lookup runs BEFORE AppContext.providers is built — no per-request provider yet
 
           const initData: MJUserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
 
@@ -247,7 +244,7 @@ export const verifyUserRecord = async (
             return { UserID: initData.ID, RoleName: role, RoleID: roleID };
           });
 
-          user = new UserInfo(Metadata.Provider, initData);
+          user = new UserInfo(Metadata.Provider, initData); // global-provider-ok: same JWT-validation context — no per-request provider yet
           UserCache.Instance.Users.push(user);
           console.warn(`   >>> New user ${email} created successfully!`);
         }

@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Cocos (Keeling) Islands",
+      "Code": "CC",
+      "ISO3166_2": "CC-CC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cocos (Keeling) Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CC"
+    },
+    "primaryKey": {
+      "ID": "07E0FFEC-03CD-4A31-BA3F-B335A66B80ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.024Z",
+      "checksum": "056c6eacc015a9840a70393c778b812e90a7d0b135db4c81626403f168fb4148"
+    }
+  }
+]

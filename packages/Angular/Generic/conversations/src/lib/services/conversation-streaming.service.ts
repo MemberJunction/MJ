@@ -462,6 +462,26 @@ export class ConversationStreamingService implements OnDestroy {
   }
 
   /**
+   * Get a diagnostic snapshot of streaming state for a specific message.
+   * Used by the Shift+Click debug tool to dump live in-memory state to the console.
+   * @param messageId - The ConversationDetailID to inspect
+   */
+  public getDiagnosticSnapshot(messageId: string): {
+    hasCallbacks: boolean;
+    callbackCount: number;
+    recentCompletion: { conversationDetailId: string; agentRunId: string; timestamp: Date } | undefined;
+    connectionStatus: StreamingConnectionStatus;
+  } {
+    const callbacks = this.callbackRegistry.get(messageId);
+    return {
+      hasCallbacks: !!callbacks && callbacks.length > 0,
+      callbackCount: callbacks?.length ?? 0,
+      recentCompletion: this.recentCompletions.get(messageId),
+      connectionStatus: this.connectionStatus$.getValue(),
+    };
+  }
+
+  /**
    * Cleanup completions older than 5 minutes to prevent memory leak
    */
   private cleanupOldCompletions(): void {

@@ -1,9 +1,9 @@
 @if (visible) {
-  <kendo-dialog
-    [title]="DialogTitle"
-    (close)="cancel()"
-    [width]="600"
-    [minWidth]="400">
+  <mj-dialog
+    [Visible]="true"
+    [Title]="DialogTitle"
+    (Close)="cancel()"
+    [Width]="600">
     <form [formGroup]="connectionForm" class="connection-form">
       <!-- Error Message -->
       @if (ErrorMessage) {
@@ -17,16 +17,15 @@
         <h3><i class="fa-solid fa-info-circle"></i> Basic Information</h3>
         <div class="form-group">
           <label for="server">MCP Server <span class="required">*</span></label>
-          <kendo-dropdownlist
-            id="server"
-            formControlName="MCPServerID"
-            [data]="ActiveServers"
-            textField="Name"
-            valueField="ID"
-            [valuePrimitive]="true"
-            [defaultItem]="{ Name: 'Select a server...', ID: '' }"
-            (valueChange)="onServerChange()">
-            <ng-template kendoDropDownListItemTemplate let-dataItem>
+          <mj-dropdown
+            [Data]="ActiveServers"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [DefaultItem]="{ Name: 'Select a server...', ID: '' }"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('MCPServerID')?.value"
+            (ValueChange)="connectionForm.get('MCPServerID')?.setValue($any($event)); onServerChange()">
+            <ng-template #mjDropdownItem let-dataItem>
               <div class="server-option">
                 <span class="server-name">{{ dataItem.Name }}</span>
                 @if (dataItem.TransportType) {
@@ -34,14 +33,14 @@
                 }
               </div>
             </ng-template>
-          </kendo-dropdownlist>
+          </mj-dropdown>
           @if (hasError('MCPServerID', 'required')) {
             <span class="error-text">Server selection is required</span>
           }
         </div>
         <div class="form-group">
           <label for="name">Connection Name <span class="required">*</span></label>
-          <input kendoTextBox
+          <input class="mj-input"
             id="name"
             formControlName="Name"
             placeholder="e.g., Production GitHub Connection" />
@@ -51,7 +50,7 @@
         </div>
         <div class="form-group">
           <label for="description">Description</label>
-          <textarea kendoTextArea
+          <textarea class="mj-textarea"
             id="description"
             formControlName="Description"
             placeholder="Optional description of this connection"
@@ -59,24 +58,23 @@
         </div>
         <div class="form-group">
           <label for="status">Status</label>
-          <kendo-dropdownlist
-            id="status"
-            formControlName="Status"
-            [data]="['Active', 'Inactive']"
-            [valuePrimitive]="true">
-          </kendo-dropdownlist>
+          <mj-dropdown
+            [Data]="['Active', 'Inactive']"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('Status')?.value"
+            (ValueChange)="connectionForm.get('Status')?.setValue($any($event))">
+          </mj-dropdown>
         </div>
         <div class="form-group">
           <label for="company">Company</label>
-          <kendo-dropdownlist
-            id="company"
-            formControlName="CompanyID"
-            [data]="companies"
-            textField="Name"
-            valueField="ID"
-            [valuePrimitive]="true"
-            [defaultItem]="{ Name: 'Global (all companies)', ID: '' }">
-          </kendo-dropdownlist>
+          <mj-dropdown
+            [Data]="companies"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [DefaultItem]="{ Name: 'Global (all companies)', ID: '' }"
+            [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('CompanyID')?.value"
+            (ValueChange)="connectionForm.get('CompanyID')?.setValue($any($event))">
+          </mj-dropdown>
           <span class="hint">Leave as Global to make this connection available to all companies</span>
         </div>
       </div>
@@ -92,18 +90,18 @@
             </div>
           } @else {
             <div class="credential-row">
-              <kendo-dropdownlist
-                id="credential"
-                formControlName="CredentialID"
-                [data]="credentials"
-                textField="Name"
-                valueField="ID"
-                [valuePrimitive]="true"
-                [defaultItem]="{ Name: 'No credential (anonymous)', ID: '' }">
-              </kendo-dropdownlist>
-              <button kendoButton
+              <mj-dropdown
+                [Data]="credentials"
+                TextField="Name"
+                ValueField="ID"
+                [ValuePrimitive]="true"
+                [DefaultItem]="{ Name: 'No credential (anonymous)', ID: '' }"
+                [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('CredentialID')?.value"
+                (ValueChange)="connectionForm.get('CredentialID')?.setValue($any($event))">
+              </mj-dropdown>
+              <button mjButton
                 type="button"
-                fillMode="outline"
+                variant="outline"
                 (click)="openCredentialDialog()"
                 title="Create New Credential">
                 <i class="fa-solid fa-plus"></i>
@@ -115,7 +113,7 @@
         </div>
         <div class="form-group">
           <label for="customHeader">Custom Header Name</label>
-          <input kendoTextBox
+          <input class="mj-input"
             id="customHeader"
             formControlName="CustomHeaderName"
             placeholder="e.g., X-Custom-API-Key" />
@@ -127,7 +125,7 @@
         <h3><i class="fa-solid fa-sliders"></i> Behavior</h3>
         <div class="checkbox-group">
           <label class="checkbox-label">
-            <input type="checkbox" kendoCheckBox formControlName="AutoSyncTools" />
+            <input type="checkbox" class="mj-checkbox" formControlName="AutoSyncTools" />
             <span>Auto-sync tools on connect</span>
           </label>
           <span class="hint">Automatically discover and sync available tools when connecting</span>
@@ -138,7 +136,7 @@
         <h3><i class="fa-solid fa-file-lines"></i> Logging</h3>
         <div class="checkbox-group">
           <label class="checkbox-label">
-            <input type="checkbox" kendoCheckBox formControlName="LogToolCalls" />
+            <input type="checkbox" class="mj-checkbox" formControlName="LogToolCalls" />
             <span>Enable tool call logging</span>
           </label>
           <span class="hint">Log all tool executions to the database</span>
@@ -146,26 +144,25 @@
         <div class="logging-options" [class.disabled]="!connectionForm.get('LogToolCalls')?.value">
           <div class="checkbox-group">
             <label class="checkbox-label">
-              <input type="checkbox" kendoCheckBox formControlName="LogInputParameters" />
+              <input type="checkbox" class="mj-checkbox" formControlName="LogInputParameters" />
               <span>Log input parameters</span>
             </label>
           </div>
           <div class="checkbox-group">
             <label class="checkbox-label">
-              <input type="checkbox" kendoCheckBox formControlName="LogOutputContent" />
+              <input type="checkbox" class="mj-checkbox" formControlName="LogOutputContent" />
               <span>Log output content</span>
             </label>
           </div>
           <div class="form-group">
             <label for="maxOutputSize">Max Output Log Size (bytes)</label>
-            <kendo-numerictextbox
-              id="maxOutputSize"
-              formControlName="MaxOutputLogSize"
-              [min]="0"
-              [max]="10485760"
-              [step]="10240"
-              [format]="'n0'">
-            </kendo-numerictextbox>
+            <mj-numeric-input
+              [Min]="0"
+              [Max]="10485760"
+              [Step]="10240"
+              [ngModelOptions]="{standalone: true}" [ngModel]="connectionForm.get('MaxOutputLogSize')?.value"
+              (ngModelChange)="connectionForm.get('MaxOutputLogSize')?.setValue($event)">
+            </mj-numeric-input>
             <span class="hint">Maximum size of output content to log (0 = unlimited, max 10MB)</span>
           </div>
         </div>
@@ -175,7 +172,7 @@
         <h3><i class="fa-solid fa-gear"></i> Advanced</h3>
         <div class="form-group">
           <label for="envVars">Environment Variables (JSON)</label>
-          <textarea kendoTextArea
+          <textarea class="mj-textarea"
             id="envVars"
             formControlName="EnvironmentVars"
             placeholder='{"VAR_NAME": "value"}'
@@ -184,16 +181,16 @@
         </div>
       </div>
     </form>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="save()" themeColor="primary" [disabled]="IsSaving">
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="save()" [disabled]="IsSaving">
         @if (IsSaving) {
           <i class="fa-solid fa-spinner fa-spin"></i>
         }
         {{ IsEditMode ? 'Update' : 'Create' }}
       </button>
-      <button kendoButton (click)="cancel()">Cancel</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+      <button mjButton (click)="cancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 <!-- Credential Creation Dialog -->

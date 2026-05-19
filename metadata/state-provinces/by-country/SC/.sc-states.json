@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Seychelles",
+      "Code": "SC",
+      "ISO3166_2": "SC-SC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Seychelles"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SC"
+    },
+    "primaryKey": {
+      "ID": "308248CF-5221-47BB-8B8A-5BC28236EF8B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:30.224Z",
+      "checksum": "f150202633b5381411cda87a8630d4c5bf0412e2fe02a1259855784275056cfc"
+    }
+  }
+]

@@ -3,46 +3,46 @@
     <mj-loading [showText]="false" size="medium"></mj-loading>
   }
   @if(ShowSaveButton) {
-    <button kendoButton (click)="SavePermissions()">Save</button>
+    <button mjButton (click)="SavePermissions()">Save</button>
   }
   <div class="table-container">
     @if(AllowAddPermissions) {
       <div class="add-permission-section">
         <span class="add-permission-label">Add Permission</span>
-        <kendo-dropdownlist 
-          [data]="PermissionTypes"
+        <mj-dropdown
+          [Data]="PermissionTypes"
           [(ngModel)]="SelectedType"
           style="width: 100px;">
-        </kendo-dropdownlist>
+        </mj-dropdown>
         @if (SelectedType === 'User') {
-          <kendo-dropdownlist 
-            [data]="AllUsers"
+          <mj-dropdown
+            [Data]="AllUsers"
             [(ngModel)]="SelectedUser"
-            textField="Name"
-            valueField="ID"
+            TextField="Name"
+            ValueField="ID"
             style="width: 225px;">
-          </kendo-dropdownlist>
+          </mj-dropdown>
         }
         @else if (SelectedType === 'Role') {
-          <kendo-dropdownlist 
-            [data]="AllRoles"
+          <mj-dropdown
+            [Data]="AllRoles"
             [(ngModel)]="SelectedRole"
-            textField="Name"
-            valueField="ID"
+            TextField="Name"
+            ValueField="ID"
             style="width: 150px;">
-          </kendo-dropdownlist>
+          </mj-dropdown>
         }
         @else {
           SelectedType: {{ SelectedType }}
         }
         @if (ShowPermissionLevels) {
-          <kendo-dropdownlist 
-            [data]="PermissionLevels"
+          <mj-dropdown
+            [Data]="PermissionLevels"
             [(ngModel)]="SelectedPermissionLevel"
             style="width: 100px;">
-          </kendo-dropdownlist>
+          </mj-dropdown>
         }
-        <button kendoButton (click)="addPermission()" [disabled]="permissionAlreadyExists()" [title]="permissionAlreadyExists() ? 'This combination of Type/User/Role already exists below' : ''" >Add</button>
+        <button mjButton (click)="addPermission()" [disabled]="permissionAlreadyExists()" [title]="permissionAlreadyExists() ? 'This combination of Type/User/Role already exists below' : ''" >Add</button>
       </div>
     }
     <table class="resource-table">
@@ -66,11 +66,11 @@
             @if (ShowPermissionLevels) {
               <td>
                 @if (AllowEditPermissions) {
-                  <kendo-dropdownlist 
+                  <mj-dropdown
                     [(ngModel)]="p.PermissionLevel"
-                    [data]="PermissionLevels"
+                    [Data]="PermissionLevels"
                     style="width: 100px;">
-                  </kendo-dropdownlist>
+                  </mj-dropdown>
                 }
                 @else {
                   {{ p.PermissionLevel }}
@@ -79,7 +79,7 @@
             }
             @if(AllowDeletePermissions) {
               <td>
-                <button kendoButton (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
+                <button mjButton aria-label="Delete permission" title="Delete permission" (click)="deletePermission(p)"><span class="fa-solid fa-trash-can"></span></button>
               </td>
             }
           </tr>  

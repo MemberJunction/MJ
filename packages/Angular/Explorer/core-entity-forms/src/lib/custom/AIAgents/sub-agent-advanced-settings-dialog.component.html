@@ -25,13 +25,13 @@
           <!-- Execution Order -->
           <div class="form-field">
             <label for="executionOrder">Execution Order *</label>
-            <kendo-numerictextbox 
+            <mj-numeric-input
               formControlName="executionOrder"
-              [min]="0"
-              [format]="'0'"
+              [Min]="0"
+              Format="0"
               [class.error-border]="hasExecutionOrderError()"
               class="form-control">
-            </kendo-numerictextbox>
+            </mj-numeric-input>
             @if (isFieldInvalid('executionOrder')) {
               <div class="field-error">{{ getFieldError('executionOrder') }}</div>
             }
@@ -44,23 +44,14 @@
           <!-- Execution Mode -->
           <div class="form-field">
             <label for="executionMode">Execution Mode *</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="executionMode"
-              [data]="executionModeOptions"
-              textField="text"
-              valueField="value"
-              [valuePrimitive]="true"
+              [Data]="executionModeOptions"
+              TextField="text"
+              ValueField="value"
+              [ValuePrimitive]="true"
               class="form-control">
-              <ng-template kendoDropDownListItemTemplate let-dataItem>
-                <div class="execution-mode-option">
-                  <div class="option-header">
-                    <i class="fa-solid {{ dataItem.icon }}"></i>
-                    <span class="option-title">{{ dataItem.text }}</span>
-                  </div>
-                  <div class="option-description">{{ dataItem.description }}</div>
-                </div>
-              </ng-template>
-            </kendo-dropdownlist>
+            </mj-dropdown>
             @if (isFieldInvalid('executionMode')) {
               <div class="field-error">{{ getFieldError('executionMode') }}</div>
             }
@@ -80,29 +71,29 @@
           <!-- Agent Type -->
           <div class="form-field">
             <label for="typeID">Agent Type</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="typeID"
-              [data]="agentTypes$ | async"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="true"
-              [defaultItem]="{ Name: 'Default Type', ID: null }"
+              [Data]="agentTypes$ | async"
+              TextField="Name"
+              ValueField="ID"
+              [ValuePrimitive]="true"
+              [DefaultItem]="{ Name: 'Default Type', ID: null }"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             <small class="field-hint">Specialized agent type that defines behavior and capabilities</small>
           </div>
           
           <!-- Status -->
           <div class="form-field">
             <label for="status">Status *</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="status"
-              [data]="statusOptions"
-              textField="text"
-              valueField="value"
-              [valuePrimitive]="true"
+              [Data]="statusOptions"
+              TextField="text"
+              ValueField="value"
+              [ValuePrimitive]="true"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             @if (isFieldInvalid('status')) {
               <div class="field-error">{{ getFieldError('status') }}</div>
             }
@@ -122,10 +113,10 @@
           <!-- Expose As Action (Disabled for Sub-Agents) -->
           <div class="form-field full-width">
             <label class="checkbox-label disabled">
-              <kendo-checkbox 
+              <input type="checkbox"
+                class="mj-checkbox"
                 formControlName="exposeAsAction"
                 [disabled]="true">
-              </kendo-checkbox>
               Expose As Action
             </label>
             <small class="field-hint disabled-hint">
@@ -140,15 +131,15 @@
 
   <!-- Dialog Footer -->
   <div class="dialog-footer">
-    <button kendoButton 
-            look="flat" 
+    <button mjButton
+            variant="flat"
             (click)="cancel()"
             [disabled]="(isSaving$ | async) || false">
       Cancel
     </button>
-    
-    <button kendoButton 
-            themeColor="primary" 
+
+    <button mjButton
+            variant="primary"
             (click)="save()"
             [disabled]="((isSaving$ | async) || false) || ((isLoading$ | async) || false) || hasExecutionOrderError()">
       @if (isSaving$ | async) {

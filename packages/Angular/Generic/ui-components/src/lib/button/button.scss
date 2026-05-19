@@ -1,0 +1,250 @@
+/**
+ * mjButton Styles
+ *
+ * Consolidates three legacy button systems (.mj-btn-*, .action-btn*, .control-btn*)
+ * into a single BEM-based system using --mj-* semantic design tokens.
+ */
+
+/* ========== Base ========== */
+.mj-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: var(--mj-radius-md);
+  font-family: var(--mj-font-family);
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+  line-height: 1.5;
+  cursor: pointer;
+  transition: var(--mj-transition-colors), box-shadow var(--mj-transition-base), transform var(--mj-transition-base);
+  text-decoration: none;
+  white-space: nowrap;
+  min-height: 44px;
+  user-select: none;
+  -webkit-user-select: none;
+
+  &:hover:not(:disabled):not(.mj-btn--flat):not(.mj-btn--icon):not(.mj-btn--outline):not(.mj-btn--sm) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+
+  &:active:not(:disabled):not(.mj-btn--flat):not(.mj-btn--icon):not(.mj-btn--outline):not(.mj-btn--sm) {
+    transform: translateY(0);
+    box-shadow: none;
+  }
+
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--mj-focus-ring);
+  }
+
+  &:disabled,
+  &[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  i,
+  .fa-solid,
+  .fa-regular,
+  .fa-light {
+    font-size: 1rem;
+    line-height: 1;
+  }
+}
+
+/* Suppress lift inside toggle groups */
+.view-toggle .mj-btn:hover,
+.mj-btn-group .mj-btn:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ========== Variants ========== */
+
+.mj-btn--primary {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+    border-color: var(--mj-brand-primary-hover);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--mj-brand-primary-active);
+    border-color: var(--mj-brand-primary-active);
+  }
+}
+
+.mj-btn--secondary {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border-color: var(--mj-border-default);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-border-strong);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--mj-bg-surface-active);
+  }
+}
+
+.mj-btn--outline {
+  background: transparent;
+  color: var(--mj-brand-primary);
+  border-color: var(--mj-brand-primary);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-brand-primary);
+    color: var(--mj-brand-on-primary);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--mj-brand-primary-active);
+    color: var(--mj-brand-on-primary);
+  }
+}
+
+.mj-btn--flat {
+  background: transparent;
+  color: var(--mj-text-secondary);
+  border-color: transparent;
+  padding: 8px 12px;
+
+  &:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--mj-bg-surface-active);
+  }
+}
+
+.mj-btn--danger {
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-status-error);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-text);
+  }
+
+  &:active:not(:disabled) {
+    opacity: 0.9;
+  }
+}
+
+.mj-btn--success {
+  background: var(--mj-status-success);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-status-success);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-text);
+  }
+
+  &:active:not(:disabled) {
+    opacity: 0.9;
+  }
+}
+
+.mj-btn--warning {
+  background: var(--mj-status-warning);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-status-warning);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-status-warning-text);
+    border-color: var(--mj-status-warning-text);
+  }
+
+  &:active:not(:disabled) {
+    opacity: 0.9;
+  }
+}
+
+.mj-btn--icon {
+  background: transparent;
+  color: var(--mj-text-muted);
+  border-color: transparent;
+  padding: 8px;
+  min-width: 44px;
+  min-height: 44px;
+
+  &:hover:not(:disabled) {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-brand-primary);
+  }
+
+  &:active:not(:disabled) {
+    background: var(--mj-bg-surface-active);
+  }
+}
+
+/* ========== Sizes ========== */
+.mj-btn--sm {
+  padding: 6px 12px;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  gap: 6px;
+}
+
+.mj-btn--lg {
+  padding: 14px 28px;
+  font-size: 1rem;
+  min-height: 52px;
+  gap: 10px;
+}
+
+/* ========== Toggleable ========== */
+.mj-btn--selected {
+  background: var(--mj-brand-primary);
+  color: var(--mj-brand-on-primary);
+  border-color: var(--mj-brand-primary);
+
+  &:hover:not(:disabled) {
+    background: var(--mj-brand-primary-hover);
+    border-color: var(--mj-brand-primary-hover);
+  }
+}
+
+/* ========== Button Group ========== */
+.mj-btn-group {
+  display: inline-flex;
+
+  .mj-btn {
+    border-radius: 0;
+
+    &:first-child {
+      border-radius: var(--mj-radius-md) 0 0 var(--mj-radius-md);
+    }
+
+    &:last-child {
+      border-radius: 0 var(--mj-radius-md) var(--mj-radius-md) 0;
+    }
+
+    &:not(:first-child) {
+      margin-left: -1px;
+    }
+  }
+}
+
+/* ========== Touch targets ========== */
+@media (pointer: coarse) {
+  .mj-btn--sm {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+}

@@ -46,12 +46,12 @@ export class AutotagAzureBlob extends CloudStorageBase {
             const filePath = path.join(this.containerName, blob.name)
             if (blob.properties.createdOn && blob.properties.createdOn > lastRunDate) {
                 // The file has been created, add a new record for this file
-                const md = new Metadata()
+                const md = this.ProviderToUse
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 const text = await this.extractText(blob.name)
                 contentItem.ContentSourceID = contentSourceParams.contentSourceID
                 contentItem.Name = blob.name
-                contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, contextUser)
+                contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams)
                 contentItem.URL = filePath
                 contentItem.ContentTypeID = contentSourceParams.ContentTypeID
                 contentItem.ContentSourceTypeID =  contentSourceParams.ContentSourceTypeID
@@ -64,7 +64,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
             }
             else if (blob.properties.lastModified && blob.properties.lastModified > lastRunDate) {
                 // The file has been modified, update the record for this file
-                const md = new Metadata()
+                const md = this.ProviderToUse
                 const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser)
                 const contentItemID = await this.engine.getContentItemIDFromURL(contentSourceParams, contextUser)
                 await contentItem.Load(contentItemID)

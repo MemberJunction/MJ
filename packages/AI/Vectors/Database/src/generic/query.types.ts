@@ -46,6 +46,21 @@ export type QueryByVectorValues = QueryParamsBase & {
  */
 export type QueryOptions = QueryByRecordId | QueryByVectorValues;
 
+/**
+ * Options for hybrid search combining vector similarity with keyword (BM25) search.
+ * Providers that support hybrid search implement VectorDBBase.HybridQuery().
+ */
+export interface HybridQueryOptions extends QueryParamsBase {
+    /** Vector values for the semantic similarity component */
+    vector: RecordValues;
+    /** Keyword query string for the BM25/text search component */
+    KeywordQuery?: string;
+    /** Balance between vector and keyword: 0.0 = pure keyword, 1.0 = pure vector (default: 0.7) */
+    Alpha?: number;
+    /** Method for fusing vector and keyword result lists (default: 'rrf') */
+    FusionMethod?: 'rrf' | 'weighted';
+}
+
 export interface ScoredRecord<T extends RecordMetadata = RecordMetadata> extends VectorRecord<T> {
     /**
      * The similarity score of the record. The interpretation of this score will be different

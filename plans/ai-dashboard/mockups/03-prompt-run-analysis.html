@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prompt Run Analysis — 3 Options</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="shared-tokens.css">
+<style>
+.analytics-shell {
+  display: flex;
+  height: calc(100vh - 78px);
+  background: var(--mj-bg-page);
+}
+
+.left-nav {
+  width: 220px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+  overflow-y: auto;
+}
+
+.nav-header { padding: 20px 16px 12px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--mj-text-disabled); }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--mj-text-secondary); cursor: pointer; transition: all 0.15s; border-left: 3px solid transparent; }
+.nav-item:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+.nav-item.active { background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface)); color: var(--mj-brand-primary); font-weight: 600; border-left-color: var(--mj-brand-primary); }
+.nav-item i { width: 18px; text-align: center; font-size: 13px; }
+.nav-divider { height: 1px; background: var(--mj-border-subtle); margin: 8px 16px; }
+
+.content-area { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.filter-label { font-size: 12px; font-weight: 600; color: var(--mj-text-muted); }
+.filter-select { padding: 6px 12px; border: 1px solid var(--mj-border-default); border-radius: 6px; font-size: 12px; background: var(--mj-bg-surface-card); color: var(--mj-text-primary); }
+.time-chips { display: flex; gap: 4px; margin-left: auto; }
+.time-chip { padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; background: var(--mj-bg-surface-card); color: var(--mj-text-muted); border: 1px solid transparent; cursor: pointer; }
+.time-chip.active { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+.compare-toggle { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--mj-text-muted); cursor: pointer; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); }
+.export-btn { display: flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 600; color: var(--mj-text-inverse); cursor: pointer; border: none; background: var(--mj-brand-primary); }
+
+/* Stats bar */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px; text-align: center;
+}
+.stat-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--mj-text-muted); margin-bottom: 4px; }
+.stat-value { font-size: 20px; font-weight: 800; color: var(--mj-text-primary); }
+.stat-value.highlight { color: var(--mj-brand-primary); }
+.stat-value.success { color: var(--mj-status-success); }
+.stat-value.warning { color: var(--mj-status-warning); }
+.stat-delta { font-size: 10px; font-weight: 600; margin-top: 2px; }
+.stat-delta.up { color: var(--mj-status-success); }
+.stat-delta.down { color: var(--mj-status-error); }
+
+/* Panel */
+.panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; margin-bottom: 16px; }
+.panel-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+.panel-title { font-size: 14px; font-weight: 700; color: var(--mj-text-primary); display: flex; align-items: center; gap: 8px; }
+.panel-title i { color: var(--mj-brand-primary); font-size: 13px; }
+.panel-body { padding: 0; }
+.panel-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--mj-border-subtle); }
+.panel-tab { padding: 10px 18px; font-size: 12px; font-weight: 600; color: var(--mj-text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; background: none; border-top: none; border-left: none; border-right: none; }
+.panel-tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); }
+.panel-tab:hover { color: var(--mj-text-primary); }
+
+/* Data table */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { padding: 10px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; color: var(--mj-text-muted); text-align: left; background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); cursor: pointer; user-select: none; white-space: nowrap; }
+.data-table th:hover { color: var(--mj-text-primary); }
+.data-table th .sort-icon { margin-left: 4px; font-size: 9px; color: var(--mj-text-disabled); }
+.data-table th.sorted .sort-icon { color: var(--mj-brand-primary); }
+.data-table td { padding: 10px 14px; font-size: 12px; color: var(--mj-text-primary); border-bottom: 1px solid var(--mj-border-subtle); }
+.data-table tr { transition: background 0.1s; cursor: pointer; }
+.data-table tbody tr:hover { background: var(--mj-bg-surface-hover); }
+
+.status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.status-pill.success { background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface)); color: var(--mj-status-success); }
+.status-pill.failed { background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface)); color: var(--mj-status-error); }
+.status-pill.running { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+.model-tag { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+
+.pagination { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--mj-border-subtle); }
+.pagination-info { font-size: 12px; color: var(--mj-text-muted); }
+.pagination-btns { display: flex; gap: 4px; }
+.page-btn { padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); cursor: pointer; }
+.page-btn.active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+
+/* Chart area */
+.chart-area { padding: 18px; }
+.chart-placeholder { height: 220px; background: var(--mj-bg-surface-card); border-radius: 8px; position: relative; overflow: hidden; }
+.chart-placeholder svg { width: 100%; height: 100%; }
+
+/* Breakdown cards */
+.breakdown-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 18px; }
+.breakdown-card { background: var(--mj-bg-surface-card); border-radius: 8px; padding: 14px; }
+.breakdown-label { font-size: 11px; font-weight: 600; color: var(--mj-text-muted); margin-bottom: 8px; }
+.breakdown-items { display: flex; flex-direction: column; gap: 6px; }
+.breakdown-item { display: flex; justify-content: space-between; align-items: center; }
+.breakdown-name { font-size: 12px; color: var(--mj-text-primary); font-weight: 500; }
+.breakdown-value { font-size: 12px; font-weight: 700; color: var(--mj-brand-primary); }
+.breakdown-bar { height: 4px; background: var(--mj-bg-surface-sunken); border-radius: 2px; margin-top: 4px; }
+.breakdown-fill { height: 100%; background: var(--mj-brand-primary); border-radius: 2px; }
+
+/* Group-by selector */
+.group-selector { display: flex; gap: 6px; }
+.group-btn { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-muted); cursor: pointer; }
+.group-btn.active { background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface)); color: var(--mj-brand-primary); border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent); }
+
+/* Drill-down modal hint */
+.drill-hint { display: flex; align-items: center; gap: 6px; padding: 8px 14px; background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); border-radius: 6px; font-size: 11px; color: var(--mj-brand-primary); font-weight: 500; margin: 0 18px 14px; }
+.drill-hint i { font-size: 10px; }
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .stats-bar { grid-template-columns: repeat(4, 1fr); }
+  .breakdown-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 768px) {
+  .analytics-shell { flex-direction: column; }
+  .left-nav { width: 100%; flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--mj-border-default); }
+  .nav-header { display: none; }
+  .stats-bar { grid-template-columns: repeat(2, 1fr); }
+  .breakdown-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="mockup-label">MOCKUP: Prompt Run Analysis — 3 Design Options</div>
+<div class="option-tabs">
+  <button class="option-tab active" onclick="showOption('a')">Option A — Table-First + Charts</button>
+  <button class="option-tab" onclick="showOption('b')">Option B — Charts-First + Table</button>
+  <button class="option-tab" onclick="showOption('c')">Option C — Split View</button>
+</div>
+
+<div class="options-container">
+
+<!-- ==================== OPTION A: Table-first with chart tabs ==================== -->
+<div id="option-a" class="option-content active">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item active"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <!-- Filters -->
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Models</option><option>Claude Sonnet 4</option><option>GPT-4o</option><option>Claude Opus 4</option></select>
+      <select class="filter-select"><option>All Vendors</option><option>Anthropic</option><option>OpenAI</option><option>Google</option></select>
+      <select class="filter-select"><option>All Agents</option><option>Data Analysis</option><option>Skip Conductor</option></select>
+      <select class="filter-select"><option>All Prompts</option><option>Summarize Content</option><option>Classify Entity</option></select>
+      <select class="filter-select"><option>All Statuses</option><option>Success</option><option>Failed</option></select>
+      <button class="compare-toggle"><i class="fa-solid fa-code-compare"></i> Compare</button>
+      <button class="export-btn"><i class="fa-solid fa-download"></i> Export CSV</button>
+      <div class="time-chips">
+        <button class="time-chip">1H</button>
+        <button class="time-chip">6H</button>
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+        <button class="time-chip">Custom</button>
+      </div>
+    </div>
+
+    <!-- Stats summary bar -->
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">Total Runs</div><div class="stat-value highlight">2,134</div><div class="stat-delta up">+14.2%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Cost</div><div class="stat-value">$0.0058</div><div class="stat-delta down">+8.1%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Tokens</div><div class="stat-value">847</div><div class="stat-delta up">-3.2%</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Latency</div><div class="stat-value">1.4s</div><div class="stat-delta up">-18%</div></div>
+      <div class="stat-card"><div class="stat-label">Success Rate</div><div class="stat-value success">97.8%</div><div class="stat-delta up">+0.5%</div></div>
+      <div class="stat-card"><div class="stat-label">P95 Latency</div><div class="stat-value warning">4.2s</div><div class="stat-delta down">+0.3s</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">$12.38</div><div class="stat-delta down">+22%</div></div>
+    </div>
+
+    <!-- Tabbed panel: Table / Charts / Breakdown -->
+    <div class="panel">
+      <div class="panel-tabs">
+        <button class="panel-tab active"><i class="fa-solid fa-table"></i> Results Table</button>
+        <button class="panel-tab"><i class="fa-solid fa-chart-line"></i> Time Series</button>
+        <button class="panel-tab"><i class="fa-solid fa-chart-bar"></i> Distributions</button>
+        <button class="panel-tab"><i class="fa-solid fa-chart-pie"></i> Breakdown</button>
+      </div>
+
+      <div class="drill-hint"><i class="fa-solid fa-hand-pointer"></i> Click any row to drill into full prompt run details with input/output viewer</div>
+
+      <div class="panel-body">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="sorted">Timestamp <span class="sort-icon"><i class="fa-solid fa-sort-down"></i></span></th>
+              <th>Prompt <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Model <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Agent <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Status <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Duration <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Tokens <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+              <th>Cost <span class="sort-icon"><i class="fa-solid fa-sort"></i></span></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:34 PM</td>
+              <td style="font-weight:600">Summarize Content</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> Claude Sonnet 4</span></td>
+              <td style="color:var(--mj-text-secondary)">Data Analysis</td>
+              <td><span class="status-pill success">Success</span></td>
+              <td>1.2s</td>
+              <td>1,247</td>
+              <td style="font-weight:600">$0.0087</td>
+            </tr>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:33 PM</td>
+              <td style="font-weight:600">Classify Entity</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> GPT-4o</span></td>
+              <td style="color:var(--mj-text-secondary)">Classification</td>
+              <td><span class="status-pill failed">Failed</span></td>
+              <td>—</td>
+              <td>0</td>
+              <td style="font-weight:600">$0.0000</td>
+            </tr>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:32 PM</td>
+              <td style="font-weight:600">Generate Report</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> Claude Opus 4</span></td>
+              <td style="color:var(--mj-text-secondary)">Report Builder</td>
+              <td><span class="status-pill success">Success</span></td>
+              <td>8.4s</td>
+              <td>4,892</td>
+              <td style="font-weight:600">$0.0342</td>
+            </tr>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:31 PM</td>
+              <td style="font-weight:600">Extract Fields</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> Gemini 2.5 Pro</span></td>
+              <td style="color:var(--mj-text-secondary)">Data Extraction</td>
+              <td><span class="status-pill success">Success</span></td>
+              <td>2.1s</td>
+              <td>2,103</td>
+              <td style="font-weight:600">$0.0126</td>
+            </tr>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:30 PM</td>
+              <td style="font-weight:600">Summarize Content</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> Claude Sonnet 4</span></td>
+              <td style="color:var(--mj-text-secondary)">Skip Conductor</td>
+              <td><span class="status-pill running">Running</span></td>
+              <td>3.2s...</td>
+              <td>—</td>
+              <td style="font-weight:600">—</td>
+            </tr>
+            <tr>
+              <td style="color:var(--mj-text-muted);font-size:11px">Apr 13, 2:29 PM</td>
+              <td style="font-weight:600">Classify Entity</td>
+              <td><span class="model-tag"><i class="fa-solid fa-microchip" style="font-size:9px"></i> Claude Sonnet 4</span></td>
+              <td style="color:var(--mj-text-secondary)">Classification</td>
+              <td><span class="status-pill success">Success</span></td>
+              <td>0.8s</td>
+              <td>412</td>
+              <td style="font-weight:600">$0.0029</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <div class="pagination-info">Showing 1–25 of 2,134 runs</div>
+          <div class="pagination-btns">
+            <button class="page-btn"><i class="fa-solid fa-chevron-left"></i></button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">2</button>
+            <button class="page-btn">3</button>
+            <button class="page-btn">...</button>
+            <button class="page-btn">86</button>
+            <button class="page-btn"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION B: Charts-first ==================== -->
+<div id="option-b" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item active"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area">
+    <div class="filter-bar">
+      <span class="filter-label">Filters:</span>
+      <select class="filter-select"><option>All Models</option></select>
+      <select class="filter-select"><option>All Vendors</option></select>
+      <select class="filter-select"><option>All Agents</option></select>
+      <select class="filter-select"><option>All Prompts</option></select>
+      <select class="filter-select"><option>All Statuses</option></select>
+      <button class="export-btn"><i class="fa-solid fa-download"></i> Export</button>
+      <div class="time-chips">
+        <button class="time-chip active">24H</button>
+        <button class="time-chip">7D</button>
+        <button class="time-chip">30D</button>
+        <button class="time-chip">Custom</button>
+      </div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="stats-bar">
+      <div class="stat-card"><div class="stat-label">Total Runs</div><div class="stat-value highlight">2,134</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Cost</div><div class="stat-value">$0.0058</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Tokens</div><div class="stat-value">847</div></div>
+      <div class="stat-card"><div class="stat-label">Avg Latency</div><div class="stat-value">1.4s</div></div>
+      <div class="stat-card"><div class="stat-label">Success</div><div class="stat-value success">97.8%</div></div>
+      <div class="stat-card"><div class="stat-label">P95</div><div class="stat-value warning">4.2s</div></div>
+      <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">$12.38</div></div>
+    </div>
+
+    <!-- Chart panel — runs over time -->
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-chart-area"></i> Runs Over Time</span>
+        <div class="group-selector">
+          <button class="group-btn active">By Volume</button>
+          <button class="group-btn">By Cost</button>
+          <button class="group-btn">By Tokens</button>
+        </div>
+      </div>
+      <div class="chart-area">
+        <div class="chart-placeholder">
+          <svg viewBox="0 0 800 180" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="gradB" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--mj-brand-primary)" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="var(--mj-brand-primary)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,140 L50,120 L100,130 L150,90 L200,100 L250,70 L300,80 L350,50 L400,60 L450,40 L500,55 L550,35 L600,45 L650,30 L700,40 L750,25 L800,30 L800,180 L0,180Z" fill="url(#gradB)"/>
+            <path d="M0,140 L50,120 L100,130 L150,90 L200,100 L250,70 L300,80 L350,50 L400,60 L450,40 L500,55 L550,35 L600,45 L650,30 L700,40 L750,25 L800,30" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2.5"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Breakdown cards row -->
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px;">
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-microchip"></i> By Model</span></div>
+        <div style="padding:14px 18px;">
+          <div class="breakdown-items">
+            <div class="breakdown-item"><span class="breakdown-name">Claude Sonnet 4</span><span class="breakdown-value">1,204</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:56%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">GPT-4o</span><span class="breakdown-value">512</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:24%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">Claude Opus 4</span><span class="breakdown-value">268</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:13%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">Gemini 2.5 Pro</span><span class="breakdown-value">150</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:7%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-comment-dots"></i> By Prompt</span></div>
+        <div style="padding:14px 18px;">
+          <div class="breakdown-items">
+            <div class="breakdown-item"><span class="breakdown-name">Summarize Content</span><span class="breakdown-value">634</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:30%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">Classify Entity</span><span class="breakdown-value">487</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:23%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">Generate Report</span><span class="breakdown-value">312</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:15%"></div></div>
+            <div class="breakdown-item" style="margin-top:10px"><span class="breakdown-name">Extract Fields</span><span class="breakdown-value">289</span></div>
+            <div class="breakdown-bar"><div class="breakdown-fill" style="width:14%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title"><i class="fa-solid fa-check-circle"></i> By Status</span></div>
+        <div style="padding:14px 18px;">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:12px;height:12px;border-radius:3px;background:var(--mj-status-success)"></div>
+              <span style="font-size:13px;flex:1;color:var(--mj-text-primary)">Success</span>
+              <span style="font-size:14px;font-weight:700;color:var(--mj-text-primary)">2,087</span>
+              <span style="font-size:11px;color:var(--mj-text-muted)">97.8%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:12px;height:12px;border-radius:3px;background:var(--mj-status-error)"></div>
+              <span style="font-size:13px;flex:1;color:var(--mj-text-primary)">Failed</span>
+              <span style="font-size:14px;font-weight:700;color:var(--mj-text-primary)">44</span>
+              <span style="font-size:11px;color:var(--mj-text-muted)">2.1%</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:12px;height:12px;border-radius:3px;background:var(--mj-brand-primary)"></div>
+              <span style="font-size:13px;flex:1;color:var(--mj-text-primary)">Running</span>
+              <span style="font-size:14px;font-weight:700;color:var(--mj-text-primary)">3</span>
+              <span style="font-size:11px;color:var(--mj-text-muted)">0.1%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Collapsed table below -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title"><i class="fa-solid fa-table"></i> Run Details</span>
+        <span style="font-size:11px;color:var(--mj-text-muted)">2,134 runs</span>
+      </div>
+      <div class="panel-body">
+        <table class="data-table">
+          <thead><tr>
+            <th>Timestamp</th><th>Prompt</th><th>Model</th><th>Status</th><th>Duration</th><th>Tokens</th><th>Cost</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="font-size:11px;color:var(--mj-text-muted)">Apr 13, 2:34 PM</td><td style="font-weight:600">Summarize Content</td><td><span class="model-tag">Claude Sonnet 4</span></td><td><span class="status-pill success">Success</span></td><td>1.2s</td><td>1,247</td><td>$0.0087</td></tr>
+            <tr><td style="font-size:11px;color:var(--mj-text-muted)">Apr 13, 2:33 PM</td><td style="font-weight:600">Classify Entity</td><td><span class="model-tag">GPT-4o</span></td><td><span class="status-pill failed">Failed</span></td><td>—</td><td>0</td><td>$0.0000</td></tr>
+            <tr><td style="font-size:11px;color:var(--mj-text-muted)">Apr 13, 2:32 PM</td><td style="font-weight:600">Generate Report</td><td><span class="model-tag">Claude Opus 4</span></td><td><span class="status-pill success">Success</span></td><td>8.4s</td><td>4,892</td><td>$0.0342</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <div class="pagination-info">Showing 1–25 of 2,134</div>
+          <div class="pagination-btns"><button class="page-btn active">1</button><button class="page-btn">2</button><button class="page-btn">3</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== OPTION C: Split view ==================== -->
+<div id="option-c" class="option-content">
+<div class="analytics-shell">
+  <nav class="left-nav">
+    <div class="nav-header">Analytics</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Executive Summary</div>
+    <div class="nav-item active"><i class="fa-solid fa-comment-dots"></i> Prompt Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> Agent Runs</div>
+    <div class="nav-item"><i class="fa-solid fa-microchip"></i> Model Performance</div>
+    <div class="nav-divider"></div>
+    <div class="nav-item"><i class="fa-solid fa-coins"></i> Cost &amp; Budget</div>
+    <div class="nav-item"><i class="fa-solid fa-triangle-exclamation"></i> Error Analysis</div>
+    <div class="nav-item"><i class="fa-solid fa-clock"></i> Usage Patterns</div>
+  </nav>
+  <div class="content-area" style="display:flex;flex-direction:column;gap:0;padding:0;">
+    <!-- Top: Filters + Stats -->
+    <div style="padding:16px 24px 0;">
+      <div class="filter-bar" style="margin-bottom:14px">
+        <span class="filter-label">Filters:</span>
+        <select class="filter-select"><option>All Models</option></select>
+        <select class="filter-select"><option>All Vendors</option></select>
+        <select class="filter-select"><option>All Agents</option></select>
+        <select class="filter-select"><option>All Prompts</option></select>
+        <select class="filter-select"><option>All Statuses</option></select>
+        <button class="compare-toggle"><i class="fa-solid fa-code-compare"></i> Compare</button>
+        <button class="export-btn"><i class="fa-solid fa-download"></i> Export</button>
+        <div class="time-chips">
+          <button class="time-chip active">24H</button>
+          <button class="time-chip">7D</button>
+          <button class="time-chip">30D</button>
+        </div>
+      </div>
+      <div class="stats-bar" style="margin-bottom:14px">
+        <div class="stat-card"><div class="stat-label">Runs</div><div class="stat-value highlight">2,134</div><div class="stat-delta up">+14%</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Cost</div><div class="stat-value">$0.0058</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Tokens</div><div class="stat-value">847</div></div>
+        <div class="stat-card"><div class="stat-label">Avg Latency</div><div class="stat-value">1.4s</div></div>
+        <div class="stat-card"><div class="stat-label">Success</div><div class="stat-value success">97.8%</div></div>
+        <div class="stat-card"><div class="stat-label">P95</div><div class="stat-value warning">4.2s</div></div>
+        <div class="stat-card"><div class="stat-label">Total Cost</div><div class="stat-value">$12.38</div></div>
+      </div>
+    </div>
+
+    <!-- Split: Chart Left, Breakdown Right -->
+    <div style="display:grid; grid-template-columns: 3fr 2fr; gap:0; flex:1; min-height:0;">
+      <!-- Left: Chart + Table stacked -->
+      <div style="display:flex; flex-direction:column; border-right:1px solid var(--mj-border-default); overflow-y:auto;">
+        <div style="padding:16px 24px; border-bottom:1px solid var(--mj-border-subtle);">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <span style="font-size:14px;font-weight:700;color:var(--mj-text-primary);display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-chart-area" style="color:var(--mj-brand-primary)"></i> Trend</span>
+            <div class="group-selector">
+              <button class="group-btn active">Volume</button>
+              <button class="group-btn">Cost</button>
+              <button class="group-btn">Latency</button>
+            </div>
+          </div>
+          <div class="chart-placeholder" style="height:160px">
+            <svg viewBox="0 0 600 130" preserveAspectRatio="none">
+              <defs><linearGradient id="gradC" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--mj-brand-primary)" stop-opacity="0.15"/><stop offset="100%" stop-color="var(--mj-brand-primary)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0,100 L75,85 L150,90 L225,60 L300,70 L375,40 L450,50 L525,30 L600,35 L600,130 L0,130Z" fill="url(#gradC)"/>
+              <path d="M0,100 L75,85 L150,90 L225,60 L300,70 L375,40 L450,50 L525,30 L600,35" fill="none" stroke="var(--mj-brand-primary)" stroke-width="2"/>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Table below chart -->
+        <div style="flex:1;overflow-y:auto;">
+          <div class="drill-hint" style="margin:14px 24px"><i class="fa-solid fa-hand-pointer"></i> Click a row to see details in the right panel</div>
+          <table class="data-table">
+            <thead><tr>
+              <th>Time</th><th>Prompt</th><th>Model</th><th>Status</th><th>Duration</th><th>Cost</th>
+            </tr></thead>
+            <tbody>
+              <tr style="background:color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface))">
+                <td style="font-size:11px;color:var(--mj-text-muted)">2:34 PM</td><td style="font-weight:600">Summarize Content</td><td><span class="model-tag">Claude Sonnet 4</span></td><td><span class="status-pill success">OK</span></td><td>1.2s</td><td>$0.0087</td>
+              </tr>
+              <tr><td style="font-size:11px;color:var(--mj-text-muted)">2:33 PM</td><td style="font-weight:600">Classify Entity</td><td><span class="model-tag">GPT-4o</span></td><td><span class="status-pill failed">Fail</span></td><td>—</td><td>$0.00</td></tr>
+              <tr><td style="font-size:11px;color:var(--mj-text-muted)">2:32 PM</td><td style="font-weight:600">Generate Report</td><td><span class="model-tag">Opus 4</span></td><td><span class="status-pill success">OK</span></td><td>8.4s</td><td>$0.034</td></tr>
+              <tr><td style="font-size:11px;color:var(--mj-text-muted)">2:31 PM</td><td style="font-weight:600">Extract Fields</td><td><span class="model-tag">Gemini 2.5</span></td><td><span class="status-pill success">OK</span></td><td>2.1s</td><td>$0.013</td></tr>
+              <tr><td style="font-size:11px;color:var(--mj-text-muted)">2:30 PM</td><td style="font-weight:600">Summarize Content</td><td><span class="model-tag">Sonnet 4</span></td><td><span class="status-pill running">Run</span></td><td>3.2s</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right: Detail panel for selected row -->
+      <div style="overflow-y:auto; padding:20px 24px; background:var(--mj-bg-surface-card);">
+        <div style="font-size:15px;font-weight:700;color:var(--mj-text-primary);margin-bottom:16px;display:flex;align-items:center;gap:8px;">
+          <i class="fa-solid fa-eye" style="color:var(--mj-brand-primary)"></i> Run Detail
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Prompt</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">Summarize Content</div>
+          </div>
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Model</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">Claude Sonnet 4</div>
+          </div>
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Duration</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">1.2s</div>
+          </div>
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Cost</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">$0.0087</div>
+          </div>
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Input Tokens</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">892</div>
+          </div>
+          <div style="background:var(--mj-bg-surface);padding:12px;border-radius:8px;border:1px solid var(--mj-border-default);">
+            <div style="font-size:10px;font-weight:600;text-transform:uppercase;color:var(--mj-text-muted);margin-bottom:4px;">Output Tokens</div>
+            <div style="font-size:13px;font-weight:600;color:var(--mj-text-primary);">355</div>
+          </div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--mj-text-primary);margin-bottom:8px;">JSON Output Preview</div>
+        <div style="background:var(--mj-color-neutral-900);color:var(--mj-color-accent-300);padding:14px;border-radius:8px;font-family:monospace;font-size:11px;line-height:1.6;max-height:200px;overflow-y:auto;">
+{<br>
+&nbsp;&nbsp;"summary": "Q1 revenue grew 12% YoY...",<br>
+&nbsp;&nbsp;"confidence": 0.94,<br>
+&nbsp;&nbsp;"key_points": [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"Revenue up 12%",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"New customer acquisition +18%",<br>
+&nbsp;&nbsp;&nbsp;&nbsp;"Churn reduced to 3.2%"<br>
+&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;"sentiment": "positive",<br>
+&nbsp;&nbsp;"word_count": 247<br>
+}
+        </div>
+
+        <div style="margin-top:16px;">
+          <button style="padding:8px 16px;background:var(--mj-brand-primary);color:var(--mj-text-inverse);border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+            <i class="fa-solid fa-external-link-alt" style="font-size:10px"></i> Open Full Record
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+
+<script>
+function showOption(id) {
+  document.querySelectorAll('.option-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.option-tab').forEach(el => el.classList.remove('active'));
+  document.getElementById('option-' + id).classList.add('active');
+  event.target.classList.add('active');
+}
+</script>
+</body>
+</html>

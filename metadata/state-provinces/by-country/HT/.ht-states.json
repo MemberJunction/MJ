@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Artibonite",
+      "Code": "AR",
+      "ISO3166_2": "HT-AR",
+      "Latitude": 19.3089,
+      "Longitude": -72.5089,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-AR.geojson",
+      "CommonAliases": [
+        "Artibonite"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "BCD68654-EBA4-43C8-A40F-088ADDEEF8AE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.251Z",
+      "checksum": "35df3fd9c549144208155a8658da82d8e968f9de2e6d5193a2d67b7236131907"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Centre",
+      "Code": "CE",
+      "ISO3166_2": "HT-CE",
+      "Latitude": 19.029,
+      "Longitude": -72.0025,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-CE.geojson",
+      "CommonAliases": [
+        "Centre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "83CD2131-447C-42EA-8513-E2E3D39E5652"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.267Z",
+      "checksum": "aeefd715b9631c1f345beb526d5a8e64f0297f2f27fdac2040bb920c60ed761a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grande-Anse",
+      "Code": "GA",
+      "ISO3166_2": "HT-GA",
+      "Latitude": 18.5137,
+      "Longitude": -74.1273,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-GA.geojson",
+      "CommonAliases": [
+        "Grande-Anse"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "36C0CD24-144A-47DF-A0C8-52606A13531B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.282Z",
+      "checksum": "d86abd384db1f6b4f8928955faf519e820669bf91fac70afcb17c530a7e5d22b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nord",
+      "Code": "ND",
+      "ISO3166_2": "HT-ND",
+      "Latitude": 19.6412,
+      "Longitude": -72.3274,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-ND.geojson",
+      "CommonAliases": [
+        "Nord"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "42572476-4D41-4BCE-9160-09E6DD6EF136"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.298Z",
+      "checksum": "2984f28297ec3000de62ea25aaf4e96f0b50d2dbc8ca285366997115a7ea4689"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nord-Est",
+      "Code": "NE",
+      "ISO3166_2": "HT-NE",
+      "Latitude": 19.4929,
+      "Longitude": -71.9088,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-NE.geojson",
+      "CommonAliases": [
+        "Nord-Est"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "984A819D-78E4-4CC8-A363-44A323D4F2C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.314Z",
+      "checksum": "b1cf868b596da51ae0c9cb19535a7536dbf4f8eeb29b8f43f2a0ec5d29955579"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nord-Ouest",
+      "Code": "NO",
+      "ISO3166_2": "HT-NO",
+      "Latitude": 19.8257,
+      "Longitude": -73.0166,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-NO.geojson",
+      "CommonAliases": [
+        "Nord-Ouest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "84143DB2-164A-4CB7-82CB-7BCCD9095D55"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.328Z",
+      "checksum": "4a9649475b8e25e1c421d3ee0b2ed93a8220f4cbbe2886b75aaba7a19115b89d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouest",
+      "Code": "OU",
+      "ISO3166_2": "HT-OU",
+      "Latitude": 18.5501,
+      "Longitude": -72.2399,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-OU.geojson",
+      "CommonAliases": [
+        "Ouest"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "F050D096-C814-4CA2-B7F8-49D75D0816B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.344Z",
+      "checksum": "16585b208ab0fd8fa8a24e81d635f2dd5bea819d9de3c0302b1fadc22c5417d8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud",
+      "Code": "SD",
+      "ISO3166_2": "HT-SD",
+      "Latitude": 18.2929,
+      "Longitude": -73.7855,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-SD.geojson",
+      "CommonAliases": [
+        "Sud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "0AEA8D40-E823-43F5-9C5C-3FE0D5EF882C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.360Z",
+      "checksum": "36f6cab12a243f0ef418c2b8dca987ac6b09ba8354abc64edadc6c3a8b75f4fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud-Est",
+      "Code": "SE",
+      "ISO3166_2": "HT-SE",
+      "Latitude": 18.2947,
+      "Longitude": -72.3683,
+      "BoundaryGeoJSON": "@file:by-country/HT/boundaries/HT-SE.geojson",
+      "CommonAliases": [
+        "Sud-Est"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HT"
+    },
+    "primaryKey": {
+      "ID": "C8A32B0E-F265-4152-9188-7D6171E1071D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.375Z",
+      "checksum": "20d8ed793d19984f14cee8da19f19ed747c8ada71e29a4775d7b1aa2303a0221"
+    }
+  }
+]

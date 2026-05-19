@@ -131,6 +131,9 @@ export function getOAuthStyles(): string {
 
     .scope-section {
       margin-bottom: 1.5rem;
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 0.25rem;
     }
 
     .scope-description {
@@ -138,11 +141,78 @@ export function getOAuthStyles(): string {
       margin-bottom: 1rem;
     }
 
-    /* Full Access Section - Special treatment for full_access scope */
+    /* Top controls section (Clear All button) */
+    .top-controls-section {
+      margin-bottom: 1rem;
+    }
+
+    .clear-all-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      width: 100%;
+      padding: 0.5rem 1rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      background: transparent;
+      color: var(--mj-text-muted);
+      border: 1px solid var(--mj-border);
+      border-radius: var(--mj-border-radius);
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .clear-all-btn:hover {
+      background: #fef2f2;
+      border-color: #fecaca;
+      color: #dc2626;
+    }
+
+    /* Full Access Section - at bottom, collapsible */
     .full-access-section {
-      margin-bottom: 1.5rem;
-      padding-bottom: 1rem;
-      border-bottom: 2px solid var(--mj-border);
+      margin-top: 1.5rem;
+      padding-top: 1rem;
+      border-top: 2px solid var(--mj-border);
+    }
+
+    .full-access-toggle-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      padding: 0.5rem 0.75rem;
+      user-select: none;
+      border-radius: var(--mj-border-radius);
+      transition: background 0.2s ease;
+    }
+
+    .full-access-toggle-header:hover {
+      background: var(--mj-background);
+    }
+
+    .full-access-toggle-arrow {
+      font-size: 0.625rem;
+      color: var(--mj-text-muted);
+      width: 0.75rem;
+    }
+
+    .full-access-toggle-label {
+      font-weight: 600;
+      font-size: 0.8125rem;
+      color: #92400e;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .full-access-toggle-hint {
+      font-size: 0.75rem;
+      color: var(--mj-text-muted);
+      font-weight: 400;
+    }
+
+    .full-access-body {
+      padding: 0.75rem 0 0 0;
     }
 
     .full-access-item {
@@ -201,30 +271,6 @@ export function getOAuthStyles(): string {
       color: #a16207;
       margin-top: 0.25rem;
       line-height: 1.4;
-    }
-
-    .clear-all-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 0.5rem;
-      width: 100%;
-      margin-top: 0.75rem;
-      padding: 0.5rem 1rem;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      background: transparent;
-      color: var(--mj-text-muted);
-      border: 1px solid var(--mj-border);
-      border-radius: var(--mj-border-radius);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .clear-all-btn:hover {
-      background: #fef2f2;
-      border-color: #fecaca;
-      color: #dc2626;
     }
 
     /* Legacy grant-all styles - kept for backwards compatibility */
@@ -570,7 +616,7 @@ export function getOAuthStyles(): string {
     .button-group {
       display: flex;
       gap: 0.75rem;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
     }
 
     .btn {

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { SystemValidationService } from './system-validation.service';
 
 /**
@@ -10,6 +10,21 @@ import { SystemValidationService } from './system-validation.service';
 })
 export class StartupValidationService {
   constructor(private validationService: SystemValidationService) { }
+
+  /**
+   * Optional explicit metadata provider. Set via `setProvider()` from a caller
+   * with provider context (e.g. the shell). Falls back to `Metadata.Provider`
+   * when not set, which is fine for single-provider apps.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
   
   /**
    * Runs all validation checks
@@ -38,11 +53,8 @@ export class StartupValidationService {
    */
   private validateUserRoles(): void {
     try {
-      console.log('StartupValidationService: Validating user roles');
-      const md = new Metadata();
+      const md = this.Provider;
       const currentUser = md.CurrentUser;
-      
-      console.log('StartupValidationService: Current user:', currentUser);
       
       if (!currentUser) {
         console.log('StartupValidationService: No current user found');
@@ -55,8 +67,6 @@ export class StartupValidationService {
         });
         return;
       }
-      
-      console.log('StartupValidationService: User roles:', currentUser.UserRoles);
       
       if (!currentUser.UserRoles || currentUser.UserRoles.length === 0) {
         console.log('StartupValidationService: No user roles found, adding validation issue');

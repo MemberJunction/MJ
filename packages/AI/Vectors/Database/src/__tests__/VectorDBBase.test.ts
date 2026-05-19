@@ -20,52 +20,55 @@ import { QueryOptions, QueryByRecordId, QueryByVectorValues, ScoredRecord, Query
  * Concrete implementation of VectorDBBase for testing
  */
 class TestVectorDB extends VectorDBBase {
-  listIndexes(): IndexList {
+  ListIndexes(): IndexList {
     return { indexes: [] };
   }
-  getIndex(params: BaseRequestParams): BaseResponse {
+  GetIndex(params: BaseRequestParams): BaseResponse {
     return { success: true, message: 'ok', data: null };
   }
-  createIndex(params: CreateIndexParams): BaseResponse {
+  CreateIndex(params: CreateIndexParams): BaseResponse {
     return { success: true, message: 'created', data: null };
   }
-  deleteIndex(params: BaseRequestParams): BaseResponse {
+  DeleteIndex(params: BaseRequestParams): BaseResponse {
     return { success: true, message: 'deleted', data: null };
   }
-  editIndex(params: EditIndexParams): BaseResponse {
+  EditIndex(params: EditIndexParams): BaseResponse {
     return { success: true, message: 'edited', data: null };
   }
-  queryIndex(params: QueryOptions): BaseResponse {
+  QueryIndex(params: QueryOptions): BaseResponse {
     return { success: true, message: 'queried', data: null };
   }
-  createRecord(record: VectorRecord): BaseResponse {
+  CreateRecord(record: VectorRecord): BaseResponse {
     return { success: true, message: 'record created', data: null };
   }
-  createRecords(records: VectorRecord[]): BaseResponse {
+  CreateRecords(records: VectorRecord[]): BaseResponse {
     return { success: true, message: 'records created', data: null };
   }
-  getRecord(param: BaseRequestParams): BaseResponse {
+  GetRecord(param: BaseRequestParams): BaseResponse {
     return { success: true, message: 'record fetched', data: null };
   }
-  getRecords(params: BaseRequestParams): BaseResponse {
+  GetRecords(params: BaseRequestParams): BaseResponse {
     return { success: true, message: 'records fetched', data: null };
   }
-  updateRecord(record: UpdateOptions): BaseResponse {
+  UpdateRecord(record: UpdateOptions): BaseResponse {
     return { success: true, message: 'record updated', data: null };
   }
-  updateRecords(records: UpdateOptions): BaseResponse {
+  UpdateRecords(records: UpdateOptions): BaseResponse {
     return { success: true, message: 'records updated', data: null };
   }
-  deleteRecord(record: VectorRecord): BaseResponse {
+  DeleteRecord(record: VectorRecord): BaseResponse {
     return { success: true, message: 'record deleted', data: null };
   }
-  deleteRecords(records: VectorRecord[]): BaseResponse {
+  DeleteRecords(records: VectorRecord[]): BaseResponse {
     return { success: true, message: 'records deleted', data: null };
   }
+  DeleteAllRecords(indexName: string, namespace?: string): BaseResponse {
+    return { success: true, message: 'all records deleted', data: null };
+  }
 
-  // Expose apiKey for testing
-  getApiKeyForTest(): string {
-    return this.apiKey;
+  // Expose ApiKey for testing
+  GetApiKeyForTest(): string {
+    return this.ApiKey;
   }
 }
 
@@ -73,7 +76,7 @@ describe('VectorDBBase', () => {
   describe('constructor', () => {
     it('should accept a valid API key', () => {
       const db = new TestVectorDB('test-api-key');
-      expect(db.getApiKeyForTest()).toBe('test-api-key');
+      expect(db.GetApiKeyForTest()).toBe('test-api-key');
     });
 
     it('should throw for empty API key', () => {
@@ -93,18 +96,18 @@ describe('VectorDBBase', () => {
     });
 
     it('should list indexes', () => {
-      const result = db.listIndexes();
+      const result = db.ListIndexes();
       expect(result).toBeDefined();
       expect(result.indexes).toEqual([]);
     });
 
     it('should get an index', () => {
-      const result = db.getIndex({ id: 'test-index' });
+      const result = db.GetIndex({ id: 'test-index' });
       expect(result.success).toBe(true);
     });
 
     it('should create an index', () => {
-      const result = db.createIndex({
+      const result = db.CreateIndex({
         id: 'new-index',
         dimension: 128,
         metric: 'cosine',
@@ -114,12 +117,12 @@ describe('VectorDBBase', () => {
     });
 
     it('should delete an index', () => {
-      const result = db.deleteIndex({ id: 'test-index' });
+      const result = db.DeleteIndex({ id: 'test-index' });
       expect(result.success).toBe(true);
     });
 
     it('should edit an index', () => {
-      const result = db.editIndex({ id: 'test-index' });
+      const result = db.EditIndex({ id: 'test-index' });
       expect(result.success).toBe(true);
     });
 
@@ -130,7 +133,7 @@ describe('VectorDBBase', () => {
         includeValues: true,
         includeMetadata: true,
       };
-      const result = db.queryIndex(queryParams);
+      const result = db.QueryIndex(queryParams);
       expect(result.success).toBe(true);
     });
 
@@ -139,7 +142,7 @@ describe('VectorDBBase', () => {
         id: 'record-123',
         topK: 5,
       };
-      const result = db.queryIndex(queryParams);
+      const result = db.QueryIndex(queryParams);
       expect(result.success).toBe(true);
     });
   });
@@ -157,7 +160,7 @@ describe('VectorDBBase', () => {
         values: [0.1, 0.2, 0.3],
         metadata: { label: 'test' },
       };
-      const result = db.createRecord(record);
+      const result = db.CreateRecord(record);
       expect(result.success).toBe(true);
     });
 
@@ -166,17 +169,17 @@ describe('VectorDBBase', () => {
         { id: 'rec1', values: [0.1, 0.2] },
         { id: 'rec2', values: [0.3, 0.4] },
       ];
-      const result = db.createRecords(records);
+      const result = db.CreateRecords(records);
       expect(result.success).toBe(true);
     });
 
     it('should get a record', () => {
-      const result = db.getRecord({ id: 'rec1' });
+      const result = db.GetRecord({ id: 'rec1' });
       expect(result.success).toBe(true);
     });
 
     it('should get records', () => {
-      const result = db.getRecords({ id: 'batch-id' });
+      const result = db.GetRecords({ id: 'batch-id' });
       expect(result.success).toBe(true);
     });
 
@@ -186,7 +189,7 @@ describe('VectorDBBase', () => {
         values: [0.5, 0.6],
         metadata: { updated: 'true' },
       };
-      const result = db.updateRecord(update);
+      const result = db.UpdateRecord(update);
       expect(result.success).toBe(true);
     });
 
@@ -195,13 +198,13 @@ describe('VectorDBBase', () => {
         id: 'batch-id',
         metadata: { batch: 'true' },
       };
-      const result = db.updateRecords(update);
+      const result = db.UpdateRecords(update);
       expect(result.success).toBe(true);
     });
 
     it('should delete a record', () => {
       const record: VectorRecord = { id: 'rec1', values: [0.1] };
-      const result = db.deleteRecord(record);
+      const result = db.DeleteRecord(record);
       expect(result.success).toBe(true);
     });
 
@@ -210,7 +213,17 @@ describe('VectorDBBase', () => {
         { id: 'rec1', values: [0.1] },
         { id: 'rec2', values: [0.2] },
       ];
-      const result = db.deleteRecords(records);
+      const result = db.DeleteRecords(records);
+      expect(result.success).toBe(true);
+    });
+
+    it('should delete all records from an index', () => {
+      const result = db.DeleteAllRecords('my-index');
+      expect(result.success).toBe(true);
+    });
+
+    it('should delete all records with namespace', () => {
+      const result = db.DeleteAllRecords('my-index', 'my-namespace');
       expect(result.success).toBe(true);
     });
   });

@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Bamingui-Bangoran",
+      "Code": "BB",
+      "ISO3166_2": "CF-BB",
+      "Latitude": 8.2127,
+      "Longitude": 20.6318,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-BB.geojson",
+      "CommonAliases": [
+        "Bamingui-Bangoran"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "0D8AD5A2-64E1-46BA-B329-C834A1C23F9A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.358Z",
+      "checksum": "1f77bdeca9c9bb67f095fe2b765ab4da2bf094e53dcf5305b00de2386f4aef61"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bangui",
+      "Code": "BGF",
+      "ISO3166_2": "CF-BGF",
+      "Latitude": 4.3833,
+      "Longitude": 18.5457,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-BGF.geojson",
+      "CommonAliases": [
+        "Bangui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "8830E77F-B891-4650-8341-96FC0A65EBC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.375Z",
+      "checksum": "474849da2e98162b92aba16782bdc154f65c56ab4ea34067c0a18779944b4ff9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Basse-Kotto",
+      "Code": "BK",
+      "ISO3166_2": "CF-BK",
+      "Latitude": 5.0037,
+      "Longitude": 21.3019,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-BK.geojson",
+      "CommonAliases": [
+        "Basse-Kotto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "6EB4B15E-584E-432E-8990-493484EF7951"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.391Z",
+      "checksum": "a7c6ffb779b373d59596c991a481356de865778f6d5b8b6fe363c7de606cc95d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haut-Mbomou",
+      "Code": "HM",
+      "ISO3166_2": "CF-HM",
+      "Latitude": 6.1574,
+      "Longitude": 25.851,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-HM.geojson",
+      "CommonAliases": [
+        "Haut-Mbomou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "FDC93BC3-E3A1-4271-976D-A5BE7A363CD7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.409Z",
+      "checksum": "77508bfb8bb1efc5438fc039f4e750b1f26bf303377872fb00fd4e9407818faa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haute-Kotto",
+      "Code": "HK",
+      "ISO3166_2": "CF-HK",
+      "Latitude": 7.4817,
+      "Longitude": 22.8492,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-HK.geojson",
+      "CommonAliases": [
+        "Haute-Kotto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "B94CCFB8-C3DA-4DD6-B0D5-35C6E381791A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.426Z",
+      "checksum": "57bd6a27bb191dd6e348e648dc4e0a51d9cca53637db0831a7154c43b354ab04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kémo",
+      "Code": "KG",
+      "ISO3166_2": "CF-KG",
+      "Latitude": 5.7554,
+      "Longitude": 19.3143,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-KG.geojson",
+      "CommonAliases": [
+        "Kémo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "7DADEE33-87F3-4036-87D8-2626DC70181D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.442Z",
+      "checksum": "fc644e8d98fa1aa85f96ef49c8fca62e5077dd8f6497ff3848c0323b0c60f40a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lobaye",
+      "Code": "LB",
+      "ISO3166_2": "CF-LB",
+      "Latitude": 4.076,
+      "Longitude": 17.6819,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-LB.geojson",
+      "CommonAliases": [
+        "Lobaye"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "A5415F9B-BA44-4745-90CB-51889D7D0E81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.458Z",
+      "checksum": "e3f9fd1557714b20f39afee552289820acc0dac2ef206ec24c939b8326b13526"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mambéré-Kadéï",
+      "Code": "HS",
+      "ISO3166_2": "CF-HS",
+      "Latitude": 4.5324,
+      "Longitude": 15.8888,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-HS.geojson",
+      "CommonAliases": [
+        "Mambéré-Kadéï"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "F9824177-9CA7-4463-9ADD-12B60C4BE475"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.474Z",
+      "checksum": "a72450f0056532fba3f50e249e2c64c0af176f58308afcabd861f7700c6f0c95"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mbomou",
+      "Code": "MB",
+      "ISO3166_2": "CF-MB",
+      "Latitude": 5.4856,
+      "Longitude": 23.4601,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-MB.geojson",
+      "CommonAliases": [
+        "Mbomou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "FAFF82DB-9173-4C3C-AD15-FC2BA15F5392"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.491Z",
+      "checksum": "3d40d994dd8a8d8cb7462f4baa8db3e8700f85571fc004fa749798024fb42c89"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nana-Grébizi",
+      "Code": "KB",
+      "ISO3166_2": "CF-KB",
+      "Latitude": 7.1188,
+      "Longitude": 19.4051,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-KB.geojson",
+      "CommonAliases": [
+        "Nana-Grébizi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "E8EDF270-9225-4B42-8E89-4C9D29A8FB94"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.507Z",
+      "checksum": "6fd160503be4ffe898786c342f395b7e384052c9c20dbc6ed08d96c421d10a7a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nana-Mambéré",
+      "Code": "NM",
+      "ISO3166_2": "CF-NM",
+      "Latitude": 5.6743,
+      "Longitude": 15.4564,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-NM.geojson",
+      "CommonAliases": [
+        "Nana-Mambéré"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "2C4E150B-EDA7-4BBB-8C96-9B09045F34D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.550Z",
+      "checksum": "cfcad26f906fcb7915f042ef410d6d6478ccc2326577b9e01cea68035ee21be4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ombella-Mpoko",
+      "Code": "MP",
+      "ISO3166_2": "CF-MP",
+      "Latitude": 5.1766,
+      "Longitude": 17.802,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-MP.geojson",
+      "CommonAliases": [
+        "Ombella-Mpoko"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "66CC58BC-F10A-46C6-B2A6-FCBC883DB5A2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.566Z",
+      "checksum": "b69db3fc5316879757e4907cc557fa74f8c681faf1ced6fed2125fec7981efed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouaka",
+      "Code": "UK",
+      "ISO3166_2": "CF-UK",
+      "Latitude": 5.9945,
+      "Longitude": 20.7064,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-UK.geojson",
+      "CommonAliases": [
+        "Ouaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "5DFA0403-B172-4958-ABB6-C49BBA482FA9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.582Z",
+      "checksum": "ef5fd248785b15eed2e672d68d3d391fbefcfc61700711ef7804433ececd6f3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouham",
+      "Code": "AC",
+      "ISO3166_2": "CF-AC",
+      "Latitude": 6.9284,
+      "Longitude": 17.8774,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-AC.geojson",
+      "CommonAliases": [
+        "Ouham"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "66FB1086-077F-4019-A3DF-3EAC0D86A5DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.598Z",
+      "checksum": "819be1cb08fb3cce92397148697fc33d6fc27818e51d0e9609acf6fc1a40f8ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouham-Pendé",
+      "Code": "OP",
+      "ISO3166_2": "CF-OP",
+      "Latitude": 6.679,
+      "Longitude": 16.0108,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-OP.geojson",
+      "CommonAliases": [
+        "Ouham-Pendé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "92B4D0A2-CF28-400D-BE2F-C129DBAE3C54"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.614Z",
+      "checksum": "9ccb6a17a816a9c24cefec06084fccc3747bab3e89859a5cbb4e5b61ffd393c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sangha-Mbaéré",
+      "Code": "SE",
+      "ISO3166_2": "CF-SE",
+      "Latitude": 3.2142,
+      "Longitude": 16.3383,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-SE.geojson",
+      "CommonAliases": [
+        "Sangha-Mbaéré"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "105F63AB-9181-452C-82C0-D1B1B12F7522"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.630Z",
+      "checksum": "fdf23a4be951eb87df4cc4bb77e21820569913ea5755f89f560b7b227fd076af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vakaga",
+      "Code": "VK",
+      "ISO3166_2": "CF-VK",
+      "Latitude": 9.8017,
+      "Longitude": 22.2437,
+      "BoundaryGeoJSON": "@file:by-country/CF/boundaries/CF-VK.geojson",
+      "CommonAliases": [
+        "Vakaga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CF"
+    },
+    "primaryKey": {
+      "ID": "AD51FDA1-FAC1-4CC9-B29F-C63B1635B893"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:36.644Z",
+      "checksum": "1b944341fded13db20390bb405580ba938f707434b1879c177bc3c364e4d86d4"
+    }
+  }
+]

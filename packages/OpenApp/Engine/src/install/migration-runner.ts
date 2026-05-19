@@ -13,6 +13,11 @@ import path from 'node:path';
 /**
  * Minimal type definition for Skyway config so we don't need
  * `@skyway/core` at compile time.
+ *
+ * `Provider` is typed as `unknown` because it's constructed from a dynamically
+ * imported provider package (e.g. `@memberjunction/skyway-sqlserver`). Skyway
+ * 0.6.x requires a provider; the field is optional here purely because it's
+ * filled in inside `RunAppMigrations` after the dynamic import resolves.
  */
 interface SkywayConfig {
     Database: {
@@ -30,11 +35,17 @@ interface SkywayConfig {
         BaselineOnMigrate: boolean;
     };
     Placeholders?: Record<string, string>;
+    Provider?: unknown;
 }
 
 /** Minimal interface for the Skyway instance returned at runtime. */
 interface SkywayInstance {
-    Migrate(): Promise<{ MigrationsApplied: number; Details: { Success: boolean; Migration: { Filename: string } }[] }>;
+    Migrate(): Promise<{
+        Success: boolean;
+        MigrationsApplied: number;
+        ErrorMessage?: string;
+        Details: { Success: boolean; Migration: { Filename: string } }[];
+    }>;
     Close(): Promise<void>;
 }
 
@@ -50,6 +61,10 @@ export interface MigrationRunOptions {
     DatabaseConfig: SkywayDatabaseConfig;
     /** Enable verbose output */
     Verbose?: boolean;
+    /** MJ core schema (used to resolve ${mjSchema} placeholder in migrations). Defaults to '__mj'. */
+    MJCoreSchema?: string;
+    /** Extra user placeholders merged into Skyway's Placeholders map. Overrides built-ins on key collision. */
+    ExtraPlaceholders?: Record<string, string>;
 }
 
 /**
@@ -107,16 +122,23 @@ export interface MigrationRunResult {
  * @returns Migration result with applied file count
  */
 export async function RunAppMigrations(options: MigrationRunOptions): Promise<MigrationRunResult> {
-    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose } = options;
+    const { MigrationsDir, SchemaName, DatabaseConfig, Verbose, MJCoreSchema, ExtraPlaceholders } = options;
 
     let skyway: SkywayInstance | undefined;
 
     try {
-        // Use a variable to prevent TypeScript from resolving the module at compile time.
-        // @memberjunction/skyway-core is published as a dependency.
+        // Use variables to prevent TypeScript from resolving the modules at compile time.
+        // @memberjunction/skyway-core + @memberjunction/skyway-sqlserver are published
+        // as dependencies of the host process (e.g. MJCLI).
         const skywayModuleId = '@memberjunction/skyway-core';
+        const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
         const { Skyway } = await import(skywayModuleId);
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig);
+        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
+        // Skyway 0.6.x requires an explicit provider. OpenApp migrations target
+        // SQL Server (Azure auto-detection is SQL-Server-specific), so we always
+        // attach the SqlServerProvider here.
+        config.Provider = new SqlServerProvider(config.Database);
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);
@@ -132,9 +154,12 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
             .map((d: { Migration: { Filename: string } }) => d.Migration.Filename);
 
         return {
-            Success: true,
+            Success: result.Success,
             MigrationsApplied: result.MigrationsApplied,
             AppliedFiles: appliedFiles,
+            ErrorMessage: result.Success
+                ? undefined
+                : `Migration failed for schema '${SchemaName}': ${result.ErrorMessage ?? 'unknown error'}`,
         };
     }
     catch (error: unknown) {
@@ -159,7 +184,9 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
 function BuildSkywayConfig(
     migrationsDir: string,
     schemaName: string,
-    dbConfig: SkywayDatabaseConfig
+    dbConfig: SkywayDatabaseConfig,
+    mjCoreSchema?: string,
+    extraPlaceholders?: Record<string, string>
 ): SkywayConfig {
     const absoluteDir = path.isAbsolute(migrationsDir)
         ? migrationsDir
@@ -191,6 +218,8 @@ function BuildSkywayConfig(
         },
         Placeholders: {
             'flyway:defaultSchema': schemaName,
+            mjSchema: mjCoreSchema ?? '__mj',
+            ...(extraPlaceholders ?? {}),
         },
     };
 }

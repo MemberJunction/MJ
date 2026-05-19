@@ -152,10 +152,10 @@ describe('UUID Cross-Database Compliance', () => {
         });
     });
 
-    describe('FileStorageEngine', () => {
+    describe('FileStorageEngineBase', () => {
         it('should find account by ID regardless of UUID case', async () => {
-            const { FileStorageEngine } = await import('../engines/FileStorageEngine');
-            const engine = FileStorageEngine.Instance;
+            const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
+            const engine = FileStorageEngineBase.Instance;
 
             (engine as Record<string, unknown>)['_accounts'] = [
                 { ID: UUID_UPPER, Name: 'S3 Bucket' },
@@ -167,8 +167,8 @@ describe('UUID Cross-Database Compliance', () => {
         });
 
         it('should find provider by ID regardless of UUID case', async () => {
-            const { FileStorageEngine } = await import('../engines/FileStorageEngine');
-            const engine = FileStorageEngine.Instance;
+            const { FileStorageEngineBase } = await import('../engines/FileStorageEngine');
+            const engine = FileStorageEngineBase.Instance;
 
             (engine as Record<string, unknown>)['_providers'] = [
                 { ID: UUID_LOWER, Name: 'AWS S3' },

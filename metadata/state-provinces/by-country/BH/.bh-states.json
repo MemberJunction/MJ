@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Al Ḩadd",
+      "Code": "01",
+      "ISO3166_2": "BH-01",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Ḩadd"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "AF0DF771-E54E-42E9-920F-47E278BF61AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.734Z",
+      "checksum": "63d7fee4e6628e09870eb367b4e58f1b6558ee69603dca55c7b954bd6fc13b41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Manāmah",
+      "Code": "03",
+      "ISO3166_2": "BH-03",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Manāmah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "D221B8C1-4B8A-4883-BE3F-7325D45D0116"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.750Z",
+      "checksum": "75202cf3712a5a56ae81e0391ab4a13ff5805b587f6e5fd712ebaad9217624b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Minţaqah al Gharbīyah",
+      "Code": "10",
+      "ISO3166_2": "BH-10",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Minţaqah al Gharbīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "0A17DD98-3749-4EBD-9ED1-BF1BEACD2D8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.766Z",
+      "checksum": "acf18abb33f17291e52bc6f138c709302748cb7035115a03ce9224023d3e5107"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Minţaqah al Wusţa",
+      "Code": "07",
+      "ISO3166_2": "BH-07",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Minţaqah al Wusţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "2D0B3C6F-84A0-4AEF-80F3-A62C31D38C9F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.783Z",
+      "checksum": "a2442a71ef569e30964afbe6350408909966f6c181b7d161c7e40047e75e0995"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Minţaqah ash Shamālīyah",
+      "Code": "05",
+      "ISO3166_2": "BH-05",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Minţaqah ash Shamālīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "AF432C82-F006-46F9-AD30-327F054FCAF4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.798Z",
+      "checksum": "129406a66d6223d43f2b9a2fe10a369446a7047e5f1cfb76cdffc030c40dffe8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Muḩarraq",
+      "Code": "02",
+      "ISO3166_2": "BH-02",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Al Muḩarraq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "32C0EE8A-9581-4436-A2C2-068BD7F80820"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.811Z",
+      "checksum": "aa153c26d7bbf9cd478db8788d8c604297e53b0b6c89cfca5733b5b2164f0bf2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ar Rifā‘",
+      "Code": "09",
+      "ISO3166_2": "BH-09",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ar Rifā‘"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "C48BCA80-C2A2-444A-870C-3819DDE09AF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.825Z",
+      "checksum": "897cd4e9d8474f93413c50d0cdc507b8395562b4f011092b04bdb41ab974db66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jidd Ḩafş",
+      "Code": "04",
+      "ISO3166_2": "BH-04",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jidd Ḩafş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "0710D275-2C48-46DB-BF6C-1048E6067602"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.839Z",
+      "checksum": "4b1ef2a64615574e1ea757d5577c0f12b8c513bcd639f416fc58a7eb1bf65e65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madīnat ‘Īsá",
+      "Code": "08",
+      "ISO3166_2": "BH-08",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madīnat ‘Īsá"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "DC22BB60-40BF-473D-9517-D7B327526AA0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.854Z",
+      "checksum": "096bd80f8b5226fa927aef29cc92e64b2942ffa09f892a759ef0a08369ee0184"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madīnat Ḩamad",
+      "Code": "12",
+      "ISO3166_2": "BH-12",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madīnat Ḩamad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "B5834D86-6FD5-4725-BC08-486125F8B3D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.866Z",
+      "checksum": "037c5f947412433527afc758b3e22da951e8ae35edd32cc5b48f430d8e283fb5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Minţaqat Juzur Ḩawār",
+      "Code": "11",
+      "ISO3166_2": "BH-11",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Minţaqat Juzur Ḩawār"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "9EF00650-5CD3-4201-A49A-536523696758"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.889Z",
+      "checksum": "de6e9028d96597aa6339eb74db388f9203d93d9894323da0765a1385eab70f5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sitrah",
+      "Code": "06",
+      "ISO3166_2": "BH-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sitrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BH"
+    },
+    "primaryKey": {
+      "ID": "23FA4B13-8234-4432-A3C7-842640E1E173"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.902Z",
+      "checksum": "18b276525965c14186469facf2119e6e83d59202c698f7fb1aaab37701985c86"
+    }
+  }
+]

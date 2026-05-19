@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Chuquisaca",
+      "Code": "H",
+      "ISO3166_2": "BO-H",
+      "Latitude": -20.0848,
+      "Longitude": -63.9529,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-H.geojson",
+      "CommonAliases": [
+        "Chuquisaca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "9B62DFDD-C73B-4B23-AD65-61D1AFAFDC35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.543Z",
+      "checksum": "cb64cf2e13db5f01ce38c44a7e1557a61d19faf1878ed116e4d91702dd26ab11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cochabamba",
+      "Code": "C",
+      "ISO3166_2": "BO-C",
+      "Latitude": -17.2884,
+      "Longitude": -65.6137,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-C.geojson",
+      "CommonAliases": [
+        "Cochabamba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "4AB189EB-7FA4-4273-A439-E9490EFDA6EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.558Z",
+      "checksum": "20e2782a020be4414a393371951b33055b70141e02a8d5f198a442dcee54051c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Beni",
+      "Code": "B",
+      "ISO3166_2": "BO-B",
+      "Latitude": -14.0358,
+      "Longitude": -64.5806,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-B.geojson",
+      "CommonAliases": [
+        "El Beni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "12ED31D1-8C7F-458A-B8DA-C22075F273CA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.576Z",
+      "checksum": "362e2e1f501841f6b61cc5c858102a8b9dd3a5a5c6577586aac917dc8224e085"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Paz",
+      "Code": "L",
+      "ISO3166_2": "BO-L",
+      "Latitude": -14.8335,
+      "Longitude": -68.2128,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-L.geojson",
+      "CommonAliases": [
+        "La Paz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "F37AB228-7890-4753-9A60-D5DC3A3CDBE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.593Z",
+      "checksum": "5b2aca1348a9935004028a0675f85e63345db0a74f843dfc987d1b024dc34fb0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oruro",
+      "Code": "O",
+      "ISO3166_2": "BO-O",
+      "Latitude": -18.7151,
+      "Longitude": -67.5984,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-O.geojson",
+      "CommonAliases": [
+        "Oruro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "A03BEA11-99BD-41A0-9A3E-73DD9012532D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.610Z",
+      "checksum": "006b8e71e80340438ced891555672d97c16e58939b8a08b1e41793085f4eba5a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pando",
+      "Code": "N",
+      "ISO3166_2": "BO-N",
+      "Latitude": -11.273,
+      "Longitude": -67.4319,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-N.geojson",
+      "CommonAliases": [
+        "Pando"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "008CF0FC-2D60-4992-9F7E-DADE4408DFC7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.629Z",
+      "checksum": "c388e8b90df7f75db377653f7d915f3964024926c463fdf6a227dbb9d828be12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Potosi",
+      "Code": "P",
+      "ISO3166_2": "BO-P",
+      "Latitude": -20.9033,
+      "Longitude": -66.7701,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-P.geojson",
+      "CommonAliases": [
+        "Potosi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "0E2EBF91-1671-447A-AC98-C8B86B84257D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.645Z",
+      "checksum": "03c637aaf68570df58ad3f9dc38298cdfbb4068afaec847a7a7734e6649a0cd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Cruz",
+      "Code": "S",
+      "ISO3166_2": "BO-S",
+      "Latitude": -16.5168,
+      "Longitude": -61.137,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-S.geojson",
+      "CommonAliases": [
+        "Santa Cruz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "0587CB2B-37E8-4D3C-88C1-D5F39AA872F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.662Z",
+      "checksum": "0daa6692d4f19baaa62a3e09e275710cb3e480c070022b509f37506b152d5dec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tarija",
+      "Code": "T",
+      "ISO3166_2": "BO-T",
+      "Latitude": -21.5039,
+      "Longitude": -63.8005,
+      "BoundaryGeoJSON": "@file:by-country/BO/boundaries/BO-T.geojson",
+      "CommonAliases": [
+        "Tarija"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BO"
+    },
+    "primaryKey": {
+      "ID": "F9686C5E-09C5-44EE-AFB7-93EC8E63F3A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.676Z",
+      "checksum": "dc5dc1d9ead874b61b341539c51b3f299c6b0289f78433138579a8424d0438a8"
+    }
+  }
+]

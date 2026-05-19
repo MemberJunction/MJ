@@ -1,0 +1,64 @@
+/**
+ * MJ Status Chip Styles
+ *
+ * Replaces kendo-chip for simple status badges/labels.
+ */
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: var(--mj-font-semibold);
+  border-radius: var(--mj-radius-full);
+  white-space: nowrap;
+  line-height: 1.5;
+
+  /* Default neutral */
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+
+  /* Color variants via data-color attribute */
+  &[data-color="success"] {
+    background: var(--mj-status-success-bg);
+    color: var(--mj-status-success-text);
+    border-color: var(--mj-status-success-border);
+  }
+
+  &[data-color="error"] {
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border-color: var(--mj-status-error-border);
+  }
+
+  &[data-color="warning"] {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border-color: var(--mj-status-warning-border);
+  }
+
+  &[data-color="info"] {
+    background: var(--mj-status-info-bg);
+    color: var(--mj-status-info-text);
+    border-color: var(--mj-status-info-border);
+  }
+
+  &[data-color="primary"] {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+  }
+
+  /* Removable chip */
+  &.removable {
+    cursor: pointer;
+
+    i { font-size: 0.625rem; margin-left: 2px; }
+
+    &:hover {
+      opacity: 0.8;
+    }
+  }
+}

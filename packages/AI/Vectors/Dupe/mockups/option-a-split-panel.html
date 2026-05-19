@@ -1,0 +1,249 @@
+<!--
+  Option A: Split Panel Layout
+  Design Philosophy: Master-detail pattern optimized for rapid review workflows.
+  Left panel provides an overview of all entities/records with duplicate counts,
+  while the right panel shows detailed match cards for the selected record.
+  This layout minimizes context-switching and allows reviewers to process
+  duplicates efficiently without losing their place in the queue.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Duplicate Detection - Split Panel</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+    --mj-brand-primary-light: #eef2ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); }
+
+  /* Top Bar */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 12px 24px; }
+  .top-bar h1 { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .top-bar h1 i { color: var(--mj-brand-primary); }
+  .run-status { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--mj-text-secondary); }
+  .run-status .badge { padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px; }
+  .badge-running { background: color-mix(in srgb, var(--mj-status-warning) 15%, transparent); color: var(--mj-status-warning); }
+  .badge-complete { background: color-mix(in srgb, var(--mj-status-success) 15%, transparent); color: var(--mj-status-success); }
+  .progress-wrap { width: 200px; height: 6px; background: var(--mj-border-default); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 78%; background: var(--mj-brand-primary); border-radius: 3px; transition: width 0.3s; }
+  .config-group { display: flex; align-items: center; gap: 8px; }
+  .config-group label { font-size: 12px; color: var(--mj-text-secondary); font-weight: 500; }
+  .config-group select, .config-group input { border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 4px 8px; font-size: 13px; }
+  .config-group input[type=number] { width: 56px; }
+
+  /* Main Layout */
+  .main { display: flex; height: calc(100vh - 57px); }
+
+  /* Left Panel */
+  .left-panel { width: 360px; min-width: 360px; border-right: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); display: flex; flex-direction: column; }
+  .entity-selector { padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); }
+  .entity-selector select { width: 100%; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 14px; color: var(--mj-text-primary); }
+  .search-bar { padding: 8px 16px; border-bottom: 1px solid var(--mj-border-default); }
+  .search-bar input { width: 100%; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 8px; font-size: 13px; }
+  .record-list { flex: 1; overflow-y: auto; }
+  .record-item { display: flex; align-items: center; padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); cursor: pointer; transition: background 0.15s; }
+  .record-item:hover { background: var(--mj-brand-primary-light); }
+  .record-item.active { background: var(--mj-brand-primary-light); border-left: 3px solid var(--mj-brand-primary); }
+  .record-item .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--mj-brand-primary); color: white; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px; margin-right: 12px; flex-shrink: 0; }
+  .record-item .info { flex: 1; min-width: 0; }
+  .record-item .name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .record-item .meta { font-size: 12px; color: var(--mj-text-secondary); }
+  .record-item .dupe-count { background: var(--mj-status-warning); color: white; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 2px 8px; margin-left: 8px; }
+
+  /* Right Panel */
+  .right-panel { flex: 1; overflow-y: auto; padding: 24px; }
+  .right-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .right-header h2 { font-size: 20px; font-weight: 600; }
+  .batch-actions { display: flex; gap: 8px; }
+  .btn { padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s; }
+  .btn-primary { background: var(--mj-brand-primary); color: white; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-outline { background: transparent; border: 1px solid var(--mj-border-default); color: var(--mj-text-primary); }
+  .btn-outline:hover { background: var(--mj-bg-page); }
+  .btn-success { background: var(--mj-status-success); color: white; }
+  .btn-danger { background: var(--mj-status-error); color: white; }
+
+  /* Match Cards */
+  .match-card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; padding: 20px; margin-bottom: 16px; transition: box-shadow 0.15s; }
+  .match-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+  .match-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .match-header .match-name { font-size: 16px; font-weight: 600; }
+  .score-badge { font-size: 14px; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+  .score-high { background: color-mix(in srgb, var(--mj-status-success) 15%, transparent); color: var(--mj-status-success); }
+  .score-mid { background: color-mix(in srgb, var(--mj-status-warning) 15%, transparent); color: var(--mj-status-warning); }
+  .score-low { background: color-mix(in srgb, var(--mj-status-error) 15%, transparent); color: var(--mj-status-error); }
+  .field-compare { display: grid; grid-template-columns: 120px 1fr 1fr; gap: 8px; font-size: 13px; margin-bottom: 12px; }
+  .field-label { color: var(--mj-text-secondary); font-weight: 500; }
+  .field-source { padding: 4px 8px; background: var(--mj-bg-page); border-radius: 4px; }
+  .field-match { padding: 4px 8px; background: var(--mj-bg-page); border-radius: 4px; }
+  .field-diff { background: color-mix(in srgb, var(--mj-status-warning) 10%, var(--mj-bg-page)); }
+  .match-actions { display: flex; gap: 8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--mj-border-default); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <h1><i class="fa-solid fa-clone"></i> Duplicate Detection</h1>
+  <div class="run-status">
+    <span class="badge badge-running"><i class="fa-solid fa-spinner fa-spin"></i> Running</span>
+    <div class="progress-wrap"><div class="progress-fill"></div></div>
+    <span>782 / 1,000 records</span>
+  </div>
+  <div class="config-group">
+    <label>TopK</label>
+    <input type="number" value="5" min="1" max="20">
+    <label>Mode</label>
+    <select><option>Hybrid</option><option>Vector Only</option><option>Text Only</option></select>
+    <button class="btn btn-primary"><i class="fa-solid fa-play"></i> Run</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left-panel">
+    <div class="entity-selector">
+      <select>
+        <option>Contacts (1,247 records)</option>
+        <option>Companies (583 records)</option>
+        <option>Leads (2,109 records)</option>
+      </select>
+    </div>
+    <div class="search-bar">
+      <input type="text" placeholder="Search records...">
+    </div>
+    <div class="record-list">
+      <div class="record-item active">
+        <div class="avatar">JD</div>
+        <div class="info"><div class="name">John Davidson</div><div class="meta">john.d@acmecorp.com</div></div>
+        <span class="dupe-count">4</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">SM</div>
+        <div class="info"><div class="name">Sarah Mitchell</div><div class="meta">s.mitchell@globex.io</div></div>
+        <span class="dupe-count">3</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">RJ</div>
+        <div class="info"><div class="name">Robert Johnson</div><div class="meta">rjohnson@initech.com</div></div>
+        <span class="dupe-count">2</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">EW</div>
+        <div class="info"><div class="name">Emily Watson</div><div class="meta">ewatson@umbrella.co</div></div>
+        <span class="dupe-count">5</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">MC</div>
+        <div class="info"><div class="name">Michael Chen</div><div class="meta">m.chen@soylent.org</div></div>
+        <span class="dupe-count">2</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">LP</div>
+        <div class="info"><div class="name">Laura Perez</div><div class="meta">laura.p@hooli.com</div></div>
+        <span class="dupe-count">1</span>
+      </div>
+      <div class="record-item">
+        <div class="avatar">DK</div>
+        <div class="info"><div class="name">David Kim</div><div class="meta">dkim@wayneent.com</div></div>
+        <span class="dupe-count">3</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="right-panel">
+    <div class="right-header">
+      <h2>Matches for John Davidson <span style="font-size:13px; color:var(--mj-text-secondary); font-weight:400;">(4 potential duplicates)</span></h2>
+      <div class="batch-actions">
+        <button class="btn btn-outline"><i class="fa-solid fa-check-double"></i> Approve All</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-forward"></i> Skip All</button>
+      </div>
+    </div>
+
+    <div class="match-card">
+      <div class="match-header">
+        <span class="match-name"><i class="fa-solid fa-user" style="color:var(--mj-brand-primary); margin-right:8px;"></i>Jon Davidson</span>
+        <span class="score-badge score-high">96%</span>
+      </div>
+      <div class="field-compare">
+        <span class="field-label">Name</span><span class="field-source">John Davidson</span><span class="field-match">Jon Davidson</span>
+        <span class="field-label">Email</span><span class="field-source">john.d@acmecorp.com</span><span class="field-match">jon.davidson@acmecorp.com</span>
+        <span class="field-label">Phone</span><span class="field-source">(555) 123-4567</span><span class="field-match">(555) 123-4567</span>
+        <span class="field-label">Company</span><span class="field-source">Acme Corp</span><span class="field-match">Acme Corporation</span>
+      </div>
+      <div class="match-actions">
+        <button class="btn btn-success"><i class="fa-solid fa-code-merge"></i> Merge</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-forward"></i> Skip</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-clock"></i> Review Later</button>
+      </div>
+    </div>
+
+    <div class="match-card">
+      <div class="match-header">
+        <span class="match-name"><i class="fa-solid fa-user" style="color:var(--mj-brand-primary); margin-right:8px;"></i>J. Davidson</span>
+        <span class="score-badge score-mid">82%</span>
+      </div>
+      <div class="field-compare">
+        <span class="field-label">Name</span><span class="field-source">John Davidson</span><span class="field-match field-diff">J. Davidson</span>
+        <span class="field-label">Email</span><span class="field-source">john.d@acmecorp.com</span><span class="field-match field-diff">jdavidson@acme.com</span>
+        <span class="field-label">Phone</span><span class="field-source">(555) 123-4567</span><span class="field-match field-diff">(555) 123-4568</span>
+        <span class="field-label">Company</span><span class="field-source">Acme Corp</span><span class="field-match">Acme Corp</span>
+      </div>
+      <div class="match-actions">
+        <button class="btn btn-success"><i class="fa-solid fa-code-merge"></i> Merge</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-forward"></i> Skip</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-clock"></i> Review Later</button>
+      </div>
+    </div>
+
+    <div class="match-card">
+      <div class="match-header">
+        <span class="match-name"><i class="fa-solid fa-user" style="color:var(--mj-brand-primary); margin-right:8px;"></i>John Davison</span>
+        <span class="score-badge score-mid">75%</span>
+      </div>
+      <div class="field-compare">
+        <span class="field-label">Name</span><span class="field-source">John Davidson</span><span class="field-match field-diff">John Davison</span>
+        <span class="field-label">Email</span><span class="field-source">john.d@acmecorp.com</span><span class="field-match field-diff">john.davison@techstart.io</span>
+        <span class="field-label">Phone</span><span class="field-source">(555) 123-4567</span><span class="field-match field-diff">(212) 987-6543</span>
+        <span class="field-label">Company</span><span class="field-source">Acme Corp</span><span class="field-match field-diff">TechStart Inc</span>
+      </div>
+      <div class="match-actions">
+        <button class="btn btn-success"><i class="fa-solid fa-code-merge"></i> Merge</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-forward"></i> Skip</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-clock"></i> Review Later</button>
+      </div>
+    </div>
+
+    <div class="match-card">
+      <div class="match-header">
+        <span class="match-name"><i class="fa-solid fa-user" style="color:var(--mj-brand-primary); margin-right:8px;"></i>Johnny Davidson</span>
+        <span class="score-badge score-low">63%</span>
+      </div>
+      <div class="field-compare">
+        <span class="field-label">Name</span><span class="field-source">John Davidson</span><span class="field-match field-diff">Johnny Davidson</span>
+        <span class="field-label">Email</span><span class="field-source">john.d@acmecorp.com</span><span class="field-match field-diff">johnny.d@personalmail.com</span>
+        <span class="field-label">Phone</span><span class="field-source">(555) 123-4567</span><span class="field-match field-diff">N/A</span>
+        <span class="field-label">Company</span><span class="field-source">Acme Corp</span><span class="field-match field-diff">Freelance</span>
+      </div>
+      <div class="match-actions">
+        <button class="btn btn-success"><i class="fa-solid fa-code-merge"></i> Merge</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-forward"></i> Skip</button>
+        <button class="btn btn-outline"><i class="fa-solid fa-clock"></i> Review Later</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

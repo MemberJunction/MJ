@@ -1,14 +1,15 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { DialogRef } from '@progress/kendo-angular-dialog';
-import { NotificationService } from '@progress/kendo-angular-notification';
 import { Metadata } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended } from "@memberjunction/ai-core-plus";
 import { NavigationService } from '@memberjunction/ng-shared';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { BehaviorSubject } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface NewAgentConfig {
   parentAgentId?: string;
   parentAgentName?: string;
@@ -21,7 +22,7 @@ export interface NewAgentConfig {
   templateUrl: './new-agent-dialog.component.html',
   styleUrls: ['./new-agent-dialog.component.css']
 })
-export class NewAgentDialogComponent implements OnInit {
+export class NewAgentDialogComponent extends BaseAngularComponent implements OnInit {
   @Input() config: NewAgentConfig = {
     redirectToForm: true
   };
@@ -32,12 +33,14 @@ export class NewAgentDialogComponent implements OnInit {
   agentTypes$ = new BehaviorSubject<MJAIAgentTypeEntity[]>([]);
   isSubmitting = false;
   
+  /** Set by NewAgentDialogService after creation */
+  public dialogRef: MJDialogRef | null = null;
+
   constructor(
     private fb: FormBuilder,
-    private dialog: DialogRef,
-    private navigationService: NavigationService,
-    private notificationService: NotificationService
-  ) {}
+    private navigationService: NavigationService
+  ) {
+    super();}
   
   ngOnInit() {
     this.initializeForm();
@@ -79,7 +82,7 @@ export class NewAgentDialogComponent implements OnInit {
       this.agentTypes$.next(agentTypes as MJAIAgentTypeEntity[] || []);
     } catch (error) {
       console.error('Error loading data:', error);
-      this.showError('Failed to load required data');
+      console.error('Failed to load required data');
     } finally {
       this.isLoading$.next(false);
     }
@@ -93,7 +96,7 @@ export class NewAgentDialogComponent implements OnInit {
     this.isSubmitting = true;
     
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       
       if (!agent) {
@@ -118,11 +121,11 @@ export class NewAgentDialogComponent implements OnInit {
       const saveResult = await agent.Save();
       
       if (saveResult) {
-        this.showSuccess('Agent created successfully!');
-        
+        MJNotificationService.Instance.CreateSimpleNotification('Agent created successfully!', 'success', 3000);
+
         // Close dialog with the new agent
-        this.dialog.close({ agent, action: 'created' });
-        
+        this.dialogRef?.Close({ agent, action: 'created' });
+
         // Redirect to form if configured
         if (this.config.redirectToForm && !this.config.parentAgentId) {
           // Only redirect for top-level agents - use NavigationService to open the record
@@ -133,35 +136,16 @@ export class NewAgentDialogComponent implements OnInit {
       } else {
         throw new Error('Failed to save agent');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('Error creating agent:', error);
-      this.showError('Failed to create agent: ' + (error.message || 'Unknown error'));
+      MJNotificationService.Instance.CreateSimpleNotification('Failed to create agent: ' + errorMessage, 'error', 5000);
     } finally {
       this.isSubmitting = false;
     }
   }
-  
+
   onCancel() {
-    this.dialog.close({ action: 'cancelled' });
-  }
-  
-  private showSuccess(message: string) {
-    this.notificationService.show({
-      content: message,
-      type: { style: 'success', icon: true },
-      position: { horizontal: 'right', vertical: 'top' },
-      animation: { type: 'slide', duration: 300 },
-      hideAfter: 3000
-    });
-  }
-  
-  private showError(message: string) {
-    this.notificationService.show({
-      content: message,
-      type: { style: 'error', icon: true },
-      position: { horizontal: 'right', vertical: 'top' },
-      animation: { type: 'slide', duration: 300 },
-      hideAfter: 5000
-    });
+    this.dialogRef?.Close({ action: 'cancelled' });
   }
 }

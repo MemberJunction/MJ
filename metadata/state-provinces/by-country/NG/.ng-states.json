@@ -1,0 +1,653 @@
+[
+  {
+    "fields": {
+      "Name": "Abia",
+      "Code": "AB",
+      "ISO3166_2": "NG-AB",
+      "Latitude": 5.574,
+      "Longitude": 7.5602,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-AB.geojson",
+      "CommonAliases": [
+        "Abia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "1815D0A4-4A5F-4D56-AE09-7F1E15534F16"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.221Z",
+      "checksum": "21ca9b73befb7162c0257796a59322027f9591ec615cd63192a426b807c7fc87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Abuja Capital Territory",
+      "Code": "FC",
+      "ISO3166_2": "NG-FC",
+      "Latitude": 8.7885,
+      "Longitude": 7.1889,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-FC.geojson",
+      "CommonAliases": [
+        "Abuja Capital Territory"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "46B96096-9244-4667-BE05-8A631F58C9FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.238Z",
+      "checksum": "d3528df1d636162d6f31012137976064505bb15b42568ebf087458e9a901d3d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Adamawa",
+      "Code": "AD",
+      "ISO3166_2": "NG-AD",
+      "Latitude": 9.4791,
+      "Longitude": 12.5768,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-AD.geojson",
+      "CommonAliases": [
+        "Adamawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "A12447BB-292F-4BFD-80AE-4D966194CE54"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.261Z",
+      "checksum": "c90eb94b5a4aa4af1c22ba5df9094cd4e047207dc68720a08cf3e2735fb1b697"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akwa Ibom",
+      "Code": "AK",
+      "ISO3166_2": "NG-AK",
+      "Latitude": 4.8993,
+      "Longitude": 7.9096,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-AK.geojson",
+      "CommonAliases": [
+        "Akwa Ibom"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "4231FDCF-AD07-42DF-9AFC-A69DCC934CAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.281Z",
+      "checksum": "726803eda65f73f4249bc92d3948f90938464ecc1454e987d6ba076296b3f5c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Anambra",
+      "Code": "AN",
+      "ISO3166_2": "NG-AN",
+      "Latitude": 6.3083,
+      "Longitude": 6.9847,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-AN.geojson",
+      "CommonAliases": [
+        "Anambra"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "7D5507B4-3593-468B-A2B0-5A884A87D7C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.300Z",
+      "checksum": "c5e5d767132baf006fd4084e7e6ac162ee5233e1b85cb17f4ee64a31df33583f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bauchi",
+      "Code": "BA",
+      "ISO3166_2": "NG-BA",
+      "Latitude": 10.4101,
+      "Longitude": 9.8858,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-BA.geojson",
+      "CommonAliases": [
+        "Bauchi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "0A9A57D2-EE5D-486A-9CF3-FD264F2403AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.321Z",
+      "checksum": "d4739f3f70f157ae906b21054b2a3f88ae1800252431887364459923d9140a24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Benue",
+      "Code": "BE",
+      "ISO3166_2": "NG-BE",
+      "Latitude": 7.4872,
+      "Longitude": 8.7074,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-BE.geojson",
+      "CommonAliases": [
+        "Benue"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "1FCDF84D-A4C5-4B1C-8C5B-EBFDC0F6ED2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.338Z",
+      "checksum": "e4e27e2a0d2c8f1543073c666bea0805f03f6aac90b1ad193537340f36e4a098"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Borno",
+      "Code": "BO",
+      "ISO3166_2": "NG-BO",
+      "Latitude": 12.0019,
+      "Longitude": 13.1533,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-BO.geojson",
+      "CommonAliases": [
+        "Borno"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "5E337136-5C83-4A6F-B044-51BE5F3F66C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.355Z",
+      "checksum": "2bb673d40d8fbd6dddc162eb67cd00b0c6e5737ba0240fc6933b0afb9686937b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cross River",
+      "Code": "CR",
+      "ISO3166_2": "NG-CR",
+      "Latitude": 5.9376,
+      "Longitude": 8.6787,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-CR.geojson",
+      "CommonAliases": [
+        "Cross River"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "C96A4307-5F89-4A2B-9BCA-47E372A38B7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.372Z",
+      "checksum": "e44acaeda448b79b1b49bed8abd652ffe3227492cced4d82abbf6b5f49e92fa2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delta",
+      "Code": "DE",
+      "ISO3166_2": "NG-DE",
+      "Latitude": 5.4427,
+      "Longitude": 5.882,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-DE.geojson",
+      "CommonAliases": [
+        "Delta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "03D6D32E-683A-4B1B-B596-2C81146DFF14"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.387Z",
+      "checksum": "bb037dfcc703eebfa6eac48c5229c9a54bba2516f45a7be6b5429484f9401d34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Edo",
+      "Code": "ED",
+      "ISO3166_2": "NG-ED",
+      "Latitude": 6.5242,
+      "Longitude": 5.8493,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-ED.geojson",
+      "CommonAliases": [
+        "Edo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "8B8F22DA-1FD7-4253-8F5B-A07D1E6F1D15"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.445Z",
+      "checksum": "0ac06a6fcabf3a63172731ea10c97474434c32a26bb9e76e57c33c148f50363f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Enugu",
+      "Code": "EN",
+      "ISO3166_2": "NG-EN",
+      "Latitude": 6.554,
+      "Longitude": 7.3841,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-EN.geojson",
+      "CommonAliases": [
+        "Enugu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "3B3C45D3-4149-407C-AD87-B64F584AD91E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.463Z",
+      "checksum": "19425454f834a8c3ef88380b94b40af5b944e85c696e6439da74acf3d5a05295"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Imo",
+      "Code": "IM",
+      "ISO3166_2": "NG-IM",
+      "Latitude": 5.55,
+      "Longitude": 7.0156,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-IM.geojson",
+      "CommonAliases": [
+        "Imo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "96767235-FE2A-4155-A21F-4C3CC4209497"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.479Z",
+      "checksum": "10dff3c7c6062667be23270ba86212b2c19f5630f30ff40f5213db59099b9583"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jigawa",
+      "Code": "JI",
+      "ISO3166_2": "NG-JI",
+      "Latitude": 12.0714,
+      "Longitude": 9.3623,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-JI.geojson",
+      "CommonAliases": [
+        "Jigawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "EBDF4B8A-D192-43AC-AA71-8C44E1878151"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.495Z",
+      "checksum": "57e3402d2cd6794e02ab59a359949384f119d7495cfa322acd6ac8c195227cad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaduna",
+      "Code": "KD",
+      "ISO3166_2": "NG-KD",
+      "Latitude": 10.3294,
+      "Longitude": 7.4391,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KD.geojson",
+      "CommonAliases": [
+        "Kaduna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "D373CA17-737B-4AB2-8BEC-A512803D3C82"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.512Z",
+      "checksum": "b4fffb31ce7501fe2aba9b5ea231558831eb5dde9c04eff8e4633c82124af8ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kano",
+      "Code": "KN",
+      "ISO3166_2": "NG-KN",
+      "Latitude": 11.7323,
+      "Longitude": 8.5415,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KN.geojson",
+      "CommonAliases": [
+        "Kano"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "9F02D8EA-3F42-4036-8DC5-4FE91B3E1328"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.528Z",
+      "checksum": "48cfd3c99f7ef548bf46b616e4b60061db5a7697f5ca01c42406b60779f1a2f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Katsina",
+      "Code": "KT",
+      "ISO3166_2": "NG-KT",
+      "Latitude": 12.5056,
+      "Longitude": 7.5861,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KT.geojson",
+      "CommonAliases": [
+        "Katsina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "B3B3365A-3E08-4B1F-AE54-507AB779A6FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.544Z",
+      "checksum": "e0da87f87fe8660979090c8cac5bf08dc52178d663c27da8b3e77311f2fee19a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kebbi",
+      "Code": "KE",
+      "ISO3166_2": "NG-KE",
+      "Latitude": 11.7712,
+      "Longitude": 4.0655,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KE.geojson",
+      "CommonAliases": [
+        "Kebbi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "655E64E4-4697-4CD2-8F1A-06D290A42A06"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.561Z",
+      "checksum": "ad8a063b0490620676a23fbf0b0a2b4cf8d553b3694eef7fc13277f296defc1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kogi",
+      "Code": "KO",
+      "ISO3166_2": "NG-KO",
+      "Latitude": 7.7849,
+      "Longitude": 6.6142,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KO.geojson",
+      "CommonAliases": [
+        "Kogi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "BB553517-7122-44C2-A3A7-DEB28A9A54CB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.577Z",
+      "checksum": "f057d91a1805ea42a88ca8cc316dd6193aad7d0ad24bbf5ce5466288bb38e14d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kwara",
+      "Code": "KW",
+      "ISO3166_2": "NG-KW",
+      "Latitude": 8.8044,
+      "Longitude": 4.4691,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-KW.geojson",
+      "CommonAliases": [
+        "Kwara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "12A72136-94EC-4EF9-9683-9CD1E7EF9230"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.591Z",
+      "checksum": "957cdddd131ea61fc03c40df33072884dff6054567a498c94a38b85afc9ac145"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lagos",
+      "Code": "LA",
+      "ISO3166_2": "NG-LA",
+      "Latitude": 6.4331,
+      "Longitude": 3.5248,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-LA.geojson",
+      "CommonAliases": [
+        "Lagos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "2AC0ADAE-8720-4952-BAFB-7849A0E76DFC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.647Z",
+      "checksum": "3555c757fe03416263695cb569a22823a7cbb7abc3ac71acb00a58bee41fa230"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niger",
+      "Code": "NI",
+      "ISO3166_2": "NG-NI",
+      "Latitude": 9.9555,
+      "Longitude": 5.4549,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-NI.geojson",
+      "CommonAliases": [
+        "Niger"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "7836B7E0-ADA0-45AF-B235-13BB7BA909F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.664Z",
+      "checksum": "cde7c9ab725769d38dbfe6f72fb6412511917944690ba399d9cb67c57a5d519c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ogun",
+      "Code": "OG",
+      "ISO3166_2": "NG-OG",
+      "Latitude": 7.0185,
+      "Longitude": 3.2926,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-OG.geojson",
+      "CommonAliases": [
+        "Ogun"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "2365ED99-C6B4-43C0-8AB7-16C4997F76C0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.682Z",
+      "checksum": "e3dd1a3acd4c2d0b769fdd879bc52a343bdfbc479ac0e74f69daa15b0c51850a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ondo",
+      "Code": "ON",
+      "ISO3166_2": "NG-ON",
+      "Latitude": 7.1444,
+      "Longitude": 5.1917,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-ON.geojson",
+      "CommonAliases": [
+        "Ondo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "C31AC67D-7186-4E5B-8DB3-03F625B0A346"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.698Z",
+      "checksum": "64fad0fedc32745c9b3029b920be3c4e2fd3007c13f196ae69baafc276d330ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Osun",
+      "Code": "OS",
+      "ISO3166_2": "NG-OS",
+      "Latitude": 7.4761,
+      "Longitude": 4.5491,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-OS.geojson",
+      "CommonAliases": [
+        "Osun"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "74EF7D6B-99A0-4700-B439-D984A7300A42"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.714Z",
+      "checksum": "0716c2d2f110826295dc43296f0dfc1ca91da321daa38a69407cead8139c1dd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oyo",
+      "Code": "OY",
+      "ISO3166_2": "NG-OY",
+      "Latitude": 8.1897,
+      "Longitude": 3.6168,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-OY.geojson",
+      "CommonAliases": [
+        "Oyo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "8DAB77BC-23F6-46BD-BAED-10F0F045CBFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.731Z",
+      "checksum": "5163e800b0d9e8dbac18735e5f94955b41e8afee54e393aaed2d5d0bb51411fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plateau",
+      "Code": "PL",
+      "ISO3166_2": "NG-PL",
+      "Latitude": 8.9533,
+      "Longitude": 9.606,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-PL.geojson",
+      "CommonAliases": [
+        "Plateau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "586A0141-E681-45DA-9492-9FA0F8EF8568"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.747Z",
+      "checksum": "77f79bf458bcf60fbb2e4038d43552fd0ae3a1569e23f4728d6d37f856a28a9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rivers",
+      "Code": "RI",
+      "ISO3166_2": "NG-RI",
+      "Latitude": 4.9979,
+      "Longitude": 6.8197,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-RI.geojson",
+      "CommonAliases": [
+        "Rivers"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "75AB3E2A-FCF0-44DC-AF81-446166F35220"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.764Z",
+      "checksum": "c8ae41e33e8322cf0b364f0247af0b2524a061eb366ba13cce8234f2a5748c98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sokoto",
+      "Code": "SO",
+      "ISO3166_2": "NG-SO",
+      "Latitude": 13.0603,
+      "Longitude": 5.4366,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-SO.geojson",
+      "CommonAliases": [
+        "Sokoto"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "49C0A54E-A451-400C-B06C-213BC7490301"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.780Z",
+      "checksum": "76e7f33a38f29754c1649ab0a62fa8fdd1a52d11a30cc2eebd390de9466e3940"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taraba",
+      "Code": "TA",
+      "ISO3166_2": "NG-TA",
+      "Latitude": 7.9361,
+      "Longitude": 10.5428,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-TA.geojson",
+      "CommonAliases": [
+        "Taraba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "7990D370-41E6-4D03-A398-E6F6237858D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.793Z",
+      "checksum": "71d8eb2a925320970828cc4aad131853829468d7cbda5c2e46da7ddfb21b017e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yobe",
+      "Code": "YO",
+      "ISO3166_2": "NG-YO",
+      "Latitude": 12.3156,
+      "Longitude": 11.5881,
+      "BoundaryGeoJSON": "@file:by-country/NG/boundaries/NG-YO.geojson",
+      "CommonAliases": [
+        "Yobe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NG"
+    },
+    "primaryKey": {
+      "ID": "D2BD9B92-022B-4441-BB7E-FF59108757AE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:21.816Z",
+      "checksum": "c65ab19ff0b7b035660274addfe88cddd5dd4dd9e396b69a5b1fde133556dfc5"
+    }
+  }
+]

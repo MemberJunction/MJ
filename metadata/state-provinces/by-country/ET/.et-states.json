@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Addis Ababa [Addis Abeba]",
+      "Code": "AA",
+      "ISO3166_2": "ET-AA",
+      "Latitude": 8.966,
+      "Longitude": 38.7815,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-AA.geojson",
+      "CommonAliases": [
+        "Addis Ababa [Addis Abeba]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "81FA0862-4E23-4C80-B6CD-F8411176A756"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.356Z",
+      "checksum": "5ec62de98749b9908095b176b4a827ffae8ffe28f9128f23bcb5a40cb8d3d678"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Afar",
+      "Code": "AF",
+      "ISO3166_2": "ET-AF",
+      "Latitude": 12.1232,
+      "Longitude": 41.0236,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-AF.geojson",
+      "CommonAliases": [
+        "Afar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "084E9A56-B6A1-4380-87B8-586694F18ADC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.374Z",
+      "checksum": "e742c2f06087e605cfedfe9d8da701c9bbca2c61087e28fd473d4c309025c6a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amara [Amhara]",
+      "Code": "AM",
+      "ISO3166_2": "ET-AM",
+      "Latitude": 11.6981,
+      "Longitude": 37.7222,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-AM.geojson",
+      "CommonAliases": [
+        "Amara [Amhara]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "E8F20FCB-4CFC-485D-9820-16345DFD11EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.391Z",
+      "checksum": "b6fec7e99c79847ab3c1c12ab3709f6cd235c5fda7099bf138365379cf219905"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Benshangul-Gumaz [Bénishangul]",
+      "Code": "BE",
+      "ISO3166_2": "ET-BE",
+      "Latitude": 10.5396,
+      "Longitude": 35.6017,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-BE.geojson",
+      "CommonAliases": [
+        "Benshangul-Gumaz [Bénishangul]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "9527B884-1090-4416-98F7-41A79EBEDB4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.407Z",
+      "checksum": "467f45d084827407ecba0c309babd53a0d34f275859e4f96ea9f25757ddbb490"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gambela Peoples [Gambéla]",
+      "Code": "GA",
+      "ISO3166_2": "ET-GA",
+      "Latitude": 7.8687,
+      "Longitude": 34.1775,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-GA.geojson",
+      "CommonAliases": [
+        "Gambela Peoples [Gambéla]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "36EB602D-2B72-4256-A39F-98B7D9B76AD7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.424Z",
+      "checksum": "2990782f94d0f5694b7edcf025ff07671d21c5fc515411db3492d268d8a0d522"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harari People [Harer]",
+      "Code": "HA",
+      "ISO3166_2": "ET-HA",
+      "Latitude": 9.2906,
+      "Longitude": 42.1676,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-HA.geojson",
+      "CommonAliases": [
+        "Harari People [Harer]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "0F448B17-13B4-4AD8-A507-C66BD88E7D4F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.442Z",
+      "checksum": "7a684e5aac1a4b58d09803bba49e894a8627bb054759764bcca3d7c368146b1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oromia [Oromo]",
+      "Code": "OR",
+      "ISO3166_2": "ET-OR",
+      "Latitude": 7.5564,
+      "Longitude": 40.2242,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-OR.geojson",
+      "CommonAliases": [
+        "Oromia [Oromo]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "C4FA1711-2ADB-4861-A35A-2CE80501576E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.460Z",
+      "checksum": "804a463ee3facf97a3b312a6f5f0be39c344cd82e3ea60f0c115a2a7e55b9e71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Somali",
+      "Code": "SO",
+      "ISO3166_2": "ET-SO",
+      "Latitude": 7.0937,
+      "Longitude": 43.5345,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-SO.geojson",
+      "CommonAliases": [
+        "Somali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "8855DFA8-B59D-47B3-9C7B-2C3F9FB25EB7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.477Z",
+      "checksum": "ed8c88035ce3fb715893b89bfd4bb28c56bd6903508b4702e2511a4307a3302e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southern Nations, Nationalities and Peoples",
+      "Code": "SN",
+      "ISO3166_2": "ET-SN",
+      "Latitude": 6.2147,
+      "Longitude": 36.4494,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-SN.geojson",
+      "CommonAliases": [
+        "Southern Nations, Nationalities and Peoples"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "B490E4AE-CCAA-49EF-9051-25DD513B63EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.493Z",
+      "checksum": "475346df2427ade9e26413bec17c63cf3a43a9fded6dad57ca425aa1f7874748"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tigrai [Tegré]",
+      "Code": "TI",
+      "ISO3166_2": "ET-TI",
+      "Latitude": 14.1003,
+      "Longitude": 38.2158,
+      "BoundaryGeoJSON": "@file:by-country/ET/boundaries/ET-TI.geojson",
+      "CommonAliases": [
+        "Tigrai [Tegré]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ET"
+    },
+    "primaryKey": {
+      "ID": "ADDC3358-0327-4C72-BBC7-3C1AD77660C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:46.507Z",
+      "checksum": "c67f33b68eeba1b947b6bc7386385f47f51cb597f07f94abbd0c5633ead09e2b"
+    }
+  }
+]

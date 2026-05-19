@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Tokelau",
+      "Code": "TK",
+      "ISO3166_2": "TK-TK",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tokelau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TK"
+    },
+    "primaryKey": {
+      "ID": "F9BCF958-1A0B-4677-B764-A858F673E6CB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:35.687Z",
+      "checksum": "bb5eeaa82430f525aa585dba57eae896066a4a674c49f64bfe76abd75df7120c"
+    }
+  }
+]

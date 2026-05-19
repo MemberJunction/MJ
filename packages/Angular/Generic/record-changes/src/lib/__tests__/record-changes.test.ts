@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock Angular
 vi.mock('@angular/core', () => ({
   Component: () => (target: Function) => target,
+  Directive: () => (target: Function) => target,
   Injectable: () => (target: Function) => target,
   Input: () => () => {},
   Output: () => () => {},
@@ -17,6 +18,14 @@ vi.mock('@angular/core', () => ({
   OnInit: class {},
   NgZone: class { run(fn: Function) { return fn(); } },
 }));
+
+vi.mock('@memberjunction/ng-base-types', () => {
+  class MockBaseAngularComponent {
+    Provider: unknown = null;
+    get ProviderToUse() { return this.Provider; }
+  }
+  return { BaseAngularComponent: MockBaseAngularComponent };
+});
 
 vi.mock('@angular/platform-browser', () => ({
   DomSanitizer: class {
@@ -169,18 +178,28 @@ describe('RecordChangesComponent utility methods', () => {
     });
   });
 
-  describe('SetTypeFilter', () => {
-    it('should set type filter', () => {
+  describe('Conditional pill filters', () => {
+    it('starts in "All" mode (no conditional pills selected)', () => {
       component.viewData = [];
-      component.SetTypeFilter('Update');
-      expect(component.selectedType).toBe('Update');
+      expect(component.IsAllSelected).toBe(true);
     });
 
-    it('should toggle off when same filter clicked', () => {
+    it('TogglePill toggles a pill on then off', () => {
       component.viewData = [];
-      component.SetTypeFilter('Update');
-      component.SetTypeFilter('Update');
-      expect(component.selectedType).toBe('');
+      component.ChipSelections = { Update: false };
+      component.TogglePill('Update');
+      expect(component.ChipSelections['Update']).toBe(true);
+      component.TogglePill('Update');
+      expect(component.ChipSelections['Update']).toBe(false);
+    });
+
+    it('SelectAllPill clears every conditional selection', () => {
+      component.viewData = [];
+      component.ChipSelections = { Update: true, Create: true };
+      component.SelectAllPill();
+      expect(component.ChipSelections['Update']).toBe(false);
+      expect(component.ChipSelections['Create']).toBe(false);
+      expect(component.IsAllSelected).toBe(true);
     });
   });
 
@@ -246,15 +265,15 @@ describe('RecordChangesComponent utility methods', () => {
   describe('ClearFilters', () => {
     it('should reset all filter state', () => {
       component.searchTerm = 'test';
-      component.selectedType = 'Update';
-      component.selectedSource = 'Internal';
+      component.ChipSelections = { Update: true, Restore: true };
       component.viewData = [];
 
       component.ClearFilters();
 
       expect(component.searchTerm).toBe('');
-      expect(component.selectedType).toBe('');
-      expect(component.selectedSource).toBe('');
+      expect(component.ChipSelections['Update']).toBe(false);
+      expect(component.ChipSelections['Restore']).toBe(false);
+      expect(component.IsAllSelected).toBe(true);
     });
   });
 

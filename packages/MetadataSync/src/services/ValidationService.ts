@@ -36,7 +36,7 @@ export class ValidationService {
   private userRoleCache: Map<string, string[]> = new Map();
 
   constructor(options: Partial<ValidationOptions> = {}) {
-    this.metadata = new Metadata();
+    this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     this.options = {
       verbose: false,
       outputFormat: 'human',
@@ -510,39 +510,55 @@ export class ValidationService {
     
     // Convert value to string for comparison (in case it's a number or boolean)
     const stringValue = String(value);
-    
-    // Check if the value is in the allowed list
-    if (!allowedValues.includes(stringValue)) {
-      // Check case-insensitive match as a warning
-      const caseInsensitiveMatch = allowedValues.find((av: string) => 
-        av.toLowerCase() === stringValue.toLowerCase()
+
+    // Support comma-delimited multi-value fields (e.g., "Data Expert, Requirements Expert").
+    // Only treat as multi-value if the whole string isn't itself an allowed value and
+    // every comma-separated segment matches an allowed value (case-insensitive).
+    // This avoids incorrectly splitting values that legitimately contain commas.
+    let valuesToCheck = [stringValue];
+    if (stringValue.includes(',') && !allowedValues.includes(stringValue)) {
+      const segments = stringValue.split(',').map((v: string) => v.trim()).filter((v: string) => v.length > 0);
+      const allSegmentsValid = segments.every((seg: string) =>
+        allowedValues.some((av: string) => av.toLowerCase() === seg.toLowerCase())
       );
-      
-      if (caseInsensitiveMatch) {
-        this.addWarning({
-          type: 'validation',
-          severity: 'warning',
-          entity: entityInfo.Name,
-          field: fieldInfo.Name,
-          file: filePath,
-          message: `Field "${fieldInfo.Name}" has value "${stringValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
-          suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
-        });
-      } else {
-        // Format the allowed values list for display
-        const allowedValuesList = allowedValues.length <= 10 
-          ? allowedValues.join(', ')
-          : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
-        
-        this.addError({
-          type: 'field',
-          severity: 'error',
-          entity: entityInfo.Name,
-          field: fieldInfo.Name,
-          file: filePath,
-          message: `Field "${fieldInfo.Name}" has invalid value "${stringValue}"`,
-          suggestion: `Allowed values are: ${allowedValuesList}`,
-        });
+      if (allSegmentsValid) {
+        valuesToCheck = segments;
+      }
+    }
+
+    for (const singleValue of valuesToCheck) {
+      if (!allowedValues.includes(singleValue)) {
+        // Check case-insensitive match as a warning
+        const caseInsensitiveMatch = allowedValues.find((av: string) =>
+          av.toLowerCase() === singleValue.toLowerCase()
+        );
+
+        if (caseInsensitiveMatch) {
+          this.addWarning({
+            type: 'validation',
+            severity: 'warning',
+            entity: entityInfo.Name,
+            field: fieldInfo.Name,
+            file: filePath,
+            message: `Field "${fieldInfo.Name}" has value "${singleValue}" which differs in case from allowed value "${caseInsensitiveMatch}"`,
+            suggestion: `Use "${caseInsensitiveMatch}" for consistency`,
+          });
+        } else {
+          // Format the allowed values list for display
+          const allowedValuesList = allowedValues.length <= 10
+            ? allowedValues.join(', ')
+            : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
+
+          this.addError({
+            type: 'field',
+            severity: 'error',
+            entity: entityInfo.Name,
+            field: fieldInfo.Name,
+            file: filePath,
+            message: `Field "${fieldInfo.Name}" has invalid value "${singleValue}"`,
+            suggestion: `Allowed values are: ${allowedValuesList}`,
+          });
+        }
       }
     }
   }

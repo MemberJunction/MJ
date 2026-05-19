@@ -1,0 +1,1262 @@
+[
+  {
+    "fields": {
+      "Name": "An Giang",
+      "Code": "44",
+      "ISO3166_2": "VN-44",
+      "Latitude": 10.5736,
+      "Longitude": 105.154,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-44.geojson",
+      "CommonAliases": [
+        "An Giang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "10BC29F8-64E0-4395-9FDA-2E43ED52236F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.092Z",
+      "checksum": "9d4c2d48e315c9caedf48bf2873cb0c762fcbaaf1df7dc8d12dfbbd25640c57d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ba Ria - Vung Tau",
+      "Code": "43",
+      "ISO3166_2": "VN-43",
+      "Latitude": 10.3969,
+      "Longitude": 107.143,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-43.geojson",
+      "CommonAliases": [
+        "Ba Ria - Vung Tau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "E502FA8D-5EE8-4605-860E-0AD82F8485F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.109Z",
+      "checksum": "951290b3168ef93ecafc56f0f9af012bea63be05fd34cf007b79ec064be5ac83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bat Can",
+      "Code": "53",
+      "ISO3166_2": "VN-53",
+      "Latitude": 22.1476,
+      "Longitude": 105.874,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-53.geojson",
+      "CommonAliases": [
+        "Bat Can"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "F3739C64-0455-4A81-BE9E-5C7740604C38"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.125Z",
+      "checksum": "d6d86931fd1333cca20221fe5cc2aaa50e30354656b1a64ffa7dffc5b9cfe84b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bat Giang",
+      "Code": "54",
+      "ISO3166_2": "VN-54",
+      "Latitude": 21.3512,
+      "Longitude": 106.493,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-54.geojson",
+      "CommonAliases": [
+        "Bat Giang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "1609073E-50A3-46D1-902B-FE2D2809113C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.144Z",
+      "checksum": "79642e1b42604d9efb43f7d7d8d63af007308144f2add5dc7ebc5204cc359a20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bat Lieu",
+      "Code": "55",
+      "ISO3166_2": "VN-55",
+      "Latitude": 9.3394,
+      "Longitude": 105.573,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-55.geojson",
+      "CommonAliases": [
+        "Bat Lieu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "6276FD6A-257A-47B5-AF1A-954906C0BFE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.162Z",
+      "checksum": "8a813e83d59ab5a008e9fabc37fb24909097aecb3dace17fea4d0dd50896358c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bat Ninh",
+      "Code": "56",
+      "ISO3166_2": "VN-56",
+      "Latitude": 21.098,
+      "Longitude": 106.117,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-56.geojson",
+      "CommonAliases": [
+        "Bat Ninh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "C331DAC6-2F93-4313-8ED3-895ED8046B49"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.180Z",
+      "checksum": "a2d60f52c78508016fac2e7e0e233b8267ee5ad7776a03aed826023c216845b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ben Tre",
+      "Code": "50",
+      "ISO3166_2": "VN-50",
+      "Latitude": 10.171,
+      "Longitude": 106.496,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-50.geojson",
+      "CommonAliases": [
+        "Ben Tre"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "8411675C-3B75-4B3B-AF4C-6089E18106F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.198Z",
+      "checksum": "c0c7ce4dcee6fd5938ea41353682413a7629cb2d6a0cbffc90f7451dae9ad2be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Binh Dinh",
+      "Code": "31",
+      "ISO3166_2": "VN-31",
+      "Latitude": 14.1075,
+      "Longitude": 108.971,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-31.geojson",
+      "CommonAliases": [
+        "Binh Dinh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "A8C0CF9F-CE7B-41B5-A191-29DE3A0952A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.214Z",
+      "checksum": "644f07122a9871c89d83d626705fe0ff41aea7282315cab7ccac90a24071d412"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Binh Duong",
+      "Code": "57",
+      "ISO3166_2": "VN-57",
+      "Latitude": 11.1382,
+      "Longitude": 106.659,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-57.geojson",
+      "CommonAliases": [
+        "Binh Duong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "A61880E6-4AA9-422C-8DB7-C8CB1B88BFC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.231Z",
+      "checksum": "843914f4b0db81380bfafb7c5f8a6f3eb862e847358b412c426c635f1a9873ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Binh Phuoc",
+      "Code": "58",
+      "ISO3166_2": "VN-58",
+      "Latitude": 11.6805,
+      "Longitude": 106.897,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-58.geojson",
+      "CommonAliases": [
+        "Binh Phuoc"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "87A7B29B-9048-43DD-821D-30E999E1A574"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.245Z",
+      "checksum": "d972362ff7b6cd9afad9a258830656e85e2aba8efaecb0d760f38f6346992b11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Binh Thuan",
+      "Code": "40",
+      "ISO3166_2": "VN-40",
+      "Latitude": 11.1284,
+      "Longitude": 108.232,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-40.geojson",
+      "CommonAliases": [
+        "Binh Thuan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "23850A0E-5204-472F-ACE8-2EEFD49BC4D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.303Z",
+      "checksum": "2fa6ee858c86ad94f466c681a3d722b651408e54e36072095250e169db6e5aff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ca Mau",
+      "Code": "59",
+      "ISO3166_2": "VN-59",
+      "Latitude": 9.0555,
+      "Longitude": 105.073,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-59.geojson",
+      "CommonAliases": [
+        "Ca Mau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "D88977EB-1AE3-401C-9E48-D151B74910A5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.325Z",
+      "checksum": "9946d574ff2c8f6ef2eaf02c2cd522705c296713793881cad6eebbd9e1df0edd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Can Tho",
+      "Code": "48",
+      "ISO3166_2": "VN-48",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Can Tho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "3B98BF9B-D39B-43B2-8E6A-2D2D9013E667"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.346Z",
+      "checksum": "5ada84270dee9dd57352222a5bbeaa1aafebd3e2ecab2554c0b6c663cfdecfc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cao Bang",
+      "Code": "04",
+      "ISO3166_2": "VN-04",
+      "Latitude": 22.7595,
+      "Longitude": 106.047,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-04.geojson",
+      "CommonAliases": [
+        "Cao Bang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "66B8A15E-9D6C-4CCF-9E29-2BD7E9262E7C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.367Z",
+      "checksum": "80c3c29b71f6dac48c56d860cb4f074b2b2387dd5f876ef63924e9b0e140bd23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Da Nang, thanh pho",
+      "Code": "60",
+      "ISO3166_2": "VN-60",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Da Nang, thanh pho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "41C94339-606B-4B69-A29B-AB2525AA4003"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.386Z",
+      "checksum": "7ef1e6dc943c36855b53760781d9f08c524e22dd6dc0caea748771efad6a6833"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dac Lac",
+      "Code": "33",
+      "ISO3166_2": "VN-33",
+      "Latitude": 12.7691,
+      "Longitude": 108.133,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-33.geojson",
+      "CommonAliases": [
+        "Dac Lac"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "CAB4D587-24DA-45AA-A873-8F9E8C7FDE59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.404Z",
+      "checksum": "5f233ff0228c2983a43a1de17068a3ff2cf056d4abff235a8df2ba72aed39d14"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dong Nai",
+      "Code": "39",
+      "ISO3166_2": "VN-39",
+      "Latitude": 11.1258,
+      "Longitude": 107.178,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-39.geojson",
+      "CommonAliases": [
+        "Dong Nai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "D31F0A61-AE17-4682-B761-795DA01D7B35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.422Z",
+      "checksum": "7a9db24363ad58c2f089119384784573c7e59c9cd2a223cad0d15e329663e9c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dong Thap",
+      "Code": "45",
+      "ISO3166_2": "VN-45",
+      "Latitude": 10.6644,
+      "Longitude": 105.586,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-45.geojson",
+      "CommonAliases": [
+        "Dong Thap"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "11802FF8-EA38-42E5-B7FE-B0DF9FEDE6D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.440Z",
+      "checksum": "b8b493dbbe0d0c83acada2bad0d7348fef52ba87888f44412029db4622c75b44"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gia Lai",
+      "Code": "30",
+      "ISO3166_2": "VN-30",
+      "Latitude": 13.8493,
+      "Longitude": 108.156,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-30.geojson",
+      "CommonAliases": [
+        "Gia Lai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "A3C3BB63-DA3C-4C3C-A9F5-555CC210F1BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.457Z",
+      "checksum": "67cf5fdc98c34fb2348c9f92291e7086faa7f759f41a3f5c0bc478307a02e1d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ha Giang",
+      "Code": "03",
+      "ISO3166_2": "VN-03",
+      "Latitude": 22.7655,
+      "Longitude": 104.965,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-03.geojson",
+      "CommonAliases": [
+        "Ha Giang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "C2359BA4-0AEB-4B8B-9A7E-309360E1011E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.471Z",
+      "checksum": "5f8535e8d35f898f3cd0192ce8d7139deba860aedbb2eda955c72e4a7e43ebf3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ha Nam",
+      "Code": "63",
+      "ISO3166_2": "VN-63",
+      "Latitude": 20.5569,
+      "Longitude": 105.985,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-63.geojson",
+      "CommonAliases": [
+        "Ha Nam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "7F16BF43-3B62-40D8-B5B0-CDED05E8C699"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.530Z",
+      "checksum": "9f9afec23860008e57a4567e1c9e8befc2231b58215a100bad1103483532525d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ha Noi, thu do",
+      "Code": "64",
+      "ISO3166_2": "VN-64",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ha Noi, thu do"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "D25942F1-79B4-4DEC-93AD-B7E91DE2273C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.546Z",
+      "checksum": "9d78ffb1da570c9bb4dd601484863c49bed4693e21a1435ade13b8a058c2103b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ha Tay",
+      "Code": "15",
+      "ISO3166_2": "VN-15",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ha Tay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "0541C20A-17E0-4449-8936-1634FECB7F7E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.563Z",
+      "checksum": "7dd82dee3f797bdeef42b8efd7775e8ab5cc9d0a83a5160bf3fdec9f91ef1f4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ha Tinh",
+      "Code": "23",
+      "ISO3166_2": "VN-23",
+      "Latitude": 18.3563,
+      "Longitude": 105.799,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-23.geojson",
+      "CommonAliases": [
+        "Ha Tinh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "82AB27B8-C58F-491A-B578-57F1B3A84E99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.580Z",
+      "checksum": "abc5ba85c1041dba7b4e6568f0765831fdc24e0ba71eb3167cae6a1d994f1bf2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hai Duong",
+      "Code": "61",
+      "ISO3166_2": "VN-61",
+      "Latitude": 20.9613,
+      "Longitude": 106.364,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-61.geojson",
+      "CommonAliases": [
+        "Hai Duong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "631A005B-62C7-4FEB-93D1-F3A93D8EABFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.596Z",
+      "checksum": "310d8a5f478f381ca32f426a25e08372dbf7c0a8e60b376e37ada653b01ba593"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hai Phong, thanh pho",
+      "Code": "62",
+      "ISO3166_2": "VN-62",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Hai Phong, thanh pho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "3ED0FAEC-03C2-434B-B523-584F30994D0F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.612Z",
+      "checksum": "0a5a1b61da6286aac22770d8e6012b1bbcb838e00c0775a294942e22f5338ec6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ho Chi Minh, thanh po [Sai Gon]",
+      "Code": "65",
+      "ISO3166_2": "VN-65",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ho Chi Minh, thanh po [Sai Gon]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "C6A5DF19-C4EE-43DE-BA7C-5107F9B28857"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.629Z",
+      "checksum": "86d0a450232521f9d43f1490213b15ed389e9f950eb70426722358c669750668"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hoa Binh",
+      "Code": "14",
+      "ISO3166_2": "VN-14",
+      "Latitude": 20.7292,
+      "Longitude": 105.34,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-14.geojson",
+      "CommonAliases": [
+        "Hoa Binh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "E287B29D-D7EF-4CF8-B556-66698204BA1D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.645Z",
+      "checksum": "9c9ed6a6410d2a9e12e615832c07c4d84a0289dd09de373bc5129a61879f2156"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hung Yen",
+      "Code": "66",
+      "ISO3166_2": "VN-66",
+      "Latitude": 20.8085,
+      "Longitude": 106.076,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-66.geojson",
+      "CommonAliases": [
+        "Hung Yen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "02BE1F01-ABD7-4ACC-9A88-A15C3F725CC1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.662Z",
+      "checksum": "530edd2931a01c94250125d1e96140f21d5ca953a9b4d29266de2fed5af26a04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khanh Hoa",
+      "Code": "34",
+      "ISO3166_2": "VN-34",
+      "Latitude": 12.6049,
+      "Longitude": 109.359,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-34.geojson",
+      "CommonAliases": [
+        "Khanh Hoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "8D934D3E-B91F-4FA7-AEF2-558AD4223CC6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.678Z",
+      "checksum": "c033986f0601a9a685e466bf78b85d7d10f28d3b97c18aaf9baf3508552435d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kien Giang",
+      "Code": "47",
+      "ISO3166_2": "VN-47",
+      "Latitude": 9.8596,
+      "Longitude": 105.284,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-47.geojson",
+      "CommonAliases": [
+        "Kien Giang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "A8C1B5DB-8C00-4376-BF2D-9D14D568AED1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.737Z",
+      "checksum": "bc75753ebdea6f3f7e1d12ee4a687e887e3f14580734c1414b1b6434d24b8eb4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kon Turn",
+      "Code": "28",
+      "ISO3166_2": "VN-28",
+      "Latitude": 14.7451,
+      "Longitude": 107.969,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-28.geojson",
+      "CommonAliases": [
+        "Kon Turn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "D87549FF-7DB1-48E6-9483-A5CD30B877F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.754Z",
+      "checksum": "63f25257efe12781999cdfe983c4be0afb2e4b1df4452f2ca04ae736bb41016a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lai Chau",
+      "Code": "01",
+      "ISO3166_2": "VN-01",
+      "Latitude": 22.3502,
+      "Longitude": 103.255,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-01.geojson",
+      "CommonAliases": [
+        "Lai Chau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "2BCCAA94-2E94-4564-8208-00ED09B61B4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.770Z",
+      "checksum": "dc772ed53074f3a567a51772e033742208fa4901bd3af230350d0cab667d22f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lam Dong",
+      "Code": "35",
+      "ISO3166_2": "VN-35",
+      "Latitude": 11.5362,
+      "Longitude": 108,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-35.geojson",
+      "CommonAliases": [
+        "Lam Dong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "AE5E82BC-C0E2-40CF-B3FD-3A089228B011"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.786Z",
+      "checksum": "a4c4c511c48461dd8225684949fac64cd2d6a3216f6b9f1d1b844cba9f75c976"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lang Son",
+      "Code": "09",
+      "ISO3166_2": "VN-09",
+      "Latitude": 21.7826,
+      "Longitude": 106.724,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-09.geojson",
+      "CommonAliases": [
+        "Lang Son"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B5FF47D7-30E8-4D63-9C57-6DE05E85D85E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.803Z",
+      "checksum": "4dda6236c171165d575cf59226e1e5a3b13756cd65fd4eeee3bc3702bc02d539"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lao Cai",
+      "Code": "02",
+      "ISO3166_2": "VN-02",
+      "Latitude": 22.3559,
+      "Longitude": 104.096,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-02.geojson",
+      "CommonAliases": [
+        "Lao Cai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "5C79F5BB-4A08-47DC-AAE4-AC846A8EC269"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.819Z",
+      "checksum": "8a1f92cac65906ad79351ce640fc6e3f68e102116bfde1adf49322ef46fa9ef6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Long An",
+      "Code": "41",
+      "ISO3166_2": "VN-41",
+      "Latitude": 10.6869,
+      "Longitude": 106.134,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-41.geojson",
+      "CommonAliases": [
+        "Long An"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B73681A3-4CE3-4F14-8491-5819D5D635C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.834Z",
+      "checksum": "98dd53aa3562c0a5cf7d05586f28fa0b54870e9413440be59e9cdefd4e63892c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nam Dinh",
+      "Code": "67",
+      "ISO3166_2": "VN-67",
+      "Latitude": 20.2343,
+      "Longitude": 106.254,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-67.geojson",
+      "CommonAliases": [
+        "Nam Dinh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "C3A8B695-30D0-40E4-90A9-700B9A2DC2C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.850Z",
+      "checksum": "28a7f52968cb42e6cf8ad29d4baa4c48be0de61cdbc74c56e642f4cab51779cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nghe An",
+      "Code": "22",
+      "ISO3166_2": "VN-22",
+      "Latitude": 19.3548,
+      "Longitude": 104.827,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-22.geojson",
+      "CommonAliases": [
+        "Nghe An"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "57DFD747-AA9C-4C28-BAB0-70D5DC3A62E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.866Z",
+      "checksum": "8018f73a067a58391202a14a0df4255ce63fa6d7957b2fd8c68793ef61f8c4fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ninh Binh",
+      "Code": "18",
+      "ISO3166_2": "VN-18",
+      "Latitude": 20.2722,
+      "Longitude": 105.852,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-18.geojson",
+      "CommonAliases": [
+        "Ninh Binh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "E42738E0-8F2D-45F8-90E3-E0851F54A1E6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.879Z",
+      "checksum": "e3ca97e555ce8f7f62ece82ed723593bc22b8b28124ce2ed43194e8736453aa2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ninh Thuan",
+      "Code": "36",
+      "ISO3166_2": "VN-36",
+      "Latitude": 11.6242,
+      "Longitude": 108.925,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-36.geojson",
+      "CommonAliases": [
+        "Ninh Thuan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B30666D7-DACC-42D6-AE5A-19EC9C740C6C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.934Z",
+      "checksum": "b040d6cea7503109989e1063976b2946afb317497ce7959cc9d814bb4c7a496a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Phu Tho",
+      "Code": "68",
+      "ISO3166_2": "VN-68",
+      "Latitude": 21.3127,
+      "Longitude": 105.143,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-68.geojson",
+      "CommonAliases": [
+        "Phu Tho"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "46ADE878-CE0A-475A-8D63-D40E6280BD85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.950Z",
+      "checksum": "25ddeda17c98f40a00666ac3c8a82b524cfd8579196c710bbd283724aed748ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Phu Yen",
+      "Code": "32",
+      "ISO3166_2": "VN-32",
+      "Latitude": 13.1647,
+      "Longitude": 109.064,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-32.geojson",
+      "CommonAliases": [
+        "Phu Yen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "10C28E0E-6574-4144-B233-36338D7B7730"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.967Z",
+      "checksum": "b671cf0c58c24d0080baff05aa6f66b48d8f73643914ab5c39cb3e28becb6d70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quang Nam",
+      "Code": "27",
+      "ISO3166_2": "VN-27",
+      "Latitude": 15.6535,
+      "Longitude": 107.955,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-27.geojson",
+      "CommonAliases": [
+        "Quang Nam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "D248A106-46DA-48A5-A55C-29444C448225"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.983Z",
+      "checksum": "6361abd14a7ed8168861c2e6ac1bff6295bb627f16f5f832e1ee12b9492071d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quang Ngai",
+      "Code": "29",
+      "ISO3166_2": "VN-29",
+      "Latitude": 14.9971,
+      "Longitude": 108.686,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-29.geojson",
+      "CommonAliases": [
+        "Quang Ngai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B48FA6F8-65F3-43F6-B2C6-5A77CE2EBE0D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.999Z",
+      "checksum": "dd5323912c9403b0556b6b1e38cff0307faf52f577fd0d920e6c7a433c54e38c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quang Ninh",
+      "Code": "24",
+      "ISO3166_2": "VN-24",
+      "Latitude": 17.4691,
+      "Longitude": 106.357,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-24.geojson",
+      "CommonAliases": [
+        "Quang Ninh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "9E83312C-42C6-4E99-B5FE-58E8249BFE82"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.015Z",
+      "checksum": "c14ffec98b925489a494cefbf9f37ea24263d23e75694c445ba62ac698e14ef8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quang Tri",
+      "Code": "25",
+      "ISO3166_2": "VN-25",
+      "Latitude": 16.7204,
+      "Longitude": 106.973,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-25.geojson",
+      "CommonAliases": [
+        "Quang Tri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "3318BE99-38C0-496B-80DA-58D1B88C053E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.031Z",
+      "checksum": "13fa157490b07af1564d3a0ba82ac2a8ed21517b9e328ca341b52da8b67e1761"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sec Trang",
+      "Code": "52",
+      "ISO3166_2": "VN-52",
+      "Latitude": 9.5614,
+      "Longitude": 105.9,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-52.geojson",
+      "CommonAliases": [
+        "Sec Trang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "6D5DD681-8BA6-4C4A-9C8D-0E2551E6CECF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.047Z",
+      "checksum": "879b1fe61a40ecaba1195062b32d7091efbb3429612a2e859cdecdd86ebad76f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Son La",
+      "Code": "05",
+      "ISO3166_2": "VN-05",
+      "Latitude": 21.3011,
+      "Longitude": 104.159,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-05.geojson",
+      "CommonAliases": [
+        "Son La"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "8D9385B5-48A8-4D41-8881-D00323E5F301"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.063Z",
+      "checksum": "11327bd1bbd939cd00010794fba5f1d8e8c87f4da5830fc9625eece59fd22d10"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tay Ninh",
+      "Code": "37",
+      "ISO3166_2": "VN-37",
+      "Latitude": 11.4121,
+      "Longitude": 106.14,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-37.geojson",
+      "CommonAliases": [
+        "Tay Ninh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "7240A210-D0DD-4DAD-80B8-084817DDAE18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.076Z",
+      "checksum": "511c14f0443e6adcbc11933dad8cadb5ae4112c9c740e2766d2e638e59e9e61a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thai Binh",
+      "Code": "20",
+      "ISO3166_2": "VN-20",
+      "Latitude": 20.5303,
+      "Longitude": 106.371,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-20.geojson",
+      "CommonAliases": [
+        "Thai Binh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "6D0BD51C-9B75-4157-B604-058DD1E1FFCD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.143Z",
+      "checksum": "a7d8d1820e15d690f126706170c03cf6098fcd3dd2f1f94087e05abd9012ea59"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thai Nguyen",
+      "Code": "69",
+      "ISO3166_2": "VN-69",
+      "Latitude": 21.5812,
+      "Longitude": 105.887,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-69.geojson",
+      "CommonAliases": [
+        "Thai Nguyen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "9E75CD4E-177C-43C9-A52B-D4D1D22E5CF4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.159Z",
+      "checksum": "739c03947727c7c03d29297d5d08624d7089ec70dc8632b0aef196aac26857dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thanh Hoa",
+      "Code": "21",
+      "ISO3166_2": "VN-21",
+      "Latitude": 20.0917,
+      "Longitude": 105.215,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-21.geojson",
+      "CommonAliases": [
+        "Thanh Hoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "1E213B02-4CF2-4E9A-87EF-4E1481AE74E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.174Z",
+      "checksum": "3cd0ca1bcc20248f5e6e4a9bad7e8af0086fad6e8adfb9478322e6d96293de46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thua Thien-Hue",
+      "Code": "26",
+      "ISO3166_2": "VN-26",
+      "Latitude": 16.312,
+      "Longitude": 107.634,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-26.geojson",
+      "CommonAliases": [
+        "Thua Thien-Hue"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "EFCB7AC1-5675-4D30-965D-38118DA9FAB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.189Z",
+      "checksum": "1965d2a4cfcd1b1b1d7beaf4dd4d377af7fb50fd0a81d0f9d0755dc78a456a21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tien Giang",
+      "Code": "46",
+      "ISO3166_2": "VN-46",
+      "Latitude": 10.4581,
+      "Longitude": 106.217,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-46.geojson",
+      "CommonAliases": [
+        "Tien Giang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B13DC7F8-699A-4D55-AAB5-222A9A4BDDC5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.205Z",
+      "checksum": "b49743d4ddfdc3791a6ef65911d70a8dec67ab60eddcfa5618d73fda1b606198"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tra Vinh",
+      "Code": "51",
+      "ISO3166_2": "VN-51",
+      "Latitude": 9.8282,
+      "Longitude": 106.289,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-51.geojson",
+      "CommonAliases": [
+        "Tra Vinh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "034A3244-C238-4465-9F3E-2A7331630599"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.220Z",
+      "checksum": "757879ee5c4e8e4a87c9ee4a4e7464f7fa28af6dd556bd7f4f668e96e13e9e08"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tuyen Quang",
+      "Code": "07",
+      "ISO3166_2": "VN-07",
+      "Latitude": 22.131,
+      "Longitude": 105.229,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-07.geojson",
+      "CommonAliases": [
+        "Tuyen Quang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "8C5011B9-D28F-4D64-8A51-7C9793DD997E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.236Z",
+      "checksum": "f9d412f85a64d6e39634a79ea820c6cbedfb6776945c9f3960ead00dc11b6650"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vinh Long",
+      "Code": "49",
+      "ISO3166_2": "VN-49",
+      "Latitude": 10.1042,
+      "Longitude": 105.969,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-49.geojson",
+      "CommonAliases": [
+        "Vinh Long"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "906F70CA-BEC6-4063-A4D1-6678AB6796ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.250Z",
+      "checksum": "7d43ef26b0f2a1bf8cd52e303bade719ee89c1dbde8f57575ce8b9f30bd0a38b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vinh Yen",
+      "Code": "70",
+      "ISO3166_2": "VN-70",
+      "Latitude": 21.3455,
+      "Longitude": 105.549,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-70.geojson",
+      "CommonAliases": [
+        "Vinh Yen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "B0FC02E7-D96F-467D-8D00-A094432179FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.265Z",
+      "checksum": "17b78a44edb992d4f871b5b68ddf5ef307308d6015b7147743b89ef2e1a86661"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yen Bai",
+      "Code": "06",
+      "ISO3166_2": "VN-06",
+      "Latitude": 21.7484,
+      "Longitude": 104.512,
+      "BoundaryGeoJSON": "@file:by-country/VN/boundaries/VN-06.geojson",
+      "CommonAliases": [
+        "Yen Bai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VN"
+    },
+    "primaryKey": {
+      "ID": "75038A61-8708-4361-9435-DE0CEAC65064"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:44.279Z",
+      "checksum": "4c59a7aa4ba67380a97d84e3e357630877664a20be1a175e0b3117f0845c9eca"
+    }
+  }
+]

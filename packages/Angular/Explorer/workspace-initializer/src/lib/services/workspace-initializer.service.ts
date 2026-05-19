@@ -20,6 +20,8 @@ import { lastValueFrom } from 'rxjs';
   providedIn: 'root'
 })
 export class WorkspaceInitializerService {
+  private _sessionExpiredHandled = false;
+
   constructor(
     private authBase: MJAuthBase,
     private startupValidationService: StartupValidationService,
@@ -62,6 +64,7 @@ export class WorkspaceInitializerService {
         },
         environment.MJ_CORE_SCHEMA_NAME
       );
+      config.OnAuthenticationError = (error: Error) => this.handleSessionExpired(error);
 
       await setupGraphQLClient(config);
       const end = Date.now();
@@ -77,7 +80,10 @@ export class WorkspaceInitializerService {
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);
       await this.themeService.Initialize();
-      const md = new Metadata();
+      // This service runs the one-time app login flow and is wiring up the global
+      // Metadata.Provider via setupGraphQLClient above. There is no per-component
+      // provider scope here.
+      const md = new Metadata(); // global-provider-ok: bootstrap — wires the app's single global provider
 
       if (!md.CurrentUser) {
         return {
@@ -220,6 +226,77 @@ export class WorkspaceInitializerService {
       console.error('Error while checking for user roles error:', e);
       return false;
     }
+  }
+
+  /**
+   * Called when token refresh fails irrecoverably mid-session.
+   * Shows a brief notification overlay, then forces logout to clear caches and redirect to login.
+   */
+  private handleSessionExpired(error: Error): void {
+    // Guard against multiple concurrent calls (e.g., parallel GraphQL requests all failing)
+    if (this._sessionExpiredHandled) {
+      return;
+    }
+    this._sessionExpiredHandled = true;
+
+    console.warn('[Workspace] Session expired, forcing re-authentication:', error.message);
+
+    this.showSessionExpiredOverlay();
+
+    // Give the user a moment to read the message, then logout
+    setTimeout(async () => {
+      try {
+        await this.authBase.logout();
+      } catch (logoutError) {
+        console.error('[Workspace] Error during forced logout:', logoutError);
+        // Last resort: reload the page to clear state
+        window.location.reload();
+      }
+    }, 3000);
+  }
+
+  /**
+   * Creates a simple DOM overlay notifying the user their session has expired.
+   * Uses inline styles so it works regardless of Angular component encapsulation.
+   */
+  private showSessionExpiredOverlay(): void {
+    const overlay = document.createElement('div');
+    overlay.setAttribute('style', [
+      'position: fixed',
+      'inset: 0',
+      'z-index: 999999',
+      'display: flex',
+      'align-items: center',
+      'justify-content: center',
+      'background: rgba(0, 0, 0, 0.6)',
+      'backdrop-filter: blur(4px)',
+    ].join(';'));
+
+    const card = document.createElement('div');
+    card.setAttribute('style', [
+      'background: var(--mj-bg-surface, #fff)',
+      'color: var(--mj-text-primary, #333)',
+      'border-radius: 12px',
+      'padding: 32px 40px',
+      'max-width: 420px',
+      'text-align: center',
+      'box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25)',
+      'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+    ].join(';'));
+
+    card.innerHTML = `
+      <div style="font-size: 40px; margin-bottom: 16px;">
+        <i class="fa-solid fa-clock" style="color: var(--mj-status-warning, #ef6c00);"></i>
+      </div>
+      <h2 style="margin: 0 0 8px; font-size: 20px; font-weight: 600;">Session Expired</h2>
+      <p style="margin: 0 0 16px; font-size: 14px; color: var(--mj-text-secondary, #666);">
+        Your session has expired. You will be redirected to log in again.
+      </p>
+      <div style="font-size: 13px; color: var(--mj-text-muted, #999);">Redirecting...</div>
+    `;
+
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
   }
 
   /**

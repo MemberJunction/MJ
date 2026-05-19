@@ -1,9 +1,9 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
-import { ConversationDataService } from './conversation-data.service';
+import { ConversationEngine } from '@memberjunction/core-entities';
 
 /**
  * Represents an active agent task that is currently running
@@ -31,8 +31,19 @@ export interface ActiveTask {
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
+  private engine = ConversationEngine.Instance;
+  private _provider: IMetadataProvider | null = null;
 
-  constructor(private conversationData: ConversationDataService) {}
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   /**
    * Observable of all active tasks as an array
@@ -211,7 +222,7 @@ export class ActiveTasksService {
    */
   async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Query for running agent runs owned by this user
       // Only restore parent agents (those with ConversationDetailID) - child agents don't have one
@@ -228,11 +239,11 @@ export class ActiveTasksService {
         return;
       }
 
-      // Get conversation names from cached ConversationDataService
+      // Get conversation names from cached ConversationEngine
       const conversationNames = new Map<string, string>();
       for (const agentRun of result.Results) {
         if (agentRun.ConversationID) {
-          const conv = this.conversationData.getConversationById(agentRun.ConversationID);
+          const conv = this.engine.GetConversation(agentRun.ConversationID);
           if (conv?.Name) {
             conversationNames.set(agentRun.ConversationID, conv.Name);
           }

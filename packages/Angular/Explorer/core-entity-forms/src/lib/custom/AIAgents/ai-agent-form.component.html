@@ -1,11 +1,13 @@
-<div class="record-form-container">
-  <!-- Dialog container for Kendo dialogs -->
-  <div kendoDialogContainer></div>
-  <!-- Window container for Kendo windows -->
-  <div kendoWindowContainer></div>
-  @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Agent Header — expanded view -->
       @if (!HeaderCollapsed) {
         <div class="agent-header">
@@ -24,11 +26,10 @@
               </div>
               <div class="agent-info">
                 @if (EditMode) {
-                  <kendo-textbox [(ngModel)]="record.Name"
+                  <input type="text" class="mj-input agent-name-input"
+                    [(ngModel)]="record.Name"
                     name="agentName"
-                    placeholder="Enter agent name..."
-                    class="agent-name-input">
-                  </kendo-textbox>
+                    placeholder="Enter agent name...">
                 } @else {
                   <h1 class="agent-name">{{ record.Name || 'Untitled AI Agent' }}</h1>
                 }
@@ -58,13 +59,13 @@
             </div>
             <div class="agent-actions">
               @if (record.ID) {
-                <button kendoButton themeColor="primary" size="large"
+                <button mjButton variant="primary" size="lg"
                   (click)="openTestHarness()"
                   [disabled]="record.Status !== 'Active'"
                   title="Run this AI agent">
                   <i class="fa-solid fa-play"></i> Run
                 </button>
-                <button kendoButton size="large"
+                <button mjButton size="lg"
                   (click)="openPermissionsDialog()"
                   [title]="IsOpenToEveryone ? 'Open to everyone — click to manage permissions' : 'Restricted — click to manage permissions'">
                   <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone"
@@ -72,7 +73,7 @@
                   {{ IsOpenToEveryone ? 'Open' : 'Restricted' }}
                 </button>
               }
-              <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
+              <button mjButton variant="outline" size="sm" (click)="refreshRelatedData()" title="Refresh all data">
                 <i class="fa-solid fa-refresh"></i>
               </button>
             </div>
@@ -115,38 +116,38 @@
       }
       <!-- Single Pane Layout with Expander Panels -->
       <div class="form-content">
-        <kendo-panelbar [keepItemContent]="true" (stateChange)="OnPanelBarStateChange($event)">
           <!-- Custom Agent Type Section (if defined) -->
           @if (record.ID && agentType && agentType.UIFormSectionKey) {
-            <kendo-panelbar-item id="custom"
-              [expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="custom"
+              [Expanded]="GetSectionExpanded('custom', agentType.UIFormSectionExpandedByDefault)">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-puzzle-piece"></i> {{ agentType.Name }} Configuration
+                </ng-template>
                 <div class="panel-content custom-agent-type-section" [style.display]="'block'">
                   @if (loadingStates.customSection) {
                     <mj-loading text="Loading {{ agentType.Name }} configuration..." size="medium"></mj-loading>
                   }
                   <ng-container #customSectionContainer></ng-container>
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Requests & History -->
           @if (record.ID) {
-            <kendo-panelbar-item id="history" [expanded]="GetSectionExpanded('history', false)" [disabled]="loadingStates.executionHistory">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-history"></i> Execution History
-                @if (loadingStates.executionHistory) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                } @else if (executionHistoryCount > 0) {
-                  <span> ({{ executionHistoryCount }})@if(executionHistoryCount < totalExecutionHistoryCount){ of {{ totalExecutionHistoryCount }} }</span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="history"
+              [Expanded]="GetSectionExpanded('history', false)"
+              [Disabled]="loadingStates.executionHistory">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-history"></i> Execution History
+                    @if (loadingStates.executionHistory) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (executionHistoryCount > 0) {
+                        <span> ({{ executionHistoryCount }}@if (executionHistoryCount < totalExecutionHistoryCount) { of {{ totalExecutionHistoryCount }}})</span>
+                    }
+                </ng-template>
                 <div class="panel-content execution-history-panel">
-                  @if (executionHistoryCount === 0) {
+                  @if (loadingStates.executionHistory) {
+                    <mj-loading text="Loading execution history..." size="medium"></mj-loading>
+                  } @else if (executionHistoryCount === 0) {
                     <div class="empty-state">
                       <i class="fa-solid fa-history"></i>
                       <h4>No Execution History</h4>
@@ -155,16 +156,14 @@
                   } @else {
                     <!-- Search Bar -->
                     <div class="execution-search-bar">
-                      <kendo-textbox
-                        [(ngModel)]="executionSearchText"
-                        (ngModelChange)="onExecutionSearchChange()"
-                        [ngModelOptions]="{standalone: true}"
-                        placeholder="Search by Run ID..."
-                        [clearButton]="true">
-                        <ng-template kendoTextBoxPrefixTemplate>
-                          <i class="fa-solid fa-search"></i>
-                        </ng-template>
-                      </kendo-textbox>
+                      <div class="search-input-wrapper">
+                        <i class="fa-solid fa-search"></i>
+                        <input type="text" class="mj-input"
+                          [(ngModel)]="executionSearchText"
+                          (ngModelChange)="onExecutionSearchChange()"
+                          [ngModelOptions]="{standalone: true}"
+                          placeholder="Search by Run ID...">
+                      </div>
                     </div>
                     <div class="execution-history-list">
                       @if (filteredExecutions.length === 0) {
@@ -326,9 +325,8 @@
                       <!-- Pagination Controls -->
                       @if (totalPages > 1) {
                         <div class="pagination-controls">
-                          <button kendoButton
-                            fillMode="outline"
-                            size="medium"
+                          <button mjButton
+                            variant="outline"
                             (click)="goToPreviousPage()"
                             [disabled]="!hasPreviousPage || isLoadingPage"
                             class="page-nav-btn">
@@ -344,18 +342,17 @@
                               <span class="record-count">({{ totalExecutionHistoryCount }} total)</span>
                             }
                           </div>
-                          <button kendoButton
-                            fillMode="outline"
-                            size="medium"
+                          <button mjButton
+                            variant="outline"
                             (click)="goToNextPage()"
                             [disabled]="!hasNextPage || isLoadingPage"
                             class="page-nav-btn">
                             Next
                             <i class="fa-solid fa-chevron-right"></i>
                           </button>
-                          <button kendoButton
-                            fillMode="flat"
-                            size="small"
+                          <button mjButton
+                            variant="flat"
+                            size="sm"
                             (click)="navigateToEntity('MJ: AI Agent Runs', '')"
                             class="view-all-btn">
                             <i class="fa-solid fa-external-link"></i>
@@ -366,21 +363,21 @@
                     </div>
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Actions -->
           @if (record.ID) {
-            <kendo-panelbar-item id="actions" [expanded]="GetSectionExpanded('actions', false)" [disabled]="loadingStates.actions">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-bolt"></i> Actions
-                @if (loadingStates.actions) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                } @else if (actionCount > 0) {
-                  <span> ({{ actionCount }})</span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="actions"
+              [Expanded]="GetSectionExpanded('actions', false)"
+              [Disabled]="loadingStates.actions">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-bolt"></i> Actions
+                    @if (loadingStates.actions) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (actionCount > 0) {
+                        <span> ({{ actionCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   @if (loadingStates.actions) {
                     <div class="loading-state">
@@ -391,7 +388,7 @@
                     <div class="section-header">
                       <div class="header-actions">
                         @if (EditMode && UserCanCreateActions) {
-                          <button kendoButton themeColor="primary" size="small" (click)="configureActions()">
+                          <button mjButton variant="primary" size="sm" (click)="configureActions()">
                             <i class="fa-solid fa-plus"></i> Add Action
                           </button>
                         }
@@ -403,7 +400,7 @@
                         <h4>No Actions Configured</h4>
                         <p>Add actions to enable this agent to perform specific tasks and operations.</p>
                         @if (EditMode && UserCanCreateActions) {
-                          <button kendoButton themeColor="primary" (click)="configureActions()">
+                          <button mjButton variant="primary" (click)="configureActions()">
                             <i class="fa-solid fa-plus"></i> Configure First Action
                           </button>
                         }
@@ -432,12 +429,12 @@
                             </div>
                             <div class="item-actions">
                               @if (EditMode && UserCanDeleteActions) {
-                                <button kendoButton
-                                  fillMode="flat"
-                                  themeColor="error"
-                                  size="small"
+                                <button mjButton
+                                  variant="flat"
+                                  size="sm"
                                   (click)="removeAction(action, $event)"
-                                  title="Remove action">
+                                  title="Remove action"
+                                  class="error-action">
                                   <i class="fa-solid fa-trash"></i>
                                 </button>
                               }
@@ -454,65 +451,61 @@
                     }
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Sub-Agents (Unified View with Filter) -->
           @if (record.ID) {
-            <kendo-panelbar-item id="subagents" [expanded]="GetSectionExpanded('subagents', false)" [disabled]="loadingStates.subAgents">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-sitemap"></i> Sub-Agents
-                @if (loadingStates.subAgents) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                } @else if (totalSubAgentCount > 0) {
-                  <span> ({{ totalSubAgentCount }})</span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="subagents"
+              [Expanded]="GetSectionExpanded('subagents', false)"
+              [Disabled]="loadingStates.subAgents">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-sitemap"></i> Sub-Agents
+                    @if (loadingStates.subAgents) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (totalSubAgentCount > 0) {
+                        <span> ({{ totalSubAgentCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <!-- Filter Controls -->
                   <div class="section-header sub-agent-filter-header">
                     <div class="filter-controls">
-                      <kendo-buttongroup selection="single">
-                        <button kendoButton
-                          [toggleable]="true"
-                          [selected]="subAgentFilter === 'all'"
-                          (click)="setSubAgentFilter('all')"
-                          size="small">
+                      <div class="mj-button-group">
+                        <button mjButton
+                          size="sm"
+                          [class.active]="subAgentFilter === 'all'"
+                          (click)="setSubAgentFilter('all')">
                           <i class="fa-solid fa-layer-group"></i>
                           All ({{ totalSubAgentCount }})
                         </button>
-                        <button kendoButton
-                          [toggleable]="true"
-                          [selected]="subAgentFilter === 'child'"
-                          (click)="setSubAgentFilter('child')"
-                          size="small">
+                        <button mjButton
+                          size="sm"
+                          [class.active]="subAgentFilter === 'child'"
+                          (click)="setSubAgentFilter('child')">
                           <i class="fa-solid fa-link"></i>
                           Child ({{ childSubAgentCount }})
                         </button>
-                        <button kendoButton
-                          [toggleable]="true"
-                          [selected]="subAgentFilter === 'related'"
-                          (click)="setSubAgentFilter('related')"
-                          size="small">
+                        <button mjButton
+                          size="sm"
+                          [class.active]="subAgentFilter === 'related'"
+                          (click)="setSubAgentFilter('related')">
                           <i class="fa-solid fa-share-nodes"></i>
                           Related ({{ relatedSubAgentCount }})
                         </button>
-                      </kendo-buttongroup>
+                      </div>
                     </div>
                     <div class="header-actions">
                       @if (EditMode && UserCanCreateSubAgents) {
-                        <button kendoButton
-                          themeColor="primary"
-                          size="small"
+                        <button mjButton
+                          variant="primary"
+                          size="sm"
                           (click)="createChildSubAgent()"
                           title="Create a new child sub-agent that shares this agent's payload">
                           <i class="fa-solid fa-link"></i>
                           Create Child
                         </button>
-                        <button kendoButton
-                          themeColor="secondary"
-                          size="small"
+                        <button mjButton
+                          size="sm"
                           (click)="linkRelatedSubAgent()"
                           title="Link an existing agent as a related sub-agent with payload mapping">
                           <i class="fa-solid fa-share-nodes"></i>
@@ -594,10 +587,9 @@
                             @if (EditMode) {
                               <!-- Output Mapping Config (Related only) -->
                               @if (item.type === 'related') {
-                                <button kendoButton
-                                  fillMode="flat"
-                                  themeColor="primary"
-                                  size="small"
+                                <button mjButton
+                                  variant="flat"
+                                  size="sm"
                                   (click)="configureOutputMapping(item, $event)"
                                   title="Configure output mapping">
                                   <i class="fa-solid fa-exchange-alt"></i>
@@ -605,10 +597,9 @@
                               }
                               <!-- Advanced Settings (Child only) -->
                               @if (item.type === 'child' && UserCanCreateSubAgents) {
-                                <button kendoButton
-                                  fillMode="flat"
-                                  themeColor="primary"
-                                  size="small"
+                                <button mjButton
+                                  variant="flat"
+                                  size="sm"
                                   (click)="openSubAgentAdvancedSettings(item.agent, $event)"
                                   title="Advanced settings">
                                   <i class="fa-solid fa-cog"></i>
@@ -616,12 +607,12 @@
                               }
                               <!-- Remove/Unlink -->
                               @if (UserCanDeleteSubAgents) {
-                                <button kendoButton
-                                  fillMode="flat"
-                                  themeColor="error"
-                                  size="small"
+                                <button mjButton
+                                  variant="flat"
+                                  size="sm"
                                   (click)="item.type === 'child' ? removeChildSubAgent(item, $event) : unlinkRelatedSubAgent(item, $event)"
-                                  [title]="item.type === 'child' ? 'Delete child sub-agent' : 'Unlink related sub-agent'">
+                                  [title]="item.type === 'child' ? 'Delete child sub-agent' : 'Unlink related sub-agent'"
+                                  class="error-action">
                                   <i [class]="item.type === 'child' ? 'fa-solid fa-trash' : 'fa-solid fa-unlink'"></i>
                                 </button>
                               }
@@ -633,21 +624,21 @@
                     </div>
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Prompts (With Model Selection) -->
           @if (record.ID) {
-            <kendo-panelbar-item id="prompts" [expanded]="GetSectionExpanded('prompts', false)" [disabled]="loadingStates.prompts">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-comments"></i> Prompts
-                @if (loadingStates.prompts) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                } @else if (promptCount > 0) {
-                  <span> ({{ promptCount }})</span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="prompts"
+              [Expanded]="GetSectionExpanded('prompts', false)"
+              [Disabled]="loadingStates.prompts">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-comments"></i> Prompts
+                    @if (loadingStates.prompts) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (promptCount > 0) {
+                        <span> ({{ promptCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="prompt-controls">
@@ -658,15 +649,15 @@
                           Model Selection:
                         </label>
                         @if (EditMode) {
-                          <kendo-dropdownlist
+                          <mj-dropdown
                             [(ngModel)]="record.ModelSelectionMode"
                             name="modelSelectionMode"
-                            [data]="modelSelectionModes"
-                            textField="text"
-                            valueField="value"
-                            [valuePrimitive]="true"
+                            [Data]="modelSelectionModes"
+                            TextField="text"
+                            ValueField="value"
+                            [ValuePrimitive]="true"
                             class="model-selection-dropdown">
-                          </kendo-dropdownlist>
+                          </mj-dropdown>
                         } @else {
                           <span class="model-selection-value">{{ record.ModelSelectionMode || 'Agent Type' }}</span>
                         }
@@ -674,7 +665,7 @@
                     </div>
                     <div class="header-actions">
                       @if (EditMode && UserCanCreateNewPrompts) {
-                        <button kendoButton themeColor="primary" size="small" (click)="addPrompt()">
+                        <button mjButton variant="primary" size="sm" (click)="addPrompt()">
                           <i class="fa-solid fa-plus"></i> Add Prompt
                         </button>
                       }
@@ -686,7 +677,7 @@
                       <h4>No Prompts Configured</h4>
                       <p>Add prompts to define how this agent processes requests and generates responses.</p>
                       @if (EditMode && UserCanCreateNewPrompts) {
-                        <button kendoButton themeColor="primary" (click)="addPrompt()">
+                        <button mjButton variant="primary" (click)="addPrompt()">
                           <i class="fa-solid fa-plus"></i> Create First Prompt
                         </button>
                       }
@@ -711,22 +702,21 @@
                           </div>
                           <div class="item-actions">
                             @if (EditMode && UserCanCreatePrompts) {
-                              <button kendoButton
-                                fillMode="flat"
-                                themeColor="primary"
-                                size="small"
+                              <button mjButton
+                                variant="flat"
+                                size="sm"
                                 (click)="openPromptAdvancedSettings(prompt, $event)"
                                 title="Advanced settings">
                                 <i class="fa-solid fa-cog"></i>
                               </button>
                             }
                             @if (EditMode && UserCanDeletePrompts) {
-                              <button kendoButton
-                                fillMode="flat"
-                                themeColor="error"
-                                size="small"
+                              <button mjButton
+                                variant="flat"
+                                size="sm"
                                 (click)="removePrompt(prompt, $event)"
-                                title="Remove prompt">
+                                title="Remove prompt"
+                                class="error-action">
                                 <i class="fa-solid fa-trash"></i>
                               </button>
                             }
@@ -742,19 +732,21 @@
                     </div>
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Learning & Analytics -->
           @if (record.ID) {
-            <kendo-panelbar-item id="learning" [expanded]="GetSectionExpanded('learning', false)" [disabled]="loadingStates.learningCycles">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-brain"></i> Learning Cycles{{ learningCycleCount > 0 ? ' (' + learningCycleCount + ')' : '' }}
-                @if (loadingStates.learningCycles) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="learning"
+              [Expanded]="GetSectionExpanded('learning', false)"
+              [Disabled]="loadingStates.learningCycles">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-brain"></i> Learning Cycles
+                    @if (loadingStates.learningCycles) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (learningCycleCount > 0) {
+                        <span> ({{ learningCycleCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="section-description">
@@ -801,19 +793,21 @@
                     </div>
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
           }
           <!-- Notes & Documentation -->
           @if (record.ID) {
-            <kendo-panelbar-item id="notes" [expanded]="GetSectionExpanded('notes', false)" [disabled]="loadingStates.notes">
-              <ng-template kendoPanelBarItemTitle>
-                <i class="fa-solid fa-sticky-note"></i> Notes{{ noteCount > 0 ? ' (' + noteCount + ')' : '' }}
-                @if (loadingStates.notes) {
-                  <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                }
-              </ng-template>
-              <ng-template kendoPanelBarContent>
+            <mj-accordion-panel id="notes"
+              [Expanded]="GetSectionExpanded('notes', false)"
+              [Disabled]="loadingStates.notes">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-sticky-note"></i> Notes
+                    @if (loadingStates.notes) {
+                        <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
+                    } @else if (noteCount > 0) {
+                        <span> ({{ noteCount }})</span>
+                    }
+                </ng-template>
                 <div class="panel-content">
                   <div class="section-header">
                     <div class="section-description">
@@ -821,7 +815,7 @@
                     </div>
                     <div class="header-actions">
                       @if (EditMode && UserCanCreateNotes) {
-                        <button kendoButton themeColor="primary" size="small" (click)="addNote()">
+                        <button mjButton variant="primary" size="sm" (click)="addNote()">
                           <i class="fa-solid fa-plus"></i> Add Note
                         </button>
                       }
@@ -833,7 +827,7 @@
                       <h4>No Notes</h4>
                       <p>Add notes to document important information, observations, or instructions for this agent.</p>
                       @if (EditMode && UserCanCreateNotes) {
-                        <button kendoButton themeColor="primary" (click)="addNote()">
+                        <button mjButton variant="primary" (click)="addNote()">
                           <i class="fa-solid fa-plus"></i> Create First Note
                         </button>
                       }
@@ -872,15 +866,123 @@
                     </div>
                   }
                 </div>
-              </ng-template>
-            </kendo-panelbar-item>
+            </mj-accordion-panel>
+          }
+          <!-- Search -->
+          @if (record.ID) {
+            <mj-accordion-panel id="search"
+              [Expanded]="GetSectionExpanded('search', false)">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </ng-template>
+                <div class="panel-content">
+                  <div class="section-header">
+                    <div class="section-description">
+                      Control this agent's access to <strong>Scoped Search</strong> and assign the scopes it can use for pre-execution RAG or agent-invoked search.
+                    </div>
+                  </div>
+
+                  <!-- Scope Access mode -->
+                  <div class="agent-search-access">
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'All'">
+                      <input type="radio" name="SearchScopeAccess" value="All" [checked]="record.SearchScopeAccess === 'All'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'All'">
+                      <i class="fa-solid fa-globe"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">All</div>
+                        <div class="agent-search-access-desc">Can use any scope including Global. No scope restriction.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'Assigned'">
+                      <input type="radio" name="SearchScopeAccess" value="Assigned" [checked]="record.SearchScopeAccess === 'Assigned'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'Assigned'">
+                      <i class="fa-solid fa-user-check"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">Assigned</div>
+                        <div class="agent-search-access-desc">Can use ONLY scopes listed below. Other scopes are rejected with ACCESS_DENIED.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'None'">
+                      <input type="radio" name="SearchScopeAccess" value="None" [checked]="record.SearchScopeAccess === 'None'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'None'">
+                      <i class="fa-solid fa-ban"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">None</div>
+                        <div class="agent-search-access-desc">No search capability. The Scoped Search action is disabled for this agent.</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Assigned scopes grid -->
+                  @if (record.SearchScopeAccess !== 'None') {
+                    <div class="agent-search-grid-header">
+                      <h4>Assigned Scopes</h4>
+                      <p class="section-description">
+                        <strong>Pre-Execution</strong> scopes are injected automatically before the first LLM call.
+                        <strong>Agent-Invoked</strong> scopes are callable via the Scoped Search tool during execution.
+                        <strong>Both</strong> covers both paths.
+                      </p>
+                    </div>
+                    <mj-search-scope-child-grid
+                      [ParentID]="record.ID"
+                      ChildEntityName="MJ: AI Agent Search Scopes"
+                      ParentFieldName="AgentID"
+                      [Columns]="AgentSearchScopeColumns"
+                      [Disabled]="!EditMode"
+                      AddButtonLabel="+ Assign another scope"
+                      EmptyMessage="No scopes assigned yet. Assign at least one if this agent will use Scoped Search."
+                      (RowsChanged)="LoadPermissionSummary()">
+                    </mj-search-scope-child-grid>
+
+                    <!-- Phase 2A: read-only audit summary of who has
+                         permission on each of this agent's assigned scopes.
+                         Editing happens in the Knowledge Hub Config dashboard
+                         (see "Permissions" subtab under Search Scopes). -->
+                    <div class="agent-search-section" style="margin-top: 16px;">
+                      <h4 style="margin: 0 0 8px 0;">
+                        <i class="fa-solid fa-shield-halved"></i> Effective scope permissions
+                      </h4>
+                      <p class="section-description" style="margin-bottom: 8px;">
+                        Per-user / per-role grants on the scopes assigned above. Edit grants in
+                        <strong>Knowledge Hub Config &rarr; Search Scopes &rarr; Permissions</strong>.
+                      </p>
+                      @if (IsLoadingPermissions) {
+                        <div style="color: var(--mj-text-muted);">Loading permissions&hellip;</div>
+                      } @else if (PermissionSummary.length === 0) {
+                        <div style="color: var(--mj-text-muted); font-style: italic;">
+                          No scopes assigned yet — permissions will appear here once you add scopes above.
+                        </div>
+                      } @else {
+                        @for (s of PermissionSummary; track s.ScopeID) {
+                          <div style="margin-bottom: 12px; padding: 8px 12px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 4px;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">{{ s.ScopeName }}</div>
+                            @if (s.Permissions.length === 0) {
+                              <div style="color: var(--mj-text-muted); font-size: 0.9em;">
+                                No explicit permissions. Access falls back to this agent's <code>SearchScopeAccess</code> setting.
+                              </div>
+                            } @else {
+                              <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                @for (p of s.Permissions; track p.Principal + p.Level) {
+                                  <li style="font-size: 0.9em; padding: 2px 0;">
+                                    <i class="fa-solid" [class.fa-user]="p.PrincipalType === 'User'" [class.fa-users]="p.PrincipalType === 'Role'"></i>
+                                    <strong>{{ p.Principal }}</strong>
+                                    <span style="color: var(--mj-text-muted);">({{ p.PrincipalType }})</span>
+                                    &mdash; <span [style.color]="p.Level === 'None' ? 'var(--mj-status-error-text)' : 'var(--mj-text-primary)'">{{ p.Level }}</span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          </div>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+            </mj-accordion-panel>
           }
           <!-- Payload -->
-          <kendo-panelbar-item id="payload" [expanded]="GetSectionExpanded('payload', false)">
-            <ng-template kendoPanelBarItemTitle>
-              <i class="fa-solid fa-exchange-alt"></i> Payload Management
-            </ng-template>
-            <ng-template kendoPanelBarContent>
+          <mj-accordion-panel id="payload"
+            [Expanded]="GetSectionExpanded('payload', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-exchange-alt"></i> Payload Management
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
@@ -1093,14 +1195,13 @@
                   </div>
                 </div>
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
+          </mj-accordion-panel>
           <!-- Execution Guardrails (New Separate Panel) -->
-          <kendo-panelbar-item id="guardrails" [expanded]="GetSectionExpanded('guardrails', false)">
-            <ng-template kendoPanelBarItemTitle>
-              <i class="fa-solid fa-shield-halved"></i> Execution Guardrails
-            </ng-template>
-            <ng-template kendoPanelBarContent>
+          <mj-accordion-panel id="guardrails"
+            [Expanded]="GetSectionExpanded('guardrails', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-shield-halved"></i> Execution Guardrails
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
@@ -1142,14 +1243,13 @@
                   </mj-form-field>
                 </div>
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
+          </mj-accordion-panel>
           <!-- Configuration (Settings Panel) -->
-          <kendo-panelbar-item id="config" [expanded]="GetSectionExpanded('config', false)">
-            <ng-template kendoPanelBarItemTitle>
-              <i class="fa-solid fa-cogs"></i> Configuration
-            </ng-template>
-            <ng-template kendoPanelBarContent>
+          <mj-accordion-panel id="config"
+            [Expanded]="GetSectionExpanded('config', false)">
+              <ng-template mjAccordionTitle>
+                  <i class="fa-solid fa-cogs"></i> Configuration
+              </ng-template>
               <div class="panel-content">
                 <div class="section-header">
                   <div class="section-description">
@@ -1175,15 +1275,15 @@
                       </div>
                       <div class="config-card-content">
                         @if (EditMode) {
-                          <kendo-dropdownlist
+                          <mj-dropdown
                             [(ngModel)]="record.Status"
-                            [data]="statusOptions"
-                            textField="text"
-                            valueField="value"
-                            [valuePrimitive]="true"
+                            [Data]="statusOptions"
+                            TextField="text"
+                            ValueField="value"
+                            [ValuePrimitive]="true"
                             name="agentStatus"
                             class="config-field-input">
-                          </kendo-dropdownlist>
+                          </mj-dropdown>
                         } @else {
                           <span class="config-field-display">{{ record.Status || 'Not Set' }}</span>
                         }
@@ -1201,15 +1301,15 @@
                       </div>
                       <div class="config-card-content">
                         @if (EditMode) {
-                          <kendo-dropdownlist
+                          <mj-dropdown
                             [(ngModel)]="record.TypeID"
-                            [data]="agentTypes"
-                            textField="Name"
-                            valueField="ID"
-                            [valuePrimitive]="true"
+                            [Data]="agentTypes"
+                            TextField="Name"
+                            ValueField="ID"
+                            [ValuePrimitive]="true"
                             name="agentTypeID"
                             class="config-field-input">
-                          </kendo-dropdownlist>
+                          </mj-dropdown>
                         } @else {
                           <span class="config-field-display">{{ record.Type || 'Not Set' }}</span>
                         }
@@ -1526,9 +1626,9 @@
                               </div>
                               <div class="prompt-actions">
                                 <button type="button"
-                                  kendoButton
-                                  fillMode="outline"
-                                  size="small"
+                                  mjButton
+                                  variant="outline"
+                                  size="sm"
                                   (click)="openContextCompressionPromptSelector()"
                                   class="prompt-select-btn">
                                   <i class="fa-solid fa-search"></i>
@@ -1536,9 +1636,9 @@
                                 </button>
                                 @if (selectedContextCompressionPrompt) {
                                   <button type="button"
-                                    kendoButton
-                                    fillMode="flat"
-                                    size="small"
+                                    mjButton
+                                    variant="flat"
+                                    size="sm"
                                     (click)="clearContextCompressionPrompt()"
                                     class="prompt-clear-btn"
                                     title="Clear selection">
@@ -1556,19 +1656,17 @@
                   </div>
                 </div>
               </div>
-            </ng-template>
-          </kendo-panelbar-item>
-        </kendo-panelbar>
+          </mj-accordion-panel>
       </div>
     </form>
-  }
+</mj-record-form-container>
+}
 
-  <!-- Permissions Dialog (from @memberjunction/ng-agents) -->
-  @if (ShowPermissionsDialog) {
-    <mj-agent-permissions-dialog
-      [Agent]="record"
-      (Closed)="onPermissionsDialogClosed()"
-      (PermissionsChanged)="refreshRelatedData()">
-    </mj-agent-permissions-dialog>
-  }
-</div>
+<!-- Permissions Dialog (from @memberjunction/ng-agents) -->
+@if (ShowPermissionsDialog) {
+  <mj-agent-permissions-dialog
+    [Agent]="record"
+    (Closed)="onPermissionsDialogClosed()"
+    (PermissionsChanged)="refreshRelatedData()">
+  </mj-agent-permissions-dialog>
+}

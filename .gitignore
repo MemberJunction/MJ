@@ -16,6 +16,12 @@ experiments/**/.angular/
 # Turbo local cache
 .turbo/
 
+# Test scripts (local-only, not part of the build)
+test-scripts/
+
+# SchemaEngine RSU test artifacts
+packages/SchemaEngine/migrations/rsu/
+
 # Node artifact files
 node_modules/
 dist/
@@ -130,7 +136,9 @@ mj.config.ts
 packages/AI/MCPServer/build/Server.js
 
 **/.claude/settings.local.json
+**/.claude/settings.local.json.bak
 **/.claude/scheduled_tasks.lock
+**/.claude/worktrees/
 sql_logging/
 .sql-log-push/
 .sql-log-watch/
@@ -168,3 +176,7 @@ packages/DBAutoDoc/autocare-config.json
 # Local test/credential directories
 amith-sf/
 benchmark-*/
+Demos/sample-skip-code-fix-prompt.json
+
+# Per-run artifacts from /audit-memory-leaks
+plans/.memory-leak-snapshots/

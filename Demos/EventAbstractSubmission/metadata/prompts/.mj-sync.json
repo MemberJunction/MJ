@@ -1,5 +1,5 @@
 {
-  "entity": "AI Prompts",
+  "entity": "MJ: AI Prompts",
   "filePattern": ".*.json",
   "defaults": {
     "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",

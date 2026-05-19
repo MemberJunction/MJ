@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Boaco",
+      "Code": "BO",
+      "ISO3166_2": "NI-BO",
+      "Latitude": 12.524,
+      "Longitude": -85.4734,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-BO.geojson",
+      "CommonAliases": [
+        "Boaco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "9E771D0C-AC7F-42B6-9CC7-A8434C927F3C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.056Z",
+      "checksum": "75404d993947f169e64ac69ba4e697f83653c43891c55b45449432aa0b146139"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Carazo",
+      "Code": "CA",
+      "ISO3166_2": "NI-CA",
+      "Latitude": 11.7692,
+      "Longitude": -86.2874,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-CA.geojson",
+      "CommonAliases": [
+        "Carazo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "45C6F2FC-C2B3-478D-B881-99CCBD2EE9F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.073Z",
+      "checksum": "3ee63b1dd85d2d6c4fcc6e645260806951abbfc94e25b5fbd2afd756cc842346"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chinandega",
+      "Code": "CI",
+      "ISO3166_2": "NI-CI",
+      "Latitude": 12.7475,
+      "Longitude": -87.1702,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-CI.geojson",
+      "CommonAliases": [
+        "Chinandega"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "A8EDAB24-F905-4ABA-A264-8A133EBE8D0F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.089Z",
+      "checksum": "b7eaa24154cb802c00df2559d1e8ce04d9913da68cad4067829e12637b1f47e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chontales",
+      "Code": "CO",
+      "ISO3166_2": "NI-CO",
+      "Latitude": 12.0292,
+      "Longitude": -85.1156,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-CO.geojson",
+      "CommonAliases": [
+        "Chontales"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "5D1F06B3-2294-41E0-8002-8A264EDB1444"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.107Z",
+      "checksum": "9ed74dd7859bf81c1e0dd6e88369e77493dc6da74c04eabf751505abbd8c2a23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Estelí",
+      "Code": "ES",
+      "ISO3166_2": "NI-ES",
+      "Latitude": 13.225,
+      "Longitude": -86.4072,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-ES.geojson",
+      "CommonAliases": [
+        "Estelí"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "8FEFFBD9-921B-4581-B3D7-8E86686665A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.123Z",
+      "checksum": "9160bb94a2177c4131fef232b5fec2364597a0a49c5cdd84eba75dbdff7bbf64"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Granada",
+      "Code": "GR",
+      "ISO3166_2": "NI-GR",
+      "Latitude": 11.8736,
+      "Longitude": -85.9698,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-GR.geojson",
+      "CommonAliases": [
+        "Granada"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "0AF4A720-05A1-4503-A972-911A1A4F00E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.140Z",
+      "checksum": "88452b4f5b683a301649cfec28569972d853fe8ea86d4dbb06af9c61f026521b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jinotega",
+      "Code": "JI",
+      "ISO3166_2": "NI-JI",
+      "Latitude": 13.6975,
+      "Longitude": -85.5417,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-JI.geojson",
+      "CommonAliases": [
+        "Jinotega"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "35D202D3-31C8-4651-B39A-BA018337CFD4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.158Z",
+      "checksum": "737cfdca1b48104e4b99c5121c18d9acc7af7f4737811c634418e1aca8528054"
+    }
+  },
+  {
+    "fields": {
+      "Name": "León",
+      "Code": "LE",
+      "ISO3166_2": "NI-LE",
+      "Latitude": 12.4168,
+      "Longitude": -86.7187,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-LE.geojson",
+      "CommonAliases": [
+        "León"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "92312C7B-E5D9-43E2-8B08-4B667E6A6508"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.174Z",
+      "checksum": "e64b7e6054e58c518223de321a9d4a90dec03d12467cda6edcc87281611d1f03"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madriz",
+      "Code": "MD",
+      "ISO3166_2": "NI-MD",
+      "Latitude": 13.4963,
+      "Longitude": -86.412,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-MD.geojson",
+      "CommonAliases": [
+        "Madriz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "7ECD5EFA-1C0C-4518-BA7D-9D33CC4C5050"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.190Z",
+      "checksum": "8e55b482063d9344fa4da082abd18394f01caf97338249b5df678557d0f71ce5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manaqua",
+      "Code": "MN",
+      "ISO3166_2": "NI-MN",
+      "Latitude": 12.3035,
+      "Longitude": -86.2493,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-MN.geojson",
+      "CommonAliases": [
+        "Manaqua"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "1544FE4C-8A34-482E-9F67-F911C8D5BA57"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.204Z",
+      "checksum": "9ae6e60479129fc41097367839a7bce6fee925834348936ed47a5d2edc8f9e9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Masaya",
+      "Code": "MS",
+      "ISO3166_2": "NI-MS",
+      "Latitude": 11.9959,
+      "Longitude": -86.1227,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-MS.geojson",
+      "CommonAliases": [
+        "Masaya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "D24FA94C-CBAE-473D-BA4C-9FD743D222DC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.247Z",
+      "checksum": "66a83443fd703fcf689683878d7d27f572d18201f3a744072640a4852a3a4390"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matagalpa",
+      "Code": "MT",
+      "ISO3166_2": "NI-MT",
+      "Latitude": 13.0242,
+      "Longitude": -85.4926,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-MT.geojson",
+      "CommonAliases": [
+        "Matagalpa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "BF767B9A-C312-4CA1-A811-1112F608D552"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.264Z",
+      "checksum": "1ed10909f39dd87b4e3530b025db86d4754b863582884a849b698e6f07e27486"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nueva Segovia",
+      "Code": "NS",
+      "ISO3166_2": "NI-NS",
+      "Latitude": 13.7183,
+      "Longitude": -86.2589,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-NS.geojson",
+      "CommonAliases": [
+        "Nueva Segovia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "AB33ED47-5B66-4B1E-90DE-C67AD1EC3C65"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.284Z",
+      "checksum": "4b57988b981a510df98d93325b1b2fd8c41a1ad3294e49b4da3a7acfb01bb2e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Río San Juan",
+      "Code": "SJ",
+      "ISO3166_2": "NI-SJ",
+      "Latitude": 11.1691,
+      "Longitude": -84.5184,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-SJ.geojson",
+      "CommonAliases": [
+        "Río San Juan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "E9625DF8-0B9A-45F3-8ED8-66FC6C164EAF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.305Z",
+      "checksum": "aa2fa7943195bb7ae842ca20bcc69de61620dfa2e0fc625db4aa065dcfe4ad2f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rivas",
+      "Code": "RI",
+      "ISO3166_2": "NI-RI",
+      "Latitude": 11.3524,
+      "Longitude": -85.7633,
+      "BoundaryGeoJSON": "@file:by-country/NI/boundaries/NI-RI.geojson",
+      "CommonAliases": [
+        "Rivas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "E1D1A864-6494-40A0-80F8-D39DF3C32535"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.326Z",
+      "checksum": "0e95742ee653c10e470c36266c6ef32394b20e7ca79f26dd1e4c41082a74ab8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zelaya",
+      "Code": "ZE",
+      "ISO3166_2": "NI-ZE",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Zelaya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NI"
+    },
+    "primaryKey": {
+      "ID": "D226A55F-4EB8-4EA3-B48F-1524BACB2046"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.344Z",
+      "checksum": "aabc949adfd52d75fafd6238e1dcea247e474d4b219262242a0abd3dc0ca99a5"
+    }
+  }
+]

@@ -65,6 +65,7 @@ export {
     EncryptionKeySourceConfig,
     EncryptedValueParts,
     KeyConfiguration,
+    KeyValidationResult,
     RotateKeyParams,
     RotateKeyResult,
     EnableFieldEncryptionParams,
@@ -76,6 +77,9 @@ export { EncryptionKeySourceBase } from './EncryptionKeySourceBase';
 
 // Core encryption engine
 export { EncryptionEngine } from './EncryptionEngine';
+
+// Startup validation (auto-registered via @RegisterForStartup)
+export { EncryptionStartupValidator } from './EncryptionStartupValidator';
 
 // Built-in key source providers
 export { EnvVarKeySource } from './providers/EnvVarKeySource';

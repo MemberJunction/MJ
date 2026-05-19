@@ -1,0 +1,716 @@
+[
+  {
+    "fields": {
+      "Name": "Aceh",
+      "Code": "AC",
+      "ISO3166_2": "ID-AC",
+      "Latitude": 4.4153,
+      "Longitude": 96.9956,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-AC.geojson",
+      "CommonAliases": [
+        "Aceh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "35DE6AA1-547E-47DD-A9EF-5D77B3D4179A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.446Z",
+      "checksum": "65261909ff95c19a62fd0ad8c511ed8c6dc17a993c674154aad342af865753de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bali",
+      "Code": "BA",
+      "ISO3166_2": "ID-BA",
+      "Latitude": -8.3412,
+      "Longitude": 115.179,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-BA.geojson",
+      "CommonAliases": [
+        "Bali"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "A0EF4FE4-A058-478A-AA30-2925507976DE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.461Z",
+      "checksum": "2b7f8f68adf7981dcf3516d5b14d599c9618142aeaba684aa8cd8f1244974e5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bengkulu",
+      "Code": "BE",
+      "ISO3166_2": "ID-BE",
+      "Latitude": -3.4861,
+      "Longitude": 102.368,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-BE.geojson",
+      "CommonAliases": [
+        "Bengkulu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "64FFF4FD-A734-4642-ACD4-4C7E71E880DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.478Z",
+      "checksum": "7f2ffb4c948377cc12450582589eb844ff012f160e23cd163160d1cce4a9850a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Irian Jaya",
+      "Code": "IJU",
+      "ISO3166_2": "ID-IJU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Irian Jaya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "0E42BF61-8F4A-4352-8BBF-402D39066051"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.493Z",
+      "checksum": "91748543f4df14ddbe4248fc750385cca881feecb749ebbd4e73cd9821ce2866"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Irian Jaya",
+      "Code": "IJ",
+      "ISO3166_2": "ID-IJ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Irian Jaya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "50AD4DA8-C25E-41C6-A9B6-9C69415D1A31"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.510Z",
+      "checksum": "9d708b5dd506ae45f2242397e6cc7d51d7ffe2c75092dbf63d9a33effa79c5de"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jakarta Raya",
+      "Code": "JK",
+      "ISO3166_2": "ID-JK",
+      "Latitude": -6.2246,
+      "Longitude": 106.837,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-JK.geojson",
+      "CommonAliases": [
+        "Jakarta Raya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "55BEF819-BE79-4E69-B9F2-392DD51EA844"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.526Z",
+      "checksum": "a25381f85aab2ee402b8bfa68ead7a7a5f9ba198a9da20c6d227059cef615113"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jambi",
+      "Code": "JA",
+      "ISO3166_2": "ID-JA",
+      "Latitude": -1.655,
+      "Longitude": 102.823,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-JA.geojson",
+      "CommonAliases": [
+        "Jambi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "3BAD0283-A52B-4292-B71E-B9CD1274B571"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.542Z",
+      "checksum": "908c467b38b87089ea417d72ece1638485338d2ced65a8db67256682d2c8a7ec"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jawa",
+      "Code": "JWU",
+      "ISO3166_2": "ID-JWU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jawa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "B89B71B9-EB35-4F55-9079-16E9C0A10CF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.558Z",
+      "checksum": "652b3a40a6816047566e50e9bf6fd78ab9122e1c5201c0a80622005b1b24544c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jawa Barat",
+      "Code": "JB",
+      "ISO3166_2": "ID-JB",
+      "Latitude": -6.9076,
+      "Longitude": 107.638,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-JB.geojson",
+      "CommonAliases": [
+        "Jawa Barat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "E9D1670C-738F-4D3C-9C18-6917DD58D16E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.574Z",
+      "checksum": "b524479fb2abefb585b2679af1ea14f2cec07609bc01d32a40d9afbb128fc372"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jawa Tengah",
+      "Code": "JT",
+      "ISO3166_2": "ID-JT",
+      "Latitude": -7.2901,
+      "Longitude": 109.896,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-JT.geojson",
+      "CommonAliases": [
+        "Jawa Tengah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "CFA9B6C1-C3D4-46D5-B2E6-CDE09BC9BA7D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.588Z",
+      "checksum": "adbc3479d5b67c9c3642f3e8e31a06611abd9de0439d19d66e02b35fcb409e83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jawa Timur",
+      "Code": "JI",
+      "ISO3166_2": "ID-JI",
+      "Latitude": -7.8813,
+      "Longitude": 112.616,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-JI.geojson",
+      "CommonAliases": [
+        "Jawa Timur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "42DA57B3-B474-4644-9216-22E4543989A9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.647Z",
+      "checksum": "bdc44bd580b62d78e7bdc7f4d4a9e2cf0ea4f0ef03cadcb5be04a40930023485"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalimantan",
+      "Code": "KAU",
+      "ISO3166_2": "ID-KAU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kalimantan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "0EE3A437-5722-4A44-BB4B-844A00E085F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.664Z",
+      "checksum": "8d99511f552baf0bda43e7984582d4d542e1a18f9fea4c64372ec18a2f79e0b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalimantan Barat",
+      "Code": "KB",
+      "ISO3166_2": "ID-KB",
+      "Latitude": -0.0636,
+      "Longitude": 111.304,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-KB.geojson",
+      "CommonAliases": [
+        "Kalimantan Barat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "30AC1105-58D5-4FDB-80E4-F25596E73F79"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.681Z",
+      "checksum": "317cf1433d06ad0177934b73eef114ff59d166246a68750626286af2cb978fb8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalimantan Selatan",
+      "Code": "KS",
+      "ISO3166_2": "ID-KS",
+      "Latitude": -3.0071,
+      "Longitude": 115.451,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-KS.geojson",
+      "CommonAliases": [
+        "Kalimantan Selatan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "E3E6CE27-433A-42CA-8794-7A8786A09141"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.697Z",
+      "checksum": "ea4008296171a670773efd59cbde0b63b485cd9773db1608f0fb157eaa82a85e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalimantan Tengah",
+      "Code": "KT",
+      "ISO3166_2": "ID-KT",
+      "Latitude": -1.8422,
+      "Longitude": 113.286,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-KT.geojson",
+      "CommonAliases": [
+        "Kalimantan Tengah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "F6471718-EF7D-451A-AEF5-3B4E3889A150"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.714Z",
+      "checksum": "a4f498709dbfc290264859a0d410b565d75b97794bfee4139eeea5e56ba2a39a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalimantan Timur",
+      "Code": "KI",
+      "ISO3166_2": "ID-KI",
+      "Latitude": 1.2892,
+      "Longitude": 116.354,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-KI.geojson",
+      "CommonAliases": [
+        "Kalimantan Timur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "D17782F1-7082-489E-B194-43EBF7797885"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.730Z",
+      "checksum": "0d828316a1a9585556f54e74684a9e291c46d13a3e123551fd7249df9d3cd986"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lampung",
+      "Code": "LA",
+      "ISO3166_2": "ID-LA",
+      "Latitude": -4.919,
+      "Longitude": 105.059,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-LA.geojson",
+      "CommonAliases": [
+        "Lampung"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "EB9F8764-B4C9-4F09-AA28-939411C09F59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.746Z",
+      "checksum": "51f73356dfbe399070590250c00d2546c13d3d0fa20e7583fc3f6f980f8266bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maluku",
+      "Code": "MAU",
+      "ISO3166_2": "ID-MAU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Maluku"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "ECE857E5-FBD2-4375-B1D8-12F704ABA22E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.762Z",
+      "checksum": "d4262d90e48f79c69db30d6941d21c6cc156515883c4e666c7c0988a46cd9781"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maluku",
+      "Code": "MA",
+      "ISO3166_2": "ID-MA",
+      "Latitude": -8.2481,
+      "Longitude": 128.161,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-MA.geojson",
+      "CommonAliases": [
+        "Maluku"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "AB599B41-109C-426E-9936-B3DDB2775654"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.779Z",
+      "checksum": "ce12e4eb599dac129a2ffb29d1351dd177ab31678ba43a20a013a6a8849f309d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nusa Tenggara",
+      "Code": "NUU",
+      "ISO3166_2": "ID-NUU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nusa Tenggara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "729B8EA3-ED77-4ACE-A5B4-300084A4EBA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.792Z",
+      "checksum": "b765a78d603b90f09b470b4e90d4a8104fac5035fa197a8d5175ecf0f37c005c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nusa Tenggara Barat",
+      "Code": "NB",
+      "ISO3166_2": "ID-NB",
+      "Latitude": -8.5711,
+      "Longitude": 116.294,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-NB.geojson",
+      "CommonAliases": [
+        "Nusa Tenggara Barat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "0AE9C3AF-C6B6-4B0C-A5ED-E1534B626BF6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.850Z",
+      "checksum": "58113780a7c0d49a161cbd4a3852c878d83f6436dd926eebee076093ec22e6a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nusa Tenggara Timur",
+      "Code": "NT",
+      "ISO3166_2": "ID-NT",
+      "Latitude": -8.5844,
+      "Longitude": 120.689,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-NT.geojson",
+      "CommonAliases": [
+        "Nusa Tenggara Timur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "DF8733D3-8E9B-4238-BFEC-3368EDB30ADE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.867Z",
+      "checksum": "1ab8874ee27363470f44f724029974f488d1b2c91a5e65f1cf5f18f5cbfb945b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Riau",
+      "Code": "RI",
+      "ISO3166_2": "ID-RI",
+      "Latitude": 0.3969,
+      "Longitude": 101.745,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-RI.geojson",
+      "CommonAliases": [
+        "Riau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "A3A3ED97-48C3-4497-8A98-D9A67C3A819B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.884Z",
+      "checksum": "9f407d83cbf4594b4ac37c10082779042c270fb938213c428daf3b2a1bc690a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sulawesi",
+      "Code": "SLU",
+      "ISO3166_2": "ID-SLU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sulawesi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "24583AF8-26C4-4A12-A0D0-DADF4D65C843"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.900Z",
+      "checksum": "7b97c05c4aeb0f5f923bf4d805dd5762cf5b452c42123f1f462edac7646099ff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sulawesi Selatan",
+      "Code": "SN",
+      "ISO3166_2": "ID-SN",
+      "Latitude": -3.7444,
+      "Longitude": 119.99,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SN.geojson",
+      "CommonAliases": [
+        "Sulawesi Selatan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "BCEBA153-E8EA-4D15-B8A2-F6E0A2354144"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.916Z",
+      "checksum": "ea7b9a8e8356d1407a145b12327144e6e8cab2aec0008f6ab849738f625dd375"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sulawesi Tengah",
+      "Code": "ST",
+      "ISO3166_2": "ID-ST",
+      "Latitude": -1.301,
+      "Longitude": 120.153,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-ST.geojson",
+      "CommonAliases": [
+        "Sulawesi Tengah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "C1F31E8B-6CDA-4487-A8DD-81A54EC47434"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.934Z",
+      "checksum": "8cd38150f697e12992b3239b7f8af1457893b84ec276181f8fd4d5ec6c4bf488"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sulawesi Tenggara",
+      "Code": "SG",
+      "ISO3166_2": "ID-SG",
+      "Latitude": -4.0746,
+      "Longitude": 122.119,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SG.geojson",
+      "CommonAliases": [
+        "Sulawesi Tenggara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "E293B90B-C398-4B34-AF6D-4E075AAAE9E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.950Z",
+      "checksum": "a0c4b47347e8874e40896cc816be47203b907cd8237a3258a748d3e53ac3fbf6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sulawesi Utara",
+      "Code": "SA",
+      "ISO3166_2": "ID-SA",
+      "Latitude": 0.853,
+      "Longitude": 124.446,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SA.geojson",
+      "CommonAliases": [
+        "Sulawesi Utara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "55939311-888C-46D2-B30B-73C95940CB20"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.965Z",
+      "checksum": "cd7cd74d47156ff4c95c5e132aaca6e48419d58c66b56e9d09a1164e5860a511"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sumatera",
+      "Code": "SMU",
+      "ISO3166_2": "ID-SMU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sumatera"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "74116004-99B7-4194-849A-E025E42BDBEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.981Z",
+      "checksum": "13518710b2f302bbfe3c8957f5499a150846ee0acc5cec2d6e478cf824ec04a6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sumatera Barat",
+      "Code": "SB",
+      "ISO3166_2": "ID-SB",
+      "Latitude": -0.6426,
+      "Longitude": 100.611,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SB.geojson",
+      "CommonAliases": [
+        "Sumatera Barat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "A4C9D867-F750-4B19-879E-66A59231423A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:01.994Z",
+      "checksum": "5dd4a2ff77edaf3252dd838a29888c4a038eb69cf413fd49498b6220d7a1812d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sumatera Selatan",
+      "Code": "SS",
+      "ISO3166_2": "ID-SS",
+      "Latitude": -3.3824,
+      "Longitude": 104.073,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SS.geojson",
+      "CommonAliases": [
+        "Sumatera Selatan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "4D15B09F-BFA2-4A22-89EE-BED260C2F9BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.030Z",
+      "checksum": "cf2b4f59ba754895dba95ccf107cebaa651edbeb481664b2eb13024c28c92a34"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sumatera Utara",
+      "Code": "SU",
+      "ISO3166_2": "ID-SU",
+      "Latitude": 2.363,
+      "Longitude": 99.2161,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-SU.geojson",
+      "CommonAliases": [
+        "Sumatera Utara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "9F26F8A6-61D6-4868-9F09-76825FB37FE3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.049Z",
+      "checksum": "42cf7ae153d5093786434cb8c640743bd47e41e385fb80ecd82db3ad40be3b7b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timor Timur",
+      "Code": "TT",
+      "ISO3166_2": "ID-TT",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Timor Timur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "AE0B73A2-2142-4CB8-9F60-BEAFC4B3E873"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.066Z",
+      "checksum": "97575e9ebcbf5842ce922883d9d13a31c955556f6b6ce1483d162ba8b0dc63f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yogyakarta",
+      "Code": "YO",
+      "ISO3166_2": "ID-YO",
+      "Latitude": -7.8353,
+      "Longitude": 110.443,
+      "BoundaryGeoJSON": "@file:by-country/ID/boundaries/ID-YO.geojson",
+      "CommonAliases": [
+        "Yogyakarta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ID"
+    },
+    "primaryKey": {
+      "ID": "D02E5A2D-FEFA-48BB-A35C-A27F572DC0E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.082Z",
+      "checksum": "64357fe61ba975fb537e6b1c67d89504a71d2a49e78a7a938e128964ca4471bf"
+    }
+  }
+]

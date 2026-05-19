@@ -39,6 +39,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
+import { KeyValidationResult } from '../interfaces';
 
 // Lazy-load Azure SDK to avoid requiring it when not used
 let SecretClient: typeof import('@azure/keyvault-secrets').SecretClient | null = null;
@@ -238,6 +239,100 @@ export class AzureKeyVaultKeySource extends EncryptionKeySourceBase {
     }
 
     /**
+     * Validates that the Azure Key Vault secret is accessible and usable.
+     *
+     * Attempts to retrieve the secret and validate its format and length.
+     * Key material is decoded internally for validation only — never returned to the caller.
+     */
+    async ValidateKeyAccessibility(
+        lookupValue: string,
+        keyVersion?: string,
+        expectedKeyLengthBytes?: number
+    ): Promise<KeyValidationResult> {
+        try {
+            if (!this._initialized || !SecretClient || !DefaultAzureCredential) {
+                return {
+                    IsAccessible: false,
+                    Error: 'Azure Key Vault client not initialized. Ensure @azure/keyvault-secrets and ' +
+                        '@azure/identity are installed and Azure credentials are configured.'
+                };
+            }
+
+            if (!lookupValue) {
+                return {
+                    IsAccessible: false,
+                    Error: 'Azure Key Vault lookup value is empty. Provide the secret URL or name.'
+                };
+            }
+
+            // Parse and attempt to retrieve the secret
+            const { vaultUrl, secretName } = this.parseLookupValue(lookupValue);
+
+            let client = this._clients.get(vaultUrl);
+            if (!client) {
+                const credential = new DefaultAzureCredential();
+                client = new SecretClient(vaultUrl, credential);
+                this._clients.set(vaultUrl, client);
+            }
+
+            const options = keyVersion ? { version: keyVersion } : {};
+            const secret = await client.getSecret(secretName, options);
+
+            if (!secret.value) {
+                return {
+                    IsAccessible: false,
+                    Error: `Secret "${secretName}" in vault has no value. Store a base64-encoded encryption key.`
+                };
+            }
+
+            // Decode and validate — key bytes stay local, never returned
+            const keyBytes = Buffer.from(secret.value, 'base64');
+            if (keyBytes.length === 0) {
+                return {
+                    IsAccessible: false,
+                    Error: `Secret "${secretName}" is not valid base64. Store a base64-encoded key value.`
+                };
+            }
+
+            if (expectedKeyLengthBytes !== undefined && keyBytes.length !== expectedKeyLengthBytes) {
+                return {
+                    IsAccessible: false,
+                    Error: `Secret "${secretName}" is ${keyBytes.length} bytes but algorithm requires ${expectedKeyLengthBytes} bytes. ` +
+                        `Store a correctly-sized key: openssl rand -base64 ${expectedKeyLengthBytes}`
+                };
+            }
+
+            return { IsAccessible: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+
+            if (message.includes('SecretNotFound')) {
+                return {
+                    IsAccessible: false,
+                    Error: `Azure Key Vault secret not found: "${lookupValue}". Verify the secret exists in the vault.`
+                };
+            }
+            if (message.includes('Forbidden') || message.includes('AccessDenied')) {
+                return {
+                    IsAccessible: false,
+                    Error: `Azure Key Vault access denied for "${lookupValue}". Ensure the application has Secret Get permission.`
+                };
+            }
+            if (message.includes('AuthenticationError')) {
+                return {
+                    IsAccessible: false,
+                    Error: 'Azure authentication failed. Ensure credentials are configured (managed identity, service principal, or Azure CLI).'
+                };
+            }
+
+            return {
+                IsAccessible: false,
+                Error: `Azure Key Vault key validation failed: ${message}`
+            };
+        }
+    }
+
+    /**
      * Parses a lookup value into vault URL and secret name.
      *
      * @private
@@ -256,7 +351,10 @@ export class AzureKeyVaultKeySource extends EncryptionKeySourceBase {
         }
 
         // Simple name format (requires AZURE_KEYVAULT_URL)
-        if (this._defaultVaultUrl) {
+        // Validate secret name matches Azure's allowed pattern to prevent
+        // path traversal or injection via crafted lookup values
+        const secretNamePattern = /^[a-zA-Z0-9-]+$/;
+        if (this._defaultVaultUrl && secretNamePattern.test(lookupValue)) {
             return {
                 vaultUrl: this._defaultVaultUrl,
                 secretName: lookupValue
@@ -266,7 +364,8 @@ export class AzureKeyVaultKeySource extends EncryptionKeySourceBase {
         throw new Error(
             `Invalid Key Vault lookup value: "${lookupValue}". ` +
             `Expected format: https://vault-name.vault.azure.net/secrets/secret-name ` +
-            `or set AZURE_KEYVAULT_URL and provide just the secret name.`
+            `or set AZURE_KEYVAULT_URL and provide a valid secret name ` +
+            `(alphanumeric characters and hyphens only).`
         );
     }
 

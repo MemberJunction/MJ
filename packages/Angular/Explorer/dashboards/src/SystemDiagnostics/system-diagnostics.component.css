@@ -1,102 +1,64 @@
-.system-diagnostics {
-    padding: 0;
-    background: var(--mj-bg-surface-sunken);
-    height: 100%;
+/* Container — flex-column workspace inside Admin's left-nav shell. */
+.sd-container {
     display: flex;
     flex-direction: column;
+    height: 100%;
     overflow: hidden;
-}
-
-/* Header */
-.diagnostics-header {
     background: var(--mj-bg-page);
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--mj-border-default);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
+}
+
+/* Sticky Header — action row only (no title; Admin shell provides it). */
+.sd-container > .sticky-header {
     flex-shrink: 0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
+    z-index: 10;
 }
 
-.header-title {
+.sd-container > .sticky-header > .action-buttons {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--mj-space-3);
+    justify-content: flex-end;
+    padding: var(--mj-space-3) var(--mj-space-6);
 }
 
-.header-title i {
-    font-size: 24px;
-    color: var(--mj-status-success);
+@media (max-width: 639px) {
+    .sd-container > .sticky-header > .action-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
 }
 
-.header-title h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
+/* Scrollable Content */
+.sd-container > .scrollable-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--mj-space-6);
 }
 
-.header-controls {
+.system-diagnostics {
+    background: var(--mj-bg-surface-sunken);
     display: flex;
-    align-items: center;
-    gap: 20px;
+    flex-direction: column;
 }
 
-.auto-refresh-control {
-    display: flex;
+/* Inline auto-refresh toggle in the [actions] slot. */
+.auto-refresh-toggle {
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 6px;
+    cursor: pointer;
     font-size: 13px;
     color: var(--mj-text-secondary);
+    white-space: nowrap;
 }
 
-.auto-refresh-control label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.auto-refresh-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
     cursor: pointer;
-}
-
-.auto-refresh-control input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-}
-
-.refresh-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--mj-status-success);
-    font-size: 12px;
-}
-
-.refresh-btn {
-    background: var(--mj-status-success);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-    background: var(--mj-color-success-800);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .spinning {
@@ -1922,26 +1884,43 @@
     font-weight: 500;
 }
 
-/* PerfMon Chart Styles */
+/* PerfMon Chart Styles
+ * ====================
+ * Chrome (background, borders, text, controls) is mapped to MJ semantic tokens
+ * so the panel adapts to the active theme and is white-labelable. Series colors
+ * (cyan / magenta / neon-green / orange) are categorical chart data — they must
+ * stay distinct across themes and are exempt by the same rule that exempts
+ * other chart-data palettes.
+ *
+ * The accent (--perfmon-accent) is intentionally kept as the same neon green as
+ * the engine series so the "live signal" indicators (header icon, footer count,
+ * chart strokes) read as part of the chart palette rather than the app's brand.
+ *
+ * Overlays are derived via color-mix() from --mj-text-primary so they invert
+ * automatically: dark tints over light surfaces in light mode, light tints over
+ * dark surfaces in dark mode.
+ */
 .perfmon-section {
-    /* Scoped terminal theme variables */
-    --perfmon-bg: #1a1a2e;
-    --perfmon-bg-deep: #0d0d1a;
+    /* Chrome — adapts to theme */
+    --perfmon-bg: var(--mj-bg-surface-card);
+    --perfmon-bg-deep: var(--mj-bg-surface-sunken);
+    --perfmon-border: var(--mj-border-default);
+    --perfmon-border-medium: var(--mj-border-strong);
+    --perfmon-border-light: var(--mj-border-strong);
+    --perfmon-text-faint: var(--mj-text-disabled);
+    --perfmon-text-muted: var(--mj-text-muted);
+    --perfmon-text-secondary: var(--mj-text-secondary);
+    --perfmon-control-bg: var(--mj-bg-surface-sunken);
+    --perfmon-control-bg-hover: var(--mj-bg-surface-hover);
+    --perfmon-mode-bg: var(--mj-bg-surface-sunken);
+    --perfmon-overlay-light: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+    --perfmon-overlay-medium: color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
+    --perfmon-overlay-strong: color-mix(in srgb, var(--mj-text-primary) 25%, transparent);
+    --perfmon-tooltip-bg: var(--mj-bg-overlay);
+
+    /* Categorical series colors and live-signal accent — exempt */
     --perfmon-accent: #00ff88;
     --perfmon-accent-dim: #00cc6a;
-    --perfmon-border: #333;
-    --perfmon-border-medium: #444;
-    --perfmon-border-light: #555;
-    --perfmon-text-faint: #666;
-    --perfmon-text-muted: #888;
-    --perfmon-text-secondary: #aaa;
-    --perfmon-control-bg: #2a2a2a;
-    --perfmon-control-bg-hover: #333;
-    --perfmon-mode-bg: #1a1a1a;
-    --perfmon-overlay-light: rgba(255, 255, 255, 0.05);
-    --perfmon-overlay-medium: rgba(255, 255, 255, 0.15);
-    --perfmon-overlay-strong: rgba(255, 255, 255, 0.25);
-    --perfmon-tooltip-bg: rgba(0, 0, 0, 0.9);
     --perfmon-series-runview: #00bcd4;
     --perfmon-series-runquery: #e040fb;
     --perfmon-series-engine: #00ff88;
@@ -2322,16 +2301,6 @@
 }
 
 @media (max-width: 768px) {
-    .diagnostics-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-controls {
-        width: 100%;
-        flex-wrap: wrap;
-    }
-
     .overview-cards {
         grid-template-columns: repeat(2, 1fr);
     }
@@ -2972,6 +2941,29 @@
     padding: 2px 6px;
     border-radius: 4px;
     word-break: break-all;
+}
+
+/* Health status indicators for config items */
+.config-health-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.config-health-icon.health-success {
+    color: var(--mj-status-success);
+}
+.config-health-icon.health-failure {
+    color: var(--mj-status-error);
+}
+.config-detail-row--error {
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.detail-value--error {
+    color: var(--mj-status-error-text) !important;
+    background: none !important;
+    font-family: inherit !important;
+    word-break: break-word;
 }
 
 /* Sample Data Section */

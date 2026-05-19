@@ -43,6 +43,9 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
         Set: vi.fn((field: string, value: unknown) => { data[field] = value; }),
         get ID() { return data['ID'] ?? 'generated-id'; },
         set ID(v: string) { data['ID'] = v; },
+        get PrimaryKey() {
+            return { KeyValuePairs: [{ FieldName: 'ID', Value: data['ID'] ?? 'generated-id' }] };
+        },
         // Dynamic property setters used by orchestrator
         set CompanyIntegrationID(v: string) { data['CompanyIntegrationID'] = v; },
         set RunByUserID(v: string) { data['RunByUserID'] = v; },
@@ -71,19 +74,55 @@ vi.mock('@memberjunction/core', async () => {
             RunViews(...args: unknown[]) { return mockRunViewsFn(...args); }
             RunView(...args: unknown[]) { return mockRunViewFn(...args); }
         },
-        Metadata: class MockMetadata {
-            get Entities() {
-                return [{
-                    Name: 'Contacts',
-                    FirstPrimaryKey: { Name: 'ID' },
-                }];
+        Metadata: (() => {
+            class MockMetadata {
+                // Stub out the database provider so ApplyRecords' BeginTransaction/Commit/Rollback
+                // pattern is a no-op in unit tests. Real transaction behavior is exercised by
+                // the full-stack regression suite.
+                //
+                // Multi-provider migration: IntegrationEngine now uses this.ProviderToUse which
+                // falls back to Metadata.Provider. Several existing tests dynamically override
+                // `MockMetadata.prototype.GetEntityObject` to inject failures — `Metadata.Provider`
+                // delegates to `MockMetadata.prototype.GetEntityObject` so a single prototype
+                // override affects both code paths (helper-class instance + static Provider).
+                static Provider: {
+                    BeginTransaction: ReturnType<typeof vi.fn>;
+                    CommitTransaction: ReturnType<typeof vi.fn>;
+                    RollbackTransaction: ReturnType<typeof vi.fn>;
+                    Entities: { Name: string; FirstPrimaryKey: { Name: string } }[];
+                    EntityByName: (name: string) => { Name: string; FirstPrimaryKey: { Name: string } } | undefined;
+                    GetEntityObject: (...args: unknown[]) => Promise<unknown>;
+                };
+                get Entities() {
+                    return [{
+                        Name: 'Contacts',
+                        FirstPrimaryKey: { Name: 'ID' },
+                    }];
+                }
+                EntityByName(name: string) {
+                    return this.Entities.find(e => e.Name === name);
+                }
+                async GetEntityObject(entityName: string) {
+                    const entity = createMockEntity({ ID: `new-${entityName}-id` });
+                    mockEntityInstances.set(entityName, entity);
+                    return entity;
+                }
             }
-            async GetEntityObject(entityName: string) {
-                const entity = createMockEntity({ ID: `new-${entityName}-id` });
-                mockEntityInstances.set(entityName, entity);
-                return entity;
-            }
-        },
+            MockMetadata.Provider = {
+                BeginTransaction: vi.fn().mockResolvedValue(undefined),
+                CommitTransaction: vi.fn().mockResolvedValue(undefined),
+                RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+                Entities: [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }],
+                EntityByName(name: string) {
+                    return this.Entities.find(e => e.Name === name);
+                },
+                // Delegate to the prototype so test-time prototype overrides flow through.
+                GetEntityObject(...args: unknown[]) {
+                    return MockMetadata.prototype.GetEntityObject.apply(new MockMetadata(), args as [string]);
+                },
+            };
+            return MockMetadata;
+        })(),
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }> = [];
         },
@@ -162,6 +201,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration: MJIntegrationEntity = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'TestIntegration',
             ClassName: 'TestConnector',
@@ -226,7 +266,7 @@ describe('IntegrationEngine', () => {
         }
     });
 
-    it('should isolate errors per record (one fails, others succeed)', async () => {
+    it('rolls back the whole batch when any record fails (batched atomicity)', async () => {
         const records = createMockRecords(3);
         const connector = createMockConnector({
             Records: records,
@@ -235,6 +275,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -299,10 +340,14 @@ describe('IntegrationEngine', () => {
 
         try {
             const result = await orchestrator.RunSync('ci-1', contextUser);
+            // With batched atomicity, a single failing record rolls back every record in
+            // the batch. All 3 records are reported as errored with the same failure
+            // message, and no creates are committed.
             expect(result.RecordsProcessed).toBe(3);
-            expect(result.RecordsErrored).toBe(1);
-            expect(result.RecordsCreated).toBe(2);
-            expect(result.Errors.length).toBe(1);
+            expect(result.RecordsErrored).toBe(3);
+            expect(result.RecordsCreated).toBe(0);
+            expect(result.Errors.length).toBe(3);
+            expect(result.Errors.every(e => e.ErrorMessage.startsWith('Batch rolled back:'))).toBe(true);
         } finally {
             ConnectorFactory.Resolve = resolveOrig;
             MockMetadataClass.prototype.GetEntityObject = origGetEntity;
@@ -317,6 +362,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -400,6 +446,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -467,6 +514,7 @@ describe('IntegrationEngine', () => {
 
         const companyIntegration = createMockCompanyIntegration();
         const integration = {
+            ID: 'int-1',
             Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
             Name: 'Test',
             ClassName: 'TestConnector',
@@ -556,7 +604,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -630,7 +679,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -700,7 +750,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -766,7 +817,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -816,20 +868,20 @@ describe('IntegrationEngine', () => {
 
             try {
                 orchestrator.MaxBatchSize = 5;
-                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
 
                 const result = await orchestrator.RunSync('ci-1', contextUser);
 
-                // Should only process 5 records (truncated from 10)
-                expect(result.RecordsProcessed).toBe(5);
-                expect(result.RecordsCreated).toBe(5);
+                // Should process ALL 10 records — MaxBatchSize is a warning threshold, not a hard truncation
+                expect(result.RecordsProcessed).toBe(10);
+                expect(result.RecordsCreated).toBe(10);
 
-                // Should have logged a warning about truncation
-                expect(warnSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('exceeding MaxBatchSize')
+                // Should have logged a message that the batch size was exceeded
+                expect(logSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('MaxBatchSize')
                 );
 
-                warnSpy.mockRestore();
+                logSpy.mockRestore();
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
             }
@@ -844,7 +896,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -925,7 +978,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1011,7 +1065,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1078,7 +1133,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1159,7 +1215,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1241,7 +1298,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;
@@ -1307,7 +1365,8 @@ describe('IntegrationEngine', () => {
 
             const companyIntegration = createMockCompanyIntegration();
             const integration = {
-                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                ID: 'int-1',
+            Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
                 Name: 'Test',
                 ClassName: 'TestConnector',
             } as unknown as MJIntegrationEntity;

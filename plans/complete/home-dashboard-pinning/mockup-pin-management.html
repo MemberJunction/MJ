@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pin Management - Edit Mode, Reorder, Groups - Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6f9;
+    --bg-surface: #ffffff;
+    --bg-surface-card: #f8f9fb;
+    --bg-surface-sunken: #f0f2f5;
+    --bg-surface-hover: #eef1f5;
+    --bg-surface-active: #e2e8f0;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-disabled: #cbd5e1;
+    --text-inverse: #ffffff;
+    --border-default: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --border-focus: #264FAF;
+    --brand-primary: #264FAF;
+    --brand-primary-hover: #1e3f8f;
+    --brand-primary-light: color-mix(in srgb, #264FAF 10%, #f8f9fb);
+    --status-warning: #f59e0b;
+    --status-error: #ef4444;
+    --status-success: #22c55e;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --shadow-xl: 0 16px 40px rgba(0,0,0,0.16);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --transition: 0.2s ease;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  /* Shell Header */
+  .shell-header {
+    height: 56px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    gap: 16px;
+  }
+  .shell-header .logo { font-weight: 700; color: var(--brand-primary); font-size: 18px; }
+  .shell-header .app-badge { background: var(--brand-primary); color: var(--text-inverse); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .shell-header .spacer { flex: 1; }
+  .shell-header .avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--bg-surface-sunken); display: flex; align-items: center; justify-content: center; color: var(--text-muted); cursor: pointer; border: 2px solid var(--border-default); }
+
+  /* Page container */
+  .home-dashboard { margin-top: 56px; padding: 32px; max-width: 1400px; margin-left: auto; margin-right: auto; }
+  .home-header { margin-bottom: 32px; }
+  .home-header h1 { font-size: 32px; font-weight: 600; margin-bottom: 4px; }
+  .home-header .date { font-size: 15px; color: var(--text-muted); }
+
+  /* ========== SECTION HEADERS ========== */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-header h2 {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 18px; font-weight: 600; color: var(--text-secondary);
+  }
+  .section-header h2 i { color: var(--text-muted); font-size: 16px; }
+  .section-header .actions { margin-left: auto; display: flex; gap: 8px; }
+  .section-header .actions button {
+    padding: 6px 14px; border-radius: var(--radius-md);
+    border: 1px solid var(--border-default); background: var(--bg-surface);
+    color: var(--text-secondary); font-size: 13px; cursor: pointer;
+    display: flex; align-items: center; gap: 6px; transition: all var(--transition);
+  }
+  .section-header .actions button:hover { background: var(--bg-surface-hover); border-color: var(--brand-primary); color: var(--brand-primary); }
+  .section-header .actions button.primary { background: var(--brand-primary); color: var(--text-inverse); border-color: var(--brand-primary); }
+  .section-header .actions button.primary:hover { background: var(--brand-primary-hover); }
+  .section-header .actions button.done { background: var(--status-success); color: var(--text-inverse); border-color: var(--status-success); }
+  .section-header .actions button.done:hover { background: #16a34a; }
+
+  /* Edit mode banner */
+  .edit-mode-banner {
+    background: color-mix(in srgb, var(--brand-primary) 8%, var(--bg-surface));
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 25%, var(--border-default));
+    border-radius: var(--radius-lg);
+    padding: 12px 20px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .edit-mode-banner i { color: var(--brand-primary); font-size: 16px; }
+  .edit-mode-banner strong { color: var(--brand-primary); }
+
+  /* ========== PIN GRID (EDIT MODE) ========== */
+  .pin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Group Header (edit mode) */
+  .group-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 4px 0;
+    margin-top: 8px;
+  }
+  .group-header .group-name {
+    font-size: 13px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .group-header .group-line { flex: 1; height: 1px; background: var(--border-default); }
+  .group-header .group-count { font-size: 11px; color: var(--text-disabled); background: var(--bg-surface-card); padding: 2px 8px; border-radius: 10px; }
+
+  /* Group header edit controls */
+  .group-header .group-edit-controls {
+    display: flex;
+    gap: 6px;
+  }
+  .group-header .group-edit-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--text-muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all var(--transition);
+  }
+  .group-header .group-edit-btn:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--border-default);
+    color: var(--text-secondary);
+  }
+  .group-header .group-edit-btn.danger:hover {
+    color: var(--status-error);
+    background: color-mix(in srgb, var(--status-error) 8%, var(--bg-surface));
+  }
+
+  /* Editable group name input */
+  .group-name-input {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border-focus);
+    border-radius: var(--radius-sm);
+    padding: 2px 8px;
+    background: var(--bg-surface);
+    outline: none;
+    width: 160px;
+  }
+
+  /* Pin Card (edit mode) */
+  .pin-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.25s ease;
+  }
+  .pin-card.edit-mode {
+    cursor: grab;
+  }
+  .pin-card.edit-mode:active {
+    cursor: grabbing;
+  }
+  .pin-card.dragging {
+    opacity: 0.5;
+    border-color: var(--brand-primary);
+    box-shadow: var(--shadow-lg);
+    transform: rotate(2deg);
+  }
+  .pin-card.drag-over {
+    border-color: var(--brand-primary);
+    border-style: dashed;
+    background: var(--brand-primary-light);
+  }
+
+  /* Edit mode overlay controls */
+  .edit-controls {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    display: flex;
+    justify-content: space-between;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .edit-controls > * { pointer-events: auto; }
+
+  .drag-handle {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.92);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    cursor: grab;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-subtle);
+    transition: all var(--transition);
+  }
+  .drag-handle:hover { color: var(--text-primary); background: white; box-shadow: var(--shadow-md); }
+
+  .edit-card-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .edit-card-btn {
+    width: 28px; height: 28px;
+    background: rgba(255,255,255,0.92);
+    border-radius: var(--radius-sm);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-subtle);
+    transition: all var(--transition);
+  }
+  .edit-card-btn:hover { color: var(--text-primary); background: white; box-shadow: var(--shadow-md); }
+  .edit-card-btn.delete:hover { color: var(--status-error); background: #fef2f2; border-color: #fecaca; }
+
+  /* Thumbnail area */
+  .pin-thumbnail {
+    width: 100%; aspect-ratio: 16 / 10; overflow: hidden; position: relative;
+  }
+  .pin-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+  .pin-thumbnail.icon-mode {
+    display: flex; align-items: center; justify-content: center;
+    background: var(--icon-bg, var(--bg-surface-card));
+  }
+  .pin-thumbnail.icon-mode i { font-size: 36px; color: var(--icon-color, var(--text-muted)); opacity: 0.7; }
+
+  /* Pin info */
+  .pin-info { padding: 10px 12px; }
+  .pin-name {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 4px;
+  }
+  .pin-name-input {
+    font-size: 13px; font-weight: 600; color: var(--text-primary);
+    border: 1px solid var(--border-focus); border-radius: var(--radius-sm);
+    padding: 2px 6px; width: 100%; outline: none;
+    background: var(--bg-surface);
+  }
+  .pin-meta {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--text-muted);
+  }
+  .pin-meta i { font-size: 10px; }
+  .pin-meta .app-badge {
+    background: var(--bg-surface-card); padding: 1px 6px;
+    border-radius: 4px; font-size: 10px; font-weight: 600; color: var(--text-secondary);
+  }
+
+  /* Add Pin Card */
+  .add-pin-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 2px dashed var(--border-default);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 180px;
+    cursor: pointer;
+    transition: all var(--transition);
+    gap: 8px;
+    color: var(--text-muted);
+  }
+  .add-pin-card:hover {
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+    background: var(--brand-primary-light);
+  }
+  .add-pin-card i { font-size: 28px; }
+  .add-pin-card span { font-size: 13px; font-weight: 600; }
+
+  /* ========== SLIDE-IN PANEL ========== */
+  .slide-panel-backdrop {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3);
+    z-index: 2000;
+  }
+  .slide-panel {
+    position: fixed;
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    width: 400px;
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-default);
+    box-shadow: var(--shadow-xl);
+    z-index: 2001;
+    display: flex;
+    flex-direction: column;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+
+  .slide-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-surface-card);
+  }
+  .slide-panel-header h3 {
+    font-size: 16px; font-weight: 600; color: var(--text-primary);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .slide-panel-header h3 i { color: var(--brand-primary); }
+  .slide-panel-close {
+    width: 32px; height: 32px; border: none;
+    border-radius: var(--radius-md); background: transparent;
+    color: var(--text-muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all var(--transition);
+  }
+  .slide-panel-close:hover { background: var(--bg-surface-hover); color: var(--text-primary); }
+
+  /* Search box */
+  .search-box {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .search-input-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--bg-surface-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 8px 12px;
+    transition: all var(--transition);
+  }
+  .search-input-wrapper:focus-within {
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 15%, transparent);
+  }
+  .search-input-wrapper i { color: var(--text-muted); font-size: 14px; }
+  .search-input-wrapper input {
+    border: none; outline: none; background: transparent;
+    font-size: 14px; color: var(--text-primary); flex: 1;
+  }
+  .search-input-wrapper input::placeholder { color: var(--text-disabled); }
+
+  /* Group selector */
+  .group-selector {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+  .group-selector label { font-weight: 500; white-space: nowrap; }
+  .group-selector select {
+    flex: 1;
+    padding: 4px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--bg-surface);
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Panel results */
+  .panel-results {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 20px;
+  }
+  .panel-section {
+    margin-bottom: 20px;
+  }
+  .panel-section-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .panel-section-title i { font-size: 12px; }
+  .panel-section-title .count {
+    margin-left: auto;
+    background: var(--bg-surface-card);
+    padding: 1px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    color: var(--text-disabled);
+  }
+
+  .panel-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    transition: all var(--transition);
+    cursor: pointer;
+  }
+  .panel-item:hover { background: var(--bg-surface-hover); }
+  .panel-item-icon {
+    width: 36px; height: 36px;
+    border-radius: var(--radius-md);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .panel-item-icon i { font-size: 14px; }
+  .panel-item-info { flex: 1; min-width: 0; }
+  .panel-item-name { font-size: 13px; font-weight: 500; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .panel-item-sub { font-size: 11px; color: var(--text-muted); }
+  .panel-item-action { flex-shrink: 0; }
+  .panel-item-action button {
+    padding: 4px 12px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+  }
+  .pin-btn {
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+    border: 1px solid var(--brand-primary);
+  }
+  .pin-btn:hover { background: var(--brand-primary-hover); }
+  .pinned-badge {
+    background: transparent;
+    color: var(--status-success);
+    border: 1px solid var(--status-success);
+    cursor: default !important;
+  }
+
+  /* ========== DRAG PLACEHOLDER ========== */
+  .drag-placeholder {
+    background: color-mix(in srgb, var(--brand-primary) 8%, var(--bg-surface));
+    border: 2px dashed var(--brand-primary);
+    border-radius: var(--radius-lg);
+    min-height: 180px;
+    opacity: 0.6;
+  }
+
+  /* ========== TOAST ========== */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-primary);
+    color: var(--text-inverse);
+    padding: 10px 24px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow-lg);
+    z-index: 3000;
+    animation: toastIn 0.3s ease;
+  }
+  .toast i { color: var(--status-success); }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  /* ========== MOCKUP LABELS ========== */
+  .mockup-label {
+    display: inline-block;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid #fcd34d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .mockup-divider {
+    margin: 48px 0;
+    border: none;
+    border-top: 3px dashed var(--border-default);
+    position: relative;
+  }
+  .mockup-divider::after {
+    content: attr(data-label);
+    position: absolute;
+    top: -10px;
+    left: 32px;
+    background: var(--bg-page);
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 768px) {
+    .home-dashboard { padding: 20px; }
+    .home-header h1 { font-size: 24px; }
+    .pin-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .slide-panel { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Shell Header -->
+<div class="shell-header">
+  <div class="logo">MJ</div>
+  <div class="app-badge"><i class="fa-solid fa-home" style="margin-right:4px"></i> Home</div>
+  <div class="spacer"></div>
+  <div class="avatar"><i class="fa-solid fa-user"></i></div>
+</div>
+
+<div class="home-dashboard">
+  <div class="home-header">
+    <h1>Good morning, Sarah</h1>
+    <p class="date">Monday, March 31, 2026</p>
+  </div>
+
+  <!-- ========================================
+       SCENARIO 1: EDIT MODE
+       ======================================== -->
+  <div style="margin-bottom: 24px">
+    <span class="mockup-label">Scenario 1: Edit Mode Active</span>
+  </div>
+
+  <div class="pinned-section">
+    <div class="section-header">
+      <h2>
+        <i class="fa-solid fa-thumbtack"></i>
+        Pinned
+      </h2>
+      <div class="actions">
+        <button class="done"><i class="fa-solid fa-check"></i> Done Editing</button>
+      </div>
+    </div>
+
+    <div class="edit-mode-banner">
+      <i class="fa-solid fa-arrows-up-down-left-right"></i>
+      <span><strong>Edit mode</strong> &mdash; Drag cards to reorder. Click names to rename. Use <strong>+</strong> to add new pins.</span>
+    </div>
+
+    <div class="pin-grid">
+
+      <!-- Editable Pin 1 -->
+      <div class="pin-card edit-mode">
+        <div class="edit-controls">
+          <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+          <div class="edit-card-actions">
+            <button class="edit-card-btn" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="edit-card-btn delete" title="Unpin"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); display:flex;align-items:center;justify-content:center;color:white;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-chart-line" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot</span>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">Sales Dashboard</div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i> Dashboard
+            <span class="app-badge" style="color:#d32f2f">AI</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Editable Pin 2 (name being edited) -->
+      <div class="pin-card edit-mode" style="border-color: var(--border-focus); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 15%, transparent);">
+        <div class="edit-controls">
+          <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+          <div class="edit-card-actions">
+            <button class="edit-card-btn" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="edit-card-btn delete" title="Unpin"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #11998e 0%, #38ef7d 100%); display:flex;align-items:center;justify-content:center;color:white;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-table" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot</span>
+          </div>
+        </div>
+        <div class="pin-info">
+          <input class="pin-name-input" value="Active Contacts" />
+          <div class="pin-meta">
+            <i class="fa-solid fa-table-list"></i> View
+            <span class="app-badge" style="color:#5c6bc0">Data Explorer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag placeholder (showing where a dragged card would land) -->
+      <div class="drag-placeholder"></div>
+
+      <!-- Editable Pin 3 (being dragged - faded) -->
+      <div class="pin-card edit-mode dragging">
+        <div class="edit-controls">
+          <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+          <div class="edit-card-actions">
+            <button class="edit-card-btn" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="edit-card-btn delete" title="Unpin"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="pin-thumbnail icon-mode" style="--icon-bg: color-mix(in srgb, #5c6bc0 10%, #f8f9fb); --icon-color: #5c6bc0;">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">Top 10 Customers</div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-database"></i> Query
+            <span class="app-badge" style="color:#5c6bc0">Data Explorer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GROUP: Analytics (editable) -->
+      <div class="group-header">
+        <input class="group-name-input" value="ANALYTICS" />
+        <div class="group-line"></div>
+        <div class="group-edit-controls">
+          <button class="group-edit-btn danger" title="Remove group (pins move to ungrouped)">
+            <i class="fa-solid fa-folder-minus"></i> Remove Group
+          </button>
+        </div>
+      </div>
+
+      <!-- Pin in group -->
+      <div class="pin-card edit-mode">
+        <div class="edit-controls">
+          <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+          <div class="edit-card-actions">
+            <button class="edit-card-btn" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="edit-card-btn delete" title="Unpin"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); display:flex;align-items:center;justify-content:center;color:white;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-chart-pie" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot</span>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">Monthly KPIs</div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i> Dashboard
+            <span class="app-badge" style="color:#264FAF">Admin</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin in group -->
+      <div class="pin-card edit-mode">
+        <div class="edit-controls">
+          <div class="drag-handle"><i class="fa-solid fa-grip-vertical"></i></div>
+          <div class="edit-card-actions">
+            <button class="edit-card-btn" title="Edit"><i class="fa-solid fa-pen"></i></button>
+            <button class="edit-card-btn delete" title="Unpin"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+        </div>
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #fa709a 0%, #fee140 100%); display:flex;align-items:center;justify-content:center;color:white;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-users" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot</span>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">Team Performance</div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i> Dashboard
+            <span class="app-badge" style="color:#264FAF">Admin</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- + Add Pin card -->
+      <div class="add-pin-card">
+        <i class="fa-solid fa-plus"></i>
+        <span>Add Pin</span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================
+       SCENARIO 2: ADD PIN SLIDE-IN PANEL
+       ======================================== -->
+  <hr class="mockup-divider" data-label="Scenario 2: Add Pin Panel" />
+</div>
+
+<!-- Slide-in Panel (Add Pin) -->
+<div class="slide-panel-backdrop" style="pointer-events: none; opacity: 0.6;"></div>
+<div class="slide-panel">
+  <div class="slide-panel-header">
+    <h3><i class="fa-solid fa-thumbtack"></i> Add Pin</h3>
+    <button class="slide-panel-close"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+
+  <div class="search-box">
+    <div class="search-input-wrapper">
+      <i class="fa-solid fa-magnifying-glass"></i>
+      <input type="text" placeholder="Search dashboards, views, queries, reports..." value="sales" />
+    </div>
+  </div>
+
+  <div class="group-selector">
+    <label><i class="fa-solid fa-folder" style="margin-right:4px"></i> Add to group:</label>
+    <select>
+      <option>(No group)</option>
+      <option>Analytics</option>
+      <option value="new">+ New Group...</option>
+    </select>
+  </div>
+
+  <div class="panel-results">
+
+    <!-- Dashboards -->
+    <div class="panel-section">
+      <div class="panel-section-title">
+        <i class="fa-solid fa-gauge-high"></i> Dashboards
+        <span class="count">3</span>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #d32f2f 10%, #f8f9fb);">
+          <i class="fa-solid fa-chart-line" style="color: #d32f2f;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name"><mark style="background:#fef3c7;padding:0 2px">Sales</mark> Dashboard</div>
+          <div class="panel-item-sub">AI App</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pinned-badge"><i class="fa-solid fa-check"></i> Pinned</button>
+        </div>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #264FAF 10%, #f8f9fb);">
+          <i class="fa-solid fa-chart-area" style="color: #264FAF;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name"><mark style="background:#fef3c7;padding:0 2px">Sales</mark> Pipeline Overview</div>
+          <div class="panel-item-sub">CRM App</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pin-btn"><i class="fa-solid fa-plus"></i> Pin</button>
+        </div>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #e65100 10%, #f8f9fb);">
+          <i class="fa-solid fa-money-bill-trend-up" style="color: #e65100;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name"><mark style="background:#fef3c7;padding:0 2px">Sales</mark> Forecast</div>
+          <div class="panel-item-sub">Finance App</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pin-btn"><i class="fa-solid fa-plus"></i> Pin</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Views -->
+    <div class="panel-section">
+      <div class="panel-section-title">
+        <i class="fa-solid fa-table-list"></i> Views
+        <span class="count">2</span>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #5c6bc0 10%, #f8f9fb);">
+          <i class="fa-solid fa-users" style="color: #5c6bc0;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name"><mark style="background:#fef3c7;padding:0 2px">Sales</mark> Team Members</div>
+          <div class="panel-item-sub">Data Explorer &middot; Employees entity</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pin-btn"><i class="fa-solid fa-plus"></i> Pin</button>
+        </div>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #5c6bc0 10%, #f8f9fb);">
+          <i class="fa-solid fa-handshake" style="color: #5c6bc0;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name"><mark style="background:#fef3c7;padding:0 2px">Sales</mark> Opportunities</div>
+          <div class="panel-item-sub">Data Explorer &middot; Deals entity</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pin-btn"><i class="fa-solid fa-plus"></i> Pin</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Queries -->
+    <div class="panel-section">
+      <div class="panel-section-title">
+        <i class="fa-solid fa-database"></i> Queries
+        <span class="count">1</span>
+      </div>
+
+      <div class="panel-item">
+        <div class="panel-item-icon" style="background: color-mix(in srgb, #5c6bc0 10%, #f8f9fb);">
+          <i class="fa-solid fa-database" style="color: #5c6bc0;"></i>
+        </div>
+        <div class="panel-item-info">
+          <div class="panel-item-name">Top <mark style="background:#fef3c7;padding:0 2px">Sales</mark> by Region</div>
+          <div class="panel-item-sub">Data Explorer</div>
+        </div>
+        <div class="panel-item-action">
+          <button class="pin-btn"><i class="fa-solid fa-plus"></i> Pin</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast notification -->
+<div class="toast">
+  <i class="fa-solid fa-check-circle"></i>
+  "Sales Pipeline Overview" pinned to Home
+</div>
+
+</body>
+</html>

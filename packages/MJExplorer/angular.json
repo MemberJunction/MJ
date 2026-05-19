@@ -25,9 +25,17 @@
                 "glob": "**/*",
                 "input": "../../node_modules/@memberjunction/ng-explorer-app/dist/assets",
                 "output": "/assets"
+              },
+              {
+                "glob": "pdf.worker.min.mjs",
+                "input": "../../node_modules/pdfjs-dist/build",
+                "output": "/assets"
               }
             ],
             "styles": ["src/styles.scss"],
+            "stylePreprocessorOptions": {
+              "includePaths": ["../../node_modules"]
+            },
             "scripts": []
           },
           "configurations": {
@@ -48,7 +56,8 @@
                   "maximumWarning": "6kb"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "serviceWorker": "../../node_modules/@memberjunction/ng-explorer-service-worker/ngsw-config.json"
             },
             "staging": {
               "optimization": {
@@ -149,8 +158,13 @@
                 "output": "/assets"
               }
             ],
-            "styles": ["src/styles/main.scss"],
-            "scripts": []
+            "styles": [
+              "src/styles/main.scss",
+              "../../node_modules/leaflet/dist/leaflet.css"
+            ],
+            "scripts": [
+              "../../node_modules/leaflet/dist/leaflet.js"
+            ]
           }
         }
       }

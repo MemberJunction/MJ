@@ -19,6 +19,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
@@ -52,7 +53,7 @@ import { BaseDashboardPart } from '../parts/base-dashboard-part';
     styleUrls: ['./dashboard-viewer.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class DashboardViewerComponent implements OnDestroy {
+export class DashboardViewerComponent extends BaseAngularComponent implements OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -217,6 +218,7 @@ export class DashboardViewerComponent implements OnDestroy {
         private readonly injector: Injector,
         private readonly environmentInjector: EnvironmentInjector
     ) {
+        super();
         // Store the promise so layout initialization can wait for it
         this._partTypesLoaded = this.loadPartTypes();
     }
@@ -499,8 +501,8 @@ export class DashboardViewerComponent implements OnDestroy {
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
-            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
+            const p = this.ProviderToUse;
+            const dashboard = await p.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', p.CurrentUser);
             const loaded = await dashboard.Load(id);
 
             if (loaded) {
@@ -689,7 +691,7 @@ export class DashboardViewerComponent implements OnDestroy {
      * Create a panel component from the DashboardPanel data.
      * Panel comes directly from GL's componentState - no lookup needed.
      */
-    private createPanelComponent(panel: DashboardPanel, container: HTMLElement): void {
+    private async createPanelComponent(panel: DashboardPanel, container: HTMLElement): Promise<void> {
         const partType = this.partTypes.find(pt => UUIDsEqual(pt.ID, panel.partTypeId));
 
         // Create the panel wrapper with header and content
@@ -709,7 +711,7 @@ export class DashboardViewerComponent implements OnDestroy {
         content.style.cssText = 'flex: 1; overflow: auto; min-height: 0;';
 
         // Try to create dynamic component via ClassFactory
-        const componentRef = this.createDynamicPartComponent(panel, partType, content);
+        const componentRef = await this.createDynamicPartComponent(panel, partType, content);
 
         if (!componentRef) {
             // Fallback to static rendering if no DriverClass or component creation failed
@@ -726,18 +728,18 @@ export class DashboardViewerComponent implements OnDestroy {
     /**
      * Create a dynamic part component using ClassFactory
      */
-    private createDynamicPartComponent(
+    private async createDynamicPartComponent(
         panel: DashboardPanel,
         partType: MJDashboardPartTypeEntity | undefined,
         container: HTMLElement
-    ): ComponentRef<BaseDashboardPart> | null {
+    ): Promise<ComponentRef<BaseDashboardPart> | null> {
         if (!partType?.DriverClass) {
             return null;
         }
 
         try {
             // Use ClassFactory to create instance and get the component class
-            const partInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseDashboardPart>(
+            const partInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseDashboardPart>(
                 BaseDashboardPart,
                 partType.DriverClass
             );

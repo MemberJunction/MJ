@@ -474,6 +474,119 @@ describe('ConfigurePhase', () => {
     });
   });
 
+  // ─── OverwriteConfig flag ───────────────────────────────────────────
+
+  describe('OverwriteConfig flag', () => {
+    it('should overwrite existing .env when OverwriteConfig is true', async () => {
+      mockFs.FileExists.mockImplementation(async (path: string) => {
+        if (path.endsWith('.env')) return true;
+        return false;
+      });
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ReadText.mockResolvedValue('OLD_CONTENT=should_be_replaced');
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const config = sampleConfig();
+      config.DatabaseHost = 'new-host';
+      const ctx = makeContext({ Config: config, Yes: true, OverwriteConfig: true });
+      const result = await phase.Run(ctx);
+
+      // .env should be in FilesWritten (overwritten, not preserved)
+      const rootEnvWritten = result.FilesWritten.some(f => f.endsWith('.env') && !f.includes('MJAPI'));
+      expect(rootEnvWritten).toBe(true);
+
+      // Content should be freshly generated, not the old content
+      const envContent = findWrittenContent('.env');
+      expect(envContent).not.toContain('OLD_CONTENT');
+      expect(envContent).toContain("DB_HOST='new-host'");
+    });
+
+    it('should overwrite existing mj.config.cjs when OverwriteConfig is true', async () => {
+      mockFs.FileExists.mockImplementation(async (path: string) => {
+        if (path.endsWith('mj.config.cjs')) return true;
+        return false;
+      });
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ReadText.mockResolvedValue('module.exports = { old: true };');
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const config = sampleConfig();
+      config.DatabaseHost = 'overwrite-host';
+      const ctx = makeContext({ Config: config, Yes: true, OverwriteConfig: true });
+      const result = await phase.Run(ctx);
+
+      const configWritten = result.FilesWritten.some(f => f.endsWith('mj.config.cjs'));
+      expect(configWritten).toBe(true);
+
+      const configContent = findWrittenContent('mj.config.cjs');
+      expect(configContent).not.toContain('old: true');
+      expect(configContent).toContain("host: 'overwrite-host'");
+    });
+
+    it('should overwrite existing environment.ts files when OverwriteConfig is true', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.ListFiles.mockImplementation(async (dir: string) => {
+        if (dir.includes('environments')) return ['environment.ts', 'environment.development.ts'];
+        return [];
+      });
+      mockFs.ReadText.mockResolvedValue("AUTH_TYPE: 'auth0'");
+
+      const config = sampleConfig();
+      config.AuthProvider = 'entra';
+      config.AuthProviderValues = { TenantID: 'new-tenant', ClientID: 'new-client' };
+      const ctx = makeContext({ Config: config, Yes: true, OverwriteConfig: true });
+      const result = await phase.Run(ctx);
+
+      // Environment files should be in FilesWritten (overwritten, not preserved)
+      const envTsWritten = result.FilesWritten.some(f => f.endsWith('environment.ts'));
+      const devTsWritten = result.FilesWritten.some(f => f.endsWith('environment.development.ts'));
+      expect(envTsWritten).toBe(true);
+      expect(devTsWritten).toBe(true);
+    });
+
+    it('should preserve existing files when OverwriteConfig is false (default)', async () => {
+      mockFs.FileExists.mockImplementation(async (path: string) => {
+        if (path.endsWith('.env')) return true;
+        if (path.endsWith('mj.config.cjs')) return true;
+        return false;
+      });
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ReadText.mockResolvedValue('module.exports = { settings: {}, encryptionKeys: { MJ_BASE_ENCRYPTION_KEY: process.env.MJ_BASE_ENCRYPTION_KEY || "" } };');
+      mockFs.ListFiles.mockImplementation(async (dir: string) => {
+        if (dir.includes('environments')) return ['environment.ts'];
+        return [];
+      });
+
+      const ctx = makeContext({ Yes: true }); // OverwriteConfig not set
+      const result = await phase.Run(ctx);
+
+      // mj.config.cjs should NOT be in FilesWritten (preserved)
+      const configWritten = result.FilesWritten.some(f => f.endsWith('mj.config.cjs'));
+      expect(configWritten).toBe(false);
+    });
+
+    it('should log overwrite mode message when OverwriteConfig is true', async () => {
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.DirectoryExists.mockImplementation(async (path: string) => {
+        if (path.includes('environments')) return false;
+        if (path.includes('MJExplorer/src') || path.includes('MJExplorer\\src')) return true;
+        return true;
+      });
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const { emitter, emitSpy } = createMockEmitter();
+      const ctx = makeContext({ Yes: true, OverwriteConfig: true, Emitter: emitter });
+      await phase.Run(ctx);
+
+      const logEvents = emittedEvents(emitSpy, 'log');
+      const overwriteLog = logEvents.find((e: unknown) =>
+        (e as Record<string, string>).Message?.includes('Overwrite mode enabled')
+      );
+      expect(overwriteLog).toBeDefined();
+    });
+  });
+
   // ─── Warning about default values in yes mode ──────────────────────
 
   describe('yes mode default values warning', () => {

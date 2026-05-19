@@ -701,60 +701,69 @@ GO
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [__mj].[spCreateRecordChange_Internal]
-GO
-CREATE PROCEDURE [__mj].[spCreateRecordChange_Internal]
-    @EntityName nvarchar(100),
-    @RecordID NVARCHAR(750),
-	  @UserID uniqueidentifier,
-    @Type nvarchar(20),
-    @ChangesJSON nvarchar(MAX),
-    @ChangesDescription nvarchar(MAX),
-    @FullRecordJSON nvarchar(MAX),
-    @Status nchar(15),
-    @Comments nvarchar(MAX)
+CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
+    @EntityName       NVARCHAR(100),
+    @RecordID         NVARCHAR(750),
+    @UserID           UNIQUEIDENTIFIER,
+    @Type             NVARCHAR(20),
+    @ChangesJSON      NVARCHAR(MAX),
+    @ChangesDescription NVARCHAR(MAX),
+    @FullRecordJSON   NVARCHAR(MAX),
+    @Status           NCHAR(15),
+    @Comments         NVARCHAR(MAX),
+    @Source           NVARCHAR(20)     = NULL,
+    @RestoredFromID   UNIQUEIDENTIFIER = NULL,
+    @RestoreReason    NVARCHAR(MAX)    = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
-    INSERT INTO 
-    [__mj].[RecordChange]
+
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER);
+
+    INSERT INTO __mj.[RecordChange]
         (
             EntityID,
             RecordID,
-			      UserID,
+            UserID,
             Type,
+            Source,
             ChangedAt,
             ChangesJSON,
             ChangesDescription,
             FullRecordJSON,
             Status,
-            Comments
+            Comments,
+            RestoredFromID,
+            RestoreReason
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
             (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
             @RecordID,
-			      @UserID,
+            @UserID,
             @Type,
+            ISNULL(@Source, 'Internal'),
             GETUTCDATE(),
             @ChangesJSON,
             @ChangesDescription,
             @FullRecordJSON,
             @Status,
-            @Comments
-        )
+            @Comments,
+            @RestoredFromID,
+            @RestoreReason
+        );
 
-    -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [__mj].vwRecordChanges WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    -- Return the new record from the base view so calculated fields are included
+    SELECT *
+    FROM __mj.vwRecordChanges
+    WHERE [ID] = (SELECT [ID] FROM @InsertedRow);
 END
-
-GO 
-GRANT EXEC ON __mj.spCreateRecordChange_Internal TO cdp_Developer, cdp_Integration, cdp_UI
-
 GO
 
+GRANT EXECUTE ON __mj.[spCreateRecordChange_Internal] TO [cdp_Developer], [cdp_Integration], [cdp_UI];
+GO
+ 
 
 
 ------------------------------------------------------------
@@ -965,7 +974,8 @@ SELECT
 	c.is_nullable AllowsNull,
 	IIF(COALESCE(bt.name, t.name) IN ('timestamp', 'rowversion'), 1, IIF(basetable_columns.is_identity IS NULL, 0, basetable_columns.is_identity)) AutoIncrement,
 	c.column_id,
-	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- updated so that we take into account that computed columns are virtual always, previously only looked for existence of a column in table vs. a view
+	IIF(basetable_columns.column_id IS NULL OR cc.definition IS NOT NULL, 1, 0) IsVirtual, -- view-only columns OR computed columns are both flagged virtual (read-only at API layer); use IsComputed below to disambiguate
+	IIF(cc.definition IS NOT NULL, 1, 0) IsComputed, -- computed columns are physically in the base table but read-only at the SQL layer; distinct from view-only virtual columns
 	basetable_columns.object_id,
 	dc.name AS DefaultConstraintName,
   dc.definition AS DefaultValue,
@@ -1208,6 +1218,7 @@ BEGIN
         DefaultValue NVARCHAR(MAX),
         AutoIncrement BIT,
         IsVirtual BIT,
+        IsComputed BIT,
         Sequence INT,
         RelatedEntityID UNIQUEIDENTIFIER,
         RelatedEntityFieldName NVARCHAR(255),
@@ -1233,6 +1244,7 @@ BEGIN
         CONVERT(nvarchar(max),fromSQL.DefaultValue),
         fromSQL.AutoIncrement,
         fromSQL.IsVirtual,
+        fromSQL.IsComputed,
         fromSQL.Sequence,
         re.ID AS RelatedEntityID,
         fk.referenced_column AS RelatedEntityFieldName,
@@ -1294,6 +1306,7 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.DefaultValue)), '') <> ISNULL(LTRIM(RTRIM(CONVERT(NVARCHAR(MAX), fromSQL.DefaultValue))), '') OR
           ef.AutoIncrement <> fromSQL.AutoIncrement OR
           ef.IsVirtual <> fromSQL.IsVirtual OR
+          ef.IsComputed <> fromSQL.IsComputed OR
           ef.Sequence <> fromSQL.Sequence OR
           ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, ef.RelatedEntityID), '00000000-0000-0000-0000-000000000000') <> ISNULL(TRY_CONVERT(UNIQUEIDENTIFIER, re.ID), '00000000-0000-0000-0000-000000000000') OR -- Use TRY_CONVERT here
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
@@ -1316,6 +1329,7 @@ BEGIN
         ef.DefaultValue = fr.DefaultValue,
         ef.AutoIncrement = fr.AutoIncrement,
         ef.IsVirtual = fr.IsVirtual,
+        ef.IsComputed = fr.IsComputed,
         ef.Sequence = fr.Sequence,
         ef.RelatedEntityID = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityID, ef.RelatedEntityID), -- if AutoUpdate is not on, respect the current value
         ef.RelatedEntityFieldName = IIF(ef.AutoUpdateRelatedEntityInfo = 1, fr.RelatedEntityFieldName, ef.RelatedEntityFieldName), -- if AutoUpdate is not on, respect the current value
@@ -1545,32 +1559,33 @@ GO
 
 
 /************* EXTERNAL TRACK CHANGES STUFF HERE *********/
-DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking 
+DROP VIEW IF EXISTS __mj.vwEntitiesWithExternalChangeTracking
 GO
-CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking 
+CREATE VIEW __mj.vwEntitiesWithExternalChangeTracking
 AS
-SELECT   
-  e.* 
-FROM 
+SELECT
+  e.*
+FROM
   __mj.vwEntities e
 WHERE
   e.TrackRecordChanges=1
+  AND e.DetectExternalChanges=1
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_UpdatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
   AND
     EXISTS (
-		  SELECT 
-			  1 
-		  FROM 
-			  __mj.vwEntityFields ef 
-		  WHERE 
+		  SELECT
+			  1
+		  FROM
+			  __mj.vwEntityFields ef
+		  WHERE
 			  ef.Name='__mj_CreatedAt' AND ef.Type='datetimeoffset' AND ef.EntityID = e.ID
 		  )
 GO

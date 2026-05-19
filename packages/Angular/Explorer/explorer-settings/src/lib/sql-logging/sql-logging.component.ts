@@ -64,7 +64,7 @@ interface SqlLoggingConfig {
 })
 @RegisterClass(BaseDashboard, 'SqlLogging')
 export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   /** Whether the component is currently performing an async operation */
   loading = false;
@@ -208,7 +208,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
   private async checkUserPermissions() {
     try {
       // Try multiple ways to get the current user
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const currentUser = md.CurrentUser;
 
       console.log('Method 1 - Metadata.CurrentUser:', {
@@ -249,7 +249,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   openStartSessionDialog() {
     // Set default session name
-    const currentUser = new Metadata().CurrentUser;
+    const currentUser = this.ProviderToUse.CurrentUser;
     this.newSessionOptions.sessionName = `SQL Logging - ${currentUser?.Name || currentUser?.Email || 'Unknown'} - ${new Date().toLocaleString()}`;
     this.newSessionOptions.fileName = `sql-log-${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     this.showStartSessionDialog = true;
@@ -263,7 +263,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     try {
       this.loading = true;
 
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
         mutation StartSqlLogging($input: StartSqlLoggingInput!) {
           startSqlLogging(input: $input) {
@@ -335,7 +335,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     try {
       this.loading = true;
 
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
         mutation StopSqlLogging($sessionId: String!) {
           stopSqlLogging(sessionId: $sessionId)
@@ -373,7 +373,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     try {
       this.loading = true;
 
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const mutation = `
         mutation StopAllSqlLogging {
           stopAllSqlLogging
@@ -418,7 +418,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   async loadSessionLog(session: any) {
     try {
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
         query ReadSqlLogFile($sessionId: String!, $maxLines: Int) {
           readSqlLogFile(sessionId: $sessionId, maxLines: $maxLines)
@@ -472,7 +472,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   async loadSqlLoggingConfig() {
     try {
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
         query SqlLoggingConfig {
           sqlLoggingConfig {
@@ -531,7 +531,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
    */
   async loadActiveSessions() {
     try {
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
         query ActiveSqlLoggingSessions {
           activeSqlLoggingSessions {
@@ -754,7 +754,7 @@ export class SqlLoggingComponent extends BaseDashboard implements OnDestroy {
     try {
       this.loading = true;
 
-      const dataProvider = Metadata.Provider as GraphQLDataProvider;
+      const dataProvider = this.ProviderToUse as GraphQLDataProvider;
       const query = `
         query DebugCurrentUserEmail {
           debugCurrentUserEmail

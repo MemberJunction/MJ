@@ -75,8 +75,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
   private shortcutsSettingEntity: MJUserSettingEntity | null = null;
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   // Evaluation preferences
   evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
 
@@ -96,7 +95,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
   // Service injections
   private navigationService = inject(NavigationService);
-  private testingDialogService = inject(TestingDialogService);
+  public testingDialogService = inject(TestingDialogService);
   private evalPrefsService = inject(EvaluationPreferencesService);
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
@@ -127,6 +126,13 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       .subscribe(value => {
         this.matrixTestFilter = value;
         this.cdr.markForCheck();
+      });
+
+    // Subscribe to panel state changes so the slide panel renders in this form
+    this.testingDialogService.PanelStateChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.cdr.detectChanges();
       });
   }
 
@@ -185,7 +191,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestSuiteTestEntity>({
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
@@ -210,7 +216,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
@@ -307,8 +313,13 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
   async runSuite() {
     if (this.record?.ID) {
-      this.testingDialogService.OpenSuiteDialog(this.record.ID, this.viewContainerRef);
+      this.testingDialogService.OpenSuitePanel(this.record.ID);
     }
+  }
+
+  OnPanelClosed(): void {
+    this.testingDialogService.ClosePanel();
+    this.cdr.markForCheck();
   }
 
   async refresh() {
@@ -363,7 +374,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
 
     try {
       // Load all runs for analytics (not just recent 50)
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `SuiteID='${this.record.ID}'`,
@@ -512,7 +523,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const filteredRuns = this.getFilteredAnalyticsData();
 
       // Load test runs for each suite run (limit to most recent 10 for performance)
@@ -608,7 +619,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     if (testRunIds.length === 0) return feedbackMap;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Build IN clause for the IDs (batch in chunks to avoid query size limits)
       const chunkSize = 50;
       for (let i = 0; i < testRunIds.length; i += chunkSize) {
@@ -1131,10 +1142,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
           tooltipParts.push(`<div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>`);
         }
         if (this.evalPreferences.showHuman) {
-          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#f59e0b">👤</span> <strong>Human:</strong> <span style="color:#94a3b8">Needs review</span></div>`);
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-warning)">👤</span> <strong>Human:</strong> <span style="color:var(--mj-text-disabled)">Needs review</span></div>`);
         }
         if (this.evalPreferences.showAuto && result.score != null) {
-          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#3b82f6">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-info)">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
         }
         const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
 
@@ -1599,7 +1610,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load test runs for both suite runs in parallel
       const [resultA, resultB] = await Promise.all([

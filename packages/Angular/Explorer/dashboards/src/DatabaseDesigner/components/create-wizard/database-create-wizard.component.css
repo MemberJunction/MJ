@@ -1,0 +1,129 @@
+.wizard-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ── Split body ───────────────────────────────────────────────────────────── */
+
+.wizard-split {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.wizard-split as-split-area {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wizard-preview {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+
+.wizard-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.wizard-body-full {
+  width: 100%;
+}
+
+/* ── Inline banner (at top of step content) ──────────────────────────────── */
+
+.wizard-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  margin: 16px 20px 0;
+  border-radius: 8px;
+  border: 1px solid var(--mj-status-error-border);
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  flex-shrink: 0;
+}
+
+.wizard-banner > i {
+  font-size: 16px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.wizard-banner-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wizard-banner-title {
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.wizard-banner-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wizard-banner-list li {
+  word-break: break-word;
+}
+
+.wizard-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.wizard-banner-dismiss {
+  background: transparent;
+  border: 0;
+  color: var(--mj-status-error-text);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  opacity: 0.7;
+  transition: opacity 120ms, background-color 120ms;
+}
+
+.wizard-banner-dismiss:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+
+.wizard-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+  flex-shrink: 0;
+}
+
+.footer-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}

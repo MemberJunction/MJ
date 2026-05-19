@@ -110,9 +110,48 @@ Make sure the changeset entries accurately reflect the release:
 
 ---
 
+## Local Build Validation
+
+### Step 6: Full Repo Build
+
+**This must be done before creating the release PR.** A full local build validates compilation across all packages and regenerates bootstrap manifest files that may have drifted across merged PRs.
+
+```bash
+# 1. Pull the latest next branch
+git checkout next
+git pull origin next
+
+# 2. Clean install dependencies
+npm install
+
+# 3. Full repo build
+npm run build
+```
+
+**Expected behavior:**
+- The `npm run build` step runs `turbo build` across all `@memberjunction/*` packages
+- The `postbuild` step regenerates bootstrap manifests (`mj-class-registrations.ts`) for:
+  - `packages/ServerBootstrap/src/generated/`
+  - `packages/ServerBootstrapLite/src/generated/`
+  - `packages/Angular/Bootstrap/src/generated/`
+  - `packages/Angular/BootstrapLite/src/generated/`
+- **You will likely see diffs in these generated files.** This is normal — different PRs merge class registrations independently, and the full build reconciles them into the correct combined manifest. Commit these regenerated files to `next` before creating the release PR.
+
+```bash
+# If bootstrap files changed, commit them
+git add packages/ServerBootstrap/src/generated/ packages/ServerBootstrapLite/src/generated/ \
+       packages/Angular/Bootstrap/src/generated/ packages/Angular/BootstrapLite/src/generated/
+git commit -m "chore: regenerate bootstrap manifests for release"
+git push origin next
+```
+
+> **Why this matters:** Git merging catches code-level conflicts, but bootstrap manifests are generated files that concatenate registrations from all packages. Two PRs each adding a new `@RegisterClass` will merge cleanly (no git conflict) but the manifest won't contain both registrations until a full build regenerates it. Skipping this step can cause missing class registrations at runtime.
+
+---
+
 ## Creating the Release
 
-### Step 6: Create PR from `next` → `main`
+### Step 7: Create PR from `next` → `main`
 
 > **Important:** All changes from the previous steps (metadata migration scripts, new changesets, AI model updates) must already be committed and pushed to `next` before creating this PR.
 
@@ -125,7 +164,7 @@ Make sure the changeset entries accurately reflect the release:
    - `dependency-check.yml` — checks for missing npm dependencies
    - `claude.yml` — reviews migration files for hardcoded UUIDs
 
-### Step 7: Merge the PR
+### Step 8: Merge the PR
 
 Once all checks pass, merge the PR into `main`.
 
@@ -135,7 +174,7 @@ Once all checks pass, merge the PR into `main`.
 
 Merging to `main` triggers a chain of automated workflows. Monitor each one.
 
-### 7a. `publish.yml` — Build & Publish Packages
+### 8a. `publish.yml` — Build & Publish Packages
 
 **Triggered by:** push to `main`
 
@@ -150,7 +189,7 @@ This workflow:
 8. Tags the release
 9. **Auto-merges `main` back into `next`** and updates lock files
 
-### 7b. `docker.yml` — Build & Publish Docker Images
+### 8b. `docker.yml` — Build & Publish Docker Images
 
 **Triggered by:** `publish.yml` completion
 
@@ -160,7 +199,7 @@ Builds and pushes multi-platform Docker images (`linux/amd64`, `linux/arm64`):
 
 > **Known issue:** This workflow sometimes fails because it tries to install the newly published npm packages before they've fully propagated on the npm registry. If it fails, **re-run the failed job** — it usually succeeds on the second attempt.
 
-### 7c. `docs.yml` — Update Package Documentation
+### 8c. `docs.yml` — Update Package Documentation
 
 **Triggered by:** `publish.yml` completion
 
@@ -178,7 +217,7 @@ Builds TypeDoc documentation and deploys to GitHub Pages.
 
 ## Post-Release Updates
 
-### Step 8: Update MJ Documentation Site
+### Step 9: Update MJ Documentation Site
 
 Go to [ReadMe Dashboard](https://dash.readme.com/):
 
@@ -188,7 +227,7 @@ Go to [ReadMe Dashboard](https://dash.readme.com/):
 4. Update the download URL with the new version number
 5. **Save** — this can be done while the post-merge actions are still running
 
-### Step 9: Update Changelog
+### Step 10: Update Changelog
 
 **Wait until ALL of the following are complete before saving:**
 - [ ] npm packages published

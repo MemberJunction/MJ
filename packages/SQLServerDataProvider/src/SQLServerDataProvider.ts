@@ -52,12 +52,15 @@ import {
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
   RunQueryWithCacheCheckParams,
+  SaveContext,
+  RestoreContext,
+  RecordChangePayload,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
-import { GenericDatabaseProvider, ExecuteSQLBatchOptions } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
@@ -70,7 +73,7 @@ import {
 } from './types.js';
 
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { EncryptionEngine } from '@memberjunction/encryption';
+
 import { v4 as uuidv4 } from 'uuid';
 import { UUIDsEqual } from '@memberjunction/global';
 import { SQLServerDialect, SQLDialect } from '@memberjunction/sql-dialect';
@@ -211,9 +214,18 @@ async function executeSQLCore(
       return executeSQLCore(query, parameters, context, options, true);
     }
 
-    // Build detailed error message with query and parameters
+    // Build detailed error message with query and parameters.
+    // mssql RequestError has a precedingErrors array with the actual root-cause
+    // SQL Server messages (e.g. "object already exists") that precede the
+    // generic "Could not create constraint" wrapper. Always include them.
+    const precedingMsgs: string =
+      Array.isArray(error?.precedingErrors) && error.precedingErrors.length > 0
+        ? `\n    Preceding errors: ${(error.precedingErrors as Array<{ message?: string }>)
+            .map((e) => e?.message ?? String(e))
+            .join(' | ')}`
+        : '';
     const errorMessage = `Error executing SQL
-    Error: ${error?.message ? error.message : error}
+    Error: ${error?.message ? error.message : error}${precedingMsgs}
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
 
@@ -750,104 +762,13 @@ export class SQLServerDataProvider
    *           Fields marked with Encrypt=true will have their values encrypted
    *           before being included in the SQL statement.
    */
-  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<string> {
-    const result = await this.GetSaveSQLWithDetails(entity, bNewRecord, spName, user);
+  public async GetSaveSQL(entity: BaseEntity, bNewRecord: boolean, _spName: string, user: UserInfo): Promise<string> {
+    // SQLServerTransactionGroup-batched saves regenerate per-item SQL when
+    // transaction variables get rebound. `_spName` is preserved for back-compat
+    // with that caller; the dialect-driven pipeline derives it from entity
+    // metadata via `GetCreateUpdateSPName`.
+    const result = await this.GenerateSaveSQL(entity, bNewRecord, user);
     return result.fullSQL;
-  }
-
-  /**
-   * This function generates both the full SQL (with record change metadata) and the simple stored procedure call
-   * @returns Object with fullSQL and simpleSQL properties
-   *
-   * @security This method handles field-level encryption transparently.
-   *           Fields marked with Encrypt=true will have their values encrypted
-   *           before being included in the SQL statement.
-   */
-  private async GetSaveSQLWithDetails(entity: BaseEntity, bNewRecord: boolean, spName: string, user: UserInfo): Promise<{ fullSQL: string; simpleSQL: string; overlappingChangeData?: { changesJSON: string; changesDescription: string } }> {
-    // Generate the stored procedure parameters - now returns an object with structured SQL
-    // This is async because it may need to encrypt field values
-    const spParams = await this.generateSPParams(entity, !bNewRecord, user);
-    
-    // Build the simple SQL - use the new DECLARE/SET/EXEC pattern
-    let sSimpleSQL: string;
-    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
-    if (spParams.variablesSQL) {
-      sSimpleSQL = `${spParams.variablesSQL}\n\n${spParams.setSQL}\n\n${execSQL}`;
-    } else {
-      sSimpleSQL = execSQL;
-    }
-    
-    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
-    let sSQL: string = '';
-    let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
-    if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
-      // don't track changes for the record changes entity
-      let oldData = null;
-      // use SQL Server CONCAT function to combine all of the primary key values and then combine them together
-      // using the default field delimiter and default value delimiter as defined in the CompositeKey class
-      const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys.map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
-
-      if (!bNewRecord) oldData = entity.GetAll(true); // get all the OLD values, only do for existing records, for new records, not relevant
-
-      // Capture the diff for overlapping subtype Record Change propagation.
-      // Must happen before finalizeSave() resets OldValues, since the diff would be lost.
-      // Returned to Save() which handles propagation — this is a backend-only concern.
-      const newData = entity.GetAll(false);
-      if (!bNewRecord && oldData) {
-        const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
-        const diffKeys = diffChanges ? Object.keys(diffChanges) : [];
-        if (diffKeys.length > 0) {
-          overlappingChangeData = {
-            changesJSON: JSON.stringify(diffChanges),
-            changesDescription: this.CreateUserDescriptionOfChanges(diffChanges)
-          };
-        }
-      }
-
-      const logRecordChangeSQL = this.GetLogRecordChangeSQL(newData, oldData, entity.EntityInfo.Name, '@ID', entity.EntityInfo, bNewRecord ? 'Create' : 'Update', user, false);
-      if (logRecordChangeSQL === null) {
-        // if we don't have any record changes to log, just return the simple SQL to run which will do nothing but update __mj_UpdatedAt
-        // this can happen if a subclass overrides the Dirty() flag to make the object dirty due to factors outside of the
-        // array of fields that are directly stored in the DB and we need to respect that but this will blow up if we try
-        // to log record changes when there are none, so we just return the simple SQL to run
-        sSQL = sSimpleSQL; 
-      }
-      else {
-        // For complex case with record change tracking, we need to insert DECLARE statements at the top
-        const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}`;
-        sSQL = `
-                    ${spParams.variablesSQL}
-                    
-                    DECLARE @ResultTable TABLE (
-                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
-                    );
-
-                    ${spParams.setSQL}
-
-                    INSERT INTO @ResultTable
-                    ${execSQL};
-
-                    DECLARE @ID NVARCHAR(MAX);
-                    
-                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
-                    
-                    IF @ID IS NOT NULL
-                    BEGIN
-                        DECLARE @ResultChangesTable TABLE (
-                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
-                        );
-
-                        INSERT INTO @ResultChangesTable
-                        ${logRecordChangeSQL};
-                    END;
-
-                    SELECT * FROM @ResultTable;`; // NOTE - in the above, we call the T-SQL variable @ID for simplicity just as a variable name, even though for each entity the pkey could be something else. Entity pkeys are not always a field called ID could be something else including composite keys.
-      }
-    } else {
-      // not doing track changes for this entity, keep it simple
-      sSQL = sSimpleSQL;
-    }
-    return { fullSQL: sSQL, simpleSQL: sSimpleSQL, overlappingChangeData };
   }
 
   /**
@@ -892,140 +813,184 @@ export class SQLServerDataProvider
    * @security Fields with Encrypt=true are encrypted before being sent to the database.
    *           Encryption uses the key specified in EncryptionKeyID.
    */
-  private async generateSPParams(
-    entity: BaseEntity,
+  /**
+   * SQL Server per-field value transform. Coerces `datetimeoffset` to ISO
+   * string for inline SET emission, and skips non-PK `uniqueidentifier`
+   * values that look like SQL function calls (e.g. `newid()`) so the DB
+   * default fires instead. PK-on-create with no explicit value is handled
+   * upstream in `GenericDatabaseProvider.GenerateSaveSQL`'s iteration loop.
+   */
+  protected override CoerceSaveFieldValue(
+    field: EntityFieldInfo,
+    value: unknown,
     isUpdate: boolean,
-    contextUser?: UserInfo
-  ): Promise<{ variablesSQL: string; setSQL: string; execParams: string; simpleParams: string }> {
-    // Generate a unique suffix for variable names to avoid collisions in batch scripts
-    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+  ): SaveCoercedValue {
+    if (value && field.Type.trim().toLowerCase() === 'datetimeoffset') {
+      return { kind: 'use', value: new Date(value as string | number | Date).toISOString() };
+    }
+    if (!isUpdate && field.Type.trim().toLowerCase() === 'uniqueidentifier' && !field.IsPrimaryKey) {
+      if (typeof value === 'string' && value.includes('()')) {
+        return { kind: 'skip' };
+      }
+    }
+    return { kind: 'use', value };
+  }
 
+  /**
+   * Renders the SQL Server DECLARE/SET/EXEC binding for a save call.
+   * Emits per-field uuid-suffixed variables to keep batched saves
+   * (`SQLServerTransactionGroup`) collision-free. PKs on UPDATE are
+   * tail-appended from `entity.PrimaryKey.KeyValuePairs`.
+   *
+   * Emits `_Clear` companion args when a nullable column carrying a
+   * non-NULL DB default is explicitly set to NULL — without it the SP
+   * body's `ISNULL(@Param, [Col])` (update) / default-substitution
+   * (create) would silently keep the existing value. See
+   * `EntityFieldInfo.NeedsClearCompanion`.
+   */
+  protected override RenderSaveCallBinding(
+    entity: BaseEntity,
+    fieldValues: Map<EntityFieldInfo, unknown>,
+    isUpdate: boolean,
+    _spName: string,
+  ): SaveCallBinding {
+    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
-    let simpleParams: string = '';
-    let bFirst: boolean = true;
+    let simpleParams = '';
+    let bFirst = true;
 
-    // Get the encryption engine instance (lazy - only used if needed)
-    let encryptionEngine: EncryptionEngine | null = null;
+    for (const [f, value] of fieldValues) {
+      const varName = `@${f.CodeName}${uniqueSuffix}`;
+      declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
 
-    for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
-      const f = entity.EntityInfo.Fields[i];
-      // For CREATE operations, include primary keys that are not auto-increment and have actual values
-      const includePrimaryKeyForCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement && entity.Get(f.Name) !== null && entity.Get(f.Name) !== undefined;
-
-      if (f.AllowUpdateAPI || includePrimaryKeyForCreate) {
-        if (!f.SkipValidation || includePrimaryKeyForCreate) {
-          // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
-          // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
-          // EXCEPTION: Include primary keys for CREATE when they have values and are not auto-increment
-
-          const theField = entity.Fields.find((field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase());
-          const tempStatus = theField.ActiveStatusAssertions;
-          theField.ActiveStatusAssertions = false; // turn off warnings for this operation
-          let value = theField.Value;// entity.Get(f.Name);
-          theField.ActiveStatusAssertions = tempStatus; // restore the status assertions
-
-          if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
-            // for non-null datetimeoffset fields, we need to convert the value to ISO format
-            value = new Date(value).toISOString();
-          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier' && !includePrimaryKeyForCreate) {
-            // in the case of unique identifiers, for CREATE procs only,
-            // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
-            // in those cases we should just skip the parameter entirely because that means there is a default value that should be used
-            // and that will be handled by the database not by us
-            // instead of just checking for specific functions like newid(), we can instead check for any string that includes ()
-            // this way we can handle any function that the database might support in the future
-            // EXCEPTION: Don't skip if we're including a primary key for create
-            if (typeof value === 'string' && value.includes('()')) {
-              continue; // skip this field entirely by going to the next iteration of the loop
-            }
-          }
-
-          // ========================================================================
-          // FIELD-LEVEL ENCRYPTION
-          // If the field is marked for encryption and has a non-null value,
-          // encrypt it before storing in the database.
-          // ========================================================================
-          if (f.Encrypt && f.EncryptionKeyID && value !== null && value !== undefined) {
-            // Lazy-load encryption engine only when needed
-            if (!encryptionEngine) {
-              encryptionEngine = EncryptionEngine.Instance;
-              await encryptionEngine.Config(false, contextUser);
-            }
-
-            // Only encrypt if the value is not already encrypted
-            // This handles cases where values may already be encrypted (e.g., re-save scenarios)
-            const keyMarker = encryptionEngine.GetKeyByID(f.EncryptionKeyID)?.Marker;
-            if (!encryptionEngine.IsEncrypted(value, keyMarker)) {
-              try {
-                // Convert value to string for encryption if it isn't already
-                const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
-                value = await encryptionEngine.Encrypt(stringValue, f.EncryptionKeyID, contextUser);
-              } catch (encryptError) {
-                // Log the error but throw to prevent unencrypted storage
-                // SECURITY: Never store unencrypted data in an encrypted field
-                const message = encryptError instanceof Error ? encryptError.message : String(encryptError);
-                throw new Error(
-                  `Failed to encrypt field "${f.Name}" on entity "${entity.EntityInfo.Name}": ${message}. ` +
-                  'The save operation has been aborted to prevent storing unencrypted sensitive data.'
-                );
-              }
-            }
-          }
-          // ========================================================================
-
-          // Generate variable name with unique suffix
-          const varName = `@${f.CodeName}${uniqueSuffix}`;
-
-          // Add declaration with proper SQL type using existing SQLFullType property
-          declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
-
-          // Add SET statement if value is not null (SQL variables default to NULL)
-          if (value !== null && value !== undefined) {
-            const setValueSQL = this.generateSetStatementValue(f, value);
-            setStatements.push(`SET ${varName} = ${setValueSQL}`);
-          }
-
-          // Add to EXEC parameters
-          execParams.push(`@${f.CodeName}=${varName}`);
-
-          // Also build the old-style simple params for backward compatibility
-          simpleParams += this.generateSingleSPParam(f, value, bFirst);
-          bFirst = false;
-        }
+      if (value !== null && value !== undefined) {
+        setStatements.push(`SET ${varName} = ${this.generateSetStatementValue(f, value)}`);
       }
-    }
-    if (isUpdate && execParams.length > 0) {
-      // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call
-      for (const pkey of entity.PrimaryKey.KeyValuePairs) {
-        const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === pkey.FieldName.trim().toLowerCase());
-        const varName = `@${f.CodeName}${uniqueSuffix}`;
-        
-        // Add declaration using existing SQLFullType property
-        declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
-        
-        // Add SET statement
-        const setValueSQL = this.generateSetStatementValue(f, pkey.Value);
-        setStatements.push(`SET ${varName} = ${setValueSQL}`);
-        
-        // Add to EXEC parameters
-        execParams.push(`@${f.CodeName}=${varName}`);
-        
-        // Also add to simple params
-        const pkeyQuotes = f.NeedsQuotes ? "'" : '';
-        simpleParams += `, @${f.CodeName} = ` + pkeyQuotes + pkey.Value + pkeyQuotes; // add pkey to update SP at end, but only if other fields included
-      }
+      execParams.push(`@${f.CodeName}=${varName}`);
+      simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
       bFirst = false;
+
+      if ((value === null || value === undefined) && f.NeedsClearCompanion) {
+        execParams.push(`@${f.CodeName}_Clear=1`);
+        simpleParams += `, @${f.CodeName}_Clear=1`;
+      }
     }
 
-    // Return the structured result with all components
+    // UPDATE: tail-append PK declarations from the loaded entity's PrimaryKey.
+    if (isUpdate && execParams.length > 0) {
+      for (const pkv of entity.PrimaryKey.KeyValuePairs) {
+        const f = entity.EntityInfo.Fields.find(
+          (x) => x.Name.trim().toLowerCase() === pkv.FieldName.trim().toLowerCase(),
+        );
+        if (!f) continue;
+        const varName = `@${f.CodeName}${uniqueSuffix}`;
+        declarations.push(`${varName} ${f.SQLFullType.toUpperCase()}`);
+        setStatements.push(`SET ${varName} = ${this.generateSetStatementValue(f, pkv.Value)}`);
+        execParams.push(`@${f.CodeName}=${varName}`);
+        const pkeyQuotes = f.NeedsQuotes ? "'" : '';
+        simpleParams += `, @${f.CodeName} = ${pkeyQuotes}${pkv.Value}${pkeyQuotes}`;
+      }
+    }
+
     return {
-      variablesSQL: declarations.length > 0 ? `DECLARE ${declarations.join(',\n        ')}` : '',
+      kind: 'mssql-declare-exec',
+      preambleSQL: declarations.length > 0 ? `DECLARE ${declarations.join(',\n        ')}` : '',
       setSQL: setStatements.join('\n'),
-      execParams: execParams.join(',\n                '),
-      simpleParams: simpleParams
+      callArgsSQL: execParams.join(',\n                '),
+      simpleParamsSQL: simpleParams,
     };
+  }
+
+  /**
+   * Wraps the bare SP-call binding with SQL Server's no-record-change save
+   * shape: `DECLARE ... ; SET ... ; EXEC [schema].sp callArgs`. When
+   * record-change tracking is on, this output is further wrapped by
+   * `WrapSaveCallWithRecordChange`.
+   */
+  protected override WrapSaveCallForResult(
+    binding: SaveCallBinding,
+    entity: BaseEntity,
+    spName: string,
+  ): SaveSQLFragment {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.WrapSaveCallForResult: unexpected binding kind '${binding.kind}'`);
+    }
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
+    const sql = binding.preambleSQL
+      ? `${binding.preambleSQL}\n\n${binding.setSQL}\n\n${execSQL}`
+      : execSQL;
+    return { sql };
+  }
+
+  /**
+   * Wraps the save SQL with SQL Server's @ResultTable + inline
+   * `spCreateRecordChange_Internal` EXEC pattern. The CONCAT-built `@ID`
+   * inline supports composite-key entities.
+   */
+  protected override WrapSaveCallWithRecordChange(
+    _saveSQL: SaveSQLFragment,
+    binding: SaveCallBinding,
+    payload: RecordChangePayload,
+    entity: BaseEntity,
+  ): SaveSQLFragment {
+    if (binding.kind !== 'mssql-declare-exec') {
+      throw new Error(`SQLServerDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
+    }
+    const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
+    const spName = this.GetCreateUpdateSPName(entity, payload.type === 'Create');
+    const concatPKIDString = `CONCAT(${entity.EntityInfo.PrimaryKeys
+      .map((pk) => `'${pk.CodeName}','${CompositeKey.DefaultValueDelimiter}',${pk.Name}`)
+      .join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
+
+    // Build the inline `EXEC spCreateRecordChange_Internal` from the payload,
+    // referencing `@ID` (set below from the result table).
+    const restoreClause = payload.source === 'Restore'
+      ? `,
+                                                                                        @Source='Restore',
+                                                                                        @RestoredFromID='${payload.restoredFromID}',
+                                                                                        @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : '';
+    const recordChangeEXEC = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entity.EntityInfo.Name}',
+                                                                                        @RecordID=@ID,
+                                                                                        @UserID='${payload.userID}',
+                                                                                        @Type='${payload.type}',
+                                                                                        @ChangesJSON='${payload.changesJSON}',
+                                                                                        @ChangesDescription='${payload.changesDescription}',
+                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
+                                                                                        @Status='Complete',
+                                                                                        @Comments=null${restoreClause}`;
+
+    const execSQL = `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${binding.callArgsSQL}`;
+    const sql = `
+                    ${binding.preambleSQL}
+
+                    DECLARE @ResultTable TABLE (
+                        ${this.getAllEntityColumnsSQL(entity.EntityInfo)}
+                    );
+
+                    ${binding.setSQL}
+
+                    INSERT INTO @ResultTable
+                    ${execSQL};
+
+                    DECLARE @ID NVARCHAR(MAX);
+
+                    SELECT @ID = ${concatPKIDString} FROM @ResultTable;
+
+                    IF @ID IS NOT NULL
+                    BEGIN
+                        DECLARE @ResultChangesTable TABLE (
+                            ${this.getAllEntityColumnsSQL(recordChangesEntityInfo)}
+                        );
+
+                        INSERT INTO @ResultChangesTable
+                        ${recordChangeEXEC};
+                    END;
+
+                    SELECT * FROM @ResultTable;`;
+    return { sql };
   }
 
   /**
@@ -1165,24 +1130,40 @@ export class SQLServerDataProvider
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
     wrapRecordIdInQuotes: boolean,
+    restoreContext?: RestoreContext | null,
   ) {
-    const fullRecordJSON: string = JSON.stringify(this.EscapeQuotesInProperties(newData ? newData : oldData, "'")); // stringify old data if we don't have new - means we are DELETING A RECORD
-    const changes: any = this.DiffObjects(oldData, newData, entityInfo, "'");
-    const changesKeys = changes ? Object.keys(changes) : [];
-    if (changesKeys.length > 0 || oldData === null /*new record*/ || newData === null /*deleted record*/) {
-      const changesJSON: string = changes !== null ? JSON.stringify(changes) : '';
-      const quotes = wrapRecordIdInQuotes ? "'" : '';
-      const sSQL = `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
+    // Dialect-agnostic payload assembly is hoisted into DatabaseProviderBase
+    // so SQL Server and PostgreSQL share one implementation. We only render
+    // the T-SQL EXEC wrapper here.
+    const payload = this.BuildRecordChangePayload(
+      newData,
+      oldData,
+      String(recordID),
+      entityInfo,
+      type,
+      user,
+      restoreContext,
+      "'",
+    );
+    if (!payload) return null;
+
+    const quotes = wrapRecordIdInQuotes ? "'" : '';
+    const restoreClause = payload.source === 'Restore'
+      ? `,
+                                                                                        @Source='Restore',
+                                                                                        @RestoredFromID='${payload.restoredFromID}',
+                                                                                        @RestoreReason=${payload.restoreReason ? `N'${payload.restoreReason.replace(/'/g, "''")}'` : 'NULL'}`
+      : '';
+
+    return `EXEC [${this.MJCoreSchemaName}].spCreateRecordChange_Internal @EntityName='${entityName}',
                                                                                         @RecordID=${quotes}${recordID}${quotes},
-                                                                                        @UserID='${user.ID}',
-                                                                                        @Type='${type}',
-                                                                                        @ChangesJSON='${changesJSON}',
-                                                                                        @ChangesDescription='${oldData && newData ? this.CreateUserDescriptionOfChanges(changes) : !oldData ? 'Record Created' : 'Record Deleted'}',
-                                                                                        @FullRecordJSON='${fullRecordJSON}',
+                                                                                        @UserID='${payload.userID}',
+                                                                                        @Type='${payload.type}',
+                                                                                        @ChangesJSON='${payload.changesJSON}',
+                                                                                        @ChangesDescription='${payload.changesDescription}',
+                                                                                        @FullRecordJSON='${payload.fullRecordJSON}',
                                                                                         @Status='Complete',
-                                                                                        @Comments=null`;
-      return sSQL;
-    } else return null;
+                                                                                        @Comments=null${restoreClause}`;
   }
   /**
    * Implements the abstract BuildRecordChangeSQL from DatabaseProviderBase.
@@ -1196,8 +1177,9 @@ export class SQLServerDataProvider
     entityInfo: EntityInfo,
     type: 'Create' | 'Update' | 'Delete',
     user: UserInfo,
+    restoreContext?: RestoreContext | null,
   ): { sql: string; parameters?: unknown[] } | null {
-    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true);
+    const sql = this.GetLogRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, true, restoreContext);
     if (sql) return { sql };
     return null;
   }
@@ -1269,7 +1251,7 @@ export class SQLServerDataProvider
                         )
 
                         INSERT INTO @ResultChangesTable
-                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true)}
+                        ${this.GetLogRecordChangeSQL(null /*pass in null for new data for deleted records*/, oldData, entity.EntityInfo.Name, sCombinedPrimaryKey, entity.EntityInfo, 'Delete', user, true, entity.RestoreContext)}
                     END
 
                     SELECT ${sReturnList}`;
@@ -1285,18 +1267,13 @@ export class SQLServerDataProvider
   // START ---- DatabaseProviderBase Override Hooks (Phase 2)
   /**************************************************************************/
 
-  protected override async GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-    const spName = this.GetCreateUpdateSPName(entity, isNew);
-    const sqlDetails = await this.GetSaveSQLWithDetails(entity, isNew, spName, user);
-    const result: SaveSQLResult = {
-      fullSQL: sqlDetails.fullSQL,
-      simpleSQL: sqlDetails.simpleSQL,
-    };
-    if (sqlDetails.overlappingChangeData) {
-      result.extraData = { overlappingChangeData: sqlDetails.overlappingChangeData };
-    }
-    return result;
-  }
+  // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
+  // dialect-driven concrete builder. overlappingChangeData for ISA
+  // propagation is populated by the inherited method via `extraData`.
+  // SS-specific save composition lives in CoerceSaveFieldValue /
+  // RenderSaveCallBinding / WrapSaveCallForResult /
+  // WrapSaveCallWithRecordChange (see this file's "Save Grammar" section
+  // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
   protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
     const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
@@ -1304,32 +1281,6 @@ export class SQLServerDataProvider
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
     };
-  }
-
-  protected override async OnSaveCompleted(
-    entity: BaseEntity,
-    saveSQLResult: SaveSQLResult,
-    user: UserInfo,
-    options: EntitySaveOptions,
-  ): Promise<void> {
-    const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
-      | { changesJSON: string; changesDescription: string }
-      | undefined;
-    if (
-      overlappingChangeData &&
-      entity.EntityInfo.AllowMultipleSubtypes &&
-      entity.EntityInfo.TrackRecordChanges
-    ) {
-      const transaction = (entity.ProviderTransaction as sql.Transaction) ?? undefined;
-      await this.PropagateRecordChangesToSiblings(
-        entity.EntityInfo,
-        overlappingChangeData,
-        entity.PrimaryKey.Values(),
-        user?.ID ?? '',
-        options.ISAActiveChildEntityName,
-        transaction ? { connectionSource: transaction } : undefined,
-      );
-    }
   }
 
   protected override OnSuspendRefresh(): void {
@@ -1983,24 +1934,32 @@ export class SQLServerDataProvider
 
 
   /**
-   * Builds a UNION ALL query that checks each child entity's base table for a record
-   * with the given primary key. Returns the first match (disjoint subtypes guarantee
-   * at most one result) unless used with overlapping subtypes.
+   * Builds a UNION ALL query that probes each child entity's BaseView for a
+   * record with the given primary key. Returns the first match (disjoint
+   * subtypes guarantee at most one result) unless used with overlapping
+   * subtypes.
+   *
+   * Probes BaseView rather than BaseTable so the runtime SQL identity, which
+   * has SELECT only on views (not on the underlying tables), can execute it.
+   * All identifier and string-literal formatting is delegated to the dialect
+   * so the same generation logic produces correct SQL on any future platform.
    */
   protected override BuildChildDiscoverySQL(
     childEntities: EntityInfo[],
     recordPKValue: string
   ): string {
-    // Sanitize the PK value to prevent SQL injection
-    const safePKValue = recordPKValue.replace(/'/g, "''");
+    const dialect = this.getDialect();
+    const pkValueLit = dialect.QuoteStringLiteral(recordPKValue);
+    const aliasName = dialect.QuoteColumnAlias('EntityName');
 
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map(child => {
         const schema = child.SchemaName || '__mj';
-        const table = child.BaseTable;
-        const pkName = child.PrimaryKeys[0].Name;
-        return `SELECT '${child.Name.replace(/'/g, "''")}' AS EntityName FROM [${schema}].[${table}] WHERE [${pkName}] = '${safePKValue}'`;
+        const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
+        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const nameLit = dialect.QuoteStringLiteral(child.Name);
+        return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
 
     if (unionParts.length === 0) return '';
@@ -2129,6 +2088,23 @@ IF ${varName} IS NOT NULL
         this._savepointStack.pop();
       }
     } catch (e) {
+      // If commit() threw after we already decremented _transactionDepth to 0,
+      // the caller's RollbackTransaction() will see depth===0 and refuse to act,
+      // leaving the mssql transaction permanently open on SQL Server and holding
+      // row locks until the TCP connection drops (requires MJAPI restart).
+      // Detect this state and force a direct rollback to release the locks.
+      if (this._transactionDepth === 0 && this._transaction) {
+        try {
+          await this._transaction.rollback();
+        } catch (rollbackError) {
+          LogError('Rollback after commit failure also failed:', undefined, rollbackError);
+        } finally {
+          this._transaction = null;
+          this._savepointStack = [];
+          this._savepointCounter = 0;
+          this._transactionState$.next(false);
+        }
+      }
       LogError(e);
       throw e; // force caller to handle
     }

@@ -61,6 +61,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
 
+    /** Job IDs we have already warned about for sub-threshold run frequency. */
+    private highFrequencyWarnedJobIds: Set<string> = new Set();
+
+    /** Threshold (ms) below which a job's run frequency triggers a console warning. */
+    private static readonly HIGH_FREQUENCY_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
+
     // ========================================================================
     // DELEGATED METADATA PROPERTIES AND METHODS
     // ========================================================================
@@ -162,6 +168,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     this.StopPolling();
                     return;
                 }
+
+                this.warnAboutHighFrequencyJobs();
             }
             try {
                 const runs = await this.ExecuteScheduledJobs(contextUser);
@@ -235,11 +243,114 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Recalculate polling interval
         this.UpdatePollingInterval();
 
+        // Re-evaluate frequency warnings against the freshly loaded jobs.
+        // Drop entries for jobs that no longer exist so deleted/disabled jobs
+        // can re-warn if they come back, and so a slowed-down job re-warns
+        // if its cron is later tightened again.
+        const liveIds = new Set(this.ScheduledJobs.map(j => j.ID));
+        for (const id of this.highFrequencyWarnedJobIds) {
+            if (!liveIds.has(id)) {
+                this.highFrequencyWarnedJobIds.delete(id);
+            }
+        }
+        this.warnAboutHighFrequencyJobs();
+
         // If polling is stopped and we now have jobs, restart it
         if (!this.isPolling && this.ScheduledJobs.length > 0) {
             console.log(`📅 Scheduled Jobs: Jobs detected, starting polling`);
             this.StartPolling(contextUser);
         }
+    }
+
+    /**
+     * Inspect every active job's cron expression and emit a hard-to-miss
+     * banner warning for any whose minimum run interval is below the
+     * configured threshold (5 minutes). Each offending job is warned about
+     * once per process lifetime; the warned-set is cleared on `OnJobChanged`
+     * for jobs whose cron has effectively changed (covered by the caller).
+     * @private
+     */
+    private warnAboutHighFrequencyJobs(): void {
+        const threshold = SchedulingEngine.HIGH_FREQUENCY_WARNING_THRESHOLD_MS;
+        const offenders: Array<{ job: MJScheduledJobEntity; intervalMs: number }> = [];
+
+        for (const job of this.ScheduledJobs) {
+            if (this.highFrequencyWarnedJobIds.has(job.ID) || !job.CronExpression) {
+                continue;
+            }
+            const intervalMs = CronExpressionHelper.GetMinIntervalMs(
+                job.CronExpression,
+                job.Timezone || 'UTC'
+            );
+            if (intervalMs < threshold) {
+                offenders.push({ job, intervalMs });
+                this.highFrequencyWarnedJobIds.add(job.ID);
+            }
+        }
+
+        if (offenders.length === 0) {
+            return;
+        }
+
+        const bar = '═'.repeat(79);
+        const lines: string[] = [
+            '',
+            bar,
+            '⚠️   HIGH-FREQUENCY SCHEDULED JOB WARNING',
+            bar,
+            '',
+            `  ${offenders.length === 1 ? 'A scheduled job is' : `${offenders.length} scheduled jobs are`} configured to run more often than every 5 minutes.`,
+            '  Please reconsider — this is rarely the right tool for that frequency:',
+            ''
+        ];
+        for (const { job, intervalMs } of offenders) {
+            lines.push(`    • ${job.Name}`);
+            lines.push(`        cron:     ${job.CronExpression}  (${job.Timezone || 'UTC'})`);
+            lines.push(`        interval: ~${this.formatInterval(intervalMs)} between runs`);
+        }
+        lines.push('');
+        lines.push('  Why this is a concern:');
+        lines.push('    - Each run writes a run record, takes a DB lock, and pays polling overhead');
+        lines.push('    - Short intervals create lock contention and large run-history tables');
+        lines.push('    - Tight cron schedules usually point to a different mechanism being a');
+        lines.push('      better fit than the Scheduled Jobs system');
+        lines.push('');
+        lines.push('  Better-fitting alternatives to consider:');
+        lines.push('    - Event-driven: have the producer notify you (queue, webhook, entity event)');
+        lines.push('    - Long-running worker: a single process that loops with backoff');
+        lines.push('    - Coalesced batch: run every 5+ minutes and process all pending work in one pass');
+        lines.push('');
+        lines.push('  The job will still run as configured — this is a recommendation, not a block.');
+        lines.push('');
+        lines.push(bar);
+        lines.push('');
+
+        for (const line of lines) {
+            console.warn(line);
+        }
+    }
+
+    /**
+     * Format a millisecond duration into a short, human-readable string
+     * (e.g. "30 seconds", "2 minutes", "1 minute 30 seconds").
+     * @private
+     */
+    private formatInterval(ms: number): string {
+        if (ms < 1000) {
+            return `${ms} ms`;
+        }
+        const totalSeconds = Math.round(ms / 1000);
+        if (totalSeconds < 60) {
+            return totalSeconds === 1 ? '1 second' : `${totalSeconds} seconds`;
+        }
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const minPart = minutes === 1 ? '1 minute' : `${minutes} minutes`;
+        if (seconds === 0) {
+            return minPart;
+        }
+        const secPart = seconds === 1 ? '1 second' : `${seconds} seconds`;
+        return `${minPart} ${secPart}`;
     }
 
     /**
@@ -446,9 +557,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
@@ -540,7 +652,18 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (job.ExpectedCompletionAt && now > job.ExpectedCompletionAt) {
                 console.log(`      → Lock is STALE, cleaning up...`);
                 this.log(`Detected stale lock on job ${job.Name}, cleaning up`);
-                await this.cleanupStaleLock(job);
+                const cleaned = await this.cleanupStaleLock(job);
+                if (!cleaned) {
+                    console.log(`      ❌ Failed to clean up stale lock, skipping`);
+                    return false;
+                }
+                // Reload from DB to verify cleanup succeeded
+                await job.Load(job.ID);
+                if (job.LockToken != null) {
+                    console.log(`      ❌ Lock still present after cleanup (re-acquired by ${job.LockedByInstance}), skipping`);
+                    return false;
+                }
+                console.log(`      ✓ Stale lock cleaned successfully`);
             } else {
                 console.log(`      → Lock is ACTIVE (not stale), returning false`);
                 return false;
@@ -549,11 +672,22 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`      → No lock exists, will try to acquire`);
         }
 
+        return this.attemptLockAcquisition(job);
+    }
+
+    /**
+     * Attempt to acquire a fresh lock on a job that is currently unlocked.
+     * Separated from tryAcquireLock to keep the stale-cleanup and acquisition
+     * paths distinct and easier to follow.
+     * @private
+     */
+    private async attemptLockAcquisition(job: MJScheduledJobEntity): Promise<boolean> {
         const lockToken = this.generateGuid();
         const instanceId = this.getInstanceIdentifier();
         const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000);
 
         try {
+            // Reload to get latest DB state right before acquiring
             await job.Load(job.ID);
 
             if (job.LockToken != null) {
@@ -574,46 +708,59 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 console.log(`      ✅ Lock acquired successfully!`);
                 return true;
             } else {
-                console.log(`      ❌ Save failed - likely race condition with another server`);
-                job.LockToken = null;
-                job.LockedAt = null;
-                job.LockedByInstance = null;
-                job.ExpectedCompletionAt = null;
+                console.log(`      ❌ Save failed: ${job.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                this.clearInMemoryLockFields(job);
                 return false;
             }
         } catch (error) {
             this.logError(`Failed to acquire lock for job ${job.Name}`, error);
-            job.LockToken = null;
-            job.LockedAt = null;
-            job.LockedByInstance = null;
-            job.ExpectedCompletionAt = null;
+            this.clearInMemoryLockFields(job);
             return false;
         }
+    }
+
+    /**
+     * Clear in-memory lock fields without saving — used when a save attempt
+     * fails and we need the in-memory object to reflect "unlocked" so the
+     * next poll cycle doesn't see a phantom lock.
+     * @private
+     */
+    private clearInMemoryLockFields(job: MJScheduledJobEntity): void {
+        job.LockToken = null;
+        job.LockedAt = null;
+        job.LockedByInstance = null;
+        job.ExpectedCompletionAt = null;
     }
 
     /**
      * Release a lock after job execution
      * @private
      */
-    private async releaseLock(job: MJScheduledJobEntity): Promise<void> {
+    private async releaseLock(job: MJScheduledJobEntity): Promise<boolean> {
         try {
             job.LockToken = null;
             job.LockedAt = null;
             job.LockedByInstance = null;
             job.ExpectedCompletionAt = null;
-            await job.Save();
+            const saved = await job.Save();
+            if (!saved) {
+                this.logError(`Failed to release lock for job ${job.Name}: ${job.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
+            }
+            return saved;
         } catch (error) {
             this.logError(`Failed to release lock for job ${job.Name}`, error);
+            return false;
         }
     }
 
     /**
-     * Clean up a stale lock
+     * Clean up a stale lock. Returns true if the lock was successfully
+     * cleared in the database, false if the save failed.
      * @private
      */
-    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<void> {
+    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<boolean> {
         this.log(`Cleaning up stale lock on job ${job.Name} (locked by ${job.LockedByInstance})`);
-        await this.releaseLock(job);
+        return this.releaseLock(job);
     }
 
     /**
@@ -622,9 +769,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createQueuedJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser

@@ -219,14 +219,21 @@
 
 /* Hidden components should not display - ensure [hidden] attribute works properly */
 mj-entity-cards[hidden],
-mj-timeline[hidden] {
+mj-timeline[hidden],
+mj-map-view[hidden] {
   display: none !important;
 }
 
 /* Visible view components should fill available space */
 mj-entity-cards:not([hidden]),
-mj-timeline:not([hidden]) {
+mj-timeline:not([hidden]),
+mj-map-view:not([hidden]) {
   display: block;
   height: 100%;
   width: 100%;
+}
+
+/* Hide map toggle when entity does not support geocoding */
+.toggle-btn.geo-hidden {
+  display: none !important;
 }

@@ -2,7 +2,7 @@ import type { IConversionRule, ConversionContext, StatementType } from './types.
 import {
   convertIdentifiers, convertDateFunctions, convertCharIndex,
   convertStringConcat, convertTopToLimit, convertIIF,
-  removeNPrefix, convertCommonFunctions,
+  removeNPrefix, convertCommonFunctions, emitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
 
@@ -13,6 +13,7 @@ export class FunctionRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_FUNCTION'];
   Priority = 35;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE FUNCTION (scalar UDFs, table-valued functions, inline TVFs) has substantial syntactic and semantic differences from PG functions: RETURNS TABLE syntax, BEGIN ATOMIC vs LANGUAGE plpgsql, schema binding, deterministic markers, IF/ELSE/WHILE control flow, and type system. sqlglot translation is incomplete and error-prone for this surface.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     const upper = sql.toUpperCase();
@@ -92,7 +93,11 @@ export class FunctionRule implements IConversionRule {
         if (colDefs) returnsClause = `RETURNS TABLE(${colDefs})`;
       }
 
-      return `CREATE OR REPLACE FUNCTION ${funcName}(${params})\n${returnsClause} AS $$\n${query}\n$$ LANGUAGE sql;`;
+      // Strip the schema/quoting from funcName for the pg_proc lookup.
+      // funcName here is the form `__mj."FuncName"` (or unquoted variant).
+      const bareName = funcName.replace(/^__mj\.\s*/, '').replace(/^"|"$/g, '');
+      const dropBlock = emitDropOverloadsBlock(bareName);
+      return `${dropBlock}CREATE OR REPLACE FUNCTION ${funcName}(${params})\n${returnsClause} AS $$\n${query}\n$$ LANGUAGE sql;`;
     }
     return sql;
   }
@@ -149,7 +154,13 @@ export class FunctionRule implements IConversionRule {
       body = body.replace(/\bISNULL\s*\(/gi, 'COALESCE(');
 
       const declareBlock = declares.length > 0 ? 'DECLARE\n' + declares.join('\n') + '\n' : '';
-      return `${header}\nAS $$\n${declareBlock}BEGIN\n${body.trim()}\nEND;\n$$ LANGUAGE plpgsql;`;
+      // Extract the function name from the header so we can prepend the
+      // shared DROP-overloads block. Header looks like
+      //   CREATE OR REPLACE FUNCTION __mj."FuncName"(...) RETURNS ...
+      // We need just `FuncName` (no schema, no quotes).
+      const nameMatch = header.match(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:__mj\.)?"?(\w+)"?/i);
+      const dropBlock = nameMatch ? emitDropOverloadsBlock(nameMatch[1]) : '';
+      return `${dropBlock}${header}\nAS $$\n${declareBlock}BEGIN\n${body.trim()}\nEND;\n$$ LANGUAGE plpgsql;`;
     }
 
     // Fallback: basic wrapping

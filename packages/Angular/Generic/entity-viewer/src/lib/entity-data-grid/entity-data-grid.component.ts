@@ -11,13 +11,24 @@ import {
   NgZone
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { buildPkString, computeFieldsList } from '../utils/record.util';
-import { MJUserViewEntityExtended, ViewInfo, ViewGridState, UserViewEngine, UserInfoEngine, ColumnFormat, ColumnTextStyle, ViewGridAggregatesConfig, ViewGridAggregate } from '@memberjunction/core-entities';
+import {
+  MJUserViewEntityExtended,
+  ViewInfo,
+  ViewGridState,
+  UserViewEngine,
+  UserInfoEngine,
+  MJUserViewEntity_IColumnFormat as ColumnFormat,
+  MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+  MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate
+} from '@memberjunction/core-entities';
 import {
   ColDef,
   GridReadyEvent,
@@ -154,7 +165,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     ])
   ]
 })
-export class EntityDataGridComponent implements OnInit, OnDestroy {
+export class EntityDataGridComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   // ========================================
   // Data Source Inputs (RunViewParams-based)
   // ========================================
@@ -275,6 +286,23 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
    * TotalRowCount from server responses. The pager auto-hides when there's only one page.
    */
   @Input() ShowPager: boolean = false;
+
+  /**
+   * Whether to render the Recycle Bin chip in the toolbar. The chip
+   * auto-hides itself when the entity has no deleted records, doesn't
+   * track changes, or the user lacks Delete permission — so it stays
+   * out of the way on entities where it's not relevant.
+   * @default true
+   */
+  @Input() ShowRecycleBin: boolean = true;
+
+  /**
+   * Convenience accessor for the resolved entity name. Returns null when
+   * the entity hasn't been resolved yet (e.g., before data loads).
+   */
+  public get entityInfoName(): string | null {
+    return this._entityInfo?.Name ?? null;
+  }
 
   /**
    * Current page number for the shared pager (1-based).
@@ -1436,7 +1464,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     private elementRef: ElementRef,
     private exportService: ExportService,
     private ngZone: NgZone
-  ) {}
+  ) {
+  super();}
 
   // ========================================
   // Lifecycle Hooks
@@ -1572,7 +1601,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
         this._viewEntity = null;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
@@ -1647,7 +1676,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return viewEntity.ViewEntityInfo;
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // Second try: Look up by Entity name (virtual field that returns entity name)
     if (viewEntity.Entity) {
@@ -1768,8 +1797,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     // Only apply grid state from view entity if not already set via props
     // (gridState input takes precedence)
     if (!this._gridState && this._viewEntity.GridState) {
-      try {
-        const gridState = JSON.parse(this._viewEntity.GridState) as ViewGridState;
+      const gridState = this._viewEntity.GridStateObject;
+      if (gridState) {
         if (gridState.columnSettings?.length) {
           this._gridState = {
             columnSettings: gridState.columnSettings,
@@ -1781,8 +1810,6 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         if (gridState.aggregates && !this._aggregatesConfig) {
           this._aggregatesConfig = gridState.aggregates;
         }
-      } catch (e) {
-        console.warn('Failed to parse view GridState:', e);
       }
     }
 
@@ -1923,7 +1950,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Build the ExtraFilter from params or view entity
       let extraFilter: string | undefined;
@@ -2907,7 +2934,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           }));
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         ...runViewParams,
         ResultType: 'simple',
@@ -3041,7 +3068,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           runViewParams.StartRow = startRow;
           runViewParams.MaxRows = blockSize;
 
-          const rv = new RunView();
+          const rv = RunView.FromMetadataProvider(this.ProviderToUse);
           const result = await rv.RunView<Record<string, unknown>>({
             ...runViewParams,
             ResultType: 'simple',
@@ -3644,24 +3671,19 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       this.isSavingState = true;
       this.pendingStateToSave = state;
 
-      // Build the grid state JSON matching ViewGridState format
-      const gridStateJson: ViewGridState = {
-        columnSettings: state.columnSettings,
-        sortSettings: state.sortSettings,
-        aggregates: state.aggregates
-      };
-
-      // Update the view entity's GridState
-      this._viewEntity.GridState = JSON.stringify(gridStateJson);
+      // Mutate the existing GridState object and write back via typed setter
+      const gridState = this._viewEntity.GridStateObject ?? {};
+      gridState.columnSettings = state.columnSettings;
+      gridState.sortSettings = state.sortSettings;
+      gridState.aggregates = state.aggregates;
+      this._viewEntity.GridStateObject = gridState;
 
       // Update SortState separately if changed
       if (state.sortSettings?.length) {
-        this._viewEntity.SortState = JSON.stringify(
-          state.sortSettings.map(s => ({
+        this._viewEntity.SortStateObject = state.sortSettings.map(s => ({
             field: s.field,
-            dir: s.dir
-          }))
-        );
+            direction: s.dir
+          }));
       }
 
       // Save the view entity

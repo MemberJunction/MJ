@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Alberta",
+      "Code": "AB",
+      "ISO3166_2": "CA-AB",
+      "Latitude": 55.0013,
+      "Longitude": -115.0021,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-AB.geojson",
+      "CommonAliases": [
+        "Alberta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "9DE79BEB-2E42-45C9-BEFE-0D3ABE207EFA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.760Z",
+      "checksum": "e3cd461e34fa31e8044f1c7493cef84211d9cbfbbfddfb87e1d380a7e866f580"
+    }
+  },
+  {
+    "fields": {
+      "Name": "British Columbia",
+      "Code": "BC",
+      "ISO3166_2": "CA-BC",
+      "Latitude": 55.0013,
+      "Longitude": -125.0024,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-BC.geojson",
+      "CommonAliases": [
+        "British Columbia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "A4825B49-A21E-496D-AFA0-F29804465BEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.779Z",
+      "checksum": "e0e3dd38e93c8217fa2a368468cc99e88cb3eba0a685924b50da5afb10f331cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manitoba",
+      "Code": "MB",
+      "ISO3166_2": "CA-MB",
+      "Latitude": 55.0013,
+      "Longitude": -97.001,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-MB.geojson",
+      "CommonAliases": [
+        "Manitoba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "427D5132-5DF3-43CD-9780-EA296CD969DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.796Z",
+      "checksum": "10458bae9c024f02ec2e5cf49b18fd11b431d569c02a2550dd8044624f81e8cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Brunswick",
+      "Code": "NB",
+      "ISO3166_2": "CA-NB",
+      "Latitude": 46.5003,
+      "Longitude": -66.7502,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-NB.geojson",
+      "CommonAliases": [
+        "New Brunswick"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "FD7B51D4-9CDC-4E20-A720-D16E7AEBD88E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.813Z",
+      "checksum": "18b649a8c58d35754d53202b86b9e77e7c5e32acf3f182afecfdbe1d9f7c5b89"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Newfoundland and Labrador",
+      "Code": "NL",
+      "ISO3166_2": "CA-NL",
+      "Latitude": 53.8217,
+      "Longitude": -61.2296,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-NL.geojson",
+      "CommonAliases": [
+        "Newfoundland and Labrador"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "C89DB2BE-98B2-4C35-8295-524458784DC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.832Z",
+      "checksum": "16db2c28a83e33cd519c1fc118714e293d0196af00432a95084a0b338ea5ce53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northwest Territories",
+      "Code": "NT",
+      "ISO3166_2": "CA-NT",
+      "Latitude": 65,
+      "Longitude": -118,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-NT.geojson",
+      "CommonAliases": [
+        "Northwest Territories"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "047B8527-813C-46AA-B6F9-23281F082E97"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.850Z",
+      "checksum": "8b0a355e3c08b202d66f6037496ad4b2605bb6465343143e0c0271da954d3c26"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nova Scotia",
+      "Code": "NS",
+      "ISO3166_2": "CA-NS",
+      "Latitude": 45.196,
+      "Longitude": -63.1654,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-NS.geojson",
+      "CommonAliases": [
+        "Nova Scotia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "80A52569-5B34-4DE9-85B1-043A0A485D5C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.868Z",
+      "checksum": "01961f15b9d1b6af9c14d1c3578bb58c58081f5a610c0bdfd76ef98c833ff7ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nunavut",
+      "Code": "NU",
+      "ISO3166_2": "CA-NU",
+      "Latitude": 65.0378,
+      "Longitude": -92.5541,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-NU.geojson",
+      "CommonAliases": [
+        "Nunavut"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "48F65B31-37A0-4999-8DC5-C1C2DE14CE13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.898Z",
+      "checksum": "93641cc0ac43a7da26f90828e1e78f2baf18bc76949daf92d86521eff082aaca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ontario",
+      "Code": "ON",
+      "ISO3166_2": "CA-ON",
+      "Latitude": 50.0007,
+      "Longitude": -86.001,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-ON.geojson",
+      "CommonAliases": [
+        "Ontario"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "FD1C575E-8471-4120-9B61-3D21A5F2C575"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.916Z",
+      "checksum": "a968686b58ccf27d5a227f24575fa9d1b0bb5849adf7ef158c41c8e7c5778169"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prince Edward Island",
+      "Code": "PE",
+      "ISO3166_2": "CA-PE",
+      "Latitude": 46.5037,
+      "Longitude": -63.5954,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-PE.geojson",
+      "CommonAliases": [
+        "Prince Edward Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "59736F2A-8ED4-4162-91C1-2A347828E53E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.930Z",
+      "checksum": "16526b19ec6a616199edcf9e5ea73b0be4c05a864fc7e03967a8d6dd7caa866e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quebec",
+      "Code": "QC",
+      "ISO3166_2": "CA-QC",
+      "Latitude": 52.4761,
+      "Longitude": -71.8259,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-QC.geojson",
+      "CommonAliases": [
+        "Quebec"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "B2242C36-AE93-435D-8C74-2E24A8E73BE1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.965Z",
+      "checksum": "c9a68d7074e884cf3466f20e8996344db5684a2702881a4718b38d962100fd9d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saskatchewan",
+      "Code": "SK",
+      "ISO3166_2": "CA-SK",
+      "Latitude": 55.5321,
+      "Longitude": -106.1412,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-SK.geojson",
+      "CommonAliases": [
+        "Saskatchewan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "B09DD31A-461B-4E16-A12D-77452D0F97B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.982Z",
+      "checksum": "045112da00be742cecf5d08bb09139062aebfb54017a3cf5db1c68745166ff53"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yukon",
+      "Code": "YT",
+      "ISO3166_2": "CA-YT",
+      "Latitude": 63.0001,
+      "Longitude": -136.0025,
+      "BoundaryGeoJSON": "@file:by-country/CA/boundaries/CA-YT.geojson",
+      "CommonAliases": [
+        "Yukon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CA"
+    },
+    "primaryKey": {
+      "ID": "33397E77-B1CE-4977-8F00-DB43193A1986"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:35.999Z",
+      "checksum": "050ab8ade2409c68b88e3c57c8c06229e2ae3fb5d161b60af04bec1d98449da2"
+    }
+  }
+]

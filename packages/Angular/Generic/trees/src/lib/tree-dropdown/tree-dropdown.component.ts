@@ -47,7 +47,9 @@ import {
 import { TreeComponent } from '../tree/tree.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Dropdown position calculation result
@@ -66,7 +68,7 @@ interface DropdownPosition {
     templateUrl: './tree-dropdown.component.html',
     styleUrls: ['./tree-dropdown.component.css']
 })
-export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TreeDropdownComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
     // ========================================
     // Tree Configuration (passed to inner tree)
     // ========================================
@@ -250,7 +252,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     constructor(
         private readonly cdr: ChangeDetectorRef,
         private readonly renderer: Renderer2
-    ) {}
+    ) { super(); }
 
     // ========================================
     // Lifecycle
@@ -335,12 +337,11 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         this.calculatePosition();
         this.attachEventListeners();
 
-        // Focus search input after opening
-        setTimeout(() => {
-            if (this.EnableSearch && this.searchInput) {
-                this.searchInput.nativeElement.focus();
-            }
-        }, 50);
+        // Trigger change detection so the @if (IsOpen) block renders the dropdown panel
+        this.cdr.detectChanges();
+
+        // Focus search input after rendering
+        this.focusSearchInput();
 
         // Fire after event
         const afterEvent = new AfterDropdownOpenEventArgs(
@@ -348,8 +349,6 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             this.Position?.renderAbove ? 'above' : 'below'
         );
         this.AfterDropdownOpen.emit(afterEvent);
-
-        this.cdr.detectChanges();
     }
 
     /**
@@ -469,7 +468,9 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     }
 
     /**
-     * Handle search keydown
+     * Handle search keydown — provides full keyboard navigation while search input retains focus.
+     * The tree's own keyboard handler doesn't fire because the search input has DOM focus,
+     * so all navigation is handled here by manipulating the tree's FocusedNode visual state.
      */
     public onSearchKeyDown(event: KeyboardEvent): void {
         switch (event.key) {
@@ -480,14 +481,31 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
                 break;
             case 'ArrowDown':
                 event.preventDefault();
-                // Focus first tree node
-                if (this.treeComponent) {
-                    const visibleNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
-                    if (visibleNodes.length > 0) {
-                        this.treeComponent.FocusedNode = visibleNodes[0];
-                        this.cdr.detectChanges();
-                    }
-                }
+                this.navigateTree('down');
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                this.navigateTree('up');
+                break;
+            case 'ArrowRight':
+                event.preventDefault();
+                this.expandOrDescendFocusedNode();
+                break;
+            case 'ArrowLeft':
+                event.preventDefault();
+                this.collapseOrAscendFocusedNode();
+                break;
+            case 'Enter':
+                event.preventDefault();
+                this.selectFocusedNode();
+                break;
+            case 'Home':
+                event.preventDefault();
+                this.navigateTree('first');
+                break;
+            case 'End':
+                event.preventDefault();
+                this.navigateTree('last');
                 break;
         }
     }
@@ -582,6 +600,180 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
 
     public onTreeAfterNodeSelect(event: AfterNodeSelectEventArgs): void {
         this.AfterNodeSelect.emit(event);
+    }
+
+    // ========================================
+    // Keyboard Navigation Helpers
+    // ========================================
+
+    /**
+     * Focus the search input after the dropdown opens.
+     * Deferred to the next macrotask so that:
+     *  1. Angular has fully resolved @ViewChild queries for the @if block
+     *  2. The browser's click event (on the trigger) has completed and won't steal focus back
+     * Falls back to direct DOM querySelector if the ViewChild isn't resolved.
+     */
+    private focusSearchInput(): void {
+        if (!this.EnableSearch) return;
+
+        const tryFocus = (retriesLeft: number): void => {
+            // Try ViewChild first
+            if (this.searchInput?.nativeElement) {
+                this.searchInput.nativeElement.focus();
+                return;
+            }
+            // Fallback: query DOM directly (ViewChild may not resolve for @if blocks)
+            const panel = this.dropdownPanel?.nativeElement;
+            if (panel) {
+                const input = panel.querySelector('.tree-dropdown-search__input') as HTMLInputElement;
+                if (input) {
+                    input.focus();
+                    return;
+                }
+            }
+            // Retry on next frame
+            if (retriesLeft > 0) {
+                requestAnimationFrame(() => tryFocus(retriesLeft - 1));
+            }
+        };
+
+        // Defer to next macrotask so the click event on the trigger completes first
+        // and Angular finishes resolving ViewChild queries for the new @if block
+        setTimeout(() => tryFocus(5), 0);
+    }
+
+    /**
+     * Navigate tree focus up/down/first/last while search input retains DOM focus
+     */
+    private navigateTree(direction: 'up' | 'down' | 'first' | 'last'): void {
+        if (!this.treeComponent?.Nodes?.length) return;
+
+        const visibleNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
+        if (visibleNodes.length === 0) return;
+
+        const currentIndex = this.treeComponent.FocusedNode
+            ? visibleNodes.indexOf(this.treeComponent.FocusedNode)
+            : -1;
+
+        let targetNode: TreeNode | null = null;
+
+        switch (direction) {
+            case 'down':
+                targetNode = currentIndex === -1
+                    ? visibleNodes[0]
+                    : currentIndex < visibleNodes.length - 1
+                        ? visibleNodes[currentIndex + 1]
+                        : null;
+                break;
+            case 'up':
+                targetNode = currentIndex === -1
+                    ? visibleNodes[visibleNodes.length - 1]
+                    : currentIndex > 0
+                        ? visibleNodes[currentIndex - 1]
+                        : null;
+                break;
+            case 'first':
+                targetNode = visibleNodes[0];
+                break;
+            case 'last':
+                targetNode = visibleNodes[visibleNodes.length - 1];
+                break;
+        }
+
+        if (targetNode) {
+            this.treeComponent.FocusedNode = targetNode;
+            this.cdr.detectChanges();
+            this.scrollFocusedNodeIntoView();
+        }
+    }
+
+    /**
+     * Select the currently focused tree node (Enter key)
+     */
+    private selectFocusedNode(): void {
+        const focusedNode = this.treeComponent?.FocusedNode;
+        if (!focusedNode) return;
+
+        // Check if the node type is selectable per config
+        const isSelectable = this.SelectableTypes === 'both'
+            || (this.SelectableTypes === 'leaf' && focusedNode.Type === 'leaf')
+            || (this.SelectableTypes === 'branch' && focusedNode.Type === 'branch');
+
+        if (isSelectable) {
+            this.treeComponent.SelectNodes([focusedNode.ID], true);
+        } else if (focusedNode.Type === 'branch') {
+            // Non-selectable branch: toggle expand/collapse
+            this.toggleBranchExpansion(focusedNode);
+        }
+    }
+
+    /**
+     * ArrowRight: expand focused branch or descend to first child
+     */
+    private expandOrDescendFocusedNode(): void {
+        const node = this.treeComponent?.FocusedNode;
+        if (!node || node.Type !== 'branch') return;
+
+        if (!node.Expanded && node.Children?.length) {
+            this.treeComponent.ExpandToNode(node.Children[0].ID);
+            this.cdr.detectChanges();
+        } else if (node.Expanded && node.Children?.length) {
+            // Already expanded: move focus to first visible child
+            const firstVisible = node.Children.find(c => c.Visible);
+            if (firstVisible) {
+                this.treeComponent.FocusedNode = firstVisible;
+                this.cdr.detectChanges();
+                this.scrollFocusedNodeIntoView();
+            }
+        }
+    }
+
+    /**
+     * ArrowLeft: collapse focused branch or ascend to parent
+     */
+    private collapseOrAscendFocusedNode(): void {
+        const node = this.treeComponent?.FocusedNode;
+        if (!node) return;
+
+        if (node.Type === 'branch' && node.Expanded) {
+            // Collapse the branch
+            this.toggleBranchExpansion(node);
+        } else if (node.ParentID) {
+            // Move to parent
+            const allNodes = this.getVisibleNodesInOrder(this.treeComponent.Nodes);
+            const parent = allNodes.find(n => UUIDsEqual(n.ID, node.ParentID));
+            if (parent) {
+                this.treeComponent.FocusedNode = parent;
+                this.cdr.detectChanges();
+                this.scrollFocusedNodeIntoView();
+            }
+        }
+    }
+
+    /**
+     * Toggle expand/collapse of a branch node
+     */
+    private toggleBranchExpansion(node: TreeNode): void {
+        if (node.Expanded) {
+            node.Expanded = false;
+        } else {
+            this.treeComponent.ExpandToNode(node.ID);
+        }
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * Scroll the currently focused tree node into view within the dropdown panel
+     */
+    private scrollFocusedNodeIntoView(): void {
+        requestAnimationFrame(() => {
+            const panel = this.dropdownPanel?.nativeElement;
+            if (!panel) return;
+            const focused = panel.querySelector('.tree-node-focused, .tree-node--focused, [data-focused="true"]');
+            if (focused) {
+                focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        });
     }
 
     // ========================================
@@ -810,7 +1002,8 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
 
         const searchText = beforeEvent.ModifiedSearchText ?? text;
 
-        if (!this.treeComponent) {
+        // Guard: tree component may not be ready or may have no nodes loaded
+        if (!this.treeComponent || !this.IsLoaded) {
             return;
         }
 
@@ -824,15 +1017,15 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
             }
         );
 
-        // Auto-expand to show matches
-        if (this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
+        // Auto-expand to show matches — guard against empty results
+        if (matchedNodes.length > 0 && this.SearchConfig.AutoExpandMatches !== false && searchText.trim()) {
             for (const node of matchedNodes) {
                 this.treeComponent.ExpandToNode(node.ID);
             }
         }
 
         // Fire after event
-        const afterEvent = new AfterSearchEventArgs(this, searchText, matchedNodes);
+        const afterEvent = new AfterSearchEventArgs(this, searchText, matchedNodes ?? []);
         this.AfterSearch.emit(afterEvent);
 
         this.cdr.detectChanges();
@@ -842,7 +1035,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Clear search filter
      */
     private clearSearch(): void {
-        if (this.treeComponent) {
+        if (this.treeComponent?.Nodes?.length) {
             this.treeComponent.FilterNodes('', {});
             this.cdr.detectChanges();
         }
@@ -852,16 +1045,18 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Get all visible nodes in tree order (for keyboard navigation)
      */
     private getVisibleNodesInOrder(nodes: TreeNode[]): TreeNode[] {
+        if (!nodes || nodes.length === 0) return [];
         const result: TreeNode[] = [];
         this.collectVisibleNodesRecursive(nodes, result);
         return result;
     }
 
     private collectVisibleNodesRecursive(nodes: TreeNode[], result: TreeNode[]): void {
+        if (!nodes) return;
         for (const node of nodes) {
             if (node.Visible) {
                 result.push(node);
-                if (node.Expanded && node.Type === 'branch') {
+                if (node.Expanded && node.Type === 'branch' && node.Children?.length) {
                     this.collectVisibleNodesRecursive(node.Children, result);
                 }
             }
@@ -900,15 +1095,17 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
      * Fetch display text for value before tree loads using Metadata.GetEntityRecordName
      */
     private async fetchDisplayTextForValue(val: CompositeKey | CompositeKey[] | null): Promise<void> {
-        if (!val || !this.LeafConfig) {
+        // Determine which entity to look up: prefer LeafConfig, fall back to BranchConfig
+        // (branch-only dropdowns have no LeafConfig)
+        const entityName = this.LeafConfig?.EntityName ?? this.BranchConfig?.EntityName;
+        if (!val || !entityName) {
             this._pendingDisplayText = null;
             this.cdr.detectChanges();
             return;
         }
 
         try {
-            const md = new Metadata();
-            const entityName = this.LeafConfig.EntityName;
+            const md = this.ProviderToUse;
 
             if (Array.isArray(val)) {
                 // Multiple selection

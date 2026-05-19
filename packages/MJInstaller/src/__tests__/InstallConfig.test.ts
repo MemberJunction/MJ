@@ -39,9 +39,9 @@ describe('InstallConfigDefaults', () => {
     expect(InstallConfigDefaults.AuthProvider).toBe('none');
   });
 
-  it('should have exactly 6 keys', () => {
+  it('should have exactly 7 keys', () => {
     const keys = Object.keys(InstallConfigDefaults);
-    expect(keys).toHaveLength(6);
+    expect(keys).toHaveLength(7);
     expect(keys).toEqual(
       expect.arrayContaining([
         'DatabaseHost',
@@ -50,6 +50,7 @@ describe('InstallConfigDefaults', () => {
         'APIPort',
         'ExplorerPort',
         'AuthProvider',
+        'InstallMode',
       ])
     );
   });

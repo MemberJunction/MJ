@@ -27,6 +27,7 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
 
   @ViewChild('searchInput') SearchInput!: ElementRef<HTMLInputElement>;
   @Output() AppSelected = new EventEmitter<string>();
+  @Output() KnowledgeSearchRequested = new EventEmitter<string>();
 
   IsOpen = false;
   SearchQuery = '';
@@ -181,6 +182,16 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Navigate to Knowledge Hub search with the current query.
+   */
+  SearchKnowledgeHub(): void {
+    if (this.IsNavigating) return;
+    const query = this.SearchQuery.trim();
+    this.service.Close();
+    this.KnowledgeSearchRequested.emit(query);
+  }
+
+  /**
    * Close the command palette
    */
   Close(): void {
@@ -204,7 +215,8 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
     switch (event.key) {
       case 'ArrowDown':
         event.preventDefault();
-        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.FilteredApps.length - 1);
+        // Allow selecting up to FilteredApps.length (the Knowledge Hub action is at that index)
+        this.SelectedIndex = Math.min(this.SelectedIndex + 1, this.maxSelectableIndex());
         this.scrollToSelected();
         break;
 
@@ -216,8 +228,11 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
 
       case 'Enter':
         event.preventDefault();
-        if (this.FilteredApps[this.SelectedIndex]) {
+        if (this.SelectedIndex < this.FilteredApps.length && this.FilteredApps[this.SelectedIndex]) {
           this.SelectApp(this.FilteredApps[this.SelectedIndex]);
+        } else if (this.SearchQuery.trim().length > 0 && this.SelectedIndex === this.FilteredApps.length) {
+          // Knowledge Hub search action is selected
+          this.SearchKnowledgeHub();
         }
         break;
 
@@ -226,6 +241,14 @@ export class CommandPaletteComponent implements OnInit, OnDestroy {
         this.service.Close();
         break;
     }
+  }
+
+  /**
+   * Get the maximum selectable index (apps + knowledge search action if query present)
+   */
+  private maxSelectableIndex(): number {
+    const hasKnowledgeAction = this.SearchQuery.trim().length > 0;
+    return hasKnowledgeAction ? this.FilteredApps.length : this.FilteredApps.length - 1;
   }
 
   /**

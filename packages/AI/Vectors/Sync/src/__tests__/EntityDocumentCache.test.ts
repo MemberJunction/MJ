@@ -1,15 +1,15 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 
-const { mockRunViews } = vi.hoisted(() => {
+const { mockRunViewFn } = vi.hoisted(() => {
   return {
-    mockRunViews: vi.fn(),
+    mockRunViewFn: vi.fn(),
   };
 });
 
 vi.mock('@memberjunction/core', () => {
   class MockRunView {
-    RunView = vi.fn();
-    RunViews = mockRunViews;
+    RunView = mockRunViewFn;
+    RunViews = vi.fn();
   }
   return {
     UserInfo: vi.fn(),
@@ -19,9 +19,26 @@ vi.mock('@memberjunction/core', () => {
   };
 });
 
+const { mockKHConfig, mockKHEntityDocuments, mockKHGetEntityDocumentById } = vi.hoisted(() => {
+  return {
+    mockKHConfig: vi.fn().mockResolvedValue(undefined),
+    mockKHEntityDocuments: [] as { ID: string; Name: string; EntityID?: string; Status?: string; TypeID?: string; Entity?: string }[],
+    mockKHGetEntityDocumentById: vi.fn((id: string) => {
+      return mockKHEntityDocuments.find(d => d.ID === id) ?? undefined;
+    }),
+  };
+});
+
 vi.mock('@memberjunction/core-entities', () => ({
   MJEntityDocumentEntity: vi.fn(),
   MJEntityDocumentTypeEntity: vi.fn(),
+  KnowledgeHubMetadataEngine: {
+    Instance: {
+      Config: mockKHConfig,
+      EntityDocuments: mockKHEntityDocuments,
+      GetEntityDocumentById: mockKHGetEntityDocumentById,
+    },
+  },
 }));
 
 import { EntityDocumentCache } from '../models/EntityDocumentCache';
@@ -109,61 +126,58 @@ describe('EntityDocumentCache', () => {
   });
 
   describe('Refresh', () => {
-    it('should load documents and types from database', async () => {
-      const mockDocuments = [
-        { ID: 'doc-1', Name: 'Doc 1', EntityID: 'entity-1', Status: 'Active' },
-        { ID: 'doc-2', Name: 'Doc 2', EntityID: 'entity-2', Status: 'Active' },
-      ];
+    it('should load documents via KH engine and types from database', async () => {
+      // Populate mock KH engine with entity documents
+      mockKHEntityDocuments.length = 0;
+      mockKHEntityDocuments.push(
+        { ID: 'doc-1', Name: 'Doc 1', EntityID: 'entity-1', Status: 'Active' } as never,
+        { ID: 'doc-2', Name: 'Doc 2', EntityID: 'entity-2', Status: 'Active' } as never,
+      );
+
       const mockTypes = [
         { ID: 'type-1', Name: 'Record Duplicate' },
       ];
 
-      mockRunViews.mockResolvedValue([
-        { Success: true, Results: mockDocuments },
-        { Success: true, Results: mockTypes },
-      ]);
+      // RunView (singular) is now only used for Entity Document Types
+      mockRunViewFn.mockResolvedValue({ Success: true, Results: mockTypes });
 
       const cache = EntityDocumentCache.Instance;
       await cache.Refresh(true);
 
       expect(cache.IsLoaded).toBe(true);
-      expect(cache.GetDocument('doc-1')).toBe(mockDocuments[0]);
-      expect(cache.GetDocument('doc-2')).toBe(mockDocuments[1]);
+      expect(mockKHConfig).toHaveBeenCalled();
+      expect(cache.GetDocument('doc-1')).toBe(mockKHEntityDocuments[0]);
+      expect(cache.GetDocument('doc-2')).toBe(mockKHEntityDocuments[1]);
       expect(cache.GetDocumentType('type-1')).toBe(mockTypes[0]);
     });
 
     it('should skip refresh when already loaded and not forced', async () => {
-      mockRunViews.mockResolvedValue([
-        { Success: true, Results: [{ ID: 'doc-1' }] },
-        { Success: true, Results: [] },
-      ]);
+      mockKHEntityDocuments.length = 0;
+      mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
       const cache = EntityDocumentCache.Instance;
       await cache.Refresh(true);
-      expect(mockRunViews).toHaveBeenCalledTimes(1);
+      const callCount = mockKHConfig.mock.calls.length;
 
       // Second call without force should be skipped
       await cache.Refresh(false);
-      expect(mockRunViews).toHaveBeenCalledTimes(1);
+      expect(mockKHConfig.mock.calls.length).toBe(callCount);
     });
 
     it('should re-refresh when forced', async () => {
-      mockRunViews.mockResolvedValue([
-        { Success: true, Results: [] },
-        { Success: true, Results: [] },
-      ]);
+      mockKHEntityDocuments.length = 0;
+      mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
       const cache = EntityDocumentCache.Instance;
       await cache.Refresh(true);
+      const callCount = mockKHConfig.mock.calls.length;
       await cache.Refresh(true);
-      expect(mockRunViews).toHaveBeenCalledTimes(2);
+      expect(mockKHConfig.mock.calls.length).toBe(callCount + 1);
     });
 
-    it('should handle failed results gracefully', async () => {
-      mockRunViews.mockResolvedValue([
-        { Success: false, Results: [] },
-        { Success: false, Results: [] },
-      ]);
+    it('should handle failed RunView results gracefully', async () => {
+      mockKHEntityDocuments.length = 0;
+      mockRunViewFn.mockResolvedValue({ Success: false, Results: [] });
 
       const cache = EntityDocumentCache.Instance;
       await cache.Refresh(true);
@@ -171,22 +185,14 @@ describe('EntityDocumentCache', () => {
     });
 
     it('should use context user when provided', async () => {
-      mockRunViews.mockResolvedValue([
-        { Success: true, Results: [] },
-        { Success: true, Results: [] },
-      ]);
+      mockKHEntityDocuments.length = 0;
+      mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });
 
       const cache = EntityDocumentCache.Instance;
       const mockUser = { ID: 'user-1' } as never;
       await cache.Refresh(true, mockUser);
 
-      expect(mockRunViews).toHaveBeenCalledWith(
-        expect.arrayContaining([
-          expect.objectContaining({ EntityName: 'MJ: Entity Documents' }),
-          expect.objectContaining({ EntityName: 'MJ: Entity Document Types' }),
-        ]),
-        mockUser
-      );
+      expect(mockKHConfig).toHaveBeenCalledWith(true, mockUser);
     });
   });
 
@@ -196,10 +202,7 @@ describe('EntityDocumentCache', () => {
         { ID: 'type-1', Name: 'Record Duplicate' },
       ];
 
-      mockRunViews.mockResolvedValue([
-        { Success: true, Results: [] },
-        { Success: true, Results: mockTypes },
-      ]);
+      mockRunViewFn.mockResolvedValue({ Success: true, Results: mockTypes });
 
       const cache = EntityDocumentCache.Instance;
       await cache.Refresh(true);

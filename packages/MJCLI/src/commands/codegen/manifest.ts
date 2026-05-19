@@ -81,6 +81,16 @@ generate a supplemental manifest covering only your own application classes.`;
                 'Without this flag, only TypeScript source in src/ is scanned.',
             default: false,
         }),
+        'lazy-config': Flags.string({
+            description: 'Output path for a generated lazy-loading feature config file. ' +
+                'Maps @RegisterClass keys from excluded packages to dynamic import() loaders based on package.json subpath exports. ' +
+                'Only packages with subpath exports in their package.json are included. Requires --exclude-packages.',
+        }),
+        strict: Flags.boolean({
+            description: 'Treat coverage audit gaps as fatal errors. A gap is a @RegisterClass class in an excluded package ' +
+                'that is not reachable from any lazy chunk subpath export. Use in CI to catch tree-shaking issues before merge.',
+            default: false,
+        }),
     };
 
     async run(): Promise<void> {
@@ -91,6 +101,7 @@ generate a supplemental manifest covering only your own application classes.`;
         const excludePackages = flags['exclude-packages'];
         const syncDependencies = !flags['no-sync-deps'];
         const scanDist = flags['scan-dist'];
+        const lazyConfig = flags['lazy-config'];
         const result = await generateClassRegistrationsManifest({
             outputPath: flags.output,
             appDir: flags.appDir || process.cwd(),
@@ -99,6 +110,8 @@ generate a supplemental manifest covering only your own application classes.`;
             excludePackages: excludePackages && excludePackages.length > 0 ? excludePackages : undefined,
             syncDependencies,
             scanDist,
+            lazyConfigPath: lazyConfig,
+            strict: flags.strict,
         });
 
         if (!result.success) {
@@ -115,6 +128,14 @@ generate a supplemental manifest covering only your own application classes.`;
             const addedCount = Object.keys(result.AddedDependencies).length;
             if (addedCount > 0) {
                 this.log(`[class-manifest] Added ${addedCount} missing ${addedCount === 1 ? 'dependency' : 'dependencies'} to package.json — run \`npm install\` at repo root`);
+            }
+
+            if (lazyConfig) {
+                if (result.LazyConfigChanged) {
+                    this.log(`[class-manifest] Lazy config updated: ${lazyConfig}`);
+                } else {
+                    this.log(`[class-manifest] Lazy config unchanged`);
+                }
             }
         }
     }

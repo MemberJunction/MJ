@@ -84,9 +84,10 @@
                     </div>
 
                     <button
-                      class="mj-btn mj-btn-primary mj-btn-outline mj-btn-sm"
+                      mjButton variant="outline" size="sm"
                       (click)="AddApp(item)"
                       title="Add to your apps"
+                      [attr.aria-label]="'Add ' + item.app.Name"
                     >
                       <i class="fa-solid fa-plus" aria-hidden="true"></i>
                       Add
@@ -153,25 +154,28 @@
 
                           <div class="app-actions">
                             <button
-                              class="mj-btn mj-btn-ghost mj-btn-sm"
+                              mjButton variant="flat" size="sm"
                               [disabled]="i === 0"
                               (click)="MoveUp(item); $event.stopPropagation()"
                               title="Move up"
+                              [attr.aria-label]="'Move ' + item.app.Name + ' up'"
                             >
                               <i class="fa-solid fa-chevron-up" aria-hidden="true"></i>
                             </button>
                             <button
-                              class="mj-btn mj-btn-ghost mj-btn-sm"
+                              mjButton variant="flat" size="sm"
                               [disabled]="i === ActiveApps.length - 1"
                               (click)="MoveDown(item); $event.stopPropagation()"
                               title="Move down"
+                              [attr.aria-label]="'Move ' + item.app.Name + ' down'"
                             >
                               <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
                             </button>
                             <button
-                              class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                              mjButton variant="danger" size="sm"
                               (click)="RemoveApp(item); $event.stopPropagation()"
                               title="Remove from your apps"
+                              [attr.aria-label]="'Remove ' + item.app.Name"
                             >
                               <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                             </button>
@@ -259,7 +263,7 @@
         <div class="footer-left">
           @if (HasChanges()) {
             <button
-              class="mj-btn mj-btn-secondary"
+              mjButton
               (click)="Reset()"
               [disabled]="IsLoading || IsSaving"
             >
@@ -270,7 +274,7 @@
         </div>
         <div class="footer-right">
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton variant="primary"
             (click)="Save()"
             [disabled]="IsLoading || IsSaving || !HasChanges()"
           >
@@ -283,7 +287,7 @@
             }
           </button>
           <button
-            class="mj-btn mj-btn-secondary"
+            mjButton
             (click)="Close()"
             [disabled]="IsSaving"
           >

@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub Mockups — Navigation</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --border-subtle: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --pink: #ec4899;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding: 2rem 0;
+  }
+  .header h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  .header p {
+    color: var(--text-secondary);
+    font-size: 1.1rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+  .categories {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+  }
+  .category {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .category-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+  .category-header .icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  .category-header h2 {
+    font-size: 1.2rem;
+    font-weight: 600;
+  }
+  .category-header .desc {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-left: auto;
+  }
+  .options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+  }
+  .option {
+    background: var(--bg-card);
+    padding: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.2s, transform 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .option:hover {
+    background: var(--bg-card-hover);
+  }
+  .option-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .option h3 {
+    font-size: 1rem;
+    font-weight: 600;
+  }
+  .option p {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.5;
+  }
+  .option .file {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    margin-top: auto;
+    padding-top: 0.5rem;
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  /* Color themes per category */
+  .cat-search .icon { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .cat-chat .icon { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .cat-vectors .icon { background: rgba(34,197,94,0.15); color: var(--success); }
+  .cat-config .icon { background: rgba(245,158,11,0.15); color: var(--warning); }
+  .cat-dupes .icon { background: rgba(236,72,153,0.15); color: var(--pink); }
+  .cat-detail .icon { background: rgba(6,182,212,0.15); color: var(--cyan); }
+
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .options { grid-template-columns: 1fr; }
+    .category-header .desc { display: none; }
+    .header h1 { font-size: 1.75rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1><i class="fa-solid fa-brain"></i> Knowledge Hub Mockups</h1>
+  <p>UX prototypes for MemberJunction's Knowledge Hub application. 3 design options per surface.</p>
+</div>
+
+<div class="categories">
+
+  <div class="category cat-search">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-magnifying-glass"></i></div>
+      <div>
+        <h2>1. Search Dashboard</h2>
+      </div>
+      <span class="desc">The killer feature — search-first experience for the default tab</span>
+    </div>
+    <div class="options">
+      <a class="option" href="search-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Google-Style Clean</h3>
+        <p>Big centered search bar, results below. Minimal and focused.</p>
+        <span class="file">search-option-a.html</span>
+      </a>
+      <a class="option" href="search-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Command Palette / Spotlight</h3>
+        <p>Floating search with instant results. Power-user oriented.</p>
+        <span class="file">search-option-b.html</span>
+      </a>
+      <a class="option" href="search-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Dashboard + Search Hybrid</h3>
+        <p>Search bar integrated with activity feed and quick stats.</p>
+        <span class="file">search-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="category cat-chat">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-comments"></i></div>
+      <div>
+        <h2>2. Floating Chat Overlay</h2>
+      </div>
+      <span class="desc">Persistent AI assistant widget (mj-chat-agents-overlay)</span>
+    </div>
+    <div class="options">
+      <a class="option" href="chat-overlay-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Slack-Style Sidebar</h3>
+        <p>Slides in from the right edge. Familiar messaging pattern.</p>
+        <span class="file">chat-overlay-option-a.html</span>
+      </a>
+      <a class="option" href="chat-overlay-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Floating Bubble</h3>
+        <p>Bottom-right bubble that expands to a chat card.</p>
+        <span class="file">chat-overlay-option-b.html</span>
+      </a>
+      <a class="option" href="chat-overlay-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Minimalist Bottom Bar</h3>
+        <p>Compact bar at the bottom that expands upward.</p>
+        <span class="file">chat-overlay-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="category cat-vectors">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-database"></i></div>
+      <div>
+        <h2>3. Vector Management Dashboard</h2>
+      </div>
+      <span class="desc">Enhanced from current — shared index focus</span>
+    </div>
+    <div class="options">
+      <a class="option" href="vectors-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Index-Centric View</h3>
+        <p>Shared index as hero, entity docs as children.</p>
+        <span class="file">vectors-option-a.html</span>
+      </a>
+      <a class="option" href="vectors-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Pipeline View</h3>
+        <p>Visual flow: entities to templates to embeddings to index.</p>
+        <span class="file">vectors-option-b.html</span>
+      </a>
+      <a class="option" href="vectors-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Operations Center</h3>
+        <p>Monitoring focused with real-time sync status.</p>
+        <span class="file">vectors-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="category cat-config">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-gear"></i></div>
+      <div>
+        <h2>4. Configuration Panel</h2>
+      </div>
+      <span class="desc">Setup and management of vector DB, indexes, templates, models</span>
+    </div>
+    <div class="options">
+      <a class="option" href="config-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Wizard-Style Setup</h3>
+        <p>Step-by-step guided configuration flow.</p>
+        <span class="file">config-option-a.html</span>
+      </a>
+      <a class="option" href="config-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Settings Page</h3>
+        <p>Collapsible sections, dense information layout.</p>
+        <span class="file">config-option-b.html</span>
+      </a>
+      <a class="option" href="config-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Card-Based Config</h3>
+        <p>Visual status indicators, card per configuration area.</p>
+        <span class="file">config-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="category cat-dupes">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-clone"></i></div>
+      <div>
+        <h2>5. Duplicate Detection</h2>
+      </div>
+      <span class="desc">Enhanced Kanban for reviewing and resolving duplicates</span>
+    </div>
+    <div class="options">
+      <a class="option" href="dupes-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Side-by-Side Comparison</h3>
+        <p>Diff highlighting between potential duplicates.</p>
+        <span class="file">dupes-option-a.html</span>
+      </a>
+      <a class="option" href="dupes-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Enhanced Kanban</h3>
+        <p>Kanban board with inline record preview.</p>
+        <span class="file">dupes-option-b.html</span>
+      </a>
+      <a class="option" href="dupes-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Table View</h3>
+        <p>Expandable rows showing match details.</p>
+        <span class="file">dupes-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="category cat-detail">
+    <div class="category-header">
+      <div class="icon"><i class="fa-solid fa-file-lines"></i></div>
+      <div>
+        <h2>6. Search Results Detail</h2>
+      </div>
+      <span class="desc">What happens when you click a search result</span>
+    </div>
+    <div class="options">
+      <a class="option" href="results-detail-option-a.html">
+        <span class="option-label">Option A</span>
+        <h3>Side Panel Preview</h3>
+        <p>Email-client style side panel for quick preview.</p>
+        <span class="file">results-detail-option-a.html</span>
+      </a>
+      <a class="option" href="results-detail-option-b.html">
+        <span class="option-label">Option B</span>
+        <h3>Full Page Detail</h3>
+        <p>Full page with related items sidebar.</p>
+        <span class="file">results-detail-option-b.html</span>
+      </a>
+      <a class="option" href="results-detail-option-c.html">
+        <span class="option-label">Option C</span>
+        <h3>Modal Overlay</h3>
+        <p>Modal with tabs: details, related, history.</p>
+        <span class="file">results-detail-option-c.html</span>
+      </a>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

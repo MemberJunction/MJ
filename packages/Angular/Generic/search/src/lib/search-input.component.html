@@ -1,0 +1,31 @@
+<div class="search-input-container" [class.search-input-focused]="IsFocused">
+    <i class="fa-solid fa-magnifying-glass search-input-icon"></i>
+    <input
+        #inputEl
+        type="text"
+        class="mj-input search-input-field"
+        [placeholder]="Placeholder"
+        [value]="Query"
+        (input)="OnInput($any($event.target).value)"
+        (keydown)="OnKeydown($event)"
+        (focus)="OnFocus()"
+        (blur)="OnBlur()"
+        (click)="OnClick()"
+        autocomplete="off"
+        spellcheck="false"
+    />
+    @if (Query.length > 0) {
+        <button
+            class="search-input-clear"
+            (click)="Clear()"
+            title="Clear search"
+            aria-label="Clear search"
+            type="button"
+        >
+            <i class="fa-solid fa-times"></i>
+        </button>
+    }
+    @if (ShowShortcutHint && !IsFocused && Query.length === 0) {
+        <kbd class="search-input-shortcut">{{ ShortcutHint }}</kbd>
+    }
+</div>

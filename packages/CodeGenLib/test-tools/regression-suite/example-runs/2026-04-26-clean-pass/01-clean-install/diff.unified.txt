@@ -1,0 +1,274 @@
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html	2026-04-26 12:41:43
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html	2026-04-26 12:42:47
+@@ -166,50 +166,50 @@
+          RELATED ENTITY PANELS
+          ======================================== -->
+ 
+-    <!-- Company Integration Field Maps Section -->
++    <!-- Company Integration Sync Watermarks Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJCompanyIntegrationFieldMaps"
+-        SectionName="Company Integration Field Maps"
+-        Icon="fa fa-exchange-alt"
++        SectionKey="mJCompanyIntegrationSyncWatermarks"
++        SectionName="Company Integration Sync Watermarks"
++        Icon="fa fa-sync-alt"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
++        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
+-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
++                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
++                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Company Integration Sync Watermarks Section -->
++    <!-- Company Integration Field Maps Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJCompanyIntegrationSyncWatermarks"
+-        SectionName="Company Integration Sync Watermarks"
+-        Icon="fa fa-sync-alt"
++        SectionKey="mJCompanyIntegrationFieldMaps"
++        SectionName="Company Integration Field Maps"
++        Icon="fa fa-exchange-alt"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
++        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
+-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
++                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
++                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts	2026-04-26 12:41:43
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts	2026-04-26 12:42:47
+@@ -20,8 +20,8 @@
+             { sectionKey: 'syncControl', sectionName: 'Sync Control', isExpanded: true },
+             { sectionKey: 'engineConfiguration', sectionName: 'Engine Configuration', isExpanded: false },
+             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+-            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },
+-            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }
++            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false },
++            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false }
+         ]);
+     }
+ }
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html	2026-04-26 12:41:43
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html	2026-04-26 12:42:47
+@@ -1783,50 +1783,50 @@
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Tag Audit Logs Section -->
++    <!-- Knowledge Hub Saved Searches Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJTagAuditLogs"
+-        SectionName="Tag Audit Logs"
+-        Icon="fa fa-history"
++        SectionKey="mJKnowledgeHubSavedSearches"
++        SectionName="Knowledge Hub Saved Searches"
++        Icon="fa fa-search-plus"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
++        [BadgeCount]="GetSectionRowCount('mJKnowledgeHubSavedSearches')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+-                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')"
++                [NewRecordValues]="NewRecordValues('MJ: Knowledge Hub Saved Searches')"
++                [AllowLoad]="IsSectionExpanded('mJKnowledgeHubSavedSearches')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+         }
+     </mj-collapsible-panel>
+ 
+-    <!-- Knowledge Hub Saved Searches Section -->
++    <!-- Tag Audit Logs Section -->
+     <mj-collapsible-panel
+-        SectionKey="mJKnowledgeHubSavedSearches"
+-        SectionName="Knowledge Hub Saved Searches"
+-        Icon="fa fa-search-plus"
++        SectionKey="mJTagAuditLogs"
++        SectionName="Tag Audit Logs"
++        Icon="fa fa-history"
+         Variant="related-entity"
+         [Form]="this"
+         [FormContext]="formContext"
+-        [BadgeCount]="GetSectionRowCount('mJKnowledgeHubSavedSearches')"
++        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
+         [DefaultExpanded]="false">
+         @if (record.IsSaved) {
+         <div>
+             <mj-explorer-entity-data-grid
+-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')"
+-                [NewRecordValues]="NewRecordValues('MJ: Knowledge Hub Saved Searches')"
+-                [AllowLoad]="IsSectionExpanded('mJKnowledgeHubSavedSearches')"
++                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
++                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
++                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
+                 [ShowToolbar]="false"
+                 (Navigate)="OnFormNavigate($event)"
+-                (AfterDataLoad)="SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)"
++                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
+                 >
+             </mj-explorer-entity-data-grid>
+         </div>
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts	2026-04-26 12:41:43
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts	2026-04-26 12:42:47
+@@ -83,8 +83,8 @@
+             { sectionKey: 'mJOpenApps', sectionName: 'Open Apps', isExpanded: false },
+             { sectionKey: 'mJContentItemDuplicates', sectionName: 'Content Item Duplicates', isExpanded: false },
+             { sectionKey: 'mJContentProcessRuns', sectionName: 'Content Process Runs', isExpanded: false },
+-            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
+             { sectionKey: 'mJKnowledgeHubSavedSearches', sectionName: 'Knowledge Hub Saved Searches', isExpanded: false },
++            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },
+             { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
+             { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
+             { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
+diff -ruN --exclude=codegen.log --exclude=migrate.log --exclude=fixture.log --exclude=sync.log --exclude=CodeGen_Run_* --exclude=_temp_batch_execution_* /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/MJServer/src/generated/generated.ts /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/MJServer/src/generated/generated.ts
+--- /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/next/packages/MJServer/src/generated/generated.ts	2026-04-26 12:41:41
++++ /Users/p/Projects/mj-codegen-regression/runs/20260426-123234/01-clean-install/branch/packages/MJServer/src/generated/generated.ts	2026-04-26 12:42:45
+@@ -25366,12 +25366,12 @@
+     @MaxLength(255)
+     Entity: string;
+         
+-    @Field(() => [MJCompanyIntegrationFieldMap_])
+-    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps
+-    
+     @Field(() => [MJCompanyIntegrationSyncWatermark_])
+     MJCompanyIntegrationSyncWatermarks_EntityMapIDArray: MJCompanyIntegrationSyncWatermark_[]; // Link to MJCompanyIntegrationSyncWatermarks
+     
++    @Field(() => [MJCompanyIntegrationFieldMap_])
++    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps
++    
+ }
+ 
+ //****************************************************************************
+@@ -25531,16 +25531,6 @@
+         return result;
+     }
+     
+-    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])
+-    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+-        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);
+-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');
+-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));
+-        return result;
+-    }
+-        
+     @FieldResolver(() => [MJCompanyIntegrationSyncWatermark_])
+     async MJCompanyIntegrationSyncWatermarks_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+         this.CheckUserReadPermissions('MJ: Company Integration Sync Watermarks', userPayload);
+@@ -25551,6 +25541,16 @@
+         return result;
+     }
+         
++    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])
++    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
++        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);
++        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
++        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');
++        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
++        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));
++        return result;
++    }
++        
+     @Mutation(() => MJCompanyIntegrationEntityMap_)
+     async CreateMJCompanyIntegrationEntityMap(
+         @Arg('input', () => CreateMJCompanyIntegrationEntityMapInput) input: CreateMJCompanyIntegrationEntityMapInput,
+@@ -74221,12 +74221,12 @@
+     @Field(() => [MJContentProcessRun_])
+     MJContentProcessRuns_StartedByUserIDArray: MJContentProcessRun_[]; // Link to MJContentProcessRuns
+     
+-    @Field(() => [MJTagAuditLog_])
+-    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
+-    
+     @Field(() => [MJKnowledgeHubSavedSearch_])
+     MJKnowledgeHubSavedSearches_UserIDArray: MJKnowledgeHubSavedSearch_[]; // Link to MJKnowledgeHubSavedSearches
+     
++    @Field(() => [MJTagAuditLog_])
++    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs
++    
+     @Field(() => [MJArchiveConfiguration_])
+     MJArchiveConfigurations_CreatedByUserIDArray: MJArchiveConfiguration_[]; // Link to MJArchiveConfigurations
+     
+@@ -75103,16 +75103,6 @@
+         return result;
+     }
+         
+-    @FieldResolver(() => [MJTagAuditLog_])
+-    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+-        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
+-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
+-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+-        return result;
+-    }
+-        
+     @FieldResolver(() => [MJKnowledgeHubSavedSearch_])
+     async MJKnowledgeHubSavedSearches_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+         this.CheckUserReadPermissions('MJ: Knowledge Hub Saved Searches', userPayload);
+@@ -75120,6 +75110,16 @@
+         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwKnowledgeHubSavedSearches')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Knowledge Hub Saved Searches', userPayload, EntityPermissionType.Read, 'AND');
+         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Knowledge Hub Saved Searches', rows, this.GetUserFromPayload(userPayload));
++        return result;
++    }
++        
++    @FieldResolver(() => [MJTagAuditLog_])
++    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
++        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);
++        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
++        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');
++        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
++        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));
+         return result;
+     }
+         

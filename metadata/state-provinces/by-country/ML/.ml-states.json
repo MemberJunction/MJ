@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Bamako",
+      "Code": "BKO",
+      "ISO3166_2": "ML-BKO",
+      "Latitude": 12.643,
+      "Longitude": -8.0192,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-BKO.geojson",
+      "CommonAliases": [
+        "Bamako"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "1C680EC9-58B5-4C98-BFDD-5222FDCC7A4E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.914Z",
+      "checksum": "54381501bce63053924834b0ad93abcbc5f8e9ee6e83aae4dbfd959bc86a4f82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gao",
+      "Code": "7",
+      "ISO3166_2": "ML-7",
+      "Latitude": 16.4482,
+      "Longitude": 1.2641,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-7.geojson",
+      "CommonAliases": [
+        "Gao"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "2BDA4A6C-5EF2-44CF-B3C4-312E1B07611C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.930Z",
+      "checksum": "15b7fd9b536ba2febf4af47a13fdb838efd59c29ad3147a11370ecd21e123403"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kayes",
+      "Code": "1",
+      "ISO3166_2": "ML-1",
+      "Latitude": 13.7959,
+      "Longitude": -10.1984,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-1.geojson",
+      "CommonAliases": [
+        "Kayes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "127F4D19-1FEE-4E07-B748-A4784C6D1DC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.947Z",
+      "checksum": "d76c9b7187ffe1e75a49c2d63fae5ccb88c02963aa29819938575cd63a3f7485"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kidal",
+      "Code": "8",
+      "ISO3166_2": "ML-8",
+      "Latitude": 19.4258,
+      "Longitude": 1.0943,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-8.geojson",
+      "CommonAliases": [
+        "Kidal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "86758F62-871C-4E7E-8116-3CE79752742C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.964Z",
+      "checksum": "b0a6a1e90ebf3ad6d13ba5590781a5b4e98bd7f6d3866228d9539708f7ba4e39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Koulikoro",
+      "Code": "2",
+      "ISO3166_2": "ML-2",
+      "Latitude": 13.7514,
+      "Longitude": -7.5432,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-2.geojson",
+      "CommonAliases": [
+        "Koulikoro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "FA4036F0-1C47-44EA-B731-057C4A943A45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.981Z",
+      "checksum": "2ed224601aa6046201f26cbab0419ecc480e2d8d3289533797cf3a883898100e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mopti",
+      "Code": "5",
+      "ISO3166_2": "ML-5",
+      "Latitude": 14.7873,
+      "Longitude": -3.2179,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-5.geojson",
+      "CommonAliases": [
+        "Mopti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "120D9B72-A5FE-416B-B495-19793DCC17B9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.997Z",
+      "checksum": "2a974f875a0f7178d0352b128d76bb8b85b1d0f1250d7eb98205715353af57d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ségou",
+      "Code": "4",
+      "ISO3166_2": "ML-4",
+      "Latitude": 13.5852,
+      "Longitude": -5.5195,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-4.geojson",
+      "CommonAliases": [
+        "Ségou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "702C0BD9-2028-4895-B585-FB8120A3D08F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.013Z",
+      "checksum": "d01a3355d2ae0c06f125c9a548e9e842e355051282160b2554d0f1815a3e8941"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sikasso",
+      "Code": "3",
+      "ISO3166_2": "ML-3",
+      "Latitude": 11.155,
+      "Longitude": -6.5444,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-3.geojson",
+      "CommonAliases": [
+        "Sikasso"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "BFBD6A5A-B133-4CEA-A6BE-918B89948D59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.030Z",
+      "checksum": "013bab2cd4b41ca98d37ae62e9c50b0b72cf4f813a628ee7021879a4e59d5f5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tombouctou",
+      "Code": "6",
+      "ISO3166_2": "ML-6",
+      "Latitude": 19.9073,
+      "Longitude": -3.295,
+      "BoundaryGeoJSON": "@file:by-country/ML/boundaries/ML-6.geojson",
+      "CommonAliases": [
+        "Tombouctou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=ML"
+    },
+    "primaryKey": {
+      "ID": "616314DD-63D2-4AF6-AA0D-289337C02276"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.044Z",
+      "checksum": "9899b10bd7be13bb21056edef34f9da1b28d48f603b47c8f6c9f1f3494c1cc97"
+    }
+  }
+]

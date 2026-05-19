@@ -95,11 +95,17 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
 }
 
 /**
- * Sorts an array of items by Sequence, then by __mj_CreatedAt, then alphabetically by a
- * type-appropriate name field, and finally by ID as a last-resort tiebreaker. This ensures
- * that generated code maintains the same order across multiple CodeGen runs and different
- * database environments, even when Sequence values are identical (e.g., all 0) and
- * CreatedAt timestamps match (e.g., batch-inserted rows).
+ * Sorts an array of items by Sequence, then alphabetically by a type-appropriate name field,
+ * and finally by ID as a last-resort tiebreaker. This ensures that generated code maintains
+ * the same order across multiple CodeGen runs **and across different database environments**,
+ * even when Sequence values are identical (e.g., all 0 or all 1).
+ *
+ * Why no `__mj_CreatedAt` tiebreaker: timestamps are set with `GETUTCDATE()` at insert time
+ * and diverge per environment (the dev who originally generated metadata gets one set of
+ * timestamps; a clean install via Flyway gets another, batched into the same SQL Server tick).
+ * Using them as a sort key made codegen output a function of DB-resident insertion history
+ * rather than of metadata identity, which is the root cause of the long-running "flip-flop"
+ * non-determinism. Codegen output must be a pure function of metadata identity.
  *
  * The alphabetical tiebreaker checks, in order:
  *   - Value (EntityFieldValueInfo)
@@ -107,7 +113,7 @@ export function logIf(shouldLog: boolean, ...args: any[]) {
  *   - RelatedEntityJoinField (EntityRelationshipInfo)
  *   - ID (universal last resort — all types have this)
  *
- * @param items - Array of items that have Sequence and optional date/name properties
+ * @param items - Array of items that have Sequence and optional name properties
  * @returns A new sorted array
  */
 export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_CreatedAt?: Date; Value?: string; Name?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
@@ -116,14 +122,6 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         if (a.Sequence !== b.Sequence) {
             return a.Sequence - b.Sequence;
         }
-        // Secondary sort by __mj_CreatedAt for consistent ordering
-        if (a.__mj_CreatedAt && b.__mj_CreatedAt) {
-            const timeDiff = new Date(a.__mj_CreatedAt).getTime() - new Date(b.__mj_CreatedAt).getTime();
-            if (timeDiff !== 0) return timeDiff;
-        }
-        // If one has a date and the other doesn't, prioritize the one with a date
-        if (a.__mj_CreatedAt && !b.__mj_CreatedAt) return -1;
-        if (!a.__mj_CreatedAt && b.__mj_CreatedAt) return 1;
 
         // Alphabetical tiebreakers — try type-appropriate name fields in order
         // Value (EntityFieldValueInfo)
@@ -146,6 +144,43 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         }
 
         // Last resort: sort by ID for absolute determinism
+        if (a.ID != null && b.ID != null) {
+            return a.ID.localeCompare(b.ID);
+        }
+        return 0;
+    });
+}
+
+/**
+ * Sorts EntityRelationshipInfo items deterministically and **environment-independently**.
+ * Sort order: Sequence → RelatedEntity name → RelatedEntityJoinField → ID.
+ *
+ * `__mj_CreatedAt` is intentionally NOT used as a tiebreaker — see
+ * {@link sortBySequenceAndCreatedAt} for the rationale. Batch-inserted relationships
+ * routinely share Sequence values (especially when CodeGen mis-keys the Sequence counter,
+ * a separate bug), so the alphabetical tiebreakers are doing the real work of stabilizing
+ * the order across environments.
+ */
+export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt?: Date; RelatedEntity?: string; RelatedEntityJoinField?: string; ID?: string }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+        // Primary sort by Sequence
+        if (a.Sequence !== b.Sequence) {
+            return a.Sequence - b.Sequence;
+        }
+
+        // Tiebreaker: RelatedEntity name (the display name of the related entity)
+        if (a.RelatedEntity != null && b.RelatedEntity != null) {
+            const cmp = a.RelatedEntity.localeCompare(b.RelatedEntity);
+            if (cmp !== 0) return cmp;
+        }
+
+        // Tiebreaker: RelatedEntityJoinField (FK column name)
+        if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
+            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            if (cmp !== 0) return cmp;
+        }
+
+        // Last resort: ID
         if (a.ID != null && b.ID != null) {
             return a.ID.localeCompare(b.ID);
         }

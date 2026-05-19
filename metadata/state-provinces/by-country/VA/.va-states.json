@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Vatican City (Holy See)",
+      "Code": "VA",
+      "ISO3166_2": "VA-VA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vatican City (Holy See)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VA"
+    },
+    "primaryKey": {
+      "ID": "84E3CA5F-8859-43DD-898B-044457CEC13A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:42.474Z",
+      "checksum": "fd8ef00d31e22be41205d4a5be1331150abe212178c916b8966f4c83a39079d6"
+    }
+  }
+]

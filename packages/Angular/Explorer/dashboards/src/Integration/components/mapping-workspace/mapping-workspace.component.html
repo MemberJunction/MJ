@@ -1,8 +1,12 @@
-<div class="mapping-workspace">
-  <div class="workspace-header">
-    <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
-  </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Mapping Workspace"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Build and validate entity field mappings">
+  </mj-page-header>
 
+  <mj-page-body [Flex]="true" [Padding]="false">
+<div class="mapping-workspace">
   @if (IsLoadingIntegrations) {
     <mj-loading text="Loading integrations..." size="medium"></mj-loading>
   } @else {
@@ -13,15 +17,15 @@
       <div class="left-panel">
         <div class="integration-selector">
           <label class="panel-label">Integration</label>
-          <kendo-dropdownlist
-            [data]="Integrations"
-            [textField]="'Name'"
-            [valueField]="'ID'"
-            [valuePrimitive]="true"
+          <mj-dropdown
+            [Data]="Integrations"
+            TextField="Name"
+            ValueField="ID"
+            [ValuePrimitive]="true"
             [(ngModel)]="SelectedIntegrationID"
-            (valueChange)="OnIntegrationChange($event)"
-            [defaultItem]="{ ID: '', Name: '-- Select --' }">
-          </kendo-dropdownlist>
+            (ValueChange)="OnIntegrationChange($any($event))"
+            [DefaultItem]="{ ID: '', Name: '-- Select --' }">
+          </mj-dropdown>
         </div>
 
         @if (IsLoadingEntityMaps) {
@@ -31,7 +35,7 @@
           <div class="entity-map-header">
             <span class="panel-label" style="margin: 0;">Entity Maps</span>
             <div class="header-actions">
-              <button kendoButton [look]="'flat'" [size]="'small'"
+              <button mjButton variant="flat" size="sm"
                       (click)="OpenAddPanel()" title="Add entity map">
                 <i class="fa-solid fa-plus"></i> Add Map
               </button>
@@ -65,16 +69,16 @@
                     No objects found in external system.
                   </div>
                 } @else {
-                  <kendo-dropdownlist
-                    [data]="DiscoveredObjects"
-                    [textField]="'Label'"
-                    [valueField]="'Name'"
-                    [valuePrimitive]="true"
+                  <mj-dropdown
+                    [Data]="DiscoveredObjects"
+                    TextField="Label"
+                    ValueField="Name"
+                    [ValuePrimitive]="true"
                     [(ngModel)]="SelectedSourceObjectName"
-                    (valueChange)="OnSourceObjectChange($event)"
-                    [filterable]="true"
-                    [defaultItem]="{ Name: '', Label: 'Select source object...' }">
-                  </kendo-dropdownlist>
+                    (ValueChange)="OnSourceObjectChange($any($event))"
+                    [Filterable]="true"
+                    [DefaultItem]="{ Name: '', Label: 'Select source object...' }">
+                  </mj-dropdown>
                 }
               </div>
 
@@ -99,15 +103,15 @@
                   @if (IsLoadingEntities) {
                     <mj-loading text="Loading..." size="small"></mj-loading>
                   } @else {
-                    <kendo-dropdownlist
-                      [data]="MJEntities"
-                      [textField]="'Name'"
-                      [valueField]="'ID'"
-                      [valuePrimitive]="true"
+                    <mj-dropdown
+                      [Data]="MJEntities"
+                      TextField="Name"
+                      ValueField="ID"
+                      [ValuePrimitive]="true"
                       [(ngModel)]="SelectedEntityID"
-                      [filterable]="true"
-                      [defaultItem]="{ ID: null, Name: 'Select entity...' }">
-                    </kendo-dropdownlist>
+                      [Filterable]="true"
+                      [DefaultItem]="{ ID: null, Name: 'Select entity...' }">
+                    </mj-dropdown>
                   }
                 </div>
               }
@@ -118,19 +122,19 @@
                   <div class="section-label">Define New Entity</div>
                   <div class="form-group">
                     <label>DB Schema</label>
-                    <kendo-combobox
-                      [data]="DBSchemas"
+                    <mj-combobox
+                      [Data]="DBSchemas"
                       [(ngModel)]="NewEntitySchemaName"
-                      (valueChange)="OnSchemaNameChange()"
-                      [allowCustom]="true"
-                      [filterable]="true"
-                      [placeholder]="'Select or type schema...'">
-                    </kendo-combobox>
+                      (ValueChange)="OnSchemaNameChange()"
+                      [AllowCustom]="true"
+                      [Filterable]="true"
+                      Placeholder="Select or type schema...">
+                    </mj-combobox>
                   </div>
                   <div class="form-row">
                     <div class="form-group">
                       <label>Table Name</label>
-                      <input kendoTextBox [(ngModel)]="NewEntityTableName"
+                      <input class="mj-input" [(ngModel)]="NewEntityTableName"
                              [placeholder]="SuggestedTableName || 'Table name'" />
                       @if (SuggestedTableName && !NewEntityTableName) {
                         <span class="auto-hint">Suggested: {{ SuggestedTableName }}</span>
@@ -138,7 +142,7 @@
                     </div>
                     <div class="form-group">
                       <label>Entity Name</label>
-                      <input kendoTextBox [(ngModel)]="NewEntityName"
+                      <input class="mj-input" [(ngModel)]="NewEntityName"
                              [placeholder]="SuggestedEntityName || 'Entity name'" />
                     </div>
                   </div>
@@ -146,7 +150,7 @@
                   <!-- DDL Preview -->
                   @if (SelectedSourceObjectName && NewEntitySchemaName && NewEntityTableName) {
                     <div class="ddl-preview-section">
-                      <button kendoButton [look]="'outline'" [size]="'small'"
+                      <button mjButton variant="outline" size="sm"
                               [disabled]="IsGeneratingDDL"
                               (click)="PreviewDDL()">
                         @if (IsGeneratingDDL) {
@@ -171,15 +175,15 @@
               <!-- Sync direction -->
               <div class="form-group">
                 <label>Sync Direction</label>
-                <kendo-dropdownlist
-                  [data]="['Pull', 'Push', 'Bidirectional']"
+                <mj-dropdown
+                  [Data]="['Pull', 'Push', 'Bidirectional']"
                   [(ngModel)]="AddSyncDirection">
-                </kendo-dropdownlist>
+                </mj-dropdown>
               </div>
 
               <!-- Save / Cancel -->
               <div class="add-form-actions">
-                <button kendoButton [themeColor]="'primary'" [size]="'small'"
+                <button mjButton variant="primary" size="sm"
                         [disabled]="!IsAddFormValid || IsSavingEntityMap"
                         (click)="SaveAddMap()">
                   @if (IsSavingEntityMap) {
@@ -190,7 +194,7 @@
                     <i class="fa-solid fa-check"></i> Add Map
                   }
                 </button>
-                <button kendoButton [size]="'small'" (click)="CloseAddPanel()">
+                <button mjButton size="sm" (click)="CloseAddPanel()">
                   Cancel
                 </button>
               </div>
@@ -200,7 +204,7 @@
           <!-- Search -->
           @if (AllMaps.length > 0) {
             <div class="search-box">
-              <input kendoTextBox
+              <input class="mj-input"
                      [(ngModel)]="EntityMapSearchText"
                      placeholder="Search entity maps..." />
             </div>
@@ -239,11 +243,10 @@
                         <i class="fa-solid fa-trash-can"></i>
                       </button>
                       @if (!item.IsPending && item.RealMap) {
-                        <kendo-switch
+                        <mj-switch
                           [(ngModel)]="item.RealMap.SyncEnabled"
-                          [size]="'small'"
-                          (valueChange)="OnToggleEntityMap(item.RealMap)">
-                        </kendo-switch>
+                          (ngModelChange)="OnToggleEntityMap(item.RealMap)">
+                        </mj-switch>
                       }
                     </div>
                   </div>
@@ -312,7 +315,7 @@
                 </h4>
                 <pre class="ddl-code-block">{{ SelectedPendingMap.DDLContent }}</pre>
                 <div class="ddl-actions">
-                  <button kendoButton [look]="'outline'" [size]="'small'"
+                  <button mjButton variant="outline" size="sm"
                           (click)="CopyDDLToClipboard(SelectedPendingMap.DDLContent)">
                     <i class="fa-solid fa-copy"></i> Copy DDL
                   </button>
@@ -356,7 +359,7 @@
               <div class="banner-text">
                 <p><strong>{{ AutoMapCount }} field{{ AutoMapCount !== 1 ? 's' : '' }} auto-mapped</strong> by matching source and destination field names.</p>
               </div>
-              <button kendoButton [look]="'flat'" [size]="'small'" (click)="DismissAutoMapBanner()">
+              <button mjButton variant="flat" size="sm" (click)="DismissAutoMapBanner()">
                 <i class="fa-solid fa-times"></i>
               </button>
             </div>
@@ -380,16 +383,16 @@
               <span class="field-count">({{ ActiveEditableFields.length }})</span>
             </h3>
             <div class="field-mapping-actions">
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingSourceFields"
                       (click)="RerunAutoMap()" title="Auto-match source and destination fields by name">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Map
               </button>
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       (click)="AddFieldMapping()">
                 <i class="fa-solid fa-plus"></i> Add Field
               </button>
-              <button kendoButton [themeColor]="'primary'" [size]="'small'"
+              <button mjButton variant="primary" size="sm"
                       [disabled]="!HasDirtyFields || IsSavingFields"
                       (click)="SaveFieldMappings()">
                 @if (IsSavingFields) {
@@ -687,12 +690,12 @@
           <!-- Data Preview Section -->
           <div class="data-preview-section">
             <div class="preview-actions">
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingSourcePreview"
                       (click)="LoadSourcePreview()">
                 <i class="fa-solid fa-cloud-arrow-down"></i> Preview Source
               </button>
-              <button kendoButton [look]="'outline'" [size]="'small'"
+              <button mjButton variant="outline" size="sm"
                       [disabled]="IsLoadingDestPreview"
                       (click)="LoadDestPreview()">
                 <i class="fa-solid fa-database"></i> Preview Destination
@@ -838,3 +841,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

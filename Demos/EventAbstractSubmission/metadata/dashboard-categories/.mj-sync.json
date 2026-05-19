@@ -1,5 +1,5 @@
 {
-  "entity": "Dashboard Categories",
+  "entity": "MJ: Dashboard Categories",
   "filePattern": ".*.json",
   "defaults": {},
   "pull": {

@@ -1,0 +1,1194 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Analytics"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Pipeline health, trending tags, and content insights">
+    <div meta>
+      <mj-stat-badge
+        [Label]="PipelineStatusText"
+        [Variant]="PipelineStatusOk ? 'success' : 'error'">
+      </mj-stat-badge>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+@if (IsLoading) {
+    <div class="analytics-loading">
+        <mj-loading text="Loading analytics data..." size="medium"></mj-loading>
+    </div>
+} @else {
+    <div class="analytics-layout">
+        <!-- =============== LEFT SIDEBAR =============== -->
+        <aside class="analytics-sidebar">
+            <nav class="sidebar-nav">
+                @for (nav of NavItems; track nav.ID) {
+                    <button
+                        class="nav-item"
+                        [class.active]="ActiveTab === nav.ID"
+                        (click)="SelectTab(nav.ID)"
+                    >
+                        <i [class]="nav.Icon"></i> {{ nav.Label }}
+                    </button>
+                }
+            </nav>
+
+            <div class="sidebar-divider"></div>
+
+            <!-- Trending Tags Cloud -->
+            <div class="trending-section">
+                <h3><i class="fa-solid fa-arrow-trend-up"></i> Trending Tags</h3>
+                <div class="tag-cloud">
+                    @for (tag of TrendingTags; track tag.Name) {
+                        <span [style.font-size.px]="tag.Size" [style.font-weight]="tag.Weight">{{ tag.Name }}</span>
+                    }
+                    @if (TrendingTags.length === 0) {
+                        <span class="no-trending">No trending tags yet</span>
+                    }
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- =============== MAIN CONTENT =============== -->
+        <div class="main-content">
+
+            <!-- ====================================================== -->
+            <!-- TAB 1: OVERVIEW                                        -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'overview') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-grip"></i>
+                        <h1>Overview</h1>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="date-chips">
+                            @for (range of DateRanges; track range.Label) {
+                                <button
+                                    class="date-chip"
+                                    [class.active]="ActiveDateRange === range.Label"
+                                    (click)="SetDateRange(range.Label)"
+                                >{{ range.Label }}</button>
+                            }
+                        </div>
+                        <select class="filter-dropdown" [ngModel]="EntityFilter" (ngModelChange)="SetEntityFilter($event)">
+                            @for (opt of EntityFilterOptions; track opt) {
+                                <option [value]="opt">{{ opt }}</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="kpi-row">
+                        @for (kpi of KPIs; track kpi.Label) {
+                            <div class="kpi-card" (click)="OpenDrillDown(kpi.DrillDownKey)">
+                                <div>
+                                    <div class="kpi-label">{{ kpi.Label }}</div>
+                                    <div class="kpi-value">{{ kpi.Value }}</div>
+                                    <div class="kpi-delta" [class.up]="kpi.DeltaDirection === 'up'" [class.down]="kpi.DeltaDirection === 'down'">
+                                        @if (kpi.DeltaDirection === 'up') {
+                                            <i class="fa-solid fa-arrow-up" style="font-size:9px"></i>
+                                        } @else if (kpi.DeltaDirection === 'down') {
+                                            <i class="fa-solid fa-arrow-down" style="font-size:9px"></i>
+                                        }
+                                        {{ kpi.Delta }}
+                                    </div>
+                                </div>
+                                <div class="kpi-sparkline">
+                                    <svg width="64" height="28" viewBox="0 0 64 28">
+                                        <polyline [attr.points]="kpi.SparklinePoints" fill="none" [attr.stroke]="kpi.SparklineColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- KPI Drill-Down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('kpi-')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Detail View</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV">
+                                            <i class="fa-solid fa-download"></i> CSV
+                                        </button>
+                                    }
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
+                                        <i class="fa-solid fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                @for (col of DrillDownColumns; track col) {
+                                                    <th>{{ col }}</th>
+                                                }
+                                                @if (DrillDownHasActions) {
+                                                    <th class="drill-action-col"></th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) {
+                                                        <td>{{ row[col] }}</td>
+                                                    }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record">
+                                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                                </button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No data available</div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Widget Cards Grid (2x3) -->
+                    <div class="cards-grid">
+
+                        <!-- Card 1: Tag Growth -->
+                        <div class="widget-card" (click)="OpenDrillDown('tagGrowth')">
+                            <div class="widget-title"><i class="fa-solid fa-chart-line"></i> Tag Growth</div>
+                            <div class="bar-chart">
+                                @for (bar of TagGrowthData; track bar.Label) {
+                                    <div class="bar-col">
+                                        <div class="bar-value">{{ bar.Count }}</div>
+                                        <div class="bar" [style.height.%]="bar.Percentage" style="background:var(--mj-brand-primary)" [style.opacity]="0.5 + (bar.Percentage / 200)"></div>
+                                        <div class="bar-label">{{ bar.Label }}</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Content Coverage -->
+                        <div class="widget-card" (click)="OpenDrillDown('contentCoverage')">
+                            <div class="widget-title"><i class="fa-solid fa-bullseye"></i> Content Coverage</div>
+                            <div class="rings-grid">
+                                @for (entity of CoverageData; track entity.Name) {
+                                    <div class="ring-item">
+                                        <svg width="48" height="48" viewBox="0 0 48 48">
+                                            <circle cx="24" cy="24" r="20" fill="none" stroke="var(--mj-border-default)" stroke-width="5"/>
+                                            <circle cx="24" cy="24" r="20" fill="none" [attr.stroke]="entity.Color" stroke-width="5"
+                                                [attr.stroke-dasharray]="entity.StrokeDash" stroke-dashoffset="31.4" stroke-linecap="round"
+                                                transform="rotate(-90 24 24)"/>
+                                            <text x="24" y="26" text-anchor="middle" font-size="11" font-weight="700" fill="var(--mj-text-primary)">{{ entity.Percentage }}%</text>
+                                        </svg>
+                                        <div>
+                                            <div class="ring-label">{{ entity.Name }}</div>
+                                            <div class="ring-stat">{{ FormatNumber(entity.Tagged) }} / {{ FormatNumber(entity.Total) }}</div>
+                                        </div>
+                                    </div>
+                                }
+                                @if (CoverageData.length === 0) {
+                                    <div class="widget-empty">No content types found</div>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Quality Score Gauge -->
+                        <div class="widget-card" (click)="OpenDrillDown('qualityScore')">
+                            <div class="widget-title"><i class="fa-solid fa-gauge-high"></i> Quality Score</div>
+                            <div class="gauge-container">
+                                <svg width="180" height="110" viewBox="0 0 180 110">
+                                    <!-- Background arc -->
+                                    <path d="M 20 95 A 70 70 0 0 1 160 95" fill="none" stroke="var(--mj-border-default)" stroke-width="14" stroke-linecap="round"/>
+                                    <!-- Zone arcs -->
+                                    <path d="M 20 95 A 70 70 0 0 1 48.6 35.2" fill="none" stroke="var(--mj-status-error)" stroke-width="14" stroke-linecap="round" opacity="0.3"/>
+                                    <path d="M 48.6 35.2 A 70 70 0 0 1 118 28" fill="none" stroke="var(--mj-status-warning)" stroke-width="14" opacity="0.3"/>
+                                    <path d="M 118 28 A 70 70 0 0 1 160 95" fill="none" stroke="var(--mj-status-success)" stroke-width="14" stroke-linecap="round" opacity="0.3"/>
+                                    <!-- Score text -->
+                                    <text x="90" y="88" text-anchor="middle" font-size="26" font-weight="800" fill="var(--mj-text-primary)">{{ QualityScore }}</text>
+                                    <text x="90" y="105" text-anchor="middle" font-size="10" fill="var(--mj-text-muted)">out of 100</text>
+                                    <text x="28" y="108" font-size="8" fill="var(--mj-text-muted)">0</text>
+                                    <text x="86" y="18" font-size="8" fill="var(--mj-text-muted)">50</text>
+                                    <text x="155" y="108" font-size="8" fill="var(--mj-text-muted)">100</text>
+                                </svg>
+                            </div>
+                            <!-- Mini confidence histogram -->
+                            <div class="mini-histogram">
+                                @for (bin of MiniConfidenceBins; track TrackByIndex($index)) {
+                                    <div class="mini-hist-bar" [style.height.px]="bin.Height" [style.background]="bin.Color" [title]="bin.Title"></div>
+                                }
+                            </div>
+                            <div class="mini-hist-label">Confidence Distribution</div>
+                        </div>
+
+                        <!-- Card 4: Source Performance -->
+                        <div class="widget-card" (click)="OpenDrillDown('sourcePerformance')">
+                            <div class="widget-title"><i class="fa-solid fa-ranking-star"></i> Source Performance</div>
+                            <div class="h-bar-list">
+                                @for (source of SourcePerfData; track source.Name) {
+                                    <div class="h-bar-row">
+                                        <div class="h-bar-name">{{ source.Name }}</div>
+                                        <div class="h-bar-track">
+                                            <div class="h-bar-fill" [style.width.%]="source.Percentage" [style.background]="source.Color">{{ source.AvgTagsPerItem }}</div>
+                                        </div>
+                                    </div>
+                                }
+                                @if (SourcePerfData.length === 0) {
+                                    <div class="widget-empty">No source data</div>
+                                }
+                            </div>
+                            <div class="widget-footnote">Average tags per item</div>
+                        </div>
+
+                        <!-- Card 5: Daily Throughput -->
+                        <div class="widget-card" (click)="OpenDrillDown('dailyThroughput')">
+                            <div class="widget-title"><i class="fa-solid fa-bolt"></i> Daily Throughput</div>
+                            <div class="throughput-bars">
+                                @for (day of ThroughputData; track day.Label) {
+                                    <div class="tp-bar"
+                                        [style.height.%]="day.Percentage"
+                                        [style.background]="day.IsError ? 'var(--mj-status-error)' : 'var(--mj-status-success)'"
+                                    >
+                                        <span class="tp-bar-label">{{ day.Label }}</span>
+                                    </div>
+                                }
+                            </div>
+                            <div class="legend">
+                                <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-success)"></div> Success</div>
+                                <div class="legend-item"><div class="legend-dot" style="background:var(--mj-status-error)"></div> Failures</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 6: Taxonomy Health -->
+                        <div class="widget-card" (click)="OpenDrillDown('taxonomyHealth')">
+                            <div class="widget-title"><i class="fa-solid fa-sitemap"></i> Taxonomy Health</div>
+                            <div class="taxonomy-ring-container">
+                                <svg width="140" height="140" viewBox="0 0 140 140">
+                                    <circle cx="70" cy="70" r="54" fill="none" stroke="var(--mj-border-default)" stroke-width="18"/>
+                                    @for (seg of TaxonomyRingSegments; track TrackByIndex($index)) {
+                                        <circle cx="70" cy="70" r="54" fill="none"
+                                            [attr.stroke]="seg.Color" stroke-width="18"
+                                            [attr.stroke-dasharray]="seg.StrokeDash"
+                                            [attr.stroke-dashoffset]="seg.StrokeOffset"
+                                            transform="rotate(-90 70 70)"/>
+                                    }
+                                    <text x="70" y="66" text-anchor="middle" font-size="22" font-weight="800" fill="var(--mj-text-primary)">{{ TaxonomyTotal }}</text>
+                                    <text x="70" y="82" text-anchor="middle" font-size="10" fill="var(--mj-text-muted)">total tags</text>
+                                </svg>
+                            </div>
+                            <div class="taxonomy-stats">
+                                @for (stat of TaxonomyStats; track stat.Label) {
+                                    <div class="tax-stat" [style.background]="stat.BgColor" [style.color]="stat.Color">
+                                        {{ stat.Count }}<small>{{ stat.Label }}</small>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                    </div><!-- /cards-grid -->
+
+                    <!-- Widget Drill-Down -->
+                    @if (DrillDownTarget && !DrillDownTarget.startsWith('kpi-')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> {{ DrillDownTarget }} Detail</span>
+                                <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()">
+                                    <i class="fa-solid fa-times"></i>
+                                </button>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead>
+                                            <tr>
+                                                @for (col of DrillDownColumns; track col) {
+                                                    <th>{{ col }}</th>
+                                                }
+                                                @if (DrillDownHasActions) {
+                                                    <th class="drill-action-col"></th>
+                                                }
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) {
+                                                        <td>{{ row[col] }}</td>
+                                                    }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" (click)="OpenDrillDownRecord(row)" title="Open record">
+                                                                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                                                </button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No data available</div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 2: TAGS                                            -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'tags') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-tags"></i>
+                        <h1>Tags</h1>
+                    </div>
+
+                    <!-- Top 20 Tags Table -->
+                    <div class="sub-section" style="margin-top:0">
+                        <div class="sub-section-header">
+                            <h3><i class="fa-solid fa-trophy"></i> Top 20 Tags</h3>
+                            @if (TopTags.length > 0) {
+                                <button class="drill-export-btn" (click)="ExportTabDataCSV('top-tags')" title="Export CSV">
+                                    <i class="fa-solid fa-download"></i> CSV
+                                </button>
+                            }
+                        </div>
+                        @if (TopTags.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Tag Name</th>
+                                            <th class="num">Usage Count</th>
+                                            <th>Avg Weight</th>
+                                            <th>Trend</th>
+                                            <th>Top Entity</th>
+                                            <th>First Seen</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (tag of TopTags; track tag.Name) {
+                                            <tr style="cursor:pointer" (click)="OpenDrillDown('tag-row:' + tag.Name)">
+                                                <td>{{ tag.Rank }}</td>
+                                                <td><strong>{{ tag.Name }}</strong></td>
+                                                <td class="num">{{ FormatNumber(tag.UsageCount) }}</td>
+                                                <td>
+                                                    <span class="weight-bar" [style.width.px]="tag.WeightBarWidth" [style.background]="tag.WeightBarColor"></span>
+                                                    {{ tag.AvgWeight }}
+                                                </td>
+                                                <td>
+                                                    <svg width="48" height="16">
+                                                        <polyline [attr.points]="tag.TrendPoints" fill="none" [attr.stroke]="tag.TrendColor" stroke-width="1.5" stroke-linecap="round"/>
+                                                    </svg>
+                                                </td>
+                                                <td>{{ tag.TopEntity }}</td>
+                                                <td class="muted">{{ tag.FirstSeen }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-tags"></i>
+                                <p>No tag data available yet. Process content to generate tags.</p>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- D10: Tags tab drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('tag-row:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Content Items Tagged "{{ DrillDownTarget.replace('tag-row:', '') }}"</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV">
+                                            <i class="fa-solid fa-download"></i> CSV
+                                        </button>
+                                    }
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No items found for this tag</div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Tag Distribution by Entity -->
+                    @if (EntityDistribution.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-chart-bar"></i> Tag Distribution by Entity</h3>
+                            <div class="stacked-bar-chart">
+                                @for (row of EntityDistribution; track row.EntityName) {
+                                    <div class="stacked-row">
+                                        <div class="stacked-label">{{ row.EntityName }}</div>
+                                        <div class="stacked-track">
+                                            @for (seg of row.Segments; track TrackByIndex($index)) {
+                                                <div class="stacked-seg" [style.width.%]="seg.Percentage" [style.background]="seg.Color" [title]="seg.Label + ': ' + seg.Percentage + '%'">{{ seg.Label }}</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="legend" style="margin-top:12px">
+                                @for (item of DistributionLegend; track item.Label) {
+                                    <div class="legend-item"><div class="legend-dot" [style.background]="item.Color"></div> {{ item.Label }}</div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Tag Depth Distribution -->
+                    @if (TagDepthBars.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-layer-group"></i> Tag Depth Distribution</h3>
+                            <div class="v-bar-chart">
+                                @for (bar of TagDepthBars; track bar.Label) {
+                                    <div class="v-bar-col">
+                                        <div class="v-bar" [style.height.%]="bar.Percentage" style="background:var(--mj-brand-primary)" [style.min-height.px]="bar.Count > 0 ? 24 : 0">{{ bar.Count }}</div>
+                                        <div class="v-bar-label">{{ bar.Label }}</div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="chart-footnote">
+                                Taxonomy hierarchy depth -- Most tags at depth 2-3 indicating a healthy mid-level structure
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Frequently Paired Tags (Co-Occurrence) -->
+                    <div class="sub-section co-occurrence-section">
+                        <div class="sub-section-header">
+                            <h3><i class="fa-solid fa-link"></i> Frequently Paired Tags</h3>
+                            <div class="co-occurrence-actions">
+                                @if (CoOccurrenceLastComputed) {
+                                    <span class="co-occurrence-staleness" title="Last computed timestamp">
+                                        <i class="fa-regular fa-clock"></i>
+                                        Last computed: {{ CoOccurrenceLastComputed }}
+                                    </span>
+                                }
+                                <button class="drill-export-btn" (click)="RecomputeCoOccurrence()" [disabled]="IsRecomputingCoOccurrence" title="Recompute co-occurrence data">
+                                    @if (IsRecomputingCoOccurrence) {
+                                        <i class="fa-solid fa-spinner fa-spin"></i> Computing...
+                                    } @else {
+                                        <i class="fa-solid fa-arrows-rotate"></i> Recompute
+                                    }
+                                </button>
+                            </div>
+                        </div>
+                        @if (CoOccurrencePairs.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>#</th>
+                                            <th>Tag A</th>
+                                            <th>Tag B</th>
+                                            <th class="num">Co-Occurrences</th>
+                                            <th>Frequency</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (pair of CoOccurrencePairs; track pair.TagAName + pair.TagBName; let i = $index) {
+                                            <tr>
+                                                <td class="muted">{{ i + 1 }}</td>
+                                                <td><strong>{{ pair.TagAName }}</strong></td>
+                                                <td><strong>{{ pair.TagBName }}</strong></td>
+                                                <td class="num">{{ FormatNumber(pair.Count) }}</td>
+                                                <td>
+                                                    <span class="weight-bar" [style.width.px]="pair.BarWidth" style="background: var(--mj-status-info)"></span>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-link"></i>
+                                <p>No co-occurrence data available yet. Process content and recompute to see which tags frequently appear together.</p>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 3: SOURCES                                         -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'sources') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-database"></i>
+                        <h1>Sources</h1>
+                    </div>
+
+                    <!-- Source Comparison Table -->
+                    <div class="sub-section" style="margin-top:0">
+                        <h3><i class="fa-solid fa-table"></i> Source Comparison</h3>
+                        @if (SourceComparison.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Source Name</th>
+                                            <th>Type</th>
+                                            <th class="num">Items</th>
+                                            <th class="num">Tags Generated</th>
+                                            <th class="num">Avg Tags/Item</th>
+                                            <th class="num">Avg Weight</th>
+                                            <th>Last Run</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (source of SourceComparison; track source.Name) {
+                                            <tr (click)="SelectSource(source.Name); OpenDrillDown('source-row:' + source.Name)" style="cursor:pointer" [class.source-selected]="SelectedSourceName === source.Name">
+                                                <td><strong>{{ source.Name }}</strong></td>
+                                                <td><i [class]="source.TypeIcon" [style.color]="source.TypeColor" style="margin-right:4px"></i> {{ source.Type }}</td>
+                                                <td class="num">{{ FormatNumber(source.Items) }}</td>
+                                                <td class="num">{{ FormatNumber(source.TagsGenerated) }}</td>
+                                                <td class="num">{{ source.AvgTagsPerItem }}</td>
+                                                <td class="num">{{ source.AvgWeight }}</td>
+                                                <td class="muted">{{ source.LastRun }}</td>
+                                                <td><span class="badge" [class]="source.StatusClass"><i class="fa-solid fa-circle" style="font-size:6px;margin-right:3px"></i> {{ source.Status }}</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-database"></i>
+                                <p>No content sources configured yet.</p>
+                            </div>
+                        }
+                    </div>
+
+                    <!-- D10: Sources tab drill-down (recent runs) -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('source-row:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Recent Runs: {{ DrillDownTarget.replace('source-row:', '') }}</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No run data for this source</div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Per-Source Detail -->
+                    @if (SelectedSourceName && SourceComparison.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-chart-area"></i> Source Detail: {{ SelectedSourceName }}</h3>
+                            <div class="two-col">
+                                <!-- Items Processed Over Time -->
+                                <div class="widget-card">
+                                    <div class="widget-title"><i class="fa-solid fa-chart-bar"></i> Items Processed (Last 8 Weeks)</div>
+                                    <div class="bar-chart" style="height:100px">
+                                        @for (bar of SourceWeeklyBars; track bar.Label) {
+                                            <div class="bar-col">
+                                                <div class="bar-value" style="font-size:9px">{{ bar.Value }}</div>
+                                                <div class="bar" [style.height.%]="bar.Percentage" style="background:var(--mj-brand-primary)" [style.opacity]="0.5 + (bar.Percentage / 200)"></div>
+                                                <div class="bar-label">{{ bar.Label }}</div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Tag Quality Distribution -->
+                                <div class="widget-card">
+                                    <div class="widget-title"><i class="fa-solid fa-star-half-stroke"></i> Tag Quality Distribution</div>
+                                    <div class="quality-bands">
+                                        @for (band of SourceQualityBands; track band.Label) {
+                                            <div class="quality-band-row">
+                                                <span class="quality-band-label">{{ band.Label }}</span>
+                                                <div class="quality-band-track">
+                                                    <div class="quality-band-fill" [style.width.%]="band.Percentage" [style.background]="band.Color">{{ band.Percentage }}%</div>
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="source-quality-note">
+                                        <i class="fa-solid fa-circle-info" style="color:var(--mj-status-info);margin-right:4px"></i>
+                                        {{ SourceQualityNote }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Source Health -->
+                    @if (SourceHealthCards.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-heart-pulse"></i> Source Health Summary</h3>
+                            <div class="source-health-grid" [style.grid-template-columns]="'repeat(' + SourceHealthCards.length + ', 1fr)'">
+                                @for (card of SourceHealthCards; track card.Name) {
+                                    <div class="source-health-card" [style.border-top-color]="card.Color">
+                                        <div class="health-card-name">{{ card.Name }}</div>
+                                        <div class="health-card-value" [style.color]="card.Color">{{ card.Uptime }}%</div>
+                                        <div class="health-card-label">uptime</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 4: PIPELINE                                        -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'pipeline') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-gears"></i>
+                        <h1>Pipeline</h1>
+                    </div>
+
+                    <!-- Pipeline Throughput Chart -->
+                    <div class="sub-section" style="margin-top:0">
+                        <h3><i class="fa-solid fa-chart-bar"></i> Pipeline Throughput (Last 30 Days)</h3>
+                        <div class="widget-card">
+                            <div class="pipeline-throughput-bars">
+                                @for (bar of PipelineThroughputBars; track TrackByIndex($index)) {
+                                    <div class="pipeline-bar"
+                                        [style.height.%]="bar.Percentage"
+                                        [style.background]="bar.IsError ? 'var(--mj-status-error)' : 'var(--mj-brand-primary)'"
+                                        [style.opacity]="bar.IsError ? 0.7 : (0.6 + bar.Percentage / 300)"
+                                        style="cursor:pointer"
+                                        (click)="OpenDrillDown('pipeline-throughput:' + $index)"
+                                    ></div>
+                                }
+                            </div>
+                            <div class="pipeline-date-labels">
+                                @for (label of PipelineDateLabels; track label) {
+                                    <span>{{ label }}</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- D10: Pipeline throughput drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('pipeline-throughput:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Runs for Selected Day</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No runs for this day</div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Processing Time Breakdown -->
+                    <div class="sub-section">
+                        <h3><i class="fa-solid fa-stopwatch"></i> Processing Time Breakdown (Avg per Item)</h3>
+                        <div class="widget-card">
+                            <div class="stage-bars">
+                                @for (stage of ProcessingStages; track stage.Name) {
+                                    <div class="stage-row">
+                                        <div class="stage-name">{{ stage.Name }}</div>
+                                        <div class="stage-track">
+                                            <div class="stage-fill" [style.width.%]="stage.Percentage" [style.background]="stage.Color">
+                                                @if (stage.Percentage > 15) {
+                                                    {{ stage.Time }}s
+                                                }
+                                            </div>
+                                        </div>
+                                        <div class="stage-time">{{ stage.Time }}s</div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="stage-summary">
+                                <span><strong>Total avg:</strong> {{ TotalAvgProcessingTime }}s per item</span>
+                                @if (BottleneckStage) {
+                                    <span class="stage-warning">
+                                        <i class="fa-solid fa-triangle-exclamation" style="color:var(--mj-status-warning);margin-right:4px"></i>
+                                        {{ BottleneckStage }} stage is the bottleneck ({{ BottleneckPercent }}% of total time)
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Success Rate -->
+                    <div class="sub-section">
+                        <h3><i class="fa-solid fa-chart-line"></i> Success Rate Overview</h3>
+                        <div class="widget-card">
+                            <div class="success-rate-display">
+                                <div class="success-rate-stat">
+                                    <div class="success-rate-value" style="color:var(--mj-status-success)">
+                                        {{ rawProcessRuns.length > 0 ? (100 - (ErrorLog.length / rawProcessRuns.length * 100)).toFixed(1) : '100' }}%
+                                    </div>
+                                    <div class="success-rate-label">Success Rate</div>
+                                </div>
+                                <div class="success-rate-stat">
+                                    <div class="success-rate-value" style="color:var(--mj-status-error)">
+                                        {{ rawProcessRuns.length > 0 ? (ErrorLog.length / rawProcessRuns.length * 100).toFixed(1) : '0' }}%
+                                    </div>
+                                    <div class="success-rate-label">Failure Rate</div>
+                                </div>
+                                <div class="success-rate-stat">
+                                    <div class="success-rate-value" style="color:var(--mj-text-primary)">
+                                        {{ FormatNumber(rawProcessRuns.length) }}
+                                    </div>
+                                    <div class="success-rate-label">Total Runs</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Runs Table -->
+                    @if (ActiveRuns.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-spinner"></i> Active Runs</h3>
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Run ID</th>
+                                            <th>Source</th>
+                                            <th>Started</th>
+                                            <th>Progress</th>
+                                            <th>Stage</th>
+                                            <th class="num">Items</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (run of ActiveRuns; track run.RunID) {
+                                            <tr>
+                                                <td class="monospace-cell">{{ run.RunID }}</td>
+                                                <td>{{ run.Source }}</td>
+                                                <td class="muted">{{ run.Started }}</td>
+                                                <td>
+                                                    <div class="progress-track"><div class="progress-fill" [style.width.%]="run.Progress" style="background:var(--mj-brand-primary)"></div></div>
+                                                    <span class="progress-text">{{ run.Progress }}%</span>
+                                                </td>
+                                                <td><span class="badge" [class]="run.StageClass">{{ run.Stage }}</span></td>
+                                                <td class="num">{{ FormatNumber(run.Items) }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Error Log -->
+                    @if (ErrorLog.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-triangle-exclamation"></i> Recent Errors</h3>
+                            <div class="error-log">
+                                @for (entry of ErrorLog; track TrackByIndex($index)) {
+                                    <div class="error-entry">
+                                        <div class="error-time">{{ entry.Time }}</div>
+                                        <div class="error-source">{{ entry.Source }}</div>
+                                        <div class="error-msg">{{ entry.Message }}</div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 5: QUALITY                                         -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'quality') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <h1>Quality</h1>
+                    </div>
+
+                    <!-- Confidence Distribution Histogram -->
+                    <div class="sub-section" style="margin-top:0">
+                        <h3><i class="fa-solid fa-chart-column"></i> Confidence Distribution</h3>
+                        <div class="widget-card">
+                            <div class="histogram">
+                                @for (bin of ConfidenceHistogram; track bin.Label) {
+                                    <div class="hist-bar-col" style="cursor:pointer" (click)="OpenDrillDown('quality-bin:' + bin.Label)">
+                                        <div class="hist-bar" [style.height.%]="bin.Percentage" [style.background]="bin.Color">
+                                            @if (bin.Count > 0) { {{ bin.Count }} }
+                                        </div>
+                                        <div class="hist-label">{{ bin.Label }}</div>
+                                    </div>
+                                }
+                            </div>
+                            <div class="confidence-stats">
+                                @for (stat of ConfidenceStats; track stat.Label) {
+                                    <span><strong>{{ stat.Label }}:</strong> {{ stat.Value }}</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- D10: Quality bin drill-down -->
+                    @if (DrillDownTarget && DrillDownTarget.startsWith('quality-bin:')) {
+                        <div class="drill-down-panel">
+                            <div class="drill-down-header">
+                                <span class="drill-down-title"><i class="fa-solid fa-table"></i> Items in Confidence Range {{ DrillDownTarget.replace('quality-bin:', '') }}</span>
+                                <div class="drill-down-header-actions">
+                                    @if (DrillDownData.length > 0) {
+                                        <button class="drill-export-btn" (click)="ExportDrillDownCSV()" title="Export CSV"><i class="fa-solid fa-download"></i> CSV</button>
+                                    }
+                                    <button class="drill-down-close" aria-label="Close drill-down" (click)="CloseDrillDown()"><i class="fa-solid fa-times"></i></button>
+                                </div>
+                            </div>
+                            @if (IsDrillDownLoading) {
+                                <mj-loading text="Loading details..." size="small"></mj-loading>
+                            } @else if (DrillDownData.length > 0) {
+                                <div class="drill-down-table-wrap">
+                                    <table class="data-table">
+                                        <thead><tr>
+                                            @for (col of DrillDownColumns; track col) { <th>{{ col }}</th> }
+                                            @if (DrillDownHasActions) { <th class="drill-action-col"></th> }
+                                        </tr></thead>
+                                        <tbody>
+                                            @for (row of DrillDownData; track TrackByIndex($index)) {
+                                                <tr>
+                                                    @for (col of DrillDownColumns; track col) { <td>{{ row[col] }}</td> }
+                                                    @if (DrillDownHasActions) {
+                                                        <td class="drill-action-col">
+                                                            @if (row['_RecordID']) {
+                                                                <button class="drill-open-btn" aria-label="Open record" (click)="OpenDrillDownRecord(row)" title="Open record"><i class="fa-solid fa-arrow-up-right-from-square"></i></button>
+                                                            }
+                                                        </td>
+                                                    }
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            } @else {
+                                <div class="drill-down-empty">No items in this confidence range</div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Weight Distribution by Entity -->
+                    @if (WeightByEntity.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-weight-scale"></i> Weight Distribution by Entity</h3>
+                            <div class="widget-card">
+                                <div class="grouped-bar-chart">
+                                    @for (entity of WeightByEntity; track entity.Name) {
+                                        <div class="grouped-col">
+                                            <div class="grouped-bars">
+                                                <div class="g-bar" [style.height.%]="entity.High" style="background:var(--mj-brand-primary)" [title]="'High: ' + entity.High + '%'"></div>
+                                                <div class="g-bar" [style.height.%]="entity.Med" style="background:var(--mj-status-info)" [title]="'Med: ' + entity.Med + '%'"></div>
+                                                <div class="g-bar" [style.height.%]="entity.Low" style="background:var(--mj-text-muted)" [title]="'Low: ' + entity.Low + '%'"></div>
+                                            </div>
+                                            <div class="grouped-label">{{ entity.Name }}</div>
+                                        </div>
+                                    }
+                                </div>
+                                <div class="legend" style="justify-content:center;margin-top:14px">
+                                    @for (item of WeightLegend; track item.Label) {
+                                        <div class="legend-item"><div class="legend-dot" [style.background]="item.Color"></div> {{ item.Label }}</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Tag Accuracy Over Time -->
+                    @if (AccuracyLinePoints) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-chart-line"></i> Tag Accuracy Over Time (Weekly Avg Confidence)</h3>
+                            <div class="widget-card">
+                                <div class="accuracy-chart">
+                                    <div class="accuracy-y-labels">
+                                        <div>1.0</div>
+                                        <div>0.75</div>
+                                        <div>0.50</div>
+                                        <div>0.25</div>
+                                    </div>
+                                    <div class="accuracy-area">
+                                        <div class="accuracy-grid-line" style="top:33%"></div>
+                                        <div class="accuracy-grid-line" style="top:66%"></div>
+                                        <svg width="100%" height="110" viewBox="0 0 400 110" preserveAspectRatio="none" class="accuracy-svg">
+                                            <polyline [attr.points]="AccuracyLinePoints"
+                                                fill="none" stroke="var(--mj-brand-primary)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round"/>
+                                            @for (dot of AccuracyDots; track TrackByIndex($index)) {
+                                                <circle [attr.cx]="dot.Cx" [attr.cy]="dot.Cy" r="3" fill="var(--mj-brand-primary)"/>
+                                            }
+                                        </svg>
+                                    </div>
+                                </div>
+                                <div class="accuracy-x-labels">
+                                    @for (label of AccuracyMonthLabels; track label) {
+                                        <span>{{ label }}</span>
+                                    }
+                                </div>
+                                <div class="accuracy-trend-text">
+                                    <i class="fa-solid fa-arrow-trend-up" style="margin-right:4px"></i>
+                                    {{ AccuracyTrendText }}
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Low-Confidence Tags Table -->
+                    @if (LowConfidenceTags.length > 0) {
+                        <div class="sub-section">
+                            <h3><i class="fa-solid fa-exclamation-triangle"></i> Low-Confidence Tags (Avg Weight &lt; 0.4)</h3>
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Tag Name</th>
+                                            <th class="num">Avg Weight</th>
+                                            <th class="num">Usage Count</th>
+                                            <th>Top Entity</th>
+                                            <th>Suggested Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (tag of LowConfidenceTags; track tag.Name) {
+                                            <tr>
+                                                <td><strong>{{ tag.Name }}</strong></td>
+                                                <td class="num">{{ tag.AvgWeight }}</td>
+                                                <td class="num">{{ tag.UsageCount }}</td>
+                                                <td>{{ tag.TopEntity }}</td>
+                                                <td><span class="badge" [class]="tag.ActionClass">{{ tag.SuggestedAction }}</span></td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Model Performance Comparison -->
+                    <div class="sub-section">
+                        <h3><i class="fa-solid fa-robot"></i> Model Performance Comparison</h3>
+                        <div class="model-grid">
+                            @for (model of ModelComparisons; track model.Name) {
+                                <div class="model-card">
+                                    <div class="model-name"><i [class]="model.Icon" [style.color]="model.IconColor" style="margin-right:4px"></i> {{ model.Name }}</div>
+                                    <svg width="80" height="80" viewBox="0 0 80 80" style="margin:4px 0">
+                                        <circle cx="40" cy="40" r="32" fill="none" stroke="var(--mj-border-default)" stroke-width="8"/>
+                                        <circle cx="40" cy="40" r="32" fill="none" [attr.stroke]="model.ScoreColor" stroke-width="8"
+                                            [attr.stroke-dasharray]="model.StrokeDash" stroke-dashoffset="50"
+                                            transform="rotate(-90 40 40)" stroke-linecap="round"/>
+                                    </svg>
+                                    <div class="model-score" [style.color]="model.ScoreColor">{{ model.ScorePercentage }}%</div>
+                                    <div class="model-detail">Avg confidence: {{ model.AvgConfidence }}</div>
+                                    <div class="model-detail">{{ FormatNumber(model.TagsGenerated) }} tags generated</div>
+                                    <div class="model-detail" [style.color]="model.RoleColor" style="font-weight:600">{{ model.Role }}</div>
+                                </div>
+                            }
+                        </div>
+                        @if (ModelRecommendation) {
+                            <div class="model-recommendation">
+                                <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i>
+                                <div>
+                                    <strong>Recommendation:</strong> {{ ModelRecommendation }}
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+            <!-- ====================================================== -->
+            <!-- TAB 6: COST & USAGE (D1)                              -->
+            <!-- ====================================================== -->
+            @if (ActiveTab === 'cost') {
+                <section class="tab-section">
+                    <div class="tab-section-header">
+                        <i class="fa-solid fa-coins"></i>
+                        <h1>Cost & Usage</h1>
+                        <div class="tab-header-actions">
+                            <button class="drill-export-btn" (click)="ExportTabDataCSV('cost-usage')" title="Export CSV">
+                                <i class="fa-solid fa-download"></i> CSV
+                            </button>
+                            <button class="drill-export-btn" (click)="PrintCurrentTab()" title="Print (PDF alternative)">
+                                <i class="fa-solid fa-print"></i> Print
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="filter-bar">
+                        <div class="date-chips">
+                            @for (range of DateRanges; track range.Label) {
+                                <button
+                                    class="date-chip"
+                                    [class.active]="ActiveDateRange === range.Label"
+                                    (click)="SetDateRange(range.Label)"
+                                >{{ range.Label }}</button>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    @if (CostKPIs.length > 0) {
+                        <div class="cost-kpi-row">
+                            @for (kpi of CostKPIs; track kpi.Label) {
+                                <div class="cost-kpi-card">
+                                    <div class="cost-kpi-icon"><i [class]="kpi.Icon"></i></div>
+                                    <div>
+                                        <div class="cost-kpi-value">{{ kpi.Value }}</div>
+                                        <div class="cost-kpi-label">{{ kpi.Label }}</div>
+                                        <div class="cost-kpi-sub">{{ kpi.SubLabel }}</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <!-- Per-Run Cost Table -->
+                    <div class="sub-section">
+                        <h3><i class="fa-solid fa-table"></i> Cost Breakdown by Run</h3>
+                        @if (CostPerRunRows.length > 0) {
+                            <div class="table-scroll">
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Run ID</th>
+                                            <th>Source</th>
+                                            <th class="num">Tokens</th>
+                                            <th class="num">Cost</th>
+                                            <th>Started</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @for (row of CostPerRunRows; track row.RunID) {
+                                            <tr>
+                                                <td class="monospace-cell">{{ row.RunID }}</td>
+                                                <td>{{ row.Source }}</td>
+                                                <td class="num">{{ FormatNumber(row.Tokens) }}</td>
+                                                <td class="num">{{ row.Cost > 0 ? '$' + row.Cost.toFixed(4) : '$0.00' }}</td>
+                                                <td class="muted">{{ row.Started }}</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        } @else {
+                            <div class="empty-state">
+                                <i class="fa-solid fa-coins"></i>
+                                <p>No cost data available yet. Run the pipeline to generate cost and token usage metrics.</p>
+                                <p class="empty-state-hint">Cost data is aggregated from ContentProcessRunDetail records linked to AI Prompt Runs.</p>
+                            </div>
+                        }
+                    </div>
+                </section>
+            }
+
+        </div><!-- /main-content -->
+    </div><!-- /analytics-layout -->
+}
+  </mj-page-body>
+</mj-page-layout>

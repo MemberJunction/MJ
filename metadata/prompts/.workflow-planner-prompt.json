@@ -1,0 +1,77 @@
+[
+  {
+    "fields": {
+      "Name": "Workflow Planner - System Prompt",
+      "Description": "System prompt for the Workflow Planner sub-agent that designs and orchestrates multi-agent task graphs for complex requests.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/sage/workflow-planner.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "DE0F9DDB-CB8B-4261-985F-3A950C201554"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:12.074Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "AA84777B-52BC-4342-BD92-6BC0664DBA6C"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:12.090Z",
+            "checksum": "585598b825508c479a4b7da27a7992964de9b9f454219801003e3d11cdf85a3a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "4AB6D22B-5708-4901-BB3B-02A57C43A821"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:12.104Z",
+            "checksum": "8c381c7386c5984c7c635a3fc80f3542d4eb51bffce6422af495188dbcaf109a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "836D0CCD-0C4C-422B-9AD9-F44B7D52BC3A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:11:12.035Z",
+      "checksum": "ce05f44b7779466a908df7bd9d109b6b6d44652d88207cec301136b53ef44396"
+    }
+  }
+]

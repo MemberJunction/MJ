@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Antwerpen (nl)",
+      "Code": "VAN",
+      "ISO3166_2": "BE-VAN",
+      "Latitude": 51.2485,
+      "Longitude": 4.7212,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-VAN.geojson",
+      "CommonAliases": [
+        "Antwerpen (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "173A9A67-EDBF-41BB-B873-4BBBF2C32B1F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.310Z",
+      "checksum": "238957ffff39c113533a164b5df2a7cfadd864ddd105c71a8105032e84a2de45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brabant Wallon (fr)",
+      "Code": "WBR",
+      "ISO3166_2": "BE-WBR",
+      "Latitude": 50.6416,
+      "Longitude": 4.5547,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-WBR.geojson",
+      "CommonAliases": [
+        "Brabant Wallon (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "A2CC54B6-27FD-469C-A3F8-4616022FED36"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.330Z",
+      "checksum": "024a96365487072c8c5a055816025f23fa0fc944f61013f6a4e918731da93d3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bruxelles-Capitale, Region de (fr), Brussels Hoofdstedelijk Gewest (nl)",
+      "Code": "BRU",
+      "ISO3166_2": "BE-BRU",
+      "Latitude": 50.8332,
+      "Longitude": 4.3627,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-BRU.geojson",
+      "CommonAliases": [
+        "Bruxelles-Capitale, Region de (fr), Brussels Hoofdstedelijk Gewest (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "124FB290-0A08-43CC-91C5-9D9C6ABBA21A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.347Z",
+      "checksum": "021c44cbad19cf0e929061be03bd8cb7682b373a90e9cb37f41117afc8280991"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hainaut (fr)",
+      "Code": "WHT",
+      "ISO3166_2": "BE-WHT",
+      "Latitude": 50.521,
+      "Longitude": 3.8893,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-WHT.geojson",
+      "CommonAliases": [
+        "Hainaut (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "A3367C34-FFCF-4AA6-9D06-36D8B5FD9D9F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.363Z",
+      "checksum": "87f9ce1f659763775f144bf6b5a0b4b8b33c03ac8ee27eff752c1b1f26941e45"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Liège (fr)",
+      "Code": "WLG",
+      "ISO3166_2": "BE-WLG",
+      "Latitude": 50.5794,
+      "Longitude": 5.6765,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-WLG.geojson",
+      "CommonAliases": [
+        "Liège (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "445CF924-CA71-4BC2-8A0F-E14620F1892C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.381Z",
+      "checksum": "9e3eed3f237ea0ddd9796adb1a0a9f98d262a49b748b290b7ca61828b596068b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Limburg (nl)",
+      "Code": "VLI",
+      "ISO3166_2": "BE-VLI",
+      "Latitude": 50.9954,
+      "Longitude": 5.4131,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-VLI.geojson",
+      "CommonAliases": [
+        "Limburg (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "2C9F9C70-5D74-4531-9A4E-2D9D59889CAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.397Z",
+      "checksum": "361a619452c73dd19522aae16e5261009ddd6de76fb126462a74c73f0c45a212"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luxembourg (fr)",
+      "Code": "WLX",
+      "ISO3166_2": "BE-WLX",
+      "Latitude": 49.9637,
+      "Longitude": 5.5012,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-WLX.geojson",
+      "CommonAliases": [
+        "Luxembourg (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "97163171-6014-41D7-B71A-B94D4E8FEB13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.414Z",
+      "checksum": "08dc974f9a6faa80548b056bcd0d8be16f68e6f949dfb6260142b16269716529"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Namur (fr)",
+      "Code": "WNA",
+      "ISO3166_2": "BE-WNA",
+      "Latitude": 50.3244,
+      "Longitude": 4.8871,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-WNA.geojson",
+      "CommonAliases": [
+        "Namur (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "6DAC73E2-C0D9-4789-93FB-CA0DA55B4556"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.431Z",
+      "checksum": "a268ce63dba0dd30560ba7419454c095bd83c4e8dbeeac92e9d4aeb4eca537ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oost-Vlaanderen (nl)",
+      "Code": "VOV",
+      "ISO3166_2": "BE-VOV",
+      "Latitude": 50.9749,
+      "Longitude": 3.8319,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-VOV.geojson",
+      "CommonAliases": [
+        "Oost-Vlaanderen (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "42A2EFA3-7E65-4141-9CEC-209EF4883EC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.448Z",
+      "checksum": "5ee164a780c4de9ae1adc53647f44497042116269c2c7eb654bfaf6280192dfc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vlaams Brabant (nl)",
+      "Code": "VBR",
+      "ISO3166_2": "BE-VBR",
+      "Latitude": 50.8709,
+      "Longitude": 4.5371,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-VBR.geojson",
+      "CommonAliases": [
+        "Vlaams Brabant (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "7028D002-77BB-468F-AFE6-A691F997BEDD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.462Z",
+      "checksum": "f3206aa4426239722f08ecce6cdcf7715fe945648bcf1f7bbf88d8ecf530c2c7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vlaamse Gewest (nl)",
+      "Code": "VLG",
+      "ISO3166_2": "BE-VLG",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vlaamse Gewest (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "076E26CD-036C-40E6-A0F1-230934B82AEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.493Z",
+      "checksum": "e141af6abce61c0de057d7419fc83df9623394bc705c9d241e2d9f1abaed5070"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wallonne, Region (fr)",
+      "Code": "WAL",
+      "ISO3166_2": "BE-WAL",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wallonne, Region (fr)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "CECAB278-B422-484E-9938-EA6432817B20"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.509Z",
+      "checksum": "250446870f650dc6b77cc41e8160365f57453d1e6b6dc1ef143bebd1007b829c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West-Vlaanderen (nl)",
+      "Code": "VWV",
+      "ISO3166_2": "BE-VWV",
+      "Latitude": 51.0312,
+      "Longitude": 3.022,
+      "BoundaryGeoJSON": "@file:by-country/BE/boundaries/BE-VWV.geojson",
+      "CommonAliases": [
+        "West-Vlaanderen (nl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BE"
+    },
+    "primaryKey": {
+      "ID": "EEA4A6AA-DE86-465D-9BE7-80244BF1DD34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:31.523Z",
+      "checksum": "ced7f4cf9aa47634b7faf7ed00058cd69d8ecc132f3865293bfa21099d5fd758"
+    }
+  }
+]

@@ -1,0 +1,716 @@
+[
+  {
+    "fields": {
+      "Name": "Anuradhapura",
+      "Code": "71",
+      "ISO3166_2": "LK-71",
+      "Latitude": 8.292,
+      "Longitude": 80.4711,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-71.geojson",
+      "CommonAliases": [
+        "Anuradhapura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "BEDC6F37-0104-4C4F-A4CA-1D0481D9ABB7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.726Z",
+      "checksum": "0f65ec9b38bd62249fad7ce5e12d702a17b3c9ffa88aa485ec2e39d25833cc07"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arnpara",
+      "Code": "52",
+      "ISO3166_2": "LK-52",
+      "Latitude": 7.1632,
+      "Longitude": 81.7242,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-52.geojson",
+      "CommonAliases": [
+        "Arnpara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "7349F477-69BB-47E0-AF30-C747633796E9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.742Z",
+      "checksum": "6e6a0a8add51c862048198bcfc7db411511aca124e75b4d25404176523af6872"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Badulla",
+      "Code": "81",
+      "ISO3166_2": "LK-81",
+      "Latitude": 7.0518,
+      "Longitude": 81.0255,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-81.geojson",
+      "CommonAliases": [
+        "Badulla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "41702914-FDA5-41EF-AEE7-F873F6D959F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.758Z",
+      "checksum": "94c4333365cbd9e8cf836a04fa0c05aedefa145cdb7a1e23d9d666a48c37d210"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Basnahira Palata (Western Province)",
+      "Code": "1",
+      "ISO3166_2": "LK-1",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Basnahira Palata (Western Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "31A91A63-4106-48E5-BD86-306665411E49"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.774Z",
+      "checksum": "dc0e7c6509288e884721915915511044d8fe152416189b14bc5d8c9c1729254a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Batticaloa",
+      "Code": "51",
+      "ISO3166_2": "LK-51",
+      "Latitude": 7.8508,
+      "Longitude": 81.4613,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-51.geojson",
+      "CommonAliases": [
+        "Batticaloa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "B4FC1376-6C18-4676-A911-19F4C32A6368"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.792Z",
+      "checksum": "35f957f25d6382f691aad8f0ccb07380c61bc51963a8bffcdf886419134bdac6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Colombo",
+      "Code": "11",
+      "ISO3166_2": "LK-11",
+      "Latitude": 6.8599,
+      "Longitude": 80.0349,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-11.geojson",
+      "CommonAliases": [
+        "Colombo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "8213720A-316D-4145-8D7A-34E5188352DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.808Z",
+      "checksum": "a8584307a6cd7e9320cbde07866acaa53c849e4add28eae5e89d5ec48fb0c9e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dakunu Palata (Southern Province)",
+      "Code": "3",
+      "ISO3166_2": "LK-3",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Dakunu Palata (Southern Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "1FC555F9-D413-4398-AD5A-0CE7E2291D88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.824Z",
+      "checksum": "c1079ff724cf9c1ff8b318be8cf7b5025cbf0314691e9919c7abf459703d7dbc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Galle",
+      "Code": "31",
+      "ISO3166_2": "LK-31",
+      "Latitude": 6.1951,
+      "Longitude": 80.2387,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-31.geojson",
+      "CommonAliases": [
+        "Galle"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "9C8EA9E3-E6CE-4B28-A030-0E4092020750"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.840Z",
+      "checksum": "3577a22b0241d7fb5e077969b6b803130d5004b8ba8a7ebeca08495b3f040e95"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gampaha",
+      "Code": "12",
+      "ISO3166_2": "LK-12",
+      "Latitude": 7.126,
+      "Longitude": 80.0106,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-12.geojson",
+      "CommonAliases": [
+        "Gampaha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "EF1E4A0E-0A9B-4CD7-A2AB-9B730D8A03E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.856Z",
+      "checksum": "222ffd4f7b6fc839e1436a068b4403607e818a44a76a48eaa4e31653a4a740d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hambantota",
+      "Code": "33",
+      "ISO3166_2": "LK-33",
+      "Latitude": 6.2704,
+      "Longitude": 81.1619,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-33.geojson",
+      "CommonAliases": [
+        "Hambantota"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "9C833B83-0A2A-4E48-9163-270ED7DFDDC9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.872Z",
+      "checksum": "6d8afb23102723285a418444c98aadbcfa297b39ab4734259b700a2d2bc80fcf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jaffna",
+      "Code": "41",
+      "ISO3166_2": "LK-41",
+      "Latitude": 9.5067,
+      "Longitude": 79.6933,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-41.geojson",
+      "CommonAliases": [
+        "Jaffna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "515EE6A1-D76E-46C0-B415-4D49D81F0AF3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.924Z",
+      "checksum": "5c4e7790ae11ce15ab764aeaf2f28e57ada8ce4b522ab287e8e2ec06ca5ff41a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalutara",
+      "Code": "13",
+      "ISO3166_2": "LK-13",
+      "Latitude": 6.5899,
+      "Longitude": 80.1374,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-13.geojson",
+      "CommonAliases": [
+        "Kalutara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "7993D7F3-A419-4998-BE19-E0A7844C4F3F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.940Z",
+      "checksum": "39bef684071db90c734524e29658a5e4d01ba0fd16b6e4f24b7d03240a2ab400"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kandy",
+      "Code": "21",
+      "ISO3166_2": "LK-21",
+      "Latitude": 7.3019,
+      "Longitude": 80.718,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-21.geojson",
+      "CommonAliases": [
+        "Kandy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "EF083A93-862D-4590-9B79-16AF235CD0FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.957Z",
+      "checksum": "62300bde9440d3b2f222a6a6ae43f83ff038a4e6300ab49a69c0ae2b8cd64937"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kegalla",
+      "Code": "92",
+      "ISO3166_2": "LK-92",
+      "Latitude": 7.088,
+      "Longitude": 80.3478,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-92.geojson",
+      "CommonAliases": [
+        "Kegalla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "59078B92-A374-4C3F-93CB-A055BC2C7823"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.974Z",
+      "checksum": "213d50a7c59dcc228bcb9e11e2e99fa0ad35c416e704b59546bf06d42d30f2fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kilinochchi",
+      "Code": "42",
+      "ISO3166_2": "LK-42",
+      "Latitude": 9.3843,
+      "Longitude": 80.3341,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-42.geojson",
+      "CommonAliases": [
+        "Kilinochchi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "1D760BE3-D62A-43C5-B914-CB44A8F4B6C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.989Z",
+      "checksum": "64e9a6268a9be40710c746ab68e14e1379a9d340d97f496adea200f75b4c7587"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kurunegala",
+      "Code": "61",
+      "ISO3166_2": "LK-61",
+      "Latitude": 7.713,
+      "Longitude": 80.2369,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-61.geojson",
+      "CommonAliases": [
+        "Kurunegala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "BEFDF349-CA67-4B8B-9D07-4AE0A1288C20"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.004Z",
+      "checksum": "d73b21bbc1b117b2b954049cca45f80eb57c11703a99b9cc1a560203088b5a75"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madhyama Palata (Central Province)",
+      "Code": "2",
+      "ISO3166_2": "LK-2",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Madhyama Palata (Central Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "AF3AA8C2-B230-4D83-AA7F-BE28A108A4B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.020Z",
+      "checksum": "ec2a291b39d9d82b8f198ab36453b0c7430023ad8effec57f63d4fc54e33ee6d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mannar",
+      "Code": "43",
+      "ISO3166_2": "LK-43",
+      "Latitude": 8.8437,
+      "Longitude": 80.0854,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-43.geojson",
+      "CommonAliases": [
+        "Mannar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "572069A2-5031-4966-866D-D906555CCEF1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.039Z",
+      "checksum": "80de50bca232080d6b6232cfd77ae69ea30295f63d7a37f331a12eb56a15741d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matale",
+      "Code": "22",
+      "ISO3166_2": "LK-22",
+      "Latitude": 7.6092,
+      "Longitude": 80.7391,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-22.geojson",
+      "CommonAliases": [
+        "Matale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "9DFF04D1-8B06-46E2-8B36-E7EF4EF0B70B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.055Z",
+      "checksum": "9f93439bbb6ba5a71005edb44cc68cd598f38a522bc745973bdebbd82fae9207"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Matara",
+      "Code": "32",
+      "ISO3166_2": "LK-32",
+      "Latitude": 6.1655,
+      "Longitude": 80.5542,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-32.geojson",
+      "CommonAliases": [
+        "Matara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "EA4455F0-C9DB-4A01-8EDB-E5B1C2191142"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.069Z",
+      "checksum": "5b147082084bef3d3a27f78a41e7e946af455e6e31efc190f1c4bee8ef3c3f0c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Monaragala",
+      "Code": "82",
+      "ISO3166_2": "LK-82",
+      "Latitude": 6.7224,
+      "Longitude": 81.3431,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-82.geojson",
+      "CommonAliases": [
+        "Monaragala"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "0959BB14-CC2E-459F-A770-55ACAC1546C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.131Z",
+      "checksum": "4b130a2c6fb2db3d64babe2bff2aef559a39a84ea88a2ef27aee7fd104c0b457"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mullaittivu",
+      "Code": "45",
+      "ISO3166_2": "LK-45",
+      "Latitude": 9.2404,
+      "Longitude": 80.5667,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-45.geojson",
+      "CommonAliases": [
+        "Mullaittivu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "790CFA48-BB4E-49D0-9F3F-503ACD09EE9A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.147Z",
+      "checksum": "dff7e3c0cf3abe2661c8a2df98dee79588607ebc95cc276482b722ce5f136a3e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Negenahira Palata (Eastern Province)",
+      "Code": "5",
+      "ISO3166_2": "LK-5",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Negenahira Palata (Eastern Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "7EFB69AA-6F61-450E-8DD1-EBF164F6CADE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.162Z",
+      "checksum": "38ce5f1e802fc557d7a336ef77d255af4e87d177056b51dd0400b6f9707ff0e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nuwara Eliya",
+      "Code": "23",
+      "ISO3166_2": "LK-23",
+      "Latitude": 6.9363,
+      "Longitude": 80.6991,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-23.geojson",
+      "CommonAliases": [
+        "Nuwara Eliya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "2F754215-CC70-45ED-A9D0-1C4B77243AD6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.178Z",
+      "checksum": "e7f2c8bad64fc8b30febad842e9925f9c40ba86ea364ab60e309c1fcf080b6a5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Polonnaruwa",
+      "Code": "72",
+      "ISO3166_2": "LK-72",
+      "Latitude": 8,
+      "Longitude": 81.048,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-72.geojson",
+      "CommonAliases": [
+        "Polonnaruwa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "0848851E-9AA0-433F-9903-D6A31B58EC30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.195Z",
+      "checksum": "6d9f547748b25d9686908e88f788430b6a1bfcdf0371e361484a3d29f5d63730"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puttalam",
+      "Code": "62",
+      "ISO3166_2": "LK-62",
+      "Latitude": 7.9494,
+      "Longitude": 79.9111,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-62.geojson",
+      "CommonAliases": [
+        "Puttalam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "270191B0-743D-45F9-AB31-0B580F25B018"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.216Z",
+      "checksum": "3662f4a69d91d7d80ab52b8489bc4e96e0eea62e7d55774076185db4a2f75ccd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ratnapura",
+      "Code": "91",
+      "ISO3166_2": "LK-91",
+      "Latitude": 6.5793,
+      "Longitude": 80.5623,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-91.geojson",
+      "CommonAliases": [
+        "Ratnapura"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "806F0D7F-B14B-4B97-AD16-471691BEF24B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.235Z",
+      "checksum": "bdcf54a8809b7402dd9d5ec3f6995015528a48af5df358a02c2393d0d8d6bf30"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sabaragamuwa Palata",
+      "Code": "9",
+      "ISO3166_2": "LK-9",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sabaragamuwa Palata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "A4EE2833-F11F-4258-89E2-64F4D2863BF5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.255Z",
+      "checksum": "c407df78b9de0ce3ee67572ba3b2326b5cd5371e26faea19c6c408a579fff7e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trincomalee",
+      "Code": "53",
+      "ISO3166_2": "LK-53",
+      "Latitude": 8.562,
+      "Longitude": 81.0848,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-53.geojson",
+      "CommonAliases": [
+        "Trincomalee"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "C3D1C2C1-3EC6-491D-AF32-BA399E75BBA0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.275Z",
+      "checksum": "885c25a8088ec9bdbc28c006d6c2a457cbff714c9c4ee0ec087d73666d44ecae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uturu Palata (Northern Province)",
+      "Code": "4",
+      "ISO3166_2": "LK-4",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Uturu Palata (Northern Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "D306496F-180B-46D3-B948-E3C7AD6BDD58"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.289Z",
+      "checksum": "1e69774b5cd86a4f29b48a7b7fad9d7d641b958bf1dfa756d88e2536a1ca9ab2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uturumeda Palata (North Central Province)",
+      "Code": "7",
+      "ISO3166_2": "LK-7",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Uturumeda Palata (North Central Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "401020C9-E802-48D7-B136-F2A4BA073DE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.329Z",
+      "checksum": "c658b44002f1fa362173d3ad27f00d6e9cfb54ec60db878cb7138d0ef65217b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uva Palata",
+      "Code": "8",
+      "ISO3166_2": "LK-8",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Uva Palata"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "2DC6B6F1-CC6C-4091-9442-EDC6BD2B57E1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.346Z",
+      "checksum": "78f93d1d137788ca3960225509294a5238db34c20e58b871f53ad9279d4b4d6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vavuniya",
+      "Code": "44",
+      "ISO3166_2": "LK-44",
+      "Latitude": 8.8976,
+      "Longitude": 80.479,
+      "BoundaryGeoJSON": "@file:by-country/LK/boundaries/LK-44.geojson",
+      "CommonAliases": [
+        "Vavuniya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "467670C7-31CC-4139-BF30-44DB3FDA23A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.364Z",
+      "checksum": "659d58f9c2f26b6dc2bf72f7e58fa3fc4191655cf40d041f95299100c035069b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wayamba Palata (North Western Province)",
+      "Code": "6",
+      "ISO3166_2": "LK-6",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Wayamba Palata (North Western Province)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LK"
+    },
+    "primaryKey": {
+      "ID": "6F9BD195-81D3-4BFF-93A9-1595CC9E4C44"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:12.380Z",
+      "checksum": "a7f299367fd7d125c2c1d2f69380eb9ff2efe09a562e5aa8dab4b65cdc5f3d1e"
+    }
+  }
+]

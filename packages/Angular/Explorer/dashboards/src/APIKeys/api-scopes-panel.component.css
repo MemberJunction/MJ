@@ -347,14 +347,14 @@
    ======================================== */
 
 /* Window styling */
-:host ::ng-deep kendo-window {
+:host ::ng-deep .mj-window {
     border-radius: 16px !important;
     overflow: hidden;
     box-shadow: var(--mj-shadow-2xl) !important;
     background: var(--mj-bg-surface) !important;
 }
 
-:host ::ng-deep kendo-window .k-window-content {
+:host ::ng-deep .mj-window-body {
     padding: 0 !important;
     display: flex;
     flex-direction: column;
@@ -362,7 +362,7 @@
     background: var(--mj-bg-surface) !important;
 }
 
-:host ::ng-deep kendo-window-titlebar {
+:host ::ng-deep .mj-window-titlebar {
     display: flex !important;
     align-items: center;
     justify-content: space-between;
@@ -441,9 +441,9 @@
     min-height: 80px;
 }
 
-:host ::ng-deep .form-input .k-input,
-:host ::ng-deep .form-textarea .k-input-inner,
-:host ::ng-deep .form-field .k-dropdownlist {
+:host ::ng-deep .form-input.mj-input,
+:host ::ng-deep .form-textarea.mj-textarea,
+:host ::ng-deep .form-field .mj-dropdown {
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 14px;
@@ -453,9 +453,9 @@
     transition: all 0.2s ease;
 }
 
-:host ::ng-deep .form-input:focus-within,
-:host ::ng-deep .form-textarea:focus-within,
-:host ::ng-deep .form-field .k-dropdownlist.k-focus {
+:host ::ng-deep .form-input.mj-input:focus-within,
+:host ::ng-deep .form-textarea.mj-textarea:focus-within,
+:host ::ng-deep .form-field .mj-dropdown:focus-within {
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 10%, transparent);
 }
 
@@ -522,7 +522,7 @@
     margin: 0 -24px -24px -24px;
 }
 
-:host ::ng-deep .dialog-actions .k-button {
+:host ::ng-deep .dialog-actions .mj-button {
     min-width: 100px;
     padding: 10px 20px;
     font-weight: 600;
@@ -530,13 +530,13 @@
     transition: all 0.2s ease;
 }
 
-:host ::ng-deep .dialog-actions .k-button-solid-primary {
+:host ::ng-deep .dialog-actions .mj-button-primary {
     background: linear-gradient(135deg, var(--mj-status-success) 0%, var(--mj-color-success-600) 100%);
     border: none;
     box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
 }
 
-:host ::ng-deep .dialog-actions .k-button-solid-primary:hover {
+:host ::ng-deep .dialog-actions .mj-button-primary:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-status-success) 40%, transparent);
 }

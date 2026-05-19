@@ -1,0 +1,30 @@
+{
+  "threshold": 30,
+  "rows": [
+    {
+      "phase": "01-clean-install",
+      "next": 84.13,
+      "branch": 63.77
+    },
+    {
+      "phase": "02-association-db",
+      "next": 97.27,
+      "branch": 82.55
+    },
+    {
+      "phase": "03-mutations",
+      "next": 88.61,
+      "branch": 67.03
+    },
+    {
+      "phase": "04-new-entities",
+      "next": 91.49,
+      "branch": 68.16
+    },
+    {
+      "phase": "scoped-verify",
+      "branch-forced": 101.82
+    }
+  ],
+  "flags": []
+}

@@ -1,0 +1,42 @@
+<div class="mj-map-view-wrapper">
+    <div class="mj-map-toolbar">
+        <div class="mj-map-mode-buttons">
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'point'"
+                    (click)="SetRenderMode('point')">
+                <i class="fa-solid fa-location-dot"></i> Points
+            </button>
+            @if (HasBoundaryField) {
+                <button class="mj-map-mode-btn"
+                        [class.active]="RenderMode === 'boundary'"
+                        (click)="SetRenderMode('boundary')">
+                    <i class="fa-solid fa-draw-polygon"></i> Boundary
+                </button>
+            }
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'choropleth'"
+                    (click)="SetRenderMode('choropleth')">
+                <i class="fa-solid fa-map"></i> Regions
+            </button>
+            <button class="mj-map-mode-btn"
+                    [class.active]="RenderMode === 'heatmap'"
+                    (click)="SetRenderMode('heatmap')">
+                <i class="fa-solid fa-fire"></i> Heat Map
+            </button>
+        </div>
+        <div class="mj-map-info">
+            {{ MarkerCount }} location{{ MarkerCount !== 1 ? 's' : '' }} mapped
+            @if (IsTruncated) {
+                <span class="mj-map-truncated" title="Not all records are displayed. Showing {{ Records.length | number }} of {{ TotalRecordCount | number }} total records.">
+                    <i class="fa-solid fa-triangle-exclamation"></i> Showing {{ Records.length | number }} of {{ TotalRecordCount | number }}
+                </span>
+            }
+        </div>
+    </div>
+    @if (IsLoading) {
+        <div class="mj-map-loading">
+            <mj-loading text="Loading map..."></mj-loading>
+        </div>
+    }
+    <div #mapContainer class="mj-map-container"></div>
+</div>

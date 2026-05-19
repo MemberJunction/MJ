@@ -12,6 +12,7 @@ import {
   Type
 } from '@angular/core';
 import { MJArtifactVersionEntity, MJArtifactTypeEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, LogError, RunView, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
@@ -112,7 +113,7 @@ import { BaseArtifactViewerPluginComponent, NavigationRequest } from './base-art
     }
   `]
 })
-export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
+export class ArtifactTypePluginViewerComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   @Input() artifactVersion!: MJArtifactVersionEntity;
   @Input() artifactTypeName!: string;
   @Input() contentType?: string;
@@ -140,6 +141,22 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
    */
   public get pluginInstance(): BaseArtifactViewerPluginComponent | null {
     return this.componentRef?.instance as BaseArtifactViewerPluginComponent || null;
+  }
+
+  /**
+   * Whether the loaded plugin supports user feedback.
+   * Pass-through to the plugin instance for use by the parent panel wrapper.
+   */
+  public get SupportsFeedback(): boolean {
+    return this.pluginInstance?.SupportsFeedback ?? false;
+  }
+
+  /**
+   * Ask the loaded plugin to show its feedback UX.
+   * Pass-through to the plugin instance, called from the parent panel header.
+   */
+  public AskUserForFeedback(): void {
+    this.pluginInstance?.AskUserForFeedback();
   }
 
   async ngOnInit(): Promise<void> {
@@ -213,7 +230,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
 
       // Get the component type using MJGlobal ClassFactory
       // CreateInstance returns the registered component class for the given DriverClass key
-      const tempInstance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactViewerPluginComponent>(
+      const tempInstance = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseArtifactViewerPluginComponent>(
         BaseArtifactViewerPluginComponent,
         driverClass
       );
@@ -357,7 +374,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
    */
   private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types');
       const loaded = await artifactType.Load(id);
 

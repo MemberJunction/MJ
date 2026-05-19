@@ -397,8 +397,32 @@ export class EntityField {
                 }
             }
             else {
-                // for strings we're good to just set the value
-                this.Value = fieldInfo.DefaultValue;
+                // For strings: strip PostgreSQL's typed-literal wrapper.
+                //
+                // PG's pg_get_expr() (used by vwSQLColumnsAndEntityFields →
+                // EntityField.DefaultValue) renders a string default like:
+                //   'Single'::character varying
+                //   'pending'::text
+                // SQL Server stores the same default as just `'Single'` or
+                // `'pending'`. If we set the field value to the raw PG form,
+                // the value is `'Single'::character varying` (27 chars), and
+                // a MaxLength=20 constraint immediately fails validation —
+                // even though the actual content is `Single` (6 chars).
+                //
+                // Unwrap a leading single-quoted string followed by a `::type`
+                // suffix. Function-call defaults (`nextval('...')`,
+                // `now() AT TIME ZONE 'UTC'`) deliberately don't match this
+                // shape and are left untouched — the database evaluates them
+                // server-side at INSERT time.
+                const dv = fieldInfo.DefaultValue.trim();
+                const pgTypedLiteral = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
+                const m = dv.match(pgTypedLiteral);
+                if (m) {
+                    // Replace the SQL-escaped doubled quotes back to a single quote.
+                    this.Value = m[1].replace(/''/g, "'");
+                } else {
+                    this.Value = fieldInfo.DefaultValue;
+                }
             }
             this._NeverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }
@@ -437,6 +461,98 @@ export class EntityField {
     public get OldValue(): any {
         return this._OldValue;
     }
+}
+
+/**
+ * Context describing a restore operation in progress on a BaseEntity.
+ *
+ * When set on an entity instance via {@link BaseEntity.SetRestoreContext}
+ * prior to calling Save(), the data provider will write the resulting
+ * RecordChange row with `Source='Restore'` and the lineage columns
+ * populated, producing an auditable chain back to the historical change
+ * that was restored.
+ */
+export interface RestoreContext {
+    /**
+     * ID of the historical RecordChange row whose state is being restored.
+     * Persisted to RecordChange.RestoredFromID on the new change row.
+     */
+    SourceChangeID: string;
+
+    /**
+     * Optional user-entered explanation for the restore. Persisted to
+     * RecordChange.RestoreReason. NULL when the user did not enter one.
+     */
+    Reason: string | null;
+}
+
+/**
+ * Discriminator for the `Source` column of a RecordChange row.
+ *
+ * - `Internal`: produced by an ordinary BaseEntity Save() / Delete() call
+ * - `External`: synthesized by an external-change-detection scanner
+ *   (records the platform discovers via direct SQL changes)
+ * - `Restore`: produced by a user-initiated restore — paired with
+ *   `RestoredFromID` and optional `RestoreReason` lineage columns
+ */
+export type RecordChangeSource = 'Internal' | 'External' | 'Restore';
+
+/**
+ * Dialect-agnostic payload for a RecordChange row.
+ *
+ * Built by `DatabaseProviderBase.BuildRecordChangePayload` from an
+ * entity's old/new data plus an optional restore context. Concrete
+ * providers consume the payload to render their dialect-specific SQL —
+ * SQL Server emits `EXEC spCreateRecordChange_Internal @...`, PostgreSQL
+ * emits a parameterized `INSERT INTO "RecordChange"` statement.
+ *
+ * Hoisting this shape into the base class means the diff/JSON/description
+ * assembly happens in exactly one place across providers, and adding new
+ * RecordChange columns in the future requires updating one method instead
+ * of every provider's render path.
+ */
+export interface RecordChangePayload {
+    /** EntityInfo.ID of the entity the change belongs to. */
+    entityID: string;
+    /**
+     * Composite-key serialized RecordID. May be empty when the caller
+     * intends to resolve it lazily from a SQL expression (e.g., PG's
+     * inline CTE save path uses the post-INSERT primary key).
+     */
+    recordID: string;
+    /** Acting user's UserInfo.ID. */
+    userID: string;
+    /** Change type — `Create`, `Update`, or `Delete`. */
+    type: 'Create' | 'Update' | 'Delete';
+    /** Source discriminator. See {@link RecordChangeSource}. */
+    source: RecordChangeSource;
+    /**
+     * JSON-serialized field-level diff. Empty string for `Create` and
+     * `Delete` (those rows are fully described by `fullRecordJSON`).
+     */
+    changesJSON: string;
+    /**
+     * Human-readable summary of the change ("Description set to ...",
+     * "Status changed from X to Y", "Record Created", etc.).
+     */
+    changesDescription: string;
+    /**
+     * Complete snapshot of the record's post-change state (or pre-delete
+     * state for deletes), JSON-encoded with quotes pre-escaped.
+     */
+    fullRecordJSON: string;
+    /**
+     * When `source === 'Restore'`, points at the historical RecordChange
+     * row whose state was restored. Persisted to
+     * `RecordChange.RestoredFromID`. Null otherwise.
+     */
+    restoredFromID: string | null;
+    /**
+     * When `source === 'Restore'`, the optional user-entered reason.
+     * Persisted to `RecordChange.RestoreReason`. Null when the user did
+     * not enter one.
+     */
+    restoreReason: string | null;
 }
 
 export class DataObjectRelatedEntityParam {
@@ -604,23 +720,160 @@ export class BaseEntityEvent {
      * where baseEntity is null but the entity name is known from the remote notification.
      */
     entityName?: string;
+
+    /**
+     * The metadata provider associated with the entity that raised this event. Required for
+     * `remote-invalidate` events where `baseEntity` is null and listeners (e.g. LocalCacheManager,
+     * BaseEngine) need to resolve entity metadata from the correct provider in multi-provider
+     * scenarios. For other event types, baseEntity.ProviderToUse is the source of truth and this
+     * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
+     * to `Metadata.Provider` when no provider is available.
+     */
+    provider?: IMetadataProvider;
 }
 
 /**
  * Base class used for all entity objects. This class is abstract and is sub-classes for each particular entity using the CodeGen tool. This class provides the basic functionality for loading, saving, and validating entity objects.
  */
 export abstract class BaseEntity<T = unknown> {
+    /**
+     * Metadata describing this entity (name, fields, keys, relationships). Populated during
+     * `SetEntityName()` from `Metadata.EntityByName` and used as the source of truth for
+     * field definitions and schema details throughout this class.
+     */
     private _EntityInfo: EntityInfo;
+
+    /**
+     * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
+     * Each holds the current value, old value, dirty state, and per-field validation.
+     *
+     * **Lazy hydration**: Fields are NOT built up-front in the constructor / `init()`. Instead they
+     * are constructed on first need by `hydrateFieldsIfNeeded()`. Until then, this array is empty
+     * and reads come from `_raw`. This makes constructing entities from cache data near-instant —
+     * the per-row Field allocation cost (the dominant overhead for engine warm-loads) only happens
+     * if a consumer actually mutates the record or invokes a Field-walking operation (Save, Validate,
+     * Dirty, .Fields accessor, etc.).
+     *
+     * Always read via the `Fields` getter — it auto-hydrates. Direct `_Fields` reads from inside
+     * `BaseEntity` are reserved for paths that have already triggered hydration or paths that
+     * deliberately want to inspect hydration state (e.g., `Dirty` getter).
+     */
     private _Fields: EntityField[] = [];
+
+    /**
+     * Tracks whether `_Fields` has been populated. `false` while in "raw mode" (data accessible
+     * via `_raw` but no EntityField instances built yet); flips to `true` after the first call to
+     * `hydrateFieldsIfNeeded()`. One-way transition.
+     */
+    private _fieldsHydrated: boolean = false;
+
+    /**
+     * Raw data populated by `LoadFromData()` BEFORE field hydration. When non-null and
+     * `_fieldsHydrated === false`, `Get()` reads from this map instead of walking `_Fields`.
+     * Cleared/superseded by the hydration step which copies values into actual EntityField
+     * instances. Keeping it after hydration would not be useful — `_Fields` becomes the
+     * authoritative source.
+     */
+    private _raw: Record<string, unknown> | null = null;
+
+    /**
+     * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
+     * `LoadFromData`, etc.). Used to gate operations that require loaded state and to distinguish
+     * uninitialized instances from genuinely empty new records.
+     */
     private _recordLoaded: boolean = false;
+
+    /**
+     * The user context to use for server-side operations (permission checks, audit trails).
+     * On the server this MUST be set per-request; on the client it may be null since the
+     * provider knows the logged-in user implicitly.
+     */
     private _contextCurrentUser: UserInfo = null;
+
+    /**
+     * The transaction group this entity is enlisted in, if any. When set, `Save()` and `Delete()`
+     * defer their provider calls to the group's coordinated `Submit()` so a batch of operations
+     * commits atomically.
+     */
     private _transactionGroup: TransactionGroupBase = null;
+
+    /**
+     * RxJS `Subject` that fires `BaseEntityEvent`s (save, delete, field-change,
+     * remote-invalidate). Exposed publicly via `Event$` so engines and UI components can react
+     * to entity lifecycle events.
+     */
     private _eventSubject: Subject<BaseEntityEvent>;
+
+    /**
+     * Bounded ring of `BaseEntityResult` objects from each Save/Delete attempt. The most
+     * recent entry is exposed via `LatestResult` for error inspection after a failure.
+     * Capped at `MAX_RESULT_HISTORY` (50) — older entries are dropped on overflow. This
+     * matters for entity instances held in long-lived engine arrays where every
+     * `Save()`/`Delete()` would otherwise leak one result object indefinitely.
+     */
     private _resultHistory: BaseEntityResult[] = [];
+
+    /**
+     * Maximum number of `BaseEntityResult` entries retained in `_resultHistory` per entity
+     * instance. Set to 50 — enough for diagnostic context while bounding worst-case
+     * memory for entities that survive thousands of Save/Delete cycles.
+     */
+    public static readonly MAX_RESULT_HISTORY = 50;
+
+    /**
+     * Append a result to `_resultHistory`, trimming the oldest entries when over
+     * `MAX_RESULT_HISTORY`. All Save/Delete code paths route through this — both inside
+     * BaseEntity and in callers like `databaseProviderBase` and entity subclasses that
+     * record their own results.
+     */
+    public RegisterResultHistoryEntry(result: BaseEntityResult): void {
+        this._resultHistory.push(result);
+        const overflow = this._resultHistory.length - BaseEntity.MAX_RESULT_HISTORY;
+        if (overflow > 0) {
+            this._resultHistory.splice(0, overflow);
+        }
+    }
+
+    /**
+     * The `IEntityDataProvider` routing DB operations for this specific entity. Resolved lazily
+     * via `ProviderToUse` and may differ from `Metadata.Provider` when a custom provider is
+     * configured per-entity (e.g., entities served from an external system).
+     */
     private _provider: IEntityDataProvider | null = null;
+
+    /**
+     * Whether this entity instance has ever been persisted (via a successful Save). Distinct
+     * from `IsSaved` because `NewRecord()` resets dirty state; this flag remains true once set.
+     * Used by `Save()` to decide between spCreate vs spUpdate.
+     */
     private _everSaved: boolean = false;
+
+    /**
+     * Whether a `Load*` operation is currently in flight. Used to suppress field-change events
+     * and dirty-tracking while bulk-populating fields from the provider response.
+     */
     private _isLoading: boolean = false;
+
+    /**
+     * Shared `Observable` for an in-flight `Delete()` call. Concurrent Delete attempts return
+     * this same observable so the actual provider call only runs once, avoiding double-deletes
+     * and duplicate error reporting.
+     */
     private _pendingDelete$: Observable<boolean> | null = null;
+
+    /**
+     * Lazy `Map<fieldName, EntityField>` cache for O(1) `GetFieldByName()` lookups. Populated
+     * on first call and cleared on `init()` so re-initialized entities rebuild fresh. Replaces
+     * the previous O(N) `_Fields.find()` scan that dominated `SetMany`/setter/serialization paths.
+     */
+    private _fieldCache: Map<string, EntityField> | null = null;
+
+    /**
+     * Lazy `Map<codeName, EntityField>` cache for O(1) `GetFieldByCodeName()` lookups. Built the
+     * same way as `_fieldCache` but keyed by the JS-safe `CodeName` rather than the DB field
+     * name. Cleared on `init()`.
+     */
+    private _codeNameCache: Map<string, EntityField> | null = null;
 
     /**************************************************************************
      * IS-A Type Relationship — Bidirectional Entity Composition
@@ -805,9 +1058,10 @@ export abstract class BaseEntity<T = unknown> {
         const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
         if (!parentEntityInfo) return;
 
-        // Create the parent entity via Metadata.Provider for proper class factory
-        // resolution and provider routing
-        this._parentEntity = await Metadata.Provider.GetEntityObject(
+        // Create the parent entity via this entity's provider so multi-provider scenarios
+        // route the parent through the same connection — not the global default.
+        const parentProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        this._parentEntity = await parentProvider.GetEntityObject(
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
@@ -892,8 +1146,10 @@ export abstract class BaseEntity<T = unknown> {
      * child's data, and recursively discovers further children.
      */
     private async createAndLinkChildEntity(childEntityName: string): Promise<void> {
-        // Create child via Metadata.Provider for proper class factory resolution
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        // Create child via this entity's provider so the child shares the same connection
+        // (correct in multi-provider scenarios — never the global default).
+        const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await childProvider.GetEntityObject<BaseEntity>(
             childEntityName,
             this._contextCurrentUser
         );
@@ -1114,9 +1370,18 @@ export abstract class BaseEntity<T = unknown> {
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
     protected RaiseEvent(type: BaseEntityEvent["type"], payload: any, saveSubType: BaseEntityEvent["saveSubType"] = undefined) {
+        // Resolve the entity's bound provider once so every consumer (local subscribers
+        // AND MJGlobal listeners) receives consistent provider context. This matters in
+        // multi-provider scenarios — listeners like LocalCacheManager / BaseEngine need to
+        // know which provider produced the event to scope cache invalidation, metadata
+        // lookups, and engine state correctly. Cast through unknown because BaseEntity
+        // exposes ProviderToUse as IEntityDataProvider; the event consumers want the
+        // metadata-side view of the same instance.
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
+        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
@@ -1127,6 +1392,7 @@ export abstract class BaseEntity<T = unknown> {
             event.payload = payload;
             event.type = type;
             event.saveSubType = saveSubType;
+            event.provider = provider;
 
             LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call MJGlobal.RaiseEvent()`);
             MJGlobal.Instance.RaiseEvent({
@@ -1312,6 +1578,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     get Fields(): EntityField[] {
+        // Caller wants to walk Fields — promote raw data into real EntityField instances now.
+        this.hydrateFieldsIfNeeded();
         return this._Fields;
     }
 
@@ -1325,16 +1593,61 @@ export abstract class BaseEntity<T = unknown> {
             return null;
         }
 
+        // Lookup needs an EntityField instance to return — hydrate.
+        this.hydrateFieldsIfNeeded();
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
-        return this.Fields.find(f => f.Name.trim().toLowerCase() === lcase);
+
+        if (this._fieldCache === null) {
+            this._fieldCache = new Map<string, EntityField>();
+            for (const f of this._Fields) {
+                if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
+                    this._fieldCache.set(f.Name.trim().toLowerCase(), f);
+                }
+            }
+        }
+
+        return this._fieldCache.get(lcase) || null;
+    }
+
+    /**
+     * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
+     * @param codeName
+     * @returns
+     */
+    public GetFieldByCodeName(codeName: string): EntityField | null {
+        if(!codeName) {
+            return null;
+        }
+
+        // Lookup needs an EntityField instance to return — hydrate.
+        this.hydrateFieldsIfNeeded();
+
+        const lcase = codeName.trim().toLowerCase();
+
+        if (this._codeNameCache === null) {
+            this._codeNameCache = new Map<string, EntityField>();
+            // First-write-wins on duplicate code names — matches prior Array.find() behavior
+            for (const f of this._Fields) {
+                const codeKey = f.CodeName.trim().toLowerCase();
+                if (!this._codeNameCache.has(codeKey)) {
+                    this._codeNameCache.set(codeKey, f);
+                }
+            }
+        }
+
+        return this._codeNameCache.get(lcase) || null;
     }
 
     /**
      * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
      */
     get Dirty(): boolean {
-        return !this.IsSaved ||
-               this.Fields.some(f => f.Dirty) ||
+        if (!this.IsSaved) return true;
+        // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
+        // dirty. Avoid hydrating just to check.
+        if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
+        return this._Fields.some(f => f.Dirty) ||
                (this._parentEntity?.Dirty ?? false);
     }
 
@@ -1450,15 +1763,33 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
             return this._parentEntity.Get(FieldName); // recursive for N-level chains
         }
-        else {
-            const field = this.GetFieldByName(FieldName);
-            if (field != null) {
-                // if the field is a date and the value is a string, convert it to a date
-                if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
-                    field.Value = new Date(field.Value);
-                }
-                return field.Value;
+
+        // Raw mode fast path: read directly from the cached data without building EntityField
+        // instances. This is the dominant cost in engine warm-loads — generated typed getters
+        // (e.g. `get Name() { return this.Get('Name'); }`) flow through here, so a consumer that
+        // only iterates and reads (`engine.Models.find(m => m.ID === x).Name`) never triggers
+        // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
+        if (!this._fieldsHydrated && this._raw) {
+            const value = this._raw[FieldName];
+            if (value === undefined) return null;
+            // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
+            // Date avoids reparsing on every read.
+            const fi = this._EntityInfo?.Fields.find(f => f.Name === FieldName);
+            if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                const d = new Date(value);
+                this._raw[FieldName] = d;
+                return d;
             }
+            return value;
+        }
+
+        const field = this.GetFieldByName(FieldName);
+        if (field != null) {
+            // if the field is a date and the value is a string, convert it to a date
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+                field.Value = new Date(field.Value);
+            }
+            return field.Value;
         }
 
         // if we get here, didn't find it
@@ -1503,7 +1834,7 @@ export abstract class BaseEntity<T = unknown> {
             else {
                 // if we don't find a match for the field name, check to see if we have a match for the code name
                 // because some objects passed in will use the code name
-                const field = this.Fields.find(f => f.CodeName.trim().toLowerCase() == key.trim().toLowerCase());
+                const field = this.GetFieldByCodeName(key);
                 if (field) {
                     const priorActiveStatusAssertions = field.ActiveStatusAssertions; // save the current active status assertions
                     if (ignoreActiveStatusAssertions) {
@@ -1731,13 +2062,63 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
-        if (this.EntityInfo) {
-            for (const rawField of this.EntityInfo.Fields) {
-                const key = this.EntityInfo.Name + '.' + rawField.Name;
-                // support for sub-classes of the EntityField class
-                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-                this.Fields.push(newField);
+        this._fieldsHydrated = false;
+        this._raw = null;
+        this._fieldCache = null;
+        this._codeNameCache = null;
+        // Field construction is deferred to hydrateFieldsIfNeeded(). Constructor / init() stays
+        // O(1). The work happens on first call to a Field-walking method (Save, Validate, .Fields,
+        // .Set, etc.) — for read-only consumers (e.g. engine cache iteration via typed getters)
+        // it never runs.
+    }
+
+    /**
+     * Lazily builds `_Fields` from `EntityInfo.Fields` and populates them from `_raw` if present.
+     * Idempotent: subsequent calls are O(1). One-way: once hydrated, the entity stays hydrated for
+     * the rest of its lifetime.
+     *
+     * Called automatically by:
+     *   - `Set()` / `SetMany()` (mutation requires Field instances for dirty tracking)
+     *   - `Fields` getter (consumer wants the array)
+     *   - `GetFieldByName()` / `GetFieldByCodeName()` (lookups)
+     *   - `Save()` / `Delete()` / `Validate()` / `ValidateAsync()` (need full Field state)
+     *
+     * Pure readers via the generated `get FieldName()` → `Get('FieldName')` path stay in raw mode
+     * and never trigger hydration.
+     */
+    private hydrateFieldsIfNeeded(): void {
+        if (this._fieldsHydrated) return;
+        this._fieldsHydrated = true;
+
+        if (!this.EntityInfo) return;
+
+        // 1. Allocate one EntityField per column. Same construction the old `init()` used to do
+        //    up-front — we just deferred it.
+        for (const rawField of this.EntityInfo.Fields) {
+            const key = this.EntityInfo.Name + '.' + rawField.Name;
+            const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
+            this._Fields.push(newField);
+        }
+
+        // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
+        //    runs through the EntityField setter with `_NeverSet=true`, which simultaneously sets
+        //    Value AND OldValue (so the field is not marked dirty). This matches the old
+        //    SetMany(replaceOldValues=true) semantics on initial load.
+        if (this._raw) {
+            for (const field of this._Fields) {
+                const value = this._raw[field.Name];
+                if (value !== undefined) {
+                    // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
+                    if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                        field.Value = new Date(value);
+                    } else {
+                        field.Value = value;
+                    }
+                }
             }
+            // Raw data has been promoted into Fields — release the reference so we don't carry
+            // duplicate state.
+            this._raw = null;
         }
     }
 
@@ -1838,6 +2219,74 @@ export abstract class BaseEntity<T = unknown> {
         return true;
     }
 
+
+
+    // ────────────────────────────────────────────────────────────────────
+    // Restore context — populated by callers immediately before Save() to
+    // mark the resulting RecordChange row as a Restore (Source='Restore'
+    // with RestoredFromID and optional RestoreReason populated).
+    //
+    // The context lives on the entity instance for exactly one Save() and
+    // is consumed by the data provider when it generates the RecordChange
+    // SQL. Callers should set the context, await Save(), then either
+    // explicitly clear it via ClearRestoreContext() or rely on it being
+    // overwritten on the next restore. We deliberately do NOT auto-clear
+    // inside Save() because TransactionGroup execution is deferred — the
+    // provider may capture the context now but use it later.
+    // ────────────────────────────────────────────────────────────────────
+    private _restoreContext: RestoreContext | null = null;
+
+    /**
+     * Returns the active restore context for the next save, if any.
+     *
+     * Read by the data provider when generating the RecordChange SQL: when
+     * non-null, the resulting RecordChange row is written with
+     * `Source='Restore'`, `RestoredFromID = SourceChangeID`, and
+     * `RestoreReason = Reason`. Returns null for ordinary saves.
+     */
+    public get RestoreContext(): RestoreContext | null {
+        return this._restoreContext;
+    }
+
+    /**
+     * Marks the next Save() as a restore from a historical RecordChange row.
+     *
+     * The provider will write a new RecordChange entry with `Source='Restore'`,
+     * `RestoredFromID` pointing at `sourceChangeId`, and `RestoreReason` set to
+     * `reason` (or NULL). This produces an auditable lineage chain that the
+     * timeline UI can render via the `RestoredFromID` foreign key.
+     *
+     * The context is consumed exactly once per Save() and persists on the
+     * entity until either (a) overwritten by a subsequent SetRestoreContext()
+     * call or (b) explicitly cleared via ClearRestoreContext(). It is NOT
+     * auto-cleared inside Save() because TransactionGroup execution is
+     * deferred — see the comment on `_restoreContext` for details.
+     *
+     * @param sourceChangeId The ID of the historical RecordChange row whose
+     *   state is being restored. Required; throws if empty.
+     * @param reason Optional user-entered explanation captured at restore
+     *   time. Persisted to RecordChange.RestoreReason for audit purposes.
+     *
+     * @example
+     *   record.SetRestoreContext(versionId, 'Reverting incorrect Q2 entries');
+     *   const ok = await record.Save();
+     *   record.ClearRestoreContext();
+     */
+    public SetRestoreContext(sourceChangeId: string, reason: string | null = null): void {
+        if (!sourceChangeId || typeof sourceChangeId !== 'string') {
+            throw new Error('BaseEntity.SetRestoreContext: sourceChangeId is required and must be a non-empty string');
+        }
+        this._restoreContext = { SourceChangeID: sourceChangeId, Reason: reason ?? null };
+    }
+
+    /**
+     * Clears any pending restore context. Safe to call when no context is set.
+     * Recommended after Save() returns so a subsequent ordinary save isn't
+     * accidentally tagged as a restore.
+     */
+    public ClearRestoreContext(): void {
+        this._restoreContext = null;
+    }
 
 
     // Holds the current pending save observable (if any)
@@ -2051,7 +2500,7 @@ export abstract class BaseEntity<T = unknown> {
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
 
             return false;
@@ -2147,7 +2596,9 @@ export abstract class BaseEntity<T = unknown> {
      * Internal helper method for the class and sub-classes - used to easily get the Active User which is either the ContextCurrentUser, if defined, or the Metadata.Provider.CurrentUser if not.
      */
     protected get ActiveUser(): UserInfo {
-        return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
+        // Use the entity's bound provider (per-instance) before falling back to the global
+        // default — multi-provider correctness for server requests with per-request users.
+        return this.ContextCurrentUser || (this.ProviderToUse as unknown as IMetadataProvider)?.CurrentUser || Metadata.Provider.CurrentUser; // global-provider-ok: final fallback when no provider is bound
     }
 
     /**
@@ -2166,8 +2617,9 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
-        // Cache it via the provider's public API
-        Metadata.Provider.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        // Cache it via this entity's provider so the cache lives on the right connection.
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
     }
 
     /**
@@ -2179,7 +2631,7 @@ export abstract class BaseEntity<T = unknown> {
     public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         const u: UserInfo = this.ActiveUser;
         if (!u)
-            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set');
+            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set'); // global-provider-ok: error message text
 
         // Virtual entities are read-only — block Create, Update, Delete at the ORM level
         // This catches server-side code calling .Save()/.Delete() directly, which bypasses the API layer flags
@@ -2439,6 +2891,53 @@ export abstract class BaseEntity<T = unknown> {
             this._parentEntity.Hydrate(data);
         }
 
+        // ── Fast path: raw-mode load ────────────────────────────────────────────
+        // First load of a fresh instance, plain object input, non-IS-A entity, no per-field
+        // active-status assertions or other side effects needed up front. Store the raw data
+        // and defer building EntityField instances until something actually needs them.
+        // This is the dominant warm-load case (cache restore in TransformSimpleObjectToEntityObject
+        // populating engine arrays of read-only data) and was previously the per-row bottleneck.
+        const isPlainObject = data && typeof data === 'object' && !Array.isArray(data) && !(data instanceof Date);
+        const canTakeFastPath =
+            isPlainObject &&
+            !this._fieldsHydrated &&
+            this._Fields.length === 0 &&
+            !this._parentEntity &&
+            !this.EntityInfo?.IsParentType;
+
+        if (canTakeFastPath) {
+            this._raw = data as Record<string, unknown>;
+
+            // Mirror the "are PKs present?" check that the hydrated path does, but read straight
+            // from the raw data so we don't trigger hydration.
+            const pks = this.EntityInfo?.PrimaryKeys ?? [];
+            let allPksPresent = pks.length > 0;
+            for (const pkInfo of pks) {
+                const v = this._raw[pkInfo.Name];
+                if (v === null || v === undefined) {
+                    allPksPresent = false;
+                    break;
+                }
+            }
+
+            if (pks.length === 0) {
+                LogError(`BaseEntity.LoadFromData() called on ${this.EntityInfo?.Name} with no primary keys defined. This is an error state and should not happen.`);
+                this._recordLoaded = false;
+                this._everSaved = false;
+            } else {
+                this._recordLoaded = allPksPresent;
+                this._everSaved = allPksPresent;
+                // Note: CacheRecordName() walks Fields, which would hydrate. Defer it — name caching
+                // is an optional optimization, not a correctness requirement, and the next path that
+                // actually needs Fields will trigger hydration anyway. For non-parent entities the
+                // child-entity discovery is a sync no-op so we skip the await as well.
+            }
+            return true;
+        }
+
+        // ── Slow / correct path ────────────────────────────────────────────────
+        // Hits when: subsequent LoadFromData call on an already-loaded instance, IS-A entity
+        // (parent or child), or non-plain-object input. Preserves original semantics exactly.
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag
@@ -2711,7 +3210,7 @@ export abstract class BaseEntity<T = unknown> {
                                 newResult.Errors = error.Errors || [];
                                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                                 newResult.EndedAt = new Date();
-                                this.ResultHistory.push(newResult);
+                                this.RegisterResultHistoryEntry(newResult);
                             }
                         });
                     }
@@ -2735,7 +3234,7 @@ export abstract class BaseEntity<T = unknown> {
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
             return false;
         }
@@ -2786,7 +3285,8 @@ export abstract class BaseEntity<T = unknown> {
         childCheck: { HasChildren: boolean; ChildEntityName: string },
         parentOptions: EntityDeleteOptions
     ): Promise<boolean> {
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        const cascadeProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await cascadeProvider.GetEntityObject<BaseEntity>(
             childCheck.ChildEntityName,
             this._contextCurrentUser
         );
@@ -2821,10 +3321,13 @@ export abstract class BaseEntity<T = unknown> {
     public static async ResolveLeafEntity(
         entityName: string,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        // Resolve metadata via the caller-supplied provider so multi-provider client setups
+        // walk the entity hierarchy of the right server. Fall back to the global default.
+        const md = provider ?? Metadata.Provider;
+        const entityInfo = md?.EntityByName(entityName);
         if (!entityInfo) {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
@@ -3124,6 +3627,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
         try {
+            if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
                 if (field.Value?.trim().length > 0) {
                     // recalc vector
@@ -3174,7 +3678,17 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+
+    /**
+     * When true, GenerateEmbedding() returns immediately without computing vectors.
+     * Set this before calling Save() in batch/sync contexts where embedding computation
+     * should be deferred (e.g., CLI sync operations where loading the embedding model
+     * per-process is expensive and vectors can be computed later by the API server).
+     */
+    private _skipEmbeddings: boolean = false;
+    public get SkipEmbeddings(): boolean { return this._skipEmbeddings; }
+    public set SkipEmbeddings(value: boolean) { this._skipEmbeddings = value; }
 
     /**
      * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can

@@ -37,29 +37,21 @@ interface EntityOption {
   standalone: false,
   selector: 'mj-lists-operations-resource',
   template: `
-    <div class="operations-container">
-      <!-- Header -->
-      <div class="operations-header">
-        <div class="header-top">
-          <div class="header-title">
-            <i class="fa-solid fa-diagram-project"></i>
-            <h2>List Operations</h2>
-          </div>
-          @if (selectedLists.length > 0 || selectedEntityId) {
-            <button
-              class="clear-all-btn"
-              (click)="clearAllSelections()"
-              title="Clear all selections">
-              <i class="fa-solid fa-xmark"></i>
-              Clear
+    <mj-page-layout>
+      <mj-page-header
+        Title="List Operations"
+        Icon="fa-solid fa-diagram-project"
+        Subtitle="Visualize overlaps and perform set operations on your lists">
+        @if (selectedLists.length > 0 || selectedEntityId) {
+          <div actions>
+            <button mjButton variant="secondary" size="sm" (click)="clearAllSelections()" title="Clear all selections">
+              <i class="fa-solid fa-xmark"></i> Clear
             </button>
-          }
-        </div>
-        <div class="header-subtitle">
-          Visualize overlaps and perform set operations on your lists
-        </div>
-      </div>
-    
+          </div>
+        }
+      </mj-page-header>
+
+      <mj-page-body [Flex]="true" [Padding]="false">
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
@@ -218,15 +210,15 @@ interface EntityOption {
                 <span class="region-count">{{selectedRegion.size}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromSelection()">
+                <button mjButton variant="primary" (click)="createListFromSelection()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addToExistingList()">
+                <button mjButton (click)="addToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
-                <button class="action-btn" (click)="exportToExcel()">
+                <button mjButton (click)="exportToExcel()">
                   <i class="fa-solid fa-file-excel"></i>
                   Export
                 </button>
@@ -267,11 +259,11 @@ interface EntityOption {
                 <span class="result-count">{{lastOperationResult.resultCount}} records</span>
               </div>
               <div class="region-actions">
-                <button class="action-btn primary" (click)="createListFromResult()">
+                <button mjButton variant="primary" (click)="createListFromResult()">
                   <i class="fa-solid fa-plus"></i>
                   Create New List
                 </button>
-                <button class="action-btn" (click)="addResultToExistingList()">
+                <button mjButton (click)="addResultToExistingList()">
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
@@ -400,20 +392,14 @@ interface EntityOption {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
       display: block;
       width: 100%;
       height: 100%;
-    }
-
-    .operations-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
     }
 
     .operations-header {
@@ -1288,7 +1274,7 @@ interface EntityOption {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsOperationsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   maxLists = 4;
   selectedLists: ListSelection[] = [];
@@ -1346,12 +1332,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async ngOnInit() {
+    super.ngOnInit();
+    this.setOperationsService.Provider = this.ProviderToUse;
     await this.loadAvailableLists();
     await this.loadSavedState();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
 
@@ -1362,8 +1351,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async loadAvailableLists() {
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const result = await rv.RunView<MJListEntity>({
       EntityName: 'MJ: Lists',
@@ -1523,7 +1512,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityId = this.selectedLists[0].list.EntityID;
       const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
 
@@ -1547,7 +1536,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const primaryKeyField = primaryKeyFields.length > 0 ? primaryKeyFields[0].Name : 'ID';
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityInfo.Name,
         ExtraFilter: `${primaryKeyField} IN (${recordIdFilter})`,
@@ -1652,7 +1641,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   openRecord(record: PreviewRecord): void {
     if (!this.currentEntityInfo) {
       // Try to get entity info
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityId = this.selectedLists[0]?.list.EntityID;
       if (entityId) {
         this.currentEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId)) || null;
@@ -1736,26 +1725,24 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
+      const tg = await md.CreateTransactionGroup();
 
-      // Create the list
+      // Queue the list plus all of its initial detail records in a single transaction.
+      // NewRecord() assigns a client-side UUID so the details can reference list.ID
+      // before the list actually persists.
       const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
+      list.NewRecord();
       list.Name = this.newListName;
       list.Description = this.newListDescription || null;
       list.EntityID = entityId;
       list.UserID = md.CurrentUser!.ID;
-
-      const saved = await list.Save();
-      if (!saved) {
-        this.notificationService.CreateSimpleNotification('Failed to create list', 'error', 4000);
-        return;
-      }
-
-      // Add records to the list using transaction group
-      const tg = await md.CreateTransactionGroup();
+      list.TransactionGroup = tg;
+      await list.Save();
 
       for (const recordId of this.recordsToAdd) {
         const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
+        detail.NewRecord();
         detail.ListID = list.ID;
         detail.RecordID = recordId;
         detail.Sequence = 0;
@@ -1763,21 +1750,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
         await detail.Save();
       }
 
-      const success = await tg.Submit();
-
-      if (success) {
+      if (!await tg.Submit()) {
         this.notificationService.CreateSimpleNotification(
-          `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification(
-          `Created list but failed to add some records`,
-          'warning',
+          'Failed to create list — all changes have been rolled back',
+          'error',
           4000
         );
+        return;
       }
+
+      this.notificationService.CreateSimpleNotification(
+        `Created "${this.newListName}" with ${this.recordsToAdd.length} items`,
+        'success',
+        3000
+      );
 
       this.cancelCreateDialog();
 
@@ -1874,7 +1860,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
@@ -1962,7 +1948,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    */
   private async saveStateToServer(): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const userId = md.CurrentUser?.ID;
       if (!userId) return;
 
@@ -1997,7 +1983,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.isLoadingSettings = true;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const userId = md.CurrentUser?.ID;
       if (!userId) {
         this.isLoadingSettings = false;

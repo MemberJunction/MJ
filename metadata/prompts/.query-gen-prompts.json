@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/query-gen/business-question-generator.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -117,8 +120,8 @@
       "ID": "FB9B5E4B-BB0E-43AF-B6C3-576999962CF5"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.681Z",
-      "checksum": "a91055cb8fefa7d846e329725d043202259cd930b8647a4a0814f62f58b40cd7"
+      "lastModified": "2026-04-20T23:56:02.809Z",
+      "checksum": "cf0db1724291f308b3667ff9803c6252afa8a29836c5721ba1e9bb8d15cafbaf"
     }
   },
   {
@@ -129,6 +132,9 @@
       "TemplateText": "@file:templates/query-gen/sql-query-writer.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -239,8 +245,8 @@
       "ID": "FA000A4D-09F5-4557-858F-AC01E19D8238"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.683Z",
-      "checksum": "4203b036dfd6ffc160ab91b1989b14e331ee1e2e3cbb58f0fb3fbd3a19baf07e"
+      "lastModified": "2026-04-20T23:56:02.846Z",
+      "checksum": "07dfdef0adc0d693bce5c1ca6b572c575ac19599c1803bf9d5b30121d7a673e8"
     }
   },
   {
@@ -251,6 +257,9 @@
       "TemplateText": "@file:templates/query-gen/sql-query-fixer.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -361,8 +370,8 @@
       "ID": "A012DDD6-FF6A-4EE4-86C2-CF394E353DC0"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.685Z",
-      "checksum": "5f610463a7bc9bcbf10bbaa4a93780e70ecc0db98da36ee59caf9ffa42fe7414"
+      "lastModified": "2026-04-20T23:56:02.874Z",
+      "checksum": "718cccd7770f7156d326c1cbcb9bd2c41fe76280b6cffd642d0a40bee7648e2a"
     }
   },
   {
@@ -373,6 +382,9 @@
       "TemplateText": "@file:templates/query-gen/query-evaluator.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -483,8 +495,8 @@
       "ID": "7B8BFC1A-A212-4902-8B05-620F51C0141C"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.687Z",
-      "checksum": "43756fb8fa9ed2aef4e6b60af3d34a32f00e410836d3fac9aeca61b944a8378c"
+      "lastModified": "2026-04-20T23:56:02.901Z",
+      "checksum": "fffce6c1d9a86f96b4247e893bcacb8592d7dbc0f60ef96f83d3a511ab98768c"
     }
   },
   {
@@ -495,6 +507,9 @@
       "TemplateText": "@file:templates/query-gen/query-refiner.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -605,8 +620,8 @@
       "ID": "06BAFF5F-D131-46BF-B2FB-79CC2067B743"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.687Z",
-      "checksum": "038f09ac441bbd4e4ec069cb31bb4441232cc0a859d0a5715b5089f1500d05b9"
+      "lastModified": "2026-04-20T23:56:02.928Z",
+      "checksum": "1ae6f3a120edee9cd1180f0b96f6a410fc76fb76bca4aa0522a9d623c1a7f204"
     }
   },
   {
@@ -617,6 +632,9 @@
       "TemplateText": "@file:templates/query-gen/entity-group-generator.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -727,8 +745,8 @@
       "ID": "D6A4AD76-747B-49C0-BEC6-FCA801D08860"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:00.687Z",
-      "checksum": "801962dc1d3ba1bcc5ee0874ee911aea0a318d8424a1ba1314d5292d0d4a8941"
+      "lastModified": "2026-04-20T23:56:02.949Z",
+      "checksum": "3767086d8f6ec1c630e5be357679390a59f6b6d1f106ab029dba5fec2ad9d710"
     }
   }
 ]

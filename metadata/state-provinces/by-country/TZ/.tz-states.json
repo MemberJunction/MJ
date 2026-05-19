@@ -1,0 +1,527 @@
+[
+  {
+    "fields": {
+      "Name": "Arusha",
+      "Code": "01",
+      "ISO3166_2": "TZ-01",
+      "Latitude": -3.0263,
+      "Longitude": 36.0865,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-01.geojson",
+      "CommonAliases": [
+        "Arusha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "884FD10E-58B8-4939-B3E6-31BE5E7F20D6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.691Z",
+      "checksum": "d2e1f80e745a4d79eaca66adb4ceed7ced1ab5ce8e2cfa022ec39bbc17c9ed91"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dar-es-Salaam",
+      "Code": "02",
+      "ISO3166_2": "TZ-02",
+      "Latitude": -6.8929,
+      "Longitude": 39.2857,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-02.geojson",
+      "CommonAliases": [
+        "Dar-es-Salaam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "435501A1-C74B-439D-817D-9E9FF0EC6DC8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.708Z",
+      "checksum": "15ab1e4beb49e476c5461727a91f5910234597f41aca89a1173aee36d6a7cc83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dodoma",
+      "Code": "03",
+      "ISO3166_2": "TZ-03",
+      "Latitude": -5.7323,
+      "Longitude": 35.9608,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-03.geojson",
+      "CommonAliases": [
+        "Dodoma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "EEF80F4D-688B-4645-A8A0-5E6CB0457365"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.724Z",
+      "checksum": "bac2ecfb4273d3b4f4aff55fb397d0aef46b10ae95f9e125231e8e9b6185817a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iringa",
+      "Code": "04",
+      "ISO3166_2": "TZ-04",
+      "Latitude": -7.8393,
+      "Longitude": 35.5453,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-04.geojson",
+      "CommonAliases": [
+        "Iringa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "75E2B922-B4A9-4A06-B022-CAD1418CEA50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.742Z",
+      "checksum": "997a15f0986f4b37fd2583d2c8a9cefb53e776c966fe6c0f0b2121e46dc08ef9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kagera",
+      "Code": "05",
+      "ISO3166_2": "TZ-05",
+      "Latitude": -1.779,
+      "Longitude": 31.2578,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-05.geojson",
+      "CommonAliases": [
+        "Kagera"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "DC2D2A46-CE19-48CC-AD35-E35853F18D81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.759Z",
+      "checksum": "0d1dd229e89941c80b13b5bc68155b26bf9ef15e3635c7e03d338c9c60389053"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaskazini Pemba (Pemba North)",
+      "Code": "06",
+      "ISO3166_2": "TZ-06",
+      "Latitude": -5.0511,
+      "Longitude": 39.777,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-06.geojson",
+      "CommonAliases": [
+        "Kaskazini Pemba (Pemba North)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "DAA80C1D-1B59-4FFA-A949-60FEC3F6BC81"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.775Z",
+      "checksum": "1819f7696faa7178cdf50e4797bc050582919c36eecfdab80128cec087a79f4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaskazini Unguja (Zanzibar North)",
+      "Code": "07",
+      "ISO3166_2": "TZ-07",
+      "Latitude": -5.8447,
+      "Longitude": 39.2294,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-07.geojson",
+      "CommonAliases": [
+        "Kaskazini Unguja (Zanzibar North)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "4732F8C5-0ED0-436D-BC54-7AFAEB4F3E70"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.791Z",
+      "checksum": "015bb937b772b6d315c8ed1b447c0c7d39fa40e4501f901adcbe049c33e97190"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kigoma",
+      "Code": "08",
+      "ISO3166_2": "TZ-08",
+      "Latitude": -4.4184,
+      "Longitude": 30.4057,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-08.geojson",
+      "CommonAliases": [
+        "Kigoma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "14E4BE82-2BBA-467A-AEA5-CBF045EA1C47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.807Z",
+      "checksum": "91b0dbd0b31e1b5bc0cb61df7ecac10aa7944168152ada06e86274bd60ef4029"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kilimanjaro",
+      "Code": "09",
+      "ISO3166_2": "TZ-09",
+      "Latitude": -4.0111,
+      "Longitude": 37.6511,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-09.geojson",
+      "CommonAliases": [
+        "Kilimanjaro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "E33F7295-3C42-4A8B-93E4-C588516A5B19"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.824Z",
+      "checksum": "310a6e8ccc11e03a696dd344d10c9e4fe440e4decf57a658361f972b9cf0f0f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kusini Pemba (Pemba South)",
+      "Code": "10",
+      "ISO3166_2": "TZ-10",
+      "Latitude": -5.3498,
+      "Longitude": 39.7495,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-10.geojson",
+      "CommonAliases": [
+        "Kusini Pemba (Pemba South)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "75759C84-E0F0-4800-8FC2-39EA94868B41"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.839Z",
+      "checksum": "2868f71e6aeb4ab800a0116c18bb269747cfdeb149d023a93e72e3bb3f673a13"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kusini Unguja (Zanzibar South)",
+      "Code": "11",
+      "ISO3166_2": "TZ-11",
+      "Latitude": -6.2741,
+      "Longitude": 39.4241,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-11.geojson",
+      "CommonAliases": [
+        "Kusini Unguja (Zanzibar South)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "4C6E1D13-5E2C-4C84-926D-C53D769D8207"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.892Z",
+      "checksum": "66c9969cabf2757d8647b4833784f18e0710b0af144c4693f1faff960cf87dd2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lindi",
+      "Code": "12",
+      "ISO3166_2": "TZ-12",
+      "Latitude": -9.4434,
+      "Longitude": 38.4234,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-12.geojson",
+      "CommonAliases": [
+        "Lindi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "45818878-3697-4B97-A06E-66C2D3009FD9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.907Z",
+      "checksum": "4788a50a2d262d8213c8fe0f2f2f8f88f1ab06c2b703452d04964792ed6ec324"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mara",
+      "Code": "13",
+      "ISO3166_2": "TZ-13",
+      "Latitude": -1.5891,
+      "Longitude": 34.0227,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-13.geojson",
+      "CommonAliases": [
+        "Mara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "B381977C-0298-4A11-B07B-E4FD0CAAF37E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.925Z",
+      "checksum": "e001a711fb917e2e4e65f27241e47159576f177571306b2e4e50fd428e188b95"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mbeya",
+      "Code": "14",
+      "ISO3166_2": "TZ-14",
+      "Latitude": -8.2969,
+      "Longitude": 33.5281,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-14.geojson",
+      "CommonAliases": [
+        "Mbeya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "C3B1D62F-8C5D-4E9A-A5BF-327E8343D488"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.939Z",
+      "checksum": "fce42331a4c7f72a5590dd316747ac9077b1bcb9d429c28c9a624ccfb1c9ec6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mjini Magharibi (Zanzibar West)",
+      "Code": "15",
+      "ISO3166_2": "TZ-15",
+      "Latitude": -6.1537,
+      "Longitude": 39.2425,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-15.geojson",
+      "CommonAliases": [
+        "Mjini Magharibi (Zanzibar West)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "E0977B3C-4C2E-40DC-892D-9AE25AFBC26B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.955Z",
+      "checksum": "5b308777630de8c9222363440a5b6acaec4a89c830001310ca9d3b869eec7d2b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morogoro",
+      "Code": "16",
+      "ISO3166_2": "TZ-16",
+      "Latitude": -8.6967,
+      "Longitude": 36.922,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-16.geojson",
+      "CommonAliases": [
+        "Morogoro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "B2126698-CB07-48E0-90FD-39ED5C1D583F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.971Z",
+      "checksum": "12e0f3377d01599b63da48ca61dcfaf045edcaa0717b457c4fe894dbb42ae4a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mtwara",
+      "Code": "17",
+      "ISO3166_2": "TZ-17",
+      "Latitude": -10.814,
+      "Longitude": 39.2212,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-17.geojson",
+      "CommonAliases": [
+        "Mtwara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "7A6526FC-9E62-49BA-A2A3-6932B61851B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.987Z",
+      "checksum": "e88204b38c6690d92c199163f1e1c5cf98731d3286b077c9ad7efe249eb0e9fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mwanza",
+      "Code": "18",
+      "ISO3166_2": "TZ-18",
+      "Latitude": -2.6728,
+      "Longitude": 32.6685,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-18.geojson",
+      "CommonAliases": [
+        "Mwanza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "EADA6426-4180-41ED-AEF9-09AD88705639"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.005Z",
+      "checksum": "a88c702978c4d0578fe035a81797c25d5421dc0498ae9c3ba060803fe3e3bca5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pwani (Coast)",
+      "Code": "19",
+      "ISO3166_2": "TZ-19",
+      "Latitude": -7.8673,
+      "Longitude": 39.7491,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-19.geojson",
+      "CommonAliases": [
+        "Pwani (Coast)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "75140A35-705B-42B4-B540-9A6CDB313E80"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.022Z",
+      "checksum": "73d0d634bdca05c2f1a775dd2f4f3c8e3d1417e3d1df391a2b1eefdec7e58e48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rukwa",
+      "Code": "20",
+      "ISO3166_2": "TZ-20",
+      "Latitude": -7.8958,
+      "Longitude": 31.3337,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-20.geojson",
+      "CommonAliases": [
+        "Rukwa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "B8D9C6F0-1043-43AB-B42B-6A03B51F6AF4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.039Z",
+      "checksum": "38b8f720c55d6f4d8c47eccd75b2f665ef81a5dc21bc31b0425ad1631fbf117f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ruvuma",
+      "Code": "21",
+      "ISO3166_2": "TZ-21",
+      "Latitude": -10.7136,
+      "Longitude": 36.3365,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-21.geojson",
+      "CommonAliases": [
+        "Ruvuma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "B134810A-C5E0-46A9-A8CD-7F3A512858B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.075Z",
+      "checksum": "255239611ce82dc154c7743eb6a58a88fea3e5ee6f09c2e5254c37136e370713"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shinyanga",
+      "Code": "22",
+      "ISO3166_2": "TZ-22",
+      "Latitude": -3.651,
+      "Longitude": 33.2015,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-22.geojson",
+      "CommonAliases": [
+        "Shinyanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "6697B3B7-97D5-4E6E-A803-10660474E6EB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.090Z",
+      "checksum": "dea33f4adaae3f34b1bbf421b90cbf099338d01e736f266ff667f8d34058fd52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Singida",
+      "Code": "23",
+      "ISO3166_2": "TZ-23",
+      "Latitude": -5.5956,
+      "Longitude": 34.4149,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-23.geojson",
+      "CommonAliases": [
+        "Singida"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "67D4D867-7D12-46D8-AA7D-E29541CDB3E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.106Z",
+      "checksum": "d4bcdfbc0c25b9118ae4b4c84f2b2d40e1679bbe2bdae5a8c6806afefd55f37b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tabora",
+      "Code": "24",
+      "ISO3166_2": "TZ-24",
+      "Latitude": -6.8214,
+      "Longitude": 32.6595,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-24.geojson",
+      "CommonAliases": [
+        "Tabora"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "74407ED1-2ED4-421C-B72A-4BE21D11A2FD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.123Z",
+      "checksum": "5ea62027e709c01d897e9e4963e395d46f768bc223f6a681950f6fec21d7af66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tanga",
+      "Code": "25",
+      "ISO3166_2": "TZ-25",
+      "Latitude": -5.1852,
+      "Longitude": 38.1412,
+      "BoundaryGeoJSON": "@file:by-country/TZ/boundaries/TZ-25.geojson",
+      "CommonAliases": [
+        "Tanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TZ"
+    },
+    "primaryKey": {
+      "ID": "493FFD14-6F22-4419-A538-FA8E02CA6969"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:39.136Z",
+      "checksum": "9bab885d585ee739fc17963577d55b623a8d899bff04faabb4e5355da0666b8f"
+    }
+  }
+]

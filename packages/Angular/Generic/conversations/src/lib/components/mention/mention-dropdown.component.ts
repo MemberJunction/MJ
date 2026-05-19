@@ -22,7 +22,19 @@ import { MentionSuggestion } from '../../services/mention-autocomplete.service';
   ]
 })
 export class MentionDropdownComponent implements OnInit, OnDestroy {
-  @Input() suggestions: MentionSuggestion[] = [];
+  private _suggestions: MentionSuggestion[] = [];
+
+  @Input()
+  set suggestions(value: MentionSuggestion[]) {
+    this._suggestions = value;
+    // Always reset selection to first item when suggestions change
+    // so there's never a state where nothing is selected
+    this.selectedIndex = 0;
+  }
+  get suggestions(): MentionSuggestion[] {
+    return this._suggestions;
+  }
+
   @Input() position: { top: number; left: number } = { top: 0, left: 0 };
   @Input() visible: boolean = false;
   @Input() showAbove: boolean = false; // Controls whether dropdown grows upward

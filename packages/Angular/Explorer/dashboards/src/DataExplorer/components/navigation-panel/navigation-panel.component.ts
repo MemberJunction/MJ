@@ -1,6 +1,9 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
-import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { ChangeDetectorRef, Component, Input, Output, EventEmitter, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild } from '@angular/core';
+import { EntityInfo, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeComponent } from '@memberjunction/ng-trees';
 import { RecentItem, FavoriteItem, AppEntityGroup } from '../../models/explorer-state.interface';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Event emitted when a record should be opened in a full tab
@@ -24,7 +27,11 @@ export interface SelectRecordEvent {
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']
 })
-export class NavigationPanelComponent {
+export class NavigationPanelComponent extends BaseAngularComponent implements OnChanges, OnInit, OnDestroy {
+  constructor(private cdr: ChangeDetectorRef) {
+    super();
+  }
+
   @Input() entities: EntityInfo[] = [];
   @Input() selectedEntityName: string | null = null;
   @Input() favorites: FavoriteItem[] = [];
@@ -37,6 +44,8 @@ export class NavigationPanelComponent {
   @Input() allowedEntityNames: Set<string> | null = null;
   /** Application-based entity groups from the parent dashboard */
   @Input() appEntityGroups: AppEntityGroup[] = [];
+  /** Optional application ID filter for the tree */
+  @Input() applicationIdFilter: string | null = null;
 
   // Section expansion states
   @Input() favoritesSectionExpanded = true;
@@ -55,73 +64,131 @@ export class NavigationPanelComponent {
   /** Emitted when a nav panel app group is toggled */
   @Output() appGroupToggled = new EventEmitter<string>();
 
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
 
-  // Entity search/filter
+  // Tree configuration for entity list
+  public treeBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: Applications',
+    DisplayField: 'Name',
+    IDField: 'ID',
+    IconField: 'Icon',
+    OrderBy: 'Name'
+  };
+
+  public treeLeafConfig: TreeLeafConfig = {
+    EntityName: 'MJ: Entities',
+    ParentField: '', // Using JunctionConfig for M2M relationship
+    DisplayField: 'Name',
+    IDField: 'ID',
+    IconField: 'Icon',
+    JunctionConfig: {
+      EntityName: 'MJ: Application Entities',
+      BranchForeignKey: 'ApplicationID',
+      LeafForeignKey: 'EntityID'
+    },
+    OrderBy: 'Name'
+  };
+
+  @ViewChild('entityTree') entityTree?: TreeComponent;
+
+  /** Selected entity ID for tree highlighting */
+  public selectedEntityIds: string[] = [];
+
+  /** Search term for filtering the entity tree */
   public entitySearchTerm = '';
-  // Local expand state for nav panel groups (independent of home view state)
-  private navGroupExpanded = new Map<string, boolean>();
 
-  /**
-   * Whether to show grouped entity view (when groups are available)
-   */
-  get hasAppGroups(): boolean {
-    return this.appEntityGroups.length > 0;
-  }
-
-  /**
-   * Get filtered entities based on search term (used in flat/ungrouped mode)
-   */
-  get filteredEntities(): EntityInfo[] {
-    if (!this.entitySearchTerm) {
-      return this.entities;
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['selectedEntityName']) {
+      this.updateSelectedEntityKey();
     }
-    const term = this.entitySearchTerm.toLowerCase();
-    return this.entities.filter(e =>
-      e.Name.toLowerCase().includes(term) ||
-      (e.Description && e.Description.toLowerCase().includes(term))
-    );
-  }
-
-  /**
-   * Get app entity groups filtered by search term
-   * Auto-expands groups when searching to show matches
-   */
-  get filteredNavGroups(): AppEntityGroup[] {
-    if (!this.entitySearchTerm) {
-      return this.appEntityGroups.filter(g => g.entities.length > 0);
+    if (changes['applicationIdFilter']) {
+      this.updateTreeBranchFilter();
     }
-    const term = this.entitySearchTerm.toLowerCase();
-    return this.appEntityGroups
-      .map(g => ({
-        ...g,
-        entities: g.entities.filter(e =>
-          e.Name.toLowerCase().includes(term) ||
-          (e.Description && e.Description.toLowerCase().includes(term))
-        ),
-        isExpanded: true // auto-expand when searching
-      }))
-      .filter(g => g.entities.length > 0);
+    if (changes['recentItems']) {
+      this.timestampLabelCache.clear();
+    }
+  }
+
+  ngOnInit(): void {
+    this.timestampRefreshHandle = setInterval(() => {
+      if (this.timestampLabelCache.size === 0) return;
+      this.timestampLabelCache.clear();
+      this.cdr.markForCheck();
+    }, 30000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.timestampRefreshHandle !== undefined) {
+      clearInterval(this.timestampRefreshHandle);
+      this.timestampRefreshHandle = undefined;
+    }
   }
 
   /**
-   * Check if a nav panel group is expanded
+   * Update the selected entity IDs for tree highlighting when selected entity changes
    */
-  isNavGroupExpanded(groupId: string): boolean {
-    if (this.entitySearchTerm) return true; // auto-expand during search
-    const localState = this.navGroupExpanded.get(groupId);
-    if (localState !== undefined) return localState;
-    // Default: first group expanded, others collapsed
-    const idx = this.appEntityGroups.findIndex(g => g.applicationId === groupId);
-    return idx === 0;
+  private updateSelectedEntityKey(): void {
+    if (this.selectedEntityName) {
+      const entity = this.metadata.Entities.find(e => e.Name === this.selectedEntityName);
+      if (entity) {
+        this.selectedEntityIds = [entity.ID];
+        return;
+      }
+    }
+    this.selectedEntityIds = [];
   }
 
   /**
-   * Toggle a nav panel group expand/collapse
+   * Update the tree's branch filter when application filter changes
    */
-  onNavGroupToggle(groupId: string): void {
-    const current = this.isNavGroupExpanded(groupId);
-    this.navGroupExpanded.set(groupId, !current);
+  private updateTreeBranchFilter(): void {
+    if (this.applicationIdFilter) {
+      this.treeBranchConfig = {
+        ...this.treeBranchConfig,
+        ExtraFilter: `ID='${this.applicationIdFilter}'`
+      };
+    } else {
+      this.treeBranchConfig = {
+        ...this.treeBranchConfig,
+        ExtraFilter: undefined
+      };
+    }
+  }
+
+  /**
+   * Filter the entity tree when search term changes
+   */
+  onEntitySearchChanged(): void {
+    if (this.entityTree) {
+      this.entityTree.FilterNodes(this.entitySearchTerm, {
+        searchBranches: true,
+        searchLeaves: true,
+        caseSensitive: false
+      });
+    }
+  }
+
+  /**
+   * Clear the entity search
+   */
+  clearEntitySearch(): void {
+    this.entitySearchTerm = '';
+    this.onEntitySearchChanged();
+  }
+
+  /**
+   * Handle tree selection change - map TreeNode to EntityInfo and emit
+   */
+  onTreeEntitySelected(nodes: TreeNode[]): void {
+    if (!nodes || nodes.length === 0) return;
+    const node = nodes[0];
+    if (node.Type !== 'leaf') return;
+
+    // Find the EntityInfo by ID from the node
+    const entity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, node.ID));
+    if (entity) {
+      this.entitySelected.emit(entity);
+    }
   }
 
   /**
@@ -255,12 +322,32 @@ export class NavigationPanelComponent {
   }
 
   /**
-   * Format recent item timestamp
+   * Cache of formatted relative-time labels keyed by timestamp epoch ms.
+   * Stable within a change-detection cycle (avoids NG0100 from `now`-dependent
+   * values shifting between dirty-check and verify passes). Cleared on a coarse
+   * interval so the displayed label still updates over time.
+   */
+  private timestampLabelCache = new Map<number, string>();
+  private timestampRefreshHandle?: ReturnType<typeof setInterval>;
+
+  /**
+   * Format recent item timestamp. Cached per-timestamp so the same value is
+   * returned across change-detection passes within a single tick — recomputed
+   * on a 30-second interval (see `ngOnInit`).
    */
   formatTimestamp(timestamp: Date): string {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
+    const epoch = new Date(timestamp).getTime();
+    const cached = this.timestampLabelCache.get(epoch);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const label = this.computeRelativeLabel(epoch);
+    this.timestampLabelCache.set(epoch, label);
+    return label;
+  }
+
+  private computeRelativeLabel(epoch: number): string {
+    const diffMs = Date.now() - epoch;
     const diffMins = Math.floor(diffMs / 60000);
 
     if (diffMins < 1) return 'Just now';
@@ -272,7 +359,7 @@ export class NavigationPanelComponent {
     const diffDays = Math.floor(diffHours / 24);
     if (diffDays < 7) return `${diffDays}d ago`;
 
-    return date.toLocaleDateString();
+    return new Date(epoch).toLocaleDateString();
   }
 
   /**

@@ -1,15 +1,11 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-// Kendo UI Angular imports
-import { NotificationModule } from '@progress/kendo-angular-notification';
-
 @NgModule({
-  declarations: [ 
+  declarations: [
   ],
   imports: [
-    CommonModule,
-    NotificationModule
+    CommonModule
   ],
   exports: [ 
   ]

@@ -196,7 +196,7 @@ function renderPrefixGroup(
  * Renders scope checkboxes with hierarchical grouping.
  *
  * Features:
- * - full_access scope at top with special treatment (acts as global grant all)
+ * - full_access scope at bottom in a collapsible "Advanced" section (hidden by default)
  * - Categories collapsed by default
  * - Within categories, scopes grouped by parent prefix
  * - Selecting parent scope implies all children (children shown as selected + disabled)
@@ -212,41 +212,50 @@ function renderScopeCheckboxes(
 ): string {
   const { fullAccessScope, categories } = hierarchicalGroups;
 
-  // Count total scopes for display
+  // Count total scopes for display (exclude parents that have children,
+  // since those are displayed as the category/group header, not as list items)
   let totalScopes = fullAccessScope ? 1 : 0;
   for (const prefixGroups of categories.values()) {
     for (const group of prefixGroups) {
-      if (group.parent) totalScopes++;
+      if (group.parent && group.children.length === 0) totalScopes++;
       totalScopes += group.children.length;
     }
   }
 
-  // full_access scope with special UI treatment (replaces "Grant All" checkbox)
-  // Also add a global "Clear All" button
-  const fullAccessSection = `
-    <div class="full-access-section">
-      ${
-        fullAccessScope
-          ? `
-      <label class="full-access-item">
-        <input type="checkbox" id="full-access-checkbox" name="scopes" value="full_access"
-               class="scope-checkbox" onchange="handleFullAccessChange(this.checked)">
-        <div class="full-access-content">
-          ${fullAccessScope.UIConfig?.icon ? `<i class="${escapeHtml(fullAccessScope.UIConfig.icon)} full-access-icon"></i>` : ''}
-          <div class="full-access-text">
-            <span class="full-access-label">Full Access</span>
-            <span class="full-access-desc">${escapeHtml(fullAccessScope.Description)}</span>
-          </div>
-        </div>
-      </label>
-      `
-          : ''
-      }
+  // Top controls section with "Clear All" button (always visible)
+  const topControlsSection = `
+    <div class="top-controls-section">
       <button type="button" class="clear-all-btn" onclick="clearAllScopes()">
         <i class="fa-solid fa-xmark"></i> Clear All Selections
       </button>
     </div>
   `;
+
+  // Full Access section at the bottom, collapsed by default
+  const fullAccessSection = fullAccessScope
+    ? `
+    <div class="full-access-section">
+      <div class="full-access-toggle-header" onclick="toggleFullAccess()">
+        <span class="full-access-toggle-arrow">&#9654;</span>
+        <span class="full-access-toggle-label">Full Access</span>
+        <span class="full-access-toggle-hint">(Advanced)</span>
+      </div>
+      <div class="full-access-body" style="display: none;">
+        <label class="full-access-item">
+          <input type="checkbox" id="full-access-checkbox" name="scopes" value="full_access"
+                 class="scope-checkbox" onchange="handleFullAccessChange(this.checked)">
+          <div class="full-access-content">
+            ${fullAccessScope.UIConfig?.icon ? `<i class="${escapeHtml(fullAccessScope.UIConfig.icon)} full-access-icon"></i>` : ''}
+            <div class="full-access-text">
+              <span class="full-access-label">Full Access</span>
+              <span class="full-access-desc">${escapeHtml(fullAccessScope.Description)}</span>
+            </div>
+          </div>
+        </label>
+      </div>
+    </div>
+    `
+    : '';
 
   // Render categories (default collapsed)
   const categoryElements: string[] = [];
@@ -256,10 +265,11 @@ function renderScopeCheckboxes(
     const categoryId = `category-${categoryIndex}`;
     categoryIndex++;
 
-    // Count scopes in this category
+    // Count scopes in this category (exclude parents that have children,
+    // since those are displayed as the category/group header, not as list items)
     let categoryTotal = 0;
     for (const group of prefixGroups) {
-      if (group.parent) categoryTotal++;
+      if (group.parent && group.children.length === 0) categoryTotal++;
       categoryTotal += group.children.length;
     }
 
@@ -354,15 +364,31 @@ function renderScopeCheckboxes(
         updateAllParentStates();
       });
 
+      // Toggle the Full Access collapsible section
+      function toggleFullAccess() {
+        const body = document.querySelector('.full-access-body');
+        const arrow = document.querySelector('.full-access-toggle-arrow');
+        if (!body || !arrow) return;
+
+        if (body.style.display === 'none') {
+          body.style.display = 'block';
+          arrow.innerHTML = '&#9660;';
+          body.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        } else {
+          body.style.display = 'none';
+          arrow.innerHTML = '&#9654;';
+        }
+      }
+
       // Handle full_access checkbox - when checked, visually indicate all scopes are granted
       function handleFullAccessChange(checked) {
         // Only affect parent scopes - children are already implied by parents
         const parentCheckboxes = document.querySelectorAll('.parent-scope');
         const standaloneCheckboxes = document.querySelectorAll('.scope-checkbox:not(.parent-scope):not(.child-scope):not(#full-access-checkbox)');
 
-        parentCheckboxes.forEach(cb => {
-          cb.disabled = checked;
-          if (checked) {
+        if (checked) {
+          parentCheckboxes.forEach(cb => {
+            cb.disabled = true;
             cb.checked = true;
             // Also disable children of this parent
             const parentScope = cb.value;
@@ -370,13 +396,21 @@ function renderScopeCheckboxes(
               child.disabled = true;
               child.checked = true;
             });
-          }
-        });
+          });
 
-        standaloneCheckboxes.forEach(cb => {
-          cb.disabled = checked;
-          if (checked) cb.checked = true;
-        });
+          standaloneCheckboxes.forEach(cb => {
+            cb.disabled = true;
+            cb.checked = true;
+          });
+        } else {
+          // Re-enable all checkboxes first
+          parentCheckboxes.forEach(cb => { cb.disabled = false; });
+          document.querySelectorAll('.child-scope').forEach(cb => { cb.disabled = false; });
+          standaloneCheckboxes.forEach(cb => { cb.disabled = false; });
+
+          // Restore parent-implies-children disabled state for checked parents
+          updateAllParentStates();
+        }
 
         saveSelectedScopes();
       }
@@ -457,6 +491,7 @@ function renderScopeCheckboxes(
         if (scopeList.style.display === 'none') {
           scopeList.style.display = 'block';
           toggle.innerHTML = '&#9660;';
+          scopeList.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         } else {
           scopeList.style.display = 'none';
           toggle.innerHTML = '&#9654;';
@@ -545,6 +580,8 @@ function renderScopeCheckboxes(
             if (fullAccessCb) {
               fullAccessCb.checked = true;
               handleFullAccessChange(true);
+              // Auto-expand the collapsible section so the user can see it's checked
+              toggleFullAccess();
               return;
             }
           }
@@ -577,7 +614,7 @@ function renderScopeCheckboxes(
     </script>
   `;
 
-  return fullAccessSection + categoryElements.join('') + script;
+  return topControlsSection + categoryElements.join('') + fullAccessSection + script;
 }
 
 /**

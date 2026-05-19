@@ -959,6 +959,7 @@ export class PayloadManager {
             generateDiff?: boolean;
             allowedPaths?: string[];
             verbose?: boolean;
+            ignoreStrayKeys?: boolean;
         }
     ): PayloadManagerResult<P> {
         const warnings: string[] = [];
@@ -970,9 +971,18 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }> = [];
+
+        // Auto-correct stray keys in the changeRequest unless ignoreStrayKeys is true.
+        // LLMs sometimes place payload properties (e.g. changeRequest, dataRequirements) as
+        // siblings of updateElements/newElements instead of inside them. This detects those
+        // stray keys and moves them into the appropriate bucket so the changes aren't silently lost.
+        if (!options?.ignoreStrayKeys) {
+            this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName);
+        }
+
         const result = _.cloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
-        
+
         // Process all changes recursively
         this.processChangeRequest(
             result,
@@ -1045,6 +1055,72 @@ export class PayloadManager {
             this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
         } else if (typeof target === 'object' && target !== null) {
             this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations);
+        }
+    }
+
+    /**
+     * Detects and auto-corrects stray keys in a payloadChangeRequest.
+     * LLMs sometimes place payload properties as siblings of updateElements/newElements
+     * instead of nesting them inside. This method moves those stray keys into the
+     * appropriate bucket (updateElements if the key exists on the payload, newElements if not).
+     *
+     * Only keys starting with a letter (a-z, A-Z) are considered — keys starting with
+     * underscore, dollar sign, or other non-letter characters are left alone as they may
+     * be internal markers.
+     */
+    protected autoCorrectStrayKeys<P = any>(
+        changeRequest: AgentPayloadChangeRequest<any>,
+        originalPayload: P,
+        warnings: string[],
+        agentName?: string
+    ): void {
+        const recognizedKeys = new Set(['newElements', 'updateElements', 'replaceElements', 'removeElements', 'reasoning']);
+        const strayKeys: string[] = [];
+
+        for (const key of Object.keys(changeRequest)) {
+            if (recognizedKeys.has(key)) continue;
+
+            // Only auto-correct keys that start with a letter — skip internal markers like _foo, $bar
+            if (!/^[a-zA-Z]/.test(key)) continue;
+
+            strayKeys.push(key);
+        }
+
+        if (strayKeys.length === 0) return;
+
+        const prefix = agentName ? `[PayloadManager:${agentName}]` : '[PayloadManager]';
+
+        for (const key of strayKeys) {
+            const value = (changeRequest as any)[key];
+            const existsOnPayload = originalPayload && typeof originalPayload === 'object' && key in (originalPayload as any);
+            const targetBucket = existsOnPayload ? 'updateElements' : 'newElements';
+
+            // Ensure the target bucket exists
+            if (!changeRequest[targetBucket]) {
+                (changeRequest as any)[targetBucket] = {};
+            }
+
+            // Deep-merge the stray value into the target bucket (don't overwrite existing explicit entries)
+            const bucket = (changeRequest as any)[targetBucket];
+            if (key in bucket) {
+                // Existing explicit entry takes precedence — merge stray value underneath
+                if (typeof bucket[key] === 'object' && bucket[key] !== null &&
+                    typeof value === 'object' && value !== null &&
+                    !Array.isArray(bucket[key]) && !Array.isArray(value)) {
+                    // Deep merge: stray values fill in gaps, explicit values win
+                    bucket[key] = _.defaultsDeep(bucket[key], value);
+                }
+                // For primitives or mismatched types, explicit entry wins — skip
+            } else {
+                bucket[key] = value;
+            }
+
+            // Remove from top level
+            delete (changeRequest as any)[key];
+
+            const warningMsg = `${prefix} Auto-corrected stray key "${key}" in payloadChangeRequest — moved to ${targetBucket}`;
+            warnings.push(warningMsg);
+            console.warn(`⚠️  ${warningMsg}`);
         }
     }
 

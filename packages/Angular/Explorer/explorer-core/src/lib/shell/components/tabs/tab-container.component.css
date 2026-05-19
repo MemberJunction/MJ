@@ -79,6 +79,14 @@
   margin: 4px 0;
 }
 
+/* Context menu item variants */
+.context-menu-item.new-item i { color: var(--mj-brand-primary); }
+.context-menu-item.new-item { font-weight: 500; }
+.context-menu-item.disabled { color: var(--mj-text-disabled); cursor: default; }
+.context-menu-item.disabled:hover { background: transparent; }
+.context-menu-item.disabled i { color: var(--mj-text-disabled); }
+.context-menu-item .check { margin-left: auto; color: var(--mj-status-success); font-size: 12px; }
+
 /* Override Golden Layout styles */
 /* Global overrides */
 

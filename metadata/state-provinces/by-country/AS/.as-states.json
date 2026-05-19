@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "American Samoa",
+      "Code": "AS",
+      "ISO3166_2": "AS-AS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "American Samoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AS"
+    },
+    "primaryKey": {
+      "ID": "30A7F367-3E5D-4F2B-B92E-FF2ADDAD52B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.594Z",
+      "checksum": "d81a76dafc98b42536ef9ce9e69e8cd0671c91384264f5a4210b0b60beb0823d"
+    }
+  }
+]

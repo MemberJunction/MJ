@@ -1,55 +1,39 @@
-<div class="execution-monitoring" >
-  <!-- Header with filters -->
-  <div class="monitoring-header">
-    <div class="header-title">
-      <h3><i class="fa-solid fa-chart-line"></i> Execution Monitoring</h3>
-      <button kendoButton [primary]="true" [icon]="'refresh'" (click)="refreshData()" class="refresh-btn">
-        Refresh
-      </button>
+<mj-page-layout>
+  <mj-page-header
+    Title="Execution Monitor"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Action execution history, latency, and error rates">
+    <div meta>
+      <mj-stat-badge
+        [Count]="metrics.totalExecutions"
+        Label="executions">
+      </mj-stat-badge>
     </div>
-    
-    <div class="filters-row">
-      <div class="search-container">
-        <kendo-textbox 
-          placeholder="Search executions..." 
-          [value]="searchTerm$.value"
-          (valueChange)="onSearchChange($event)">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
-        </kendo-textbox>
-      </div>
-      
-      <div class="filter-group">
-        <kendo-dropdownlist 
-          [data]="timeRangeOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedTimeRange$.value"
-          (valueChange)="onTimeRangeChange($event)">
-        </kendo-dropdownlist>
-        
-        <kendo-dropdownlist 
-          [data]="resultOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedResult$.value"
-          (valueChange)="onResultFilterChange($event)">
-        </kendo-dropdownlist>
-        
-        <kendo-dropdownlist 
-          [data]="actionOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [value]="selectedAction$.value"
-          (valueChange)="onActionFilterChange($event)">
-        </kendo-dropdownlist>
-      </div>
+    <div actions>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
+      <mj-refresh-button (Clicked)="refreshData()"></mj-refresh-button>
     </div>
-  </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search executions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+  <div class="execution-monitoring" >
 
   <!-- Metrics Summary -->
   <div class="metrics-summary">
@@ -181,18 +165,16 @@
             </div>
             
             <div class="execution-result">
-              <kendo-chip 
-                [themeColor]="getResultColor(execution.ResultCode)"
-                [size]="'small'">
+              <span class="status-chip" [attr.data-color]="getResultColor(execution.ResultCode)">
                 {{ execution.ResultCode || 'Unknown' }}
-              </kendo-chip>
+              </span>
             </div>
             
             <div class="execution-actions">
-              <button kendoButton 
-                [fillMode]="'flat'" 
-                [icon]="'more-vertical'"
+              <button mjButton
+                variant="flat"
                 (click)="$event.stopPropagation()">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
               </button>
             </div>
           </div>
@@ -213,3 +195,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

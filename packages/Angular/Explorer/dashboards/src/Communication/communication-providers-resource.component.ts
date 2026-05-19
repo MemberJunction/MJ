@@ -17,17 +17,19 @@ interface ProviderCardData {
   standalone: false,
     selector: 'mj-communication-providers-resource',
     template: `
-    <div class="providers-wrapper">
-      <div class="providers-header">
-        <div>
-          <h2>Communication Providers</h2>
-          <p>Manage your messaging service integrations</p>
+    <mj-page-layout>
+      <mj-page-header
+        Title="Providers"
+        Icon="fa-solid fa-server"
+        Subtitle="Manage your messaging service integrations">
+        <div actions>
+          <button mjButton variant="primary" size="sm" (click)="addNewProvider()">
+            <i class="fa-solid fa-plus"></i> Add Provider
+          </button>
         </div>
-        <button class="tb-btn primary" (click)="addNewProvider()">
-          <i class="fa-solid fa-plus"></i> Add Provider
-        </button>
-      </div>
-    
+      </mj-page-header>
+
+      <mj-page-body>
       @if (isLoading) {
         <div class="loading-state">
           <mj-loading text="Loading providers..."></mj-loading>
@@ -106,51 +108,10 @@ interface ProviderCardData {
           }
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
     styles: [`
-    .providers-wrapper {
-        height: 100%;
-        padding: 24px;
-        overflow-y: auto;
-        background: var(--mj-bg-surface);
-    }
-    .providers-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 20px;
-    }
-    .providers-header h2 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 800;
-        color: var(--mj-text-primary);
-    }
-    .providers-header p {
-        margin: 4px 0 0;
-        font-size: 13px;
-        color: var(--mj-text-muted);
-    }
-
-    .tb-btn {
-        display: inline-flex; align-items: center;
-        gap: 6px; padding: 8px 16px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 4px;
-        background: var(--mj-bg-surface-card);
-        color: var(--mj-text-secondary);
-        font-size: 12px; font-weight: 600;
-        cursor: pointer; transition: all 0.15s ease;
-        font-family: inherit;
-    }
-    .tb-btn.primary {
-        background: var(--mj-brand-primary);
-        color: var(--mj-text-inverse);
-        border-color: var(--mj-brand-primary);
-    }
-    .tb-btn.primary:hover { background: var(--mj-brand-primary-hover); }
-
     .loading-state {
         display: flex;
         align-items: center;
@@ -303,18 +264,21 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
     }
 
     async ngOnInit(): Promise<void> {
+        super.ngOnInit();
         await this.loadData();
         this.NotifyLoadComplete();
     }
 
-    ngOnDestroy(): void { }
+    ngOnDestroy(): void {
+        super.ngOnDestroy();
+    }
 
     public async loadData(): Promise<void> {
         try {
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();
@@ -382,7 +346,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
 
     public configureProvider(provider: MJCommunicationProviderEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
+        pk.LoadFromEntityInfoAndRecord(this.ProviderToUse.Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
         this.navService.OpenEntityRecord('MJ: Communication Providers', pk);
     }
 

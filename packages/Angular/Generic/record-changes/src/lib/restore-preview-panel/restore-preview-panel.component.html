@@ -1,0 +1,198 @@
+<mj-slide-panel
+  [Mode]="'slide'"
+  [Title]="HeaderTitle"
+  [Visible]="Visible"
+  [Resizable]="true"
+  [MinWidthPx]="500"
+  [MaxWidthRatio]="0.7"
+  (Closed)="Cancel()">
+
+  @if (RecordChange) {
+    <div class="rpp-container">
+
+      <!-- Header summary block -->
+      <div class="rpp-header">
+        <div class="rpp-header-icon">
+          <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i>
+        </div>
+        <div class="rpp-header-text">
+          <div class="rpp-header-title">{{ HeaderTitle }}</div>
+          <div class="rpp-header-meta">
+            <span><strong>Version:</strong> {{ formatTimestamp(VersionTimestamp) }}</span>
+            @if (VersionUser) {
+              <span><strong>By:</strong> {{ VersionUser }}</span>
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- Drift warning -->
+      @if (DriftCount > 0) {
+        <div class="rpp-banner rpp-banner-warning">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          <span>{{ DriftCount }} field{{ DriftCount === 1 ? '' : 's' }} from this snapshot no longer exist on the entity and will be skipped.</span>
+        </div>
+      }
+
+      <!-- Empty state -->
+      @if (Rows.length === 0) {
+        <div class="rpp-empty">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <p>No fields could be parsed from this snapshot.</p>
+        </div>
+      }
+
+      <!-- Action bar (select all / deselect all) -->
+      @if (Rows.length > 0 && Mode !== 'undelete') {
+        <div class="rpp-action-bar">
+          <span class="rpp-action-bar-label">{{ ChangedCount }} field{{ ChangedCount === 1 ? '' : 's' }} differ from current</span>
+          <div class="rpp-action-bar-buttons">
+            <button class="rpp-link-btn" type="button" (click)="SelectAll()" [disabled]="IsRestoring">Select all changed</button>
+            <span class="rpp-action-bar-sep">·</span>
+            <button class="rpp-link-btn" type="button" (click)="DeselectAll()" [disabled]="IsRestoring">Deselect all</button>
+          </div>
+        </div>
+      }
+
+      <!-- Diff table -->
+      @if (Rows.length > 0) {
+        <div class="rpp-table-wrap">
+          <table class="rpp-table">
+            <thead>
+              <tr>
+                <th class="rpp-col-check"></th>
+                <th class="rpp-col-field">Field</th>
+                @if (Mode === 'live') {
+                  <th class="rpp-col-current">Current Value</th>
+                  <th class="rpp-col-restore">Restore To</th>
+                } @else {
+                  <th class="rpp-col-restore" colspan="2">Will be created with</th>
+                }
+                <th class="rpp-col-flag"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of Rows; track row.FieldName) {
+                @if (row.IsChanged || ShowUnchanged) {
+                  <tr [class.rpp-row-changed]="row.IsChanged"
+                      [class.rpp-row-unchanged]="!row.IsChanged"
+                      [class.rpp-row-immutable]="row.IsImmutable"
+                      [class.rpp-row-drift]="row.IsMissingInSchema">
+                    <td class="rpp-col-check">
+                      <button type="button"
+                        class="rpp-checkbox"
+                        [class.checked]="row.Selected"
+                        [class.disabled]="row.IsImmutable || row.IsMissingInSchema"
+                        [disabled]="row.IsImmutable || row.IsMissingInSchema || IsRestoring"
+                        [attr.aria-label]="'Toggle ' + row.DisplayName"
+                        (click)="ToggleRow(row)">
+                        @if (row.Selected) {
+                          <i class="fa-solid fa-check" aria-hidden="true"></i>
+                        }
+                      </button>
+                    </td>
+                    <td class="rpp-col-field">
+                      <div class="rpp-field-display">{{ row.DisplayName }}</div>
+                      <div class="rpp-field-name">{{ row.FieldName }}</div>
+                    </td>
+                    @if (Mode === 'live') {
+                      <td class="rpp-col-current" [class.rpp-empty-cell]="!row.CurrentValue">
+                        {{ row.CurrentValue || '(empty)' }}
+                      </td>
+                      <td class="rpp-col-restore" [class.rpp-empty-cell]="!row.RestoreValue">
+                        {{ row.RestoreValue || '(empty)' }}
+                      </td>
+                    } @else {
+                      <td class="rpp-col-restore" colspan="2" [class.rpp-empty-cell]="!row.RestoreValue">
+                        {{ row.RestoreValue || '(empty)' }}
+                      </td>
+                    }
+                    <td class="rpp-col-flag">
+                      @if (row.IsMissingInSchema) {
+                        <i class="fa-solid fa-triangle-exclamation rpp-flag-drift"
+                           title="This field no longer exists on the entity and will be skipped"
+                           aria-hidden="true"></i>
+                      } @else if (row.IsImmutable) {
+                        <i class="fa-solid fa-lock rpp-flag-immutable"
+                           title="Read-only or system field — cannot be modified"
+                           aria-hidden="true"></i>
+                      } @else if (row.IsChanged) {
+                        <i class="fa-solid fa-circle-exclamation rpp-flag-changed"
+                           title="Will be changed"
+                           aria-hidden="true"></i>
+                      } @else {
+                        <i class="fa-solid fa-check rpp-flag-ok"
+                           title="Already matches"
+                           aria-hidden="true"></i>
+                      }
+                    </td>
+                  </tr>
+                }
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Unchanged disclosure -->
+        @if (UnchangedCount > 0 && Mode === 'live') {
+          <button class="rpp-disclosure" type="button" (click)="ToggleUnchanged()">
+            <i class="fa-solid"
+               [class.fa-chevron-right]="!ShowUnchanged"
+               [class.fa-chevron-down]="ShowUnchanged"
+               aria-hidden="true"></i>
+            <span>{{ ShowUnchanged ? 'Hide' : 'Show' }} {{ UnchangedCount }} unchanged field{{ UnchangedCount === 1 ? '' : 's' }}</span>
+          </button>
+        }
+      }
+
+      <!-- Reason text area -->
+      @if (!HideReason && Rows.length > 0) {
+        <div class="rpp-reason-section">
+          <label for="rpp-reason-input">
+            Reason for restore
+            @if (RequireReason) {
+              <span class="rpp-required">*</span>
+            } @else {
+              <span class="rpp-optional">(optional)</span>
+            }
+          </label>
+          <textarea id="rpp-reason-input"
+            [(ngModel)]="Reason"
+            [disabled]="IsRestoring"
+            placeholder="e.g., Reverting incorrect Q2 entries"
+            class="rpp-reason-textarea"
+            rows="2"></textarea>
+        </div>
+      }
+    </div>
+
+    <!-- Footer actions -->
+    <div class="rpp-footer">
+      <div class="rpp-footer-info">
+        <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+        @if (Mode === 'live') {
+          <span>A snapshot of the current state is saved automatically before the restore.</span>
+        } @else {
+          <span>A new "Created" entry will be added to this record's history, linked back to the original deletion.</span>
+        }
+      </div>
+      <div class="rpp-footer-actions">
+        <button type="button"
+          class="rpp-btn rpp-btn-primary"
+          [disabled]="IsRestoreDisabled"
+          (click)="ConfirmRestore()">
+          @if (IsRestoring) {
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+          } @else {
+            <i class="fa-solid fa-rotate-left" aria-hidden="true"></i>
+          }
+          {{ RestoreButtonLabel }}
+        </button>
+        <button type="button"
+          class="rpp-btn rpp-btn-secondary"
+          [disabled]="IsRestoring"
+          (click)="Cancel()">Cancel</button>
+      </div>
+    </div>
+  }
+</mj-slide-panel>

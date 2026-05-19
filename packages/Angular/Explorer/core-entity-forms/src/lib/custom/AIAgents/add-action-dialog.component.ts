@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormControl } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CategoryTreeNode {
   id: string;
   name: string;
@@ -30,7 +30,7 @@ export interface ActionDisplayItem extends MJActionEntity {
   templateUrl: './add-action-dialog.component.html',
   styleUrls: ['./add-action-dialog.component.css']
 })
-export class AddActionDialogComponent implements OnInit, OnDestroy {
+export class AddActionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   agentId: string = '';
@@ -68,10 +68,12 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     return this.filteredActions$.value.length;
   }
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeData();
@@ -98,7 +100,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   }
 
   private async loadActionsAndCategories() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     const [actionsResult, categoriesResult] = await rv.RunViews([
       {
@@ -324,21 +326,21 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   cancel() {
     this.result.next([]);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   addSelectedActions() {
     const selectedIds = this.selectedActions$.value;
     const allActions = this.allActions$.value;
-    
+
     // Get the selected action display items (excluding existing ones)
     const selectedDisplayItems = allActions
       .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.some(id => UUIDsEqual(id, action.ID)));
-    
+
     // Convert ActionDisplayItem to MJActionEntity by casting (they have the same structure)
     const selectedActions: MJActionEntity[] = selectedDisplayItems.map(item => item as MJActionEntity);
-    
+
     this.result.next(selectedActions);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

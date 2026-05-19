@@ -6,6 +6,9 @@ import {
     SchemaIntrospectionSQL,
     TriggerOptions,
     IndexOptions,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    ResolveTypeOptions,
 } from './sqlDialect.js';
 
 /**
@@ -138,6 +141,15 @@ export class SQLServerDialect extends SQLDialect {
         return `[${schema}].[${object}]`;
     }
 
+    /**
+     * SQL Server identifiers are case-insensitive by default, so a bare
+     * alias preserves the requested casing when echoed in result-set
+     * column metadata. Bracketed quoting would also work but is unnecessary.
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return aliasName;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
@@ -153,9 +165,70 @@ export class SQLServerDialect extends SQLDialect {
         return value ? '1' : '0';
     }
 
+    BooleanParameterType(): string {
+        return 'bit';
+    }
+
+    ParameterRef(name: string): string {
+        return `@${name}`;
+    }
+
+    ParameterDefault(value: string): string {
+        return ` = ${value}`;
+    }
+
+    /**
+     * SQL Server has both `ISNULL` (T-SQL native, two-arg only) and `COALESCE`
+     * (ANSI, n-ary). For two-argument null-coalescing we emit the native
+     * `ISNULL` form so generated SPs match the conventional T-SQL idiom and
+     * the data-type-of-first-argument semantics callers may already rely on.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `ISNULL(${expr}, ${fallback})`;
+    }
+
+    /**
+     * SQL Server supports `COALESCE` as an ANSI-standard alternative to its
+     * native `ISNULL`. The two differ subtly in return-type inference and
+     * argument arity (`COALESCE` is n-ary; `ISNULL` is two-arg only). Use
+     * this helper when codegen needs the n-ary form or when caller intent
+     * is ANSI-portable rather than T-SQL-native.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
     CurrentTimestampUTC(): string {
         return 'GETUTCDATE()';
     }
+
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // SQL Server's column-type names as they appear in `sys.columns.name`
+    // / `EntityField.Type` for entities backed by a SQL Server schema.
+
+    private static readonly _BooleanTypeNames = ['bit'] as const;
+    private static readonly _StringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
+    private static readonly _UuidTypeNames = ['uniqueidentifier'] as const;
+    private static readonly _BinaryTypeNames = ['binary', 'varbinary', 'image'] as const;
+    private static readonly _JsonTypeNames = ['xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money', 'smallmoney'] as const;
+    private static readonly _IntervalTypeNames = [] as const;
+    private static readonly _NetworkTypeNames = [] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return SQLServerDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return SQLServerDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return SQLServerDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return SQLServerDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return SQLServerDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return SQLServerDialect._NetworkTypeNames; }
 
     NewUUID(): string {
         return 'NEWID()';
@@ -163,6 +236,17 @@ export class SQLServerDialect extends SQLDialect {
 
     CastToText(expr: string): string {
         return `CAST(${expr} AS NVARCHAR(MAX))`;
+    }
+
+    /**
+     * SQL Server-specific Flyway escape. Interleaves a `CAST(N'' AS NVARCHAR(MAX))`
+     * between the split halves so the running T-SQL concat chain inherits
+     * NVARCHAR(MAX) precedence. Without the cast, `N'a' + N'b'` produces
+     * NVARCHAR(a+b) capped at NVARCHAR(4000) and silently truncates anything
+     * past 4,000 characters.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
     }
 
     CastToUUID(expr: string): string {
@@ -251,6 +335,10 @@ export class SQLServerDialect extends SQLDialect {
         return false;
     }
 
+    get DefaultPagingOrderBy(): string {
+        return '(SELECT NULL)';
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {
@@ -284,7 +372,85 @@ export class SQLServerDialect extends SQLDialect {
         return `EXEC [${schema}].[${name}] ${paramList}`;
     }
 
-    // ─── DDL Generation ──────────────────────────────────────────────
+    // ─── DDL Generation (Schema/Table) ──────────────────────────────
+
+    CreateSchemaDDL(schemaName: string): string {
+        return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
+    }
+
+    /** SQL Server cannot index NVARCHAR(MAX) columns — cap to NVARCHAR(450). */
+    override CapIndexableType(rawSqlType: string): string {
+        return rawSqlType.toUpperCase() === 'NVARCHAR(MAX)' ? 'NVARCHAR(450)' : rawSqlType;
+    }
+
+    // ─── DDL Generation (Conditional/Procedural) ────────────────────
+
+    DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {
+        return `DATEADD(${unit}, ${amount}, ${baseExpr})`;
+    }
+
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        const quotedTable = this.QuoteSchema(schema, tableName);
+        return [
+            `IF NOT EXISTS (SELECT * FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.schema_id WHERE s.name='${schema}' AND t.name='${tableName}')`,
+            `BEGIN`,
+            `  CREATE TABLE ${quotedTable} (`,
+            columnsDDL,
+            `  );`,
+            `END;`,
+        ].join('\n');
+    }
+
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        const lines = [
+            `IF ${condition}`,
+            `BEGIN`,
+            `  ${thenSQL}`,
+            `END`,
+        ];
+        if (elseSQL) {
+            lines.push(`ELSE`);
+            lines.push(`BEGIN`);
+            lines.push(`  ${elseSQL}`);
+            lines.push(`END`);
+        }
+        return lines.join('\n');
+    }
+
+    RaiseSignalSQL(message: string): string {
+        return `RAISERROR('${message}', 16, 1)`;
+    }
+
+    // ─── DDL Generation (Schema/Table continued) ────────────────────
+
+    AddColumnClause(col: ColumnDDLOptions): string {
+        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
+        return `ADD [${col.name}] ${col.sqlType} ${nullable}${defaultExpr}`;
+    }
+
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        const nullable = options.newNullable ? 'NULL' : 'NOT NULL';
+        return `ALTER TABLE ${quotedTable}\n    ALTER COLUMN [${options.columnName}] ${options.newType} ${nullable};`;
+    }
+
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        const escaped = comment.replace(/'/g, "''");
+        return [
+            `EXEC sp_addextendedproperty`,
+            `    @name = N'MS_Description',`,
+            `    @value = N'${escaped}',`,
+            `    @level0type = N'SCHEMA', @level0name = '${schema}',`,
+            `    @level1type = N'TABLE', @level1name = '${table}',`,
+            `    @level2type = N'COLUMN', @level2name = '${column}';`,
+        ].join('\n');
+    }
+
+    FallbackType(): string {
+        return 'NVARCHAR(MAX)';
+    }
+
+    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     TriggerDDL(options: TriggerOptions): string {
         const events = options.events.join(', ');
@@ -383,6 +549,47 @@ export class SQLServerDialect extends SQLDialect {
 
     IIF(condition: string, trueVal: string, falseVal: string): string {
         return `IIF(${condition}, ${trueVal}, ${falseVal})`;
+    }
+
+    // ─── Abstract Type Resolution ─────────────────────────────────────
+
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        switch (options.type) {
+            case 'string':
+                return this.resolveStringType(options.maxLength);
+            case 'text':
+                return 'NVARCHAR(MAX)';
+            case 'integer':
+                return 'INT';
+            case 'bigint':
+                return 'BIGINT';
+            case 'decimal':
+                return `DECIMAL(${options.precision ?? 18},${options.scale ?? 2})`;
+            case 'boolean':
+                return 'BIT';
+            case 'datetime':
+                return 'DATETIMEOFFSET';
+            case 'date':
+                return 'DATE';
+            case 'uuid':
+                return 'UNIQUEIDENTIFIER';
+            case 'json':
+                return 'NVARCHAR(MAX)';
+            case 'float':
+                return 'FLOAT';
+            case 'time':
+                return 'TIME';
+            default:
+                return this.FallbackType();
+        }
+    }
+
+    private resolveStringType(maxLength?: number): string {
+        if (maxLength != null && maxLength > 0) {
+            if (maxLength > 4000) return 'NVARCHAR(MAX)';
+            return `NVARCHAR(${maxLength})`;
+        }
+        return 'NVARCHAR(255)';
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────

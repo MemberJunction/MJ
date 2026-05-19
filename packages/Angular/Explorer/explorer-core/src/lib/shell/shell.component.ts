@@ -15,19 +15,27 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
-import { SettingsDialogService } from './services/settings-dialog.service';
+import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
+import { ProfileDialogService } from './services/profile-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
+import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
-import { MJUserEntity } from '@memberjunction/core-entities';
+import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { FileOpenService } from '@memberjunction/ng-file-storage';
+import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -42,11 +50,10 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
-export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
-  private firstUrlSync = true; // Track if this is the first URL sync (for replaceUrl behavior)
 
   activeApp: BaseApplication | null = null;
   loading = true;
@@ -76,6 +83,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -96,11 +106,33 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   public userMenuElements: UserMenuElement[] = [];
   private destroy$ = new Subject<void>();
 
+  // Pin progress overlay
+  public PinProgressVisible = false;
+  public PinProgressText = '';
+
   // Search state
   isSearchOpen = false;
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+
+  // Universal search bar
+  @ViewChild('shellSearchComposite') shellSearchComposite: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined;
+
+  // Instance configuration feature flags
+  get ShowSearchBar(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.Enabled', true);
+  }
+  get ShowSearchPreview(): boolean {
+      return InstanceConfigEngine.Instance.GetBoolean('Shell.SearchBar.EnablePreview', true);
+  }
+
+  // Tab container reference for thumbnail capture
+  @ViewChild(TabContainerComponent) tabContainerRef!: TabContainerComponent;
 
   // App access dialog
   @ViewChild('appAccessDialog') appAccessDialog!: AppAccessDialogComponent;
@@ -135,13 +167,33 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
-    private settingsDialogService: SettingsDialogService,
+    private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
+    private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
+    private startupValidationService: StartupValidationService,
     private commandPaletteService: CommandPaletteService,
-    private themeService: ThemeService
+    private themeService: ThemeService,
+    private homePinService: HomeAppPinService,
+    private fileOpenService: FileOpenService,
+    private feedbackDialogService: FeedbackDialogService,
+    private feedbackService: FeedbackService
   ) {
+    super();
+
+    // Thread the active provider into the bootstrap services that need provider
+    // context. They each fall back to Metadata.Provider when no explicit provider
+    // is set, so this is a no-op for single-provider apps but enables correct
+    // behavior in multi-provider setups.
+    const providerForServices = this.ProviderToUse;
+    this.appManager.Provider = providerForServices;
+    this.workspaceManager.Provider = providerForServices;
+    this.developerModeService.Provider = providerForServices;
+    this.startupValidationService.Provider = providerForServices;
+    if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
+
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
 
@@ -190,9 +242,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           }
         }
       });
-      
+
     } catch (error) {
-      console.error('Failed to initialize shell:', error);
       this.loading = false;
     }
   }
@@ -204,10 +255,15 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // Initialize application manager (subscribes to LoggedIn event)
     this.appManager.Initialize();
 
-    await StartupManager.Instance.Startup();          
+    await StartupManager.Instance.Startup();
+
+    // Initialize instance configuration for feature flags
+    await InstanceConfigEngine.Instance.Config(false).catch(() => {
+        LogStatus('InstanceConfigEngine initialization skipped (not critical)');
+    });
 
     // Get current user
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user) {
       throw new Error('No current user found');
@@ -382,7 +438,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       MJGlobal.Instance.GetEventListener(false).subscribe(async (updateEvent) => {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
@@ -397,12 +453,21 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.initialized = true;
     this.waitingForFirstResource = true;
 
-    // Trigger initial URL sync: the Configuration BehaviorSubject already emitted
-    // its value when the shell subscribed (line above), but this.initialized was false
-    // at that point so syncUrlWithWorkspace() was skipped. Now that we're initialized,
-    // manually trigger the first URL sync to set the browser URL from workspace state.
+    // Decide whether to restore workspace state or honor the current URL.
+    // If the user navigated to a specific path (deep link, bookmark, typed URL),
+    // that URL takes priority — the ResourceResolver will handle tab creation.
+    // Only restore workspace state when the URL is bare root (/) or empty.
+    const initialUrl = this.router.url.split('?')[0]; // ignore query params for this check
+    const isDeepLink = initialUrl.length > 1 && initialUrl !== '/';
+
     const initConfig = this.workspaceManager.GetConfiguration();
-    if (initConfig && initConfig.activeTabId) {
+    if (isDeepLink) {
+      // User navigated to a specific URL — sync workspace to match the URL,
+      // not the other way around. The ResourceResolver will have created a tab
+      // for this URL; we just need to activate it.
+      await this.syncWorkspaceWithUrl(this.router.url);
+    } else if (initConfig && initConfig.activeTabId) {
+      // Bare root URL — restore last workspace state
       await this.syncActiveAppWithTab(initConfig);
       this.syncUrlWithWorkspace(initConfig);
     }
@@ -512,10 +577,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.appManager.SetActiveApp(tabAppId);
     }
 
-    // Update browser title with app and tab context
+    // Update browser title with app and tab context.
+    // Prefer navItemName from configuration (always correct) over activeTab.title
+    // (which can be stale when switching between apps in single-resource mode).
     const app = this.appManager.GetAppById(tabAppId);
     const appName = app?.Name || null;
-    const tabTitle = activeTab.title || null;
+    const tabTitle = (activeTab.configuration?.['navItemName'] as string) || activeTab.title || null;
     this.titleService.setContext(appName, tabTitle);
   }
 
@@ -551,10 +618,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
 
-        // Replace URL on first sync (initialization), push new history entries after that
-        const replaceUrl = this.firstUrlSync;
-        this.firstUrlSync = false;
-        this.router.navigateByUrl(resourceUrl, { replaceUrl });
+        this.router.navigateByUrl(resourceUrl);
       }
     }
   }
@@ -575,11 +639,53 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (matchingTab && matchingTab.id !== config.activeTabId) {
       // Activate the matching tab
       this.workspaceManager.SetActiveTab(matchingTab.id);
+    } else if (matchingTab && matchingTab.id === config.activeTabId) {
+      // Same tab is already active, but query params may have changed (back/forward within nav item)
+      const urlParams = this.extractQueryParamsFromUrl(url);
+      const tabParams = (matchingTab.configuration?.['queryParams'] || {}) as Record<string, string>;
+      if (!this.queryParamsEqual(urlParams, tabParams)) {
+        // URL is source of truth during back/forward — update tab config to match.
+        this.urlBasedNavigation = true;
+        try {
+          this.workspaceManager.UpdateTabConfiguration(matchingTab.id, {
+            queryParams: Object.keys(urlParams).length > 0 ? urlParams : undefined
+          });
+          this.navigationService.NotifyQueryParamsChanged(matchingTab.id, urlParams);
+        } finally {
+          this.urlBasedNavigation = false;
+        }
+      }
     } else if (!matchingTab) {
-      // No matching tab found - check if this is an app-only URL for an app with zero nav items
-      // If so, we need to create a new tab for it (the old one was replaced when navigating away)
       await this.handleMissingTabForUrl(url);
     }
+  }
+
+  /**
+   * Extract query params from a URL string, stripping any fragment (#hash).
+   */
+  private extractQueryParamsFromUrl(url: string): Record<string, string> {
+    const fragmentIndex = url.indexOf('#');
+    const cleanUrl = fragmentIndex !== -1 ? url.substring(0, fragmentIndex) : url;
+    const queryIndex = cleanUrl.indexOf('?');
+    if (queryIndex === -1) return {};
+    const params = new URLSearchParams(cleanUrl.substring(queryIndex + 1));
+    const result: Record<string, string> = {};
+    params.forEach((value, key) => { result[key] = value; });
+    return result;
+  }
+
+  /**
+   * Compare two query param records for equality, normalizing encoding differences
+   * (URLSearchParams encodes spaces as +, Angular Router uses %20).
+   */
+  private queryParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every(key =>
+      decodeURIComponent(a[key]?.replace(/\+/g, ' ') || '') ===
+      decodeURIComponent(b[key]?.replace(/\+/g, ' ') || '')
+    );
   }
 
   /**
@@ -654,6 +760,44 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         return;
       }
 
+      // Check for app-scoped search URL: /app/:appName/search/:searchInput
+      const appSearchMatch = urlPath.match(/^\/app\/([^\/]+)\/search\/(.+)$/);
+      if (appSearchMatch) {
+        const searchInput = decodeURIComponent(appSearchMatch[2]);
+        this.navigationService.OpenSearch(searchInput);
+        return;
+      }
+
+      // Check for app nav item URL: /app/:appName/:navItemName
+      const appNavItemMatch = urlPath.match(/^\/app\/([^\/]+)\/([^\/]+)$/);
+      if (appNavItemMatch) {
+        const appPath = decodeURIComponent(appNavItemMatch[1]);
+        const navItemName = decodeURIComponent(appNavItemMatch[2]);
+        const app = this.appManager.GetAppByPath(appPath) || this.appManager.GetAppByName(appPath);
+
+        if (app) {
+          // Activate the app and open the nav item
+          await this.appManager.SetActiveApp(app.ID);
+          const navItems = await app.GetNavItems();
+          const navItem = navItems.find(item => item.Label === navItemName);
+
+          if (navItem) {
+            // Parse query params to pass as configuration
+            const qpObj: Record<string, string> = {};
+            queryParams.forEach((value, key) => { qpObj[key] = value; });
+            this.navigationService.OpenNavItem(
+              app.ID,
+              navItem,
+              app.GetColor(),
+              Object.keys(qpObj).length > 0 ? { queryParams: qpObj } : undefined
+            );
+          } else {
+            console.warn('handleMissingTabForUrl: nav item not found:', navItemName, 'in app:', appPath);
+          }
+        }
+        return;
+      }
+
       // Check for app-only URL: /app/:appName
       const appOnlyMatch = urlPath.match(/^\/app\/([^\/]+)$/);
       if (appOnlyMatch) {
@@ -670,6 +814,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             const defaultTab = await app.CreateDefaultTab();
             if (defaultTab) {
               this.workspaceManager.OpenTab(defaultTab, app.GetColor());
+            }
+          } else {
+            // App has nav items — activate the app and its default nav item
+            await this.appManager.SetActiveApp(app.ID);
+            const defaultNavItem = navItems.find(item => (item as { isDefault?: boolean }).isDefault) || navItems[0];
+            if (defaultNavItem) {
+              this.navigationService.OpenNavItem(app.ID, defaultNavItem, app.GetColor());
             }
           }
         }
@@ -981,6 +1132,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const isAppDefault = config['isAppDefault'] as boolean | undefined;
     const tabAppId = tab.applicationId;
 
+    // Helper to append query params to a URL, preserving any existing params
+    const appendQP = (url: string): string => {
+      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+      const separator = url.includes('?') ? '&' : '?';
+      const params = new URLSearchParams(queryParams);
+      return `${url}${separator}${params.toString()}`;
+    };
+
     // Helper function to get app path for URL
     const getAppPath = (appIdOrName: string): string | null => {
       // First try by ID
@@ -1097,7 +1256,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
           if (entityName && recordId) {
-            return `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${recordId}`);
           }
           break;
 
@@ -1110,53 +1269,63 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
               if (extraFilter) {
                 url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
               }
-              return url;
+              return appendQP(url);
             }
           } else if (recordId) {
             // /app/:appName/view/:viewId (saved view)
-            return `/app/${encodeURIComponent(appPath)}/view/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/view/${recordId}`);
           }
           break;
 
         case 'dashboards':
           // /app/:appName/dashboard/:dashboardId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/dashboard/${recordId}`);
           }
           break;
 
         case 'artifacts':
           // /app/:appName/artifact/:artifactId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/artifact/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/artifact/${recordId}`);
           }
           break;
 
         case 'queries':
           // /app/:appName/query/:queryId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/query/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/query/${recordId}`);
           }
           break;
 
         case 'reports':
           // /app/:appName/report/:reportId
           if (recordId) {
-            return `/app/${encodeURIComponent(appPath)}/report/${recordId}`;
+            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
           }
           break;
 
-        case 'search results':
-          // /app/:appName/search/:searchInput?Entity=...
+        case 'search results': {
+          // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
           if (searchInput) {
             let url = `/app/${encodeURIComponent(appPath)}/search/${encodeURIComponent(searchInput)}`;
+            const searchParams = new URLSearchParams();
             if (entityName) {
-              url += `?Entity=${encodeURIComponent(entityName)}`;
+              searchParams.set('Entity', entityName);
+            }
+            if (queryParams) {
+              for (const [key, value] of Object.entries(queryParams)) {
+                if (value != null) searchParams.set(key, value);
+              }
+            }
+            if (searchParams.toString()) {
+              url += `?${searchParams.toString()}`;
             }
             return url;
           }
           break;
+        }
       }
     }
 
@@ -1164,7 +1333,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     switch (resourceType) {
       case 'records':
         if (entityName && recordId) {
-          return `/resource/record/${encodeURIComponent(entityName)}/${recordId}`;
+          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${recordId}`);
         }
         break;
 
@@ -1175,30 +1344,31 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
             if (extraFilter) {
               url += `?ExtraFilter=${encodeURIComponent(extraFilter)}`;
             }
-            return url;
+            return appendQP(url);
           }
         } else if (recordId) {
-          return `/resource/view/${recordId}`;
+          return appendQP(`/resource/view/${recordId}`);
         }
         break;
 
       case 'dashboards':
         if (recordId) {
-          return `/resource/dashboard/${recordId}`;
+          return appendQP(`/resource/dashboard/${recordId}`);
         }
         break;
 
       case 'artifacts':
         if (recordId) {
-          return `/resource/artifact/${recordId}`;
+          return appendQP(`/resource/artifact/${recordId}`);
         }
         break;
 
       case 'queries':
         if (recordId) {
-          return `/resource/query/${recordId}`;
+          return appendQP(`/resource/query/${recordId}`);
         }
         break;
+
     }
 
     return null;
@@ -1596,7 +1766,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           this.workspaceManager.SetActiveTab(defaultNavItemTab.id);
           const resourceUrl = await this.buildResourceUrl(defaultNavItemTab);
           if (resourceUrl) {
-            this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+            this.router.navigateByUrl(resourceUrl);
           }
         } else {
           // No tab for default nav item - create one via NavigationService
@@ -1611,7 +1781,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // but we can also manually trigger it here to ensure immediate update
         const resourceUrl = await this.buildResourceUrl(firstTab);
         if (resourceUrl) {
-          this.router.navigateByUrl(resourceUrl, { replaceUrl: true });
+          this.router.navigateByUrl(resourceUrl);
         }
       }
     } finally {
@@ -1764,7 +1934,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async initializeUserMenu(): Promise<void> {
     // Get the highest priority user menu implementation via ClassFactory
-    this.userMenu = MJGlobal.Instance.ClassFactory.CreateInstance<BaseUserMenu>(BaseUserMenu);
+    this.userMenu = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseUserMenu>(BaseUserMenu);
 
     if (!this.userMenu) {
       console.error('No user menu implementation found');
@@ -1776,9 +1946,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.developerModeService.Initialize(this.userEntity);
     }
 
+    // Check org-level feedback kill switch (defaults to enabled on error)
+    const feedbackEnabled = await this.feedbackService.IsEnabled();
+
     // Build context for the menu
     const context: UserMenuContext = {
-      user: new Metadata().CurrentUser,
+      user: this.ProviderToUse.CurrentUser,
       userEntity: this.userEntity!,
       shell: this as unknown as Record<string, unknown>,
       viewContainerRef: this.viewContainerRef,
@@ -1787,10 +1960,14 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       currentApplication: this.activeApp as unknown as ApplicationInfoRef | null,
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
-      openSettings: () => this.openSettingsDialog(),
+      pinService: this.homePinService,
+      // Legacy hook retained for plugin compatibility — no-op now that the
+      // multi-tab Settings dialog has been replaced by the Identity Card flow.
+      openSettings: () => { /* deprecated; profile menu item now emits 'profile' */ },
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
-      appliedTheme: this.themeService.AppliedTheme
+      appliedTheme: this.themeService.AppliedTheme,
+      feedbackEnabled
     };
 
     // Initialize menu
@@ -1847,12 +2024,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const result = await this.userMenu.HandleItemClick(itemId);
 
     // Handle special signals from menu handlers
-    if (result.message === 'toggle-dev-mode') {
-      await this.developerModeService.Toggle();
-      // Menu will refresh via the subscription above
-      return;
-    }
-
     if (result.message?.startsWith('select-theme-')) {
       const themeId = result.message.substring('select-theme-'.length);
       await this.themeService.SetTheme(themeId);
@@ -1871,6 +2042,48 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (result.message === 'reset-layout') {
       await this.onResetLayout();
+      return;
+    }
+
+    if (result.message === 'pin-to-home') {
+      // Close menu and show overlay immediately before any async work
+      this.userMenuVisible = false;
+      this.refreshMenuElements();
+      this.showPinProgress('Pinning...');
+      // Let the UI render the overlay before starting the work
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      await this.handlePinToHome();
+      this.hidePinProgress();
+      return;
+    }
+
+    if (result.message === 'sharing-center') {
+      this.userMenuVisible = false;
+      this.userSharingCenterDialogService.open(this.viewContainerRef);
+      return;
+    }
+
+    if (result.message === 'submit-feedback') {
+      this.userMenuVisible = false;
+      this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
+      return;
+    }
+
+    if (result.message === 'profile') {
+      this.userMenuVisible = false;
+      this.profileDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 
@@ -1920,19 +2133,140 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     return element as UserMenuItem;
   }
 
+
   /**
-   * Open the settings dialog
+   * Pin the currently active resource to the Home dashboard
    */
-  private openSettingsDialog(): void {
-    this.settingsDialogService.open(this.viewContainerRef);
+  private async handlePinToHome(): Promise<void> {
+    const activeTabId = this.workspaceManager.GetActiveTabId();
+    if (!activeTabId) {
+      console.warn('Pin to Home: No active tab found');
+      return;
+    }
+
+    const activeTab = this.workspaceManager.GetTab(activeTabId);
+    if (!activeTab) {
+      console.warn('Pin to Home: Active tab not found');
+      return;
+    }
+
+    // Ensure pins are loaded before adding
+    await this.homePinService.LoadPins();
+
+    const resourceType = this.resolveTabResourceType(activeTab);
+
+    // Resolve a better display name for record pins
+    let displayName = activeTab.title;
+    if (resourceType === 'Records') {
+      const resolved = await this.resolveRecordDisplayName(activeTab);
+      if (resolved) displayName = resolved;
+    }
+
+    // Resolve nav item icon for Custom pins
+    let pinIcon: string | undefined;
+    if (resourceType === 'Custom' && this.activeApp) {
+      const navItemName = activeTab.configuration?.['navItemName'] as string;
+      if (navItemName) {
+        const navItems = await this.activeApp.GetNavItems();
+        const navItem = navItems.find(ni => ni.Label === navItemName);
+        pinIcon = navItem?.Icon || undefined;
+      }
+    }
+
+    const added = this.homePinService.AddPin({
+      DisplayName: displayName,
+      ResourceType: resourceType,
+      ApplicationID: activeTab.applicationId,
+      ApplicationName: this.activeApp?.Name,
+      Icon: pinIcon,
+      Color: this.activeApp?.GetColor() || undefined,
+      Configuration: activeTab.configuration as Record<string, unknown>
+    });
+
+    if (added) {
+      this.showPinProgress(`Capturing preview for "${displayName}"...`);
+      await this.captureAndAttachThumbnail(activeTab, resourceType);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${activeTab.title}" is already pinned to Home`, 'info', 3000
+      );
+    }
   }
 
   /**
-   * Open Settings in a full-screen modal dialog
+   * Capture a thumbnail of the currently visible content and attach it to the pin.
    */
-  onSettings(): void {
-    this.userMenuVisible = false;
-    this.openSettingsDialog();
+  private async captureAndAttachThumbnail(tab: WorkspaceTab, resourceType: string): Promise<void> {
+    try {
+      if (!this.tabContainerRef) return;
+      const thumbnail = await this.tabContainerRef.CaptureActiveThumbnail();
+      if (thumbnail) {
+        const pin = this.homePinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
+        if (pin) {
+          this.homePinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
+        }
+      }
+    } catch {
+      // Thumbnail capture is best-effort
+    }
+  }
+
+  /**
+   * Resolve a friendly display name for a record tab using GetEntityRecordNames.
+   */
+  private async resolveRecordDisplayName(tab: WorkspaceTab): Promise<string | null> {
+    try {
+      const config = tab.configuration;
+      const entityName = (config['Entity'] || config['entity']) as string;
+      const recordId = config['recordId'] as string;
+      if (!entityName || !recordId) return null;
+
+      const md = this.ProviderToUse;
+      const entityInfo = md.Entities.find(e => e.Name === entityName);
+      if (!entityInfo) return null;
+
+      const pkField = entityInfo.FirstPrimaryKey;
+      if (!pkField) return null;
+
+      const compositeKey = new CompositeKey();
+      compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+
+      const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
+      if (results.length > 0 && results[0].Success && results[0].RecordName) {
+        return results[0].RecordName;
+      }
+    } catch {
+      // Fall through to null
+    }
+    return null;
+  }
+
+  private showPinProgress(text: string): void {
+    this.PinProgressText = text;
+    this.PinProgressVisible = true;
+    this.cdr.detectChanges();
+  }
+
+  private hidePinProgress(): void {
+    this.PinProgressVisible = false;
+    this.PinProgressText = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Resolve a WorkspaceTab's resource type to a human-readable string
+   * used by the pin service for matching and by the Home dashboard for navigation.
+   */
+  private resolveTabResourceType(tab: WorkspaceTab): string {
+    const config = tab.configuration;
+    const rt = (config.resourceType as string) || '';
+    if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
+    if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
+    if (rt === 'Queries' || config['queryId']) return 'Queries';
+    if (rt === 'Reports' || config['reportId']) return 'Reports';
+    if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
+    if (rt === 'Custom' || config['navItemName']) return 'Custom';
+    return rt || 'Custom';
   }
 
   /**
@@ -2040,7 +2374,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
@@ -2138,7 +2472,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Load searchable entities from metadata
    */
   private async loadSearchableEntities(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.searchableEntities.length > 0) {
       this.selectedEntity = this.searchableEntities[0];
@@ -2201,6 +2535,55 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   // ========================================
+  // UNIVERSAL SEARCH EVENT HANDLERS
+  // ========================================
+
+  @HostListener('document:keydown', ['$event'])
+  OnGlobalKeydown(event: KeyboardEvent): void {
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+      const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+      const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
+      if (isCtrlOrCmd && event.key === 'k') {
+          event.preventDefault();
+          event.stopPropagation();
+          if (this.shellSearchComposite?.Focus) {
+              this.shellSearchComposite.Focus();
+          }
+      }
+  }
+
+  OnSearchResultSelected(result: { EntityName: string; RecordID: string; ResultType?: string; RawMetadata?: string }): void {
+      if (result.ResultType === 'storage-file') {
+          if (!this.fileOpenService.OpenPreviewFromSearchResult(result.RawMetadata)) {
+              this.fileOpenService.OpenFileFromSearchResult(result.RawMetadata);
+          }
+          return;
+      }
+
+      if (!result.EntityName || !result.RecordID) return;
+
+      // Entity records — open via NavigationService
+      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      this.navigationService.OpenEntityRecord(result.EntityName, pkey);
+  }
+
+  OnSearchSubmitted(query: string): void {
+      if (query && query.trim().length >= 2) {
+          const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
+          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
+          if (minRelevance) opts.minRelevance = minRelevance;
+          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
+          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
+      }
+  }
+
+  OnSeeAllSearch(query: string): void {
+      this.OnSearchSubmitted(query);
+  }
+
+  // ========================================
   // NOTIFICATION FUNCTIONALITY
   // ========================================
 
@@ -2227,6 +2610,56 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the feedback dialog with current workspace context.
+   * Captures a screenshot in the background and attaches it once ready.
+   */
+  async ShowFeedbackDialog(): Promise<void> {
+    // Check if feedback is enabled for this org
+    const enabled = await this.feedbackService.IsEnabled();
+    if (!enabled) {
+      return;
+    }
+
+    const config = this.workspaceManager.GetConfiguration();
+    const currentPage = config?.tabs
+      ?.map(t => t.title)
+      .filter(Boolean)
+      .join(' \u2192 ') || undefined;
+
+    // Open dialog immediately — screenshot loads in background
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
+
+    // Capture screenshot in background and attach when ready
+    this.captureAndAttachFeedbackScreenshot();
+  }
+
+  /**
+   * Capture a screenshot in the background and attach it to the open feedback dialog.
+   */
+  private async captureAndAttachFeedbackScreenshot(): Promise<void> {
+    try {
+      let screenshot: string | undefined;
+      if (this.tabContainerRef) {
+        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      }
+      if (!screenshot) {
+        const contentEl = document.querySelector('.shell-content') as HTMLElement
+          || document.querySelector('mj-tab-container') as HTMLElement;
+        if (contentEl) {
+          screenshot = await this.homePinService.CaptureThumbnail(contentEl);
+        }
+      }
+      if (screenshot) {
+        this.feedbackDialogService.AttachScreenshot(screenshot);
+      } else {
+        this.feedbackDialogService.StopScreenshotLoading();
+      }
+    } catch {
+      this.feedbackDialogService.StopScreenshotLoading();
+    }
   }
 
   // ========================================
@@ -2299,6 +2732,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       case 'disabled':
         return {
           type: 'disabled',
+          appName: accessResult.appName,
+          appId: accessResult.appId
+        };
+
+      case 'not_authorized':
+        return {
+          type: 'no_access',
           appName: accessResult.appName,
           appId: accessResult.appId
         };
@@ -2475,7 +2915,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Update URL to reflect the new app
     const appPath = app.Path || app.Name;
-    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`, { replaceUrl: true });
+    this.router.navigateByUrl(`/app/${encodeURIComponent(appPath)}`);
   }
 
   /**

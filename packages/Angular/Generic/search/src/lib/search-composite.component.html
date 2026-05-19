@@ -1,0 +1,39 @@
+<div class="search-composite-wrap">
+    @if (EnableScopeSelector && HasScopes) {
+        <mj-search-scope-selector
+            class="search-composite-scope"
+            [SelectedScopeIDs]="SelectedScopeIDs"
+            (SelectionChange)="OnScopeSelectionChange($any($event))">
+        </mj-search-scope-selector>
+    }
+
+    <mj-search-input
+        #searchInput
+        [Placeholder]="Placeholder"
+        [Query]="Query"
+        [ShowShortcutHint]="ShowShortcutHint"
+        [DebounceMs]="DebounceMs"
+        (QueryChange)="OnQueryChange($any($event))"
+        (QuerySubmit)="OnQuerySubmit($any($event))"
+        (InputFocused)="OnInputFocused()"
+        (InputEscaped)="OnInputEscaped()"
+        (InputCleared)="OnInputCleared()"
+    ></mj-search-input>
+
+    <mj-search-suggest
+        #searchSuggest
+        [IsOpen]="IsSuggestOpen"
+        [PreviewResults]="PreviewResults"
+        [RecentSearches]="RecentSearches"
+        [TotalCount]="PreviewTotalCount"
+        [IsLoading]="IsPreviewLoading"
+        [Query]="Query"
+        [MinQueryLength]="MinQueryLength"
+        [MaxPreviewResults]="MaxPreviewResults"
+        [ShowRecent]="EnableRecent"
+        (ResultSelected)="OnResultSelected($any($event))"
+        (RecentSelected)="OnRecentSelected($any($event))"
+        (SeeAllRequested)="OnSeeAllRequested($any($event))"
+        (ClearRecentRequested)="OnClearRecentRequested()"
+    ></mj-search-suggest>
+</div>

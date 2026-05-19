@@ -64,7 +64,6 @@ vi.mock('../auth/index.js', () => ({
   getValidationOptions: mockGetValidationOptions,
   verifyUserRecord: mockVerifyUserRecord,
   extractUserInfoFromPayload: mockExtractUserInfo,
-  TokenExpiredError: MockTokenExpiredError,
 }));
 
 vi.mock('../cache.js', () => {
@@ -84,9 +83,11 @@ vi.mock('../config.js', () => ({
   mj_core_schema: '__mj',
 }));
 
-vi.mock('../auth/AuthProviderFactory.js', () => ({
+vi.mock('@memberjunction/auth-providers', () => ({
+  TokenExpiredError: MockTokenExpiredError,
   AuthProviderFactory: {
     getInstance: () => ({ getByIssuer: mockGetByIssuer }),
+    get Instance() { return { getByIssuer: mockGetByIssuer }; },
   },
 }));
 

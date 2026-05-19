@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 // ---------------------------------------------------------------------------
 // Mock external modules
@@ -9,7 +10,7 @@ vi.mock('@memberjunction/core', () => ({
     UserInfo: class {
         ID: string;
         Name: string;
-        constructor(provider: unknown, data: Record<string, unknown>) {
+        constructor(_provider: unknown, data: Record<string, unknown>) {
             this.ID = data.ID as string;
             this.Name = data.Name as string;
             Object.assign(this, data);
@@ -17,10 +18,12 @@ vi.mock('@memberjunction/core', () => ({
     },
 }));
 
-const globalStore: Record<string, unknown> = {};
-vi.mock('@memberjunction/global', () => ({
-    MJGlobal: { Instance: { GetGlobalObjectStore: () => globalStore } },
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+    };
+});
 
 // Mock mssql to prevent real database imports
 vi.mock('mssql', () => ({}));
@@ -35,10 +38,11 @@ import { UserInfo } from '@memberjunction/core';
 // Helper to reset singleton state between tests
 // ---------------------------------------------------------------------------
 function resetSingleton(): void {
-    (UserCache as Record<string, unknown>)._instance = undefined;
-    // Clear the global store key used by UserCache
-    for (const key of Object.keys(globalStore)) {
-        delete globalStore[key];
+    // BaseSingleton stores instances in the global object store keyed by class name
+    const g = GetGlobalObjectStore();
+    const key = '___SINGLETON__UserCache';
+    if (g && g[key]) {
+        delete g[key];
     }
 }
 
@@ -74,18 +78,18 @@ describe('UserCache', () => {
             expect(UserCache.Instance).toBe(instance);
         });
 
-        it('should store instance in global object store', () => {
-            const instance = new UserCache();
-            const storeKey = 'MJ.SQLServerDataProvider.UserCache.Instance';
-            expect(globalStore[storeKey]).toBe(instance);
+        it('should store instance in global object store via BaseSingleton', () => {
+            const instance = UserCache.Instance;
+            const g = GetGlobalObjectStore()!;
+            const key = '___SINGLETON__UserCache';
+            expect(g[key]).toBe(instance);
         });
 
-        it('should retrieve instance from global object store when _instance is cleared', () => {
-            const original = new UserCache();
-            // Clear the static _instance but leave global store intact
-            (UserCache as Record<string, unknown>)._instance = undefined;
-            const restored = new UserCache();
-            expect(restored).toBe(original);
+        it('should return existing instance from global store on subsequent construction', () => {
+            const original = UserCache.Instance;
+            // A new construction should return the same global-store-backed instance
+            const second = UserCache.Instance;
+            expect(second).toBe(original);
         });
     });
 
@@ -107,7 +111,7 @@ describe('UserCache', () => {
             const instance = UserCache.Instance;
             const systemUser = makeUser('ecafccec-6a37-ef11-86d4-000d3a4e707e', 'System');
             const otherUser = makeUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'Other');
-            (instance as Record<string, unknown>)._users = [otherUser, systemUser];
+            (instance as unknown as Record<string, unknown>)._users = [otherUser, systemUser];
 
             const result = instance.GetSystemUser();
             expect(result).toBe(systemUser);
@@ -117,7 +121,7 @@ describe('UserCache', () => {
             const instance = UserCache.Instance;
             // Store the ID in uppercase
             const systemUser = makeUser('ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', 'System');
-            (instance as Record<string, unknown>)._users = [systemUser];
+            (instance as unknown as Record<string, unknown>)._users = [systemUser];
 
             const result = instance.GetSystemUser();
             expect(result).toBe(systemUser);
@@ -126,7 +130,7 @@ describe('UserCache', () => {
         it('should return undefined when system user is not in the cache', () => {
             const instance = UserCache.Instance;
             const otherUser = makeUser('aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', 'Other');
-            (instance as Record<string, unknown>)._users = [otherUser];
+            (instance as unknown as Record<string, unknown>)._users = [otherUser];
 
             const result = instance.GetSystemUser();
             expect(result).toBeUndefined();
@@ -140,7 +144,7 @@ describe('UserCache', () => {
         it('should return the _users array', () => {
             const instance = UserCache.Instance;
             const users = [makeUser('id1', 'Alice'), makeUser('id2', 'Bob')];
-            (instance as Record<string, unknown>)._users = users;
+            (instance as unknown as Record<string, unknown>)._users = users;
 
             expect(instance.Users).toBe(users);
             expect(instance.Users).toHaveLength(2);
@@ -159,7 +163,7 @@ describe('UserCache', () => {
         it('should delegate to Instance.Users', () => {
             const instance = UserCache.Instance;
             const users = [makeUser('id1', 'Alice')];
-            (instance as Record<string, unknown>)._users = users;
+            (instance as unknown as Record<string, unknown>)._users = users;
 
             expect(UserCache.Users).toBe(users);
         });
@@ -173,7 +177,7 @@ describe('UserCache', () => {
 
         beforeEach(() => {
             instance = UserCache.Instance;
-            (instance as Record<string, unknown>)._users = [
+            (instance as unknown as Record<string, unknown>)._users = [
                 makeUser('id1', 'Alice Johnson'),
                 makeUser('id2', 'Bob Smith'),
                 makeUser('id3', 'Charlie Brown'),
@@ -217,7 +221,7 @@ describe('UserCache', () => {
 
         it('should trim whitespace from stored user names during comparison', () => {
             // Add a user with leading/trailing whitespace in name
-            const users = (instance as Record<string, unknown>)._users as UserInfo[];
+            const users = (instance as unknown as Record<string, unknown>)._users as UserInfo[];
             users.push(makeUser('id4', '  Padded Name  '));
 
             const result = instance.UserByName('Padded Name');

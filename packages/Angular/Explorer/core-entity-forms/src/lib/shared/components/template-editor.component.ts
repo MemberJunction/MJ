@@ -9,6 +9,7 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { DEFAULT_SYSTEM_PLACEHOLDERS, SystemPlaceholder, SYSTEM_PLACEHOLDER_CATEGORIES, SystemPlaceholderCategory } from '@memberjunction/ai-core-plus';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TemplateEditorConfig {
     allowEdit?: boolean;
     showRunButton?: boolean;
@@ -21,7 +22,7 @@ export interface TemplateEditorConfig {
     templateUrl: './template-editor.component.html',
     styleUrls: ['./template-editor.component.css']
 })
-export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
+export class TemplateEditorComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy, AfterViewInit {
     @Input() template: MJTemplateEntity | null = null;
     @Input() config: TemplateEditorConfig = {
         allowEdit: true,
@@ -52,10 +53,11 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
     @ViewChild('codeEditor') codeEditor: CodeEditorComponent | null = null;
     private isUpdatingEditorValue = false;
     private destroy$ = new Subject<void>();
-    private _metadata = new Metadata();
+    private get _metadata() { return this.ProviderToUse; }
     private activeTimeouts: number[] = [];
     
-    constructor(private notificationService: MJNotificationService) {}
+    constructor(private notificationService: MJNotificationService) {
+    super();}
 
     async ngOnInit() {
         this.loadContentTypes();
@@ -154,7 +156,7 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
             if (this.template.IsSaved && this.template.ID) {
                 // Load existing template contents for saved templates
                 try {
-                    const rv = new RunView();
+                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                     const results = await rv.RunView<MJTemplateContentEntity>({
                         EntityName: 'MJ: Template Contents',
                         ExtraFilter: `TemplateID='${this.template.ID}'`,
@@ -406,17 +408,24 @@ export class TemplateEditorComponent implements OnInit, OnChanges, OnDestroy, Af
 
     async saveTemplateContents(): Promise<boolean> {
         if (!this.config.allowEdit) return false;
-        
+
         try {
-            // Save all template contents that have changes
+            // Ensure FK is set on all contents, then persist the dirty/new ones atomically
             for (const content of this.templateContents) {
-                content.TemplateID = this.template!.ID; // Ensure FK is set
-                if (content.Dirty || !content.ID) {
-                    const contentResult = await content.Save();
-                    if (!contentResult) {
-                        console.error('Failed to save template content:', content);
-                        return false;
-                    }
+                content.TemplateID = this.template!.ID;
+            }
+            const toSave = this.templateContents.filter(c => c.Dirty || !c.ID);
+
+            if (toSave.length > 0) {
+                const tg = await this._metadata.CreateTransactionGroup();
+                for (const content of toSave) {
+                    content.TransactionGroup = tg;
+                    await content.Save();
+                }
+                const success = await tg.Submit();
+                if (!success) {
+                    console.error('Failed to save template contents transaction');
+                    return false;
                 }
             }
 

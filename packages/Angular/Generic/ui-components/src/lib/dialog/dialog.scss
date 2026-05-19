@@ -1,0 +1,134 @@
+/**
+ * MJ Dialog Styles
+ *
+ * Replaces Kendo dialog styling. Uses --mj-* semantic design tokens.
+ */
+
+/* ========== Backdrop ========== */
+.mj-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  animation: mj-dialog-fade-in var(--mj-transition-fast);
+}
+
+/* ========== Container ========== */
+.mj-dialog-container {
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: mj-dialog-scale-in var(--mj-transition-base);
+}
+
+/* ========== Title Bar ========== */
+.mj-dialog-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+
+.mj-dialog-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: var(--mj-font-semibold);
+  color: var(--mj-text-primary);
+  line-height: 1.4;
+}
+
+.mj-dialog-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  border-radius: var(--mj-radius-sm);
+  transition: var(--mj-transition-colors);
+  flex-shrink: 0;
+  margin-left: 12px;
+
+  &:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+  }
+
+  &:focus-visible {
+    outline: none;
+    box-shadow: var(--mj-focus-ring);
+  }
+}
+
+/* ========== Body ========== */
+.mj-dialog-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  color: var(--mj-text-primary);
+
+  /* Inputs inside dialogs need contrast against the surface background */
+  .mj-input,
+  .mj-textarea,
+  .mj-numeric-input,
+  .mj-dropdown {
+    background: var(--mj-bg-surface-card);
+  }
+}
+
+/* ========== Actions ========== */
+.mj-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--mj-border-default);
+  flex-shrink: 0;
+}
+
+/* ========== Animations ========== */
+@keyframes mj-dialog-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mj-dialog-scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ========== Mobile ========== */
+@media (max-width: 767px) {
+  .mj-dialog-container {
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: 100vw !important;
+    max-height: 100vh !important;
+    border-radius: 0;
+  }
+}
+
+/* ========== Reduced Motion ========== */
+@media (prefers-reduced-motion: reduce) {
+  .mj-dialog-backdrop,
+  .mj-dialog-container {
+    animation: none;
+  }
+}

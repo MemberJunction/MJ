@@ -2,8 +2,8 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy, Input } from '@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { NavigationRequest } from '@memberjunction/ng-artifacts';
-import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { AnalyzeArtifactService, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { DataSnapshot, UserInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
 /**
@@ -59,7 +59,8 @@ import { Subject } from 'rxjs';
               [refreshTrigger]="refreshTrigger"
               (navigateToLink)="onNavigateToLink($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
-              (navigationRequest)="onNavigationRequest($event)">
+              (navigationRequest)="onNavigationRequest($event)"
+              (analyzeRequested)="onAnalyzeRequested($event)">
             </mj-artifact-viewer-panel>
           }
         </div>
@@ -145,7 +146,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     public get currentUser(): UserInfo {
         // Use provided CurrentUser, or fall back to Metadata.CurrentUser
         // In client-side Angular context, Metadata.CurrentUser should always be available
-        const user = this.CurrentUser || new Metadata().CurrentUser;
+        const user = this.CurrentUser || this.ProviderToUse.CurrentUser;
         if (!user) {
             throw new Error('No current user available - user must be logged in to view artifacts');
         }
@@ -156,7 +157,13 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
         return this.EnvironmentId || '';
     }
 
-    constructor(cdr: ChangeDetectorRef) {
+    constructor(cdr: ChangeDetectorRef, private analyzeService: AnalyzeArtifactService) {
+        // Note: this component is instantiated twice — once via bare `new` by
+        // ClassFactory.CreateInstanceAsync (just to extract the constructor
+        // reference), then properly via createComponent() with a full injector.
+        // Constructor parameters are undefined on the bare path but Angular DI
+        // populates them on the real path. Field initializers calling inject()
+        // would throw on the bare path, so we use constructor injection.
         super(cdr);
     }
 
@@ -255,6 +262,31 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
             event.queryParams,
             false
         );
+    }
+
+    /**
+     * Handler for the Analyze button on the embedded artifact viewer.
+     * Captures the live DataSnapshot, creates an analysis conversation with
+     * the snapshot attached as input, and emits a navigation request to open
+     * the new conversation in the host application.
+     */
+    public async onAnalyzeRequested(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+        try {
+            const result = await this.analyzeService.StartAnalysisConversation({
+                snapshot: event.snapshot,
+                currentUser: this.currentUser,
+                environmentId: this.environmentId,
+            });
+
+            this.RequestOpenNavItem(
+                'Conversations',
+                undefined,
+                { conversationId: result.conversationId },
+                false,
+            );
+        } catch (error) {
+            this.setError(error instanceof Error ? error.message : 'Failed to start analysis conversation');
+        }
     }
 
     protected override cleanup(): void {

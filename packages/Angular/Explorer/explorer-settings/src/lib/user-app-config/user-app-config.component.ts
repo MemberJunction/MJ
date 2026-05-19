@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, NgZone, ElementRef, inject } from '@angular/core';
-import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
-import { MJUserApplicationEntity } from '@memberjunction/core-entities';
+import { Metadata, LogError, LogStatus, IMetadataProvider, LogStatusEx } from '@memberjunction/core';
+import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Represents an app item in the configuration UI
  */
@@ -14,16 +15,6 @@ interface AppConfigItem {
   sequence: number;
   isActive: boolean;
   isDirty: boolean;
-}
-
-/**
- * Result shape for the lightweight user-application query (simple ResultType)
- */
-interface UserAppRow {
-  ID: string;
-  ApplicationID: string;
-  Sequence: number;
-  IsActive: boolean;
 }
 
 /**
@@ -39,7 +30,7 @@ interface UserAppRow {
   templateUrl: './user-app-config.component.html',
   styleUrls: ['./user-app-config.component.css']
 })
-export class UserAppConfigComponent {
+export class UserAppConfigComponent extends BaseAngularComponent {
   private appManager = inject(ApplicationManager);
   private sharedService = inject(SharedService);
   private cdr = inject(ChangeDetectorRef);
@@ -169,7 +160,7 @@ export class UserAppConfigComponent {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       for (const item of this.AllApps) {
         if (!item.isDirty) continue;
@@ -181,8 +172,15 @@ export class UserAppConfigComponent {
         }
       }
 
-      LogStatus('User app configuration saved, reloading ApplicationManager...');
-      await this.appManager.ReloadUserApplications();
+      // Each userApp.Save() above fires a BaseEntity 'save' event, which UserInfoEngine
+      // catches via HandleIndividualBaseEntityEvent → debounced refresh → NotifyDataChange.
+      // ApplicationManager.subscribeToEngineChanges then propagates to the shell app
+      // switcher. No explicit reload needed here — and avoiding it sidesteps NG0100
+      // from observable emissions interleaving with this method's save loop.
+      LogStatusEx({
+        message: 'User app configuration saved',
+        verboseOnly: true 
+      });
 
       this.sharedService.CreateSimpleNotification('App configuration saved successfully!', 'success', 3000);
       this.ConfigSaved.emit();
@@ -353,23 +351,15 @@ export class UserAppConfigComponent {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
-      const systemApps = this.appManager.GetAllSystemApps();
-
-      const userAppsResult = await rv.RunView<UserAppRow>({
-        EntityName: 'MJ: User Applications',
-        Fields: ['ID', 'ApplicationID', 'Sequence', 'IsActive'],
-        ExtraFilter: `UserID = '${md.CurrentUser.ID}'`,
-        OrderBy: 'Sequence, Application',
-        ResultType: 'simple'
-      });
-
-      if (!userAppsResult.Success) {
-        throw new Error(userAppsResult.ErrorMessage);
-      }
-
-      this.AllApps = this.buildAppConfigItems(systemApps, userAppsResult.Results);
+      // Read directly from UserInfoEngine's cache. The engine already loaded
+      // and maintains MJ: User Applications via its event-driven refresh — no
+      // need to re-query the DB on every dialog open. EnsureLoaded is idempotent
+      // and instant when the engine is already loaded (the typical case here,
+      // since UserInfoEngine fires at startup).
+      await UserInfoEngine.Instance.EnsureLoaded();
+      const systemApps = this.appManager.GetAuthorizedSystemApps();
+      const userApps = UserInfoEngine.Instance.UserApplications;
+      this.AllApps = this.buildAppConfigItems(systemApps, userApps);
       this.refreshAppLists();
 
     } catch (error) {
@@ -383,7 +373,7 @@ export class UserAppConfigComponent {
     }
   }
 
-  private buildAppConfigItems(systemApps: BaseApplication[], userApps: UserAppRow[]): AppConfigItem[] {
+  private buildAppConfigItems(systemApps: BaseApplication[], userApps: MJUserApplicationEntity[]): AppConfigItem[] {
     return systemApps.map(app => {
       const userApp = userApps.find(ua => UUIDsEqual(ua.ApplicationID, app.ID));
       return {
@@ -423,7 +413,7 @@ export class UserAppConfigComponent {
     b.isDirty = true;
   }
 
-  private async updateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async updateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.userAppId!);
 
@@ -439,7 +429,7 @@ export class UserAppConfigComponent {
     LogStatus(`Updated UserApplication for ${item.app.Name}: sequence=${item.sequence}, isActive=${item.isActive}`);
   }
 
-  private async createUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async createUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 

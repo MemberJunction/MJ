@@ -19,10 +19,10 @@ type EditorMode = 'preview' | 'edit';
         <div class="header-right">
           @if (IsEditing) {
             <div class="action-buttons">
-              <button kendoButton [themeColor]="'primary'" (click)="ApplyChanges()" class="action-btn">
+              <button mjButton variant="primary" (click)="ApplyChanges()" class="action-btn">
                 <i class="fa-solid fa-check"></i> Apply
               </button>
-              <button kendoButton [themeColor]="'base'" (click)="CancelChanges()" class="action-btn">
+              <button mjButton (click)="CancelChanges()" class="action-btn">
                 Cancel
               </button>
             </div>

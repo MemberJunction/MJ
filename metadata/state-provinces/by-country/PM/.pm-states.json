@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "St. Pierre & Miquelon",
+      "Code": "PM",
+      "ISO3166_2": "PM-PM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "St. Pierre & Miquelon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PM"
+    },
+    "primaryKey": {
+      "ID": "57373DED-3334-45B0-98D6-B1DA20E3601E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.420Z",
+      "checksum": "0ca38dc16bc36072af155945771ce6bea98e4e1afd7379500732d2a429fe6778"
+    }
+  }
+]

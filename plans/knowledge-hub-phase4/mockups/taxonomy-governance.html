@@ -1,0 +1,1962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Taxonomy Governance - Final Mockup</title>
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-hover: #1e3f8f;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-warning: #ea580c;
+    --mj-status-error: #dc2626;
+    --mj-status-info: #2563eb;
+    --mj-brand-primary-light: #e8edf7;
+    --mj-status-success-light: #dcfce7;
+    --mj-status-warning-light: #fff7ed;
+    --mj-status-error-light: #fef2f2;
+    --mj-status-info-light: #eff6ff;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1);
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--mj-bg-page);
+    color: var(--mj-text-primary);
+    min-height: 100vh;
+  }
+
+  /* ===== APP SHELL ===== */
+  .app-header {
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .app-header .logo {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--mj-brand-primary);
+  }
+  .app-header .breadcrumb {
+    font-size: 13px;
+    color: var(--mj-text-muted);
+  }
+  .app-header .breadcrumb span { color: var(--mj-text-secondary); }
+
+  .app-body {
+    display: flex;
+    min-height: calc(100vh - 49px);
+  }
+
+  /* Left nav */
+  .left-nav {
+    width: 220px;
+    background: var(--mj-bg-surface);
+    border-right: 1px solid var(--mj-border-default);
+    padding: 16px 0;
+    flex-shrink: 0;
+    position: sticky;
+    top: 49px;
+    height: calc(100vh - 49px);
+  }
+  .nav-item {
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-item:hover { background: var(--mj-bg-surface-card); color: var(--mj-text-primary); }
+  .nav-item.active {
+    background: var(--mj-brand-primary-light);
+    color: var(--mj-brand-primary);
+    font-weight: 600;
+    border-right: 3px solid var(--mj-brand-primary);
+  }
+  .nav-icon { width: 18px; text-align: center; font-size: 14px; }
+  .nav-section-title {
+    padding: 20px 20px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mj-text-muted);
+  }
+
+  /* Main content area */
+  .main-content {
+    flex: 1;
+    padding: 24px 32px;
+    overflow-y: auto;
+    max-height: calc(100vh - 49px);
+  }
+
+  /* Page header */
+  .page-header {
+    margin-bottom: 20px;
+  }
+  .page-header h1 {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    margin-bottom: 4px;
+  }
+  .page-header .subtitle {
+    font-size: 13px;
+    color: var(--mj-text-muted);
+  }
+  .page-header .subtitle strong {
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+  }
+
+  /* Tab strip */
+  .tab-strip {
+    display: flex;
+    border-bottom: 2px solid var(--mj-border-default);
+    margin-bottom: 24px;
+    gap: 0;
+  }
+  .tab-item {
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tab-item:hover { color: var(--mj-text-secondary); }
+  .tab-item.active {
+    color: var(--mj-brand-primary);
+    border-bottom-color: var(--mj-brand-primary);
+    font-weight: 600;
+  }
+  .tab-badge {
+    background: var(--mj-brand-primary-light);
+    color: var(--mj-brand-primary);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 10px;
+  }
+  .tab-badge.warning {
+    background: var(--mj-status-warning-light);
+    color: var(--mj-status-warning);
+  }
+  .tab-badge.error {
+    background: var(--mj-status-error-light);
+    color: var(--mj-status-error);
+  }
+
+  /* ===== TAB SECTION DIVIDERS ===== */
+  .tab-section {
+    margin-bottom: 48px;
+    padding-bottom: 48px;
+    border-bottom: 3px solid var(--mj-border-default);
+  }
+  .tab-section:last-child { border-bottom: none; }
+  .tab-section-label {
+    display: inline-block;
+    background: var(--mj-brand-primary);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 12px;
+    border-radius: 4px;
+    margin-bottom: 16px;
+  }
+
+  /* ===== TAB 1: TREE VIEW ===== */
+  .split-view {
+    display: flex;
+    gap: 0;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    min-height: 560px;
+    overflow: hidden;
+  }
+
+  /* Tree panel */
+  .tree-panel {
+    width: 40%;
+    border-right: 1px solid var(--mj-border-default);
+    display: flex;
+    flex-direction: column;
+  }
+  .tree-search {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .tree-search input {
+    width: 100%;
+    padding: 8px 12px 8px 32px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.242.156a5 5 0 1 1 0-10 5 5 0 0 1 0 10z'/%3E%3C/svg%3E") no-repeat 10px center;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .tree-search input:focus { border-color: var(--mj-brand-primary); }
+  .tree-search input::placeholder { color: var(--mj-text-muted); }
+
+  .tree-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .tree-node {
+    padding: 6px 16px 6px calc(16px + var(--depth, 0) * 20px);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background 0.1s;
+    line-height: 1.4;
+  }
+  .tree-node:hover { background: var(--mj-bg-surface-card); }
+  .tree-node.selected { background: var(--mj-brand-primary-light); }
+  .tree-arrow {
+    width: 16px;
+    font-size: 10px;
+    color: var(--mj-text-muted);
+    flex-shrink: 0;
+    text-align: center;
+  }
+  .tree-arrow.collapsed::before { content: "\25B6"; }
+  .tree-arrow.expanded::before { content: "\25BC"; }
+  .tree-arrow.leaf { visibility: hidden; }
+  .health-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .health-dot.green { background: var(--mj-status-success); }
+  .health-dot.yellow { background: var(--mj-status-warning); }
+  .health-dot.red { background: var(--mj-status-error); }
+  .tree-label { flex: 1; }
+  .tree-count {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-left: 4px;
+  }
+
+  /* Details panel */
+  .details-panel {
+    width: 60%;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .details-header {
+    padding: 20px 24px 0;
+  }
+  .details-breadcrumb {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .details-breadcrumb .bc-sep { color: var(--mj-border-default); }
+  .details-breadcrumb .bc-link { color: var(--mj-brand-primary); cursor: pointer; }
+  .details-breadcrumb .bc-current { color: var(--mj-text-secondary); font-weight: 600; }
+
+  .details-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .details-title .edit-icon {
+    font-size: 13px;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+  }
+  .details-title .edit-icon:hover { color: var(--mj-brand-primary); }
+
+  .details-description {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    line-height: 1.5;
+    margin-bottom: 16px;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 6px;
+    border: 1px solid var(--mj-border-subtle);
+  }
+
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+    padding: 0 24px;
+  }
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    min-width: 80px;
+  }
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+  }
+  .stat-label {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+  }
+
+  .action-toolbar {
+    display: flex;
+    gap: 8px;
+    padding: 0 24px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .action-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+  }
+  .action-btn:hover {
+    background: var(--mj-bg-surface-card);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+  }
+  .action-btn.danger:hover {
+    border-color: var(--mj-status-error);
+    color: var(--mj-status-error);
+    background: var(--mj-status-error-light);
+  }
+
+  .details-section {
+    padding: 0 24px 20px;
+  }
+  .details-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted);
+    margin-bottom: 10px;
+  }
+
+  .child-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .child-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 16px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .child-chip:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+    background: var(--mj-brand-primary-light);
+  }
+  .child-chip .chip-count {
+    font-size: 10px;
+    background: var(--mj-border-default);
+    color: var(--mj-text-muted);
+    padding: 0 5px;
+    border-radius: 8px;
+  }
+
+  .recent-items-list {
+    list-style: none;
+  }
+  .recent-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    font-size: 13px;
+  }
+  .recent-item:last-child { border-bottom: none; }
+  .recent-item-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: var(--mj-brand-primary-light);
+    color: var(--mj-brand-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .recent-item-name { flex: 1; color: var(--mj-text-primary); }
+  .recent-item-date { font-size: 11px; color: var(--mj-text-muted); }
+  .recent-item-weight {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-card);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* Health bar */
+  .health-bar {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 20px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius);
+    margin-top: 16px;
+    box-shadow: var(--shadow-sm);
+    flex-wrap: wrap;
+  }
+  .health-bar-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .health-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+  }
+  .health-stat .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+  .health-stat .value { font-weight: 700; }
+  .health-stat .label { color: var(--mj-text-muted); }
+
+  /* ===== TAB 2: DUPLICATES ===== */
+  .dup-stats-bar {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+  .dup-stat {
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+  }
+  .dup-stat strong {
+    font-size: 18px;
+    color: var(--mj-text-primary);
+    margin-right: 4px;
+  }
+
+  .dup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dup-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 20px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s;
+  }
+  .dup-card:hover { border-color: var(--mj-brand-primary); }
+  .dup-card.high { border-left: 3px solid var(--mj-status-error); }
+  .dup-card.moderate { border-left: 3px solid var(--mj-status-warning); }
+
+  .dup-tag {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    min-width: 140px;
+    padding: 6px 12px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 6px;
+    text-align: center;
+  }
+  .dup-arrow {
+    font-size: 16px;
+    color: var(--mj-text-muted);
+    flex-shrink: 0;
+  }
+  .dup-similarity {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 120px;
+  }
+  .sim-bar-bg {
+    width: 100%;
+    height: 6px;
+    background: var(--mj-border-default);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .sim-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s;
+  }
+  .sim-bar-fill.high { background: var(--mj-status-error); }
+  .sim-bar-fill.moderate { background: var(--mj-status-warning); }
+  .sim-percent {
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .sim-percent.high { color: var(--mj-status-error); }
+  .sim-percent.moderate { color: var(--mj-status-warning); }
+
+  .dup-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .dup-btn {
+    padding: 5px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .dup-btn.primary {
+    background: var(--mj-brand-primary);
+    color: white;
+    border-color: var(--mj-brand-primary);
+  }
+  .dup-btn.primary:hover { background: var(--mj-brand-primary-hover); }
+  .dup-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+
+  /* ===== TAB 3: ORPHANS ===== */
+  .orphan-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .orphan-toolbar .count {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+  }
+  .bulk-btn {
+    padding: 6px 14px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+  }
+  .bulk-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .bulk-btn.select-all { background: var(--mj-bg-surface-card); }
+
+  .orphan-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .orphan-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.15s;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border-top: 3px solid var(--mj-status-error);
+  }
+  .orphan-card:hover { border-color: var(--mj-brand-primary); box-shadow: var(--shadow-md); }
+  .orphan-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .orphan-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+  }
+  .orphan-checkbox {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--mj-brand-primary);
+  }
+  .orphan-stats {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--mj-text-muted);
+  }
+  .orphan-stat-val { font-weight: 600; color: var(--mj-text-secondary); }
+  .orphan-dates {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--mj-text-muted);
+  }
+  .orphan-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+  .orphan-btn {
+    flex: 1;
+    padding: 5px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 5px;
+    background: var(--mj-bg-surface);
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .orphan-btn:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .orphan-btn.assign {
+    background: var(--mj-brand-primary);
+    color: white;
+    border-color: var(--mj-brand-primary);
+  }
+  .orphan-btn.delete:hover {
+    border-color: var(--mj-status-error);
+    color: var(--mj-status-error);
+  }
+
+  /* ===== TAB 4: TREEMAP ===== */
+  .treemap-kpi-strip {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .treemap-kpi {
+    padding: 10px 18px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 120px;
+  }
+  .treemap-kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--mj-text-primary);
+  }
+  .treemap-kpi-label {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+  }
+
+  .treemap-legend {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .legend-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+  }
+
+  .treemap-container {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 3fr 2fr 2fr 1.5fr;
+    grid-template-rows: repeat(4, 80px);
+    gap: 4px;
+    min-height: 340px;
+  }
+  .treemap-cell {
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .treemap-cell:hover {
+    transform: scale(1.02);
+    z-index: 2;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .treemap-cell .cell-name { font-size: 13px; }
+  .treemap-cell .cell-count { font-size: 11px; opacity: 0.85; font-weight: 400; }
+
+  /* Blue family (Technology) */
+  .tm-blue-1 { background: #1e3a7a; }
+  .tm-blue-2 { background: #264FAF; }
+  .tm-blue-3 { background: #3b6fd8; }
+  .tm-blue-4 { background: #6b93e4; }
+  .tm-blue-5 { background: #9bb5ed; }
+
+  /* Green family (Healthcare) */
+  .tm-green-1 { background: #166534; }
+  .tm-green-2 { background: #16a34a; }
+  .tm-green-3 { background: #4ade80; color: #166534; text-shadow: none; }
+
+  /* Purple family (Business) */
+  .tm-purple-1 { background: #581c87; }
+  .tm-purple-2 { background: #7e22ce; }
+  .tm-purple-3 { background: #a855f7; }
+  .tm-purple-4 { background: #c084fc; }
+
+  /* Orange family (Other) */
+  .tm-orange-1 { background: #c2410c; }
+  .tm-orange-2 { background: #ea580c; }
+  .tm-orange-3 { background: #fb923c; color: #7c2d12; text-shadow: none; }
+
+  /* ===== TAB 5: AUDIT LOG ===== */
+  .audit-filters {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--radius);
+    flex-wrap: wrap;
+  }
+  .audit-filter-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .audit-checkbox-group {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .audit-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+  }
+  .audit-checkbox input {
+    accent-color: var(--mj-brand-primary);
+  }
+  .audit-date-range {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+  }
+  .audit-date-input {
+    padding: 4px 8px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 5px;
+    font-size: 12px;
+    color: var(--mj-text-primary);
+  }
+
+  .audit-timeline {
+    position: relative;
+    padding-left: 32px;
+  }
+  .audit-timeline::before {
+    content: '';
+    position: absolute;
+    left: 14px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: var(--mj-border-default);
+  }
+  .audit-event {
+    position: relative;
+    padding: 10px 16px;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: var(--radius);
+    transition: background 0.1s;
+  }
+  .audit-event:hover { background: var(--mj-bg-surface-card); }
+  .audit-event-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    position: absolute;
+    left: -32px;
+    top: 10px;
+    z-index: 1;
+  }
+  .audit-event-icon.created { background: var(--mj-status-success-light); color: var(--mj-status-success); }
+  .audit-event-icon.merged { background: var(--mj-status-info-light); color: var(--mj-status-info); }
+  .audit-event-icon.moved { background: #f3e8ff; color: #7e22ce; }
+  .audit-event-icon.deleted { background: var(--mj-status-error-light); color: var(--mj-status-error); }
+  .audit-event-icon.renamed { background: var(--mj-status-warning-light); color: var(--mj-status-warning); }
+
+  .audit-event-body { flex: 1; }
+  .audit-event-desc {
+    font-size: 13px;
+    color: var(--mj-text-primary);
+    line-height: 1.5;
+  }
+  .audit-event-desc strong { font-weight: 600; }
+  .audit-event-desc .tag-ref {
+    background: var(--mj-bg-surface-card);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 12px;
+    border: 1px solid var(--mj-border-default);
+  }
+  .audit-event-meta {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    margin-top: 2px;
+    display: flex;
+    gap: 12px;
+  }
+
+  .audit-day-header {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--mj-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 0 6px;
+    margin-top: 8px;
+    border-top: 1px solid var(--mj-border-subtle);
+  }
+  .audit-day-header:first-child { border-top: none; margin-top: 0; }
+</style>
+</head>
+<body>
+
+<!-- ===== APP SHELL ===== -->
+<div class="app-header">
+  <div class="logo">Knowledge Hub</div>
+  <div class="breadcrumb">Autotagging <span>&rsaquo;</span> <span>Taxonomy Governance</span></div>
+</div>
+
+<div class="app-body">
+  <!-- Left nav -->
+  <div class="left-nav">
+    <div class="nav-section-title">Autotagging</div>
+    <div class="nav-item"><span class="nav-icon">&#9654;</span> Pipeline</div>
+    <div class="nav-item"><span class="nav-icon">&#128196;</span> Sources</div>
+    <div class="nav-item"><span class="nav-icon">&#9881;</span> Content Types</div>
+    <div class="nav-item"><span class="nav-icon">&#127991;</span> Tag Library</div>
+    <div class="nav-item active"><span class="nav-icon">&#127795;</span> Taxonomy</div>
+    <div class="nav-item"><span class="nav-icon">&#128337;</span> Run History</div>
+    <div class="nav-section-title">Settings</div>
+    <div class="nav-item"><span class="nav-icon">&#9881;</span> Configuration</div>
+    <div class="nav-item"><span class="nav-icon">&#128274;</span> Permissions</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main-content">
+
+    <!-- Page header -->
+    <div class="page-header">
+      <h1>Taxonomy Governance</h1>
+      <div class="subtitle">Manage tag hierarchy, resolve duplicates, and monitor taxonomy health &mdash; <strong>105 total tags</strong> across 4 domains</div>
+    </div>
+
+    <!-- Tab strip -->
+    <div class="tab-strip">
+      <div class="tab-item active">&#127795; Tree View</div>
+      <div class="tab-item">&#128279; Duplicates <span class="tab-badge warning">8</span></div>
+      <div class="tab-item">&#128683; Orphans <span class="tab-badge error">12</span></div>
+      <div class="tab-item">&#128200; Treemap</div>
+      <div class="tab-item">&#128220; Audit Log</div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TAB 1: TREE VIEW                           -->
+    <!-- ========================================== -->
+    <div class="tab-section">
+      <div class="tab-section-label">Tab 1: Tree View</div>
+
+      <div class="split-view">
+        <!-- Tree panel -->
+        <div class="tree-panel">
+          <div class="tree-search">
+            <input type="text" placeholder="Search tags...">
+          </div>
+          <div class="tree-body">
+            <!-- Technology -->
+            <div class="tree-node" style="--depth: 0">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Technology</span>
+              <span class="tree-count">(42)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">AI &amp; Machine Learning</span>
+              <span class="tree-count">(18)</span>
+            </div>
+            <div class="tree-node selected" style="--depth: 2">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label"><strong>Deep Learning</strong></span>
+              <span class="tree-count">(12)</span>
+            </div>
+            <div class="tree-node" style="--depth: 3">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Neural Networks</span>
+              <span class="tree-count">(8)</span>
+            </div>
+            <div class="tree-node" style="--depth: 3">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Transformers</span>
+              <span class="tree-count">(6)</span>
+            </div>
+            <div class="tree-node" style="--depth: 3">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Reinforcement Learning</span>
+              <span class="tree-count">(2)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Natural Language Processing</span>
+              <span class="tree-count">(9)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Computer Vision</span>
+              <span class="tree-count">(3)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Cloud Computing</span>
+              <span class="tree-count">(11)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">AWS</span>
+              <span class="tree-count">(7)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Azure</span>
+              <span class="tree-count">(5)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Google Cloud</span>
+              <span class="tree-count">(2)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Cybersecurity</span>
+              <span class="tree-count">(8)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Network Security</span>
+              <span class="tree-count">(5)</span>
+            </div>
+            <div class="tree-node" style="--depth: 2">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Identity Management</span>
+              <span class="tree-count">(3)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Software Development</span>
+              <span class="tree-count">(5)</span>
+            </div>
+
+            <!-- Healthcare -->
+            <div class="tree-node" style="--depth: 0">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Healthcare</span>
+              <span class="tree-count">(24)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Clinical Research</span>
+              <span class="tree-count">(10)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Public Health</span>
+              <span class="tree-count">(8)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Telemedicine</span>
+              <span class="tree-count">(3)</span>
+            </div>
+
+            <!-- Business -->
+            <div class="tree-node" style="--depth: 0">
+              <span class="tree-arrow expanded"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Business</span>
+              <span class="tree-count">(21)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Strategy</span>
+              <span class="tree-count">(9)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Marketing</span>
+              <span class="tree-count">(7)</span>
+            </div>
+            <div class="tree-node" style="--depth: 1">
+              <span class="tree-arrow leaf"></span>
+              <span class="health-dot yellow"></span>
+              <span class="tree-label">Operations</span>
+              <span class="tree-count">(5)</span>
+            </div>
+
+            <!-- Education -->
+            <div class="tree-node" style="--depth: 0">
+              <span class="tree-arrow collapsed"></span>
+              <span class="health-dot green"></span>
+              <span class="tree-label">Education</span>
+              <span class="tree-count">(6)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Details panel -->
+        <div class="details-panel">
+          <div class="details-header">
+            <div class="details-breadcrumb">
+              <span class="bc-link">Technology</span>
+              <span class="bc-sep">&rsaquo;</span>
+              <span class="bc-link">AI &amp; Machine Learning</span>
+              <span class="bc-sep">&rsaquo;</span>
+              <span class="bc-current">Deep Learning</span>
+            </div>
+            <div class="details-title">
+              Deep Learning
+              <span class="edit-icon" title="Edit name">&#9998;</span>
+            </div>
+            <div class="details-description">
+              Subset of machine learning using multi-layered neural networks to learn representations from data. Encompasses architectures like CNNs, RNNs, and transformer models for complex pattern recognition tasks.
+            </div>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-value">12</div>
+              <div class="stat-label">Items Tagged</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">0.82</div>
+              <div class="stat-label">Avg Weight</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">3</div>
+              <div class="stat-label">Children</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">3</div>
+              <div class="stat-label">Depth</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" style="font-size: 14px;">Jan 12</div>
+              <div class="stat-label">First Seen</div>
+            </div>
+          </div>
+
+          <div class="action-toolbar">
+            <button class="action-btn">&#128279; Merge</button>
+            <button class="action-btn">&#9986; Split</button>
+            <button class="action-btn">&#10145; Move</button>
+            <button class="action-btn">&#9998; Rename</button>
+            <button class="action-btn danger">&#128465; Delete</button>
+          </div>
+
+          <div class="details-section">
+            <div class="details-section-title">Child Tags</div>
+            <div class="child-chips">
+              <span class="child-chip">Neural Networks <span class="chip-count">8</span></span>
+              <span class="child-chip">Transformers <span class="chip-count">6</span></span>
+              <span class="child-chip">Reinforcement Learning <span class="chip-count">2</span></span>
+            </div>
+          </div>
+
+          <div class="details-section">
+            <div class="details-section-title">Recently Tagged Items</div>
+            <ul class="recent-items-list">
+              <li class="recent-item">
+                <div class="recent-item-icon">&#128196;</div>
+                <div class="recent-item-name">Transformer Architecture Survey 2025</div>
+                <div class="recent-item-weight">0.94</div>
+                <div class="recent-item-date">Apr 2, 2026</div>
+              </li>
+              <li class="recent-item">
+                <div class="recent-item-icon">&#127760;</div>
+                <div class="recent-item-name">Introduction to Deep Learning Frameworks</div>
+                <div class="recent-item-weight">0.91</div>
+                <div class="recent-item-date">Apr 1, 2026</div>
+              </li>
+              <li class="recent-item">
+                <div class="recent-item-icon">&#128196;</div>
+                <div class="recent-item-name">CNN Performance Benchmarks Q1 2026</div>
+                <div class="recent-item-weight">0.87</div>
+                <div class="recent-item-date">Mar 30, 2026</div>
+              </li>
+              <li class="recent-item">
+                <div class="recent-item-icon">&#128221;</div>
+                <div class="recent-item-name">Deep Learning for Medical Imaging</div>
+                <div class="recent-item-weight">0.79</div>
+                <div class="recent-item-date">Mar 28, 2026</div>
+              </li>
+              <li class="recent-item">
+                <div class="recent-item-icon">&#127760;</div>
+                <div class="recent-item-name">Neural Network Optimization Techniques</div>
+                <div class="recent-item-weight">0.74</div>
+                <div class="recent-item-date">Mar 25, 2026</div>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Health bar -->
+      <div class="health-bar">
+        <span class="health-bar-label">Taxonomy Health</span>
+        <div class="health-stat">
+          <span class="dot" style="background: var(--mj-text-secondary);"></span>
+          <span class="value">105</span>
+          <span class="label">Total</span>
+        </div>
+        <div class="health-stat">
+          <span class="dot" style="background: var(--mj-status-success);"></span>
+          <span class="value" style="color: var(--mj-status-success);">82</span>
+          <span class="label">Healthy</span>
+        </div>
+        <div class="health-stat">
+          <span class="dot" style="background: var(--mj-status-warning);"></span>
+          <span class="value" style="color: var(--mj-status-warning);">11</span>
+          <span class="label">Need Attention</span>
+        </div>
+        <div class="health-stat">
+          <span class="dot" style="background: var(--mj-status-error);"></span>
+          <span class="value" style="color: var(--mj-status-error);">12</span>
+          <span class="label">Orphaned</span>
+        </div>
+        <div class="health-stat">
+          <span class="dot" style="background: var(--mj-status-info);"></span>
+          <span class="value" style="color: var(--mj-status-info);">8</span>
+          <span class="label">Duplicate Candidates</span>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TAB 2: DUPLICATES                          -->
+    <!-- ========================================== -->
+    <div class="tab-section">
+      <div class="tab-section-label">Tab 2: Duplicates</div>
+
+      <div class="dup-stats-bar">
+        <div class="dup-stat"><strong>8</strong> candidates found</div>
+        <div class="dup-stat" style="color: var(--mj-status-error);"><strong>3</strong> high confidence (&gt;85%)</div>
+        <div class="dup-stat" style="color: var(--mj-status-warning);"><strong>5</strong> moderate (70&ndash;85%)</div>
+      </div>
+
+      <div class="dup-list">
+        <!-- 1 -->
+        <div class="dup-card high">
+          <div class="dup-tag">ML</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill high" style="width: 96%;"></div></div>
+            <span class="sim-percent high">96%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Machine Learning</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 2 -->
+        <div class="dup-card high">
+          <div class="dup-tag">AI</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill high" style="width: 91%;"></div></div>
+            <span class="sim-percent high">91%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Artificial Intelligence</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 3 -->
+        <div class="dup-card high">
+          <div class="dup-tag">Cybersec</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill high" style="width: 89%;"></div></div>
+            <span class="sim-percent high">89%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Cybersecurity</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 4 -->
+        <div class="dup-card moderate">
+          <div class="dup-tag">Cloud</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill moderate" style="width: 84%;"></div></div>
+            <span class="sim-percent moderate">84%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Cloud Computing</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 5 -->
+        <div class="dup-card moderate">
+          <div class="dup-tag">NLP</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill moderate" style="width: 82%;"></div></div>
+            <span class="sim-percent moderate">82%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Natural Language Processing</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 6 -->
+        <div class="dup-card moderate">
+          <div class="dup-tag">DL</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill moderate" style="width: 78%;"></div></div>
+            <span class="sim-percent moderate">78%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Deep Learning</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 7 -->
+        <div class="dup-card moderate">
+          <div class="dup-tag">Dev</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill moderate" style="width: 72%;"></div></div>
+            <span class="sim-percent moderate">72%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Software Development</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+        <!-- 8 -->
+        <div class="dup-card moderate">
+          <div class="dup-tag">Healthcare IT</div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-similarity">
+            <div class="sim-bar-bg"><div class="sim-bar-fill moderate" style="width: 71%;"></div></div>
+            <span class="sim-percent moderate">71%</span>
+          </div>
+          <div class="dup-arrow">&#10231;</div>
+          <div class="dup-tag">Health Informatics</div>
+          <div class="dup-actions">
+            <button class="dup-btn primary">Merge</button>
+            <button class="dup-btn">Make Child</button>
+            <button class="dup-btn">Dismiss</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TAB 3: ORPHANS                             -->
+    <!-- ========================================== -->
+    <div class="tab-section">
+      <div class="tab-section-label">Tab 3: Orphans</div>
+
+      <div class="orphan-toolbar">
+        <span class="count">12 orphaned tags</span>
+        <span style="color: var(--mj-text-muted); font-size: 13px;">&mdash; no parent, no children, low usage</span>
+        <div style="margin-left: auto; display: flex; gap: 8px;">
+          <button class="bulk-btn select-all">&#9744; Select All</button>
+          <button class="bulk-btn">Bulk Assign Parent</button>
+          <button class="bulk-btn" style="color: var(--mj-status-error);">Bulk Delete</button>
+        </div>
+      </div>
+
+      <div class="orphan-grid">
+        <!-- 1 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Quantum Computing</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">2</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.61</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Jan 15, 2026</span>
+            <span>Last: Feb 8, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 2 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Blockchain 2.0</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.55</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Dec 3, 2025</span>
+            <span>Last: Dec 3, 2025</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 3 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Edge Computing</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">3</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.68</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Jan 22, 2026</span>
+            <span>Last: Mar 14, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 4 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">AR/VR</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.49</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Feb 1, 2026</span>
+            <span>Last: Feb 1, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 5 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">DevSecOps</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">2</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.72</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Jan 10, 2026</span>
+            <span>Last: Mar 5, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 6 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Serverless</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.58</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Mar 2, 2026</span>
+            <span>Last: Mar 2, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 7 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Microservices</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">2</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.65</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Feb 14, 2026</span>
+            <span>Last: Mar 20, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 8 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">GraphQL</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.52</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Mar 11, 2026</span>
+            <span>Last: Mar 11, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 9 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Web3</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.44</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Dec 18, 2025</span>
+            <span>Last: Dec 18, 2025</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 10 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">5G Networks</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">2</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.59</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Jan 28, 2026</span>
+            <span>Last: Feb 22, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 11 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Digital Twin</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.47</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Feb 5, 2026</span>
+            <span>Last: Feb 5, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+        <!-- 12 -->
+        <div class="orphan-card">
+          <div class="orphan-card-header">
+            <span class="orphan-name">Low-Code</span>
+            <input type="checkbox" class="orphan-checkbox">
+          </div>
+          <div class="orphan-stats">
+            <span>Usage: <span class="orphan-stat-val">1</span></span>
+            <span>Avg Weight: <span class="orphan-stat-val">0.51</span></span>
+          </div>
+          <div class="orphan-dates">
+            <span>First: Mar 18, 2026</span>
+            <span>Last: Mar 18, 2026</span>
+          </div>
+          <div class="orphan-actions">
+            <button class="orphan-btn assign">Assign Parent</button>
+            <button class="orphan-btn delete">Delete</button>
+            <button class="orphan-btn">Ignore</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TAB 4: TREEMAP                             -->
+    <!-- ========================================== -->
+    <div class="tab-section">
+      <div class="tab-section-label">Tab 4: Treemap</div>
+
+      <div class="treemap-kpi-strip">
+        <div class="treemap-kpi">
+          <div class="treemap-kpi-value">105</div>
+          <div class="treemap-kpi-label">Total Tags</div>
+        </div>
+        <div class="treemap-kpi">
+          <div class="treemap-kpi-value">2.4</div>
+          <div class="treemap-kpi-label">Avg Depth</div>
+        </div>
+        <div class="treemap-kpi">
+          <div class="treemap-kpi-value">4</div>
+          <div class="treemap-kpi-label">Max Depth</div>
+        </div>
+        <div class="treemap-kpi">
+          <div class="treemap-kpi-value" style="font-size: 16px;">Machine Learning</div>
+          <div class="treemap-kpi-label">Most Used Tag</div>
+        </div>
+      </div>
+
+      <div class="treemap-legend">
+        <div class="legend-item"><span class="legend-swatch" style="background: #264FAF;"></span> Technology</div>
+        <div class="legend-item"><span class="legend-swatch" style="background: #16a34a;"></span> Healthcare</div>
+        <div class="legend-item"><span class="legend-swatch" style="background: #7e22ce;"></span> Business</div>
+        <div class="legend-item"><span class="legend-swatch" style="background: #ea580c;"></span> Other</div>
+        <div style="margin-left: auto; font-size: 11px; color: var(--mj-text-muted);">Darker shade = higher avg weight</div>
+      </div>
+
+      <div class="treemap-container">
+        <!-- Row 1 -->
+        <div class="treemap-cell tm-blue-1" style="grid-row: span 2;">
+          <span class="cell-name">AI &amp; ML</span>
+          <span class="cell-count">18 items</span>
+        </div>
+        <div class="treemap-cell tm-green-1" style="grid-row: span 2;">
+          <span class="cell-name">Clinical Research</span>
+          <span class="cell-count">10 items</span>
+        </div>
+        <div class="treemap-cell tm-purple-1">
+          <span class="cell-name">Strategy</span>
+          <span class="cell-count">9 items</span>
+        </div>
+        <div class="treemap-cell tm-orange-1">
+          <span class="cell-name">Education</span>
+          <span class="cell-count">6 items</span>
+        </div>
+
+        <!-- Row 2 -->
+        <div class="treemap-cell tm-purple-2">
+          <span class="cell-name">Marketing</span>
+          <span class="cell-count">7 items</span>
+        </div>
+        <div class="treemap-cell tm-green-2">
+          <span class="cell-name">Public Health</span>
+          <span class="cell-count">8 items</span>
+        </div>
+
+        <!-- Row 3 -->
+        <div class="treemap-cell tm-blue-2" style="grid-row: span 2;">
+          <span class="cell-name">Cloud Computing</span>
+          <span class="cell-count">11 items</span>
+        </div>
+        <div class="treemap-cell tm-blue-3">
+          <span class="cell-name">Cybersecurity</span>
+          <span class="cell-count">8 items</span>
+        </div>
+        <div class="treemap-cell tm-purple-3">
+          <span class="cell-name">Operations</span>
+          <span class="cell-count">5 items</span>
+        </div>
+        <div class="treemap-cell tm-orange-2">
+          <span class="cell-name">IoT</span>
+          <span class="cell-count">4 items</span>
+        </div>
+
+        <!-- Row 4 -->
+        <div class="treemap-cell tm-blue-4">
+          <span class="cell-name">Software Dev</span>
+          <span class="cell-count">5 items</span>
+        </div>
+        <div class="treemap-cell tm-green-3">
+          <span class="cell-name">Telemedicine</span>
+          <span class="cell-count">3 items</span>
+        </div>
+        <div class="treemap-cell tm-orange-3">
+          <span class="cell-name">Data Science</span>
+          <span class="cell-count">3 items</span>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- ========================================== -->
+    <!-- TAB 5: AUDIT LOG                           -->
+    <!-- ========================================== -->
+    <div class="tab-section">
+      <div class="tab-section-label">Tab 5: Audit Log</div>
+
+      <div class="audit-filters">
+        <span class="audit-filter-label">Filter</span>
+        <div class="audit-checkbox-group">
+          <label class="audit-checkbox"><input type="checkbox" checked> Created</label>
+          <label class="audit-checkbox"><input type="checkbox" checked> Merged</label>
+          <label class="audit-checkbox"><input type="checkbox" checked> Moved</label>
+          <label class="audit-checkbox"><input type="checkbox" checked> Deleted</label>
+          <label class="audit-checkbox"><input type="checkbox" checked> Renamed</label>
+        </div>
+        <div class="audit-date-range">
+          <span>From</span>
+          <input type="date" class="audit-date-input" value="2026-03-28">
+          <span>To</span>
+          <input type="date" class="audit-date-input" value="2026-04-04">
+        </div>
+      </div>
+
+      <div class="audit-timeline">
+
+        <!-- Today -->
+        <div class="audit-day-header">Today &mdash; April 4, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon created">+</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">Reinforcement Learning</span> created as child of <span class="tag-ref">Deep Learning</span></div>
+            <div class="audit-event-meta"><span>10:32 AM</span><span>Sarah Chen</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon merged">&#8644;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">ML</span> merged into <span class="tag-ref">Machine Learning</span> &mdash; 4 items retagged</div>
+            <div class="audit-event-meta"><span>9:15 AM</span><span>System (Auto-merge)</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon renamed">&#9998;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">Cyber</span> renamed to <span class="tag-ref">Cybersecurity</span></div>
+            <div class="audit-event-meta"><span>8:47 AM</span><span>James Rodriguez</span></div>
+          </div>
+        </div>
+
+        <!-- Yesterday -->
+        <div class="audit-day-header">Yesterday &mdash; April 3, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon moved">&#10145;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">Transformers</span> moved from <span class="tag-ref">NLP</span> to <span class="tag-ref">Deep Learning</span></div>
+            <div class="audit-event-meta"><span>4:22 PM</span><span>Sarah Chen</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon deleted">&#10005;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">Misc</span> deleted &mdash; 0 items affected</div>
+            <div class="audit-event-meta"><span>2:10 PM</span><span>James Rodriguez</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon created">+</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">Computer Vision</span> created as child of <span class="tag-ref">AI &amp; Machine Learning</span></div>
+            <div class="audit-event-meta"><span>11:05 AM</span><span>System (Auto-tag)</span></div>
+          </div>
+        </div>
+
+        <!-- April 2 -->
+        <div class="audit-day-header">April 2, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon merged">&#8644;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">AI</span> merged into <span class="tag-ref">Artificial Intelligence</span> &mdash; 7 items retagged</div>
+            <div class="audit-event-meta"><span>3:48 PM</span><span>Sarah Chen</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon created">+</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">Identity Management</span> created as child of <span class="tag-ref">Cybersecurity</span></div>
+            <div class="audit-event-meta"><span>1:30 PM</span><span>System (Auto-tag)</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon renamed">&#9998;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">SW Dev</span> renamed to <span class="tag-ref">Software Development</span></div>
+            <div class="audit-event-meta"><span>10:12 AM</span><span>James Rodriguez</span></div>
+          </div>
+        </div>
+
+        <!-- April 1 -->
+        <div class="audit-day-header">April 1, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon moved">&#10145;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">Network Security</span> moved from root to <span class="tag-ref">Cybersecurity</span></div>
+            <div class="audit-event-meta"><span>5:15 PM</span><span>Sarah Chen</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon deleted">&#10005;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">TBD</span> deleted &mdash; 0 items affected</div>
+            <div class="audit-event-meta"><span>3:00 PM</span><span>System (Cleanup)</span></div>
+          </div>
+        </div>
+
+        <!-- March 31 -->
+        <div class="audit-day-header">March 31, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon created">+</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tag <span class="tag-ref">Google Cloud</span> created as child of <span class="tag-ref">Cloud Computing</span></div>
+            <div class="audit-event-meta"><span>2:44 PM</span><span>System (Auto-tag)</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon merged">&#8644;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">Cybersec</span> merged into <span class="tag-ref">Cybersecurity</span> &mdash; 3 items retagged</div>
+            <div class="audit-event-meta"><span>11:20 AM</span><span>Sarah Chen</span></div>
+          </div>
+        </div>
+
+        <!-- March 29 -->
+        <div class="audit-day-header">March 29, 2026</div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon created">+</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc">Tags <span class="tag-ref">AWS</span>, <span class="tag-ref">Azure</span> created as children of <span class="tag-ref">Cloud Computing</span></div>
+            <div class="audit-event-meta"><span>9:30 AM</span><span>System (Auto-tag)</span></div>
+          </div>
+        </div>
+
+        <div class="audit-event">
+          <div class="audit-event-icon moved">&#10145;</div>
+          <div class="audit-event-body">
+            <div class="audit-event-desc"><span class="tag-ref">Telemedicine</span> moved from root to <span class="tag-ref">Healthcare</span></div>
+            <div class="audit-event-meta"><span>8:15 AM</span><span>James Rodriguez</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /.main-content -->
+</div><!-- /.app-body -->
+
+</body>
+</html>

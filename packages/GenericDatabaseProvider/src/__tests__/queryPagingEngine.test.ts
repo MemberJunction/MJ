@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { QueryPagingEngine, PagingWrappedSQL } from '../queryPagingEngine';
+import { QueryPagingEngine } from '../queryPagingEngine';
 import { DatabasePlatform } from '@memberjunction/core';
 
 // ─── ShouldPage ────────────────────────────────────────────────────────────────
@@ -21,51 +21,6 @@ describe('QueryPagingEngine.ShouldPage', () => {
 
     it('returns false when both are undefined', () => {
         expect(QueryPagingEngine.ShouldPage(undefined, undefined)).toBe(false);
-    });
-});
-
-// ─── splitCTEAndSelect ─────────────────────────────────────────────────────────
-
-describe('QueryPagingEngine.splitCTEAndSelect', () => {
-    it('returns empty ctePrefix for simple SELECT', () => {
-        const sql = 'SELECT ID, Name FROM Users WHERE Active = 1';
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toBe('');
-        expect(mainSelect).toBe(sql);
-    });
-
-    it('splits a single CTE from the main SELECT', () => {
-        const sql = `WITH cte AS (
-SELECT ID FROM Users
-)
-SELECT * FROM cte`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH cte AS');
-        expect(mainSelect.trim()).toBe('SELECT * FROM cte');
-    });
-
-    it('splits multiple CTEs from the main SELECT', () => {
-        const sql = `WITH a AS (
-SELECT 1 AS x
-),
-b AS (
-SELECT 2 AS y
-)
-SELECT * FROM a JOIN b ON 1=1`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH a AS');
-        expect(ctePrefix).toContain('b AS');
-        expect(mainSelect.trim()).toMatch(/^SELECT \* FROM a JOIN b/);
-    });
-
-    it('handles nested parentheses inside CTEs', () => {
-        const sql = `WITH cte AS (
-SELECT ID FROM Users WHERE Name IN ('a', 'b')
-)
-SELECT * FROM cte`;
-        const { ctePrefix, mainSelect } = QueryPagingEngine.splitCTEAndSelect(sql);
-        expect(ctePrefix).toContain('WITH cte AS');
-        expect(mainSelect.trim()).toBe('SELECT * FROM cte');
     });
 });
 
@@ -124,154 +79,208 @@ describe('QueryPagingEngine.stripTopClause', () => {
     });
 });
 
-// ─── WrapWithPaging (SQL Server) ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════
+// WrapWithPaging — Data SQL (appends paging directly)
+// ═══════════════════════════════════════════════════
 
-describe('QueryPagingEngine.WrapWithPaging — SQL Server', () => {
-    const platform: DatabasePlatform = 'sqlserver';
+describe('WrapWithPaging — Data SQL', () => {
+    describe('SQL Server', () => {
+        const platform: DatabasePlatform = 'sqlserver';
 
-    it('wraps a simple SELECT with CTE-based paging', () => {
-        const sql = 'SELECT ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
+        it('appends OFFSET/FETCH directly to simple SQL with ORDER BY', () => {
+            const sql = 'SELECT ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
 
-        expect(result.Offset).toBe(0);
-        expect(result.PageSize).toBe(25);
-        expect(result.DataSQL).toContain('[__paged]');
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
-        // AST path quotes identifiers: ORDER BY `Name`, [Name], or Name
-        expect(result.DataSQL).toMatch(/ORDER BY [`[\s]?Name[`\]]?/);
-        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM [__paged]');
+            expect(result.Offset).toBe(0);
+            expect(result.PageSize).toBe(25);
+            // Data SQL should contain the original SQL with paging appended
+            expect(result.DataSQL).toContain('ORDER BY Name');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+            // Data SQL should NOT be wrapped in a CTE
+            expect(result.DataSQL).not.toContain('__paged');
+            expect(result.DataSQL).not.toContain('__count');
+        });
+
+        it('adds default ORDER BY when none exists', () => {
+            const sql = 'SELECT ID FROM Users';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, platform);
+
+            // SQL Server uses (SELECT NULL) as neutral ORDER BY
+            expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
+        });
+
+        it('strips TOP clause before appending OFFSET/FETCH', () => {
+            const sql = 'SELECT TOP 100 ID, Name FROM Users ORDER BY Name';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
+
+            expect(result.DataSQL).not.toMatch(/TOP\s+100/i);
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+        });
+
+        it('preserves existing CTEs in data SQL (no wrapping)', () => {
+            const sql = `WITH active_users AS (
+SELECT ID, Name FROM Users WHERE Active = 1
+)
+SELECT * FROM active_users ORDER BY Name`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 10, 50, platform);
+
+            // Original CTE should be preserved as-is
+            expect(result.DataSQL).toContain('active_users');
+            expect(result.DataSQL).toContain('OFFSET 10 ROWS FETCH NEXT 50 ROWS ONLY');
+            // No __paged wrapping
+            expect(result.DataSQL).not.toContain('__paged');
+        });
+
+        it('preserves ORDER BY on non-projected columns (Board of Directors bug)', () => {
+            // This was the bug that motivated the redesign: ORDER BY references
+            // columns that exist in the FROM scope but not in the SELECT list.
+            // The old CTE-wrapping approach broke these because the CTE boundary
+            // hid the non-projected columns.
+            const sql = `SELECT (FirstName + ' ' + LastName) AS Name, Position
+FROM BoardMembers
+ORDER BY LastName, FirstName`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, platform);
+
+            // ORDER BY LastName, FirstName must be preserved exactly — not remapped
+            expect(result.DataSQL).toContain('ORDER BY LastName, FirstName');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('preserves table-qualified ORDER BY (no remapping needed)', () => {
+            const sql = `SELECT m.ID, m.FirstName, m.LastName
+FROM Members m
+ORDER BY m.LastName, m.FirstName`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
+
+            // Table qualifiers are preserved — no remapping
+            expect(result.DataSQL).toContain('ORDER BY m.LastName, m.FirstName');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+        });
+
+        it('preserves COALESCE in ORDER BY (no remapping needed)', () => {
+            const sql = `SELECT e.Name, COALESCE(rev.TotalRevenue, 0) AS TotalRevenue
+FROM Events e
+LEFT JOIN Revenue rev ON e.ID = rev.EventID
+ORDER BY COALESCE(rev.TotalRevenue, 0) DESC`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, platform);
+
+            expect(result.DataSQL).toContain('ORDER BY COALESCE(rev.TotalRevenue, 0) DESC');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY');
+        });
+
+        it('handles page 2 offset correctly', () => {
+            const sql = 'SELECT * FROM Users ORDER BY ID';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 50, 25, platform);
+
+            expect(result.Offset).toBe(50);
+            expect(result.PageSize).toBe(25);
+            expect(result.DataSQL).toContain('OFFSET 50 ROWS FETCH NEXT 25 ROWS ONLY');
+        });
     });
 
-    it('preserves existing CTEs and appends __paged', () => {
+    describe('PostgreSQL', () => {
+        const platform: DatabasePlatform = 'postgresql';
+
+        it('appends LIMIT/OFFSET to simple SQL', () => {
+            const sql = 'SELECT ID, Name FROM Users WHERE Active = true ORDER BY Name';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
+
+            expect(result.DataSQL).toContain('LIMIT 25 OFFSET 0');
+            expect(result.DataSQL).not.toContain('FETCH NEXT');
+            expect(result.DataSQL).not.toContain('__paged');
+        });
+
+        it('adds default ORDER BY 1 when none exists', () => {
+            const sql = 'SELECT ID FROM Users';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, platform);
+
+            expect(result.DataSQL).toContain('ORDER BY 1');
+            expect(result.DataSQL).toContain('LIMIT 10 OFFSET 0');
+        });
+
+        it('handles page 2 offset correctly', () => {
+            const sql = 'SELECT * FROM Users ORDER BY ID';
+            const result = QueryPagingEngine.WrapWithPaging(sql, 50, 25, platform);
+
+            expect(result.Offset).toBe(50);
+            expect(result.PageSize).toBe(25);
+            expect(result.DataSQL).toContain('LIMIT 25 OFFSET 50');
+        });
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// WrapWithPaging — Count SQL (CTE wrapping)
+// ═══════════════════════════════════════════════════
+
+describe('WrapWithPaging — Count SQL', () => {
+    it('wraps simple SQL in __count CTE for SQL Server', () => {
+        const sql = 'SELECT ID, Name FROM Users WHERE Active = 1 ORDER BY Name';
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
+
+        expect(result.CountSQL).toContain('[__count]');
+        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM [__count]');
+        // ORDER BY should be stripped from the count query
+        expect(result.CountSQL).not.toMatch(/ORDER BY/i);
+    });
+
+    it('wraps simple SQL in __count CTE for PostgreSQL', () => {
+        const sql = 'SELECT ID FROM Users ORDER BY ID';
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'postgresql');
+
+        expect(result.CountSQL).toContain('"__count"');
+        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM "__count"');
+        expect(result.CountSQL).not.toMatch(/ORDER BY/i);
+    });
+
+    it('preserves existing CTEs in count SQL', () => {
         const sql = `WITH active_users AS (
 SELECT ID, Name FROM Users WHERE Active = 1
 )
 SELECT * FROM active_users ORDER BY Name`;
-        const result = QueryPagingEngine.WrapWithPaging(sql, 10, 50, platform);
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'sqlserver');
 
-        // AST path bracket-quotes CTE names: [active_users] AS (...)
-        expect(result.DataSQL).toMatch(/\[?active_users\]?\s+AS/);
-        expect(result.DataSQL).toContain('[__paged] AS');
-        expect(result.DataSQL).toContain('OFFSET 10 ROWS FETCH NEXT 50 ROWS ONLY');
-    });
-
-    it('adds default ORDER BY when none exists', () => {
-        const sql = 'SELECT ID FROM Users';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, platform);
-
-        // SQL Server uses (SELECT NULL) as neutral ORDER BY
-        expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
-    });
-
-    it('strips TOP clause before wrapping', () => {
-        const sql = 'SELECT TOP 100 ID, Name FROM Users ORDER BY Name';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
-
-        // TOP should not appear in the CTE definition
-        expect(result.DataSQL).not.toMatch(/TOP\s+100/i);
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
-    });
-});
-
-// ─── WrapWithPaging (PostgreSQL) ───────────────────────────────────────────────
-
-describe('QueryPagingEngine.WrapWithPaging — PostgreSQL', () => {
-    const platform: DatabasePlatform = 'postgresql';
-
-    it('wraps with LIMIT/OFFSET syntax', () => {
-        const sql = 'SELECT ID, Name FROM Users WHERE Active = true ORDER BY Name';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, platform);
-
-        expect(result.DataSQL).toContain('"__paged"');
-        expect(result.DataSQL).toContain('LIMIT 25 OFFSET 0');
-        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount FROM "__paged"');
-    });
-
-    it('adds default ORDER BY 1 when none exists', () => {
-        const sql = 'SELECT ID FROM Users';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, platform);
-
-        expect(result.DataSQL).toContain('ORDER BY 1');
-    });
-
-    it('handles page 2 offset correctly', () => {
-        const sql = 'SELECT * FROM Users ORDER BY ID';
-        const result = QueryPagingEngine.WrapWithPaging(sql, 50, 25, platform);
-
-        expect(result.Offset).toBe(50);
-        expect(result.PageSize).toBe(25);
-        expect(result.DataSQL).toContain('LIMIT 25 OFFSET 50');
-    });
-});
-
-// ─── WrapWithPaging — CTE composition integration ──────────────────────────────
-
-describe('QueryPagingEngine.WrapWithPaging — composition engine CTEs', () => {
-    it('handles multiple composed CTEs from the composition engine', () => {
-        const sql = `WITH __cq_0 AS (
-SELECT CustomerID, SUM(Total) AS TotalRevenue
-FROM Orders
-GROUP BY CustomerID
-),
-__cq_1 AS (
-SELECT ID, Name FROM Customers WHERE Status = 'Active'
-)
-SELECT c.Name, r.TotalRevenue
-FROM __cq_1 c
-JOIN __cq_0 r ON c.ID = r.CustomerID
-ORDER BY r.TotalRevenue DESC`;
-
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 20, 'sqlserver');
-
-        // Should have all three CTEs: __cq_0, __cq_1, and __paged
-        // AST path bracket-quotes CTE names
-        expect(result.DataSQL).toMatch(/\[?__cq_0\]?\s+AS/);
-        expect(result.DataSQL).toMatch(/\[?__cq_1\]?\s+AS/);
-        expect(result.DataSQL).toContain('[__paged] AS');
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY');
-        // After remapping, ORDER BY should use projected column names
-        // AST exprToSQL preserves table qualifiers with backtick quoting
-        // The ORDER BY should reference TotalRevenue (possibly with table qualifier and quoting)
-        expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/);
-
-        // Count query should also have all CTEs
-        expect(result.CountSQL).toMatch(/\[?__cq_0\]?\s+AS/);
-        expect(result.CountSQL).toContain('[__paged] AS');
+        // Count SQL should have the original CTE + __count
+        expect(result.CountSQL).toMatch(/active_users/i);
+        expect(result.CountSQL).toContain('[__count]');
         expect(result.CountSQL).toContain('TotalRowCount');
+        // ORDER BY should be stripped
+        expect(result.CountSQL).not.toMatch(/ORDER BY/i);
     });
 
-    it('remaps ORDER BY with COALESCE and aliased columns to projected names', () => {
-        // Include SQL comments like the real composition engine produces
-        const sql = `WITH [__cte_Active_Users_k1gvl3] AS (
--- Reusable base query: Returns all active users with basic profile info
-SELECT u.ID, u.Name, u.Email, u.Type, u.__mj_CreatedAt AS CreatedAt
-FROM __mj.vwUsers u
-WHERE u.IsActive = 1
+    it('handles SQL without ORDER BY', () => {
+        const sql = 'SELECT ID FROM Users WHERE Active = 1';
+        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+
+        expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+    });
+
+    it('hoists existing CTEs as siblings of __count (no nested WITH)', () => {
+        // This is the bug that caused "Incorrect syntax near ')'" — the count SQL
+        // was wrapping the entire SQL (including its WITH clause) inside another
+        // WITH [__count] AS (...), producing invalid nested WITH statements.
+        const sql = `WITH lapsed AS (
+SELECT a.Id, a.FirstName FROM Users a WHERE a.Active = 1
 ),
-[__cte_Recent_Entity_Changes_sokwc2] AS (
--- Reusable base query: Returns recent record changes grouped by entity
-SELECT e.Name AS EntityName, COUNT(*) AS ChangeCount, MAX(rc.CreatedAt) AS LatestChange
-FROM __mj.vwRecordChanges rc
-INNER JOIN __mj.vwEntities e ON e.ID = rc.EntityID
-WHERE rc.CreatedAt >= DATEADD(DAY, -30, GETUTCDATE())
-GROUP BY e.Name
+verified AS (
+SELECT l.Id, l.FirstName FROM lapsed l INNER JOIN Educators e ON e.Name = l.FirstName
 )
--- Composed query: Joins Active Users with Recent Entity Changes
--- Demonstrates composition syntax
-SELECT au.Name AS UserName, au.Email, au.Type AS UserType, COALESCE(rc.ChangeCount, 0) AS RecentChanges, rc.LatestChange
-FROM [__cte_Active_Users_k1gvl3] au
-LEFT JOIN [__cte_Recent_Entity_Changes_sokwc2] rc ON rc.EntityName IN (
-    SELECT e.Name FROM __mj.vwEntities e WHERE e.ID IN (
-        SELECT DISTINCT EntityID FROM __mj.vwRecordChanges WHERE UserID = au.ID
-    )
-)
-ORDER BY COALESCE(rc.ChangeCount, 0) DESC, au.Name`;
+SELECT v.Id, v.FirstName
+FROM verified v
+ORDER BY v.FirstName`;
 
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-        // ORDER BY should use projected names, not table aliases
-        expect(result.DataSQL).toContain('ORDER BY RecentChanges DESC, UserName');
-        expect(result.DataSQL).not.toContain('ORDER BY COALESCE(rc.ChangeCount');
+        // Count SQL must NOT have nested WITH
+        expect(result.CountSQL).not.toMatch(/WITH\s+\[__count\]\s+AS\s*\(\s*\n\s*WITH/i);
+        // All CTEs should be siblings in a single WITH chain
+        expect(result.CountSQL).toMatch(/lapsed/i);
+        expect(result.CountSQL).toMatch(/verified/i);
+        expect(result.CountSQL).toContain('[__count]');
+        expect(result.CountSQL).toContain('TotalRowCount');
+        // ORDER BY should be stripped from count SQL
+        expect(result.CountSQL).not.toMatch(/ORDER BY/i);
     });
 });
 
@@ -280,14 +289,12 @@ ORDER BY COALESCE(rc.ChangeCount, 0) DESC, au.Name`;
 // ═══════════════════════════════════════════════════
 
 describe('QueryPagingEngine — Trailing Semicolon Handling', () => {
-    it('should strip trailing semicolon from simple SQL before wrapping', () => {
+    it('should strip trailing semicolon before appending paging', () => {
         const sql = `SELECT ID, Name FROM Users ORDER BY Name;`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-        // The OFFSET clause must come right after ORDER BY, not after a semicolon
         expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
         expect(result.DataSQL).not.toContain(';\nOFFSET');
-        expect(result.DataSQL).not.toContain(';\nSELECT');
     });
 
     it('should strip trailing semicolon from SQL with CTE', () => {
@@ -308,18 +315,10 @@ SELECT * FROM Active ORDER BY ID;`;
         expect(result.DataSQL).not.toContain(';');
     });
 
-    it('should not affect SQL without trailing semicolon', () => {
-        const sql = `SELECT * FROM Users ORDER BY Name`;
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
-
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
-    });
-
     it('should preserve semicolons inside string literals', () => {
         const sql = `SELECT ID, 'value; with semicolon' AS Label FROM Users ORDER BY ID`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-        // String literal with semicolon should be preserved inside the CTE body
         expect(result.DataSQL).toContain('value; with semicolon');
         expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
     });
@@ -329,171 +328,352 @@ SELECT * FROM Active ORDER BY ID;`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 10, 20, 'postgresql');
 
         expect(result.DataSQL).toContain('LIMIT 20 OFFSET 10');
-        expect(result.DataSQL).not.toContain(';\n');
-    });
-
-    it('should handle SQL with Nunjucks template expression followed by semicolon', () => {
-        // This is the exact pattern from the External Change Detection bug
-        const sql = `SELECT * FROM Users WHERE Region = 'West' ORDER BY ID;`;
-        const result = QueryPagingEngine.WrapWithPaging(sql, 0, 5000, 'sqlserver');
-
-        expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 5000 ROWS ONLY');
-        // The semicolon should NOT appear between ORDER BY and OFFSET
-        const orderByIdx = result.DataSQL.lastIndexOf('ORDER BY');
-        const offsetIdx = result.DataSQL.indexOf('OFFSET');
-        const between = result.DataSQL.substring(orderByIdx, offsetIdx);
-        expect(between).not.toContain(';');
     });
 
     it('should produce valid count SQL without semicolon', () => {
         const sql = `SELECT * FROM Users ORDER BY Name;`;
         const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-        // Count SQL should not have a semicolon in the CTE body
         expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
         expect(result.CountSQL).not.toContain(';');
     });
 });
 
 // ═══════════════════════════════════════════════════
-// Real-world E2E Regression Tests
-// These test the exact SQL patterns that caused production failures.
+// Real-world Regression Tests
 // ═══════════════════════════════════════════════════
 
-describe('QueryPagingEngine.WrapWithPaging — Real-World Regressions', () => {
-    describe('Backtick quoting bug (ExprToSQL dialect awareness)', () => {
-        it('should produce bracket-quoted ORDER BY for SQL Server (member-activity-counts pattern)', () => {
-            // This is the exact pattern that broke: CTE → SELECT * → ORDER BY column alias
-            // The AST path used to produce ORDER BY `TotalActivityCount` DESC (backtick = MySQL)
-            // instead of ORDER BY [TotalActivityCount] DESC or ORDER BY TotalActivityCount DESC
-            const sql = `WITH MemberActivities AS (
-    SELECT m.ID AS MemberID, m.FirstName,
-        (COALESCE(evt.EventsAttended, 0) + COALESCE(crs.CoursesCompleted, 0)) AS TotalActivityCount
-    FROM [AssociationDemo].[vwMembers] m
-    LEFT JOIN (
-        SELECT er.MemberID, SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS EventsAttended
-        FROM [AssociationDemo].[vwEventRegistrations] er
-        GROUP BY er.MemberID
-    ) evt ON m.ID = evt.MemberID
-    LEFT JOIN (
-        SELECT en.MemberID, SUM(CASE WHEN en.Status = 'Completed' THEN 1 ELSE 0 END) AS CoursesCompleted
-        FROM [AssociationDemo].[vwEnrollments] en
-        GROUP BY en.MemberID
-    ) crs ON m.ID = crs.MemberID
+describe('WrapWithPaging — Real-World Regressions', () => {
+    describe('Non-projected ORDER BY columns (Board of Directors bug)', () => {
+        it('should preserve ORDER BY on columns not in SELECT list', () => {
+            // The bug that motivated the CTE-wrapping removal: ORDER BY references
+            // FirstName/LastName which are consumed in a concatenation but not projected.
+            const sql = `WITH [__cte_Board] AS (
+SELECT a.Id AS AccountId, a.FirstName, a.LastName,
+    cm.CommitteePositionName__c AS Board_Position,
+    a.Institution__c AS School_District, a.Region__c
+FROM nams.vwNU__CommitteeMembership__cs cm
+INNER JOIN nams.vwAccounts a ON a.Id = cm.NU__Account__c
+WHERE cm.NU__State__c = 'Current'
 )
-SELECT * FROM MemberActivities
-ORDER BY TotalActivityCount DESC`;
+SELECT
+    a.Id AS AccountId,
+    (bd.FirstName + ' ' + bd.LastName) AS Name,
+    bd.Board_Position AS Position,
+    bd.School_District AS SchoolDistrict
+FROM [__cte_Board] bd
+INNER JOIN nams.vwAccounts a
+    ON a.FirstName = bd.FirstName
+    AND a.LastName = bd.LastName
+ORDER BY bd.LastName, bd.FirstName`;
 
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-            // Must NOT contain backtick-quoted identifiers (MySQL syntax)
-            expect(result.DataSQL).not.toContain('`');
-            // Must contain valid OFFSET/FETCH
+            // ORDER BY must be preserved exactly — bd.LastName/bd.FirstName are valid
+            // in the original FROM scope even though they're not in the SELECT list
+            expect(result.DataSQL).toContain('ORDER BY bd.LastName, bd.FirstName');
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
-            // ORDER BY should reference the projected column name without backticks
-            expect(result.DataSQL).toMatch(/ORDER BY.*TotalActivityCount.*DESC/i);
-            // The CTE should be present
-            expect(result.DataSQL).toMatch(/MemberActivities/i);
-            // Count query should work
+            // Data SQL should NOT wrap in a CTE
+            expect(result.DataSQL).not.toContain('__paged');
+            expect(result.DataSQL).not.toContain('__count');
+        });
+    });
+
+    describe('Composed CTEs with comments containing apostrophes (MSTA lapsed-members bug)', () => {
+        it('should handle CTE body with apostrophes in SQL comments', () => {
+            const sql = `WITH [__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l] AS (
+-- Bridge query: maps NAMS member accounts to DESE educator records
+-- is in the same district as the member's Institution__c via co_dist_desc.
+-- This eliminates false positives from common names (e.g., "Jennifer Smith")
+SELECT DISTINCT
+    a.Id AS AccountId, a.FirstName, a.LastName, a.PersonEmail,
+    a.Institution__c AS District_Name, a.Region__c,
+    e.edssn, e.co_dist_code, e.year AS DESE_Year
+FROM nams.vwAccounts a
+INNER JOIN dese.vwco_dist_descs d ON d.description = a.Institution__c
+INNER JOIN dese.vweducators e
+    ON UPPER(LTRIM(RTRIM(e.edfname))) = UPPER(LTRIM(RTRIM(a.FirstName)))
+    AND UPPER(LTRIM(RTRIM(e.edlname))) = UPPER(LTRIM(RTRIM(a.LastName)))
+    AND e.co_dist_code = d.co_dist_code
+    AND e.year = '2024'
+WHERE a.IsPersonAccount = 1
+  AND a.Institution__c IS NOT NULL
+)
+SELECT DISTINCT
+    bridge.AccountId, bridge.FirstName, bridge.LastName,
+    bridge.PersonEmail, bridge.Region__c,
+    bridge.District_Name AS Prior_District,
+    d_new.description AS New_District,
+    2024 AS Prior_Year, 2025 AS New_Year
+FROM [__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l] bridge
+INNER JOIN nams.vwNU__Membership__cs m1
+    ON m1.NU__Account__c = bridge.AccountId
+    AND m1.Year__c = 2024
+    AND m1.NU__MembershipProductName__c NOT IN ('Student', 'Retired Annual', 'Retired Lifetime', 'Associate')
+INNER JOIN dese.vweducators e_new
+    ON e_new.edssn = bridge.edssn
+    AND CAST(e_new.year AS INT) = 2025
+INNER JOIN dese.vwco_dist_descs d_new
+    ON d_new.co_dist_code = e_new.co_dist_code
+WHERE NOT EXISTS (
+    SELECT 1 FROM nams.vwNU__Membership__cs m2
+    WHERE m2.NU__Account__c = bridge.AccountId AND m2.Year__c = 2025
+)
+AND e_new.co_dist_code != bridge.co_dist_code
+ORDER BY bridge.LastName, bridge.FirstName`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // Data SQL: original SQL with paging appended directly
+            expect(result.DataSQL).toContain('ORDER BY bridge.LastName, bridge.FirstName');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+            expect(result.DataSQL).not.toContain('__paged');
+
+            // Count SQL: CTE preserved, ORDER BY stripped, wrapped in __count
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            expect(result.CountSQL).toMatch(/\[__cte_MSTA_NAMSDESE_Member_Bridge_6yqh6l\]\s+AS/i);
+        });
+
+        it('should handle line comments with apostrophes', () => {
+            const sql = `WITH cte AS (
+-- This query checks the member's status
+SELECT ID, Name FROM Users WHERE Name = 'test'
+)
+SELECT * FROM cte ORDER BY Name`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+
+            expect(result.DataSQL).toContain('ORDER BY Name');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
             expect(result.CountSQL).toContain('TotalRowCount');
         });
-    });
 
-    describe('Table-qualified ORDER BY bug (remap to projected names)', () => {
-        it('should strip table qualifier from ORDER BY when wrapping in __paged CTE (chapter-engagement pattern)', () => {
-            // This is the exact pattern that broke: 3 CTEs with table-aliased ORDER BY
-            // The outer query is SELECT * FROM [__paged] where "chmem" doesn't exist
-            const sql = `WITH ChapterMembers AS (
-    SELECT c.ID AS ChapterID, c.Name AS ChapterName, c.ChapterType, c.Region, c.State,
-        COUNT(DISTINCT cm.MemberID) AS ActiveMemberCount,
-        AVG(DATEDIFF(DAY, cm.JoinDate, GETDATE())) AS AvgMemberTenureDays
-    FROM [AssociationDemo].[vwChapters] c
-    LEFT JOIN [AssociationDemo].[vwChapterMemberships] cm ON c.ID = cm.ChapterID AND cm.Status = 'Active'
-    WHERE c.IsActive = 1
-    GROUP BY c.ID, c.Name, c.ChapterType, c.Region, c.State
-),
-ChapterEventActivity AS (
-    SELECT cm.ChapterID, COUNT(DISTINCT er.EventID) AS UniqueEventsAttended
-    FROM [AssociationDemo].[vwChapterMemberships] cm
-    LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON cm.MemberID = er.MemberID
-    WHERE cm.Status = 'Active'
-    GROUP BY cm.ChapterID
-),
-ChapterCourseActivity AS (
-    SELECT cm.ChapterID, COUNT(DISTINCT en.CourseID) AS UniqueCoursesEnrolled
-    FROM [AssociationDemo].[vwChapterMemberships] cm
-    LEFT JOIN [AssociationDemo].[vwEnrollments] en ON cm.MemberID = en.MemberID
-    WHERE cm.Status = 'Active'
-    GROUP BY cm.ChapterID
+        it('should handle block comments with apostrophes', () => {
+            const sql = `WITH cte AS (
+/* This is the member's query — don't remove */
+SELECT ID FROM Users
 )
-SELECT chmem.ChapterID, chmem.ChapterName, chmem.ActiveMemberCount,
-    COALESCE(chev.UniqueEventsAttended, 0) AS UniqueEventsAttended,
-    COALESCE(chcr.UniqueCoursesEnrolled, 0) AS UniqueCoursesEnrolled
-FROM ChapterMembers chmem
-LEFT JOIN ChapterEventActivity chev ON chmem.ChapterID = chev.ChapterID
-LEFT JOIN ChapterCourseActivity chcr ON chmem.ChapterID = chcr.ChapterID
-ORDER BY chmem.ActiveMemberCount DESC`;
+SELECT * FROM cte`;
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 10, 'sqlserver');
+
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
+            expect(result.CountSQL).toContain('TotalRowCount');
+        });
+
+        it('should not be fooled by "ORDER BY" text inside a SQL comment (FBI net position bug)', () => {
+            // Real-world regression: a header comment mentioned "No ORDER BY / TOP"
+            // and the only true ORDER BY was inside a ROW_NUMBER() OVER(...) window
+            // function. The regex scanner false-positived on the comment text and
+            // skipped appending the synthetic ORDER BY, producing invalid SQL like
+            // `... WHERE fb.rn = 1 OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY` (no ORDER BY).
+            const sql = `/*
+  Latest FBI net position per pool, scoped to pool MemberTypeCodes.
+
+  No ORDER BY / TOP -- composable.
+*/
+WITH FilteredMembers AS (
+    SELECT [EmployerName], [MemberTypeCode]
+    FROM [ym].[vwMembers]
+    WHERE [MemberTypeCode] IN ('Regular', 'SponPoolSub', 'Affiliate-CAJPAOrg', 'AffiliateOrg')
+),
+MostRecentFBIPoolData AS (
+    SELECT
+        f.[Pool],
+        f.[State],
+        f.[YearEnded],
+        f.[NetPositionCurrent],
+        ROW_NUMBER() OVER (PARTITION BY f.[Pool] ORDER BY f.[YearEnded] DESC) AS rn
+    FROM [document].[vwFinancialBenchmarkingInitiativeDatas] AS f
+    INNER JOIN FilteredMembers AS m ON f.[Pool] = m.[EmployerName]
+)
+SELECT
+    fb.[Pool] AS PoolName,
+    fb.[State],
+    fb.[YearEnded] AS LatestYearEnded,
+    fb.[NetPositionCurrent]
+FROM MostRecentFBIPoolData AS fb
+WHERE fb.rn = 1`;
 
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-            // The ORDER BY must NOT reference "chmem." — that alias is inside __paged CTE
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*chmem\./i);
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[chmem\]\./i);
-            // It should use the projected column name
-            expect(result.DataSQL).toMatch(/ORDER BY.*ActiveMemberCount.*DESC/i);
-            // Must not have backticks
-            expect(result.DataSQL).not.toContain('`');
-            // Paging clause present
+            // The synthetic ORDER BY (SELECT NULL) MUST be present immediately
+            // before OFFSET — otherwise SQL Server rejects FETCH NEXT.
+            expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
-            // All 3 original CTEs + __paged should be present
-            expect(result.DataSQL).toMatch(/ChapterMembers/i);
-            expect(result.DataSQL).toMatch(/ChapterEventActivity/i);
-            expect(result.DataSQL).toMatch(/ChapterCourseActivity/i);
-            expect(result.DataSQL).toContain('[__paged]');
-        });
-
-        it('should handle COALESCE in ORDER BY with table qualifier (event-revenue pattern)', () => {
-            // ORDER BY COALESCE(rev.TotalRevenue, 0) DESC — complex expression with table qualifier
-            const sql = `SELECT e.ID AS EventID, e.Name AS EventName,
-    COUNT(DISTINCT er.ID) AS TotalRegistrations,
-    COALESCE(rev.TotalRevenue, 0) AS TotalRevenue
-FROM [AssociationDemo].[vwEvents] e
-LEFT JOIN [AssociationDemo].[vwEventRegistrations] er ON e.ID = er.EventID
-LEFT JOIN (
-    SELECT li.RelatedEntityID AS EventID, SUM(li.Amount) AS TotalRevenue
-    FROM [AssociationDemo].[vwInvoiceLineItems] li
-    GROUP BY li.RelatedEntityID
-) rev ON e.ID = rev.EventID
-GROUP BY e.ID, e.Name, rev.TotalRevenue
-ORDER BY COALESCE(rev.TotalRevenue, 0) DESC`;
-
-            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'sqlserver');
-
-            // Should use projected name TotalRevenue, not COALESCE(rev.TotalRevenue, 0)
-            expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/i);
-            expect(result.DataSQL).not.toContain('`');
-            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 50 ROWS ONLY');
-        });
-
-        it('should handle multiple ORDER BY terms with table qualifiers', () => {
-            // ORDER BY m.LastName, m.FirstName — both need qualifier stripping
-            const sql = `SELECT m.ID, m.FirstName, m.LastName, m.Email
-FROM [AssociationDemo].[vwMembers] m
-ORDER BY m.LastName, m.FirstName`;
-
-            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
-
-            // Table qualifiers should be stripped from both terms
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*\bm\./i);
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[m\]\./i);
-            expect(result.DataSQL).toMatch(/ORDER BY.*LastName/i);
-            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
+            expect(result.DataSQL.indexOf('ORDER BY (SELECT NULL)'))
+                .toBeLessThan(result.DataSQL.indexOf('OFFSET 0 ROWS FETCH NEXT'));
         });
     });
 
-    describe('Nunjucks-templated queries after composition', () => {
-        it('should handle fully-resolved SQL that originally had Nunjucks (member-lifetime-revenue)', () => {
-            // After Nunjucks rendering, the SQL is plain — this tests the post-rendering paging
+    describe('Leading block-comment before WITH clause (ExtractCTEs comment-skip bug)', () => {
+        it('should hoist CTEs as siblings when SQL starts with a block comment — QEI Patron Engagement', () => {
+            // Real-world regression: ExtractCTEs tested ^WITH\s on trimStart() and
+            // returned null because the leading /* */ comment was still there. The
+            // count builder then wrapped the ENTIRE SQL (comment + WITH + body) inside
+            // WITH [__count] AS (...), producing illegal nested WITH.
+            const sql = `/*
+  Per-QEI-Patron summary that totals engagement activity across five
+  channels: MEL contacts, event registrations, HL discussion posts, HL
+  logins, and Rasa newsletter actions.
+
+  No ORDER BY / TOP -- composable.
+*/
+
+WITH [TargetOrgs] AS (
+    SELECT [m].[ID] AS [OrganizationID], [m].[EmployerName] AS [OrganizationName]
+    FROM [ym].[vwMembers] AS [m]
+),
+[MEL_Eng] AS (
+    SELECT [m_mel].[EmployerName], COUNT(*) AS [MELCount]
+    FROM [document].[vwMemberEngagementLogs] AS [mel]
+    INNER JOIN [ym].[vwMembers] AS [m_mel]
+        ON [mel].[FirstName] = [m_mel].[FirstName]
+        AND [mel].[LastName] = [m_mel].[LastName]
+    GROUP BY [m_mel].[EmployerName]
+)
+SELECT [t].[OrganizationID], [t].[OrganizationName],
+    ISNULL([mel].[MELCount], 0) AS [TotalEngagementCount]
+FROM [TargetOrgs] AS [t]
+LEFT JOIN [MEL_Eng] AS [mel] ON [t].[OrganizationName] = [mel].[EmployerName]`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            // CountSQL must NOT have nested WITH inside [__count]
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            // CTEs must be hoisted as siblings of [__count]
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            // DataSQL must have paging appended
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should hoist CTEs as siblings when SQL starts with a block comment — ExecComp By Pool Service Area', () => {
+            // This query uses TRY_CAST which node-sql-parser cannot parse, so the
+            // AST path fails and the regex fallback must handle the leading comment.
+            const sql = `/*
+  Aggregates executive compensation by service area bucket.
+  Salary gotcha: ExecutiveCompData stores salary as free text in a truncated
+  column name [what_is_your_total_annual_base_salary_in_us_dolla].
+*/
+
+WITH ExecComp AS (
+    SELECT e.Email AS Email,
+        TRY_CAST(REPLACE(REPLACE(LTRIM(RTRIM(e.[what_is_your_total_annual_base_salary_in_us_dolla])), '$', ''), ',', '') AS decimal(18,2)) AS BaseSalary
+    FROM [document].[vwExecutiveCompDatas] AS e
+    WHERE e.[what_is_your_total_annual_base_salary_in_us_dolla] IS NOT NULL
+),
+MemberInfo AS (
+    SELECT m.ID AS MemberID, m.MemberTypeCode, ei.TypeCovered, m.EmailAddress
+    FROM [ym].[vwMembers] AS m
+    LEFT JOIN [ym].[vwMemberExtendedInfo_Virtual] AS ei ON m.ID = ei.MemberID
+    WHERE m.MemberTypeCode IN ('Regular','SponPoolSub','Affiliate-CAJPAOrg','AffiliateOrg')
+)
+SELECT
+    CASE
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%Count%' THEN 'County-Serving'
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%School%' THEN 'School-District-Serving'
+        ELSE 'Other'
+    END AS ServiceArea,
+    COUNT(ec.BaseSalary) AS ExecutiveCount,
+    AVG(ec.BaseSalary) AS AvgBaseSalary
+FROM MemberInfo AS mi
+LEFT JOIN ExecComp AS ec ON ec.Email = mi.EmailAddress
+WHERE ec.BaseSalary IS NOT NULL
+GROUP BY CASE
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%Count%' THEN 'County-Serving'
+        WHEN ISNULL(mi.TypeCovered, '') LIKE '%School%' THEN 'School-District-Serving'
+        ELSE 'Other'
+    END
+HAVING COUNT(ec.BaseSalary) > 0`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+
+        it('should hoist CTEs as siblings when SQL starts with a block comment — ExecComp With Member Context', () => {
+            // This query has 3 CTEs, TRY_CAST, ROW_NUMBER with PARTITION BY, and
+            // a leading block comment mentioning "No ORDER BY / TOP".
+            const sql = `/*
+  One row per executive compensation respondent with full pool/member
+  context attached (no grouping, no service-area bucketing).
+
+  No ORDER BY / TOP -- composable.
+*/
+
+WITH ExecComp AS (
+    SELECT e.[ID] AS [ExecCompID], e.[Email],
+        TRY_CAST(REPLACE(REPLACE(LTRIM(RTRIM(e.[what_is_your_total_annual_base_salary_in_us_dolla])), '$', ''), ',', '') AS DECIMAL(18,2)) AS [BaseSalary]
+    FROM [document].[vwExecutiveCompDatas] AS e
+    WHERE e.[Email] IS NOT NULL
+),
+MemberByEmail AS (
+    SELECT LOWER([m].[EmailAddress]) AS [EmailKey], [m].[ID], [m].[EmployerName],
+        ROW_NUMBER() OVER (
+            PARTITION BY LOWER([m].[EmailAddress])
+            ORDER BY CASE WHEN [m].[Membership] IS NOT NULL THEN 0 ELSE 1 END, [m].[ID]
+        ) AS [rn]
+    FROM [ym].[vwMembers] AS [m]
+    WHERE [m].[EmailAddress] IS NOT NULL
+),
+LatestFBI AS (
+    SELECT [fbi].[Pool], [fbi].[TotalAssets],
+        ROW_NUMBER() OVER (PARTITION BY [fbi].[Pool] ORDER BY [fbi].[YearEnded] DESC) AS [rn]
+    FROM [document].[vwFinancialBenchmarkingInitiativeDatas] AS [fbi]
+)
+SELECT [ec].[ExecCompID], [ec].[Email], [ec].[BaseSalary],
+    [m].[EmployerName] AS [PoolName], [lf].[TotalAssets]
+FROM ExecComp AS [ec]
+LEFT JOIN MemberByEmail AS [m] ON [m].[EmailKey] = LOWER([ec].[Email]) AND [m].[rn] = 1
+LEFT JOIN LatestFBI AS [lf] ON [lf].[Pool] = [m].[EmployerName] AND [lf].[rn] = 1
+WHERE 1 = 1`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
+
+            expect(result.CountSQL).not.toMatch(/\[__count\]\s*AS\s*\([\s\S]*?\bWITH\s/i);
+            expect(result.CountSQL).toContain('[__count]');
+            expect(result.CountSQL).toContain('SELECT COUNT(*) AS TotalRowCount');
+            // Must have synthetic ORDER BY since the query has none (window
+            // functions' ORDER BYs don't count)
+            expect(result.DataSQL).toContain('ORDER BY (SELECT NULL)');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
+        });
+    });
+
+    describe('Multiple CTEs from composition engine', () => {
+        it('should handle multiple composed CTEs', () => {
+            const sql = `WITH __cq_0 AS (
+SELECT CustomerID, SUM(Total) AS TotalRevenue
+FROM Orders
+GROUP BY CustomerID
+),
+__cq_1 AS (
+SELECT ID, Name FROM Customers WHERE Status = 'Active'
+)
+SELECT c.Name, r.TotalRevenue
+FROM __cq_1 c
+JOIN __cq_0 r ON c.ID = r.CustomerID
+ORDER BY r.TotalRevenue DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 20, 'sqlserver');
+
+            // Data SQL: original SQL preserved, paging appended
+            expect(result.DataSQL).toContain('ORDER BY r.TotalRevenue DESC');
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY');
+
+            // Count SQL: CTEs preserved, ORDER BY stripped
+            expect(result.CountSQL).toMatch(/__cq_0/);
+            expect(result.CountSQL).toMatch(/__cq_1/);
+            expect(result.CountSQL).toContain('TotalRowCount');
+            expect(result.CountSQL).not.toMatch(/ORDER BY/i);
+        });
+    });
+
+    describe('Complex real-world query patterns', () => {
+        it('should handle member-lifetime-revenue (CTEs + COALESCE ORDER BY)', () => {
             const sql = `WITH CurrentMembership AS (
     SELECT ms.MemberID, mt.Name AS MembershipType,
         ROW_NUMBER() OVER (PARTITION BY ms.MemberID ORDER BY ms.StartDate DESC) AS rn
@@ -519,19 +699,12 @@ ORDER BY COALESCE(rev.TotalRevenue, 0) DESC`;
 
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-            expect(result.DataSQL).toMatch(/ORDER BY.*TotalRevenue.*DESC/i);
-            expect(result.DataSQL).not.toContain('`');
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*rev\./i);
-            expect(result.DataSQL).not.toMatch(/ORDER BY.*\[rev\]\./i);
+            // ORDER BY preserved exactly — no remapping needed
+            expect(result.DataSQL).toContain('ORDER BY COALESCE(rev.TotalRevenue, 0) DESC');
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
-            // Both original CTEs + __paged
-            expect(result.DataSQL).toMatch(/CurrentMembership/i);
-            expect(result.DataSQL).toMatch(/MemberRevenue/i);
         });
-    });
 
-    describe('Simple queries without CTEs', () => {
-        it('should handle active-members-by-membership-type (GROUP BY, no CTE)', () => {
+        it('should handle GROUP BY with aliased ORDER BY (active-members-by-type)', () => {
             const sql = `SELECT mt.Name AS MembershipType, mt.AnnualDues,
     COUNT(DISTINCT m.ID) AS ActiveMemberCount,
     ROUND(COUNT(DISTINCT m.ID) * 100.0 / SUM(COUNT(DISTINCT m.ID)) OVER (), 1) AS PercentageOfTotal
@@ -544,8 +717,7 @@ ORDER BY ActiveMemberCount DESC`;
 
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-            expect(result.DataSQL).toMatch(/ORDER BY.*ActiveMemberCount.*DESC/i);
-            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).toContain('ORDER BY ActiveMemberCount DESC');
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
         });
 
@@ -553,9 +725,7 @@ ORDER BY ActiveMemberCount DESC`;
             const sql = `SELECT YEAR(e.StartDate) AS EventYear,
     DATEPART(QUARTER, e.StartDate) AS EventQuarter,
     CONCAT(YEAR(e.StartDate), ' Q', DATEPART(QUARTER, e.StartDate)) AS YearQuarter,
-    COUNT(DISTINCT e.ID) AS UniqueEvents,
-    COUNT(DISTINCT er.ID) AS TotalRegistrations,
-    SUM(CASE WHEN er.Status = 'Attended' THEN 1 ELSE 0 END) AS TotalAttended
+    COUNT(DISTINCT e.ID) AS UniqueEvents
 FROM [AssociationDemo].[vwEvents] e
 INNER JOIN [AssociationDemo].[vwEventRegistrations] er ON e.ID = er.EventID
 WHERE e.Status NOT IN ('Draft', 'Cancelled')
@@ -564,14 +734,13 @@ ORDER BY EventYear, EventQuarter`;
 
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 100, 'sqlserver');
 
-            expect(result.DataSQL).toMatch(/ORDER BY.*EventYear/i);
-            expect(result.DataSQL).not.toContain('`');
+            expect(result.DataSQL).toContain('ORDER BY EventYear, EventQuarter');
             expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY');
         });
     });
 
     describe('PostgreSQL paging with real-world patterns', () => {
-        it('should produce valid PostgreSQL paging for member-activity-counts pattern', () => {
+        it('should produce valid PostgreSQL paging for CTE queries', () => {
             const sql = `WITH MemberActivities AS (
     SELECT m.ID AS MemberID, m.FirstName,
         (COALESCE(evt.EventsAttended, 0) + COALESCE(crs.CoursesCompleted, 0)) AS TotalActivityCount
@@ -585,9 +754,31 @@ ORDER BY TotalActivityCount DESC`;
             const result = QueryPagingEngine.WrapWithPaging(sql, 0, 50, 'postgresql');
 
             expect(result.DataSQL).toContain('LIMIT 50 OFFSET 0');
-            expect(result.DataSQL).not.toContain('`');
             expect(result.DataSQL).not.toContain('FETCH NEXT');
-            expect(result.DataSQL).toMatch(/ORDER BY.*TotalActivityCount.*DESC/i);
+            expect(result.DataSQL).toContain('ORDER BY TotalActivityCount DESC');
+        });
+    });
+
+    describe('TOP clause handling with CTEs', () => {
+        it('should strip TOP from main SELECT but not from CTE body', () => {
+            const sql = `WITH TopSellers AS (
+SELECT TOP 10 SellerID, SUM(Amount) AS Revenue
+FROM Sales
+GROUP BY SellerID
+ORDER BY Revenue DESC
+)
+SELECT TOP 50 s.Name, ts.Revenue
+FROM TopSellers ts
+JOIN Sellers s ON ts.SellerID = s.ID
+ORDER BY ts.Revenue DESC`;
+
+            const result = QueryPagingEngine.WrapWithPaging(sql, 0, 25, 'sqlserver');
+
+            // TOP 50 should be stripped from main SELECT
+            expect(result.DataSQL).not.toMatch(/SELECT\s+TOP\s+50/i);
+            // But TOP 10 inside CTE should be preserved
+            expect(result.DataSQL).toMatch(/TOP\s+10/i);
+            expect(result.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 25 ROWS ONLY');
         });
     });
 });

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, CodeNameFromString } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, CodeNameFromString } from '@memberjunction/core';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -7,13 +7,13 @@ import {
     FullTextSearchResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { logIf, sortBySequenceAndCreatedAt } from '../../../Misc/util';
-import { configInfo, dbDatabase } from '../../../Config/config';
-import { sqlConfig } from '../../../Config/db-connection';
-import { logError, logMessage, logWarning } from '../../../Misc/status_logging';
+import { RegisterClass } from '@memberjunction/global';
+import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
+import { dbDatabase } from '../../../Config/config';
+import { MSSQLConnection } from '../../../Config/db-connection';
+import { logError, logWarning } from '../../../Misc/status_logging';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync, spawn } from 'child_process';
 
 const ssDialect = new SQLServerDialect();
 
@@ -22,9 +22,13 @@ const ssDialect = new SQLServerDialect();
  * Generates SQL Server-native DDL for views, stored procedures, triggers, indexes,
  * full-text search, permissions, and other database objects.
  *
- * This provider extracts the SQL Server-specific generation logic that was previously
- * hardcoded in SQLCodeGenBase, enabling the orchestrator to be database-agnostic.
+ * Registered with `MJGlobal.ClassFactory` against the canonical `'sqlserver'`
+ * platform key — `SQLCodeGenBase` resolves this provider via
+ * `ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)`.
+ * Downstream packages can subclass and re-register with higher priority to
+ * override codegen behavior — same extension hook every other MJ class uses.
  */
+@RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get Dialect(): SQLDialect {
@@ -173,6 +177,17 @@ ${whereClause}GO`;
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
             }
         } else {
+            // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
+            // supply the PK on INSERT (no IDENTITY, no UUID-with-default). Add ALL PKs to the
+            // additionalFieldList so they appear in the INSERT, and call generateInsertFieldString
+            // below with excludePrimaryKey=true so it does NOT also emit them — otherwise the
+            // INSERT would list the PK columns twice and SQL Server raises "The column name 'X'
+            // is specified more than once". This pairs with the excludePrimaryKey=true argument
+            // at the call sites at the bottom of this method.
+            for (const k of entity.PrimaryKeys) {
+                additionalFieldList += ',\n                [' + k.Name + ']';
+                additionalValueList += ',\n                @' + k.CodeName;
+            }
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
             for (const k of entity.PrimaryKeys) {
@@ -199,11 +214,11 @@ BEGIN
     INSERT INTO
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '')}${additionalFieldList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '', true)}${additionalFieldList}
         )
     ${outputCode}VALUES
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '@')}${additionalValueList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}${additionalValueList}
         )`}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
@@ -717,7 +732,7 @@ GO
      * Includes primary key fields and all updateable fields, with proper
      * DECLARE statements, SELECT fields, FETCH INTO variables, and SP parameters.
      */
-    private buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+    private buildUpdateCursorParameters(entity: EntityInfo, fkField: EntityFieldInfo, prefix: string = ''): {
         declarations: string,
         selectFields: string,
         fetchInto: string,
@@ -760,8 +775,14 @@ GO
 
                 if (allParams !== '')
                     allParams += ', ';
-                // Use named parameters: @ParamName = @VariableValue
-                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
+
+                // Use the centralized buildExecParamForField() to generate EXEC
+                // params. For the FK field being cleared, pass clearValue=true so
+                // the tolerant update SP receives @FK_Clear = 1 and actually sets
+                // the column to NULL (instead of treating NULL as "leave unchanged").
+                const isFkBeingCleared = ef.Name === fkField.Name;
+                const paramParts = this.buildExecParamForField(ef, `@${varPrefix}_${ef.CodeName}`, isFkBeingCleared);
+                allParams += paramParts.join(', ');
             }
         }
 
@@ -791,120 +812,6 @@ GO
     }
 
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
-
-    /**
-     * Builds the SQL Server parameter declaration list for a CRUD stored procedure.
-     * Produces `@ParamName TYPE` entries separated by commas. Filters fields based on
-     * update/create context: includes primary keys only on updates (or non-auto-increment
-     * creates), excludes virtual and special date fields, and adds `= NULL` default values
-     * for optional primary keys on create and for non-nullable fields with database defaults.
-     */
-    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            const autoGeneratedPrimaryKey = ef.AutoIncrement;
-            if (
-                (ef.AllowUpdateAPI || (ef.IsPrimaryKey && isUpdate) || (ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !isUpdate)) &&
-                !ef.IsVirtual &&
-                (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey || isUpdate) &&
-                !ef.IsSpecialDateField
-            ) {
-                if (!isFirst) sOutput += ',\n    ';
-                else isFirst = false;
-
-                let defaultParamValue = '';
-                if (!isUpdate && ef.IsPrimaryKey && !ef.AutoIncrement) {
-                    defaultParamValue = ' = NULL';
-                } else if (!isUpdate && ef.HasDefaultValue && !ef.AllowsNull) {
-                    defaultParamValue = ' = NULL';
-                }
-                sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
-            }
-        }
-        return sOutput;
-    }
-
-    /**
-     * Generates either the column-name list or the value-expression list for an INSERT
-     * statement, depending on the `prefix` parameter:
-     *
-     * - **Empty prefix** (`''`): Produces bracketed column names (e.g., `[Name], [Email]`).
-     * - **`'@'` prefix**: Produces parameter references with smart default handling:
-     *   - Special date fields emit `GETUTCDATE()` for created/updated-at, `NULL` for deleted-at.
-     *   - UNIQUEIDENTIFIER fields with defaults use a `CASE` expression that detects the
-     *     empty GUID sentinel (`00000000-...`) and falls back to the database default.
-     *   - Other non-nullable fields with defaults are wrapped in `ISNULL(@Param, default)`.
-     *
-     * Skips auto-increment, virtual, and non-updatable fields. Optionally excludes the
-     * primary key column (used by the two-branch GUID insert pattern in `generateCRUDCreate`).
-     */
-    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
-        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            if (
-                (excludePrimaryKey && ef.IsPrimaryKey) ||
-                (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
-                ef.IsVirtual ||
-                !ef.AllowUpdateAPI ||
-                ef.AutoIncrement
-            ) {
-                continue;
-            }
-
-            if (!isFirst) sOutput += ',\n                ';
-            else isFirst = false;
-
-            if (prefix !== '' && ef.IsSpecialDateField) {
-                if (ef.IsCreatedAtField || ef.IsUpdatedAtField)
-                    sOutput += `GETUTCDATE()`;
-                else
-                    sOutput += `NULL`;
-            } else if (prefix && prefix !== '' && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue && !ef.AllowsNull) {
-                const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                sOutput += `CASE @${ef.CodeName} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(@${ef.CodeName}, ${formattedDefault}) END`;
-            } else {
-                let sVal = '';
-                if (!prefix || prefix.length === 0) {
-                    sVal = '[' + ef.Name + ']';
-                } else {
-                    sVal = prefix + ef.CodeName;
-                    if (ef.HasDefaultValue && !ef.AllowsNull) {
-                        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                        if (ef.IsUniqueIdentifier) {
-                            sVal = `CASE ${sVal} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(${sVal}, ${formattedDefault}) END`;
-                        } else {
-                            sVal = `ISNULL(${sVal}, ${formattedDefault})`;
-                        }
-                    }
-                }
-                sOutput += sVal;
-            }
-        }
-        return sOutput;
-    }
-
-    /** @inheritdoc */
-    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
-        let sOutput = '';
-        let isFirst = true;
-        for (const ef of entityFields) {
-            if (
-                !ef.IsPrimaryKey &&
-                !ef.IsVirtual &&
-                ef.AllowUpdateAPI &&
-                !ef.AutoIncrement &&
-                !ef.IsSpecialDateField
-            ) {
-                if (!isFirst) sOutput += ',\n        ';
-                else isFirst = false;
-                sOutput += `[${ef.Name}] = @${ef.CodeName}`;
-            }
-        }
-        return sOutput;
-    }
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
@@ -1361,9 +1268,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1399,7 +1306,13 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+        // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
+        // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
+        // but we quote each ID anyway for SQL Server's UUID literal syntax.
+        const scopeFilter = entityIDs && entityIDs.length > 0
+            ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
         return `WITH MaxSequences AS (
    SELECT
       EntityID,
@@ -1427,6 +1340,7 @@ NumberedRows AS (
                                    sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
+      sf.IsComputed,
       e.RelationshipDefaultDisplayType,
       e.Name EntityName,
       re.ID RelatedEntityID,
@@ -1458,6 +1372,7 @@ NumberedRows AS (
       ON e.BaseTable = uk.TableName AND sf.FieldName = uk.ColumnName AND e.SchemaName = uk.SchemaName
    WHERE
       EntityFieldID IS NULL
+      ${scopeFilter}
    )
    SELECT *
    FROM NumberedRows
@@ -1508,153 +1423,30 @@ DROP TABLE #__mj__CodeGen__vwTableUniqueKeys;
      */
     async executeSQLFileViaShell(filePath: string): Promise<boolean> {
         try {
-            this.validateSqlConfig();
-            const serverSpec = this.buildServerSpec();
-            const absoluteFilePath = this.resolveAndShortPathConvert(filePath);
-            const args = this.buildSqlcmdArgs(serverSpec, absoluteFilePath);
-            return await this.spawnSqlcmd(args, filePath);
+            const sql = fs.readFileSync(filePath, 'utf-8');
+            if (!sql.trim()) return true;
+
+            const batches = sql
+                .split(/^\s*GO\s*$/gim)
+                .map(b => b.trim())
+                .filter(b => b.length > 0);
+
+            const pool = await MSSQLConnection();
+
+            for (const batch of batches) {
+                try {
+                    await pool.request().query(batch);
+                } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    logWarning(`[CodeGen] SQL batch warning in ${path.basename(filePath)}: ${msg.substring(0, 200)}`);
+                }
+            }
+
+            return true;
         } catch (e) {
-            this.logSqlcmdError(e);
+            logError(`[CodeGen] Failed to execute SQL file ${filePath}: ${e instanceof Error ? e.message : e}`);
             return false;
         }
     }
 
-    /**
-     * Validates that required SQL Server connection configuration is present.
-     */
-    private validateSqlConfig(): void {
-        if (sqlConfig.user === undefined || sqlConfig.password === undefined || sqlConfig.database === undefined) {
-            throw new Error('SQL Server user, password, and database must be provided in the configuration');
-        }
-    }
-
-    /**
-     * Builds the server specification string for sqlcmd (server[,port][\instance]).
-     */
-    private buildServerSpec(): string {
-        let serverSpec = sqlConfig.server;
-        if (sqlConfig.port) {
-            serverSpec += `,${sqlConfig.port}`;
-        }
-        if (sqlConfig.options?.instanceName) {
-            serverSpec += `\\${sqlConfig.options.instanceName}`;
-        }
-        return serverSpec;
-    }
-
-    /**
-     * Resolves the file path to absolute and converts to 8.3 short path on Windows if needed.
-     */
-    private resolveAndShortPathConvert(filePath: string): string {
-        const cwd = path.resolve(process.cwd());
-        let absoluteFilePath = path.resolve(cwd, filePath);
-
-        const isWindows = process.platform === 'win32';
-        if (isWindows && absoluteFilePath.includes(' ')) {
-            absoluteFilePath = this.tryConvertToShortPath(absoluteFilePath);
-        }
-        return absoluteFilePath;
-    }
-
-    /**
-     * Attempts to convert a Windows path to 8.3 short format to avoid quoting issues.
-     */
-    private tryConvertToShortPath(absoluteFilePath: string): string {
-        try {
-            const result = execSync(`for %I in ("${absoluteFilePath}") do @echo %~sI`, {
-                encoding: 'utf8',
-                shell: 'cmd.exe'
-            }).trim();
-            if (result && !result.includes('ERROR') && !result.includes('%~sI')) {
-                logIf(configInfo.verboseOutput, `Converted path to short format: ${result}`);
-                return result;
-            }
-        } catch (e) {
-            logIf(configInfo.verboseOutput, `Could not convert to short path, using original: ${e}`);
-        }
-        return absoluteFilePath;
-    }
-
-    /**
-     * Builds the argument array for the sqlcmd CLI tool.
-     */
-    private buildSqlcmdArgs(serverSpec: string, absoluteFilePath: string): string[] {
-        const args = [
-            '-S', serverSpec,
-            '-U', sqlConfig.user!,
-            '-P', sqlConfig.password!,
-            '-d', sqlConfig.database!,
-            '-I',       // Enable QUOTED_IDENTIFIER
-            '-V', '17', // Only fail on severity >= 17
-            '-i', absoluteFilePath
-        ];
-        if (sqlConfig.options?.trustServerCertificate) {
-            args.push('-C');
-        }
-        return args;
-    }
-
-    /**
-     * Spawns the sqlcmd process and waits for completion.
-     */
-    private async spawnSqlcmd(args: string[], filePath: string): Promise<boolean> {
-        logIf(
-            configInfo.verboseOutput,
-            `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`
-        );
-        const isWindows = process.platform === 'win32';
-        const sqlcmdCommand = isWindows ? 'sqlcmd.exe' : 'sqlcmd';
-
-        const spawnOptions: Record<string, unknown> = { shell: false };
-        if (isWindows) {
-            spawnOptions['windowsVerbatimArguments'] = true;
-        }
-
-        const result = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-            const child = spawn(sqlcmdCommand, args, spawnOptions as Parameters<typeof spawn>[2]);
-            let stdout = '';
-            let stderr = '';
-
-            child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
-            child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
-            child.on('error', (error: Error) => { reject(error); });
-            child.on('close', (code: number | null) => {
-                if (code === 0) {
-                    resolve({ stdout, stderr });
-                } else {
-                    const error = new Error(`sqlcmd exited with code ${code}`);
-                    Object.assign(error, { stdout, stderr, code });
-                    reject(error);
-                }
-            });
-        });
-
-        if (result.stdout && result.stdout.trim().length > 0) {
-            logWarning(`SQL Server message: ${result.stdout.trim()}`);
-        }
-        if (result.stderr && result.stderr.trim().length > 0) {
-            logWarning(`SQL Server stderr: ${result.stderr.trim()}`);
-        }
-        return true;
-    }
-
-    /**
-     * Logs a sqlcmd execution error, masking the password in the output.
-     */
-    private logSqlcmdError(e: unknown): void {
-        const errRecord = e as Record<string, unknown>;
-        let message = (e instanceof Error) ? e.message : String(e);
-
-        if (errRecord['stdout']) {
-            message += `\n SQL Server message: ${errRecord['stdout']}`;
-        }
-        if (errRecord['stderr']) {
-            message += `\n SQL Server error: ${errRecord['stderr']}`;
-        }
-
-        const errorMessage = sqlConfig.password
-            ? message.replace(sqlConfig.password, 'XXXXX')
-            : message;
-        logError('Error executing batch SQL file: ' + errorMessage);
-    }
 }

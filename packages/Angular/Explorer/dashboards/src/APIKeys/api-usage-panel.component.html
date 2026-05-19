@@ -290,16 +290,17 @@
 
   <!-- Drill-down Panel -->
   @if (ShowLogsPanel) {
-    <kendo-window
-      [width]="800"
-      [minWidth]="600"
-      [height]="500"
-      [minHeight]="400"
-      [resizable]="true"
-      [draggable]="true"
-      [top]="80"
-      (close)="closeLogsPanel()">
-      <kendo-window-titlebar>
+    <mj-window
+      [Width]="800"
+      [MinWidth]="600"
+      [Height]="500"
+      [MinHeight]="400"
+      [Resizable]="true"
+      [Draggable]="true"
+      [Top]="80"
+      [Visible]="true"
+      (Close)="closeLogsPanel()">
+      <mj-window-titlebar>
         <div class="drilldown-title">
           <i class="fa-solid fa-magnifying-glass-chart"></i>
           <span>Request Details</span>
@@ -314,10 +315,10 @@
             </span>
           }
         </div>
-        <button kendoButton fillMode="flat" (click)="closeLogsPanel()" class="window-close-btn">
+        <button mjButton variant="flat" (click)="closeLogsPanel()" class="window-close-btn">
           <i class="fa-solid fa-times"></i>
         </button>
-      </kendo-window-titlebar>
+      </mj-window-titlebar>
       <div class="drilldown-content">
         @if (IsLoadingLogs) {
           <mj-loading text="Loading requests..."></mj-loading>
@@ -355,6 +356,6 @@
           </div>
         }
       </div>
-    </kendo-window>
+    </mj-window>
   }
 </div>

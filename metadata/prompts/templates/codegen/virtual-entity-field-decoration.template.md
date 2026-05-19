@@ -117,7 +117,7 @@ Notes:
 - `confidence` must be "high", "medium", or "low"
 - Only include foreign keys with "high" or "medium" confidence
 - `extendedType` is optional — only use one of these exact values when the field content clearly matches: `Code`, `Email`, `FaceTime`, `Geo`, `MSTeams`, `Other`, `SIP`, `SMS`, `Skype`, `Tel`, `URL`, `WhatsApp`, `ZoomMtg`. For phone numbers use `Tel`, for addresses/coordinates use `Geo`, for Microsoft Teams links use `MSTeams`, for Zoom links use `ZoomMtg`. Do NOT use values outside this list.
-- `codeType` is optional — only use one of: `CSS`, `HTML`, `JavaScript`, `SQL`, `TypeScript`, `Other`. Use when the field content is source code or markup.
+- `codeType` is optional — MUST be EXACTLY one of these case-sensitive strings, or `null`: `CSS`, `HTML`, `JavaScript`, `SQL`, `TypeScript`, `Other`. Use when the field content is source code or markup. Any other language (Python, Markdown, JSON, XML, YAML, Bash, Shell, C#, Java, etc.) MUST map to `Other` — do NOT invent new enum values. Case matters (`javascript` is invalid, `JavaScript` is correct). Never use an empty string — use `null` instead.
 - `category` is required for every field — assign a semantic category to each field
 - `displayName` is required for every field — provide a user-friendly name
 - `entityIcon` should be a valid Font Awesome 6 icon class

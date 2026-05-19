@@ -225,5 +225,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Artifact Versions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArtifactVersions"
+        SectionName="Artifact Versions"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArtifactVersions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Versions','FileID')"
+                [NewRecordValues]="NewRecordValues('MJ: Artifact Versions')"
+                [AllowLoad]="IsSectionExpanded('mJArtifactVersions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArtifactVersions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, inject } from '@angular/core';
+import { RunView, UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ArtifactSelectionResult {
   artifact: MJArtifactEntity;
@@ -19,7 +19,10 @@ export interface ArtifactSelectionResult {
   templateUrl: './artifact-selection-dialog.component.html',
   styleUrl: './artifact-selection-dialog.component.css'
 })
-export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
+export class ArtifactSelectionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactSelectionResult | undefined>();
+
   // Data
   artifacts: MJArtifactEntity[] = [];
   artifactVersions: MJArtifactVersionEntity[] = [];
@@ -48,15 +51,13 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   newArtifactName = '';
   newArtifactDescription = '';
   
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
   private currentUser: UserInfo | null = null;
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
 
-  constructor(
-    public dialog: DialogRef,
-    private notificationService: MJNotificationService
-  ) {}
+  private notificationService = inject(MJNotificationService);
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit() {
     // Setup search debouncing
@@ -78,8 +79,9 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   async loadArtifacts() {
     this.isLoading = true;
+    this.cdr.detectChanges();
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Calculate StartRow for server-side paging
       const startRow = this.currentPage * this.pageSize;
@@ -106,6 +108,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       console.error('Error loading artifacts:', error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -129,7 +132,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     
     // Filter by user email if provided
     if (this.userEmail?.trim()) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`;
       filters.push(userFilter);
@@ -152,6 +155,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     this.showNewArtifactForm = false;
     this.versionAction = 'new';
     this.selectedVersion = null;
+    this.cdr.detectChanges();
 
     // Load versions for this artifact
     await this.loadVersions(artifact.ID);
@@ -159,7 +163,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   async loadVersions(artifactId: string) {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
@@ -173,6 +177,8 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading versions:', error);
       this.artifactVersions = [];
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 
@@ -259,7 +265,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   async save() {
@@ -273,7 +279,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
           artifact: newArtifact,
           action: 'new-version'
         };
-        this.dialog.close(result);
+        this.Close.emit(result);
       }
       return;
     }
@@ -295,7 +301,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
         if (!confirm) return;
       }
 
-      this.dialog.close(result);
+      this.Close.emit(result);
     }
   }
 
@@ -306,7 +312,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       artifact.Description = this.newArtifactDescription || null;
 
       // Get Component artifact type
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const typeResult = await rv.RunView({
         EntityName: 'MJ: Artifact Types',
         ExtraFilter: `Name = 'Component'`,

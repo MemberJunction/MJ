@@ -1,0 +1,296 @@
+[
+  {
+    "fields": {
+      "Name": "Al Ḩasakah",
+      "Code": "HA",
+      "ISO3166_2": "SY-HA",
+      "Latitude": 36.3536,
+      "Longitude": 40.9092,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-HA.geojson",
+      "CommonAliases": [
+        "Al Ḩasakah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "F7C903B4-8D13-47AC-B7EC-C66544D0EF86"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.153Z",
+      "checksum": "a1cdc65a772acdfdfc41add53b9d26a13dc7b2acbe5a5c314017956ae844533b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Lādhiqīyah",
+      "Code": "LA",
+      "ISO3166_2": "SY-LA",
+      "Latitude": 35.5494,
+      "Longitude": 36.0061,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-LA.geojson",
+      "CommonAliases": [
+        "Al Lādhiqīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "E18620AC-90D5-4DE1-9F24-5DB34A648B3E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.171Z",
+      "checksum": "65aa722c10ea214d06db48b39e558a204867948e1637d1dcecf84da05c7b6799"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Qunayţirah",
+      "Code": "QU",
+      "ISO3166_2": "SY-QU",
+      "Latitude": 33.053,
+      "Longitude": 35.9145,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-QU.geojson",
+      "CommonAliases": [
+        "Al Qunayţirah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "1000198B-6704-45BE-91A9-A53735989B25"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.188Z",
+      "checksum": "ff85b2394e2fb5bd12922125ed567730a50b8b496eee61922ef9b058540e3197"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ar Raqqah",
+      "Code": "RA",
+      "ISO3166_2": "SY-RA",
+      "Latitude": 36.0067,
+      "Longitude": 38.9127,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-RA.geojson",
+      "CommonAliases": [
+        "Ar Raqqah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "290CB7EF-9CC1-4970-8EDB-4B96629C10FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.205Z",
+      "checksum": "b1ac886ed58005b76958c4d5f7105c28fbc49429241eaa8db33b4a37a5ea2564"
+    }
+  },
+  {
+    "fields": {
+      "Name": "As Suwaydā'",
+      "Code": "SU",
+      "ISO3166_2": "SY-SU",
+      "Latitude": 32.7577,
+      "Longitude": 36.9153,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-SU.geojson",
+      "CommonAliases": [
+        "As Suwaydā'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "775FDD60-E465-40B9-A617-4C3EE2DE5208"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.221Z",
+      "checksum": "78fe6d5cb11ae2e34f05a316f3feab9b95979f1c35dbd8b302b14eb5d169f3e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dar’ā",
+      "Code": "DR",
+      "ISO3166_2": "SY-DR",
+      "Latitude": 32.8686,
+      "Longitude": 36.1698,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-DR.geojson",
+      "CommonAliases": [
+        "Dar’ā"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "AF56A0E8-34D2-4E49-A2B3-C5A3B4EFDA94"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.238Z",
+      "checksum": "c01e137ef72b5f7a8614ed178a0fd5d65612bf17be6d5aa8d72190f57bfaaa43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dayr az Zawr",
+      "Code": "DY",
+      "ISO3166_2": "SY-DY",
+      "Latitude": 35.0736,
+      "Longitude": 40.275,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-DY.geojson",
+      "CommonAliases": [
+        "Dayr az Zawr"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "D6F0FBF1-EE32-49E3-8A90-906CFFD41F9D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.255Z",
+      "checksum": "09c4d0f47940e6ac6b101ea5b7ff3f5484054a33a7c074778236efb9ad06b5a6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dimashq",
+      "Code": "DI",
+      "ISO3166_2": "SY-DI",
+      "Latitude": 33.5101,
+      "Longitude": 36.2897,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-DI.geojson",
+      "CommonAliases": [
+        "Dimashq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "138974F8-AB2C-40A3-8C70-455865A37ED4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.273Z",
+      "checksum": "90ee225055e7c05ceb01fb261e624655b60cc9d6dcaba393808114c534e0c81e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ḩalab",
+      "Code": "HL",
+      "ISO3166_2": "SY-HL",
+      "Latitude": 36.1054,
+      "Longitude": 37.601,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-HL.geojson",
+      "CommonAliases": [
+        "Ḩalab"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "0A1BD2CE-AC2A-4929-9551-8B7B63A5A498"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.290Z",
+      "checksum": "a9edcd3f71f0e44f3ce19828f54e7896c4ce740d249291850911d445e2a57e98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ḩamāh",
+      "Code": "HM",
+      "ISO3166_2": "SY-HM",
+      "Latitude": 35.2352,
+      "Longitude": 37.22,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-HM.geojson",
+      "CommonAliases": [
+        "Ḩamāh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "30D0855F-9FD5-458C-970E-B4F0E9EB66FD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.303Z",
+      "checksum": "d84420dc5a55eb9820f1a391b257e029d1a58ad05652df1d0cb8f4af26d0c38c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ḩimş",
+      "Code": "HI",
+      "ISO3166_2": "SY-HI",
+      "Latitude": 34.1503,
+      "Longitude": 38.1425,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-HI.geojson",
+      "CommonAliases": [
+        "Ḩimş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "103A89AA-D07B-4403-B569-9D9BCE592352"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.346Z",
+      "checksum": "775b95f98e4fd755973151c0a3ea3ffcd9abc3fe03f9868f25a9ee2828c1492a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Idlib",
+      "Code": "ID",
+      "ISO3166_2": "SY-ID",
+      "Latitude": 35.8528,
+      "Longitude": 36.6829,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-ID.geojson",
+      "CommonAliases": [
+        "Idlib"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "09070D9C-4D98-4180-8737-881DA53D10AD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.366Z",
+      "checksum": "aedeaae21742cc48f426411d4794365aa67a0a530975a814bac960df29f6f487"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rīf Dimashq",
+      "Code": "RD",
+      "ISO3166_2": "SY-RD",
+      "Latitude": 33.5286,
+      "Longitude": 37.0728,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-RD.geojson",
+      "CommonAliases": [
+        "Rīf Dimashq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "69066F80-0B0F-4EEF-85F9-7EFB4EE7A52F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.385Z",
+      "checksum": "252b26f19964b2a5096e9e2f6f029f08e4ca600c8f5549e1a396811f4ebadab7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ţarţūs",
+      "Code": "TA",
+      "ISO3166_2": "SY-TA",
+      "Latitude": 34.9274,
+      "Longitude": 36.0901,
+      "BoundaryGeoJSON": "@file:by-country/SY/boundaries/SY-TA.geojson",
+      "CommonAliases": [
+        "Ţarţūs"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SY"
+    },
+    "primaryKey": {
+      "ID": "91417B63-A309-4470-A0E8-D659014D93C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.400Z",
+      "checksum": "342a1d746cb326ec99dd429c2f971672e82d460f40ec52736f0b54ff76f6ea8b"
+    }
+  }
+]

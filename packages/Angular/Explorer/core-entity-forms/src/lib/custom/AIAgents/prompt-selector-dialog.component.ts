@@ -1,11 +1,11 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { WindowRef } from '@progress/kendo-angular-dialog';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl } from '@angular/forms';
 import { RunView } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface PromptSelectorConfig {
   /** Title for the dialog */
   title: string;
@@ -40,7 +40,7 @@ export interface PromptSelectorResult {
   templateUrl: './prompt-selector-dialog.component.html',
   styleUrls: ['./prompt-selector-dialog.component.css']
 })
-export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
+export class PromptSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
   config: PromptSelectorConfig = { title: 'Select Prompts' };
@@ -62,10 +62,12 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
   // View mode
   viewMode: 'grid' | 'list' = 'list';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.setupSearch();
@@ -103,7 +105,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Build filter - default to active prompts
       let filter = "Status = 'Active'";
@@ -233,7 +235,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   createNew() {
@@ -243,11 +245,11 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     };
 
     this.result.next(result);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 }

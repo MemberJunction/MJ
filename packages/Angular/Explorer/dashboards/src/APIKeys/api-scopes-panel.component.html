@@ -135,40 +135,37 @@
 
   <!-- Create/Edit Dialog -->
   @if (ShowCreateDialog || ShowEditDialog) {
-    <kendo-window
-      [width]="560"
-      [minWidth]="420"
-      [minHeight]="480"
-      [resizable]="true"
-      [draggable]="true"
-      [top]="80"
-      (close)="closeDialogs()">
-      <kendo-window-titlebar>
+    <mj-window
+      [Width]="560"
+      [MinWidth]="420"
+      [MinHeight]="480"
+      [Resizable]="true"
+      [Draggable]="true"
+      [Visible]="true"
+      [Top]="80"
+      (Close)="closeDialogs()">
+      <mj-window-titlebar>
         <div class="dialog-title">
           <i class="fa-solid fa-shield-halved"></i>
           <span>{{EditingScope ? 'Edit Scope' : 'New Scope'}}</span>
         </div>
-        <button kendoButton fillMode="flat" (click)="closeDialogs()" class="window-close-btn" title="Close (Esc)">
-          <i class="fa-solid fa-times"></i>
-        </button>
-      </kendo-window-titlebar>
+      </mj-window-titlebar>
       <div class="dialog-content">
         <div class="form-field">
           <label>Scope Name *</label>
-          <input kendoTextBox [(ngModel)]="EditName"
-            placeholder="e.g., runview, create, execute"
-            class="form-input" />
+          <input class="mj-input form-input" [(ngModel)]="EditName"
+            placeholder="e.g., runview, create, execute" />
           <span class="field-hint">Use lowercase, single word. Will be combined with parent for full path.</span>
         </div>
         <div class="form-field">
           <label>Parent Scope</label>
-          <kendo-dropdownlist [(ngModel)]="EditParentId"
-            [data]="getParentOptions()"
-            [textField]="'FullPath'"
-            [valueField]="'ID'"
-            [valuePrimitive]="true"
-            [defaultItem]="{ FullPath: '(No Parent - Root Level)', ID: null }">
-          </kendo-dropdownlist>
+          <mj-dropdown [(ngModel)]="EditParentId"
+            [Data]="getParentOptions()"
+            TextField="FullPath"
+            ValueField="ID"
+            [ValuePrimitive]="true"
+            [DefaultItem]="{ FullPath: '(No Parent - Root Level)', ID: null }">
+          </mj-dropdown>
           @if (SelectedParentScope) {
             <span class="field-hint">
               Full path will be: <code>{{SelectedParentScope.FullPath}}:{{EditName || '...'}}</code>
@@ -178,30 +175,29 @@
         <div class="form-row">
           <div class="form-field half">
             <label>Category</label>
-            <kendo-dropdownlist [(ngModel)]="EditCategory"
-              [data]="Categories"
-              [valuePrimitive]="true">
-            </kendo-dropdownlist>
+            <mj-dropdown [(ngModel)]="EditCategory"
+              [Data]="Categories"
+              [ValuePrimitive]="true">
+            </mj-dropdown>
           </div>
           <div class="form-field half">
             <label>Resource Type</label>
-            <kendo-dropdownlist [(ngModel)]="EditResourceType"
-              [data]="ResourceTypes"
-              [valuePrimitive]="true"
-              [defaultItem]="''">
-            </kendo-dropdownlist>
+            <mj-dropdown [(ngModel)]="EditResourceType"
+              [Data]="ResourceTypes"
+              [ValuePrimitive]="true"
+              [DefaultItem]="''">
+            </mj-dropdown>
           </div>
         </div>
         <div class="form-field">
           <label>Description</label>
-          <textarea kendoTextArea [(ngModel)]="EditDescription"
+          <textarea class="mj-textarea form-textarea" [(ngModel)]="EditDescription"
             placeholder="Describe what this scope allows..."
-            [rows]="3"
-          class="form-textarea"></textarea>
+            [rows]="3"></textarea>
         </div>
         <div class="form-field">
           <label class="checkbox-label">
-            <input type="checkbox" kendoCheckBox [(ngModel)]="EditIsActive" />
+            <input type="checkbox" class="mj-checkbox" [(ngModel)]="EditIsActive" />
             <div>
               <span>Active</span>
               <span class="checkbox-hint">Inactive scopes cannot be assigned to keys or applications</span>
@@ -209,7 +205,7 @@
           </label>
         </div>
         <div class="dialog-actions">
-          <button kendoButton [themeColor]="'primary'"
+          <button mjButton variant="primary"
             [disabled]="!EditName.trim() || IsSaving"
             (click)="saveScope()">
             @if (IsSaving) {
@@ -222,9 +218,9 @@
               </span>
             }
           </button>
-          <button kendoButton (click)="closeDialogs()">Cancel</button>
+          <button mjButton (click)="closeDialogs()">Cancel</button>
         </div>
       </div>
-    </kendo-window>
+    </mj-window>
   }
 </div>

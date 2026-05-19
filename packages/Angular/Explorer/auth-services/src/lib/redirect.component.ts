@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
 
 /**
@@ -8,6 +8,7 @@ import { MJAuthBase } from './mjexplorer-auth-base.service';
 @Component({
   standalone: false,
   selector: 'app-redirect',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (isProcessing) {
       <div style="display: flex; justify-content: center; align-items: center; height: 100vh;">
@@ -22,7 +23,10 @@ import { MJAuthBase } from './mjexplorer-auth-base.service';
 export class RedirectComponent implements OnInit {
   isProcessing = false;
 
-  constructor(private authService: MJAuthBase) {}
+  constructor(
+    private authService: MJAuthBase,
+    private cdr: ChangeDetectorRef
+  ) {}
 
   async ngOnInit() {
     // Only show the processing message if we're actually handling an auth redirect
@@ -39,6 +43,7 @@ export class RedirectComponent implements OnInit {
 
     if (hasAuthCode && !isMCPOAuthCallback) {
       this.isProcessing = true;
+      this.cdr.markForCheck();
       try {
         // Handle the callback for the current auth provider
         await this.authService.handleCallback();
@@ -47,6 +52,7 @@ export class RedirectComponent implements OnInit {
       } finally {
         // Always hide the component after processing
         this.isProcessing = false;
+        this.cdr.markForCheck();
       }
     }
   }

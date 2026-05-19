@@ -1,0 +1,1745 @@
+[
+  {
+    "fields": {
+      "Name": "Adygea",
+      "Code": "AD",
+      "ISO3166_2": "RU-AD",
+      "Latitude": 44.6939,
+      "Longitude": 40.152,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-AD.geojson",
+      "CommonAliases": [
+        "Adygea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "3CB51ADA-21D8-4C3D-AD80-1BA692648E00"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.838Z",
+      "checksum": "d74f56df9079708926fc8d2d938488a0d83d0ea46060c4b8ccd9611375054738"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Altai",
+      "Code": "ALT",
+      "ISO3166_2": "RU-ALT",
+      "Latitude": 50.7114,
+      "Longitude": 86.8572,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ALT.geojson",
+      "CommonAliases": [
+        "Altai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "653AC348-3822-41CE-9D3B-123F9AE807A7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.853Z",
+      "checksum": "a754111b51b7dfb6de7e020b754e87e5b268a6101306252218f0ae7302291651"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Altai",
+      "Code": "AL",
+      "ISO3166_2": "RU-AL",
+      "Latitude": 50.7114,
+      "Longitude": 86.8572,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-AL.geojson",
+      "CommonAliases": [
+        "Altai"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "66E8B216-0895-44FD-9FC5-7BE0A3EA6106"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.868Z",
+      "checksum": "cc409ab5a319610d73a8892df15c86d6bafc7d9077223ae4d34eadb4c67271f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amur",
+      "Code": "AMU",
+      "ISO3166_2": "RU-AMU",
+      "Latitude": 52.8032,
+      "Longitude": 128.4373,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-AMU.geojson",
+      "CommonAliases": [
+        "Amur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "153588AF-3A91-4DF2-A117-8E20951ECBA5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.885Z",
+      "checksum": "0c9492fb5598c0bf240be612c4cd0bc4e86c493f6a1df0d9384c4e8b65ba70c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arkhangelsk",
+      "Code": "ARK",
+      "ISO3166_2": "RU-ARK",
+      "Latitude": 64.5459,
+      "Longitude": 40.5506,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ARK.geojson",
+      "CommonAliases": [
+        "Arkhangelsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "DA30447D-A578-4FFE-822B-21D7C79253D2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.902Z",
+      "checksum": "57dea8c4cfd1728e4eebec72eaf5ae102172748997378cae8667fa0dd228d531"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Astrakhan",
+      "Code": "AST",
+      "ISO3166_2": "RU-AST",
+      "Latitude": 46.3498,
+      "Longitude": 48.0326,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-AST.geojson",
+      "CommonAliases": [
+        "Astrakhan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "B7697048-169E-419D-82AD-F50A4213C575"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.916Z",
+      "checksum": "099f49ac7ad63ad51e4871d169b05ca83e1dfb06551338e4b0c65843871228ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bashkortostan",
+      "Code": "BA",
+      "ISO3166_2": "RU-BA",
+      "Latitude": 54.4748,
+      "Longitude": 55.9785,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-BA.geojson",
+      "CommonAliases": [
+        "Bashkortostan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "D7E96F5E-5301-4A75-8A8D-CC5F4EA398D1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.931Z",
+      "checksum": "d3549d7bab4da0f07c652004946abcdf86cb91f997845d60bffb57228a0aa072"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Belgorod",
+      "Code": "BEL",
+      "ISO3166_2": "RU-BEL",
+      "Latitude": 50.708,
+      "Longitude": 37.5838,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-BEL.geojson",
+      "CommonAliases": [
+        "Belgorod"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "7BF5B877-E705-42A7-91CD-DEB7F5F18ACC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.945Z",
+      "checksum": "1931ca3a6b6fb6979228da942f51710fb3c45a2bfb67592a976762efcc4be39d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bryansk",
+      "Code": "BRY",
+      "ISO3166_2": "RU-BRY",
+      "Latitude": 53.2424,
+      "Longitude": 34.3668,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-BRY.geojson",
+      "CommonAliases": [
+        "Bryansk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "EA88078E-DA59-4F65-B5BC-D316FBF1CC7B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.959Z",
+      "checksum": "acb4f13785abf639632fd0261f3ba8f14b8842ea2759a205596c92809f51ee7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Buryatia",
+      "Code": "BU",
+      "ISO3166_2": "RU-BU",
+      "Latitude": 52.7182,
+      "Longitude": 109.4921,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-BU.geojson",
+      "CommonAliases": [
+        "Buryatia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "5CD24ACC-CCFC-452C-89D8-9BC377C312FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.974Z",
+      "checksum": "caed9e99ed57ed826eac75dd0a6a17e1742e286ab009c2fcf851fb541d38c241"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chechen",
+      "Code": "CE",
+      "ISO3166_2": "RU-CE",
+      "Latitude": 43.4,
+      "Longitude": 45.7,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-CE.geojson",
+      "CommonAliases": [
+        "Chechen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "84B92515-3491-4D4F-B00D-2AE4246CD2A4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.024Z",
+      "checksum": "82f9c65778df5884060321e33f9d98274e55cfc4cb71363b74fe5239d0548f3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chelyabinsk",
+      "Code": "CHE",
+      "ISO3166_2": "RU-CHE",
+      "Latitude": 55.1559,
+      "Longitude": 61.4013,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-CHE.geojson",
+      "CommonAliases": [
+        "Chelyabinsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "777E7347-4EF9-46DE-8E68-874942086681"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.040Z",
+      "checksum": "b390ce4f7e09853cfa442a38cc1576de5a5c63ddb0e5b0fdbe6b88c4385a7266"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chukotka",
+      "Code": "CHU",
+      "ISO3166_2": "RU-CHU",
+      "Latitude": 66.0006,
+      "Longitude": 169.4901,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-CHU.geojson",
+      "CommonAliases": [
+        "Chukotka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "712009E2-E34C-4545-B7F5-A3FE68426931"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.056Z",
+      "checksum": "2c0ec33fb1266077972e85728d85e0c18c0afeba308d51a11891f9e58acad378"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chuvash",
+      "Code": "CU",
+      "ISO3166_2": "RU-CU",
+      "Latitude": 55.426,
+      "Longitude": 47.0849,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-CU.geojson",
+      "CommonAliases": [
+        "Chuvash"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "FED1BD27-C6A0-4723-BC43-080401248D09"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.070Z",
+      "checksum": "5c70f7a088d415f85f96daf357e149c6282138326303a68b47d97483c1eb8e4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dagestan",
+      "Code": "DA",
+      "ISO3166_2": "RU-DA",
+      "Latitude": 43,
+      "Longitude": 47,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-DA.geojson",
+      "CommonAliases": [
+        "Dagestan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "032AD30C-86B9-45F1-9DDA-0D8CFE8944FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.087Z",
+      "checksum": "81e98dd79a2d54e5784ac50958898d4ee3fdc39b4433dae9d783db57fb2d6796"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ingushetia",
+      "Code": "IN",
+      "ISO3166_2": "RU-IN",
+      "Latitude": 43.1655,
+      "Longitude": 44.9797,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-IN.geojson",
+      "CommonAliases": [
+        "Ingushetia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "C7223923-C9D6-45F6-A71B-C93E86239DAA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.104Z",
+      "checksum": "afdacc21be17e14cf2a99a862b657a4d27bbe5c3c8248940cf1d646bd163b126"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Irkutsk",
+      "Code": "IRK",
+      "ISO3166_2": "RU-IRK",
+      "Latitude": 52.2855,
+      "Longitude": 104.289,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-IRK.geojson",
+      "CommonAliases": [
+        "Irkutsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "41C05199-30CF-450B-AA22-F75AA29536C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.120Z",
+      "checksum": "0e99cae7e5aaca05d8e580956b0fef02087b7284db3758e225eff104d7ac4e50"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivanovo",
+      "Code": "IVA",
+      "ISO3166_2": "RU-IVA",
+      "Latitude": 56.9957,
+      "Longitude": 40.9812,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-IVA.geojson",
+      "CommonAliases": [
+        "Ivanovo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "044C86A7-D09D-460F-AEB3-0E37FD5A38B2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.138Z",
+      "checksum": "9e2f57352c2e691c004470b47138232cbc280e0181ecf6d4d0b31941b056400e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jewish",
+      "Code": "YEV",
+      "ISO3166_2": "RU-YEV",
+      "Latitude": 48.5602,
+      "Longitude": 132.2776,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-YEV.geojson",
+      "CommonAliases": [
+        "Jewish"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "B2BC19BB-C1C1-43E4-B473-B4849FC4F3DB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.155Z",
+      "checksum": "b8363ca2c972ff5dc8eaa6ceae0adb55c58b6efbd4272f321dca312a0d4fc194"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kabardino-Balkar",
+      "Code": "KB",
+      "ISO3166_2": "RU-KB",
+      "Latitude": 43.4428,
+      "Longitude": 43.4205,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KB.geojson",
+      "CommonAliases": [
+        "Kabardino-Balkar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "A29E4FC9-603E-4575-8378-C23906E8F64C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.170Z",
+      "checksum": "239ae68ea70550f116d0548fc93720708617971a953b3f7a66b611f1b161e7eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaliningrad",
+      "Code": "KGD",
+      "ISO3166_2": "RU-KGD",
+      "Latitude": 54.7104,
+      "Longitude": 20.4522,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KGD.geojson",
+      "CommonAliases": [
+        "Kaliningrad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "4CAE0605-B9A8-4480-A7A3-30D5B6A2C55D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.227Z",
+      "checksum": "fa88aca75ca2894e64f3b232b84ac5f1ab8a4682b4367d4bf3e39e0dd26d9ca5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kalmykia",
+      "Code": "KL",
+      "ISO3166_2": "RU-KL",
+      "Latitude": 46.9017,
+      "Longitude": 45.2492,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KL.geojson",
+      "CommonAliases": [
+        "Kalmykia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "A9EAC8F0-2EF0-428A-96EF-25CB8520D491"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.244Z",
+      "checksum": "b97e54738ba2d1afeba98a41a23da08633582ff5c56c7a7e2c03e742a0e50350"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaluga",
+      "Code": "KLU",
+      "ISO3166_2": "RU-KLU",
+      "Latitude": 54.4383,
+      "Longitude": 35.5273,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KLU.geojson",
+      "CommonAliases": [
+        "Kaluga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "62DA7A6B-893F-49A7-9BC4-C3F5AEBB4DCA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.260Z",
+      "checksum": "7306e5c15c28b581a8cbeb9722881c242ac542ac577a027a6e14c59e6884dfcc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kamchatka",
+      "Code": "KAM",
+      "ISO3166_2": "RU-KAM",
+      "Latitude": 57.1915,
+      "Longitude": 160.0384,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KAM.geojson",
+      "CommonAliases": [
+        "Kamchatka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "184521FD-E9F6-43D0-90BB-3E7C345A401D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.278Z",
+      "checksum": "12f668318dbb4c21ab45867b15bb2159bb928bc74abe4430579b1c2f0d231839"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karachay-Cherkess",
+      "Code": "KC",
+      "ISO3166_2": "RU-KC",
+      "Latitude": 43.7368,
+      "Longitude": 41.7268,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KC.geojson",
+      "CommonAliases": [
+        "Karachay-Cherkess"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "2905B152-BE8C-43FE-AE74-C9A0302B0B95"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.299Z",
+      "checksum": "93cf92617b1887a839f6ea4c67181802e01c521509f9dbe6270f89a262f5c90e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karelia",
+      "Code": "KR",
+      "ISO3166_2": "RU-KR",
+      "Latitude": 62.6194,
+      "Longitude": 33.492,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KR.geojson",
+      "CommonAliases": [
+        "Karelia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "9B0879DF-01EC-4278-8C74-5A051C1779C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.323Z",
+      "checksum": "906e4361d8e50bc8199891ece2c85a5b9c2921a517d06e5b5fe65daf5b31b242"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kemerovo",
+      "Code": "KEM",
+      "ISO3166_2": "RU-KEM",
+      "Latitude": 54.5336,
+      "Longitude": 87.3429,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KEM.geojson",
+      "CommonAliases": [
+        "Kemerovo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "BDD0C7E1-BD77-4625-93B0-CC0FD6CD885F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.343Z",
+      "checksum": "0295e0f41201c00e5741cefa6e0199127c3f822643bdb50e221278fc74139c04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khabarovsk",
+      "Code": "KHA",
+      "ISO3166_2": "RU-KHA",
+      "Latitude": 51.6313,
+      "Longitude": 136.1215,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KHA.geojson",
+      "CommonAliases": [
+        "Khabarovsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "0A57F01B-023F-40EB-9B0C-038660A3370B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.368Z",
+      "checksum": "9c546cedc322d68eff81ed91eb692b32264d9c7e289348f6f9a16e722398fd06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khakassia",
+      "Code": "KK",
+      "ISO3166_2": "RU-KK",
+      "Latitude": 53.4399,
+      "Longitude": 90.0664,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KK.geojson",
+      "CommonAliases": [
+        "Khakassia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "31D8050C-F285-4868-9C2C-38C5E60DA337"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.385Z",
+      "checksum": "e17d308aec1e37acc8803ca8803a95d245f489bc1bf7737279426a77cc9a6a6b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khanty-Mansi",
+      "Code": "KHM",
+      "ISO3166_2": "RU-KHM",
+      "Latitude": 61.8793,
+      "Longitude": 68.6418,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KHM.geojson",
+      "CommonAliases": [
+        "Khanty-Mansi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "0081D934-E056-438E-BD1C-597ACD4B20BA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.401Z",
+      "checksum": "f08e238e738661b703163239a4b00d729b36a7f7b4711f688c3762509977241d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kirov",
+      "Code": "KIR",
+      "ISO3166_2": "RU-KIR",
+      "Latitude": 58.6036,
+      "Longitude": 49.6666,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KIR.geojson",
+      "CommonAliases": [
+        "Kirov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "08EA8DC8-6C8F-4986-8B7F-F6B104E84AAE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.459Z",
+      "checksum": "2eda5add54849be9725fafbc92ad3fbc5203eeb2344d132c15d5e964c60cf3ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Komi",
+      "Code": "KO",
+      "ISO3166_2": "RU-KO",
+      "Latitude": 63.9881,
+      "Longitude": 54.3326,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KO.geojson",
+      "CommonAliases": [
+        "Komi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "251D5E19-0F83-4771-A69A-71DAED04C2F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.477Z",
+      "checksum": "685e99e9f4d30c808957ba44072c782434e0f97b31482effafdd83db37f036fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kostroma",
+      "Code": "KOS",
+      "ISO3166_2": "RU-KOS",
+      "Latitude": 58.6044,
+      "Longitude": 41.5889,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KOS.geojson",
+      "CommonAliases": [
+        "Kostroma"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "5E690C60-F1F0-4486-A9AE-AA49F47EEE35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.494Z",
+      "checksum": "ae6d9af2d51d0142e3f4c19a88f01faa6d809a23a6a1246aa72b35eb049a7f33"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krasnodar",
+      "Code": "KDA",
+      "ISO3166_2": "RU-KDA",
+      "Latitude": 45.7684,
+      "Longitude": 39.0261,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KDA.geojson",
+      "CommonAliases": [
+        "Krasnodar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "C86EB375-5FF8-45A8-8FD1-51A06110C539"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.510Z",
+      "checksum": "b673abbee09d82671ac58c54da9a34fbd25d2206f631471fd50623553f480c3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Krasnoyarsk",
+      "Code": "KYA",
+      "ISO3166_2": "RU-KYA",
+      "Latitude": 63.3234,
+      "Longitude": 97.098,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KYA.geojson",
+      "CommonAliases": [
+        "Krasnoyarsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "82799F25-6087-4EE6-9A49-C5343F2C6877"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.529Z",
+      "checksum": "b366d469de1a3e50ac01b5d494a9680c3409f4bea43b3cab0561c536afe5e3e0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kurgan",
+      "Code": "KGN",
+      "ISO3166_2": "RU-KGN",
+      "Latitude": 55.4409,
+      "Longitude": 65.3421,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KGN.geojson",
+      "CommonAliases": [
+        "Kurgan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "8F3F3447-3FD1-4491-9ECB-41525B8EC100"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.546Z",
+      "checksum": "9a690b6aeb29ea363b6b53676226e80226eb1840ea227888f3ec6be2dff4379d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kursk",
+      "Code": "KRS",
+      "ISO3166_2": "RU-KRS",
+      "Latitude": 51.7309,
+      "Longitude": 36.1923,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-KRS.geojson",
+      "CommonAliases": [
+        "Kursk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "DD8F19E4-5E7F-4A7A-87AF-7EA2EF58A536"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.565Z",
+      "checksum": "e9a96c0d7d7b37d6e7c9720dcd6d257df61ee483a05eea9b5a8b8bd34268f639"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Leningrad",
+      "Code": "LEN",
+      "ISO3166_2": "RU-LEN",
+      "Latitude": 60.1853,
+      "Longitude": 32.3925,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-LEN.geojson",
+      "CommonAliases": [
+        "Leningrad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "718FB5E3-EE17-4134-ABDC-121F4B2908B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.581Z",
+      "checksum": "083e79822f2bb17d67b08198cd1a282b1d142a96d0fbf4451875582e87b7ecc7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lipetsk",
+      "Code": "LIP",
+      "ISO3166_2": "RU-LIP",
+      "Latitude": 52.6935,
+      "Longitude": 39.1123,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-LIP.geojson",
+      "CommonAliases": [
+        "Lipetsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "5BDC4D6E-6261-4FCC-A479-0308527D27B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.597Z",
+      "checksum": "df02b6db0ee8ad690cdf3522d274e479e60d84368778246ac264ca7b2b9f7ab1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magadan",
+      "Code": "MAG",
+      "ISO3166_2": "RU-MAG",
+      "Latitude": 63.5515,
+      "Longitude": 154.0147,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-MAG.geojson",
+      "CommonAliases": [
+        "Magadan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "566E8BD5-D48A-4733-9A53-16472FA882BE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.611Z",
+      "checksum": "a6dace920ca19e09b0b695835879030c0fc304cded5c9814da4d82de0409a7ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mari El",
+      "Code": "ME",
+      "ISO3166_2": "RU-ME",
+      "Latitude": 56.5768,
+      "Longitude": 47.8818,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ME.geojson",
+      "CommonAliases": [
+        "Mari El"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "891C0CCA-DDAE-45F9-9F86-14A14CD81871"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.667Z",
+      "checksum": "a6044d94707abc9bf25bb9f32ef108b940a2f2ce4cb68dc93c48c32d85f391a1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mordovia",
+      "Code": "MO",
+      "ISO3166_2": "RU-MO",
+      "Latitude": 54.442,
+      "Longitude": 44.4661,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-MO.geojson",
+      "CommonAliases": [
+        "Mordovia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "AEF7A433-804A-490B-8B0C-0B08A12CADAA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.684Z",
+      "checksum": "7424d30f9681436a972be7b267340c40e440fb78e1ac8189fbc645f7715ab1c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moscow",
+      "Code": "MOS",
+      "ISO3166_2": "RU-MOS",
+      "Latitude": 55.6256,
+      "Longitude": 37.6064,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-MOS.geojson",
+      "CommonAliases": [
+        "Moscow"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "657B4EF4-00E1-4E83-B0FB-7B39FC9D1C29"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.700Z",
+      "checksum": "1d7b8b7fb9d1238d76fa205b84227d465d18bd048efd63b284acda38a9226a60"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moscow",
+      "Code": "MOW",
+      "ISO3166_2": "RU-MOW",
+      "Latitude": 55.6256,
+      "Longitude": 37.6064,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-MOW.geojson",
+      "CommonAliases": [
+        "Moscow"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "4F7E4FFA-8FE3-4EC0-8999-097E0DB8F313"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.718Z",
+      "checksum": "732401a0081c6334601f72d9fb316d9cdce899d76a4604ae0b3b8f3adce20b76"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Murmansk",
+      "Code": "MUR",
+      "ISO3166_2": "RU-MUR",
+      "Latitude": 68,
+      "Longitude": 33.9999,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-MUR.geojson",
+      "CommonAliases": [
+        "Murmansk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "D0623065-30AC-475F-8E19-96C2A9588EBA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.735Z",
+      "checksum": "bfd835f1df5993d671180d15debbd366f7aae35392ae9f80316d26adfd3a2b58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nenets",
+      "Code": "NEN",
+      "ISO3166_2": "RU-NEN",
+      "Latitude": 67.6783,
+      "Longitude": 57.0627,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-NEN.geojson",
+      "CommonAliases": [
+        "Nenets"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "9712B04B-A89B-4270-B9E6-489C13C16C02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.752Z",
+      "checksum": "847f486148d93b52d430a7f8c38acbbaf046dff027bbc1a825dd6e7f7c8c14b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nizhny Novgorod",
+      "Code": "NIZ",
+      "ISO3166_2": "RU-NIZ",
+      "Latitude": 56.2769,
+      "Longitude": 43.9213,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-NIZ.geojson",
+      "CommonAliases": [
+        "Nizhny Novgorod"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "75F72194-AD8A-4380-8686-D9F9756F0D85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.768Z",
+      "checksum": "066a4c61d4caced281b77f1fc84a4cc3ac3b1fa63828e675475f249100286797"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Ossetia-Alania",
+      "Code": "SE",
+      "ISO3166_2": "RU-SE",
+      "Latitude": 42.9921,
+      "Longitude": 44.2636,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SE.geojson",
+      "CommonAliases": [
+        "North Ossetia-Alania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "2D5FB62D-6EF6-40F0-833A-E5C7D3822980"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.787Z",
+      "checksum": "454c59bdb66b343a542d9ed17e0b8980c00e0c7be603fee15f98a976c35261a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Novgorod",
+      "Code": "NGR",
+      "ISO3166_2": "RU-NGR",
+      "Latitude": 58.521,
+      "Longitude": 31.2758,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-NGR.geojson",
+      "CommonAliases": [
+        "Novgorod"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "A05638A7-15DB-4AC9-BA1C-332BE7E51214"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.803Z",
+      "checksum": "8b83c3a77717a5a8a2b03ef7088263c35e441b752be2a489d803dff45f30bef9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Novosibirsk",
+      "Code": "NVS",
+      "ISO3166_2": "RU-NVS",
+      "Latitude": 54.9678,
+      "Longitude": 82.9516,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-NVS.geojson",
+      "CommonAliases": [
+        "Novosibirsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "0FC426BB-E406-475B-AC0F-F05C81A25112"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.817Z",
+      "checksum": "9b1e98928810b8dd85d199c84887f3f615da20b7b9bc2f89ffa4959d599f63f9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Omsk",
+      "Code": "OMS",
+      "ISO3166_2": "RU-OMS",
+      "Latitude": 54.9914,
+      "Longitude": 73.3715,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-OMS.geojson",
+      "CommonAliases": [
+        "Omsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "63ACEAD0-E4B0-4E28-9AC0-DCADCEFD5CAB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.878Z",
+      "checksum": "e57b3d5741fb5e3ec16eee62c1de1ff584c44a20329e64ca09c83f5e9f030d0f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Orenburg",
+      "Code": "ORE",
+      "ISO3166_2": "RU-ORE",
+      "Latitude": 52.0269,
+      "Longitude": 54.7277,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ORE.geojson",
+      "CommonAliases": [
+        "Orenburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "689F0FF9-3375-49AA-BA9C-B0F5F92B3126"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.895Z",
+      "checksum": "9614b4f59b32c0ae0bbf14b885259b8aae6c18165fca74c76624d9c0b88c8f40"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oryol",
+      "Code": "ORL",
+      "ISO3166_2": "RU-ORL",
+      "Latitude": 52.8393,
+      "Longitude": 36.4252,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ORL.geojson",
+      "CommonAliases": [
+        "Oryol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "4D2B2E1B-16B7-4BFC-ACF3-669675B54011"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.910Z",
+      "checksum": "31c856ab9aa8f635db808b3cb8d6d14901f499571cb508efd78dbd234ba8a1e9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Penza",
+      "Code": "PNZ",
+      "ISO3166_2": "RU-PNZ",
+      "Latitude": 53.1655,
+      "Longitude": 44.7879,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-PNZ.geojson",
+      "CommonAliases": [
+        "Penza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "2F8EBECD-873B-47AE-B207-4DBD57825537"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.926Z",
+      "checksum": "00ef878991b0f7dede0d01bd7b2465d058c202c92fb3cb1eb85d60104331d8f0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Perm",
+      "Code": "PER",
+      "ISO3166_2": "RU-PER",
+      "Latitude": 58.5952,
+      "Longitude": 56.316,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-PER.geojson",
+      "CommonAliases": [
+        "Perm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "1AF84985-EE71-4338-862F-D97DFA481A8C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.942Z",
+      "checksum": "f14347d24576afe6a89a5de9d4d4af521f4732e52aa17578158a213b10c05c64"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Primorsky",
+      "Code": "PRI",
+      "ISO3166_2": "RU-PRI",
+      "Latitude": 45.0819,
+      "Longitude": 134.7266,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-PRI.geojson",
+      "CommonAliases": [
+        "Primorsky"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "8E7B3543-A26A-4988-942B-C6AE1FDD20E5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.959Z",
+      "checksum": "5eddb17432221e6c1b15b14a2b27332adce39ee3255a34147e35fc4b49bdf218"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pskov",
+      "Code": "PSK",
+      "ISO3166_2": "RU-PSK",
+      "Latitude": 57.5359,
+      "Longitude": 28.8587,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-PSK.geojson",
+      "CommonAliases": [
+        "Pskov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "B6154EEE-1EDC-4248-A86C-4884571D5E86"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.973Z",
+      "checksum": "fc2cd643e92331cdc9a6e932d6ade696d0c3bfa39bcc132fb96a3fa68621c7df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rostov",
+      "Code": "ROS",
+      "ISO3166_2": "RU-ROS",
+      "Latitude": 47.6222,
+      "Longitude": 40.7958,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ROS.geojson",
+      "CommonAliases": [
+        "Rostov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "F2AD1726-CA8A-4D35-A24C-9683E5B9517E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:28.988Z",
+      "checksum": "df6730c90c26e0114b784a865ae78e358afb55ce2f547b3b4f84a4c0728e8066"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ryazan",
+      "Code": "RYA",
+      "ISO3166_2": "RU-RYA",
+      "Latitude": 54.6296,
+      "Longitude": 39.7425,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-RYA.geojson",
+      "CommonAliases": [
+        "Ryazan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "9D0E739B-72F9-4150-AFFD-08D585E74FC2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.003Z",
+      "checksum": "4a1734f659310c6e5f5702cd3a387f68229c36f89a138734d497d704dea3ad38"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint Petersburg",
+      "Code": "SPE",
+      "ISO3166_2": "RU-SPE",
+      "Latitude": 59.9387,
+      "Longitude": 30.3162,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SPE.geojson",
+      "CommonAliases": [
+        "Saint Petersburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "581349F1-5BAE-4022-B562-E52C3D96DA01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.016Z",
+      "checksum": "63cfdf9bbde38230b367884286aa13e220823ad0e8c9a5e3a5de7999c7c1998d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sakha",
+      "Code": "SA",
+      "ISO3166_2": "RU-SA",
+      "Latitude": 66.9416,
+      "Longitude": 129.6424,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SA.geojson",
+      "CommonAliases": [
+        "Sakha"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "4CC62B8D-D8E2-4007-83A9-7DCB84F53AEB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.069Z",
+      "checksum": "c5617546a6329a300553feb3179bdf133b4ee78171bfbef682061c83f8734811"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sakhalin",
+      "Code": "SAK",
+      "ISO3166_2": "RU-SAK",
+      "Latitude": 50.1595,
+      "Longitude": 143.0264,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SAK.geojson",
+      "CommonAliases": [
+        "Sakhalin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "77E9D207-3853-4A51-B50D-24B12A72A36D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.084Z",
+      "checksum": "20687e5e025f99c805a21109e97b9bbcdd7f57d58aecf940677a16303224d6d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samara",
+      "Code": "SAM",
+      "ISO3166_2": "RU-SAM",
+      "Latitude": 53.1956,
+      "Longitude": 50.1015,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SAM.geojson",
+      "CommonAliases": [
+        "Samara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "5703113E-8136-4F69-B313-4256097A875A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.099Z",
+      "checksum": "7ad7837daae6f1049a880701400d6be76a12af1ccf2f25cea96b2a1e0015dd35"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saratov",
+      "Code": "SAR",
+      "ISO3166_2": "RU-SAR",
+      "Latitude": 51.53,
+      "Longitude": 46.0347,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SAR.geojson",
+      "CommonAliases": [
+        "Saratov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "1F8354B0-0060-4CC6-86C6-63690347A724"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.114Z",
+      "checksum": "aaa84f3aad1b9ae5e0c26a64ca42996a7b17761c1c4d573ead3ab161a7376545"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Smolensk",
+      "Code": "SMO",
+      "ISO3166_2": "RU-SMO",
+      "Latitude": 55.0343,
+      "Longitude": 33.0192,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SMO.geojson",
+      "CommonAliases": [
+        "Smolensk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "5CB46FC4-0370-49AB-8CD8-79EBFC2FDB4C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.128Z",
+      "checksum": "f8ad72e6249c01a7a7820d940b0a57a8926c4e7cc766d2248a5db104647b1c1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Stavropol",
+      "Code": "STA",
+      "ISO3166_2": "RU-STA",
+      "Latitude": 44.8633,
+      "Longitude": 43.4407,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-STA.geojson",
+      "CommonAliases": [
+        "Stavropol"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "55CF761F-058A-452A-8C05-33EEB39B241B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.143Z",
+      "checksum": "2819a40c6181c6ef9e0db8a28392642a2c85e06c4947ad280784bca9f9313b87"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sverdlovsk",
+      "Code": "SVE",
+      "ISO3166_2": "RU-SVE",
+      "Latitude": 56.8391,
+      "Longitude": 60.6082,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-SVE.geojson",
+      "CommonAliases": [
+        "Sverdlovsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "DC12FAE0-5F32-43DC-8E8A-070A19AF4EB8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.159Z",
+      "checksum": "c80ea5deeeeabb5d34cc34b046cde1a1c26a768d90a6f0172abdf71a3cc1ca20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tambov",
+      "Code": "TAM",
+      "ISO3166_2": "RU-TAM",
+      "Latitude": 52.7216,
+      "Longitude": 41.4524,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TAM.geojson",
+      "CommonAliases": [
+        "Tambov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "9678DC14-C533-46DB-B598-412072FFDF22"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.175Z",
+      "checksum": "bd460f4649943c113ff538f96963708f13255f75bbafe08326ab7ebac2d24451"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tatarstan",
+      "Code": "TA",
+      "ISO3166_2": "RU-TA",
+      "Latitude": 55.4482,
+      "Longitude": 50.4764,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TA.geojson",
+      "CommonAliases": [
+        "Tatarstan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "62F3A73A-D20C-4787-9EE0-BEDEE2BF783E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.191Z",
+      "checksum": "ce619c8d652b732314b16460eed22fc448f0bf11db65c1d8127360c8c49b4beb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tomsk",
+      "Code": "TOM",
+      "ISO3166_2": "RU-TOM",
+      "Latitude": 58.6124,
+      "Longitude": 82.0475,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TOM.geojson",
+      "CommonAliases": [
+        "Tomsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "FF12FBB4-7395-4EB5-9D3C-109AAE1CD067"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.207Z",
+      "checksum": "2c2415d8ac3d04ac6bad1ed9a53117c531425b4e3541d74572019d0cb8d5ee80"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tula",
+      "Code": "TUL",
+      "ISO3166_2": "RU-TUL",
+      "Latitude": 54.193,
+      "Longitude": 37.6175,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TUL.geojson",
+      "CommonAliases": [
+        "Tula"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "A1DD829E-04A4-4A5E-A677-025E2B3E05A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.256Z",
+      "checksum": "c7147d62b5d7c17ff70e2ea6f5333ee818488f4a699da1e9e34e7d9cdf85ab14"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tuva",
+      "Code": "TY",
+      "ISO3166_2": "RU-TY",
+      "Latitude": 51.4017,
+      "Longitude": 93.8583,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TY.geojson",
+      "CommonAliases": [
+        "Tuva"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "DD157C47-4A20-4B41-A1B1-B687A7B1F613"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.276Z",
+      "checksum": "38ee449270539f9c29c2fc314a703f38be3b226ddb69c96253dc2d3a102542a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tver",
+      "Code": "TVE",
+      "ISO3166_2": "RU-TVE",
+      "Latitude": 57.1134,
+      "Longitude": 35.1744,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TVE.geojson",
+      "CommonAliases": [
+        "Tver"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "E2C1685D-17D8-450E-918F-FC5614227890"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.296Z",
+      "checksum": "48a80fd7d1e5be8c9cf99fb7c3dbbc3e8f55b135d22fd05f3a829595b1491291"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tyumen",
+      "Code": "TYU",
+      "ISO3166_2": "RU-TYU",
+      "Latitude": 57.1535,
+      "Longitude": 65.5423,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-TYU.geojson",
+      "CommonAliases": [
+        "Tyumen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "2DE09712-DD4E-4C93-89B4-DEEAD2114593"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.316Z",
+      "checksum": "8137b6c22502a76d07453d1ea60c4923f630e6632614c1fbadb514d62681b0f3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Udmurt",
+      "Code": "UD",
+      "ISO3166_2": "RU-UD",
+      "Latitude": 57.1961,
+      "Longitude": 52.696,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-UD.geojson",
+      "CommonAliases": [
+        "Udmurt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "9C8522CA-2E94-44CE-A94F-858EA33AF398"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.335Z",
+      "checksum": "e78c7455c59aea0ab6ba7c7730c06e45ea50d39e3ff22e0255bca3d23fbbd9be"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ulyanovsk",
+      "Code": "ULY",
+      "ISO3166_2": "RU-ULY",
+      "Latitude": 54.1463,
+      "Longitude": 47.2325,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ULY.geojson",
+      "CommonAliases": [
+        "Ulyanovsk"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "6368EC4D-F0E2-4812-864A-2BAB0D5E4007"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.355Z",
+      "checksum": "0d024a7c49f72a57390071b25fc6da29319a29d2f6ab071d3a2fb3a14233544b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vladimir",
+      "Code": "VLA",
+      "ISO3166_2": "RU-VLA",
+      "Latitude": 56.1289,
+      "Longitude": 40.4075,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-VLA.geojson",
+      "CommonAliases": [
+        "Vladimir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "7E95701E-94F9-4A7E-8B1D-D17A1CCA56C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.373Z",
+      "checksum": "4db091ccd49b2cad1d7e8d4cbb9bdeef7d18606ce4bf6435f75cc8161e0f1fc9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Volgograd Oblast",
+      "Code": "VGG",
+      "ISO3166_2": "RU-VGG",
+      "Latitude": 49.6048,
+      "Longitude": 44.2904,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-VGG.geojson",
+      "CommonAliases": [
+        "Volgograd Oblast"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "E2ED7403-2CA0-4107-BBBD-841649BB0EA3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.389Z",
+      "checksum": "1c58428be0d7f965a54e309a7d7eee8b7adaee4751098f7169d1aa75e428e02f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vologda",
+      "Code": "VLG",
+      "ISO3166_2": "RU-VLG",
+      "Latitude": 59.2265,
+      "Longitude": 39.8722,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-VLG.geojson",
+      "CommonAliases": [
+        "Vologda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "B16340EE-0BE2-43EA-A5C5-1B41C90F6663"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.406Z",
+      "checksum": "b54532828ac28d1e3b30c35d26834b36482c3d6ddb1a96e3428e6bfa7dd84d71"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Voronezh",
+      "Code": "VOR",
+      "ISO3166_2": "RU-VOR",
+      "Latitude": 51.6606,
+      "Longitude": 39.2006,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-VOR.geojson",
+      "CommonAliases": [
+        "Voronezh"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "70FC1D9F-C0DA-45B0-B61A-ADD1391CDA57"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.421Z",
+      "checksum": "0082f7b7e7deba46c8928ebd7e92c2b27b1af6e48b26222a98da4fb2356fbb80"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yamalo-Nenets",
+      "Code": "YAN",
+      "ISO3166_2": "RU-YAN",
+      "Latitude": 67.1472,
+      "Longitude": 74.3415,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-YAN.geojson",
+      "CommonAliases": [
+        "Yamalo-Nenets"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "CF85DE83-5447-459A-9E02-154D8502C5B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.457Z",
+      "checksum": "951fb2f72fb2fbb8643f3816559f0097c7cad3106a20acbe60a8003131523b6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yaroslavl",
+      "Code": "YAR",
+      "ISO3166_2": "RU-YAR",
+      "Latitude": 57.6508,
+      "Longitude": 39.8719,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-YAR.geojson",
+      "CommonAliases": [
+        "Yaroslavl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "0628A31D-2F16-44BC-BE51-EAAEF0DA47B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.474Z",
+      "checksum": "bf51bab217e0db32dfdc2aae4e4c3e77090882e7ca28151fac98f738051fa203"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zabaykalsky",
+      "Code": "ZAB",
+      "ISO3166_2": "RU-ZAB",
+      "Latitude": 52.2485,
+      "Longitude": 115.9563,
+      "BoundaryGeoJSON": "@file:by-country/RU/boundaries/RU-ZAB.geojson",
+      "CommonAliases": [
+        "Zabaykalsky"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RU"
+    },
+    "primaryKey": {
+      "ID": "6A47FBC7-D272-41C0-98AF-313BB712CC2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:29.489Z",
+      "checksum": "b161169b31e450f203712ddf2a78850b11c1109a88624f0fba6cfc1fd6983311"
+    }
+  }
+]

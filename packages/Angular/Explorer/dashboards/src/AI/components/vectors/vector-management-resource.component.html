@@ -1,0 +1,599 @@
+@if (!HideToolbar) {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Vector Management"
+      Icon="fa-solid fa-cubes"
+      Subtitle="Vector index health, embeddings, and entity sync status">
+      <div actions>
+        <mj-view-toggle
+          [Options]="VectorViewOptions"
+          [ActiveKey]="ViewMode"
+          (KeyChange)="ViewMode = $any($event)">
+        </mj-view-toggle>
+      </div>
+    </mj-page-header>
+    <mj-page-body [Flex]="true">
+      <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
+}
+
+<ng-template #vectorBody>
+@if (IsLoading) {
+  <div class="vector-loading">
+    <mj-loading text="Loading vector management data..."></mj-loading>
+  </div>
+} @else {
+  <div class="vector-dashboard">
+
+    <!-- KPI Cards Row -->
+    <div class="kpi-row">
+      @for (card of KPICards; track card.title) {
+        <app-kpi-card [data]="card"></app-kpi-card>
+      }
+    </div>
+
+    <!-- Main Content Area: Table + Sidebar -->
+    <div class="content-area">
+      <!-- Entity Sync Table -->
+      <div class="sync-table-panel">
+        <div class="panel-header">
+          <h3 class="panel-title">
+            <i class="fa-solid fa-table-list"></i>
+            Entity Sync Status
+          </h3>
+          <div class="panel-actions">
+            <button class="suggest-btn" (click)="OpenSuggestDialog()" title="Use AI to suggest an Entity Document template">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <span class="suggest-btn-text">Suggest Document</span>
+            </button>
+            <button class="refresh-btn" (click)="LoadData()" title="Refresh data">
+              <i class="fa-solid fa-arrows-rotate"></i>
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        @if (SyncRows.length === 0) {
+          <div class="empty-state">
+            <i class="fa-solid fa-folder-open"></i>
+            <p>No entity documents configured for vectorization.</p>
+          </div>
+        } @else {
+          <div class="table-wrapper">
+            <table class="sync-table">
+              <thead>
+                <tr>
+                  <th>Entity</th>
+                  <th>Document</th>
+                  <th class="text-right">Vectors</th>
+                  <th>Last Synced</th>
+                  <th>Status</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of SyncRows; track row.EntityDocumentID) {
+                  <tr>
+                    <td class="entity-name">{{ row.EntityName }}</td>
+                    <td class="document-name">{{ row.DocumentName }}</td>
+                    <td class="text-right vector-count">{{ row.VectorCount | number }}</td>
+                    <td class="last-synced">{{ FormatDate(row.LastSynced) }}</td>
+                    <td>
+                      <span class="status-badge" [class]="GetStatusClass(row.Status)">
+                        <i [class]="GetStatusIcon(row.Status)"></i>
+                        @if (row.Status === 'Syncing' && row.PercentComplete > 0) {
+                          {{ row.PercentComplete }}%
+                        } @else {
+                          {{ row.Status }}
+                        }
+                      </span>
+                    </td>
+                    <td class="text-center actions-cell">
+                      <button
+                        class="sync-btn"
+                        [disabled]="SyncingIds.has(row.EntityDocumentID)"
+                        (click)="SyncEntity(row.EntityDocumentID)"
+                        title="Sync now">
+                        @if (SyncingIds.has(row.EntityDocumentID)) {
+                          <i class="fa-solid fa-spinner fa-spin"></i>
+                          {{ row.PercentComplete > 0 ? row.PercentComplete + '%' : 'Sync' }}
+                        } @else {
+                          <i class="fa-solid fa-play"></i>
+                          Sync
+                        }
+                      </button>
+                      <button
+                        class="schedule-btn"
+                        (click)="OpenScheduleSyncDialog(row.EntityDocumentID)"
+                        title="Schedule recurring sync">
+                        <i class="fa-regular fa-clock"></i>
+                      </button>
+                      <button
+                        class="edit-btn"
+                        (click)="OpenEditPanel(row.EntityDocumentID)"
+                        title="Edit entity document">
+                        <i class="fa-solid fa-pen"></i>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+
+      <!-- Sidebar Panels -->
+      <div class="sidebar">
+        <!-- Vector DB Health -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-heart-pulse"></i>
+            Vector DB Health
+          </h4>
+          <div class="health-row">
+            <span class="health-dot" [class]="DBHealthClass"></span>
+            <span class="health-label">{{ VectorDBName }}</span>
+          </div>
+          <div class="health-status">{{ VectorDBStatus }}</div>
+        </div>
+
+        <!-- Embedding Model Info -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-microchip"></i>
+            Embedding Model
+          </h4>
+          <div class="model-info">
+            <div class="info-row">
+              <span class="info-label">Model</span>
+              <span class="info-value">{{ EmbeddingModel.Name }}</span>
+            </div>
+            @if (EmbeddingModel.Dimensions != null) {
+              <div class="info-row">
+                <span class="info-label">Dimensions</span>
+                <span class="info-value">{{ EmbeddingModel.Dimensions | number }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Storage Usage -->
+        <div class="sidebar-card">
+          <h4 class="sidebar-title">
+            <i class="fa-solid fa-hard-drive"></i>
+            Vectorization Coverage
+          </h4>
+          <div class="gauge-container">
+            <div class="gauge-bar">
+              <div class="gauge-fill" [style.width.%]="StorageUsagePercent"></div>
+            </div>
+            <div class="gauge-label">{{ StorageLabel }} of records vectorized</div>
+          </div>
+          <div class="storage-detail">
+            {{ TotalVectors | number }} vectors stored
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Entity Document Slide-in Panel -->
+  @if (ShowEditPanel) {
+    <div class="slide-panel-overlay" (click)="CloseEditPanel()">
+      <div class="slide-panel open" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-solid fa-pen"></i>
+            Edit Entity Document
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseEditPanel()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          <div class="suggest-form">
+            <div class="suggest-field">
+              <label class="suggest-label">Entity</label>
+              <span class="edit-readonly-value">{{ EditDocEntityName }}</span>
+            </div>
+
+            <!-- Template Section -->
+            <div class="suggest-field">
+              <div class="edit-template-header">
+                <label class="suggest-label">Template</label>
+                <button class="edit-regenerate-btn"
+                        [disabled]="IsEditRegenerating"
+                        (click)="RegenerateTemplate()"
+                        title="Regenerate template using AI">
+                  @if (IsEditRegenerating) {
+                    <i class="fa-solid fa-spinner fa-spin"></i> Regenerating...
+                  } @else {
+                    <i class="fa-solid fa-wand-magic-sparkles"></i> Regenerate with AI
+                  }
+                </button>
+              </div>
+              <div class="template-editor-wrapper">
+                <mj-code-editor
+                  [value]="EditDocTemplate"
+                  language="markdown"
+                  [readonly]="false"
+                  [lineWrapping]="true"
+                  (change)="OnEditTemplateChange($event)">
+                </mj-code-editor>
+              </div>
+            </div>
+
+            <!-- Selected Fields (parsed from template) -->
+            @if (EditDocSelectedFields.length > 0) {
+              <div class="suggest-field">
+                <label class="suggest-label">Selected Fields</label>
+                <div class="result-tags">
+                  @for (field of EditDocSelectedFields; track field) {
+                    <span class="result-tag">{{ field }}</span>
+                  }
+                </div>
+              </div>
+            }
+
+            <div class="suggest-field">
+              <label class="suggest-label">Document Name</label>
+              <input class="suggest-input" type="text" [(ngModel)]="EditDocName" />
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Embedding Model</label>
+              <select class="suggest-select" [(ngModel)]="EditDocAIModelID">
+                @for (model of AvailableEmbeddingModels; track model.ID) {
+                  <option [value]="model.ID">{{ model.Name }}</option>
+                }
+              </select>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Vector Database</label>
+              <select class="suggest-select" [(ngModel)]="EditDocVectorDBID">
+                @for (db of vectorDatabases; track db.ID) {
+                  <option [value]="db.ID">{{ db.Name }}</option>
+                }
+              </select>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Vector Index</label>
+              @if (EditFilteredIndexes.length > 0) {
+                <select class="suggest-select" [(ngModel)]="EditDocVectorIndexID">
+                  <option value="">Auto (create/find matching index)</option>
+                  @for (idx of EditFilteredIndexes; track idx.ID) {
+                    <option [value]="idx.ID">{{ idx.Name }}</option>
+                  }
+                </select>
+              } @else {
+                <span class="edit-readonly-value" style="font-size: 13px; color: var(--mj-text-muted);">
+                  No indexes for this database — one will be created automatically on sync
+                </span>
+              }
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Status</label>
+              <select class="suggest-select" [(ngModel)]="EditDocStatus">
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+            </div>
+            <div class="result-actions" style="margin-top: 1rem">
+              @if (IsEditSaving || IsEditDeleting) {
+                <mj-loading text="Saving..." size="small"></mj-loading>
+              } @else {
+                <button class="suggest-submit-btn" (click)="SaveEditedDocument()">
+                  <i class="fa-solid fa-save"></i> Save Changes
+                </button>
+                <button class="edit-delete-btn" (click)="DeleteEntityDocument()">
+                  <i class="fa-solid fa-trash-can"></i> Delete
+                </button>
+                <button class="suggest-close-action" (click)="CloseEditPanel()">
+                  Cancel
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Schedule Sync Dialog -->
+  @if (ShowScheduleSyncDialog) {
+    <div class="slide-panel-overlay" (click)="CloseScheduleSyncDialog()">
+      <div class="schedule-dialog" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-regular fa-clock"></i>
+            Schedule Vector Sync
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseScheduleSyncDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          <div class="suggest-form">
+            <div class="suggest-field">
+              <label class="suggest-label">Entity Document</label>
+              <span class="edit-readonly-value">{{ ScheduleSyncDocName }}</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Action</label>
+              <span class="edit-readonly-value">__VectorizeEntity</span>
+            </div>
+            <div class="suggest-field">
+              <label class="suggest-label">Cron Expression</label>
+              <input class="suggest-input" type="text" [(ngModel)]="ScheduleSyncCron" placeholder="0 2 * * *" />
+              <div class="schedule-cron-preview">
+                <i class="fa-solid fa-info-circle"></i>
+                {{ GetScheduleCronPreview(ScheduleSyncCron) }}
+              </div>
+            </div>
+            <div class="suggest-field schedule-toggle-row">
+              <label class="suggest-label">Enabled</label>
+              <input type="checkbox" class="mj-checkbox" [(ngModel)]="ScheduleSyncEnabled" />
+            </div>
+            <div class="result-actions" style="margin-top: 1rem">
+              @if (ScheduleSyncSaving) {
+                <mj-loading text="Saving..." size="small"></mj-loading>
+              } @else {
+                <button class="suggest-submit-btn" (click)="SaveScheduleSync()">
+                  <i class="fa-solid fa-check"></i> Create Schedule
+                </button>
+                <button class="suggest-close-action" (click)="CloseScheduleSyncDialog()">
+                  Cancel
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- No Vector Index Warning Dialog -->
+  @if (ShowNoIndexWarning) {
+    <div class="slide-panel-overlay" (click)="CloseNoIndexWarning()">
+      <div class="no-index-warning-dialog" (click)="$event.stopPropagation()">
+        <div class="no-index-warning-icon">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 class="no-index-warning-title">Vector Index Required</h3>
+        <p class="no-index-warning-message">
+          You need to create at least one vector database and index before creating entity documents.
+          Go to the Configuration section to set up a vector database and create an index.
+        </p>
+        <div class="no-index-warning-actions">
+          <button class="suggest-submit-btn" (click)="GoToConfiguration()">
+            <i class="fa-solid fa-gear"></i> Go to Configuration
+          </button>
+          <button class="suggest-close-action" (click)="CloseNoIndexWarning()">
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Suggest Document Slide-in Panel -->
+  @if (ShowSuggestDialog) {
+    <div class="slide-panel-overlay" (click)="CloseSuggestDialog()">
+      <div class="slide-panel" [class.open]="ShowSuggestDialog" (click)="$event.stopPropagation()">
+        <div class="suggest-dialog-header">
+          <h3 class="suggest-dialog-title">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            AI Document Suggestion
+          </h3>
+          <button class="suggest-close-btn" (click)="CloseSuggestDialog()">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </div>
+        <div class="suggest-dialog-body">
+          @if (!SuggestionResult) {
+            <div class="suggest-form">
+              <div class="suggest-field">
+                <label class="suggest-label">Entity</label>
+                <div class="entity-picker">
+                  <button class="entity-picker-trigger" (click)="ToggleEntityPicker()">
+                    @if (SuggestEntityName) {
+                      <i class="fa-solid fa-table"></i>
+                      <span class="entity-picker-value">{{ SuggestEntityName }}</span>
+                    } @else {
+                      <i class="fa-solid fa-search"></i>
+                      <span class="entity-picker-placeholder">Search and select an entity...</span>
+                    }
+                    <i class="fa-solid fa-chevron-down entity-picker-arrow"></i>
+                  </button>
+                  @if (ShowEntityPicker) {
+                    <div class="entity-picker-dropdown" (mousedown)="$event.stopPropagation()">
+                      <div class="entity-picker-search">
+                        <i class="fa-solid fa-search"></i>
+                        <input #entitySearchInput
+                               type="text"
+                               class="entity-picker-search-input"
+                               placeholder="Filter entities..."
+                               [(ngModel)]="EntitySearchText"
+                               (input)="FilterEntities()"
+                               (keydown)="OnEntityPickerKeyDown($event)" />
+                      </div>
+                      <div class="entity-picker-list">
+                        @for (group of FilteredEntityGroups; track group.SchemaName) {
+                          <div class="entity-picker-group">
+                            <div class="entity-picker-group-header">
+                              <i class="fa-solid fa-database"></i>
+                              {{ group.SchemaName }}
+                            </div>
+                            @for (entity of group.Entities; track entity.ID) {
+                              <button class="entity-picker-item"
+                                      [class.entity-picker-item-selected]="entity.Name === SuggestEntityName"
+                                      [class.entity-picker-item-focused]="FlatFilteredEntities[SelectedEntityIndex]?.ID === entity.ID"
+                                      (click)="SelectEntity(entity.Name)">
+                                <i class="fa-solid fa-table"></i>
+                                {{ entity.Name }}
+                              </button>
+                            }
+                          </div>
+                        }
+                        @if (FilteredEntityGroups.length === 0) {
+                          <div class="entity-picker-empty">
+                            No entities matching "{{ EntitySearchText }}"
+                          </div>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+              <div class="suggest-field">
+                <label class="suggest-label">Use Case</label>
+                <div class="use-case-options">
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'duplicate detection'"
+                          (click)="SuggestUseCase = 'duplicate detection'">
+                    <i class="fa-solid fa-clone"></i>
+                    Duplicate Detection
+                  </button>
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'search'"
+                          (click)="SuggestUseCase = 'search'">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                    Search
+                  </button>
+                  <button class="use-case-btn"
+                          [class.use-case-btn-active]="SuggestUseCase === 'classification'"
+                          (click)="SuggestUseCase = 'classification'">
+                    <i class="fa-solid fa-tags"></i>
+                    Classification
+                  </button>
+                </div>
+              </div>
+              <button class="suggest-submit-btn"
+                      [disabled]="IsSuggesting || !SuggestEntityName"
+                      (click)="RunSuggestion()">
+                @if (IsSuggesting) {
+                  <i class="fa-solid fa-spinner fa-spin"></i> Generating with AI...
+                } @else {
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Template
+                }
+              </button>
+              @if (SuggestionError) {
+                <div class="suggestion-error">
+                  <i class="fa-solid fa-circle-exclamation"></i>
+                  {{ SuggestionError }}
+                </div>
+              }
+            </div>
+          } @else {
+            <div class="suggest-result">
+              <div class="result-section">
+                <h4 class="result-heading">Suggested Template</h4>
+                <div class="template-editor-wrapper">
+                  <mj-code-editor
+                    [value]="EditableTemplate"
+                    language="markdown"
+                    [readonly]="false"
+                    [lineWrapping]="true"
+                    (change)="OnTemplateChange($event)">
+                  </mj-code-editor>
+                </div>
+              </div>
+              <div class="result-section">
+                <h4 class="result-heading">Selected Fields</h4>
+                <div class="result-tags">
+                  @for (field of SuggestionResult.selectedFields; track field) {
+                    <span class="result-tag">{{ field }}</span>
+                  }
+                </div>
+              </div>
+              @if ((SuggestionResult.selectedRelationships?.length ?? 0) > 0) {
+                <div class="result-section">
+                  <h4 class="result-heading">Related Entities</h4>
+                  @for (rel of SuggestionResult.selectedRelationships; track rel.name) {
+                    <div class="result-relationship">
+                      <span class="rel-name">{{ rel.name }}</span>
+                      <span class="rel-fields">{{ rel.fields.join(', ') }}</span>
+                    </div>
+                  }
+                </div>
+              }
+              <div class="result-section result-thresholds">
+                <div class="threshold-item">
+                  <span class="threshold-label">Potential Match</span>
+                  <span class="threshold-value">{{ (SuggestionResult.potentialMatchThreshold * 100).toFixed(0) }}%</span>
+                </div>
+                <div class="threshold-item">
+                  <span class="threshold-label">Absolute Match</span>
+                  <span class="threshold-value">{{ (SuggestionResult.absoluteMatchThreshold * 100).toFixed(0) }}%</span>
+                </div>
+              </div>
+              <div class="result-section">
+                <h4 class="result-heading">Reasoning</h4>
+                <p class="result-reasoning">{{ SuggestionResult.reasoning }}</p>
+              </div>
+              <div class="result-section">
+                <div class="suggest-field">
+                  <label class="suggest-label">Document Name</label>
+                  <input class="suggest-input" type="text" [(ngModel)]="SaveDocumentName" />
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Embedding Model</label>
+                  <select class="suggest-select" [(ngModel)]="SelectedEmbeddingModelID">
+                    @for (model of AvailableEmbeddingModels; track model.ID) {
+                      <option [value]="model.ID">{{ model.Name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Vector Database</label>
+                  <select class="suggest-select" [(ngModel)]="SelectedVectorDBID">
+                    @for (db of vectorDatabases; track db.ID) {
+                      <option [value]="db.ID">{{ db.Name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="suggest-field" style="margin-top: 0.75rem">
+                  <label class="suggest-label">Vector Index</label>
+                  @if (FilteredIndexesForSelectedDB.length > 0) {
+                    <select class="suggest-select" [(ngModel)]="SelectedVectorIndexID">
+                      <option value="">Auto (create/find matching index)</option>
+                      @for (idx of FilteredIndexesForSelectedDB; track idx.ID) {
+                        <option [value]="idx.ID">{{ idx.Name }}</option>
+                      }
+                    </select>
+                  } @else {
+                    <span class="edit-readonly-value" style="font-size: 13px; color: var(--mj-text-muted);">
+                      No indexes yet — create one in Configuration > Vector Database, or one will be created on sync
+                    </span>
+                  }
+                </div>
+              </div>
+              <div class="result-actions">
+                @if (IsSavingDocument) {
+                  <div class="save-spinner">
+                    <mj-loading text="Saving..." size="small"></mj-loading>
+                  </div>
+                } @else {
+                  <button class="suggest-submit-btn" (click)="SaveAsEntityDocument()">
+                    <i class="fa-solid fa-floppy-disk"></i> Save as Entity Document
+                  </button>
+                  <button class="suggest-submit-btn suggest-try-again-btn" (click)="ClearSuggestion()">
+                    <i class="fa-solid fa-rotate"></i> Try Again
+                  </button>
+                  <button class="suggest-close-action" (click)="CloseSuggestDialog()">
+                    Close
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+}
+</ng-template>

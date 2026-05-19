@@ -3,7 +3,8 @@ import {
   SimpleChanges, ChangeDetectorRef, ViewEncapsulation, HostListener, HostBinding,
   ElementRef, Renderer2
 } from '@angular/core';
-import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
+import { RunView, CompositeKey, TransactionGroupBase } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentStepEntity, MJAIAgentStepPathEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { FlowNode, FlowConnection, FlowNodeAddedEvent, FlowConnectionCreatedEvent, FlowConnectionReassignedEvent, FlowNodeTypeConfig } from '../interfaces/flow-types';
 import { FlowEditorComponent } from '../components/flow-editor.component';
@@ -25,7 +26,7 @@ export type AgentEditorViewMode = 'diagram' | 'list';
   encapsulation: ViewEncapsulation.None,
   providers: [AgentFlowTransformerService]
 })
-export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
+export class FlowAgentEditorComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy {
   // ── Host Bindings ─────────────────────────────────────────────
   @HostBinding('class.mj-flow-agent-editor--fullscreen') get HostFullScreen(): boolean { return this.FullScreen; }
 
@@ -98,7 +99,9 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     private transformer: AgentFlowTransformerService,
     private elRef: ElementRef<HTMLElement>,
     private renderer: Renderer2
-  ) {}
+  ) {
+    super();
+  }
 
   // ── Lifecycle ───────────────────────────────────────────────
 
@@ -148,7 +151,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
 
   private async loadStepsAndPaths(): Promise<void> {
     if (!this.AgentID) return;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [stepsResult, pathsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: AI Agent Steps',
@@ -171,7 +174,7 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   }
 
   private async loadPickerData(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [actionsResult, promptsResult, agentsResult] = await rv.RunViews([
       {
         EntityName: 'MJ: Actions',
@@ -265,25 +268,30 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
       // Update positions from canvas to entities
       this.syncPositionsFromCanvas();
 
-      // Delete removed items first
-      await this.deleteRemovedEntities();
+      // Bundle deletes and saves for steps + paths into one transaction so a partial save
+      // can never leave the flow in an inconsistent state.
+      const p = this.ProviderToUse;
+      const tg = await p.CreateTransactionGroup();
 
-      // Save all steps
+      await this.queueRemovedEntitiesForDelete(tg);
+
       for (const step of this.steps) {
-        const result = await step.Save();
-        if (!result) {
-          console.error(`Failed to save step: ${step.Name}`, step.LatestResult);
-        }
+        step.TransactionGroup = tg;
+        await step.Save();
       }
 
-      // Save all paths
       for (const path of this.paths) {
-        const result = await path.Save();
-        if (!result) {
-          console.error(`Failed to save path: ${path.ID}`, path.LatestResult);
-        }
+        path.TransactionGroup = tg;
+        await path.Save();
       }
 
+      if (!await tg.Submit()) {
+        console.error('Failed to save flow — all changes have been rolled back');
+        return;
+      }
+
+      this.deletedPathIDs = [];
+      this.deletedStepIDs = [];
       this.hasUnsavedChanges = false;
       this.lastSaved = new Date();
 
@@ -316,23 +324,22 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     }
   }
 
-  private async deleteRemovedEntities(): Promise<void> {
-    const md = new Metadata();
+  private async queueRemovedEntitiesForDelete(tg: TransactionGroupBase): Promise<void> {
+    const p = this.ProviderToUse;
 
     for (const pathId of this.deletedPathIDs) {
-      const pathEntity = await md.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths');
+      const pathEntity = await p.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths', p.CurrentUser);
       await pathEntity.InnerLoad(CompositeKey.FromID(pathId));
+      pathEntity.TransactionGroup = tg;
       await pathEntity.Delete();
     }
 
     for (const stepId of this.deletedStepIDs) {
-      const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps');
+      const stepEntity = await p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
       await stepEntity.InnerLoad(CompositeKey.FromID(stepId));
+      stepEntity.TransactionGroup = tg;
       await stepEntity.Delete();
     }
-
-    this.deletedPathIDs = [];
-    this.deletedStepIDs = [];
   }
 
   // ── Flow Editor Event Handlers ──────────────────────────────
@@ -340,8 +347,8 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   protected async onNodeAdded(event: FlowNodeAddedEvent): Promise<void> {
     if (!this.AgentID) return;
 
-    const md = new Metadata();
-    const step = await md.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps');
+    const p = this.ProviderToUse;
+    const step = await p.GetEntityObject<MJAIAgentStepEntity>('MJ: AI Agent Steps', p.CurrentUser);
     step.NewRecord(); // This generates a UUID immediately - available before Save()
     step.AgentID = this.AgentID;
     step.Name = event.Node.Label;
@@ -381,8 +388,8 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
     );
     if (exists) return;
 
-    const md = new Metadata();
-    const path = await md.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths');
+    const p = this.ProviderToUse;
+    const path = await p.GetEntityObject<MJAIAgentStepPathEntity>('MJ: AI Agent Step Paths', p.CurrentUser);
     path.NewRecord(); // Generates UUID immediately - available before Save()
     path.OriginStepID = event.SourceNodeID;
     path.DestinationStepID = event.TargetNodeID;
@@ -753,10 +760,10 @@ export class FlowAgentEditorComponent implements OnInit, OnChanges, OnDestroy {
   // ── Permission Check ────────────────────────────────────────
 
   private checkUpdatePermission(): void {
-    const md = new Metadata();
-    const entity = md.EntityByName('MJ: AI Agents');
+    const p = this.ProviderToUse;
+    const entity = p.EntityByName('MJ: AI Agents');
     if (entity) {
-      const perms = entity.GetUserPermisions(md.CurrentUser);
+      const perms = entity.GetUserPermisions(p.CurrentUser);
       this.userCanUpdate = perms?.CanUpdate === true;
     }
   }

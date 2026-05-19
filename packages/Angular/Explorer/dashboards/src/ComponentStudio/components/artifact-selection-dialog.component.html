@@ -1,10 +1,4 @@
-<div>
-    <kendo-dialog-titlebar (close)="cancel()">
-        <div style="font-size: 18px;">
-        <i class="fa-solid fa-save"></i> Save Component to Artifact
-        </div>
-    </kendo-dialog-titlebar>
-
+<mj-dialog [Visible]="true" Title="Save Component to Artifact" (Close)="cancel()" [Width]="1200" [MinWidth]="600">
     <div class="artifact-selection-content">
         <!-- Left Filter Panel -->
         <div class="filter-panel" [style.width]="isFilterPanelCollapsed ? '40px' : '280px'">
@@ -13,10 +7,9 @@
                 @if (!isFilterPanelCollapsed) {
                     <span>Filters</span>
                 }
-                <button kendoButton (click)="toggleFilterPanel()" 
-                        [fillMode]="'flat'"
-                        [class.filter-active]="getActiveFilterCount() > 0"
-                        [themeColor]="getActiveFilterCount() > 0 ? 'primary' : 'base'">
+                <button mjButton (click)="toggleFilterPanel()"
+                        variant="flat"
+                        [class.filter-active]="getActiveFilterCount() > 0">
                     <i class="fa-solid fa-filter"></i>
                     @if (isFilterPanelCollapsed && getActiveFilterCount() > 0) {
                         <span class="filter-count">{{ getActiveFilterCount() }}</span>
@@ -66,20 +59,18 @@
         <div class="main-content">
             <!-- Paging Controls -->
             <div class="paging-controls">
-                <button kendoButton 
-                    (click)="previousPage()" 
-                    [disabled]="!canGoPrevious()"
-                    [themeColor]="'base'">
+                <button mjButton
+                    (click)="previousPage()"
+                    [disabled]="!canGoPrevious()">
                     <i class="fa-solid fa-chevron-left"></i> Previous
                 </button>
                 <span class="page-info">
                     Page {{ currentPage + 1 }} of {{ getTotalPages() }}
                     ({{ totalArtifacts }} total items)
                 </span>
-                <button kendoButton 
-                    (click)="nextPage()" 
-                    [disabled]="!canGoNext()"
-                    [themeColor]="'base'">
+                <button mjButton
+                    (click)="nextPage()"
+                    [disabled]="!canGoNext()">
                     Next <i class="fa-solid fa-chevron-right"></i>
                 </button>
             </div>
@@ -128,23 +119,22 @@
             <div class="create-section">
                 <div class="divider">OR CREATE NEW ARTIFACT</div>
                 
-                <button kendoButton 
+                <button mjButton
                 (click)="selectCreateNew()"
-                [themeColor]="'primary'"
+                variant="primary"
                 class="create-btn">
                 <i class="fa-solid fa-plus"></i> Create New Artifact
                 </button>
                 
                 @if (showNewArtifactForm) {
                     <div class="new-artifact-form">
-                        <kendo-textbox 
-                        [(value)]="newArtifactName"
+                        <input class="mj-input"
+                        [(ngModel)]="newArtifactName"
                         placeholder="Artifact name...">
-                        </kendo-textbox>
-                        <kendo-textarea 
-                        [(value)]="newArtifactDescription"
+                        <textarea class="mj-textarea"
+                        [(ngModel)]="newArtifactDescription"
                         placeholder="Description (optional)...">
-                        </kendo-textarea>
+                        </textarea>
                     </div>
                 }
             </div>
@@ -216,14 +206,14 @@
         }
     </div>
 
-    <kendo-dialog-actions>
-        <button kendoButton 
-            [themeColor]="versionAction === 'update' && selectedVersion ? 'warning' : 'primary'" 
+    <mj-dialog-actions>
+        <button mjButton
+            [variant]="versionAction === 'update' && selectedVersion ? 'warning' : 'primary'"
             (click)="save()"
             [disabled]="!canSave()">
-            <i class="fa-solid fa-save"></i> 
+            <i class="fa-solid fa-save"></i>
             {{ getSaveButtonText() }}
         </button>
-        <button kendoButton (click)="cancel()">Cancel</button>
-    </kendo-dialog-actions>
-</div>
+        <button mjButton (click)="cancel()">Cancel</button>
+    </mj-dialog-actions>
+</mj-dialog>

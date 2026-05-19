@@ -1,10 +1,9 @@
 @if (_isVisible) {
-  <kendo-dialog
-    [minWidth]="600"
-    [width]="800"
-    [height]="700"
-    (close)="close()"
-    [title]="'Test Template: ' + (template?.Name || 'Unknown')">
+  <mj-dialog
+    [Visible]="true"
+    [Width]="800"
+    (Close)="close()">
+    <mj-dialog-titlebar>Test Template: {{ template?.Name || 'Unknown' }}</mj-dialog-titlebar>
     <div class="dialog-content" style="display: flex; flex-direction: column; height: 100%; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
       <!-- Header Section -->
       <div class="dlg-header">
@@ -24,17 +23,15 @@
         </div>
       } @else {
         <!-- Template Parameters Section -->
-        <kendo-expansionpanel
-          [(expanded)]="parametersExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="parametersExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
-          <ng-template kendoExpansionPanelTitleDirective>
+          <ng-template mjAccordionTitle>
             <span class="dlg-panel-title">
               <i class="fa-solid fa-sliders"></i>
               Template Parameters
               @if (parameters.length > 0) {
-                <span class="count-badge">
-                  {{ parameters.length }}
-                </span>
+                <span class="count-badge">{{ parameters.length }}</span>
               }
             </span>
           </ng-template>
@@ -82,30 +79,28 @@
                           </div>
                         }
                       } @else {
-                        <kendo-textbox [(ngModel)]="param.key"
+                        <input type="text" class="mj-input"
+                          [(ngModel)]="param.key"
                           (ngModelChange)="onParameterChange()"
                           placeholder="Parameter name..."
                           [disabled]="isRunning"
-                          style="font-family: 'Courier New', monospace; width: 100%;">
-                        </kendo-textbox>
+                          style="font-family: 'Courier New', monospace; width: 100%;" />
                       }
                     </div>
                     <!-- Parameter Value -->
                     <div class="param-value">
-                      <kendo-textarea [(ngModel)]="param.value"
+                      <textarea class="mj-textarea"
+                        [(ngModel)]="param.value"
                         (ngModelChange)="onParameterChange()"
                         [rows]="2"
                         placeholder="Enter value (JSON strings, numbers, objects)..."
                         [disabled]="isRunning"
-                        style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;">
-                      </kendo-textarea>
+                        style="font-family: 'Courier New', monospace; font-size: 0.9em; width: 100%;"></textarea>
                     </div>
                     <!-- Actions -->
                     <div class="param-actions">
                       @if (!param.isFromTemplate && parameters.length > 1) {
-                        <button kendoButton fillMode="flat"
-                          themeColor="error"
-                          size="small"
+                        <button mjButton variant="danger" size="sm"
                           (click)="removeParameter(i)"
                           [disabled]="isRunning"
                           title="Remove parameter">
@@ -117,9 +112,7 @@
                 }
                 <!-- Add Parameter Row -->
                 <div class="add-param-row">
-                  <button kendoButton fillMode="outline"
-                    themeColor="success"
-                    size="small"
+                  <button mjButton variant="success" size="sm"
                     (click)="addParameter()"
                     [disabled]="isRunning">
                     <i class="fa-solid fa-plus"></i> Add Parameter
@@ -130,7 +123,7 @@
               <div class="no-params-state">
                 <i class="fa-solid fa-info-circle"></i>
                 <p>No parameters defined yet</p>
-                <button kendoButton themeColor="primary" size="small"
+                <button mjButton variant="primary" size="sm"
                   (click)="addParameter()"
                   [disabled]="isRunning">
                   <i class="fa-solid fa-plus"></i> Add First Parameter
@@ -138,12 +131,12 @@
               </div>
             }
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
         <!-- JSON Preview Section -->
-        <kendo-expansionpanel
-          [(expanded)]="jsonPreviewExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="jsonPreviewExpanded"
           style="margin-bottom: 16px; flex-shrink: 0;">
-          <ng-template kendoExpansionPanelTitleDirective>
+          <ng-template mjAccordionTitle>
             <span class="dlg-panel-title">
               <i class="fa-solid fa-code"></i>
               Context Data (JSON)
@@ -154,20 +147,20 @@
               <pre>{{ parametersAsJson }}</pre>
             </div>
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
         <!-- Test Results Section -->
-        <kendo-expansionpanel
-          [(expanded)]="resultsExpanded"
+        <mj-accordion-panel
+          [(Expanded)]="resultsExpanded"
           style="margin-bottom: 16px; flex: 1; display: flex; flex-direction: column;">
-          <ng-template kendoExpansionPanelTitleDirective>
+          <ng-template mjAccordionTitle>
             <span class="dlg-panel-title">
               <i class="fa-solid fa-chart-line"></i>
               Test Results
               @if (testResult) {
                 @if (testResult.success) {
-                  <span class="result-badge-success">Success</span>
+                  <span class="result-badge success"><i class="fa-solid fa-check"></i> Success</span>
                 } @else {
-                  <span class="result-badge-error">Error</span>
+                  <span class="result-badge error"><i class="fa-solid fa-times"></i> Failed</span>
                 }
               }
             </span>
@@ -196,10 +189,9 @@
                   }
                   <div class="result-stat">
                     <div class="result-stat-label">ACTIONS</div>
-                    <button kendoButton fillMode="flat" size="small"
+                    <button mjButton variant="flat" size="sm"
                       (click)="saveResults()"
-                      title="Save results to file"
-                      style="min-width: auto; padding: 4px 8px;">
+                      title="Save results to file">
                       <i class="fa-solid fa-download"></i>
                     </button>
                   </div>
@@ -236,16 +228,15 @@
               </div>
             }
           </div>
-        </kendo-expansionpanel>
+        </mj-accordion-panel>
       }
     </div>
     <!-- Dialog Actions -->
-    <kendo-dialog-actions>
+    <mj-dialog-actions>
       <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
         <div>
           @if (hasUnsavedParameters) {
-            <button kendoButton fillMode="outline"
-              themeColor="info"
+            <button mjButton variant="outline"
               (click)="updateTemplateParams()"
               [disabled]="isRunning">
               <i class="fa-solid fa-save"></i> Update Template Params
@@ -253,15 +244,15 @@
           }
         </div>
         <div style="display: flex; gap: 8px;">
-          <button kendoButton fillMode="outline" (click)="close()">
+          <button mjButton variant="outline" (click)="close()">
             Close
           </button>
           @if (testResult) {
-            <button kendoButton fillMode="outline" themeColor="info" (click)="saveResults()">
+            <button mjButton variant="outline" (click)="saveResults()">
               <i class="fa-solid fa-download"></i> Save Results
             </button>
           }
-          <button kendoButton themeColor="primary"
+          <button mjButton variant="primary"
             [disabled]="isRunning || isLoading"
             (click)="runTemplate()">
             @if (isRunning) {
@@ -272,6 +263,6 @@
           </button>
         </div>
       </div>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

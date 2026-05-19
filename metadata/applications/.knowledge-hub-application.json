@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "Name": "Knowledge Hub",
+    "Description": "Unified knowledge management: semantic search, vector management, duplicate detection, content classification, and AI assistant",
+    "Icon": "fa-solid fa-brain",
+    "DefaultForNewUser": false,
+    "Color": "#7c3aed",
+    "DefaultSequence": 1010,
+    "DefaultNavItems": [
+      {
+        "Label": "Classify",
+        "Icon": "fa-solid fa-tags",
+        "ResourceType": "Custom",
+        "DriverClass": "AutotaggingPipelineResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Tags",
+        "Icon": "fa-solid fa-sitemap",
+        "ResourceType": "Custom",
+        "DriverClass": "Tags",
+        "isDefault": false
+      },
+      {
+        "Label": "Clusters",
+        "Icon": "fa-solid fa-circle-nodes",
+        "ResourceType": "Custom",
+        "DriverClass": "ClusterVisualizationResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Duplicates",
+        "Icon": "fa-solid fa-clone",
+        "ResourceType": "Custom",
+        "DriverClass": "DuplicateDetectionResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Analytics",
+        "Icon": "fa-solid fa-chart-line",
+        "ResourceType": "Custom",
+        "DriverClass": "AnalyticsResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Vectors",
+        "Icon": "fa-solid fa-cubes",
+        "ResourceType": "Custom",
+        "DriverClass": "VectorManagementResource",
+        "isDefault": false
+      },
+      {
+        "Label": "Configuration",
+        "Icon": "fa-solid fa-cogs",
+        "ResourceType": "Custom",
+        "DriverClass": "KnowledgeConfigResource",
+        "isDefault": false
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
+  },
+  "sync": {
+    "lastModified": "2026-05-01T18:47:56.524Z",
+    "checksum": "ede1799605922038250fb7ec80cca4746f621c2abedb626ae95d3b48ec6dff7c"
+  }
+}

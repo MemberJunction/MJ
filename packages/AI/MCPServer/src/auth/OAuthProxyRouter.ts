@@ -434,7 +434,7 @@ async function redirectToConsentScreen(
     const requestedScopeNames = authState.scope.split(' ').filter(Boolean);
     if (requestedScopeNames.length > 0) {
       const filteredScopes = availableScopes.filter((s) =>
-        requestedScopeNames.includes(s.Name)
+        requestedScopeNames.includes(s.FullPath)
       );
       // Only use filtered list if at least one valid scope was requested
       // If all requested scopes are unknown, show all scopes (FR-031b)

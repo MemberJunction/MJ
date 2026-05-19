@@ -1,0 +1,506 @@
+[
+  {
+    "fields": {
+      "Name": "Autonomous City of Buenos Aires",
+      "Code": "C",
+      "ISO3166_2": "AR-C",
+      "Latitude": -34.6161,
+      "Longitude": -58.4356,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-C.geojson",
+      "CommonAliases": [
+        "Autonomous City of Buenos Aires"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "EE3B4255-0492-4BA1-BC28-E01F6EF66A85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.124Z",
+      "checksum": "9e28585ed31f2e446c9161554819b66ec78a42ca21060b38e385cf4e17adff1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Buenos Aires",
+      "Code": "B",
+      "ISO3166_2": "AR-B",
+      "Latitude": -37.1498,
+      "Longitude": -60.1319,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-B.geojson",
+      "CommonAliases": [
+        "Buenos Aires"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "7E1B0135-F94A-40F6-8E9A-09FBD87736A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.146Z",
+      "checksum": "85479c53f665fc72580d96ea442b7d8c0f135833c0ff47e6b8f2e834a87d1b69"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Catamarca",
+      "Code": "K",
+      "ISO3166_2": "AR-K",
+      "Latitude": -28.4716,
+      "Longitude": -65.7877,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-K.geojson",
+      "CommonAliases": [
+        "Catamarca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "00ABC815-590C-4C25-B5A7-0F552C26A4F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.165Z",
+      "checksum": "6e2aaaf964dcafd4b764596b094e530ba9b4efe1aba6eedf0afc7c340b05d488"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chaco",
+      "Code": "H",
+      "ISO3166_2": "AR-H",
+      "Latitude": -26.383,
+      "Longitude": -60.8816,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-H.geojson",
+      "CommonAliases": [
+        "Chaco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "4278F7D8-333D-46E3-9ABB-48CC21A1E539"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.182Z",
+      "checksum": "7c17ca54ea53ea74e71203d88c20dad60f4fb9d97903a624a506f6bcc719483d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chubut",
+      "Code": "U",
+      "ISO3166_2": "AR-U",
+      "Latitude": -43.7128,
+      "Longitude": -68.7462,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-U.geojson",
+      "CommonAliases": [
+        "Chubut"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "3BD5703B-E76B-4B97-B913-697EE0C2919F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.199Z",
+      "checksum": "48a29270373b071423365b6052002e9b298f3e0a6025a5eaf00b8bb86d22fa68"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Corrientes",
+      "Code": "W",
+      "ISO3166_2": "AR-W",
+      "Latitude": -27.4819,
+      "Longitude": -58.7956,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-W.geojson",
+      "CommonAliases": [
+        "Corrientes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "3B755677-A04F-4EE1-B5AA-58008C559F69"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.216Z",
+      "checksum": "f4e5db42f9caaf3fd282eee9556aaf9cefa5323d12ef25fcb7bb1232e4692f9c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Córdoba",
+      "Code": "X",
+      "ISO3166_2": "AR-X",
+      "Latitude": -31.4167,
+      "Longitude": -64.1834,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-X.geojson",
+      "CommonAliases": [
+        "Córdoba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "46FE8952-D77B-4F89-92AD-64A6F938922C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.234Z",
+      "checksum": "66efe2644123826b89a64e48ec63332dd606b55f801e88c359312f54a43c5383"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Entre Ríos",
+      "Code": "E",
+      "ISO3166_2": "AR-E",
+      "Latitude": -31.6253,
+      "Longitude": -59.354,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-E.geojson",
+      "CommonAliases": [
+        "Entre Ríos"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "0846F215-D518-426E-8F23-42D77A35D9DA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.251Z",
+      "checksum": "4d5763517f67da2258784fb2b22f78c23556631972af85ad762a4446c2188998"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Formosa",
+      "Code": "P",
+      "ISO3166_2": "AR-P",
+      "Latitude": -26.1853,
+      "Longitude": -58.1745,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-P.geojson",
+      "CommonAliases": [
+        "Formosa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "B95708D9-178B-42C3-AFC1-0E9BE9BAB97F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.268Z",
+      "checksum": "62f35c06b86167deb830a09fa27e88f611d338496ded09d51abb62a88ea616f8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jujuy",
+      "Code": "Y",
+      "ISO3166_2": "AR-Y",
+      "Latitude": -23.3161,
+      "Longitude": -65.7595,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-Y.geojson",
+      "CommonAliases": [
+        "Jujuy"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "8A563F8C-3F89-42D0-A2F3-25B3AF97F202"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.282Z",
+      "checksum": "ff84d8c91f46ba19bf3e709559f2b45ef5aebe90efde38c05c5d44f10b500b7f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Pampa",
+      "Code": "L",
+      "ISO3166_2": "AR-L",
+      "Latitude": -37.2315,
+      "Longitude": -65.3973,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-L.geojson",
+      "CommonAliases": [
+        "La Pampa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "B605209F-787E-4909-8F28-CE3850513217"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.339Z",
+      "checksum": "8f3c23bb359df5a89bb48dc72a1a76f5ccfde2e5fdb065cf5eb7ec1906abe593"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Rioja",
+      "Code": "F",
+      "ISO3166_2": "AR-F",
+      "Latitude": -29.4194,
+      "Longitude": -66.856,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-F.geojson",
+      "CommonAliases": [
+        "La Rioja"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "4B4BA453-B92C-4ABC-8605-0F55315B8F78"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.355Z",
+      "checksum": "33c418224182d94c0f4e190e2aa865f7c7b146469ccb7e90721a3c472ced4617"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mendoza",
+      "Code": "M",
+      "ISO3166_2": "AR-M",
+      "Latitude": -32.8895,
+      "Longitude": -68.8458,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-M.geojson",
+      "CommonAliases": [
+        "Mendoza"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "4EFA8AB6-BA3A-48F7-8DA5-D347C0B227CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.373Z",
+      "checksum": "990569318b49bf3abc5c4d5278830b2e5b062160b04814acf70e02d814de192e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Misiones",
+      "Code": "N",
+      "ISO3166_2": "AR-N",
+      "Latitude": -26.7372,
+      "Longitude": -54.4315,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-N.geojson",
+      "CommonAliases": [
+        "Misiones"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "C36AC50E-43DA-4075-AF11-54BEE3A38EE5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.389Z",
+      "checksum": "ac653b6646d76c18d000730e32be8a91da1bd9a3f3c56086e372c6928d1dd69e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neuquén",
+      "Code": "Q",
+      "ISO3166_2": "AR-Q",
+      "Latitude": -38.952,
+      "Longitude": -68.0592,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-Q.geojson",
+      "CommonAliases": [
+        "Neuquén"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "60F3F7A8-D633-46BF-B231-773357CEC1FD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.406Z",
+      "checksum": "b50753e386e5dd12121ff3a47e60a6e9e18738dbbab20e4dd6d5b373e881f046"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Río Negro",
+      "Code": "R",
+      "ISO3166_2": "AR-R",
+      "Latitude": -39.7296,
+      "Longitude": -65.3418,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-R.geojson",
+      "CommonAliases": [
+        "Río Negro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "ECFDACFC-6B0A-454A-8DF2-389499AB4E0C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.422Z",
+      "checksum": "72c21953eeeee25e720952ddd91b31d3908191f2369382c042877b83ef49e360"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Salta",
+      "Code": "A",
+      "ISO3166_2": "AR-A",
+      "Latitude": -24.7893,
+      "Longitude": -65.4103,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-A.geojson",
+      "CommonAliases": [
+        "Salta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "3E5D81F1-105F-4DE8-BF7D-E6EFA2D7D315"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.439Z",
+      "checksum": "06cb7ef59c19eee871e8a852c3c5e424180943963443465b4f5d180946f9a161"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Juan",
+      "Code": "J",
+      "ISO3166_2": "AR-J",
+      "Latitude": -31.5371,
+      "Longitude": -68.5252,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-J.geojson",
+      "CommonAliases": [
+        "San Juan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "1208715F-9712-4BD6-A15F-3139B9C1E2FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.457Z",
+      "checksum": "007ced1d82f0009b2e898fa8c8dab41844f8d537dc41a622ab8f0c651a0a48f7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Luis",
+      "Code": "D",
+      "ISO3166_2": "AR-D",
+      "Latitude": -33.2962,
+      "Longitude": -66.3295,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-D.geojson",
+      "CommonAliases": [
+        "San Luis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "45191A9E-663C-4718-ABA2-F3D11FD7C736"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.474Z",
+      "checksum": "7fff95335a8440e958283422dcb33783c3f48f54679579fc150398d9042ef5b3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Cruz",
+      "Code": "Z",
+      "ISO3166_2": "AR-Z",
+      "Latitude": -48.5693,
+      "Longitude": -70.1607,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-Z.geojson",
+      "CommonAliases": [
+        "Santa Cruz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "C09A6E46-9676-4042-9B72-B3E55F8124AC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.488Z",
+      "checksum": "9c3d2606348cf054d958de3336d64da47d7b7f7b5de1bd453bc4fed2670bb8a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Fe",
+      "Code": "S",
+      "ISO3166_2": "AR-S",
+      "Latitude": -31.6187,
+      "Longitude": -60.702,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-S.geojson",
+      "CommonAliases": [
+        "Santa Fe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "B8CCB9ED-1E42-4365-9A76-4EE9CAA01A01"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.522Z",
+      "checksum": "6c584271a49197bf7bd489631c62c28f24835fdfda9ed8269ab69908bfaa2134"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santiago del Estero",
+      "Code": "G",
+      "ISO3166_2": "AR-G",
+      "Latitude": -27.7834,
+      "Longitude": -64.2642,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-G.geojson",
+      "CommonAliases": [
+        "Santiago del Estero"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "E90FD6A0-4B7D-411B-9A81-126D449A2487"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.539Z",
+      "checksum": "5c27641b732a52b83124d3c36c89e17a538ddf400c79b4c9630f6b9d6f8e9213"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tierra del Fuego",
+      "Code": "V",
+      "ISO3166_2": "AR-V",
+      "Latitude": -54.4071,
+      "Longitude": -67.8975,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-V.geojson",
+      "CommonAliases": [
+        "Tierra del Fuego"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "022201BC-F7C1-41DF-A267-66DE63AC3E32"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.554Z",
+      "checksum": "a11a3f8634ccd82311d0707f7e7524a6232571d2f68d23aa2c65bc21ef37e45c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tucumán",
+      "Code": "T",
+      "ISO3166_2": "AR-T",
+      "Latitude": -26.8304,
+      "Longitude": -65.2038,
+      "BoundaryGeoJSON": "@file:by-country/AR/boundaries/AR-T.geojson",
+      "CommonAliases": [
+        "Tucumán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AR"
+    },
+    "primaryKey": {
+      "ID": "9A5525ED-2C07-4642-9629-76D927BB6139"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.568Z",
+      "checksum": "0abb26c7afc8c4416ca333eedff7cba9139556c71dde82f8472428c45f44395b"
+    }
+  }
+]

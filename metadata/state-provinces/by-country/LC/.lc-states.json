@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Saint Lucia",
+      "Code": "LC",
+      "ISO3166_2": "LC-LC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Saint Lucia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LC"
+    },
+    "primaryKey": {
+      "ID": "AD9DEC2C-8BCD-43F7-871D-BBDFAE5C1163"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.975Z",
+      "checksum": "5006690bb62c3908a1b19ba2c450b60b8d879ee5446be819b64552367c054e7d"
+    }
+  }
+]

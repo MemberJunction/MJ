@@ -1329,10 +1329,10 @@ ORDER BY m.Name`,
     });
 
     // ================================================================
-    // Template token escaping in SQL comments
+    // SQL comments with {{ }} tokens
     // ================================================================
-    describe('Template token escaping in comments', () => {
-        it('should escape {{ }} in single-line comments when AnyDependencyUsesTemplates is true', () => {
+    describe('SQL comments with template tokens', () => {
+        it('should preserve comments in ResolveComposition output (pipeline strips them later)', () => {
             const depQuery = makeQueryInfo({
                 ID: 'esc-1',
                 Name: 'Template Dep',
@@ -1349,13 +1349,14 @@ SELECT * FROM {{query:"Test/Template Dep(days='7')"}} td`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
             expect(result.AnyDependencyUsesTemplates).toBe(true);
-            // The comment's {{ should be escaped so Nunjucks won't choke
-            expect(result.ResolvedSQL).not.toMatch(/\{\{query:/);
-            // But the CTE should be present
+            // Composition resolves real {{query:...}} tokens but leaves comments intact.
+            // The pipeline strips comments before Nunjucks, so {{ in comments is safe.
             expect(result.ResolvedSQL).toMatch(/WITH/i);
+            // The comment text is still in the output (pipeline will strip it later)
+            expect(result.ResolvedSQL).toContain('-- This query uses');
         });
 
-        it('should escape {{ }} in block comments when AnyDependencyUsesTemplates is true', () => {
+        it('should preserve block comments in ResolveComposition output', () => {
             const depQuery = makeQueryInfo({
                 ID: 'esc-2',
                 Name: 'Block Comment Dep',
@@ -1370,10 +1371,11 @@ SELECT * FROM {{query:"Test/Template Dep(days='7')"}} td`;
 SELECT * FROM {{query:"Test/Block Comment Dep"}} bcd`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            expect(result.ResolvedSQL).not.toMatch(/\{\{query:/);
+            // Comment preserved (pipeline strips it before Nunjucks)
+            expect(result.ResolvedSQL).toContain('/* References:');
         });
 
-        it('should NOT escape {{ }} in comments when no dependency uses templates', () => {
+        it('should leave comments as-is when no dependency uses templates', () => {
             const depQuery = makeQueryInfo({
                 ID: 'esc-3',
                 Name: 'No Template Dep',
@@ -1389,12 +1391,11 @@ SELECT * FROM {{query:"Test/No Template Dep"}} ntd`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
             expect(result.AnyDependencyUsesTemplates).toBe(false);
-            // When no templates involved, Nunjucks won't run, so escaping is unnecessary
-            // The comment {{ should remain as-is
+            // No templates → Nunjucks won't run → comments stay as-is
             expect(result.ResolvedSQL).toContain('{{query:"..."}}');
         });
 
-        it('should escape {{ }} in dependency SQL comments carried into CTEs', () => {
+        it('should preserve dependency SQL comments carried into CTEs', () => {
             const depQuery = makeQueryInfo({
                 ID: 'esc-4',
                 Name: 'Commented Dep',
@@ -1409,11 +1410,10 @@ SELECT ID FROM Events WHERE CreatedAt > DATEADD(DAY, -{{lookbackDays}}, GETUTCDA
             const sql = `SELECT * FROM {{query:"Test/Commented Dep(lookbackDays='30')"}} cd`;
             const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
 
-            // The dependency comment had {{lookbackDays}} — but static param substitution
-            // should have replaced the real one. The comment one should be escaped.
             expect(result.AnyDependencyUsesTemplates).toBe(true);
-            // No unescaped {{ should remain in comments
-            expect(result.ResolvedSQL).not.toMatch(/--.*\{\{/);
+            // Comments flow through from composition — the pipeline strips
+            // them before Nunjucks processes the SQL.
+            expect(result.ResolvedSQL).toMatch(/WITH/i);
         });
     });
 
@@ -2283,6 +2283,132 @@ JOIN {{query:"Reports/Active Members By Membership Type"}} am ON 1=1`;
             expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
             // MinActivityCount='3' substituted in the dep1 SQL
             expect(result.CTEs[0].Parameters['MinActivityCount']).toBe('3');
+        });
+    });
+
+    // ================================================================
+    // Filter Chain Preservation in Parameter Substitution
+    // ================================================================
+    describe('Filter chain preservation in parameter substitution', () => {
+        it('should preserve sqlNumber filter on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-num-1',
+                Name: 'Recent Changes',
+                CategoryPath: '/Demos/',
+                SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays=numDays)"}} rc';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: inner {{ lookbackDays | sqlNumber }} should become {{ numDays | sqlNumber }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+        });
+
+        it('should preserve sqlString filter on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-str-1',
+                Name: 'By Region',
+                CategoryPath: '/Sales/',
+                SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Sales/By Region(region=userRegion)"}} c';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: inner {{ region | sqlString }} should become {{ userRegion | sqlString }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('userRegion');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlString');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('region |');
+        });
+
+        it('should preserve default+filter chain on pass-through parameter', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-chain-1',
+                Name: 'Limited Results',
+                CategoryPath: '/Test/',
+                SQL: "SELECT TOP {{ limit | default(25) | sqlNumber }} * FROM Items",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = 'SELECT * FROM {{query:"Test/Limited Results(limit=maxRows)"}} lr';
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Pass-through: {{ limit | default(25) | sqlNumber }} should become {{ maxRows | default(25) | sqlNumber }}
+            expect(result.CTEs[0].ResolvedSQL).toContain('maxRows');
+            expect(result.CTEs[0].ResolvedSQL).toContain('default(25)');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('limit');
+        });
+
+        it('should replace entire expression (including filter) for static string value', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-static-str',
+                Name: 'By Region',
+                CategoryPath: '/Sales/',
+                SQL: "SELECT * FROM Customers WHERE Region = {{ region | sqlString }}",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `SELECT * FROM {{query:"Sales/By Region(region='West')"}} c`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static value: entire {{ region | sqlString }} replaced with literal 'West'
+            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('sqlString');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('{{');
+        });
+
+        it('should replace entire expression (including filter) for static numeric value', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-static-num',
+                Name: 'Recent Changes',
+                CategoryPath: '/Demos/',
+                SQL: "SELECT * FROM Changes WHERE CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            const sql = `SELECT * FROM {{query:"Demos/Recent Changes(lookbackDays='30')"}} rc`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static numeric: entire {{ lookbackDays | sqlNumber }} replaced with bare 30
+            expect(result.CTEs[0].ResolvedSQL).toContain('30');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('{{');
+        });
+
+        it('should handle mixed static and pass-through params both with filters', () => {
+            const depQuery = makeQueryInfo({
+                ID: 'fc-mixed-1',
+                Name: 'Regional Changes',
+                CategoryPath: '/Analytics/',
+                SQL: "SELECT * FROM Changes WHERE Region = {{ region | sqlString }} AND CreatedAt >= DATEADD(DAY, -{{ lookbackDays | sqlNumber }}, GETUTCDATE())",
+            });
+
+            mockMetadataQueries([depQuery]);
+
+            // region is static, lookbackDays is pass-through
+            const sql = `SELECT * FROM {{query:"Analytics/Regional Changes(region='West', lookbackDays=numDays)"}} rc`;
+            const result = engine.ResolveComposition(sql, 'sqlserver', mockUser);
+
+            // Static region: filter dropped, literal substituted
+            expect(result.CTEs[0].ResolvedSQL).toContain("'West'");
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('region');
+
+            // Pass-through lookbackDays: renamed to numDays, filter preserved
+            expect(result.CTEs[0].ResolvedSQL).toContain('numDays');
+            expect(result.CTEs[0].ResolvedSQL).toContain('sqlNumber');
+            expect(result.CTEs[0].ResolvedSQL).not.toContain('lookbackDays');
         });
     });
 });

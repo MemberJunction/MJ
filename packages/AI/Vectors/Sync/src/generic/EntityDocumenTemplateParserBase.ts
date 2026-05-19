@@ -1,5 +1,6 @@
-import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.
@@ -17,6 +18,14 @@ export abstract class EntityDocumentTemplateParserBase {
     return EntityDocumentTemplateParserBase.__cache;
   }
 
+  /** Optional provider override; falls back to Metadata.Provider when not set. */
+  protected _provider?: IMetadataProvider;
+
+  /** Returns the active provider — explicit override if set, otherwise the global default. */
+  protected get ProviderToUse(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+
   /**
    * This method will parse an entity document template and replace values within ${} placeholders with actual values from the entity record. In the case of function calls
    * within the placeholders, the functions object must be provided to parse the function calls.
@@ -31,17 +40,28 @@ export abstract class EntityDocumentTemplateParserBase {
       throw new Error('ContextUser is required to parse the template');
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, EntityID));
     if (!entityInfo) {
       throw new Error(`Entity with ID ${EntityID} not found.`);
+    }
+
+    // If template uses Nunjucks {{ }} syntax, pre-render with the MJ TemplateEngine first.
+    // This handles conditionals, filters, and expressions that ${} syntax can't express.
+    let processedTemplate = Template;
+    if (/\{\{.*\}\}/.test(Template)) {
+      await TemplateEngineServer.Instance.Config(false, ContextUser);
+      const renderResult = await TemplateEngineServer.Instance.RenderTemplateSimple(Template, EntityRecord);
+      if (renderResult.Success && renderResult.Output) {
+        processedTemplate = renderResult.Output;
+      }
     }
 
     let compositeKey: CompositeKey = new CompositeKey();
     compositeKey.LoadFromEntityInfoAndRecord(entityInfo, EntityRecord);
 
     const regex = /\$\{([^{}]+)\}/g;
-    const matches = Template.matchAll(regex);
+    const matches = processedTemplate.matchAll(regex);
 
     // Convert matches to an array to handle them asynchronously
     const replacements = Array.from(matches).map(async (match) => {
@@ -64,7 +84,7 @@ export abstract class EntityDocumentTemplateParserBase {
     const resolvedReplacements = await Promise.all(replacements);
 
     // Replace each placeholder in the template with its resolved value
-    let resolvedTemplate = Template;
+    let resolvedTemplate = processedTemplate;
     resolvedReplacements.forEach((replacement) => {
       resolvedTemplate = resolvedTemplate.replace(replacement.old, replacement.new);
     });

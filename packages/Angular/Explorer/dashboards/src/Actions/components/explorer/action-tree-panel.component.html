@@ -4,23 +4,23 @@
       <div class="header-content">
         <h3><i class="fa-solid fa-folder-tree"></i> Categories</h3>
         <div class="header-actions">
-          <button kendoButton
-            [fillMode]="'flat'"
-            [size]="'small'"
+          <button mjButton
+            variant="flat"
+            size="sm"
             title="Expand All"
             (click)="expandAll()">
             <i class="fa-solid fa-angles-down"></i>
           </button>
-          <button kendoButton
-            [fillMode]="'flat'"
-            [size]="'small'"
+          <button mjButton
+            variant="flat"
+            size="sm"
             title="Collapse All"
             (click)="collapseAll()">
             <i class="fa-solid fa-angles-up"></i>
           </button>
-          <button kendoButton
-            [fillMode]="'flat'"
-            [size]="'small'"
+          <button mjButton
+            variant="flat"
+            size="sm"
             title="Collapse Panel"
             (click)="toggleCollapse()">
             <i class="fa-solid fa-chevron-left"></i>
@@ -29,25 +29,19 @@
       </div>
 
       <div class="tree-search">
-        <kendo-textbox
-          [placeholder]="'Filter categories...'"
-          [value]="SearchTerm"
-          (valueChange)="onSearchChange($event)"
-          [size]="'small'">
-          <ng-template kendoTextBoxPrefixTemplate>
-            <i class="fa-solid fa-search"></i>
-          </ng-template>
+        <div class="search-input-wrapper">
+          <i class="fa-solid fa-search search-icon"></i>
+          <input type="text" class="mj-input"
+            placeholder="Filter categories..."
+            [value]="SearchTerm"
+            (input)="onSearchChange($any($event.target).value)" />
           @if (SearchTerm) {
-            <ng-template kendoTextBoxSuffixTemplate>
-              <button kendoButton
-                [fillMode]="'flat'"
-                [size]="'small'"
-                (click)="onSearchChange('')">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            </ng-template>
+            <button mjButton variant="flat" size="sm" class="search-clear"
+              (click)="onSearchChange('')">
+              <i class="fa-solid fa-times"></i>
+            </button>
           }
-        </kendo-textbox>
+        </div>
       </div>
     </div>
 
@@ -106,9 +100,9 @@
               <span class="item-count" [title]="node.totalActionCount + ' total actions'">{{ node.totalActionCount }}</span>
 
               <div class="item-actions">
-                <button kendoButton
-                  [fillMode]="'flat'"
-                  [size]="'small'"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   title="Add Subcategory"
                   (click)="onNewCategory(node.category.ID, $event)">
                   <i class="fa-solid fa-plus"></i>
@@ -127,10 +121,9 @@
     </div>
 
     <div class="tree-footer">
-      <button kendoButton
-        [fillMode]="'outline'"
-        [themeColor]="'primary'"
-        [size]="'small'"
+      <button mjButton
+        variant="primary"
+        size="sm"
         class="new-category-btn"
         (click)="onNewCategory(null, $event)">
         <i class="fa-solid fa-plus"></i>
@@ -147,14 +140,14 @@
 } @else {
   <!-- Collapsed State -->
   <div class="tree-panel-collapsed">
-    <button kendoButton
-      [fillMode]="'flat'"
+    <button mjButton
+      variant="flat"
       title="Expand Category Panel"
       (click)="toggleCollapse()">
       <i class="fa-solid fa-chevron-right"></i>
     </button>
-    <button kendoButton
-      [fillMode]="'flat'"
+    <button mjButton
+      variant="flat"
       title="All Actions"
       [class.selected]="isSelected('all')"
       (click)="selectCategory('all')">

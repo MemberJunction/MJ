@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Antarctica",
+      "Code": "AQ",
+      "ISO3166_2": "AQ-AQ",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Antarctica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AQ"
+    },
+    "primaryKey": {
+      "ID": "4E499D26-B76F-4706-9485-43AA6DE8540A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:28.047Z",
+      "checksum": "adb66f143a5616177f42c16601d5089e8af726b66e80fc41bab544c73bb2569f"
+    }
+  }
+]

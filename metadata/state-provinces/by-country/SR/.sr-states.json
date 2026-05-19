@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Brokopondo",
+      "Code": "BR",
+      "ISO3166_2": "SR-BR",
+      "Latitude": 4.7127,
+      "Longitude": -55.1215,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-BR.geojson",
+      "CommonAliases": [
+        "Brokopondo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "F8440CFB-6A7C-45C0-94F5-0B6822382507"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.602Z",
+      "checksum": "afd5489080799f8d0737115a484401fc322cf960aab8bd4e42f96318c95400ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Commewijne",
+      "Code": "CM",
+      "ISO3166_2": "SR-CM",
+      "Latitude": 5.7072,
+      "Longitude": -54.8961,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-CM.geojson",
+      "CommonAliases": [
+        "Commewijne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "12135EF9-12F2-4969-9144-D9BDA9355228"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.618Z",
+      "checksum": "823ab936d1294926da676a22d7916eb822eb12180e6ecc3d76459f6cd3666331"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coronie",
+      "Code": "CR",
+      "ISO3166_2": "SR-CR",
+      "Latitude": 5.6412,
+      "Longitude": -56.2504,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-CR.geojson",
+      "CommonAliases": [
+        "Coronie"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "B815A80B-56D6-4339-AE68-82DE7D7F1A68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.637Z",
+      "checksum": "8e46639e526824812376cd3b776dc30c68322e2d5f085f459061b172aa3faa52"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marowijne",
+      "Code": "MA",
+      "ISO3166_2": "SR-MA",
+      "Latitude": 5.5794,
+      "Longitude": -54.3667,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-MA.geojson",
+      "CommonAliases": [
+        "Marowijne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "E3D40225-6C10-42DA-8631-F4EEA4C8F105"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.658Z",
+      "checksum": "79114dd2831db1b18b0b5a59437d7c0a268fb22d68599f6b1432fed3618fac28"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nickerie",
+      "Code": "NI",
+      "ISO3166_2": "SR-NI",
+      "Latitude": 5.6496,
+      "Longitude": -56.8988,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-NI.geojson",
+      "CommonAliases": [
+        "Nickerie"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "AABFDA23-C84B-4189-B1FE-2CA990C16989"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.676Z",
+      "checksum": "da78bf9072ca7904ca0eff232055cd11d1868221e4a8d7eca70ba632d221c375"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Para",
+      "Code": "PR",
+      "ISO3166_2": "SR-PR",
+      "Latitude": 5.4937,
+      "Longitude": -55.3042,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-PR.geojson",
+      "CommonAliases": [
+        "Para"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "5FB3389E-EDD3-4B37-BF23-81821B0E38A1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.693Z",
+      "checksum": "8839b3445ecf3c2891ea85fc70727750f36eb77bea49c7064a35078b3e903942"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Paramaribo",
+      "Code": "PM",
+      "ISO3166_2": "SR-PM",
+      "Latitude": 5.8432,
+      "Longitude": -55.1707,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-PM.geojson",
+      "CommonAliases": [
+        "Paramaribo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "D9214040-6C0A-485C-9427-6D1B9914F865"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.710Z",
+      "checksum": "1bbbc81b4b345581812f671a8f97756b4794327cbc23f892916673b556e69911"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saramacca",
+      "Code": "SA",
+      "ISO3166_2": "SR-SA",
+      "Latitude": 5.7019,
+      "Longitude": -55.6138,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-SA.geojson",
+      "CommonAliases": [
+        "Saramacca"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "2A8D8A7D-835A-44F7-8D5F-4F70B8546665"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.726Z",
+      "checksum": "a76ac42345e5443247db485ae826254c4df678bbc68865f5318c4b8eb746c420"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sipaliwini",
+      "Code": "SI",
+      "ISO3166_2": "SR-SI",
+      "Latitude": 3.5316,
+      "Longitude": -55.9918,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-SI.geojson",
+      "CommonAliases": [
+        "Sipaliwini"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "6FAC2543-EC41-4823-9EE3-85EBEEA3140C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.743Z",
+      "checksum": "9a99105d11000f70da1a898c770008504e12bcaabec28bd4d0fb7bca4b2c7bb3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wanica",
+      "Code": "WA",
+      "ISO3166_2": "SR-WA",
+      "Latitude": 5.7261,
+      "Longitude": -55.1929,
+      "BoundaryGeoJSON": "@file:by-country/SR/boundaries/SR-WA.geojson",
+      "CommonAliases": [
+        "Wanica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SR"
+    },
+    "primaryKey": {
+      "ID": "BB27F6C0-E338-4722-BA66-E1310FB8BBD9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.757Z",
+      "checksum": "3c10b05d833980df1dd33214f1a7caf884e91905163690dcd99b0b86a89980fa"
+    }
+  }
+]

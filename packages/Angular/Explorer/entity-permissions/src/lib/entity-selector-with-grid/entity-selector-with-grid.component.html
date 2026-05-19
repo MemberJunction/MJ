@@ -1,13 +1,13 @@
 <div >
-  <kendo-dropdownlist
-    [data]="entityList"
-    textField="Name"
-    valueField="Name"
-    placeholder="Select an entity..."
+  <mj-dropdown
+    [Data]="entityList"
+    TextField="Name"
+    ValueField="Name"
+    Placeholder="Select an entity..."
     class="entity-selector"
-    [(value)]="CurrentEntity"
+    [(ngModel)]="CurrentEntity"
     >
-  </kendo-dropdownlist>
+  </mj-dropdown>
   @if (CurrentEntity) {
     <mj-entity-permissions-grid class="inner-grid" [EntityName]="CurrentEntity.Name" (PermissionChanged)="handlePermissionChanged($event)"></mj-entity-permissions-grid>
   }

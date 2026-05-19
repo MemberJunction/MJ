@@ -1,6 +1,6 @@
 :host {
   display: block;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
@@ -19,9 +19,10 @@
 .shell-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
+  position: relative;
 }
 
 /* Hide shell container while loading - allows tab container to render and load
@@ -73,6 +74,10 @@ mj-tab-container ::ng-deep .lm_stack {
   gap: 16px;
   box-shadow: var(--mj-shadow-sm);
   flex-shrink: 0;
+  /* Creates a stacking context so children (search bar z-index: 99999, dropdown)
+     are contained within this level. Modal overlays (z-index: 1000+) sit above. */
+  position: relative;
+  z-index: 500;
 }
 
 /* Nav Bar Apps - permanent app icons in the header */
@@ -273,6 +278,12 @@ mj-tab-container ::ng-deep .lm_stack {
   color: var(--mj-text-muted);
 }
 
+.user-menu-header .user-subtitle {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  font-style: italic;
+}
+
 /* User Context Menu */
 .user-context-menu {
   position: absolute;
@@ -433,6 +444,15 @@ mj-tab-container ::ng-deep .lm_stack {
   height: 100vh;
   padding-bottom: 15vh;
   background: var(--mj-bg-page);
+}
+
+.loading-version {
+  margin-top: var(--mj-space-8, 24px);
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  letter-spacing: 0.4px;
+  opacity: 0.6;
+  user-select: none;
 }
 
 /* Loading Recovery Reset Panel */
@@ -726,6 +746,21 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 /* ========================================
+   UNIVERSAL SEARCH BAR
+   ======================================== */
+.shell-search-bar {
+    flex: 0 1 420px;
+    min-width: 200px;
+    max-width: 520px;
+    margin: 0 12px;
+    position: relative;
+    z-index: 99999;
+}
+@media (max-width: 768px) {
+    .shell-search-bar { display: none; }
+}
+
+/* ========================================
    SEARCH POPUP
    ======================================== */
 
@@ -750,7 +785,7 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .search-popup {
-  position: fixed;
+  position: absolute;
   top: 60px; /* Below header */
   right: 16px;
   width: 480px;
@@ -868,4 +903,49 @@ mj-tab-container ::ng-deep .lm_stack {
     flex: 1;
     min-width: 0;
   }
+}
+
+/* ========================================
+   PIN PROGRESS OVERLAY
+   ======================================== */
+.pin-progress-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--mj-text-primary) 40%, transparent);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: pinBackdropIn 0.2s ease;
+}
+
+@keyframes pinBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.pin-progress-modal {
+  background: var(--mj-bg-surface);
+  border-radius: var(--mj-radius-xl);
+  padding: 28px 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--mj-text-primary) 30%, transparent);
+  animation: pinModalIn 0.25s ease;
+}
+
+@keyframes pinModalIn {
+  from { opacity: 0; transform: scale(0.9) translateY(8px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.pin-progress-text {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-medium);
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
 }

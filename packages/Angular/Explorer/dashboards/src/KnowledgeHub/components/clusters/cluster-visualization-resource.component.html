@@ -1,0 +1,102 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Cluster Visualization"
+    Icon="fa-solid fa-circle-nodes"
+    Subtitle="Explore semantic clusters in your knowledge base">
+    <div actions>
+      <button mjButton variant="primary" size="sm" (click)="OnNewAnalysis()">
+        <i class="fa-solid fa-plus"></i> New Analysis
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+<div class="cluster-viz-container">
+    <!-- Left Sidebar: Saved Visualizations -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2><i class="fa-solid fa-circle-nodes"></i> Saved Clusters</h2>
+        </div>
+        <div class="saved-list">
+            @for (saved of SavedVisualizations; track TrackSavedBy($index, saved)) {
+                <div class="saved-item"
+                     [class.active]="IsActiveSaved(saved)"
+                     (click)="OnSelectSaved(saved)">
+                    <div class="saved-name">{{ saved.Name }}</div>
+                    <div class="saved-meta">
+                        <span>{{ saved.EntityName }}</span>
+                        <span>{{ FormatDate(saved.CreatedAt) }}</span>
+                    </div>
+                    <button class="delete-btn"
+                            title="Delete"
+                            (click)="OnDeleteSaved(saved, $event)">
+                        <i class="fa-solid fa-times"></i>
+                    </button>
+                </div>
+            }
+
+            @if (SavedVisualizations.length === 0) {
+                <div class="no-saved">
+                    <i class="fa-solid fa-bookmark"></i>
+                    <p>No saved visualizations yet</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Main Area -->
+    <div class="main-area">
+        <!-- Top metrics bar -->
+        <div class="topbar">
+            <div class="topbar-title">{{ VisualizationTitle }}</div>
+            @if (HasResult) {
+                <div class="metric">
+                    <i class="fa-solid fa-circle-dot"></i>
+                    Records: <span class="metric-value">{{ Result!.Metrics.RecordCount }}</span>
+                </div>
+                <div class="metric">
+                    <i class="fa-solid fa-layer-group"></i>
+                    Clusters: <span class="metric-value">{{ Result!.Metrics.ClusterCount }}</span>
+                </div>
+                <div class="metric">
+                    <i class="fa-solid fa-chart-line"></i>
+                    Silhouette:
+                    <span class="metric-value" [class.good]="IsSilhouetteGood">
+                        {{ SilhouetteScoreFormatted }}
+                    </span>
+                </div>
+                <div class="metric">
+                    <i class="fa-solid fa-clock"></i>
+                    Computed: <span class="metric-value">{{ ComputationTimeFormatted }}</span>
+                </div>
+            }
+        </div>
+
+        <!-- Scatter plot area -->
+        <div class="scatter-area">
+            <mj-cluster-scatter
+                #scatterPlot
+                [Points]="Result?.Points ?? []"
+                [Clusters]="Result?.Clusters ?? []"
+                [IsLoading]="IsRunning"
+                [EntityName]="ActiveConfig.EntityName"
+                (PointClicked)="OnPointClicked($event)"
+                (PointHovered)="OnPointHovered($event)"
+                (OpenRecordRequested)="OnOpenRecord($event)"
+                (LabelEdited)="OnLabelEdited($event)">
+            </mj-cluster-scatter>
+
+            <!-- Floating config panel -->
+            <mj-cluster-config-panel
+                [IsRunning]="IsRunning"
+                [Metrics]="Metrics"
+                [EntityOptions]="EntityOptions"
+                [EntityDocOptions]="EntityDocOptions"
+                (RunClustering)="OnRunClustering($event)"
+                (SaveVisualization)="OnSaveVisualization()">
+            </mj-cluster-config-panel>
+        </div>
+    </div>
+</div>
+  </mj-page-body>
+</mj-page-layout>

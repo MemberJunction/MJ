@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Diekirch",
+      "Code": "D",
+      "ISO3166_2": "LU-D",
+      "Latitude": 49.9763,
+      "Longitude": 6.0048,
+      "BoundaryGeoJSON": "@file:by-country/LU/boundaries/LU-D.geojson",
+      "CommonAliases": [
+        "Diekirch"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LU"
+    },
+    "primaryKey": {
+      "ID": "819A7125-B17B-4B13-8503-4849E113F526"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.530Z",
+      "checksum": "d1f6d8b9b7cb0eefb780dfa55e6b5869da244c22371e7b28cd1b98aee1c4dcdb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grevenmacher",
+      "Code": "G",
+      "ISO3166_2": "LU-G",
+      "Latitude": 49.6474,
+      "Longitude": 6.3384,
+      "BoundaryGeoJSON": "@file:by-country/LU/boundaries/LU-G.geojson",
+      "CommonAliases": [
+        "Grevenmacher"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LU"
+    },
+    "primaryKey": {
+      "ID": "897C7911-00D9-4046-82FC-6DFA37CCC92C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.546Z",
+      "checksum": "3d838862146082ac796ec2a44ccbe6bfc07d752c78a3cd948a9200f402d079dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luxembourg (Luxemburg)",
+      "Code": "L",
+      "ISO3166_2": "LU-L",
+      "Latitude": 49.6376,
+      "Longitude": 6.0511,
+      "BoundaryGeoJSON": "@file:by-country/LU/boundaries/LU-L.geojson",
+      "CommonAliases": [
+        "Luxembourg (Luxemburg)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LU"
+    },
+    "primaryKey": {
+      "ID": "B16C60CC-89D8-4ECA-A37E-83B8386EE211"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:13.562Z",
+      "checksum": "35f58fb02328320578b941b635ca6794741080a49efb7fc440680542f6c1cd9a"
+    }
+  }
+]

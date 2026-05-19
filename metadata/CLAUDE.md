@@ -156,6 +156,7 @@ metadata/
 - Don't forget to set Status fields to "Active"
 - Don't create agent types - use existing "Loop" type
 - Don't include primaryKey or sync objects in any records
+- `metadata/scheduled-jobs/.memory-cleanup-job.json` is **deprecated as of v5.30.x** — Memory Cleanup Agent has been folded into Memory Manager's consolidation pipeline. Don't author new scheduled jobs that reference it; trigger memory maintenance through the Memory Manager agent instead. See `packages/AI/Agents/README.md` and `specs/001-memory-consolidation/spec.md`.
 
 ### 11. Pushing Metadata with `mj sync push`
 

@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Atakora",
+      "Code": "AK",
+      "ISO3166_2": "BJ-AK",
+      "Latitude": 10.7035,
+      "Longitude": 1.5578,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-AK.geojson",
+      "CommonAliases": [
+        "Atakora"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "95DE69B8-30E1-446E-9C85-3FB22E0BB396"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.290Z",
+      "checksum": "e19b07e71f89cb97dd1dda0fe251127274f1952d09e6c35527107e4420c77d6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atlantique",
+      "Code": "AQ",
+      "ISO3166_2": "BJ-AQ",
+      "Latitude": 6.6166,
+      "Longitude": 2.2226,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-AQ.geojson",
+      "CommonAliases": [
+        "Atlantique"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "1D6820ED-444E-4963-AB02-61CE57E097B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.306Z",
+      "checksum": "25efc04f33c2d47363d5062ddb2f0f65971e96e979c19ff1b7e37fa8a27c6c79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Borgou",
+      "Code": "BO",
+      "ISO3166_2": "BJ-BO",
+      "Latitude": 9.8067,
+      "Longitude": 2.9036,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-BO.geojson",
+      "CommonAliases": [
+        "Borgou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "F482310A-9623-44B2-9A0D-FFC5B558D011"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.323Z",
+      "checksum": "3c3b486dd62ae532218be869ecf03526be0c3ff628ae75191728e15388e77dd1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mono",
+      "Code": "MO",
+      "ISO3166_2": "BJ-MO",
+      "Latitude": 6.4857,
+      "Longitude": 1.7947,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-MO.geojson",
+      "CommonAliases": [
+        "Mono"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "F14666CC-C770-4C17-B485-F1A38E856B85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.339Z",
+      "checksum": "6cf75cb631b750e0977d92ad3c0d1a72641b42033d1af0509e56ba44d62f6185"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ouémé",
+      "Code": "OU",
+      "ISO3166_2": "BJ-OU",
+      "Latitude": 6.5942,
+      "Longitude": 2.5517,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-OU.geojson",
+      "CommonAliases": [
+        "Ouémé"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "A3E1CD99-8FD0-4E47-8CD8-5535E1592CC0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.356Z",
+      "checksum": "5088d12c509e22497287c203d0346f51e532f01bbd8e70807eb78922308ad798"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zou",
+      "Code": "ZO",
+      "ISO3166_2": "BJ-ZO",
+      "Latitude": 7.2268,
+      "Longitude": 2.0914,
+      "BoundaryGeoJSON": "@file:by-country/BJ/boundaries/BJ-ZO.geojson",
+      "CommonAliases": [
+        "Zou"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BJ"
+    },
+    "primaryKey": {
+      "ID": "ABFF05F4-A9F6-439E-8C42-5B1560E04842"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.369Z",
+      "checksum": "f1822d097ea8aa951ba830bb38b82617c1d6450996ad405d7304fa927d96a7da"
+    }
+  }
+]

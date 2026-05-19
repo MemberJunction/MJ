@@ -14,6 +14,7 @@ import {
 } from '../services/testing-instrumentation.service';
 import { KPICardData } from '../../AI/components/widgets/kpi-card.component';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
+import { TestingExecutionService, ActiveRun, TestingDialogService } from '@memberjunction/ng-testing';
 
 /** Status type union matching TestRunSummary */
 type TestRunStatus = 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Running' | 'Timeout';
@@ -33,6 +34,25 @@ interface TestAlert {
   selector: 'app-testing-dashboard-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Testing Overview"
+          Icon="fa-solid fa-gauge-high"
+          Subtitle="Test health, recent activity, and KPIs">
+          <div actions>
+            <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
     <!-- Full-page loading state -->
     @if (IsLoading) {
       <div class="full-page-loading">
@@ -40,18 +60,6 @@ interface TestAlert {
       </div>
     } @else {
       <div class="dashboard-container">
-
-        <!-- Page Header -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="fa-solid fa-gauge-high"></i>
-            Testing Dashboard
-          </h2>
-          <button class="refresh-btn" (click)="OnRefresh()" [disabled]="IsLoading">
-            <i class="fa-solid fa-refresh" [class.spinning]="IsLoading"></i>
-            Refresh
-          </button>
-        </div>
 
         <!-- KPI Row -->
         <div class="kpi-row">
@@ -74,13 +82,17 @@ interface TestAlert {
           @if (RunningTests.length > 0) {
             <div class="running-tests-list">
               @for (run of RunningTests; track run.id) {
-                <div class="running-test-item">
-                  <div class="running-test-name">{{ run.testName }}</div>
+                <div class="running-test-item" (click)="OnViewRunningTest(run)">
+                  <div class="running-test-info">
+                    <div class="running-test-name">{{ run.testName }}</div>
+                    <div class="running-test-step">{{ GetActiveRunStep(run.testId) }}</div>
+                  </div>
                   <div class="running-test-meta">
                     <span class="running-elapsed">{{ FormatDuration(run.duration) }}</span>
                     <span class="running-progress-bar">
-                      <span class="running-progress-fill"></span>
+                      <span class="running-progress-fill" [style.width.%]="GetActiveRunProgress(run.testId)"></span>
                     </span>
+                    <span class="running-progress-pct">{{ GetActiveRunProgress(run.testId) }}%</span>
                   </div>
                 </div>
               }
@@ -188,6 +200,7 @@ interface TestAlert {
         </div>
       </div>
     }
+    </ng-template>
   `,
   styles: [`
     /* ===== Layout ===== */
@@ -327,12 +340,29 @@ interface TestAlert {
       background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
       border-radius: 8px;
       border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, var(--mj-bg-surface));
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .running-test-item:hover {
+      background: color-mix(in srgb, var(--mj-status-success) 16%, var(--mj-bg-surface));
+    }
+
+    .running-test-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
     .running-test-name {
       font-size: 13px;
       font-weight: 500;
       color: var(--mj-status-success);
+    }
+
+    .running-test-step {
+      font-size: 11px;
+      color: var(--mj-text-muted);
     }
 
     .running-test-meta {
@@ -348,7 +378,7 @@ interface TestAlert {
     }
 
     .running-progress-bar {
-      width: 60px;
+      width: 80px;
       height: 4px;
       background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       border-radius: 2px;
@@ -357,16 +387,18 @@ interface TestAlert {
 
     .running-progress-fill {
       display: block;
-      width: 100%;
       height: 100%;
       background: var(--mj-status-success);
-      animation: progress-slide 1.2s ease-in-out infinite;
       border-radius: 2px;
+      transition: width 0.5s ease;
     }
 
-    @keyframes progress-slide {
-      0% { transform: translateX(-100%); }
-      100% { transform: translateX(100%); }
+    .running-progress-pct {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--mj-status-success);
+      min-width: 30px;
+      text-align: right;
     }
 
     /* ===== Lower Grid ===== */
@@ -567,6 +599,8 @@ interface TestAlert {
 export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();
@@ -579,8 +613,12 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
   SortedSuites: SuiteHierarchyNode[] = [];
   Alerts: TestAlert[] = [];
 
+  private activeRunsMap = new Map<string, ActiveRun>();
+
   constructor(
     private instrumentationService: TestingInstrumentationService,
+    private executionService: TestingExecutionService,
+    private testingDialogService: TestingDialogService,
     private cdr: ChangeDetectorRef
   ) {}
 
@@ -605,6 +643,21 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
   OnRefresh(): void {
     this.instrumentationService.refresh();
+  }
+
+  OnViewRunningTest(run: TestRunSummary): void {
+    this.testingDialogService.OpenTestMonitor(run.testId);
+  }
+
+  GetActiveRunProgress(testId: string): number {
+    return this.activeRunsMap.get(testId)?.Progress ?? 0;
+  }
+
+  GetActiveRunStep(testId: string): string {
+    const step = this.activeRunsMap.get(testId)?.CurrentStep ?? '';
+    // Hide raw internal step identifiers (e.g. "driver_log", "loading_test")
+    if (step.includes('_')) return '';
+    return step;
   }
 
   OnOpenRun(run: TestRunSummary): void {
@@ -664,6 +717,19 @@ export class TestingDashboardTabComponent implements OnInit, OnDestroy {
     this.subscribeKpis();
     this.subscribeTestRuns();
     this.subscribeSuites();
+    this.subscribeActiveRuns();
+  }
+
+  private subscribeActiveRuns(): void {
+    this.executionService.ActiveRuns$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(runs => {
+      this.activeRunsMap.clear();
+      for (const run of runs) {
+        this.activeRunsMap.set(run.TestId, run);
+      }
+      this.cdr.markForCheck();
+    });
   }
 
   private subscribeLoading(): void {

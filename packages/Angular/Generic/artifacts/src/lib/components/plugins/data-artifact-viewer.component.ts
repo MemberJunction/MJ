@@ -1,80 +1,41 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig, QueryEntityLinkClickEvent, resolveTargetEntity } from '@memberjunction/ng-query-viewer';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, NavigationRequest } from '../base-artifact-viewer.component';
 import { SaveQueryResult } from './save-query-dialog.component';
+import { createDataSnapshot, buildMultiTableSql } from '../../snapshot-helpers';
 
 /**
- * JSON schema for Data artifact content.
- * The agent produces this structure when emitting query/view results.
+ * Data artifact content shape as parsed from JSON.
+ *
+ * Core tabular data fields (source, columns, rows, tables, metadata, etc.)
+ * are handled by NormalizeToTables() from @memberjunction/core.
+ * This interface adds viewer-specific fields for query sync and display.
+ *
+ * Columns may use either `displayName` (new) or `headerName` (legacy).
+ * BuildColumnConfigsForTable handles both.
  */
 interface DataArtifactSpec {
-  /** Data source type */
-  source: 'query' | 'view';
-
-  /** Display title for the data */
+  source?: 'query' | 'view';
   title?: string;
-
-  /** For query source: the query ID to render via mj-query-viewer */
   queryId?: string;
-
-  /** For query source: parameter values to pass */
   parameters?: Record<string, string | number | boolean>;
-
-  /** For view source: the entity name */
   entityName?: string;
-
-  /** For view source: extra WHERE filter */
   extraFilter?: string;
-
-  /** Column definitions for inline data display */
-  columns?: DataArtifactColumn[];
-
-  /** Inline row data (when results are embedded directly) */
+  columns?: Array<MJColumnDescriptor & { headerName?: string }>;
   rows?: Record<string, unknown>[];
-
-  /** Optional markdown plan/approach description (mermaid diagrams, explanations) */
+  tables?: DataTable[];
   plan?: string;
-
-  /** Query metadata */
-  metadata?: {
-    sql?: string;
-    rowCount?: number;
-    executionTimeMs?: number;
-  };
-
-  /** ID of saved query (set after user saves from artifact) */
+  interpretation?: string;
+  computations?: DataComputation[];
+  metadata?: { sql?: string; rowCount?: number; executionTimeMs?: number };
   savedQueryId?: string;
-
-  /** Name of saved query (for display) */
   savedQueryName?: string;
-
-  /** Version number this query was saved/updated from */
   savedAtVersionNumber?: number;
-}
-
-interface DataArtifactColumn {
-  field: string;
-  headerName?: string;
-  width?: number;
-
-  /** MJ entity name this column originates from (e.g., "Members") */
-  sourceEntity?: string;
-
-  /** Field name in that entity (e.g., "ID", "FirstName") */
-  sourceFieldName?: string;
-
-  /** True for calculated expressions (CASE, ROUND, CONCAT, etc.) */
-  isComputed?: boolean;
-
-  /** True for aggregate functions (SUM, COUNT, AVG, etc.) */
-  isSummary?: boolean;
-
-  /** SQL data type: int, nvarchar, uniqueidentifier, datetime, decimal, bit, money, etc. */
-  sqlBaseType?: string;
 }
 
 /**
@@ -128,6 +89,33 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   public PagerPageNumber = 1;
   public PagerPageSize = 100;
 
+  // ─── Multi-Table State ───
+
+  /** All resolved tables (from multi-table or wrapped single-table) */
+  public ResolvedTables: DataTable[] = [];
+
+  /** Index of the currently active table tab */
+  public ActiveTableIndex = 0;
+
+  /** Per-table paging state */
+  private tablePageState: Map<number, { pageNumber: number; pageSize: number; totalRowCount: number }> = new Map();
+
+  /** Per-table live data cache (loaded lazily on tab switch) */
+  private tableDataCache: Map<number, Record<string, unknown>[]> = new Map();
+
+  /** Per-table column configs cache */
+  private tableColumnConfigsCache: Map<number, QueryGridColumnConfig[]> = new Map();
+
+  /** Whether we're in multi-table mode */
+  public get IsMultiTable(): boolean {
+    return this.ResolvedTables.length > 1;
+  }
+
+  /** The currently active table */
+  public get ActiveTable(): DataTable | null {
+    return this.ResolvedTables[this.ActiveTableIndex] ?? null;
+  }
+
   /** Query sync state — drives the toolbar UI for saved query actions */
   public QuerySyncState: QuerySyncState = 'no-query-latest';
 
@@ -146,7 +134,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public override get hasDisplayContent(): boolean {
-    return this.spec != null && (this.HasData || this.IsLoading);
+    return this.spec != null && (this.HasData || this.IsLoading || this.ResolvedTables.length > 0);
   }
 
   public override get parentShouldShowRawContent(): boolean {
@@ -158,7 +146,9 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   public get HasInlineData(): boolean {
-    return !!(this.spec?.rows && this.spec.rows.length > 0);
+    // Check root-level rows (legacy single-table) or any resolved table with rows
+    return !!(this.spec?.rows && this.spec.rows.length > 0) ||
+           this.ResolvedTables.some(t => t.rows && t.rows.length > 0);
   }
 
   public get DisplayRowCount(): number | null {
@@ -207,26 +197,37 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         return;
       }
 
-      // Build enriched column configs from agent metadata (if available)
-      this.GridColumnConfigs = this.BuildColumnConfigs();
+      // Resolve to tables array (handles both single and multi-table)
+      this.ResolvedTables = NormalizeToTables(
+        this.spec as unknown as Record<string, unknown>,
+        this.spec.title || 'Results'
+      );
 
-      // Set loading early (synchronously) so hasDisplayContent is true immediately.
-      // This ensures the Display tab is available when onPluginLoaded fires,
-      // showing a loading indicator instead of briefly flashing the Plan tab.
-      if (this.spec.metadata?.sql || this.HasInlineData) {
+      if (this.ResolvedTables.length === 0 && !this.spec.plan) {
+        return;
+      }
+
+      // Build enriched column configs for the first table
+      if (this.ResolvedTables.length > 0) {
+        this.GridColumnConfigs = this.BuildColumnConfigsForTable(this.ResolvedTables[0]);
+      }
+
+      // Initialize paging state for all tables
+      for (let i = 0; i < this.ResolvedTables.length; i++) {
+        this.tablePageState.set(i, { pageNumber: 1, pageSize: 100, totalRowCount: 0 });
+      }
+
+      // Set loading early (synchronously) so hasDisplayContent is true immediately
+      if (this.ResolvedTables.some(t => t.metadata?.sql) || this.HasInlineData) {
         this.IsLoading = true;
       }
 
       // Load cached metadata and resolve query sync state
       await this.InitQuerySyncState();
 
-      // If SQL is available, execute it live
-      if (this.spec.metadata?.sql) {
-        await this.LoadLiveData();
-      } else if (this.HasInlineData) {
-        // Fall back to embedded rows
-        this.GridData = this.spec.rows!;
-        this.IsLoading = false;
+      // Load data for the first (active) table
+      if (this.ResolvedTables.length > 0) {
+        await this.LoadTableData(0);
       }
 
       // Signal parent that tabs/display content may have changed after async load
@@ -238,12 +239,11 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Re-execute the live SQL query
+   * Re-execute the live SQL query for the active table
    */
   public async OnRefresh(): Promise<void> {
-    if (this.spec?.metadata?.sql) {
-      await this.LoadLiveData();
-    }
+    this.tableDataCache.delete(this.ActiveTableIndex);
+    await this.LoadTableData(this.ActiveTableIndex);
   }
 
   /**
@@ -251,7 +251,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Converts the grid's recordId string into a CompositeKey for the artifact viewer pipeline.
    */
   public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.Entities.find(e => e.Name === event.entityName);
     const pkFieldName = entity?.FirstPrimaryKey?.Name ?? 'ID';
 
@@ -266,54 +266,101 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   /**
    * Handle page change from the data grid's embedded pager.
-   * Re-executes the live SQL with the new page parameters.
+   * Re-executes the query for the active table with new page parameters.
    */
   public async OnPageChange(event: PageChangeEvent): Promise<void> {
-    if (!this.spec?.metadata?.sql) return;
-    this.PagerPageNumber = event.PageNumber;
-    this.PagerPageSize = event.PageSize;
-    await this.LoadLiveData();
+    const pageState = this.tablePageState.get(this.ActiveTableIndex);
+    if (!pageState) return;
+
+    pageState.pageNumber = event.PageNumber;
+    pageState.pageSize = event.PageSize;
+
+    // Clear cache so it reloads
+    this.tableDataCache.delete(this.ActiveTableIndex);
+    await this.LoadTableData(this.ActiveTableIndex);
   }
 
   /**
-   * Execute the SQL query via RunQuery and populate the grid.
-   * Falls back to inline data on error.
+   * Switch to a different table tab.
+   * Loads data lazily if not already cached.
    */
-  private async LoadLiveData(): Promise<void> {
+  public async OnTableTabClick(index: number): Promise<void> {
+    if (index === this.ActiveTableIndex) return;
+    this.ActiveTableIndex = index;
+
+    const table = this.ResolvedTables[index];
+    if (!table) return;
+
+    // Use cached column configs or build new
+    if (!this.tableColumnConfigsCache.has(index)) {
+      const configs = this.BuildColumnConfigsForTable(table);
+      if (configs) this.tableColumnConfigsCache.set(index, configs);
+    }
+    this.GridColumnConfigs = this.tableColumnConfigsCache.get(index) ?? null;
+
+    // Use cached data or load fresh
+    if (this.tableDataCache.has(index)) {
+      this.GridData = this.tableDataCache.get(index)!;
+      const pageState = this.tablePageState.get(index)!;
+      this.PagerPageNumber = pageState.pageNumber;
+      this.PagerPageSize = pageState.pageSize;
+      this.PagerTotalRowCount = pageState.totalRowCount;
+    } else {
+      await this.LoadTableData(index);
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Load data for a specific table.
+   * Handles live SQL execution, inline rows, and caching.
+   */
+  private async LoadTableData(tableIndex: number): Promise<void> {
+    const table = this.ResolvedTables[tableIndex];
+    if (!table) return;
+
     this.IsLoading = true;
     this.HasError = false;
     this.cdr.detectChanges();
 
     try {
-      const rq = new RunQuery();
-      const startRow = (this.PagerPageNumber - 1) * this.PagerPageSize;
-      const result = await rq.RunQuery({
-        SQL: this.spec!.metadata!.sql!,
-        StartRow: startRow,
-        MaxRows: this.PagerPageSize
-      });
+      if (table.metadata?.sql) {
+        // Live SQL execution
+        const pageState = this.tablePageState.get(tableIndex)!;
+        const rq = new RunQuery();
+        const startRow = (pageState.pageNumber - 1) * pageState.pageSize;
+        const result = await rq.RunQuery({
+          SQL: table.metadata.sql,
+          StartRow: startRow,
+          MaxRows: pageState.pageSize
+        });
 
-      if (result.Success) {
-        this.GridData = result.Results;
-        this.liveRowCount = result.RowCount;
-        this.liveExecutionTime = result.ExecutionTime;
-        this.IsLive = true;
+        if (result.Success) {
+          this.tableDataCache.set(tableIndex, result.Results);
+          this.GridData = result.Results;
+          this.IsLive = true;
 
-        // Update pager state from result
-        if (result.TotalRowCount != null) {
-          this.PagerTotalRowCount = result.TotalRowCount;
+          pageState.totalRowCount = result.TotalRowCount ?? result.RowCount ?? 0;
+          this.PagerTotalRowCount = pageState.totalRowCount;
+          this.PagerPageNumber = pageState.pageNumber;
+          this.PagerPageSize = pageState.pageSize;
+
+          this.liveRowCount = result.RowCount;
+          this.liveExecutionTime = result.ExecutionTime;
+        } else {
+          this.HandleTableError(tableIndex, result.ErrorMessage || 'Query failed');
         }
-        if (result.PageNumber != null) {
-          this.PagerPageNumber = result.PageNumber;
-        }
-        if (result.PageSize != null) {
-          this.PagerPageSize = result.PageSize;
-        }
+      } else if (table.rows && table.rows.length > 0) {
+        // Inline data
+        this.tableDataCache.set(tableIndex, table.rows);
+        this.GridData = table.rows;
+        this.liveRowCount = table.rows.length;
       } else {
-        this.HandleQueryError(result.ErrorMessage || 'Query execution failed');
+        this.GridData = [];
       }
     } catch (error) {
-      this.HandleQueryError(error instanceof Error ? error.message : 'Query execution failed');
+      this.HandleTableError(tableIndex, error instanceof Error ? error.message : 'Load failed');
     } finally {
       this.IsLoading = false;
       this.cdr.detectChanges();
@@ -321,18 +368,19 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Build QueryGridColumnConfig[] from enriched artifact column metadata.
+   * Build QueryGridColumnConfig[] from a DataTable's column metadata.
    * Returns null if columns have no entity metadata (grid falls back to auto-inference).
    */
-  private BuildColumnConfigs(): QueryGridColumnConfig[] | null {
-    if (!this.spec?.columns?.length) return null;
+  private BuildColumnConfigsForTable(table: DataTable): QueryGridColumnConfig[] | null {
+    const columns = table.columns;
+    if (!columns?.length) return null;
 
     // Only build if at least one column has entity metadata or type info
-    const hasMetadata = this.spec.columns.some(c => c.sourceEntity || c.sqlBaseType);
+    const hasMetadata = columns.some(c => c.sourceEntity || c.sqlBaseType);
     if (!hasMetadata) return null;
 
-    const md = new Metadata();
-    return this.spec.columns.map((col, index) => {
+    const md = this.ProviderToUse;
+    return columns.map((col, index) => {
       const target = resolveTargetEntity(col.sourceEntity, col.sourceFieldName, md);
       const isEntityLink = !!(target.targetEntityName && (target.isPrimaryKey || target.isForeignKey));
       const baseType = (col.sqlBaseType || 'nvarchar').toLowerCase();
@@ -344,15 +392,19 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         align = 'center';
       }
 
+      // Support both displayName (new) and headerName (legacy) for backward compat
+      const colAny = col as unknown as Record<string, unknown>;
+      const title = col.displayName || (colAny['headerName'] as string) || col.field;
+
       return {
         field: col.field,
-        title: col.headerName || col.field,
+        title,
         visible: true,
         sortable: true,
         resizable: true,
         reorderable: true,
         sqlBaseType: col.sqlBaseType || 'nvarchar',
-        sqlFullType: col.sqlBaseType || 'nvarchar',
+        sqlFullType: col.sqlFullType || col.sqlBaseType || 'nvarchar',
         align,
         order: index,
         sourceEntityName: col.sourceEntity,
@@ -369,13 +421,14 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Handle a query error by setting error state and falling back to inline data
+   * Handle a table load error by setting error state and falling back to inline data
    */
-  private HandleQueryError(message: string): void {
+  private HandleTableError(tableIndex: number, message: string): void {
     this.HasError = true;
     this.ErrorMessage = message;
-    if (this.HasInlineData) {
-      this.GridData = this.spec!.rows!;
+    const table = this.ResolvedTables[tableIndex];
+    if (table?.rows && table.rows.length > 0) {
+      this.GridData = table.rows;
     }
   }
 
@@ -566,7 +619,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const query = await md.GetEntityObject<import('@memberjunction/core-entities').MJQueryEntity>('MJ: Queries');
       const loaded = await query.Load(this.spec.savedQueryId);
 
@@ -629,7 +682,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       await this.PersistArtifactContent();
       await QueryEngine.Instance.Config(true);
       await ArtifactMetadataEngine.Instance.Config(true);
-      await new Metadata().Refresh();
+      await this.ProviderToUse.Refresh();
 
       this.savedQuerySql = this.spec!.metadata?.sql ?? null;
       this.EffectiveSavedAtVersion = this.CurrentVersionNumber;
@@ -649,10 +702,41 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     await this.artifactVersion.Save();
   }
 
+  /**
+   * Returns a DataSnapshot with live grid data, current page state,
+   * and query sync state.
+   */
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    if (!this.spec) return null;
+
+    const tables = NormalizeToTables(
+      this.spec as unknown as Record<string, unknown>,
+      this.spec.title || 'Results'
+    );
+    const activeTable = tables[this.ActiveTableIndex];
+
+    if (activeTable) {
+      // Override with live data for the active table
+      if (this.IsLive) activeTable.rows = this.GridData;
+      activeTable.pageNumber = this.PagerPageNumber;
+      activeTable.metadata = {
+        ...activeTable.metadata,
+        ...(this.liveRowCount != null ? { rowCount: this.liveRowCount } : {}),
+        ...(this.liveExecutionTime != null
+          ? { executionTimeMs: this.liveExecutionTime } : {}),
+        ...(this.PagerTotalRowCount > 0
+          ? { totalAvailableRows: this.PagerTotalRowCount } : {}),
+        pageSize: this.PagerPageSize
+      };
+    }
+
+    return DataSnapshot.FromTables(tables, this.spec.title);
+  }
+
   // ─── Tabs ───────────────────────────────────────────────────────
 
   /**
-   * Provide Plan tab (markdown) and SQL tab (code) when available
+   * Provide Plan tab (markdown), SQL tab (code), and Interpretation tab when available
    */
   public GetAdditionalTabs(): ArtifactViewerTab[] {
     const tabs: ArtifactViewerTab[] = [];
@@ -666,13 +750,35 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       });
     }
 
-    if (this.spec?.metadata?.sql) {
+    // SQL tab — multi-table shows all queries with headers
+    if (this.IsMultiTable) {
+      const multiSql = buildMultiTableSql(this.ResolvedTables);
+      if (multiSql) {
+        tabs.push({
+          label: 'SQL',
+          icon: 'fa-database',
+          contentType: 'code',
+          language: 'sql',
+          content: multiSql
+        });
+      }
+    } else if (this.spec?.metadata?.sql) {
       tabs.push({
         label: 'SQL',
         icon: 'fa-database',
         contentType: 'code',
         language: 'sql',
         content: this.spec.metadata.sql
+      });
+    }
+
+    // Interpretation tab
+    if (this.spec?.interpretation) {
+      tabs.push({
+        label: 'Interpretation',
+        icon: 'fa-lightbulb',
+        contentType: 'markdown',
+        content: this.spec.interpretation
       });
     }
 

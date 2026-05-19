@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/transitive-join-intelligence.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "ParallelizationMode": "None",
@@ -102,8 +105,8 @@
       "ID": "20B32494-268F-4673-BDE1-CDB64CF90B21"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.800Z",
-      "checksum": "86333447d334b3596064d0f8c30a5ecf71eb0e174bc9410b16916f20b3f3b12e"
+      "lastModified": "2026-04-20T23:53:38.491Z",
+      "checksum": "22896897639206a5a508d2317cefa81c44e82e9a43428fa00e2bd1aae56f52d1"
     }
   }
 ]

@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Virgin Islands (U.S.)",
+      "Code": "VI",
+      "ISO3166_2": "VI-VI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Virgin Islands (U.S.)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=VI"
+    },
+    "primaryKey": {
+      "ID": "357ED11A-05AB-4E39-BEFF-6D68AC317F7C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:43.028Z",
+      "checksum": "dd93542c578ae3b4ac123d289847284d7c495f74ef9b8048d3f2294115680dca"
+    }
+  }
+]

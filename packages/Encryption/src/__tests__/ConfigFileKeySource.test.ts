@@ -373,4 +373,75 @@ describe('ConfigFileKeySource', () => {
             );
         });
     });
+
+    describe('ValidateKeyAccessibility', () => {
+        it('should return error when config not loaded', async () => {
+            const result = await source.ValidateKeyAccessibility('some_key');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('Configuration file not loaded');
+        });
+
+        it('should return IsAccessible true for valid key', async () => {
+            const keyBytes = Buffer.alloc(32, 0xAB);
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({
+                search: () => ({
+                    config: { encryptionKeys: { pii_master: keyBytes.toString('base64') } },
+                    filepath: '/app/mj.config.cjs'
+                })
+            });
+            await source.Initialize();
+
+            const result = await source.ValidateKeyAccessibility('pii_master', undefined, 32);
+            expect(result.IsAccessible).toBe(true);
+            expect(result.Error).toBeUndefined();
+        });
+
+        it('should return error for missing key', async () => {
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({
+                search: () => ({
+                    config: { encryptionKeys: { other_key: 'dGVzdA==' } },
+                    filepath: '/app/mj.config.cjs'
+                })
+            });
+            await source.Initialize();
+
+            const result = await source.ValidateKeyAccessibility('nonexistent_key');
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('nonexistent_key');
+            expect(result.Error).toContain('not found');
+        });
+
+        it('should validate key length when expected length provided', async () => {
+            const keyBytes = Buffer.alloc(16, 0xAB); // 16 bytes, not 32
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({
+                search: () => ({
+                    config: { encryptionKeys: { short_key: keyBytes.toString('base64') } },
+                    filepath: '/app/mj.config.cjs'
+                })
+            });
+            await source.Initialize();
+
+            const result = await source.ValidateKeyAccessibility('short_key', undefined, 32);
+            expect(result.IsAccessible).toBe(false);
+            expect(result.Error).toContain('16 bytes');
+            expect(result.Error).toContain('32 bytes');
+        });
+
+        it('should not return key material in result', async () => {
+            const keyBytes = Buffer.alloc(32, 0xDE);
+            const base64Key = keyBytes.toString('base64');
+            (cosmiconfigSync as ReturnType<typeof vi.fn>).mockReturnValue({
+                search: () => ({
+                    config: { encryptionKeys: { secret_key: base64Key } },
+                    filepath: '/app/mj.config.cjs'
+                })
+            });
+            await source.Initialize();
+
+            const result = await source.ValidateKeyAccessibility('secret_key', undefined, 32);
+            const resultStr = JSON.stringify(result);
+            expect(resultStr).not.toContain(base64Key);
+            expect(Object.keys(result).every(k => k === 'IsAccessible' || k === 'Error')).toBe(true);
+        });
+    });
 });

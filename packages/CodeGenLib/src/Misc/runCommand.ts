@@ -1,4 +1,4 @@
-import { CommandInfo } from '../Config/config';
+import { CommandInfo, currentWorkingDirectory } from '../Config/config';
 import { spawn, ChildProcess } from 'child_process';
 import { logError, logStatus } from './status_logging';
 import path from 'path';
@@ -47,7 +47,7 @@ export class RunCommandsBase {
       let startTime = new Date();
       let bErrors: boolean = false;
       const commandName = command.command;
-      const absPath = path.resolve(command.workingDirectory);
+      const absPath = path.resolve(currentWorkingDirectory, command.workingDirectory);
 
       logStatus(`STARTING COMMAND: "${command.command}" in location "${absPath}" with args "${command.args.join(' ')}"`);
 

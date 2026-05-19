@@ -34,16 +34,30 @@
           </button>
         </div>
       }
-      <!-- Tab Navigation - Only show when we have both options -->
-      @if (showStepPayloadDiff) {
+      <!-- Tab Navigation - Show when we have payload diff or scratchpad data -->
+      @if (showStepPayloadDiff || showScratchpadTab) {
         <div class="detail-pane-tabs">
-          <button
-            class="detail-tab"
-            [class.active]="detailPaneTab === 'diff'"
-            (click)="detailPaneTab = 'diff'">
-            <i class="fa-solid fa-code-branch"></i>
-            Payload Changes
-          </button>
+          @if (showStepPayloadDiff) {
+            <button
+              class="detail-tab"
+              [class.active]="detailPaneTab === 'diff'"
+              (click)="detailPaneTab = 'diff'">
+              <i class="fa-solid fa-code-branch"></i>
+              Payload Changes
+            </button>
+          }
+          @if (showScratchpadTab) {
+            <button
+              class="detail-tab"
+              [class.active]="detailPaneTab === 'scratchpad'"
+              (click)="detailPaneTab = 'scratchpad'">
+              <i class="fa-solid fa-clipboard-list"></i>
+              Scratchpad
+              @if (scratchpadTaskChangeCount > 0) {
+                <span class="tab-badge">{{ scratchpadTaskChangeCount }}</span>
+              }
+            </button>
+          }
           <button
             class="detail-tab"
             [class.active]="detailPaneTab === 'json'"
@@ -54,7 +68,7 @@
         </div>
       }
       <!-- Tab Content -->
-      <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff">
+      <div class="detail-pane-content" [class.with-tabs]="showStepPayloadDiff || showScratchpadTab">
         <!-- Payload Diff Tab -->
         @if (detailPaneTab === 'diff' && showStepPayloadDiff) {
           <div class="step-payload-diff">
@@ -71,8 +85,90 @@
             </mj-deep-diff>
           </div>
         }
+        <!-- Scratchpad Tab -->
+        @if (detailPaneTab === 'scratchpad' && showScratchpadTab) {
+          <div class="scratchpad-content">
+            <div class="scratchpad-sub-tabs">
+              <button
+                class="scratchpad-sub-tab"
+                [class.active]="scratchpadSubTab === 'diff'"
+                (click)="scratchpadSubTab = 'diff'">
+                <i class="fa-solid fa-code-compare"></i> Diff
+              </button>
+              <button
+                class="scratchpad-sub-tab"
+                [class.active]="scratchpadSubTab === 'input'"
+                (click)="scratchpadSubTab = 'input'">
+                <i class="fa-solid fa-arrow-right-to-bracket"></i> Input
+              </button>
+              <button
+                class="scratchpad-sub-tab"
+                [class.active]="scratchpadSubTab === 'output'"
+                (click)="scratchpadSubTab = 'output'">
+                <i class="fa-solid fa-arrow-right-from-bracket"></i> Output
+              </button>
+            </div>
+            <!-- Scratchpad Diff Sub-Tab -->
+            @if (scratchpadSubTab === 'diff') {
+              <div class="scratchpad-diff-view">
+                @if (stepScratchpadInput && stepScratchpadOutput) {
+                  <mj-deep-diff
+                    [oldValue]="stepScratchpadInput"
+                    [newValue]="stepScratchpadOutput"
+                    [title]="''"
+                    [showSummary]="true"
+                    [showUnchanged]="false"
+                    [expandAll]="true"
+                    [maxDepth]="6"
+                    [maxStringLength]="300"
+                    [treatNullAsUndefined]="true">
+                  </mj-deep-diff>
+                } @else if (stepScratchpadOutput) {
+                  <div class="scratchpad-empty-state">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    <span>Scratchpad created in this step (no prior state)</span>
+                  </div>
+                  <div class="scratchpad-snapshot">
+                    <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadOutput }"></ng-container>
+                  </div>
+                } @else {
+                  <div class="scratchpad-empty-state">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>No scratchpad changes in this step</span>
+                  </div>
+                }
+              </div>
+            }
+            <!-- Scratchpad Input Sub-Tab -->
+            @if (scratchpadSubTab === 'input') {
+              <div class="scratchpad-snapshot-view">
+                @if (stepScratchpadInput) {
+                  <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadInput }"></ng-container>
+                } @else {
+                  <div class="scratchpad-empty-state">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>No scratchpad input for this step</span>
+                  </div>
+                }
+              </div>
+            }
+            <!-- Scratchpad Output Sub-Tab -->
+            @if (scratchpadSubTab === 'output') {
+              <div class="scratchpad-snapshot-view">
+                @if (stepScratchpadOutput) {
+                  <ng-container *ngTemplateOutlet="scratchpadSnapshotTpl; context: { $implicit: stepScratchpadOutput }"></ng-container>
+                } @else {
+                  <div class="scratchpad-empty-state">
+                    <i class="fa-solid fa-circle-info"></i>
+                    <span>No scratchpad output for this step</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
         <!-- Full JSON Tab -->
-        @if (detailPaneTab === 'json' || !showStepPayloadDiff) {
+        @if (detailPaneTab === 'json' || (!showStepPayloadDiff && !showScratchpadTab)) {
           <div class="json-viewer">
             <div class="json-toolbar">
               <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
@@ -91,3 +187,48 @@
     </div>
   </div>
 }
+
+<!-- Reusable scratchpad snapshot template -->
+<ng-template #scratchpadSnapshotTpl let-snapshot>
+  <div class="scratchpad-snapshot">
+    @if (snapshot.notes) {
+      <div class="scratchpad-notes-section">
+        <h4><i class="fa-solid fa-note-sticky"></i> Notes</h4>
+        <div class="scratchpad-notes-content">{{ snapshot.notes }}</div>
+      </div>
+    }
+    @if (snapshot.tasks?.length > 0) {
+      <div class="scratchpad-tasks-section">
+        <h4><i class="fa-solid fa-list-check"></i> Tasks ({{ snapshot.tasks.length }})</h4>
+        <div class="scratchpad-task-list">
+          @for (task of snapshot.tasks; track task.id) {
+            <div class="scratchpad-task-item" [attr.data-status]="task.status">
+              <span class="task-status-indicator" [attr.data-status]="task.status">
+                @switch (task.status) {
+                  @case ('completed') { <i class="fa-solid fa-circle-check"></i> }
+                  @case ('in_progress') { <i class="fa-solid fa-spinner"></i> }
+                  @case ('blocked') { <i class="fa-solid fa-circle-xmark"></i> }
+                  @default { <i class="fa-regular fa-circle"></i> }
+                }
+              </span>
+              <div class="task-content">
+                <span class="task-id">{{ task.id }}</span>
+                <span class="task-title">{{ task.title }}</span>
+                @if (task.notes) {
+                  <span class="task-notes">{{ task.notes }}</span>
+                }
+              </div>
+              <span class="task-status-badge" [attr.data-status]="task.status">{{ task.status }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    }
+    @if (!snapshot.notes && (!snapshot.tasks || snapshot.tasks.length === 0)) {
+      <div class="scratchpad-empty-state">
+        <i class="fa-solid fa-circle-info"></i>
+        <span>Empty scratchpad</span>
+      </div>
+    }
+  </div>
+</ng-template>

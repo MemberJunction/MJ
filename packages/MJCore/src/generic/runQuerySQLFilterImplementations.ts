@@ -7,6 +7,7 @@
  * @module @memberjunction/core/runQuerySQLFilterImplementations
  */
 
+import { BaseSingleton } from '@memberjunction/global';
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';
 import { DatabasePlatform } from './platformSQL';
 
@@ -145,6 +146,24 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
         return `(${escaped.join(', ')})`;
     },
     
+    sqlLikeContains: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'both');
+        return `'%${escapeLikeValue(stripped, 'sqlserver')}%'`;
+    },
+
+    sqlLikeBegins: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'trailing');
+        return `'${escapeLikeValue(stripped, 'sqlserver')}%'`;
+    },
+
+    sqlLikeEnds: (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'leading');
+        return `'%${escapeLikeValue(stripped, 'sqlserver')}'`;
+    },
+
     sqlNoKeywordsExpression: (value: any) => {
         if (!value) {
             throw new Error('SQL expression cannot be empty');
@@ -244,16 +263,80 @@ function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknow
 }
 
 /**
+ * Strips leading and/or trailing SQL LIKE wildcard characters (%) from a value.
+ * The sqlLike* filters add their own wildcards, so any user-supplied wildcards at
+ * the boundaries are redundant and cause double-wrapping bugs (e.g. '%[%]value[%]%').
+ *
+ * @param value  The raw parameter value
+ * @param side   Which boundary to strip: 'leading', 'trailing', or 'both'
+ */
+function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'both'): string {
+    switch (side) {
+        case 'leading':
+            return value.replace(/^%+/, '');
+        case 'trailing':
+            return value.replace(/%+$/, '');
+        case 'both':
+            return value.replace(/^%+/, '').replace(/%+$/, '');
+    }
+}
+
+/**
+ * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
+ * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
+ */
+function escapeLikeValue(value: string, platform: DatabasePlatform): string {
+    const escaped = value.replace(/'/g, "''");
+    if (platform === 'postgresql') {
+        return escaped.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+    return escaped.replace(/%/g, '[%]').replace(/_/g, '[_]');
+}
+
+/**
+ * Creates platform-aware sqlLike filter implementations.
+ * SQL Server escapes with [%]/[_], PostgreSQL escapes with \%/\_.
+ */
+function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'both');
+        return `'%${escapeLikeValue(stripped, platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'trailing');
+        return `'${escapeLikeValue(stripped, platform)}%'`;
+    };
+}
+
+function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => string {
+    return (value: any) => {
+        if (value === null || value === undefined) return 'NULL';
+        const stripped = stripBoundaryWildcards(String(value), 'leading');
+        return `'%${escapeLikeValue(stripped, platform)}'`;
+    };
+}
+
+/**
  * Singleton class for managing RunQuery SQL filters with implementations.
  * Supports platform-specific filter behavior via SetPlatform().
+ *
+ * Uses BaseSingleton to guarantee a single instance across the entire process,
+ * even if bundlers duplicate this module across multiple execution paths.
  */
-export class RunQuerySQLFilterManager {
-    private static _instance: RunQuerySQLFilterManager;
-    private _filters: Map<string, RunQuerySQLFilter>;
+export class RunQuerySQLFilterManager extends BaseSingleton<RunQuerySQLFilterManager> {
+    private _filters: Map<string, RunQuerySQLFilter> = new Map();
     private _platform: DatabasePlatform = 'sqlserver';
 
-    private constructor() {
-        this._filters = new Map();
+    /**
+     * Use RunQuerySQLFilterManager.Instance to get the singleton instance.
+     */
+    public constructor() {
+        super();
         this.initializeFilters();
     }
 
@@ -283,16 +366,25 @@ export class RunQuerySQLFilterManager {
         if (idFilter) {
             idFilter.implementation = createPlatformSqlIdentifier(this._platform);
         }
+        const likeContainsFilter = this._filters.get('sqlLikeContains');
+        if (likeContainsFilter) {
+            likeContainsFilter.implementation = createPlatformSqlLikeContains(this._platform);
+        }
+        const likeBeginsFilter = this._filters.get('sqlLikeBegins');
+        if (likeBeginsFilter) {
+            likeBeginsFilter.implementation = createPlatformSqlLikeBegins(this._platform);
+        }
+        const likeEndsFilter = this._filters.get('sqlLikeEnds');
+        if (likeEndsFilter) {
+            likeEndsFilter.implementation = createPlatformSqlLikeEnds(this._platform);
+        }
     }
 
     /**
      * Gets the singleton instance
      */
     public static get Instance(): RunQuerySQLFilterManager {
-        if (!this._instance) {
-            this._instance = new RunQuerySQLFilterManager();
-        }
-        return this._instance;
+        return RunQuerySQLFilterManager.getInstance<RunQuerySQLFilterManager>();
     }
 
     /**

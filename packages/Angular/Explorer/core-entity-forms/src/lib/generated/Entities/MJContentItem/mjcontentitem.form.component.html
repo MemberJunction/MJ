@@ -8,42 +8,17 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Source Information Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="sourceInformation"
+        SectionName="Source Information"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
             FieldName="ContentSourceID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Name"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentTypeID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -82,6 +57,51 @@
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="URL"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EntityRecordDocumentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content Details Section -->
+    <mj-collapsible-panel
+        SectionKey="contentDetails"
+        SectionName="Content Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Name"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Description"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ContentTypeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
@@ -91,6 +111,67 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- AI & Vectorization Section -->
+    <mj-collapsible-panel
+        SectionKey="aIVectorization"
+        SectionName="AI & Vectorization"
+        Icon="fa fa-robot"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingStatus"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LastEmbeddedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="TaggingStatus"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LastTaggedAt"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -107,26 +188,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Source Information Section -->
-    <mj-collapsible-panel
-        SectionKey="sourceInformation"
-        SectionName="Source Information"
-        Icon="fa fa-link"
-        [Form]="this"
-        [FormContext]="formContext">
-
-    </mj-collapsible-panel>
-
-    <!-- Content Details Section -->
-    <mj-collapsible-panel
-        SectionKey="contentDetails"
-        SectionName="Content Details"
-        Icon="fa fa-file-code"
-        [Form]="this"
-        [FormContext]="formContext">
 
     </mj-collapsible-panel>
 
@@ -178,6 +239,81 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Content Item Duplicates (Content Item A ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentItemDuplicatesContentItemAID"
+        SectionName="Content Item Duplicates (Content Item A ID)"
+        Icon="fa fa-copy"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentItemDuplicatesContentItemAID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Duplicates','ContentItemAID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates')"
+                [AllowLoad]="IsSectionExpanded('mJContentItemDuplicatesContentItemAID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicatesContentItemAID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Content Item Duplicates (Content Item B ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentItemDuplicatesContentItemBID"
+        SectionName="Content Item Duplicates (Content Item B ID)"
+        Icon="fa fa-copy"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentItemDuplicatesContentItemBID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Duplicates','ContentItemBID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Duplicates')"
+                [AllowLoad]="IsSectionExpanded('mJContentItemDuplicatesContentItemBID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicatesContentItemBID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Suggestions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSuggestions"
+        SectionName="Tag Suggestions"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','SourceContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

@@ -63,7 +63,6 @@ export class MJInitializationService {
     // This enables real-time data refresh when other servers modify entities
     if (GraphQLDataProvider.Instance) {
         GraphQLDataProvider.Instance.SubscribeToCacheInvalidation();
-        console.log('✓ Cache invalidation subscription active');
     }
   }
 
@@ -73,7 +72,7 @@ export class MJInitializationService {
   async validateUserAccess(): Promise<InitializationResult> {
     await SharedService.RefreshData(true);
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: app bootstrap — runs once during initialization to validate the default provider's CurrentUser
 
     if (!md.CurrentUser) {
       return {

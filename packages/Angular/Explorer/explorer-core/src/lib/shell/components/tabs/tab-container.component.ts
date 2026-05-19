@@ -7,6 +7,7 @@ import {
   ElementRef,
   ApplicationRef,
   EnvironmentInjector,
+  runInInjectionContext,
   createComponent,
   ComponentRef,
   ViewEncapsulation,
@@ -27,12 +28,13 @@ import {
   LayoutNode
 } from '@memberjunction/ng-base-application';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
-import { ResourceData, MJResourceTypeEntity } from '@memberjunction/core-entities';
+import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
+import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
-import { LazyModuleRegistry } from '../../../services/lazy-module-registry';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -50,7 +52,7 @@ import { LazyModuleRegistry } from '../../../services/lazy-module-registry';
   styleUrls: ['./tab-container.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TabContainerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
@@ -67,7 +69,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   @Output() layoutInitError = new EventEmitter<void>();
 
-  private lazyRegistry = inject(LazyModuleRegistry);
+  private pinService = inject(HomeAppPinService);
   private subscriptions: Subscription[] = [];
   private layoutInitRetryCount = 0;
   private readonly MAX_LAYOUT_INIT_RETRIES = 5;
@@ -77,6 +79,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   // Track component references for cleanup (legacy - keep for backward compat during transition)
   private componentRefs = new Map<string, ComponentRef<BaseResourceComponent>>();
 
+  // Guard against concurrent loadTabContent calls for the same tab.
+  // When a tab's content changes while active, both the reload path (workspace config subscription)
+  // and onTabShown can race to call loadTabContent, resulting in duplicate component rendering.
+  private tabsCurrentlyLoading = new Set<string>();
+
   // NEW: Smart component cache for preserving state across tab switches
   private cacheManager: ComponentCacheManager;
 
@@ -84,6 +91,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   // This avoids the 20px height issue when GL header is hidden
   useSingleResourceMode = false;
   private singleResourceComponentRef: ComponentRef<BaseResourceComponent> | null = null;
+  /** Cache identity of the current single-resource component for detachment */
+  private singleResourceCacheIdentity: { driverClass: string; recordId: string; appId: string; tabId: string } | null = null;
   private previousTabBarVisible: boolean | null = null;
   private currentSingleResourceSignature: string | null = null; // Track loaded content signature to avoid unnecessary reloads
   private isCreatingInitialTabs = false; // Flag to prevent syncTabsWithConfiguration during initial tab creation
@@ -102,6 +111,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     private environmentInjector: EnvironmentInjector,
     private cdr: ChangeDetectorRef
   ) {
+    super();
     // Initialize component cache manager
     this.cacheManager = new ComponentCacheManager(this.appRef);
   }
@@ -144,7 +154,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
             if (activeTab) {
               const signature = this.getTabContentSignature(activeTab);
               if (signature !== this.currentSingleResourceSignature) {
+                // DO NOT call saveCurrentComponentQueryParams() here — by the time this
+                // subscription fires, OpenTab has already replaced the tab config with the
+                // new nav item's config, so queryParams are gone. The cache entry already
+                // has the correct queryParams from the most recent unchanged-signature save.
                 this.loadSingleResourceContent();
+              } else {
+                // Signature unchanged — sync queryParams to cache entry so it stays current.
+                // This catches incremental queryParam updates (e.g., user selects a conversation).
+                this.saveCurrentComponentQueryParams();
               }
             }
           } else if (this.layoutRestorationComplete && !this.isCreatingInitialTabs) {
@@ -338,7 +356,9 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     if (shouldUseSingleResourceMode !== this.useSingleResourceMode) {
       this.useSingleResourceMode = shouldUseSingleResourceMode;
-      this.cdr.detectChanges();
+      // Defer detectChanges to next microtask to avoid ExpressionChangedAfterItHasBeenCheckedError
+      // when this handler fires during an already-running change detection cycle.
+      Promise.resolve().then(() => this.cdr.detectChanges());
 
       if (this.useSingleResourceMode) {
         // Transitioning to single-resource mode
@@ -349,6 +369,11 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
           if (this.layoutInitialized) {
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
+            // Reset restoration flag too — otherwise a subsequent flip back to multi-tab
+            // mode will let the Configuration subscription take the "restoration-complete"
+            // branch and try to mutate a non-existent layout, producing
+            // "GoldenLayoutManager: Layout not initialized" on the next AddTab.
+            this.layoutRestorationComplete = false;
           }
           // Load the active tab's content directly (now container will exist)
           this.loadSingleResourceContent();
@@ -387,6 +412,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Reset layout initialized flag since we're switching from single-resource mode
         // The gl-container is a new DOM element (due to @if), so we need fresh initialization
         this.layoutInitialized = false;
+        // Restoration is also undone — see comment above on the single-resource branch.
+        this.layoutRestorationComplete = false;
 
         // Initialize Golden Layout - use setTimeout to allow the template to update first
         // and ensure the gl-container div exists in the DOM
@@ -428,7 +455,6 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get the container element
     const container = this.directContentContainer?.nativeElement;
     if (!container) {
-      console.warn('Direct content container not available yet, retrying...');
       // Retry after view is updated
       setTimeout(() => this.loadSingleResourceContent(), 50);
       return;
@@ -455,34 +481,61 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // Clean up previous single-resource component (if different)
       this.cleanupSingleResourceComponent();
 
-      // Detach from tab tracking (it was attached to a tab in Golden Layout)
-      this.cacheManager.markAsDetached(activeTab.id);
+      // Mark cached component as attached to this tab (it was detached / available for reuse).
+      // IMPORTANT: We use markAsAttached here, NOT markAsDetached — the component is being
+      // reattached to the DOM and should NOT be eligible for LRU eviction.
+      this.cacheManager.markAsAttached(
+        driverClass,
+        resourceData.ResourceRecordID || '',
+        activeTab.applicationId,
+        activeTab.id
+      );
 
       // Reattach the cached wrapper element to single-resource container
       cached.wrapperElement.style.height = "100%"; // Ensure full height
       container.appendChild(cached.wrapperElement);
 
-      // Store reference for cleanup
+      // Store reference and identity for cleanup/detachment
       this.singleResourceComponentRef = cached.componentRef;
+      this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
+
+      // Restore saved queryParams to the tab config so the URL reflects
+      // the component's preserved state (e.g., selected conversation, collection drill-down).
+      if (cached.savedQueryParams) {
+        this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
+          queryParams: cached.savedQueryParams
+        });
+        // Do NOT clear savedQueryParams here — the else branch (unchanged-signature saves)
+        // will keep it current while the component is active. Clearing it would cause the
+        // queryParams to be lost on the next detach/reattach cycle.
+      }
+
+      // Cached component is already loaded — emit load-complete so the shell clears its
+      // loading overlay. Without this, single-tab mode navigation to a cached resource
+      // leaves the overlay blocking all user interaction.
+      this.emitFirstLoadCompleteOnce();
 
       return;
     }
 
-    // Get the component registration (with lazy loading fallback)
-    let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+    // Get the component registration (with lazy loading fallback via ClassFactory)
+    const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
       BaseResourceComponent,
       driverClass
     );
 
     if (!resourceReg) {
-      const loaded = await this.lazyRegistry.Load(driverClass);
-      if (loaded) {
-        resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-      }
-    }
-
-    if (!resourceReg) {
       LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+      // Show the user something actionable instead of an empty pane, and unblock the
+      // shell's first-load gate so the loading overlay clears.
+      this.cleanupSingleResourceComponent();
+      this.renderMissingResourceError(container, driverClass, {
+        mode: 'single-resource',
+        appId: activeTab.applicationId,
+        tabId: activeTab.id,
+        resourceType: resourceData.ResourceType,
+        recordId: resourceData.ResourceRecordID || null,
+      });
       return;
     }
 
@@ -506,6 +559,19 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       this.emitFirstLoadCompleteOnce();
     };
 
+    // Wire up display name change for single-resource mode.
+    // Guard: only update the title if THIS component is the currently displayed one.
+    // Without this guard, cached components (detached but alive) can fire this callback
+    // and overwrite the active tab's title with a stale name.
+    instance.DisplayNameChangedEvent = (newName: string) => {
+      if (this.singleResourceComponentRef?.instance === instance) {
+        const tabId = this.workspaceManager.GetActiveTabId();
+        if (tabId) {
+          this.workspaceManager.UpdateTabTitle(tabId, newName);
+        }
+      }
+    };
+
     // Get the native element and append to container
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
@@ -514,24 +580,85 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       (container.children[0] as any).style.height = "100%";
     }
 
-    // Store reference for cleanup
+    // Cache the component for reuse when switching between nav items within the same app.
+    // Without this, every nav switch creates a brand new component from scratch.
+    const wrapperElement = nativeElement;
+    this.cacheManager.cacheComponent(
+      componentRef as ComponentRef<BaseResourceComponent>,
+      wrapperElement,
+      resourceData,
+      activeTab.id
+    );
+
+    // Store reference and identity for cleanup/detachment
     this.singleResourceComponentRef = componentRef as ComponentRef<BaseResourceComponent>;
+    this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
   }
 
   /**
    * Clean up single-resource mode component
    */
+  /**
+   * Detaches the current single-resource component from the DOM and marks it as
+   * available for reuse in the component cache.
+   *
+   * ╔══════════════════════════════════════════════════════════════════════════╗
+   * ║  ⚠️  DO NOT DESTROY THE COMPONENT HERE — INTENTIONAL DESIGN CHOICE  ⚠️  ║
+   * ║                                                                        ║
+   * ║  The component is DETACHED from the DOM, NOT destroyed. It stays alive ║
+   * ║  in the ComponentCacheManager with its full Angular state preserved     ║
+   * ║  (properties, subscriptions, loaded data, scroll position, etc).       ║
+   * ║                                                                        ║
+   * ║  When the user returns to this tab, the cached component is reattached ║
+   * ║  instantly — no data reload, no API calls, no flash of empty content.  ║
+   * ║                                                                        ║
+   * ║  Destroying components here "for memory optimization" is a net         ║
+   * ║  NEGATIVE: the reload on return is far more expensive (DB queries,     ║
+   * ║  API calls, re-rendering) than keeping the component in memory.        ║
+   * ║  The LRU eviction in ComponentCacheManager handles memory limits —     ║
+   * ║  when MaxDetachedComponents is exceeded, the LEAST recently used       ║
+   * ║  components are evicted automatically.                                 ║
+   * ║                                                                        ║
+   * ║  If you think memory is a problem, adjust MaxDetachedComponents        ║
+   * ║  instead of destroying components here.                                ║
+   * ╚══════════════════════════════════════════════════════════════════════════╝
+   */
+  /**
+   * Save the currently displayed component's queryParams to its cache entry.
+   * Called on every config change so the cache entry always has the latest queryParams,
+   * even after the tab config is overwritten by a new nav item.
+   */
+  private saveCurrentComponentQueryParams(): void {
+    if (!this.singleResourceCacheIdentity) return;
+
+    const { tabId } = this.singleResourceCacheIdentity;
+    const tab = this.workspaceManager.GetTab(tabId);
+    const qp = tab?.configuration?.['queryParams'] as Record<string, string> | undefined;
+    const cached = this.cacheManager.getComponentByTabId(tabId);
+    if (cached) {
+      cached.savedQueryParams = (qp && Object.keys(qp).length > 0) ? { ...qp } : undefined;
+    }
+  }
+
   private cleanupSingleResourceComponent(): void {
     if (this.singleResourceComponentRef) {
-      this.appRef.detachView(this.singleResourceComponentRef.hostView);
-      this.singleResourceComponentRef.destroy();
+      if (this.singleResourceCacheIdentity) {
+        const { driverClass, recordId, appId } = this.singleResourceCacheIdentity;
+        // Mark as DETACHED by resource identity — the ONE consistent key used everywhere.
+        this.cacheManager.markAsDetached(driverClass, recordId, appId);
+      }
       this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
     }
 
-    // Clear the container
+    // Remove children from the container. This detaches the wrapper DOM element
+    // without destroying the Angular component — it lives on in the cache.
+    // Using removeChild (not innerHTML='') to avoid aggressive DOM cleanup.
     const container = this.directContentContainer?.nativeElement;
     if (container) {
-      container.innerHTML = '';
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
   }
 
@@ -594,6 +721,14 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Uses component cache to reuse components for same resources
    */
   private async loadTabContent(tabId: string, container: unknown): Promise<void> {
+    // Per-tab guard: prevent concurrent loads of the same tab content.
+    // This can happen when a tab's content changes while active — both the workspace
+    // config subscription reload path and onTabShown can race to call this method.
+    if (this.tabsCurrentlyLoading.has(tabId)) {
+      return;
+    }
+    this.tabsCurrentlyLoading.add(tabId);
+
     try {
       const tab = this.workspaceManager.GetTab(tabId);
       if (!tab) {
@@ -643,30 +778,34 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         // Keep legacy componentRefs map updated
         this.componentRefs.set(tabId, cached.componentRef);
 
-        // If resource is already loaded, update tab title immediately
+        // If resource is already loaded, update tab title immediately and signal
+        // load-complete so the shell clears any loading overlay.
         const instance = cached.componentRef.instance as BaseResourceComponent;
         if (instance.LoadComplete) {
           this.updateTabTitleFromResource(tabId, instance, resourceData);
+          this.emitFirstLoadCompleteOnce();
         }
 
         return;
       }
 
-      // Get the component registration using the driver class (with lazy loading fallback)
-      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+      // Get the component registration using the driver class (with lazy loading fallback via ClassFactory)
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseResourceComponent,
         driverClass
       );
 
       if (!resourceReg) {
-        const loaded = await this.lazyRegistry.Load(driverClass);
-        if (loaded) {
-          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-        }
-      }
-
-      if (!resourceReg) {
         LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+        // Render an in-tab error instead of leaving the pane blank. The container was
+        // already cleared above on line 754, so we just append the error UI here.
+        this.renderMissingResourceError(glContainer.element, driverClass, {
+          mode: 'multi-tab',
+          appId: tab.applicationId,
+          tabId,
+          resourceType: resourceData.ResourceType,
+          recordId: resourceData.ResourceRecordID || null,
+        });
         return;
       }
 
@@ -696,6 +835,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
         }
       };
 
+      // Wire up display name change notifications
+      instance.DisplayNameChangedEvent = (newName: string) => {
+        this.layoutManager.UpdateTabStyle(tabId, { title: newName });
+        this.workspaceManager.UpdateTabTitle(tabId, newName);
+      };
+
       // Create a container div for the component
       const componentElement = document.createElement('div');
       componentElement.className = 'tab-content-wrapper';
@@ -721,6 +866,8 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     } catch (e) {
       LogError(e);
+    } finally {
+      this.tabsCurrentlyLoading.delete(tabId);
     }
   }
 
@@ -744,24 +891,22 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Get the resource registration to access GetResourceDisplayName without loading full component
       const driverClass = resourceData.Configuration?.resourceTypeDriverClass || resourceData.ResourceType;
-      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
         BaseResourceComponent,
         driverClass
       );
 
       if (!resourceReg) {
-        const loaded = await this.lazyRegistry.Load(driverClass);
-        if (loaded) {
-          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, driverClass);
-        }
-      }
-
-      if (!resourceReg) {
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName
-      const tempInstance = new resourceReg.SubClass() as BaseResourceComponent;
+      // Create a lightweight instance just to call GetResourceDisplayName.
+      // Must run inside an injection context because BaseResourceComponent
+      // uses inject() field initializers (e.g. NavigationService).
+      const tempInstance = runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
@@ -845,11 +990,12 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
       // If no DriverClass in metadata, fall back to resourceType (backward compatibility)
     }
 
-    // Include applicationId and driverClass in configuration
+    // Include applicationId, driverClass, and tabId in configuration
     const resourceConfig = {
       ...config,
       applicationId: tab.applicationId,
-      resourceTypeDriverClass: driverClass  // Store resolved driver class for component lookup
+      resourceTypeDriverClass: driverClass,  // Store resolved driver class for component lookup
+      tabId: tab.id  // Needed for query param notification scoping in BaseResourceComponent
     };
 
     // Get ResourceRecordID from config or fall back to tab.resourceRecordId
@@ -871,7 +1017,17 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Get ResourceType entity by name (includes DriverClass field)
    */
   private async getResourceTypeEntity(resourceType: string): Promise<MJResourceTypeEntity | null> {
-    const md = new Metadata();
+    // Use ResourcePermissionEngine's cached data instead of fetching the dataset again.
+    // The engine loads ResourceTypes during startup and keeps them in memory.
+    const resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
+    if (resourceTypes && resourceTypes.length > 0) {
+      const rt = resourceTypes.find(rt => rt.Name.trim().toLowerCase() === resourceType.trim().toLowerCase());
+      return rt || null;
+    }
+
+    // Fallback: if engine hasn't loaded yet (shouldn't happen in normal flow),
+    // fetch the dataset directly
+    const md = this.ProviderToUse;
     const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
     if (!ds || !ds.Success || ds.Results.length === 0) {
       return null;
@@ -961,7 +1117,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private cleanupTabComponent(tabId: string): void {
     // First, try to detach from cache (preserves component for reuse)
-    const cachedInfo = this.cacheManager.markAsDetached(tabId);
+    const cachedInfo = this.cacheManager.findAndDetachByTabId(tabId);
 
     if (cachedInfo) {
       // Remove from legacy componentRefs but keep in cache
@@ -981,6 +1137,15 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
+    // Defense in depth: skip syncing if Golden Layout isn't actually live. This can
+    // happen when the visibility-mode transition has flipped `useSingleResourceMode`
+    // to false and scheduled `initializeGoldenLayout(true)` via setTimeout(0), but the
+    // Configuration subscription fires in the same tick before that init runs. The
+    // deferred init will rebuild tabs from config via forceCreateTabs anyway.
+    if (!this.layoutInitialized || !this.layoutManager.IsInitialized) {
+      return;
+    }
+
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
@@ -1149,11 +1314,210 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   /**
+   * Check if context menu tab is pinned to Home dashboard
+   */
+  get isContextTabPinnedToHome(): boolean {
+    if (!this.contextMenuTabId) return false;
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    if (!tab) return false;
+    const resourceType = this.resolveResourceType(tab);
+    return this.pinService.IsPinned(resourceType, tab.configuration as Record<string, unknown>);
+  }
+
+  /**
+   * Pin current context menu tab to Home dashboard
+   */
+  async onContextPinToHome(): Promise<void> {
+    if (this.isContextTabPinnedToHome) {
+      this.hideContextMenu();
+      return;
+    }
+    if (!this.contextMenuTabId) {
+      this.hideContextMenu();
+      return;
+    }
+
+    const tab = this.workspaceManager.GetTab(this.contextMenuTabId);
+    if (!tab) {
+      this.hideContextMenu();
+      return;
+    }
+
+    const resourceType = this.resolveResourceType(tab);
+    const activeApp = this.appManager.GetActiveApp();
+
+    // Resolve nav item icon for Custom pins
+    let pinIcon: string | undefined;
+    if (resourceType === 'Custom' && activeApp) {
+      const navItemName = tab.configuration?.['navItemName'] as string;
+      if (navItemName) {
+        const navItems = await activeApp.GetNavItems();
+        const navItem = navItems.find(ni => ni.Label === navItemName);
+        pinIcon = navItem?.Icon || undefined;
+      }
+    }
+
+    const added = this.pinService.AddPin({
+      DisplayName: tab.title || 'Untitled',
+      ResourceType: resourceType,
+      ApplicationID: tab.applicationId || activeApp?.ID,
+      ApplicationName: activeApp?.Name,
+      Icon: pinIcon,
+      Color: activeApp?.GetColor() || undefined,
+      Configuration: tab.configuration as Record<string, unknown>,
+    });
+
+    if (added) {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Pinned "${tab.title}" to Home`, 'success', 2000
+      );
+      this.captureContextTabThumbnail(tab);
+    } else {
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `"${tab.title}" is already pinned to Home`, 'info', 3000
+      );
+    }
+
+    this.hideContextMenu();
+  }
+
+  /**
+   * Resolve a WorkspaceTab's resource type string for pin matching
+   */
+  private resolveResourceType(tab: WorkspaceTab): string {
+    const config = tab.configuration;
+    const rt = (config.resourceType as string) || '';
+    if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
+    if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
+    if (rt === 'Queries' || config['queryId']) return 'Queries';
+    if (rt === 'Reports' || config['reportId']) return 'Reports';
+    if (rt === 'Records' || (config['entity'] && config['recordId'])) return 'Records';
+    if (rt === 'Custom' || config['navItemName']) return 'Custom';
+    return rt || 'Custom';
+  }
+
+  /**
+   * Capture thumbnail for a just-pinned tab (async, non-blocking)
+   */
+  private async captureContextTabThumbnail(tab: WorkspaceTab): Promise<void> {
+    try {
+      // Find the active content element — differs by mode
+      let contentEl: HTMLElement | null = null;
+      if (this.useSingleResourceMode) {
+        contentEl = this.directContentContainer?.nativeElement ?? null;
+      } else {
+        // In Golden Layout mode, find the active tab's content pane
+        contentEl = this.glContainer?.nativeElement?.querySelector(
+          '.lm_item_container .lm_content'
+        ) as HTMLElement | null;
+      }
+      if (!contentEl) return;
+
+      const thumbnail = await this.pinService.CaptureThumbnail(contentEl);
+      if (thumbnail) {
+        const resourceType = this.resolveResourceType(tab);
+        const pin = this.pinService.FindPin(resourceType, tab.configuration as Record<string, unknown>);
+        if (pin) {
+          this.pinService.UpdatePin(pin.Id, { Thumbnail: thumbnail });
+        }
+      }
+    } catch {
+      // Thumbnail capture is best-effort
+    }
+  }
+
+  /**
+   * Public method for external callers (e.g. shell) to capture a thumbnail
+   * of the currently visible content, regardless of mode.
+   */
+  public async CaptureActiveThumbnail(): Promise<string | undefined> {
+    try {
+      let contentEl: HTMLElement | null = null;
+      if (this.useSingleResourceMode) {
+        contentEl = this.directContentContainer?.nativeElement ?? null;
+      } else {
+        contentEl = this.glContainer?.nativeElement?.querySelector(
+          '.lm_item_container .lm_content'
+        ) as HTMLElement | null;
+      }
+      if (!contentEl) return undefined;
+      return await this.pinService.CaptureThumbnail(contentEl);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * While the naming implies this is only invoked once, components we DO NOT CONTROL might have race
    * conditions that result in unpredictable behavior. To avoid those causing loading screen overaly to show
    * forever we emit all events upstream
    */
   private emitFirstLoadCompleteOnce(): void {
     this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
+  }
+
+  /**
+   * Render an inline "missing resource component" error into a host element when
+   * ClassFactory has no registration for the requested driver class. Used when a
+   * dashboard / nav item references a component class that isn't built into this
+   * Angular bundle (e.g. an app-specific dashboard defined outside the running app).
+   *
+   * Logs a structured console.error with context for developers, and ensures the
+   * shell's first-resource-load gate is satisfied so the loading overlay clears.
+   */
+  private renderMissingResourceError(host: HTMLElement, driverClass: string, context: Record<string, unknown>): void {
+    console.error(
+      `[TabContainer] No resource component registered for driver class "${driverClass}".\n` +
+        `MemberJunction's ClassFactory has no @RegisterClass(BaseResourceComponent, '${driverClass}') in this build. ` +
+        `Either the package providing this resource is not included in the running Explorer bundle, ` +
+        `the registration manifest is stale (run \`npm run mj:manifest\`), or the driver class name in metadata is wrong.\n` +
+        `Context: ${JSON.stringify(context, null, 2)}`
+    );
+
+    // Clear the host before injecting the error UI.
+    host.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tab-content-wrapper missing-resource-error';
+    wrapper.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px; box-sizing: border-box;';
+    wrapper.setAttribute('role', 'alert');
+
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'max-width: 720px',
+      'width: 100%',
+      'padding: 32px',
+      'background: var(--mj-bg-surface)',
+      'border: 1px solid var(--mj-status-warning-border)',
+      'border-radius: 8px',
+      'text-align: center',
+      'color: var(--mj-text-primary)',
+      'font-family: inherit',
+    ].join(';');
+
+    const icon = document.createElement('div');
+    icon.innerHTML = '<i class="fa-solid fa-puzzle-piece"></i>';
+    icon.style.cssText = 'font-size: 32px; color: var(--mj-status-warning); margin-bottom: 12px;';
+
+    const title = document.createElement('h2');
+    title.textContent = 'This view isn’t available in the running build.';
+    title.style.cssText = 'font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--mj-status-warning-text);';
+
+    const detail = document.createElement('p');
+    detail.textContent = `No component is registered for driver class "${driverClass}". The Angular package that provides this view likely isn't bundled into this Explorer build.`;
+    detail.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--mj-text-secondary); margin: 0 0 12px 0;';
+
+    const hint = document.createElement('p');
+    hint.textContent = 'See browser console for technical details (driver class, application, nav item).';
+    hint.style.cssText = 'font-size: 12px; color: var(--mj-text-muted); margin: 0; font-style: italic;';
+
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(detail);
+    card.appendChild(hint);
+    wrapper.appendChild(card);
+    host.appendChild(wrapper);
+
+    // Unblock the shell's first-load gate so the loading overlay clears.
+    this.emitFirstLoadCompleteOnce();
   }
 }

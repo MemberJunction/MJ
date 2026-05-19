@@ -34,21 +34,21 @@ import { ArtifactIconService } from '@memberjunction/ng-artifacts';
         </div>
       </div>
       <div class="card-actions">
-        <button class="action-btn" (click)="onView($event)" title="View">
+        <button mjButton variant="flat" size="sm" (click)="onView($event)" title="View">
           <i class="fas fa-eye"></i>
         </button>
         @if (canShare) {
-          <button class="action-btn" (click)="onShare($event)" title="Share">
+          <button mjButton variant="flat" size="sm" (click)="onShare($event)" title="Share">
             <i class="fas fa-share-nodes"></i>
           </button>
         }
         @if (canEdit) {
-          <button class="action-btn" (click)="onEdit($event)" title="Edit">
+          <button mjButton variant="flat" size="sm" (click)="onEdit($event)" title="Edit">
             <i class="fas fa-edit"></i>
           </button>
         }
         @if (canEdit) {
-          <button class="action-btn" (click)="onRemove($event)" title="Remove from collection">
+          <button mjButton variant="danger" size="sm" (click)="onRemove($event)" title="Remove from collection">
             <i class="fas fa-times"></i>
           </button>
         }

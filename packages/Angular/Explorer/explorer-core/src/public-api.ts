@@ -2,7 +2,6 @@
  * Public API Surface 
  */
 
-export * from './lib/generic/form-toolbar';
 export * from './lib/generic/resource-container-component';
 
 export * from './lib/resource-wrappers/dashboard-resource.component'
@@ -41,13 +40,25 @@ export * from './lib/resource-wrappers/query-resource.component'
 export * from './lib/services/system-validation.service'
 export * from './lib/services/startup-validation.service'
 
+// Server connectivity
+export * from './lib/services/server-connectivity.service'
+export * from './lib/server-connectivity/server-connectivity-banner.component'
+
 // Lazy loading infrastructure
 export * from './lib/services/lazy-module-registry'
-export * from './lib/services/lazy-feature-config'
+export * from './generated/lazy-feature-config'
 export * from './lib/system-validation/system-validation-banner.component'
 
 // User Menu Plugin System
 export * from './lib/user-menu'
+
+// About Dialog
+export * from './lib/about/about-dialog.component'
+export * from './lib/shell/services/about-dialog.service'
+
+// Profile Dialog (Identity Card)
+export * from './lib/profile/profile-dialog.component'
+export * from './lib/shell/services/profile-dialog.service'
 
 // OAuth Module
 export * from './lib/oauth/oauth.module'

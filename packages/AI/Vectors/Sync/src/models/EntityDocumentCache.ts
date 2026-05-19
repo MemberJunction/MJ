@@ -1,92 +1,79 @@
 import { UserInfo, RunView, LogStatus, RunViewResult } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
-import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity } from "@memberjunction/core-entities";
+import { MJEntityDocumentEntity, MJEntityDocumentTypeEntity, KnowledgeHubMetadataEngine } from "@memberjunction/core-entities";
+import { BaseSingleton } from "@memberjunction/global";
 
 /**
- * Simple caching class to load all Entity Documents and related data at once into memory
+ * Caching class for Entity Documents and Entity Document Types.
+ *
+ * Delegates Entity Document storage to KnowledgeHubMetadataEngine (which uses
+ * BaseEngine auto-refresh on entity events), and only independently caches
+ * Entity Document Types (which KH engine does not manage).
  */
-export class EntityDocumentCache {
-    private static _instance: EntityDocumentCache;
+export class EntityDocumentCache extends BaseSingleton<EntityDocumentCache> {
     private _loaded: boolean = false;
-    private _cache: { [key: string]: MJEntityDocumentEntity } = {};
     private _typeCache: { [key: string]: MJEntityDocumentTypeEntity } = {};
     private _contextUser: UserInfo | null = null;
 
-    private constructor() {
-        // load up the cache
-        this._cache = {};
-        this._typeCache = {};
-    } 
+    public constructor() {
+        super();
+    }
 
     public static get Instance(): EntityDocumentCache {
-        if(!EntityDocumentCache._instance){
-            EntityDocumentCache._instance = new EntityDocumentCache();
-        }
-        return EntityDocumentCache._instance;
+        return EntityDocumentCache.getInstance<EntityDocumentCache>();
     }
 
     public get IsLoaded(): boolean {
         return this._loaded;
     }
 
-    protected Cache(): { [key: string]: MJEntityDocumentEntity } {
-        return this._cache;
-    }
-
-    protected TypeCache(): { [key: string]: MJEntityDocumentTypeEntity } {
-        return this._typeCache;
-    }
-
     public GetDocument(EntityDocumentID: string): MJEntityDocumentEntity | null {
-        let document: MJEntityDocumentEntity = this._cache[EntityDocumentID];
+        const document = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentById(EntityDocumentID);
         if (!document) {
             LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentID}`);
         }
-
-        return document || null;
+        return document ?? null;
     }
 
     public GetFirstActiveDocumentForEntityByID(EntityID: string): MJEntityDocumentEntity | null {
-        let documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
-        if(!documentType){
+        const documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
+        if (!documentType) {
             return null;
         }
 
-        return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
-            UUIDsEqual(ed.EntityID, EntityID) && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID);
-        });
-
+        return KnowledgeHubMetadataEngine.Instance.EntityDocuments.find((ed: MJEntityDocumentEntity) =>
+            UUIDsEqual(ed.EntityID, EntityID) && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID)
+        ) ?? null;
     }
 
     public GetFirstActiveDocumentForEntityByName(EntityName: string): MJEntityDocumentEntity | null {
-        let documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
-        if(!documentType){
+        const documentType: MJEntityDocumentTypeEntity | null = this.GetDocumentTypeByName('Record Duplicate');
+        if (!documentType) {
             return null;
         }
 
-        return Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
-            ed.Entity === EntityName && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID);
-        });
-
+        return KnowledgeHubMetadataEngine.Instance.EntityDocuments.find((ed: MJEntityDocumentEntity) =>
+            ed.Entity === EntityName && ed.Status === 'Active' && UUIDsEqual(ed.TypeID, documentType.ID)
+        ) ?? null;
     }
 
     public GetDocumentByName(EntityDocumentName: string): MJEntityDocumentEntity | null {
         const toLower = EntityDocumentName.trim().toLowerCase();
-        let document: MJEntityDocumentEntity = Object.values(this._cache).find((ed: MJEntityDocumentEntity) => {
-            ed.Name.trim().toLowerCase() === toLower;
-        });
+        const document = KnowledgeHubMetadataEngine.Instance.EntityDocuments.find((ed: MJEntityDocumentEntity) =>
+            ed.Name.trim().toLowerCase() === toLower
+        );
 
         if (!document) {
             LogStatus(`EntityDocumentCache.GetDocumentByName: Cache miss for EntityDocumentName: ${EntityDocumentName}`);
         }
 
-        return document || null;
+        return document ?? null;
     }
 
     public GetDocumentType(EntityDocumentTypeID: string): MJEntityDocumentTypeEntity | null {
-        let documentType: MJEntityDocumentTypeEntity = this._typeCache[EntityDocumentTypeID];
+        const documentType: MJEntityDocumentTypeEntity = this._typeCache[EntityDocumentTypeID];
         if (!documentType) {
-            LogStatus(`EntityDocumentCache.GetDocument: Cache miss for EntityDocumentID: ${EntityDocumentTypeID}`);
+            LogStatus(`EntityDocumentCache.GetDocumentType: Cache miss for EntityDocumentTypeID: ${EntityDocumentTypeID}`);
             return null;
         }
 
@@ -95,52 +82,47 @@ export class EntityDocumentCache {
 
     public GetDocumentTypeByName(EntityDocumentTypeName: string): MJEntityDocumentTypeEntity | null {
         const toLower = EntityDocumentTypeName.trim().toLowerCase();
-        let documentType: MJEntityDocumentTypeEntity = Object.values(this._typeCache).find((edt: MJEntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower);
+        const documentType: MJEntityDocumentTypeEntity = Object.values(this._typeCache).find((edt: MJEntityDocumentTypeEntity) => edt.Name.trim().toLowerCase() === toLower);
 
         if (!documentType) {
-            LogStatus(`EntityDocumentCache.GetDocumentByName: Cache miss for EntityDocumentName: ${EntityDocumentTypeName}`);
+            LogStatus(`EntityDocumentCache.GetDocumentTypeByName: Cache miss for EntityDocumentTypeName: ${EntityDocumentTypeName}`);
             return null;
         }
 
-        return documentType;;
+        return documentType;
     }
 
     public SetCurrentUser(user: UserInfo) {
         this._contextUser = user;
     }
 
+    /**
+     * Refreshes the cache. Entity Documents are loaded via KnowledgeHubMetadataEngine
+     * (auto-refreshing BaseEngine). Entity Document Types are loaded independently.
+     */
     public async Refresh(forceRefresh: boolean, ContextUser?: UserInfo) {
 
-        if(!forceRefresh && this._loaded){
+        if (!forceRefresh && this._loaded) {
             return;
         }
 
         LogStatus('Refreshing Entity Document Cache');
-        this._cache = {};
         this._typeCache = {};
 
-        // now load up the cache with all the entity documents
+        const user = ContextUser || this._contextUser;
+
+        // Delegate Entity Documents to KnowledgeHubMetadataEngine
+        await KnowledgeHubMetadataEngine.Instance.Config(forceRefresh, user);
+
+        // Load Entity Document Types independently (KH engine doesn't cache these)
         const rv = new RunView();
+        const result: RunViewResult<MJEntityDocumentTypeEntity> = await rv.RunView<MJEntityDocumentTypeEntity>({
+            EntityName: "MJ: Entity Document Types",
+            ResultType: "entity_object"
+        }, user);
 
-        const results: RunViewResult[] = await rv.RunViews([
-            {
-                EntityName: "MJ: Entity Documents",
-                ResultType: "entity_object"
-            },
-            {
-                EntityName: "MJ: Entity Document Types",
-                ResultType: "entity_object"
-            }
-        ], ContextUser || this._contextUser);
-
-        if (results[0] && results[0].Success) {
-            for (const entityDocument of results[0].Results) {
-                this._cache[entityDocument.ID] = entityDocument;
-            }
-        }
-
-        if (results[1] && results[1].Success) {
-            for (const entityDocumentType of results[1].Results) {
+        if (result && result.Success) {
+            for (const entityDocumentType of result.Results) {
                 this._typeCache[entityDocumentType.ID] = entityDocumentType;
             }
         }

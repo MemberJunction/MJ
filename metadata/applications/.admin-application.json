@@ -8,59 +8,31 @@
     "DefaultSequence": 999,
     "DefaultNavItems": [
       {
-        "Label": "ERD",
-        "Icon": "fa-solid fa-database",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=ERD?allowDefer",
+        "Label": "Identity & Access",
+        "Icon": "fa-solid fa-shield-halved",
+        "ResourceType": "Custom",
+        "DriverClass": "AdminIdentityAccess",
         "isDefault": true
       },
       {
-        "Label": "Diagnostics",
-        "Icon": "fa-solid fa-stethoscope",
+        "Label": "Data & Schema",
+        "Icon": "fa-solid fa-database",
         "ResourceType": "Custom",
-        "DriverClass": "SystemDiagnosticsResource",
+        "DriverClass": "AdminDataSchema",
         "isDefault": false
       },
       {
-        "Label": "Permissions",
-        "Icon": "fa-solid fa-lock",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=Entity Permissions?allowDefer",
-        "isDefault": true
-      },
-      {
-        "Label": "Roles",
-        "Icon": "fa-solid fa-shield-halved",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=Role Management?allowDefer",
-        "isDefault": true
-      },
-      {
-        "Label": "Users",
-        "Icon": "fa-solid fa-users",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=User Management?allowDefer",
-        "isDefault": true
-      },
-      {
-        "Label": "Apps",
-        "Icon": "fa-solid fa-th-large",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=Application Management?allowDefer",
-        "isDefault": true
-      },
-      {
-        "Label": "SQL Logging",
-        "Icon": "fa-solid fa-file-code",
-        "ResourceType": "Dashboards",
-        "RecordID": "@lookup:MJ: Dashboards.Name=SQL Logging?allowDefer",
-        "isDefault": true
-      },
-      {
-        "Label": "API Keys",
-        "Icon": "fa-solid fa-key",
+        "Label": "Monitoring",
+        "Icon": "fa-solid fa-stethoscope",
         "ResourceType": "Custom",
-        "DriverClass": "APIKeysResource",
+        "DriverClass": "AdminMonitoring",
+        "isDefault": false
+      },
+      {
+        "Label": "Developer Tools",
+        "Icon": "fa-solid fa-screwdriver-wrench",
+        "ResourceType": "Custom",
+        "DriverClass": "AdminDeveloperTools",
         "isDefault": false
       }
     ]
@@ -72,7 +44,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-02-13T21:09:36.691Z",
-    "checksum": "6a03ae98f0a6424606aef4acf7a79d4b6f5714ebeab59885e99a03d23d75f5ed"
+    "lastModified": "2026-05-04T18:14:12.119Z",
+    "checksum": "f7f0eb4d2e98158d20601cc7bb4c6a45c7881260e36357fdccc46ec7e7d3accc"
   }
 }

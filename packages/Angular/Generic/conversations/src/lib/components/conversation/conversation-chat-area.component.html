@@ -10,7 +10,13 @@
             <i class="fas fa-table-columns"></i>
           </button>
         }
-        <div class="chat-title">{{ conversation.Name }}</div>
+        <div class="chat-title">{{ conversation.Name || '' }}</div>
+        @if (sharedByBadge) {
+          <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
+            <i class="fas fa-share-nodes"></i>
+            <span>Shared by {{ sharedByBadge.display }}</span>
+          </span>
+        }
         @if (conversation.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
             <i class="fas fa-folder"></i>
@@ -23,15 +29,15 @@
             <span>Test</span>
           </button>
         }
-        <mj-active-agent-indicator
-          [conversationId]="conversation.ID"
-          [currentUser]="currentUser"
-          (togglePanel)="onToggleAgentPanel()"
-          (agentSelected)="onAgentSelected($event)">
-        </mj-active-agent-indicator>
       </div>
       <div class="chat-actions chat-actions-buttons">
-        @if (artifactCountDisplay > 0) {
+        @if (pinnedMessages.length > 0) {
+          <button class="pin-chip" [class.active]="showPinsPanel" (click)="showPinsPanel = !showPinsPanel" title="View pinned messages">
+            <i class="fas fa-thumbtack"></i>
+            <span class="pin-chip-count">{{ pinnedMessages.length }}</span>
+          </button>
+        }
+        @if (showArtifactIndicator && artifactCountDisplay > 0) {
           <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
             <i class="fas fa-cube"></i>
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
@@ -43,23 +49,21 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
-        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
-          <i class="fas fa-download"></i>
-          <span class="btn-label">Export</span>
-        </button>
-        <button class="action-btn share-btn"
-          [class.shared]="isShared"
-          (click)="shareConversation()"
-          [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-          <i class="fas fa-share-nodes"></i>
-          <span class="btn-label">Share</span>
-        </button>
-        <mj-active-agent-indicator
-          [conversationId]="conversation.ID"
-          [currentUser]="currentUser"
-          (togglePanel)="onToggleAgentPanel()"
-          (agentSelected)="onAgentSelected($event)">
-        </mj-active-agent-indicator>
+        @if (showExportButton) {
+          <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
+            <i class="fas fa-download"></i>
+            <span class="btn-label">Export</span>
+          </button>
+        }
+        @if (showShareButton && canShareConversation) {
+          <button mjButton variant="flat" size="sm"
+            [class.shared]="isShared"
+            (click)="shareConversation()"
+            [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+            <i class="fas fa-share-nodes"></i>
+            <span class="btn-label">Share</span>
+          </button>
+        }
       </div>
     </div>
   }
@@ -70,20 +74,26 @@
     <div class="chat-messages-pane"
       [class.full-width]="!showArtifactPanel"
       [class.hidden]="isArtifactPaneMaximized">
-      @if (isNewConversation || !conversationId) {
+      @if (isLoadingConversation) {
+        <!-- Loading State - Show centered spinner while conversation loads (checked FIRST to prevent empty state flash) -->
+        <div class="conversation-loading-state">
+          <mj-loading text="Loading conversation..." size="large"></mj-loading>
+        </div>
+      } @else if (isNewConversation || !conversationId) {
         <!-- Empty State - No conversation selected OR new unsaved conversation -->
         <mj-conversation-empty-state
           [currentUser]="currentUser"
           [disabled]="isProcessing"
           [showSidebarToggle]="showSidebarToggle"
+          [overlayMode]="overlayMode"
+          [greeting]="emptyStateGreeting"
+          [enableAttachments]="enableAttachments"
+          [maxAttachments]="maxAttachments"
+          [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+          [acceptedFileTypes]="acceptedFileTypes"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
-      } @else if (isLoadingConversation) {
-        <!-- Loading State - Show centered spinner while conversation loads -->
-        <div class="conversation-loading-state">
-          <mj-loading text="Loading conversation..." size="large"></mj-loading>
-        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
@@ -106,13 +116,16 @@
               [attachmentsMap]="attachmentsByDetailId"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
+              (deleteMessage)="onDeleteMessage($event)"
               (retryMessage)="onRetryMessage($event)"
               (testFeedbackMessage)="onTestFeedbackMessage($event)"
               (artifactClicked)="onArtifactClicked($event)"
               (messageEdited)="onMessageEdited($event)"
               (openEntityRecord)="onOpenEntityRecord($event)"
               (suggestedResponseSelected)="onSuggestedResponseSelected($event)"
-              (attachmentClicked)="onAttachmentClicked($event)">
+              (attachmentClicked)="onAttachmentClicked($event)"
+              (diagnosticRequested)="onDiagnosticRequested($event)"
+              (messagePinToggled)="onMessagePinToggled($event)">
             </mj-conversation-message-list>
 
             <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
@@ -132,6 +145,12 @@
                 <mj-loading text="Loading conversation data..." size="medium"></mj-loading>
               </div>
             } @else {
+              @if (isReadOnlyView) {
+                <div class="read-only-banner" role="status">
+                  <i class="fas fa-eye"></i>
+                  <span>You have view-only access to this conversation.</span>
+                </div>
+              }
               <!-- Input Component - Multiple instances cached, only one visible -->
               <div class="message-input-container-wrapper">
                 @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
@@ -145,8 +164,9 @@
                     [artifactsByDetailId]="inputRef.conversationId === conversationId ? artifactsByDetailId : emptyArtifactsMap"
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
+                    [appContext]="appContext"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
-                    [disabled]="isProcessing"
+                    [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
@@ -196,7 +216,8 @@
           (shareRequested)="onArtifactShareRequested($event)"
           (maximizeToggled)="toggleMaximizeArtifactPane()"
           (openEntityRecord)="onOpenEntityRecord($event)"
-          (navigationRequest)="onNavigationRequest($event)">
+          (navigationRequest)="onNavigationRequest($event)"
+          (analyzeRequested)="OnAnalyzeArtifact($event)">
         </mj-artifact-viewer-panel>
       </div>
     }
@@ -209,6 +230,16 @@
       (saved)="onArtifactShared()"
       (cancelled)="onArtifactShareModalClose()">
     </mj-artifact-share-modal>
+
+    <!-- Pinned Messages Panel (overlay) -->
+    @if (showPinsPanel) {
+      <mj-pinned-messages-panel
+        [pinnedMessages]="pinnedMessages"
+        (closed)="showPinsPanel = false"
+        (jumpRequested)="onJumpToMessage($event)"
+        (unpinRequested)="onUnpinFromPanel($event)">
+      </mj-pinned-messages-panel>
+    }
   </div>
 </div>
 
@@ -231,6 +262,14 @@
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">
 </mj-export-modal>
+
+<!-- Share Dialog (generic, shared with dashboards) -->
+<mj-resource-share-dialog
+  [Visible]="showShareModal"
+  [Context]="shareContext"
+  [Adapter]="shareAdapter"
+  (Result)="onShareDialogResult($event)">
+</mj-resource-share-dialog>
 
 <!-- Members Modal -->
 <mj-members-modal
@@ -347,9 +386,21 @@
     [environmentId]="environmentId"
     [currentUser]="currentUser"
     [excludeCollectionIds]="collectionPickerExcludedIds"
-    (saved)="onCollectionPickerSaved($event)"
+    [artifactVersionId]="collectionPickerVersionId"
+    [artifactName]="collectionPickerArtifactName"
+    [artifactVersionNumber]="collectionPickerVersionNumber"
+    (completed)="onCollectionPickerCompleted($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
+}
+
+<!-- Test Feedback Dialog -->
+@if (testFeedbackDialogData) {
+  <mj-test-feedback-dialog
+    [data]="testFeedbackDialogData"
+    [visible]="showTestFeedbackDialog"
+    (closed)="onTestFeedbackDialogClosed($event)">
+  </mj-test-feedback-dialog>
 }
 
 <!-- Image Viewer Modal -->

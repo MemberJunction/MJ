@@ -555,6 +555,59 @@ const result = await rv.RunView<OrderEntity>({
 // Aggregate results are in result.AggregateResults[]
 ```
 
+#### Keyset (Seek) Pagination — `AfterKey`
+
+For background jobs and bulk processing that iterate through *all* records of a large entity, use `AfterKey` instead of `StartRow`. Keyset pagination stays **O(log N) per page** regardless of depth — `StartRow`/OFFSET pagination becomes progressively slower as the offset grows.
+
+```typescript
+import { CompositeKey } from '@memberjunction/core';
+
+let lastSeenKey: CompositeKey | undefined; // undefined => first page
+
+while (true) {
+    const result = await rv.RunView({
+        EntityName: 'Tax Returns',
+        ExtraFilter: 'AddressLine1 IS NOT NULL',
+        AfterKey: lastSeenKey,
+        MaxRows: 500,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break; // partial page = end of data
+
+    const last = result.Results[result.Results.length - 1];
+    lastSeenKey = CompositeKey.FromID(last.ID);
+}
+```
+
+**Constraints** (throw `AfterKeyNotSupportedError` on violation):
+- Entity must have a **single-column primary key** on a comparable type.
+- `OrderBy`, if set, must reference only the PK column (any `ASC`/`DESC` direction).
+- Cannot be combined with non-zero `StartRow`.
+
+Keyset queries automatically bypass the server cache (read + write) — each call uses a different seek key, so caching them is pure overhead.
+
+UI grid pagination (a few hundred pages of a few hundred rows) should stay on `StartRow` — keyset isn't necessary there. See **[KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)** for the full pattern, validation rules, and reference implementations.
+
+```typescript
+// Defensive: catch the framework's typed error if you want to fall back to OFFSET
+import { AfterKeyNotSupportedError } from '@memberjunction/core';
+
+try {
+    await rv.RunView({ EntityName: 'SomeEntity', AfterKey: key, MaxRows: 500 }, user);
+} catch (e) {
+    if (e instanceof AfterKeyNotSupportedError && e.Reason === 'CompositePK') {
+        // entity has composite PK — fall back to StartRow-based iteration
+    } else {
+        throw e;
+    }
+}
+```
+
+Helper: `IsKeysetPaginationOrderableType(sqlTypeName)` — returns true if a column type is acceptable as a keyset PK (essentially all standard SQL types; defensively rejects exotics like `xml`/`sql_variant`/`varbinary`).
+
 #### ResultType and Fields Optimization
 
 ```typescript
@@ -592,7 +645,8 @@ const countResult = await rv.RunView({
 | `Fields` | `string[]` | Field names to return (simple mode only) |
 | `UserSearchString` | `string` | User search term |
 | `MaxRows` | `number` | Maximum rows to return |
-| `StartRow` | `number` | Row offset for pagination |
+| `StartRow` | `number` | Row offset (OFFSET-based pagination). Use for UI grids. For deep iteration over large tables, prefer `AfterKey`. |
+| `AfterKey` | `CompositeKey` | Keyset (seek) pagination cursor — O(log N) per page regardless of depth. Requires single-column PK. Throws `AfterKeyNotSupportedError` on incompatible entities. See [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
 | `ResultType` | `'simple' \| 'entity_object' \| 'count_only'` | Result format |
 | `IgnoreMaxRows` | `boolean` | Bypass entity MaxRows setting |
 | `SaveViewResults` | `boolean` | Store run results for future exclusion |
@@ -601,6 +655,7 @@ const countResult = await rv.RunView({
 | `ForceAuditLog` | `boolean` | Force audit log entry |
 | `CacheLocal` | `boolean` | Use LocalCacheManager for caching |
 | `CacheLocalTTL` | `number` | Cache TTL in milliseconds |
+| `BypassCache` | `boolean` | Skip all server-side caching (read and write). Use for maintenance queries that need true DB state after direct SQL inserts. |
 | `Aggregates` | `AggregateExpression[]` | Aggregate expressions to compute |
 
 ---
@@ -655,6 +710,9 @@ Parameterized queries use Nunjucks templates with built-in SQL injection protect
 | `sqlBoolean` | Converts to SQL bit | `{{ flag \| sqlBoolean }}` produces `1` |
 | `sqlIdentifier` | Brackets identifiers | `{{ table \| sqlIdentifier }}` produces `[UserAccounts]` |
 | `sqlIn` | Formats arrays for IN clauses | `{{ list \| sqlIn }}` produces `('A', 'B', 'C')` |
+| `sqlLikeContains` | Wraps value with `%` for LIKE contains | `{{ term \| sqlLikeContains }}` produces `'%Conference%'` |
+| `sqlLikeBegins` | Appends `%` for LIKE begins-with | `{{ term \| sqlLikeBegins }}` produces `'Conference%'` |
+| `sqlLikeEnds` | Prepends `%` for LIKE ends-with | `{{ term \| sqlLikeEnds }}` produces `'%Conference'` |
 | `sqlNoKeywordsExpression` | Blocks dangerous SQL keywords | Allows `Revenue DESC`, blocks `DROP TABLE` |
 
 ---
@@ -830,6 +888,19 @@ const result = await rv.RunView({
     CacheLocalTTL: 300000  // 5 minutes
 });
 ```
+
+To bypass all caching for a specific query (e.g., maintenance actions that need to see
+records inserted via direct SQL that bypassed `BaseEntity.Save()`), set `BypassCache: true`:
+
+```typescript
+// Always hits the database — skips both cache reads and cache writes
+const result = await rv.RunView({
+    EntityName: 'Members',
+    ExtraFilter: 'State IS NOT NULL',
+    BypassCache: true,
+    IgnoreMaxRows: true
+});
+```
 #### Cross-Server Cache Invalidation
 
 When multiple MJAPI server instances share a Redis-backed `ILocalStorageProvider`, cache invalidation propagates automatically across all instances. The system uses two complementary mechanisms:
@@ -878,14 +949,58 @@ unsubscribe();
 
 `LocalCacheManager` and `ProviderBase` delegate persistence to an `ILocalStorageProvider`. MemberJunction ships with several implementations:
 
-| Provider | Package | Environment | Persistence |
-|----------|---------|-------------|-------------|
-| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart |
-| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` |
-| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB |
-| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts |
+| Provider | Package | Environment | Persistence | Storage Format |
+|----------|---------|-------------|-------------|----------------|
+| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart | Native references (no serialization) |
+| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` | JSON-serialized internally |
+| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB | **Native objects via structured clone** |
+| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts | JSON-serialized internally |
 
 For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
+
+#### Generic-typed interface
+
+`ILocalStorageProvider` is generic — `SetItem<T>(key, value, category?)` and `GetItem<T>(key, category?)` thread the value's type through the call:
+
+```typescript
+interface UserCacheEntry { userId: string; roles: string[]; }
+
+await provider.SetItem<UserCacheEntry>('user:1', { userId: 'u-1', roles: ['admin'] }, 'Users');
+const user = await provider.GetItem<UserCacheEntry>('user:1', 'Users');
+//          ^^^^^ typed as UserCacheEntry | null — no .parse(), no casting
+```
+
+Each implementation handles serialization for its medium internally:
+
+- **IndexedDB** stores objects natively via the structured clone algorithm — `Date`, `Map`, `Set`, typed arrays, and nested objects are preserved as-is on retrieval. **No JSON.parse on read** — significantly faster for cache-heavy workloads.
+- **localStorage** and **Redis** JSON-encode/decode internally because their underlying media are string-only. `Date` instances become ISO strings on round-trip; `Map`/`Set` become plain objects.
+- **In-memory** stores object references directly — same identity returned on read.
+
+Class instances (with prototype methods) lose their prototype on retrieval across all providers; store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`).
+
+#### Batched reads via `GetItems<T>`
+
+For workflows that need many cached entries at once — most notably the smart-cache-check warm-load path that reads ~85 fingerprints per coalesced engine batch — the interface exposes a batched read:
+
+```typescript
+GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+```
+
+Returns a `Map` keyed by the input keys. Missing keys map to `null`. Implementations leverage their backend's native batching primitive:
+
+- **IndexedDB**: single read transaction with N parallel `get()` calls inside it. Trades ~N transactions of overhead for one transaction's commit cost — significant on hot paths because IDB serializes transactions on the same object store. For 85 keys, this is the difference between ~425ms of IDB bookkeeping and ~10ms.
+- **Redis**: one `MGET` command, one network round-trip, N values returned. ~N× faster than individual `GET` calls which each pay full RTT.
+- **localStorage / in-memory**: implemented as a tight loop for API uniformity (no batching benefit on synchronous backends).
+
+Used internally by `LocalCacheManager.GetRunViewResults` which the smart-cache-check flow calls in two passes (one for the per-fingerprint cache-status payload, one to materialize 'current' entries after the server response). Available to consumer code anywhere multiple cached entries are needed at once.
+
+#### IndexedDB schema versioning
+
+`BrowserIndexedDBStorageProvider` derives its IDB `DB_VERSION` from the `@memberjunction/graphql-dataprovider` package version (`major * 1000 + minor`). Patch releases share the same DB version (cache survives); minor releases trigger a one-time `onupgradeneeded` that wipes all object stores and recreates them empty. Cache repopulates on first use after the upgrade.
+
+This is intentional: it sidesteps the "did this PR change cache format?" review burden — every minor naturally rolls forward to a clean cache. The cost is one slow page load per user per minor (~1s vs. the warm-load path), which is negligible for monthly LTS cadence and well below the perceptual threshold for "instant" on subsequent loads.
+
+For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
 > **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
@@ -1429,6 +1544,12 @@ For detailed guides on specific topics, see the [docs/](./docs/) folder:
 - [IS-A Relationships](./docs/isa-relationships.md) — Type inheritance, save/delete orchestration, provider integration
 - [Organic Keys](./docs/organic-keys.md) — Cross-system matching by shared business data (email, phone, domain), CodeGen integration, transitive views
 - [RunQuery Pagination](./docs/runquery-pagination.md) — Parameterized queries with pagination support
+- [Full-Text Search](./docs/FULL_TEXT_SEARCH_GUIDE.md) — Database-native FTS via `Metadata.FullTextSearch()`, SQL Server FREETEXT / PostgreSQL tsvector, provider architecture, Knowledge Hub integration
+
+### Scoring Utilities
+
+- **`ComputeRRF(rankedLists, k?)`** — Reciprocal Rank Fusion for combining ranked result lists from different retrieval methods. Score-scale independent — works on ordinal position, making it ideal for fusing vector similarity results with full-text search results. Located in `@memberjunction/core` (exported from `src/generic/scoring/ReciprocalRankFusion.ts`).
+- **`ScoredCandidate`** — Interface for RRF input/output: `{ ID: string, Score: number, Metadata?: Record<string, unknown> }`
 
 ## Support
 

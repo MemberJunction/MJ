@@ -11,8 +11,11 @@
     "packages/AI/Providers/*",
     "packages/AI/Recommendations/*",
     "packages/AI/Vectors/*",
+    "packages/AI/Vectors/Providers/*",
     "packages/AI/Vectors/Memory/*",
+    "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
+    "packages/AI/DatabaseDesigner/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
@@ -27,7 +30,10 @@
     "packages/Credentials/*",
     "packages/APIKeys/*",
     "packages/OpenApp/*",
-    "packages/Integration/*"
+    "packages/Integration/*",
+    "packages/Archiving/*",
+    "packages/geo/*"
+
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",
@@ -51,7 +57,7 @@
     "mj:manifest:server-bootstrap": "mj codegen manifest --appDir ./packages/ServerBootstrap --output ./packages/ServerBootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap": "mj codegen manifest --appDir ./packages/Angular/Bootstrap --output ./packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:api": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJAPI --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts",
-    "mj:manifest:explorer": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJExplorer --output ./packages/MJExplorer/src/app/generated/class-registrations-manifest.ts",
+    "mj:manifest:explorer": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJExplorer --output ./packages/MJExplorer/src/app/generated/class-registrations-manifest.ts --lazy-config ./packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts",
     "mj:manifest:a2a-server": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/AI/A2AServer --output ./packages/AI/A2AServer/src/generated/class-registrations-manifest.ts",
     "mj:manifest:mcp-server": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/AI/MCPServer --output ./packages/AI/MCPServer/src/generated/class-registrations-manifest.ts",
     "mj:manifest:codegen-api": "mj codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJCodeGenAPI --output ./packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts",
@@ -95,7 +101,9 @@
     "@changesets/cli": "^2.27.12",
     "@typescript-eslint/eslint-plugin": "7.12.0",
     "@typescript-eslint/parser": "7.12.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "baseline-browser-mapping": "^2.9.19",
+    "browserslist": "4.28.1",
     "caniuse-lite": "^1.0.30001764",
     "cpy-cli": "^5.0.0",
     "eslint": "8.56.0",
@@ -112,10 +120,8 @@
     "typedoc": "~0.28.0",
     "typedoc-plugin-missing-exports": "~4.1.0",
     "typescript": "5.9.3",
-    "browserslist": "4.28.1",
-    "vitest": "^4.0.18",
-    "@vitest/coverage-v8": "^4.0.18",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^4.0.18"
   },
   "overrides": {
     "@types/node": "20.14.2",

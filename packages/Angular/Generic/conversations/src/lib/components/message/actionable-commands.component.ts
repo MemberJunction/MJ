@@ -41,16 +41,15 @@ export class ActionableCommandsComponent {
   }
 
   /**
-   * Get button theme color based on command type
+   * Get button variant based on command type
    */
-  public getButtonTheme(command: ActionableCommand): 'base' | 'primary' | 'secondary' | 'tertiary' | 'info' | 'success' | 'warning' | 'error' | 'dark' | 'light' | 'inverse' {
-    // Use different themes for different command types
+  public getButtonVariant(command: ActionableCommand): 'primary' | 'secondary' | 'outline' | 'flat' {
     if (command.type === 'open:resource') {
       return 'primary';
     } else if (command.type === 'open:url') {
-      return 'info';
+      return 'outline';
     }
-    return 'base';
+    return 'secondary';
   }
 
   /**

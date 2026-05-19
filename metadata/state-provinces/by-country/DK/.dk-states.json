@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Århus",
+      "Code": "070",
+      "ISO3166_2": "DK-070",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Århus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "C93EF235-A3E7-4643-9C39-AD15940E42D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.430Z",
+      "checksum": "ce69174c8a846be695b4a3d3a1b136ca882988a3ac13a55ec3564faea496e513"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bornholm",
+      "Code": "040",
+      "ISO3166_2": "DK-040",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bornholm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "3CAA161B-B23A-4E0D-A084-82C56F3CC231"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.446Z",
+      "checksum": "b20d5b86935d59d0aad616645ea3642624ad653ede8da734aa2869a05310dd7d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Frederiksberg",
+      "Code": "147",
+      "ISO3166_2": "DK-147",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Frederiksberg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "A1D6213A-EB67-4A0F-B9A6-806F965E556C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.462Z",
+      "checksum": "6c7440abf07c8e7ea80f7ea70a049ee0af2dde4eb561a6f8a685ac2e76111d48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Frederiksborg",
+      "Code": "020",
+      "ISO3166_2": "DK-020",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Frederiksborg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "3CB77D0E-265B-4D83-BBF3-D2677630C962"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.478Z",
+      "checksum": "1826e3ff83da273635c12474c930a8c86692535e226f7d858f454c48487460eb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fyn",
+      "Code": "042",
+      "ISO3166_2": "DK-042",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Fyn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "6C18A136-DC63-4D77-B937-54649BC8E4A8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.497Z",
+      "checksum": "a3c830e0d1cd4d0c450ddac900d3a481293936766bb71cc0b04430d95c055072"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kǿbenhavn",
+      "Code": "101",
+      "ISO3166_2": "DK-101",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kǿbenhavn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "F486D95C-A687-4269-9F5E-3E7355AE45C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.515Z",
+      "checksum": "f74b877ddb8349afb228ff93a99125858c8768563e57ea41f5752ab922e4fcea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kǿbenhavn",
+      "Code": "015",
+      "ISO3166_2": "DK-015",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kǿbenhavn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "C0D361DA-D9BB-4B9D-A7FE-3FA1823F7CA8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.531Z",
+      "checksum": "14bd99557c3c2771763a214daad80243c2012a8b8b60fd0102d4df25c50f2fc2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nordjylland",
+      "Code": "080",
+      "ISO3166_2": "DK-080",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nordjylland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "9C998D84-0C8A-4522-91EF-718CEDBFAD44"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.548Z",
+      "checksum": "fc7c9a51a045bfcd4d0edc3cb3383f0e6aaadb4431adfcc80a89867266f7fbce"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ribe",
+      "Code": "055",
+      "ISO3166_2": "DK-055",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ribe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "D3C74074-3682-4EDF-824D-3B0D3FE0593F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.564Z",
+      "checksum": "a47addac1056bf36253e11def25995832a7638feec6f095499400882e53a79fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ringkǿbing",
+      "Code": "065",
+      "ISO3166_2": "DK-065",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Ringkǿbing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "5D7345E7-FC32-4133-86EC-15BC84F2C90F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.578Z",
+      "checksum": "bd81d4c9088a39704f6103704e8203eb710e4749a2f0b96622bd40af8c1f19d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Roskilde",
+      "Code": "025",
+      "ISO3166_2": "DK-025",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Roskilde"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "53032AB3-5FCA-41E7-B265-023D3BD29A9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.620Z",
+      "checksum": "7032f21d5959a568e805f01928b1a2386b35681f03cd2088351fde885a629444"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sǿnderjylland",
+      "Code": "050",
+      "ISO3166_2": "DK-050",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sǿnderjylland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "A3117C0A-56A8-4C01-900F-EE984B8A983E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.636Z",
+      "checksum": "a3a3cbdb92b7b3ebf7ec5d82697eb196a54807f535cfc35f61673be3a29e431b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Storstrǿm",
+      "Code": "035",
+      "ISO3166_2": "DK-035",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Storstrǿm"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "B080787A-1EF4-401C-88CE-01DFB5F947B1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.653Z",
+      "checksum": "1f883bb3d0ddc1ed7b9ca6ae7df660b509e8351ac3ddb9b39ec533a873dc0b5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vejle",
+      "Code": "060",
+      "ISO3166_2": "DK-060",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vejle"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "3AA8B1BC-CA67-4115-8F8B-8386AD3A876E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.669Z",
+      "checksum": "58ade7fc3983eab954ad611248d7a494744bf04e8a622cc397bc729820fda47c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vestsjælland",
+      "Code": "030",
+      "ISO3166_2": "DK-030",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vestsjælland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "D7BAFA22-C692-43FE-9A55-15DF800EF446"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.686Z",
+      "checksum": "3226c5fc356f5c61a30d42f506b5dd30dd99d56ff93e3addb4aa10c30470ef8b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Viborg",
+      "Code": "076",
+      "ISO3166_2": "DK-076",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Viborg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=DK"
+    },
+    "primaryKey": {
+      "ID": "332C9147-049C-4811-BDCF-DBA2EEEDDA13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:41.700Z",
+      "checksum": "f343f5b85ad247b7151500b154567813c261218fdafe09e7a556ad7e3e54e60f"
+    }
+  }
+]

@@ -1,0 +1,283 @@
+[
+  {
+    "fields": {
+      "Name": "Search",
+      "Description": "Executes a universal search across the organization's knowledge base using vector similarity, full-text, and entity LIKE-based search with Reciprocal Rank Fusion (RRF). Returns ranked, scored, and enriched results. Designed for AI agents, MCP connectors, A2A connectors, and workflow orchestration.",
+      "DriverClass": "__Internal_Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The search query text (required). Natural language query to search across all configured knowledge sources.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "52EEA173-A9DC-48C4-A8A9-DE4DA77D70DE"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.025Z",
+            "checksum": "9467cb6f3cdc3a5a2c02ba7f42bd1ea5df2c72c0e689df3561a742f065696c85"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "25",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return. Defaults to 25.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2E98D666-837C-43D1-96BB-BEE88FA575FA"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.060Z",
+            "checksum": "32e28b948d28e234e6ff9bd9b45ec2327c6ddd0460e6987e3f19ea82e66af28c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinScore",
+            "DefaultValue": "0",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum relevance score threshold (0-1). Results below this score are excluded after RRF fusion. Defaults to 0 (no filtering).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D6F3FA3E-C125-4554-B823-D2977457CBB0"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.095Z",
+            "checksum": "9f35ee7fd2b3a91a218d62fc1e5d95eaad8963bbd7c74cdb72d6c7faa32d1ce1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityNames",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of entity names to restrict search to (e.g., 'Documents,Knowledge Articles'). When omitted, searches all entities.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "667B8F7D-6A2E-4CBC-B2C9-18BFA55F1F81"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.128Z",
+            "checksum": "b79677a5d47e7ff6ca09004d8a950a27ceeafc2f3df0c6d7aa69787ba75e12b5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSources",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of search source types to include: 'vector', 'fulltext', 'entity'. When omitted, all available sources are used.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "91D8EFFE-B47F-4535-9CDD-9B6F890675A4"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.161Z",
+            "checksum": "0ce5a3c44664dce069bd4f333f07d3420b9074b5a36579005f5a2c72f293e6b7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tags",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of tags to filter results by. Only results with at least one matching tag are returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B86F8731-336B-4F74-B077-0CD334C2ECF3"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.193Z",
+            "checksum": "fef0299ede34897e4b76e21992d0e240fda29ddd7843b7fb9f0103e4e8617d0f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result objects, each containing: ID (search-provider-specific identifier — may differ from the actual record primary key for non-entity sources like storage files; always use RecordID when you need the exact primary key to load or navigate to a record), EntityName, RecordID (the actual primary key of the source record — use this to load, navigate to, or reference the record), SourceType, ResultType (entity-record|storage-file|content-item), Title, Snippet, Score, ScoreBreakdown (Vector/FullText/Entity/Storage), Tags, EntityIcon, RecordName, MatchedAt, and RawMetadata.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "72949CFB-AAA2-4760-B5C8-08DF929147AD"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.226Z",
+            "checksum": "da523710fdc7c25cf0fed113b6051afded2777fd38584a1ca3e8978941bc7721"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of results returned after filtering.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "71AA778C-C703-4E18-A196-F8C168C08D9D"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.258Z",
+            "checksum": "baf43fac50e74391d6701c8cadf77258326d29c6a1105f0e94610e3cb3f06dfe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ElapsedMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total search execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D6E5DBD8-0626-4771-93D3-60E7F9946402"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.291Z",
+            "checksum": "903d10aeab9f8158fc465370e7735ac430f4dc9211e02eca07ee1e3574207695"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceCounts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Object with counts of results contributed by each source before fusion: { Vector: number, FullText: number, Entity: number }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F0B78989-BDC8-4B27-A756-0A29C71BF220"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.320Z",
+            "checksum": "d67fdbc88e7cd97561a446c5ecd14c3b48785e7379164a225cfa329b6c111050"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed successfully."
+          },
+          "primaryKey": {
+            "ID": "B1835092-6384-48B7-A44D-56FDD5217273"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.377Z",
+            "checksum": "33c2eb7988460ba255e188f687c95b11d30aa50565ba24f4f48e39cc607862c1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "The required Query parameter was not provided."
+          },
+          "primaryKey": {
+            "ID": "D1DD5463-2490-4D84-83BE-85C99D951A2F"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.397Z",
+            "checksum": "23194527677b8d34a512670f2922d10ea0d7699131cf56d63da9b30d5fbc5f5a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_USER_CONTEXT",
+            "IsSuccess": false,
+            "Description": "User context is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "1457F987-A026-4658-91F5-3304F54E7A86"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.416Z",
+            "checksum": "d3dc7fb0671e9141140a5fa754e1d15579ddf2337e5cb436bd888fc656c465c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "The search engine returned an error during execution."
+          },
+          "primaryKey": {
+            "ID": "CDB32D43-818C-4349-AE3A-319E72C4443F"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.435Z",
+            "checksum": "469ba40eabcf6ffc1a34156e435088e14aea5eeaca9595122d03ae3f7e62bbc3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during search execution."
+          },
+          "primaryKey": {
+            "ID": "11E77FE3-524F-423E-87AE-79EE3AF8D75D"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:21.454Z",
+            "checksum": "04a6d36f25fe769d32caae91cdeb71a551023b264f139312bab5245d62ecf704"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "449CF6F8-2418-4C58-9EAE-5D67A9C76639"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:10:20.948Z",
+      "checksum": "4c16b3ea91f17fba3f638b1f19f74934031d88bf986960a1ff6e37d3e3f39b22"
+    }
+  }
+]

@@ -5,8 +5,10 @@ import {
   CompositeKey,
   DatabaseProviderBase,
   EntityFieldTSType,
+  EntityInfo,
   EntityPermissionType,
   EntitySaveOptions,
+  IMetadataProvider,
   IRunViewProvider,
   LogDebug,
   LogError,
@@ -65,7 +67,7 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns The processed data object
    */
-  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo): Promise<any> {
+  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
@@ -77,8 +79,8 @@ export class ResolverBase {
     // with the CodeName, because we can't transfer those via GraphQL as they are not
     // valid property names in GraphQL
     {
-      const md = new Metadata();
-      const entityInfo = md.Entities.find((e) => e.Name === entityName);
+      const md = provider ?? new Metadata();
+      const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
       // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
       const mapper = new FieldMapper();
@@ -153,11 +155,33 @@ export class ResolverBase {
           Key: mapper.ReverseMapFieldName(item.Key),
           Value: item.Value,
         }));
+      } else if (key === 'RestoreContext___') {
+        // Pass through the restore-context blob unchanged — its inner field
+        // names (SourceChangeID, Reason) are not entity-field names.
+        mapped[key] = input[key];
       } else {
         mapped[mapper.ReverseMapFieldName(key)] = input[key];
       }
     }
     return mapped;
+  }
+
+  /**
+   * Applies an inbound RestoreContext___ blob to a server-side BaseEntity.
+   * Mirrors the OldValues___ pattern — the client-side BaseEntity's
+   * `_restoreContext` doesn't traverse the network, so the server must
+   * reconstruct it from the mutation input before calling Save().
+   *
+   * Returns true when context was applied; false when no context was on the input.
+   */
+  protected applyRestoreContext(
+    entityObject: BaseEntity,
+    input: { RestoreContext___?: { SourceChangeID?: string; Reason?: string | null } | null },
+  ): boolean {
+    const ctx = input?.RestoreContext___;
+    if (!ctx || !ctx.SourceChangeID) return false;
+    entityObject.SetRestoreContext(ctx.SourceChangeID, ctx.Reason ?? null);
+    return true;
   }
 
   protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
@@ -187,12 +211,13 @@ export class ResolverBase {
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) return dataObject;
 
     // Find all encrypted fields that need filtering
@@ -247,13 +272,14 @@ export class ResolverBase {
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
     // Check if entity has any encrypted fields first to avoid unnecessary processing
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) return dataObjectArray;
 
     const encryptedFields = entityInfo.Fields.filter(f => f.Encrypt && !f.AllowDecryptInAPI);
@@ -261,7 +287,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
     }
 
     return dataObjectArray;
@@ -330,7 +356,10 @@ export class ResolverBase {
           userPayload,
           viewInput.MaxRows,
           viewInput.StartRow,
-          viewInput.Aggregates
+          viewInput.Aggregates,
+          viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined
         );
       }
       else {
@@ -479,6 +508,9 @@ export class ResolverBase {
           ignoreMaxRows: viewInput.IgnoreMaxRows,
           maxRows: viewInput.MaxRows,
           startRow: viewInput.StartRow,
+          afterKey: viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined,
           excludeDataFromAllPriorViewRuns: viewInput.EntityName ? false : viewInput.ExcludeDataFromAllPriorViewRuns,
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
@@ -540,9 +572,9 @@ export class ResolverBase {
     }
   }
 
-  protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null) {
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+  protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null, provider?: IMetadataProvider) {
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!userPayload) {
       throw new Error(`userPayload is null`);
     }
@@ -660,7 +692,8 @@ export class ResolverBase {
     userPayload: UserPayload | null,
     maxRows: number | undefined,
     startRow: number | undefined,
-    aggregates?: AggregateExpression[]
+    aggregates?: AggregateExpression[],
+    afterKey?: CompositeKey
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -719,6 +752,7 @@ export class ResolverBase {
           IgnoreMaxRows: ignoreMaxRows,
           MaxRows: maxRows,
           StartRow: startRow,
+          AfterKey: afterKey,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
@@ -774,10 +808,10 @@ export class ResolverBase {
       // Skip processing if no params
       if (!params.length) return [];
 
-      let md: Metadata | null = null;
+      let md: IMetadataProvider | null = null;
       const rv = params[0].provider as any as IRunViewProvider;
       let runViewParams: RunViewParams[] = [];
-      
+
       // Fix #1: Get user info only once for all queries
       let contextUser: UserInfo | null = null;
       if (params[0]?.userPayload?.email) {
@@ -788,10 +822,12 @@ export class ResolverBase {
         }
         contextUser = user;
       }
-      
+
       // Create a map of entities to validate only once per entity
       const validatedEntities = new Set<string>();
-      md = new Metadata();
+      // Use the per-request provider that came in on params instead of `new Metadata()` so
+      // multi-tenant servers resolve metadata against the request's own connection.
+      md = params[0].provider as unknown as IMetadataProvider;
 
       // Transform parameters
       for (const param of params) {
@@ -799,7 +835,7 @@ export class ResolverBase {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
           if (!validatedEntities.has(entityName)) {
-            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            const entityInfo = md.EntityByName(entityName);
             if (!entityInfo) {
               throw new Error(`Entity ${entityName} not found in metadata`);
             }
@@ -829,6 +865,7 @@ export class ResolverBase {
           IgnoreMaxRows: param.ignoreMaxRows,
           MaxRows: param.maxRows,
           StartRow: param.startRow,
+          AfterKey: param.afterKey,
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
@@ -976,7 +1013,7 @@ export class ResolverBase {
   }
 
   public get MJCoreSchema(): string {
-    return Metadata.Provider.ConfigData.MJCoreSchemaName;
+    return Metadata.Provider.ConfigData.MJCoreSchemaName; // global-provider-ok: process-wide config (schema name) read once at module level
   }
 
   /**
@@ -1053,7 +1090,17 @@ export class ResolverBase {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
       entityObject.NewRecord();
-      entityObject.SetMany(input);
+      // Strip the RestoreContext___ blob from the field assignments — it's
+      // metadata for the upcoming Save(), not a field on the record.
+      const fieldsForSet: Record<string, unknown> = {};
+      for (const key of Object.keys(input)) {
+        if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
+      }
+      entityObject.SetMany(fieldsForSet);
+
+      // Reconstruct the client-side restore context, if any, on this server
+      // entity so the data provider writes the lineage columns on Save().
+      this.applyRestoreContext(entityObject, input);
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
 
@@ -1095,10 +1142,11 @@ export class ResolverBase {
       const entityInfo = entityObject.EntityInfo;
       const clientNewValues = {};
       Object.keys(input).forEach((key) => {
-        if (key !== 'OldValues___') {
+        // Skip metadata blobs that aren't actual entity fields.
+        if (key !== 'OldValues___' && key !== 'RestoreContext___') {
           clientNewValues[key] = input[key];
         }
-      }); // grab all the props except for the OldValues property
+      });
 
       if (entityInfo.TrackRecordChanges || !input.OldValues___) {
         // We get here because EITHER the entity tracks record changes OR the client did not provide OldValues, so we need to load the old values from the DB
@@ -1140,8 +1188,12 @@ export class ResolverBase {
         entityObject.SetMany(clientNewValues);
       }
 
+      // Reconstruct the client-side restore context, if any, on this server
+      // entity so the data provider writes the lineage columns on Save().
+      this.applyRestoreContext(entityObject, input);
+
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-      
+
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
@@ -1319,9 +1371,10 @@ export class ResolverBase {
           }
         });
 
-        // Create ErrorLog record in the database
+        // Create ErrorLog record in the database — use the entity's bound provider so the
+        // ErrorLog write goes to the same connection as the entity that triggered it.
         try {
-          const md = new Metadata();
+          const md = entityObject.ProviderToUse as unknown as IMetadataProvider;
           const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
           errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
           errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;

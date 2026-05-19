@@ -200,6 +200,145 @@ describe('Composition Engine Edge Cases', () => {
     });
 
     // ================================================================
+    // CTE Hoisting — Production Failure Cases
+    // ================================================================
+    describe('CTE Hoisting — Production Failure Cases', () => {
+        it('should hoist CTE when dependency SQL has leading -- comments before WITH', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('leading comment block before WITH'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // Must NOT produce nested WITH — the inner CTE must be hoisted
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // Single WITH keyword
+            const withCount = (result.ResolvedSQL.match(/\bWITH\b/gi) || []).length;
+            expect(withCount).toBe(1);
+        });
+
+        it('should hoist CTE when dependency SQL has leading /* */ block comment before WITH', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('block comment'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+        });
+
+        it('should hoist CTE with complex EXISTS subquery inside CTE body', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('complex EXISTS'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // MemberActivities CTE must be hoisted, not nested
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // The EXISTS subquery must be preserved in the CTE body
+            expect(result.ResolvedSQL).toMatch(/EXISTS/i);
+        });
+
+        it('should hoist CTE from exact production failure SQL (comments + complex body + WHERE 1=1)', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('WHERE 1=1'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // Critical: must NOT produce nested WITH
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            // MemberActivities must be a top-level CTE
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            // Single WITH keyword in the output
+            const withCount = (result.ResolvedSQL.match(/\bWITH\b/gi) || []).length;
+            expect(withCount).toBe(1);
+            // The main SELECT body (WHERE 1=1 AND EXISTS) must be in the wrapper CTE, not hoisted
+            expect(result.ResolvedSQL).toMatch(/WHERE\s+1\s*=\s*1/i);
+        });
+
+        it('should hoist CTE when dependency has Nunjucks template tokens inside CTE body', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('Nunjucks template tokens inside CTE'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // Must NOT produce nested WITH
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/ScoredMembers\s+AS\s*\(/i);
+            // Template token should be preserved for later Nunjucks processing
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should hoist CTE when dependency has mixed -- and /* */ comments before WITH', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('mixed -- and /* */'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+            const withCount = (result.ResolvedSQL.match(/\bWITH\b/gi) || []).length;
+            expect(withCount).toBe(1);
+        });
+
+        it('should hoist CTEs when comments are interleaved between CTE definitions', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('interleaved between CTE'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/EventCounts/i);
+            expect(result.ResolvedSQL).toMatch(/EmailOpens/i);
+        });
+
+        it('should hoist CTE AND strip ORDER BY when dependency also has leading comments', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('combined stripping + hoisting'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // CTE must be hoisted (may be bracket-quoted: [ActivityCounts])
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/ActivityCounts/i);
+            // ORDER BY must be stripped
+            expect(result.ResolvedSQL).not.toMatch(/ORDER\s+BY\s+ActivityCount\s+DESC/i);
+        });
+
+        it('should hoist CTE when empty line separates comments from WITH', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('empty line between comments'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/MemberActivities\s+AS\s*\(/i);
+        });
+
+        it('should not confuse WITH inside string literals with actual CTE keyword', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('string literal that looks like WITH'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            // The actual CTE must be hoisted
+            expect(result.ResolvedSQL).toMatch(/RecentNotes\s+AS\s*\(/i);
+            // String literals with WITH must be preserved
+            expect(result.ResolvedSQL).toContain('WITH regard to');
+        });
+
+        it('should hoist CTE when Nunjucks {% if %} block is inside CTE body', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('conditional block wrapping'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/FilteredMembers\s+AS\s*\(/i);
+            expect(result.AnyDependencyUsesTemplates).toBe(true);
+        });
+
+        it('should hoist CTE with leading comments on PostgreSQL', () => {
+            const ec = CTE_HOISTING_EDGE_CASES.find(e => e.description.includes('PostgreSQL') && e.description.includes('leading comments'))!;
+            const { result } = setupAndResolve(ec);
+
+            expect(result.HasCompositions).toBe(true);
+            expect(result.ResolvedSQL).not.toMatch(/AS\s*\(\s*WITH/i);
+            expect(result.ResolvedSQL).toMatch(/member_activities\s+AS\s*\(/i);
+        });
+    });
+
+    // ================================================================
     // Multiple Dependencies
     // ================================================================
     describe('Multiple Dependencies', () => {

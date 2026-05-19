@@ -1,0 +1,126 @@
+@if (Result) {
+    <div class="detail-page" [class.detail-side-panel]="SidePanelMode">
+        <!-- Breadcrumb (full page mode only) -->
+        @if (!SidePanelMode) {
+            <nav class="detail-breadcrumb">
+                <button class="breadcrumb-back" (click)="GoBack()">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    Back to Search Results
+                </button>
+            </nav>
+        }
+
+        <div class="detail-layout">
+            <!-- Main Content -->
+            <div class="detail-main">
+                <!-- Header -->
+                <div class="detail-header">
+                    <div class="detail-header-icon">
+                        <i [class]="Result.SourceIcon"></i>
+                    </div>
+                    <div class="detail-header-info">
+                        <h1 class="detail-title">{{ Result.Title }}</h1>
+                        <div class="detail-meta">
+                            <span class="detail-meta-item">
+                                <i class="fa-solid fa-table"></i>
+                                {{ Result.EntityName }}
+                            </span>
+                            <span class="detail-meta-item">
+                                <i [class]="Result.SourceIcon"></i>
+                                {{ GetSourceTypeLabel(Result.SourceType) }}
+                            </span>
+                            <span class="detail-meta-item">
+                                <i class="fa-solid fa-key"></i>
+                                {{ Result.RecordID }}
+                            </span>
+                        </div>
+                    </div>
+                    <button class="detail-open-record-btn" (click)="OpenSourceRecord()">
+                        <i class="fa-solid fa-external-link-alt"></i>
+                        Open Record
+                    </button>
+                </div>
+
+                <!-- Score Section -->
+                <div class="detail-section">
+                    <h3 class="detail-section-title">
+                        <i class="fa-solid fa-chart-bar"></i>
+                        Relevance Score
+                    </h3>
+                    <div class="score-overview">
+                        <div class="score-main" [class]="GetScoreClass(Result.Score)">
+                            <span class="score-main-value">{{ FormatScore(Result.Score) }}</span>
+                            <span class="score-main-label">Overall Score</span>
+                        </div>
+                        <div class="score-breakdown">
+                            @for (entry of GetScoreBreakdownEntries(); track entry.Label) {
+                                <div class="score-bar-row">
+                                    <span class="score-bar-label">{{ entry.Label }}</span>
+                                    <div class="score-bar-track">
+                                        <div class="score-bar-fill" [style.width]="GetScoreBarWidth(entry.Score)" [class]="GetScoreClass(entry.Score)"></div>
+                                    </div>
+                                    <span class="score-bar-value">{{ FormatScore(entry.Score) }}</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Snippet Section -->
+                <div class="detail-section">
+                    <h3 class="detail-section-title">
+                        <i class="fa-solid fa-align-left"></i>
+                        Content Preview
+                    </h3>
+                    <div class="detail-snippet-box">
+                        <p class="detail-snippet">{{ Result.Snippet }}</p>
+                    </div>
+                </div>
+
+                <!-- Tags Section -->
+                @if (Result.Tags.length > 0) {
+                    <div class="detail-section">
+                        <h3 class="detail-section-title">
+                            <i class="fa-solid fa-tags"></i>
+                            Tags
+                        </h3>
+                        <div class="detail-tags">
+                            @for (tag of Result.Tags; track tag) {
+                                <span class="detail-tag">{{ tag }}</span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            <!-- Related Items Sidebar -->
+            <aside class="detail-sidebar">
+                <h3 class="sidebar-title">Related Items</h3>
+                @if (IsLoadingRelated) {
+                    <mj-loading text="Loading..." size="small"></mj-loading>
+                } @else if (RelatedItems.length === 0) {
+                    <div class="sidebar-empty">
+                        <i class="fa-solid fa-link sidebar-empty-icon"></i>
+                        <p>No related items found</p>
+                    </div>
+                } @else {
+                    @for (item of RelatedItems; track item.ID) {
+                        <div class="related-item" (click)="OnRelatedItemClick(item)">
+                            <i [class]="item.SourceIcon + ' related-item-icon'"></i>
+                            <div class="related-item-info">
+                                <span class="related-item-title">{{ item.Title }}</span>
+                                <span class="related-item-entity">{{ item.EntityName }}</span>
+                            </div>
+                            <span class="related-item-score">{{ FormatScore(item.Score) }}</span>
+                        </div>
+                    }
+                }
+            </aside>
+        </div>
+    </div>
+} @else {
+    <div class="detail-empty">
+        <i class="fa-solid fa-file-magnifying-glass detail-empty-icon"></i>
+        <p>Select a search result to view details</p>
+    </div>
+}

@@ -5,7 +5,8 @@ import {
     UserMenuContext,
     UserMenuActionResult,
     UserMenuOptions,
-    UserMenuDivider
+    UserMenuDivider,
+    UserDisplayInfo
 } from './user-menu.types';
 
 /**
@@ -118,8 +119,6 @@ export class BaseUserMenu {
      * Developer role AND developer mode is enabled.
      */
     public GetMenuItems(): UserMenuItem[] {
-        const devModeEnabled = this._context?.developerModeEnabled ?? false;
-
         return [
             // === PRIMARY GROUP ===
             {
@@ -133,42 +132,43 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'View and edit your profile'
             },
-
-            // === DEVELOPER GROUP (Only visible to developers) ===
             {
-                id: 'toggle-dev-mode',
-                label: devModeEnabled ? 'Developer Mode (On)' : 'Developer Mode (Off)',
-                icon: devModeEnabled ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off',
-                color: devModeEnabled ? '#4CAF50' : undefined,
-                group: 'developer',
-                order: 10,
-                developerOnly: true,
+                id: 'pin-to-home',
+                label: 'Pin to Home',
+                icon: 'fa-solid fa-house-chimney',
+                group: 'primary',
+                order: 20,
+                developerOnly: false,
                 visible: true,
                 enabled: true,
-                tooltip: 'Toggle developer tools visibility'
+                tooltip: 'Pin the current resource to your Home dashboard'
             },
             {
-                id: 'log-layout',
-                label: 'Log Layout (Debug)',
-                icon: 'fa-solid fa-terminal',
-                group: 'developer',
-                order: 20,
-                developerOnly: true,
-                visible: devModeEnabled,
+                id: 'sharing-center',
+                label: 'Sharing Center',
+                icon: 'fa-solid fa-share-nodes',
+                group: 'primary',
+                order: 25,
+                developerOnly: false,
+                visible: true,
                 enabled: true,
-                tooltip: 'Output current layout configuration to console'
+                tooltip: "See what you've shared and what's been shared with you"
             },
             {
-                id: 'inspect-state',
-                label: 'Inspect App State',
-                icon: 'fa-solid fa-magnifying-glass-chart',
-                group: 'developer',
+                id: 'submit-feedback',
+                label: 'Submit Feedback',
+                icon: 'fa-solid fa-comment-dots',
+                group: 'primary',
                 order: 30,
-                developerOnly: true,
-                visible: devModeEnabled,
+                developerOnly: false,
+                visible: this._context?.feedbackEnabled !== false,
                 enabled: true,
-                tooltip: 'View current application state in console'
+                tooltip: 'Report a bug or request a feature'
             },
+
+            // Developer tools live in the Admin app's "Developer Tools" section,
+            // not in this menu. The DeveloperModeService still exists for
+            // per-record dev affordances (e.g. "open in CodeGen" links).
 
             // === SYSTEM GROUP (Theme selection) ===
             ...this.BuildThemeMenuItems(),
@@ -182,6 +182,17 @@ export class BaseUserMenu {
                 visible: true,
                 enabled: true,
                 tooltip: 'Reset workspace to default layout'
+            },
+            {
+                id: 'about',
+                label: 'About MemberJunction',
+                icon: 'fa-solid fa-circle-info',
+                group: 'system',
+                order: 20,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Version, diagnostics, and links'
             },
 
             // === DANGER GROUP ===
@@ -213,7 +224,7 @@ export class BaseUserMenu {
         const elements: UserMenuElement[] = [];
 
         // Define group order
-        const groupOrder = ['primary', 'developer', 'system', 'danger'];
+        const groupOrder = this.GetGroupOrder();
         const sortedGroupKeys = Object.keys(groups).sort((a, b) => {
             const aIndex = groupOrder.indexOf(a);
             const bIndex = groupOrder.indexOf(b);
@@ -245,6 +256,14 @@ export class BaseUserMenu {
 
         // Check item's own visible flag
         return item.visible;
+    }
+
+    /**
+     * Get the ordered list of group names for menu rendering.
+     * Override to insert custom groups (e.g., 'organization' before 'primary').
+     */
+    protected GetGroupOrder(): string[] {
+        return ['primary', 'developer', 'system', 'danger'];
     }
 
     /**
@@ -308,56 +327,15 @@ export class BaseUserMenu {
     // ========================================
 
     /**
-     * Handle "My Profile" click - Opens user profile/settings
+     * Handle "My Profile" click — signals the shell to open the new
+     * Identity Card profile dialog. The shell wires this to ProfileDialogService.
      */
     protected async Handle_profile(): Promise<UserMenuActionResult> {
-        if (this._context?.openSettings) {
-            this._context.openSettings();
-        }
-        return { success: true, closeMenu: true };
-    }
-
-    /**
-     * Handle "Toggle Developer Mode" click
-     */
-    protected async Handle_toggle_dev_mode(): Promise<UserMenuActionResult> {
-        // This will be handled by the shell component which has access to DeveloperModeService
-        // The result signals that the menu should refresh to show the updated state
         return {
             success: true,
-            closeMenu: false, // Keep menu open to see updated state
-            message: 'toggle-dev-mode' // Special signal for shell to handle
+            closeMenu: true,
+            message: 'profile'
         };
-    }
-
-    /**
-     * Handle "Log Layout" click - Debug utility
-     */
-    protected async Handle_log_layout(): Promise<UserMenuActionResult> {
-        if (!this._context?.workspaceManager) {
-            return { success: false, closeMenu: true, message: 'Workspace manager not available' };
-        }
-
-        const config = this._context.workspaceManager.GetConfiguration();
-        console.log('📋 Workspace Configuration:', JSON.stringify(config, null, 2));
-        console.log('📋 Workspace Configuration (object):', config);
-
-        return { success: true, closeMenu: true };
-    }
-
-    /**
-     * Handle "Inspect App State" click - Debug utility
-     */
-    protected async Handle_inspect_state(): Promise<UserMenuActionResult> {
-        console.group('🔍 Application State Inspection');
-        console.log('User:', this._context?.userEntity);
-        console.log('Current App:', this._context?.currentApplication);
-        console.log('Developer Mode:', this._context?.developerModeEnabled);
-        console.log('Is Developer:', this._context?.isDeveloper);
-        console.log('Workspace Config:', this._context?.workspaceManager?.GetConfiguration());
-        console.groupEnd();
-
-        return { success: true, closeMenu: true };
     }
 
     /**
@@ -400,6 +378,54 @@ export class BaseUserMenu {
         await this._context.authService.logout();
 
         return { success: true, closeMenu: true };
+    }
+
+    // ========================================
+    // PIN TO HOME HELPERS
+    // ========================================
+
+    /**
+     * Handle "Pin to Home" click - signals the shell to pin the active resource
+     */
+    protected async Handle_pin_to_home(): Promise<UserMenuActionResult> {
+        // Signal the shell to handle the actual pinning (it has access to DI and the active tab)
+        // The shell's handler checks for Home app and duplicate pin conditions
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'pin-to-home'
+        };
+    }
+
+    /**
+     * Handle "Sharing Center" click — signals the shell to open the dialog.
+     * The shell has access to `ViewContainerRef` and the dialog service; the
+     * menu only needs to report the intent.
+     */
+    protected async Handle_sharing_center(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'sharing-center'
+        };
+    }
+
+    /** Signal the shell to open the feedback dialog */
+    protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'submit-feedback'
+        };
+    }
+
+    /** Signal the shell to open the About dialog */
+    protected async Handle_about(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'about'
+        };
     }
 
     // ========================================
@@ -466,7 +492,7 @@ export class BaseUserMenu {
     /**
      * Get user display information for menu header
      */
-    public GetUserDisplayInfo(): { name: string; email: string; avatarUrl: string | null; initials: string } {
+    public GetUserDisplayInfo(): UserDisplayInfo {
         const user = this._context?.userEntity;
         const name = user?.Name || this._context?.user?.Name || 'User';
         const email = user?.Email || '';

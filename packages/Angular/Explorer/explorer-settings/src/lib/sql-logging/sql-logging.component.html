@@ -198,8 +198,9 @@
                         </span>
                       </div>
                     </div>
-                    <button
-                      class="action-btn action-btn-danger"
+                    <button mjButton
+                      variant="danger"
+                      size="sm"
                       (click)="openStopSessionConfirm(session, $event)"
                       [attr.aria-label]="'Stop session ' + session.sessionName"
                     >
@@ -242,15 +243,17 @@
                     />
                     Auto-refresh
                   </label>
-                  <button
-                    class="action-btn"
+                  <button mjButton
+                    variant="flat"
+                    size="sm"
                     (click)="loadSessionLog(selectedSession)"
                     aria-label="Refresh log content"
                   >
                     <i class="fa-solid fa-sync" [class.fa-spin]="loading" aria-hidden="true"></i>
                   </button>
-                  <button
-                    class="action-btn"
+                  <button mjButton
+                    variant="flat"
+                    size="sm"
                     (click)="toggleLogViewerExpand()"
                     [attr.aria-label]="isLogViewerExpanded ? 'Collapse log viewer' : 'Expand log viewer to fullscreen'"
                     [attr.aria-expanded]="isLogViewerExpanded"

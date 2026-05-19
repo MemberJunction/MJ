@@ -1,5 +1,65 @@
 # @memberjunction/installer
 
+## 5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+
+## 5.33.0
+
+## 5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+
+## 5.30.1
+
+## 5.30.0
+
+## 5.29.0
+
+## 5.28.0
+
+## 5.27.1
+
+## 5.27.0
+
+## 5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- f322a53: Add dual-mode installer supporting both distribution and monorepo installation methods.
+
+## 5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- b589bef: Switch installer from distribution bootstrap ZIP to full monorepo source download. The installer now downloads the complete MemberJunction repository via GitHub's codeload CDN (not rate-limited) instead of the smaller bootstrap distribution ZIP.
+
+## 5.22.0
+
+## 5.21.0
+
+## 5.20.0
+
+## 5.19.0
+
+## 5.18.0
+
+## 5.17.0
+
+## 5.16.0
+
 ## 5.15.0
 
 ## 5.14.0

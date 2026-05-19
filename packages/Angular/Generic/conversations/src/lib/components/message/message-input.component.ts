@@ -1,11 +1,11 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
-import { ConversationDataService } from '../../services/conversation-data.service';
 import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMetadata } from '../../services/conversation-streaming.service';
@@ -19,9 +19,10 @@ import { Mention, MentionParseResult } from '../../models/conversation-state.mod
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { Subscription } from 'rxjs';
 import { MessageInputBoxComponent } from './message-input-box.component';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
 
 @Component({
   standalone: false,
@@ -29,7 +30,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'
 })
-export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
+export class MessageInputComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit  {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
   private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
@@ -47,6 +48,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() systemArtifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded system artifact data (Visibility='System Only')
   @Input() agentRunsByDetailId?: Map<string, MJAIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
+  @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
@@ -118,6 +120,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
   @Output() emptyStateSubmit = new EventEmitter<{text: string; attachments: PendingAttachment[]}>(); // Emitted when in emptyStateMode
   @Output() uploadStateChanged = new EventEmitter<{isUploading: boolean; message: string}>(); // Emits when attachment upload state changes
+  @Output() artifactPickerRequested = new EventEmitter<void>(); // Emits when user clicks "Attach Artifact"
 
   @ViewChild('inputBox') inputBox!: MessageInputBoxComponent;
 
@@ -137,20 +140,30 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
 
+  private engine = ConversationEngine.Instance;
+
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationData: ConversationDataService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private streamingService: ConversationStreamingService,
     private mentionParser: MentionParserService,
     private mentionAutocomplete: MentionAutocompleteService,
-    private attachmentService: ConversationAttachmentService
-  ) {}
+    private attachmentService: ConversationAttachmentService,
+    private bridge: ConversationBridgeService
+  ) {
+  super();}
 
   async ngOnInit() {
+    // Bind provider-aware services to this component's provider.
+    const p = this.ProviderToUse;
+    this.agentService.Provider = p;
+    this.dataCache.Provider = p;
+    this.activeTasks.Provider = p;
+    this.attachmentService.Provider = p;
+
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
     // Initialize mention autocomplete (needed for parsing mentions in messages)
@@ -336,6 +349,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    */
   onAttachmentError(error: string): void {
     this.toastService.error(error);
+  }
+
+  /**
+   * Handle artifact picker request — bubble up to parent
+   */
+  onArtifactPickerRequested(): void {
+    this.artifactPickerRequested.emit();
   }
 
   /**
@@ -648,7 +668,23 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Handles routing when there's a previous agent - checks intent first
+   * Handles routing when there's a previous non-Sage agent in the conversation.
+   *
+   * LATENCY OPTIMIZATION (PR #2309 / plans/agent-latency-optimization.md — Opt #1):
+   * Previously, this method made a separate LLM call via checkContinuityIntent() to decide
+   * whether the user's new message was still directed at the previous agent or should be
+   * routed to Sage. That call added ~300ms of latency on every message in a conversation
+   * with an active agent — the single largest source of non-inference overhead on the client.
+   *
+   * The heuristic replacement is simple: if a previous non-Sage agent exists, always continue
+   * with it. The user can @mention a different agent (or Sage) to explicitly switch. This is
+   * more predictable and eliminates a common source of confusion where the intent check
+   * incorrectly rerouted messages away from the active agent.
+   *
+   * The checkContinuityIntent() method and the underlying checkAgentContinuityIntent() service
+   * method are preserved (not deleted) so we can reintroduce intent checking in the future
+   * when browser-local inference is fast enough (~20-50ms) to do this without blocking the
+   * user. See PR #2309 for the full discussion.
    */
   private async handleAgentContinuity(
     messageDetail: MJConversationDetailEntity,
@@ -656,26 +692,39 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     mentionResult: MentionParseResult,
     isFirstMessage: boolean
   ): Promise<void> {
-    const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    // COMMENTED OUT — LLM intent check removed for latency optimization (see JSDoc above).
+    // const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    //
+    // if (intentResult.decision === 'YES') {
+    //   await this.executeRouteWithNaming(
+    //     () => this.continueWithAgent(
+    //       messageDetail,
+    //       lastAgentId,
+    //       this.conversationId,
+    //       intentResult.targetArtifactVersionId
+    //     ),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // } else {
+    //   await this.executeRouteWithNaming(
+    //     () => this.processMessageThroughAgent(messageDetail, mentionResult),
+    //     messageDetail.Message,
+    //     isFirstMessage
+    //   );
+    // }
 
-    if (intentResult.decision === 'YES') {
-      await this.executeRouteWithNaming(
-        () => this.continueWithAgent(
-          messageDetail,
-          lastAgentId,
-          this.conversationId,
-          intentResult.targetArtifactVersionId
-        ),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    } else {
-      await this.executeRouteWithNaming(
-        () => this.processMessageThroughAgent(messageDetail, mentionResult),
-        messageDetail.Message,
-        isFirstMessage
-      );
-    }
+    // Always continue with the previous agent — user can @mention another agent to switch.
+    await this.executeRouteWithNaming(
+      () => this.continueWithAgent(
+        messageDetail,
+        lastAgentId,
+        this.conversationId,
+        undefined // artifact version targeting unavailable without intent check
+      ),
+      messageDetail.Message,
+      isFirstMessage
+    );
   }
 
   /**
@@ -933,7 +982,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Sage')
+        this.createProgressCallback(conversationManagerMessage, 'Sage'),
+        this.appContext
       );
 
       // Task will be removed automatically in markMessageComplete()
@@ -2178,7 +2228,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const promptId = p.ID;
 
       // Use GraphQL AI client to run the prompt (same client as agent)
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.ProviderToUse as GraphQLDataProvider;
       if (!provider) {
         console.warn('⚠️ GraphQLDataProvider not available');
         return;
@@ -2208,16 +2258,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       ]);
 
       if (result && result.success && (result.parsedResult || result.output)) {
-        // Use parsedResult if available, otherwise parse output
+        // Use parsedResult if available, otherwise clean and parse output
+        // (CleanAndParseJSON handles markdown code blocks like ```json ... ```)
         const parsed = result.parsedResult ||
-          (result.output ? JSON.parse(result.output) : null);
+          (result.output ? CleanAndParseJSON(result.output) : null);
 
         if (parsed) {
           const { name, description } = parsed;
 
           if (name) {
             // Update the conversation name and description in database AND state immediately
-            await this.conversationData.saveConversation(
+            await this.engine.SaveConversation(
               this.conversationId,
               { Name: name, Description: description || '' },
               this.currentUser
@@ -2275,12 +2326,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       this.activeTasks.remove(task.id);
 
-      // Show completion notification
-      MJNotificationService.Instance?.CreateSimpleNotification(
-        `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
-        'success',
-        3000
-      );
+      // Show toast only if the user isn't currently viewing this conversation.
+      // If they're watching, the inline completion is sufficient.
+      const isConvoVisible = UUIDsEqual(this.bridge.ActiveConversationID$.value, task.conversationId)
+        && (this.bridge.OverlayActive$.value || this.bridge.WorkspaceActive$.value);
+      if (!isConvoVisible) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `${task.agentName} completed in ${task.conversationName || 'conversation'}`,
+          'success',
+          3000
+        );
+      }
     } else {
       console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
     }

@@ -1,0 +1,157 @@
+{
+  "name": "SimpleMap",
+  "title": "Simple Map",
+  "description": "@file:../../descriptions/generic/simple-map.md",
+  "type": "map",
+  "location": "embedded",
+  "functionalRequirements": "@file:../../functional-requirements/generic/simple-map.md",
+  "technicalDesign": "@file:../../technical-design/generic/simple-map.md",
+  "properties": [
+    {
+      "name": "data",
+      "type": "array",
+      "description": "Array of records to display on the map. Same contract as SimpleChart and DataGrid.",
+      "required": true
+    },
+    {
+      "name": "latitudeField",
+      "type": "string",
+      "description": "Field name for latitude values. Defaults to __mj_Latitude for MJ geo-enabled entities.",
+      "required": false,
+      "defaultValue": "__mj_Latitude"
+    },
+    {
+      "name": "longitudeField",
+      "type": "string",
+      "description": "Field name for longitude values. Defaults to __mj_Longitude for MJ geo-enabled entities.",
+      "required": false,
+      "defaultValue": "__mj_Longitude"
+    },
+    {
+      "name": "entityName",
+      "type": "string",
+      "description": "Entity name for metadata-aware formatting and OpenEntityRecord integration.",
+      "required": false
+    },
+    {
+      "name": "entityPrimaryKeys",
+      "type": "array",
+      "description": "Array of primary key field names for record opening (same pattern as DataGrid).",
+      "required": false
+    },
+    {
+      "name": "renderMode",
+      "type": "string",
+      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity, 'boundary' for rendering one GeoJSON polygon per record using the boundaryField prop.",
+      "required": false,
+      "defaultValue": "point",
+      "possibleValues": ["point", "choropleth", "heatmap", "boundary"]
+    },
+    {
+      "name": "clusterMarkers",
+      "type": "boolean",
+      "description": "Enable marker clustering in point mode via L.markerClusterGroup when available.",
+      "required": false,
+      "defaultValue": true
+    },
+    {
+      "name": "clusterRadius",
+      "type": "number",
+      "description": "Radius in degrees for spatial clustering in heatmap mode. Larger values produce fewer, larger clusters.",
+      "required": false,
+      "defaultValue": 2.0
+    },
+    {
+      "name": "height",
+      "type": "number",
+      "description": "Map height in pixels.",
+      "required": false,
+      "defaultValue": 400
+    },
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Optional map title displayed above the map.",
+      "required": false
+    },
+    {
+      "name": "popupFields",
+      "type": "array",
+      "description": "Field names to show in marker popup. Auto-detects from entity metadata if omitted. NOTE: Present in function signature but not yet implemented; currently has no effect.",
+      "required": false
+    },
+    {
+      "name": "center",
+      "type": "object",
+      "description": "Initial map center as { lat, lng }. Auto-fits to data bounds if omitted.",
+      "required": false
+    },
+    {
+      "name": "zoom",
+      "type": "number",
+      "description": "Initial zoom level (1-18). Auto-fits to data if omitted.",
+      "required": false
+    },
+    {
+      "name": "colors",
+      "type": "array",
+      "description": "Custom color palette for choropleth regions. Array of hex color strings.",
+      "required": false
+    },
+    {
+      "name": "countryField",
+      "type": "string",
+      "description": "Field name used to group records by country in choropleth mode.",
+      "required": false,
+      "defaultValue": "Country"
+    },
+    {
+      "name": "boundaryField",
+      "type": "string",
+      "description": "Field name containing GeoJSON boundary data on each record. Used with renderMode='boundary' to render one polygon per record. If a record lacks boundary data, falls back to a centroid marker using lat/lng fields.",
+      "required": false
+    },
+    {
+      "name": "maxPopupRecords",
+      "type": "number",
+      "description": "Maximum number of records to show as clickable links in cluster/region popups before showing 'and X more...' overflow text.",
+      "required": false,
+      "defaultValue": 5
+    }
+  ],
+  "events": [
+    {
+      "name": "onRegionClick",
+      "description": "Fired when a choropleth region polygon or heatmap density circle is clicked. Emits all records within that region/cluster. Invoked via the callbacks object (callbacks.onRegionClick), not as a direct prop.",
+      "parameters": [
+        { "name": "region", "type": "string", "description": "Region or cluster name (country name or 'Cluster (N records)')" },
+        { "name": "records", "type": "array", "description": "All records within the clicked region" },
+        { "name": "groupBy", "type": "string", "description": "Grouping level: 'country' for choropleth, 'state_province' for heatmap clusters" },
+        { "name": "count", "type": "number", "description": "Number of records in the region" }
+      ]
+    },
+    {
+      "name": "onMapRendered",
+      "description": "Fired after the map finishes rendering markers, heatmap circles, or choropleth polygons. Invoked via the callbacks object (callbacks.onMapRendered), not as a direct prop.",
+      "parameters": [
+        { "name": "renderMode", "type": "string", "description": "Current render mode (point, heatmap, choropleth)" },
+        { "name": "markerCount", "type": "number", "description": "Number of records with valid coordinates rendered" },
+        { "name": "bounds", "type": "object", "description": "Map bounds as { north, south, east, west }" }
+      ]
+    }
+  ],
+  "libraries": [
+    {
+      "name": "leaflet",
+      "version": "1.9.4",
+      "globalVariable": "L"
+    },
+    {
+      "name": "geo-maps",
+      "version": "^5",
+      "globalVariable": "MapCore"
+    }
+  ],
+  "code": "@file:../../code/generic/simple-map.js",
+  "exampleUsage": "React.createElement(SimpleMap, { data: records, entityName: 'Organizations', entityPrimaryKeys: ['ID'], renderMode: 'choropleth', height: 500, utilities: utilities, callbacks: callbacks })"
+}

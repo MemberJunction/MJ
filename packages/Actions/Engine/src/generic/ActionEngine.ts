@@ -1,8 +1,19 @@
 import { LogError, Metadata } from "@memberjunction/core";
-import { MJActionExecutionLogEntity, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { MJActionExecutionLogEntity, MJActionEntity_IRuntimeActionConfiguration, MJActionFilterEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJGlobal, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { BaseAction } from "./BaseAction";
-import { ActionEngineBase, MJActionEntityExtended, ActionParam, ActionResult, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import {
+    ActionEngineBase,
+    MJActionEntityExtended,
+    ActionParam,
+    ActionResult,
+    ActionResultSimple,
+    RunActionParams,
+    RuntimeActionConfigurationSchema,
+    RuntimeActionBridgeBuilder
+} from "@memberjunction/actions-base";
+import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
+import type { BridgeHandlerMap } from "@memberjunction/code-execution";
 
  
 
@@ -15,6 +26,17 @@ export class ActionEngineServer extends ActionEngineBase {
 
    public static get Instance(): ActionEngineServer {
       return super.getInstance<ActionEngineServer>();
+   }
+
+   /**
+    * Engine-default wall-clock timeout applied to any action whose
+    * `MaxExecutionTimeMS` is NULL. Intentionally generous (2 hours) because
+    * some integration actions do legitimately long sync work; per-action
+    * overrides should be used to tighten this for anything agent-facing.
+    * Sub-classes can override to globally change the default.
+    */
+   protected get DefaultActionTimeoutMS(): number {
+      return 2 * 60 * 60 * 1000;
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
@@ -51,8 +73,98 @@ export class ActionEngineServer extends ActionEngineBase {
          }
       }
 
-      const runActionResult = await this.InternalRunAction(params);
-      return runActionResult;
+      return await this.RunActionWithTimeout(params);
+   }
+
+   /**
+    * Wraps `InternalRunAction()` with a universal wall-clock timeout
+    * (`Action.MaxExecutionTimeMS`, falling back to `DefaultActionTimeoutMS`)
+    * and an `AbortSignal` passed to the action via `params.AbortSignal`.
+    *
+    * Enforcement is cooperative: when the timeout fires we set an abort on
+    * the signal so in-flight `fetch`/`setTimeout`/custom polling logic can
+    * short-circuit, and we race the action against a rejection that surfaces
+    * a `TIMEOUT` result. If the caller already supplied an `AbortSignal`
+    * (e.g. when being run from a Runtime-action bridge that has its own
+    * abort), we chain to it so either source can trigger cancellation.
+    */
+   protected async RunActionWithTimeout(params: RunActionParams): Promise<ActionResult> {
+      const actionTimeoutMS = params.Action.MaxExecutionTimeMS ?? this.DefaultActionTimeoutMS;
+
+      // Chain with any upstream AbortSignal (e.g. Runtime-action bridge).
+      const controller = new AbortController();
+      const externalSignal = params.AbortSignal;
+      const relayExternalAbort = () => {
+         if (!controller.signal.aborted) {
+            controller.abort(externalSignal?.reason ?? 'upstream abort');
+         }
+      };
+      if (externalSignal) {
+         if (externalSignal.aborted) {
+            relayExternalAbort();
+         } else {
+            externalSignal.addEventListener('abort', relayExternalAbort, { once: true });
+         }
+      }
+
+      // Wall-clock timeout.
+      const timeoutId = setTimeout(() => {
+         if (!controller.signal.aborted) {
+            controller.abort(`Action '${params.Action.Name}' exceeded MaxExecutionTimeMS (${actionTimeoutMS}ms)`);
+         }
+      }, actionTimeoutMS);
+
+      // Assign the chained signal onto params so BaseAction subclasses can poll it.
+      const previousSignal = params.AbortSignal;
+      params.AbortSignal = controller.signal;
+
+      try {
+         const timeoutPromise = new Promise<ActionResult>((_resolve, reject) => {
+            controller.signal.addEventListener(
+               'abort',
+               () => {
+                  reject(new Error(String(controller.signal.reason ?? 'aborted')));
+               },
+               { once: true }
+            );
+         });
+
+         try {
+            return await Promise.race([this.InternalRunAction(params), timeoutPromise]);
+         } catch (err) {
+            // Timeout or upstream abort — return a standard TIMEOUT result.
+            // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
+            // exists on every action; the Success flag + Message are the canonical
+            // failure signal for timeouts).
+            if (controller.signal.aborted) {
+               const message =
+                  typeof controller.signal.reason === 'string'
+                     ? controller.signal.reason
+                     : `Action '${params.Action.Name}' was aborted`;
+               const timeoutResult: ActionResult = {
+                  Success: false,
+                  Message: message,
+                  LogEntry: null,
+                  Params: params.Params,
+                  RunParams: params,
+                  Result: undefined
+               };
+               if (!params.SkipActionLog) {
+                  timeoutResult.LogEntry = await this.StartAndEndActionLog(params, timeoutResult);
+               }
+               return timeoutResult;
+            }
+            // Real runtime error unrelated to abort — rethrow so upstream handling catches it.
+            throw err;
+         }
+      } finally {
+         clearTimeout(timeoutId);
+         if (externalSignal) {
+            externalSignal.removeEventListener('abort', relayExternalAbort);
+         }
+         // Restore whatever AbortSignal the caller had in place so we don't leak our own.
+         params.AbortSignal = previousSignal;
+      }
    }
    
 
@@ -125,22 +237,19 @@ export class ActionEngineServer extends ActionEngineBase {
    }
 
    protected async InternalRunAction(params: RunActionParams): Promise<ActionResult> {
-      // this is where the actual action code will be implemented
-      // first, let's get the right BaseAction derived sub-class for this particular action
-      // using ClassFactory
       let logEntry: MJActionExecutionLogEntity | undefined;
       if(!params.SkipActionLog){
          logEntry = await this.StartActionLog(params);
       }
 
       try {
-         const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(BaseAction, params.Action.DriverClass || params.Action.Name, params.ContextUser);
-         if (!action || action.constructor === BaseAction) {
-            throw new Error(`Could not find a class for action ${params.Action.Name}.`);
-         }
-         
-         // we now have the action class for this particular action, so run it
-         const simpleResult: ActionResultSimple = await action.Run(params);
+         // Branch by Action.Type. Runtime actions go through the sandboxed
+         // RuntimeActionExecutor; Custom / Generated (and legacy rows where
+         // Type may be null) flow through the existing ClassFactory path.
+         const simpleResult: ActionResultSimple =
+            params.Action.Type === 'Runtime'
+               ? await this.RunRuntimeAction(params)
+               : await this.RunClassBasedAction(params);
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined = this.ActionResultCodes.find(r => UUIDsEqual(r.ActionID, params.Action.ID) &&
                                                                r.ResultCode.trim().toLowerCase() === simpleResult.ResultCode.trim().toLowerCase());
@@ -150,7 +259,7 @@ export class ActionEngineServer extends ActionEngineBase {
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
             LogEntry: logEntry,
-            Params: simpleResult.Params || params.Params, // use the params from the simple result if provided, otherwise use the original params
+            Params: simpleResult.Params || params.Params,
             Result: resultCodeEntity
          };
 
@@ -180,9 +289,136 @@ export class ActionEngineServer extends ActionEngineBase {
       }
    }
 
+   /**
+    * Resolves and runs a Custom / Generated action via the ClassFactory.
+    * This is the pre-existing path — factored out of `InternalRunAction` so
+    * the Type dispatch is readable.
+    */
+   protected async RunClassBasedAction(params: RunActionParams): Promise<ActionResultSimple> {
+      const action = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAction>(
+         BaseAction,
+         params.Action.DriverClass || params.Action.Name,
+         params.ContextUser
+      );
+      if (!action || action.constructor === BaseAction) {
+         throw new Error(`Could not find a class for action ${params.Action.Name}.`);
+      }
+      return await action.Run(params);
+   }
+
+   /**
+    * Runs an `Action.Type='Runtime'` action by delegating to the sandboxed
+    * RuntimeActionExecutor. Approval / Status / Code-presence checks are
+    * enforced inside the executor; here we parse the RuntimeActionConfiguration,
+    * build the permissioned bridge-handler map, and hand it off.
+    *
+    * The bridge handlers run in-process on the host (not inside the sandbox)
+    * so they have full access to Metadata, RunView, ActionEngine, etc.
+    * Permission enforcement against `RuntimeActionConfiguration.permissions`
+    * happens inside each handler — see `RuntimeActionBridge.ts`.
+    *
+    * If the configuration is missing or malformed, we still let the action
+    * run in pure-compute mode (no bridge). The action's Code can then only
+    * use `input` + `libs`; any attempt to call `utilities.*` at runtime
+    * rejects with a "handler not registered" error from the worker pool.
+    */
+   protected async RunRuntimeAction(params: RunActionParams): Promise<ActionResultSimple> {
+      // Extract + validate the RuntimeActionConfiguration JSON blob. Uses
+      // the strongly-typed accessor from @memberjunction/core-entities
+      // (emitted by the JSONType codegen) rather than parsing the raw string.
+      const actionEntity = params.Action as unknown as {
+         RuntimeActionConfigurationObject?: unknown;
+      };
+      const rawConfig = actionEntity.RuntimeActionConfigurationObject;
+
+      let bridgeHandlers: BridgeHandlerMap | undefined;
+      let preamble = '';
+      let maxBridgeCalls: number | undefined;
+
+      if (rawConfig) {
+         const parsed = RuntimeActionConfigurationSchema.safeParse(rawConfig);
+         if (!parsed.success) {
+            return {
+               Success: false,
+               ResultCode: 'INVALID_CONFIG',
+               Message:
+                  `Runtime action '${params.Action.Name}' has a malformed ` +
+                  `RuntimeActionConfiguration: ${parsed.error.message}`,
+               Params: params.Params
+            };
+         }
+         // Cast to the JSONType-emitted interface: the Zod-inferred type
+         // has optional fields due to how `z.object()` composes with this
+         // repo's non-strict TS config; the runtime validation above has
+         // already proven the shape is valid, so the narrowing cast is safe.
+         const config = parsed.data as unknown as MJActionEntity_IRuntimeActionConfiguration;
+
+         // Resolve the concrete bridge builder via MJ's ClassFactory. The
+         // implementation lives in `@memberjunction/action-runtime-host`
+         // (top of the stack — can statically import AIEngine, AgentRunner,
+         // ActionEngineServer, etc. without creating a cycle). If nothing
+         // is registered (the host package wasn't imported), we fall through
+         // to pure-compute mode: the user's Runtime action still runs, it
+         // just can't call any `utilities.*` bridge namespaces.
+         const builder = MJGlobal.Instance.ClassFactory.CreateInstance<RuntimeActionBridgeBuilder>(
+            RuntimeActionBridgeBuilder
+         );
+         if (builder) {
+            bridgeHandlers = builder.BuildHandlers({
+               action: params.Action,
+               config,
+               contextUser: params.ContextUser,
+               abortSignal: params.AbortSignal,
+               provider: params.Provider
+            });
+            preamble = builder.GetPreamble();
+         }
+         maxBridgeCalls = config.limits?.maxBridgeCalls;
+      }
+
+      // If we built a preamble, inject it BEFORE the user's code so
+      // `globalThis.utilities` is available from the first line. The
+      // executor wraps everything in an async IIFE — the preamble runs
+      // inside that same IIFE.
+      const codeToRun = preamble
+         ? `${preamble}\n${params.Action.Code ?? ''}`
+         : params.Action.Code ?? '';
+
+      // We mutate a defensive copy of the action entity so the executor sees
+      // the prepended preamble without modifying the live MJActionEntity
+      // instance (which the rest of the ActionEngine may still reference).
+      const actionForExecution = Object.create(
+         Object.getPrototypeOf(params.Action),
+         Object.getOwnPropertyDescriptors(params.Action)
+      ) as typeof params.Action;
+      // The executor checks `action.Code`; override just that getter.
+      Object.defineProperty(actionForExecution, 'Code', {
+         value: codeToRun,
+         writable: false,
+         enumerable: true,
+         configurable: true
+      });
+
+      const execResult = await RuntimeActionExecutor.Instance.execute({
+         action: actionForExecution,
+         params: params.Params ?? [],
+         contextUser: params.ContextUser,
+         abortSignal: params.AbortSignal,
+         bridgeHandlers,
+         maxBridgeCalls
+      });
+
+      return {
+         Success: execResult.success,
+         ResultCode: execResult.resultCode,
+         Message: execResult.message,
+         Params: execResult.params
+      };
+   }
+
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
-      const md = new Metadata();
+      const md = params.Provider ?? new Metadata();
       const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;
@@ -204,7 +440,13 @@ export class ActionEngineServer extends ActionEngineBase {
    protected async EndActionLog(logEntity: MJActionExecutionLogEntity, params: RunActionParams, result: ActionResult) {
       // this is where the log entry for the action run will be created
       logEntity.EndedAt = new Date();
-      logEntity.Params = JSON.stringify(params.Params);
+      // Persist the final merged param set (inputs + outputs) — Runtime actions
+      // return a fresh array from the sandbox executor that lives on
+      // `result.Params`, so logging `params.Params` would lose every new output
+      // key. Custom/Generated actions mutate `params.Params` in place, and
+      // `result.Params` falls back to that same reference, so they remain
+      // equivalent.
+      logEntity.Params = JSON.stringify(result.Params ?? params.Params);
       logEntity.ResultCode = result.Result?.ResultCode;
       logEntity.Message = result.Message;
       

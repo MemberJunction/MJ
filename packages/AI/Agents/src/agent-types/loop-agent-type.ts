@@ -12,7 +12,7 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse } from './loop-agent-response-type';
@@ -114,6 +114,8 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     terminate: true, // Chat always terminates to return to user
                     payloadChangeRequest: response.payloadChangeRequest,
+                    scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands,
@@ -122,8 +124,13 @@ export class LoopAgentType extends BaseAgentType {
                 });
             }
 
-            // Check if task is complete
-            if (response.taskComplete) {
+            // Check if task is complete — but if client tools are declared, execute them first.
+            // Client tools are yield/await: the LLM can't know the result until they execute.
+            // After tools run, executeClientToolsStep calls executePromptStep which re-enters
+            // the LLM loop. If taskComplete was true, the LLM will naturally complete on the
+            // next iteration after seeing tool results.
+            const hasClientTools = response.nextStep?.clientTools && response.nextStep.clientTools.length > 0;
+            if (response.taskComplete && !hasClientTools) {
                 LogStatusEx({
                     message: '✅ Loop Agent: Task completed successfully. Message: ' + response.message,
                     verboseOnly: true
@@ -133,6 +140,8 @@ export class LoopAgentType extends BaseAgentType {
                     reasoning: response.reasoning,
                     confidence: response.confidence,
                     payloadChangeRequest: response.payloadChangeRequest,
+                    scratchpad: response.scratchpad,
+                    artifactToolCalls: response.artifactToolCalls,
                     responseForm: response.responseForm,
                     actionableCommands: response.actionableCommands,
                     automaticCommands: response.automaticCommands
@@ -147,6 +156,8 @@ export class LoopAgentType extends BaseAgentType {
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
+                scratchpad: response.scratchpad,
+                artifactToolCalls: response.artifactToolCalls,
                 terminate: response.taskComplete,
                 responseForm: response.responseForm,
                 actionableCommands: response.actionableCommands,
@@ -183,6 +194,22 @@ export class LoopAgentType extends BaseAgentType {
                         }))
                     }
                     break;
+                case 'ClientTools':
+                    if (!response.nextStep.clientTools || response.nextStep.clientTools.length === 0) {
+                        retVal.step = 'Retry';
+                        retVal.message = 'When nextStep.type == "ClientTools", 1 or more client tools must be specified in nextStep.clientTools array';
+                        retVal.errorMessage = 'Client tools not specified for ClientTools type';
+                    }
+                    else {
+                        retVal.step = 'ClientTools' as BaseAgentNextStep['step'];
+                        retVal.clientTools = response.nextStep.clientTools.map(tool => ({
+                            Name: tool.name ?? tool.Name,
+                            Params: tool.params ?? tool.Params ?? {},
+                            TimeoutMs: tool.timeoutMs ?? tool.TimeoutMs,
+                            Description: tool.description ?? tool.Description
+                        }));
+                    }
+                    break;
                 case 'ForEach':
                     if (!response.nextStep.forEach) {
                         retVal.step = 'Retry';
@@ -204,6 +231,12 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.step = 'While';
                         retVal.while = response.nextStep.while;
                     }
+                    break;
+                case 'Retry':
+                    // Message expansion: agent wants to see full content of a compacted message
+                    retVal.step = 'Retry';
+                    retVal.messageIndex = response.nextStep.messageIndex;
+                    retVal.expandReason = response.nextStep.reason;
                     break;
                 default:
                     retVal.step = 'Retry';
@@ -291,7 +324,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'foreach', 'while'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -302,6 +335,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
                 response.nextStep.type = 'Actions'; // update the data structure to have the correct type
                 lcaseType = 'actions';
+            } else if (!lcaseType && response.nextStep.clientTools && response.nextStep.clientTools.length > 0) {
+                response.nextStep.type = 'ClientTools';
+                lcaseType = 'clienttools';
             } else if (!lcaseType && response.nextStep.forEach) {
                 response.nextStep.type = 'ForEach'; // update the data structure to have the correct type
                 lcaseType = 'foreach';

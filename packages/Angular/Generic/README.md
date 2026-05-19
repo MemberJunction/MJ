@@ -2,6 +2,8 @@
 
 Reusable Angular components and services shared across MemberJunction applications. These 41 packages provide common UI patterns -- chat interfaces, data grids, dashboards, file management, and more -- while integrating with MemberJunction's entity system, metadata, and permissions.
 
+> **Encapsulation Rule:** Generic components **MUST NOT** import `Router`, `ActivatedRoute`, or any `@angular/router` types. All external state must flow through `@Input()` / `@Output()` contracts. See [CLAUDE.md](./CLAUDE.md) for details.
+
 ## Packages
 
 ### Core & Base Types

@@ -5,13 +5,14 @@ import { EntityPermissionChangedEvent } from '../grid/entity-permissions-grid.co
 
  
  
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 @Component({
   standalone: false,
   selector: 'mj-entity-permissions-selector-with-grid',
   templateUrl: './entity-selector-with-grid.component.html',
   styleUrls: ['./entity-selector-with-grid.component.css']
 })
-export class EntityPermissionsSelectorWithGridComponent implements OnInit {
+export class EntityPermissionsSelectorWithGridComponent extends BaseAngularComponent implements OnInit {
   @Input() EntityName!: string;
   @Input() BottomMargin: number = 0;
 
@@ -19,11 +20,9 @@ export class EntityPermissionsSelectorWithGridComponent implements OnInit {
 
   @Input() CurrentEntity: EntityInfo | undefined;
 
-  private _md: Metadata | undefined;
   public entityList: EntityInfo[] = [];
   public ngOnInit(): void {
-    this._md = new Metadata();
-    this.entityList = this._md.Entities.sort((a, b) => a.Name.localeCompare(b.Name));
+    this.entityList = this.ProviderToUse.Entities.sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.entityList?.length > 0)
       this.CurrentEntity = this.entityList[0];
   }

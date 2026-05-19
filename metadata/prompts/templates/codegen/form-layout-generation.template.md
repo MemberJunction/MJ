@@ -202,11 +202,20 @@ For each field, you must also determine:
   - "__mj_CreatedAt" → "Created At"
 
 **2. Extended Type** - Specifies special UI treatment for the field
-- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
+- Valid values: `'Code'`, `'Email'`, `'FaceTime'`, `'Geo'`, `'GeoLatitude'`, `'GeoLongitude'`, `'GeoCountry'`, `'GeoStateProvince'`, `'GeoCity'`, `'GeoPostalCode'`, `'GeoAddress'`, `'MSTeams'`, `'SIP'`, `'SMS'`, `'Skype'`, `'Tel'`, `'URL'`, `'WhatsApp'`, `'ZoomMtg'`, or `null`
 - Use `'Email'` for email address fields - creates clickable mailto: links
 - Use `'URL'` for web address fields - creates clickable hyperlinks
 - Use `'Tel'` for phone number fields - creates clickable tel: links
 - Use `'Code'` for code/script fields (requires CodeType to be set)
+- **Geographic types** - Use these for address/location fields to enable automatic geocoding:
+  - `'GeoAddress'` for street address fields (Address, Address1, StreetAddress, BillToAddress1, ShipToAddress1)
+  - `'GeoCity'` for city fields (City, BillToCity, ShipToCity)
+  - `'GeoStateProvince'` for state/province fields (State, Province, StateProvince, BillToState, ShipToState)
+  - `'GeoCountry'` for country fields (Country, CountryCode, Nation)
+  - `'GeoPostalCode'` for postal/zip code fields (ZipCode, PostalCode, Zip)
+  - `'GeoLatitude'` for latitude fields (Latitude, Lat)
+  - `'GeoLongitude'` for longitude fields (Longitude, Lng, Lon)
+  - `'Geo'` for generic location fields that don't fit the above categories
 - Use `null` for regular text/data fields
 - Examples:
   - "EmailAddress", "Email", "ContactEmail" → `'Email'`
@@ -214,17 +223,28 @@ For each field, you must also determine:
   - "Phone", "PhoneNumber", "Mobile" → `'Tel'`
   - "SkypeID" → `'Skype'`
   - "JavaScript", "SQLStatement", "CSSCode" → `'Code'`
+  - "City", "BillToCity" → `'GeoCity'`
+  - "State", "Province" → `'GeoStateProvince'`
+  - "ZipCode", "PostalCode" → `'GeoPostalCode'`
+  - "Address", "StreetAddress" → `'GeoAddress'`
+  - "Country" → `'GeoCountry'`
+  - "Latitude" → `'GeoLatitude'`
+  - "Longitude" → `'GeoLongitude'`
 
 **3. Code Type** - For fields with ExtendedType='Code', specifies the programming language
-- Valid values: `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`, or `null`
-- **Only set when ExtendedType='Code'**
+- **STRICT ENUM** — `codeType` MUST be EXACTLY one of these case-sensitive strings, or `null`:
+  `'CSS'`, `'HTML'`, `'JavaScript'`, `'SQL'`, `'TypeScript'`, `'Other'`
+- **Only set when ExtendedType='Code'**. Otherwise `codeType` MUST be `null`.
+- **Any other language (Python, Markdown, JSON, XML, YAML, Bash, Shell, C#, Java, Ruby, Go, Rust, PHP, etc.) MUST map to `'Other'` — do NOT invent new enum values.**
+- Case matters: `'javascript'` is invalid, `'JavaScript'` is correct. `'typescript'` is invalid, `'TypeScript'` is correct.
+- Never use an empty string `""` — use `null` instead.
 - Infer from field name and context:
   - "SQL", "Query", "SQLStatement" → `'SQL'`
   - "JavaScript", "Script", "JSCode" → `'JavaScript'`
   - "TypeScript", "TSCode" → `'TypeScript'`
   - "HTML", "HTMLContent" → `'HTML'`
   - "CSS", "Styles" → `'CSS'`
-  - Unknown code type → `'Other'`
+  - Any other language, or unknown → `'Other'`
 - Set to `null` for all non-code fields
 
 ### Common Patterns
@@ -258,7 +278,7 @@ Return a JSON object with this exact structure:
       "category": "Bill To Address",
       "reason": "Billing address fields for invoice delivery",
       "displayName": "Billing Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     }
   ],
@@ -481,7 +501,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address for invoice",
       "displayName": "Billing Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     },
     {
@@ -489,7 +509,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address city",
       "displayName": "Billing City",
-      "extendedType": null,
+      "extendedType": "GeoCity",
       "codeType": null
     },
     {
@@ -497,7 +517,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Billing Address",
       "reason": "Billing address state for tax calculation",
       "displayName": "Billing State",
-      "extendedType": null,
+      "extendedType": "GeoStateProvince",
       "codeType": null
     },
     {
@@ -505,7 +525,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Physical delivery address",
       "displayName": "Shipping Address Line 1",
-      "extendedType": null,
+      "extendedType": "GeoAddress",
       "codeType": null
     },
     {
@@ -513,7 +533,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Shipping destination city",
       "displayName": "Shipping City",
-      "extendedType": null,
+      "extendedType": "GeoCity",
       "codeType": null
     },
     {
@@ -521,7 +541,7 @@ For entity "Orders" with fields: OrderNumber, OrderDate, CustomerID, BillToAddre
       "category": "Shipping Address",
       "reason": "Shipping destination state",
       "displayName": "Shipping State",
-      "extendedType": null,
+      "extendedType": "GeoStateProvince",
       "codeType": null
     },
     {

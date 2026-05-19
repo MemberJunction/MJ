@@ -1,0 +1,191 @@
+[
+  {
+    "fields": {
+      "Name": "Burgas",
+      "Code": "02",
+      "ISO3166_2": "BG-02",
+      "Latitude": 42.5385,
+      "Longitude": 27.2597,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-02.geojson",
+      "CommonAliases": [
+        "Burgas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "D540DA2D-5530-46A8-B21F-1F1FE6236A87"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.532Z",
+      "checksum": "de2f9500b5636614e5d769fee4ac2c39b3748a683e0bf32b6c0e4b1f44c0b8aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haskovo",
+      "Code": "09",
+      "ISO3166_2": "BG-09",
+      "Latitude": 41.5377,
+      "Longitude": 25.5852,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-09.geojson",
+      "CommonAliases": [
+        "Haskovo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "DB590037-3161-461D-BDA5-52CC53EB831F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.549Z",
+      "checksum": "7256642e6432418ba04c029f7db1793a520f644fc6614a7c7fd971ec2a11c4d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loveč",
+      "Code": "04",
+      "ISO3166_2": "BG-04",
+      "Latitude": 42.8079,
+      "Longitude": 25.6222,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-04.geojson",
+      "CommonAliases": [
+        "Loveč"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "A6C00B6B-3D2F-4FE1-9CA3-36D09512C564"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.565Z",
+      "checksum": "c4379d6818a6cd4b268800ffac6d8a8bef77b8301acc8bb58f8ef16826d2205d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Montana",
+      "Code": "05",
+      "ISO3166_2": "BG-05",
+      "Latitude": 43.8092,
+      "Longitude": 22.7008,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-05.geojson",
+      "CommonAliases": [
+        "Montana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "862A3D1E-3560-4760-8A7A-38B26B84F77A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.581Z",
+      "checksum": "c3621542bb1910977c88c7526160c5b478d87c005f99b2710c899828fde5757f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plovdiv",
+      "Code": "06",
+      "ISO3166_2": "BG-06",
+      "Latitude": 43.4325,
+      "Longitude": 23.832,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-06.geojson",
+      "CommonAliases": [
+        "Plovdiv"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "002F9556-D0FB-46DF-8D41-1C7D8821F597"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.597Z",
+      "checksum": "ba7a0f3e93b989b5ab86499903c8e5ccaef2d47d648e8a881f089504c9ffdd23"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ruse",
+      "Code": "07",
+      "ISO3166_2": "BG-07",
+      "Latitude": 42.9256,
+      "Longitude": 25.2475,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-07.geojson",
+      "CommonAliases": [
+        "Ruse"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "DED8C642-3EDB-4140-B0A0-7922FC735EFF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.613Z",
+      "checksum": "584ae444ef3b671ff29faeb7a982fb246a6bfce07f3013e069785a35ecb8246b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sofija",
+      "Code": "08",
+      "ISO3166_2": "BG-08",
+      "Latitude": 43.6874,
+      "Longitude": 27.9018,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-08.geojson",
+      "CommonAliases": [
+        "Sofija"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "37AA5DFE-399C-45BD-B03D-017E715AC0C8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.630Z",
+      "checksum": "59eb917e109260317670e1137a404e8338d65c146e6745bcf21815e544990577"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sofija-Grad",
+      "Code": "01",
+      "ISO3166_2": "BG-01",
+      "Latitude": 41.743,
+      "Longitude": 23.5213,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-01.geojson",
+      "CommonAliases": [
+        "Sofija-Grad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "AC6402A3-8990-4E82-804D-CC38C1A610E0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.650Z",
+      "checksum": "2335c54d23ab5315f201addf075b9e13a0dc9d6b0cf126820fac5ef6796f050e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Varna",
+      "Code": "03",
+      "ISO3166_2": "BG-03",
+      "Latitude": 43.2097,
+      "Longitude": 27.5827,
+      "BoundaryGeoJSON": "@file:by-country/BG/boundaries/BG-03.geojson",
+      "CommonAliases": [
+        "Varna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BG"
+    },
+    "primaryKey": {
+      "ID": "9284AF6C-EED5-45E4-AB16-C284E70AB0A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:32.666Z",
+      "checksum": "5e5a04736144787282f1634b315b50742d285298180dde48b9787ca4b48efd0f"
+    }
+  }
+]

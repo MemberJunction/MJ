@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Beiroût (Bayrūt)",
+      "Code": "BA",
+      "ISO3166_2": "LB-BA",
+      "Latitude": 33.8849,
+      "Longitude": 35.5093,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-BA.geojson",
+      "CommonAliases": [
+        "Beiroût (Bayrūt)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "02CAC206-24B4-4636-B946-86CF35523332"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.870Z",
+      "checksum": "bc779ce47d0f031e162e15b36eb545d7cd6afec5f8484e5c9a1e274aafa6c922"
+    }
+  },
+  {
+    "fields": {
+      "Name": "El Béqaa (Al Biqā')",
+      "Code": "BI",
+      "ISO3166_2": "LB-BI",
+      "Latitude": 34.0494,
+      "Longitude": 36.1086,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-BI.geojson",
+      "CommonAliases": [
+        "El Béqaa (Al Biqā')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "35EC2025-00D6-45A1-9EFA-D3963EC1E58D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.886Z",
+      "checksum": "7cc09c3d0cb52f9f3d0690b2340485b180f43b5aa8028c57210df9e754083969"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jabal Loubnâne (Jabal Lubnān)",
+      "Code": "JL",
+      "ISO3166_2": "LB-JL",
+      "Latitude": 33.9291,
+      "Longitude": 35.6942,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-JL.geojson",
+      "CommonAliases": [
+        "Jabal Loubnâne (Jabal Lubnān)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "C0BF9932-B100-4002-A6AD-6F192E68299B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.904Z",
+      "checksum": "e11279d5b59e363b06fe69b49ec1abcf60cfba1891daa34a0ae8c2cdd2067ac3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loubnâne ech Chemâli (Ash Shamāl)",
+      "Code": "AS",
+      "ISO3166_2": "LB-AS",
+      "Latitude": 34.3933,
+      "Longitude": 36.0424,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-AS.geojson",
+      "CommonAliases": [
+        "Loubnâne ech Chemâli (Ash Shamāl)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "23D24509-0D6D-42F6-B544-5DC3F9693963"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.922Z",
+      "checksum": "c49d692a32437bbe2bac1dfdafe7f5c79997786a3f291948fa879b9cc470b99a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Loubnâne ej Jnoûbi (Al Janūb)",
+      "Code": "JA",
+      "ISO3166_2": "LB-JA",
+      "Latitude": 33.2661,
+      "Longitude": 35.2966,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-JA.geojson",
+      "CommonAliases": [
+        "Loubnâne ej Jnoûbi (Al Janūb)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "41F151B7-9B59-46BB-9A64-F3038A430955"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.938Z",
+      "checksum": "1d2e52bfe60725886c046ec50fb67ba76147c1e8fde3c88f1042646b6af3eb24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nabatîyé (An Nabaţīyah",
+      "Code": "NA",
+      "ISO3166_2": "LB-NA",
+      "Latitude": 33.3303,
+      "Longitude": 35.5666,
+      "BoundaryGeoJSON": "@file:by-country/LB/boundaries/LB-NA.geojson",
+      "CommonAliases": [
+        "Nabatîyé (An Nabaţīyah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LB"
+    },
+    "primaryKey": {
+      "ID": "BF5672F7-E5E0-42F5-8540-42CDD2D752BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:10.951Z",
+      "checksum": "3a79ac01e808b917d179aeb076c88c9062e3c9182f8b6764dbab34b15b1d4e0c"
+    }
+  }
+]

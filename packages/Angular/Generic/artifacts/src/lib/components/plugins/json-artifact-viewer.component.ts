@@ -1,9 +1,11 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
-import { RunView } from '@memberjunction/core';
+import { DataSnapshot, RunView } from '@memberjunction/core';
 import { MJArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
+import { createJsonSnapshot } from '../../snapshot-helpers';
 
 /**
  * Viewer component for JSON artifacts.
@@ -197,7 +199,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     console.log(`📦 JSON Plugin: Loading attributes for version ID: ${this.artifactVersion.ID}`);
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
@@ -386,6 +388,10 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    return createJsonSnapshot(this.getRawContent(), this.getDisplayTitle());
   }
 
   /**

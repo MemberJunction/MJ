@@ -171,11 +171,12 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
     try {
       const userInfo = await this.makeLearnWorldsRequest<LWApiUserInfo>(`users/${userId}`, 'GET', undefined, contextUser);
       userProgress.userEmail = userInfo.email || '';
-    } catch {
-      // Ignore if we can't get user info
+    } catch (error) {
+      console.warn(`Failed to fetch user info for userId ${userId}:`, error instanceof Error ? error.message : error);
     }
 
-    this.calculateLearningAnalytics(userProgress);
+    const analytics = this.calculateLearningAnalytics(userProgress);
+    Object.assign(userProgress, analytics);
 
     const summary = this.createProgressSummary(userProgress);
 
@@ -255,8 +256,8 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
         if (unitsResponse.data) {
           progress.unitProgress = await Promise.all(unitsResponse.data.map((unit) => this.mapUnitProgress(unit, includeLessons)));
         }
-      } catch {
-        // Units endpoint might not be available
+      } catch (error) {
+        console.warn(`Units endpoint unavailable for user ${userId}, course ${courseId}:`, error instanceof Error ? error.message : error);
       }
     }
 
@@ -267,14 +268,13 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
    * Get progress for all user courses
    */
   private async getAllCoursesProgress(userId: string, includeUnits: boolean, includeLessons: boolean, contextUser: UserInfo): Promise<UserLearningProgress> {
-    const enrollmentsResponse = await this.makeLearnWorldsRequest<{ data: LWApiEnrollmentItem[] }>(
-      `users/${userId}/enrollments`,
-      'GET',
-      undefined,
+    const enrollmentsData = await this.makeLearnWorldsPaginatedRequest<LWApiEnrollmentItem>(
+      `users/${userId}/courses`,
+      {},
       contextUser,
     );
 
-    const courseProgressResults = await this.processInBatches(enrollmentsResponse.data, (enrollment) =>
+    const courseProgressResults = await this.processInBatches(enrollmentsData, (enrollment) =>
       this.getCourseProgress(userId, enrollment.course_id || enrollment.course?.id || '', includeUnits, includeLessons, contextUser).catch(() => null),
     );
     const validCourses = courseProgressResults.filter((p): p is CourseProgress => p !== null);
@@ -480,19 +480,20 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
   }
 
   /**
-   * Calculate learning analytics
+   * Calculate learning analytics and return the computed values (no mutation).
    */
-  private calculateLearningAnalytics(progress: UserLearningProgress): void {
-    if (progress.courses.length === 0) return;
+  private calculateLearningAnalytics(progress: UserLearningProgress): { lastLearningDate?: Date; learningStreak?: number } {
+    if (progress.courses.length === 0) return {};
 
     const lastDates = progress.courses.map((c) => c.lastAccessedAt).filter((d): d is Date => d !== undefined);
 
-    if (lastDates.length > 0) {
-      progress.lastLearningDate = new Date(Math.max(...lastDates.map((d) => d.getTime())));
+    if (lastDates.length === 0) return {};
 
-      const daysSinceLastActivity = Math.floor((new Date().getTime() - progress.lastLearningDate.getTime()) / (1000 * 60 * 60 * 24));
-      progress.learningStreak = daysSinceLastActivity <= 1 ? 1 : 0;
-    }
+    const lastLearningDate = new Date(Math.max(...lastDates.map((d) => d.getTime())));
+    const daysSinceLastActivity = Math.floor((new Date().getTime() - lastLearningDate.getTime()) / (1000 * 60 * 60 * 24));
+    const learningStreak = daysSinceLastActivity <= 1 ? 1 : 0;
+
+    return { lastLearningDate, learningStreak };
   }
 
   /**
@@ -506,20 +507,8 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
       .slice(0, 5);
 
     return {
-      overview: {
-        totalCourses: progress.totalCourses,
-        completedCourses: progress.coursesCompleted,
-        inProgressCourses: progress.coursesInProgress,
-        notStartedCourses: progress.coursesNotStarted,
-        overallProgress: `${progress.overallProgressPercentage}%`,
-        certificatesEarned: progress.totalCertificatesEarned,
-        totalLearningTime: this.formatDuration(progress.totalTimeSpent),
-      },
-      performance: {
-        averageQuizScore: progress.averageQuizScore ? `${Math.round(progress.averageQuizScore)}%` : 'N/A',
-        averageCourseProgress: `${progress.overallProgressPercentage}%`,
-        completionRate: progress.totalCourses > 0 ? `${Math.round((progress.coursesCompleted / progress.totalCourses) * 100)}%` : '0%',
-      },
+      overview: this.buildProgressOverview(progress),
+      performance: this.buildPerformanceMetrics(progress),
       currentFocus: activeCourses.map((c) => ({
         courseTitle: c.courseTitle,
         progress: `${c.progressPercentage}%`,
@@ -531,15 +520,39 @@ export class GetLearnWorldsUserProgressAction extends LearnWorldsBaseAction {
         lastAccessed: c.lastAccessedAt,
         progress: `${c.progressPercentage}%`,
       })),
-      achievements: {
-        totalCertificates: progress.totalCertificatesEarned,
-        coursesWithCertificates: progress.courses
-          .filter((c) => c.certificateEarned)
-          .map((c) => ({
-            courseTitle: c.courseTitle,
-            completedAt: c.completedAt,
-          })),
-      },
+      achievements: this.buildAchievementsSummary(progress),
+    };
+  }
+
+  private buildProgressOverview(progress: UserLearningProgress): Record<string, unknown> {
+    return {
+      totalCourses: progress.totalCourses,
+      completedCourses: progress.coursesCompleted,
+      inProgressCourses: progress.coursesInProgress,
+      notStartedCourses: progress.coursesNotStarted,
+      overallProgress: `${progress.overallProgressPercentage}%`,
+      certificatesEarned: progress.totalCertificatesEarned,
+      totalLearningTime: this.formatDuration(progress.totalTimeSpent),
+    };
+  }
+
+  private buildPerformanceMetrics(progress: UserLearningProgress): Record<string, unknown> {
+    return {
+      averageQuizScore: progress.averageQuizScore ? `${Math.round(progress.averageQuizScore)}%` : 'N/A',
+      averageCourseProgress: `${progress.overallProgressPercentage}%`,
+      completionRate: progress.totalCourses > 0 ? `${Math.round((progress.coursesCompleted / progress.totalCourses) * 100)}%` : '0%',
+    };
+  }
+
+  private buildAchievementsSummary(progress: UserLearningProgress): Record<string, unknown> {
+    return {
+      totalCertificates: progress.totalCertificatesEarned,
+      coursesWithCertificates: progress.courses
+        .filter((c) => c.certificateEarned)
+        .map((c) => ({
+          courseTitle: c.courseTitle,
+          completedAt: c.completedAt,
+        })),
     };
   }
 

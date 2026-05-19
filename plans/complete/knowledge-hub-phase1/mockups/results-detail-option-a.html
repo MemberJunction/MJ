@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Search Results Detail — Option A: Side Panel Preview</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .split-layout {
+    display: grid;
+    grid-template-columns: 1fr 440px;
+    height: 100vh;
+  }
+
+  /* Left: Results list */
+  .results-list {
+    overflow-y: auto;
+    padding: 3rem 1.5rem 2rem;
+    border-right: 1px solid var(--border);
+  }
+  .results-list::-webkit-scrollbar { width: 4px; }
+  .results-list::-webkit-scrollbar-track { background: transparent; }
+  .results-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .search-info {
+    margin-bottom: 1.5rem;
+  }
+  .search-info h2 {
+    font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem;
+  }
+  .search-info .meta {
+    font-size: 0.8rem; color: var(--text-muted);
+  }
+
+  .result-item {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.85rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: 1px solid transparent;
+    margin-bottom: 0.25rem;
+  }
+  .result-item:hover { background: var(--bg-card); }
+  .result-item.active {
+    background: rgba(59,130,246,0.08);
+    border-color: var(--accent);
+  }
+  .ri-icon {
+    width: 32px; height: 32px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; flex-shrink: 0; margin-top: 2px;
+  }
+  .ri-icon.blue { background: rgba(59,130,246,0.15); color: var(--accent); }
+  .ri-icon.purple { background: rgba(168,85,247,0.15); color: var(--purple); }
+  .ri-icon.green { background: rgba(34,197,94,0.15); color: var(--success); }
+  .ri-info { flex: 1; min-width: 0; }
+  .ri-title {
+    font-size: 0.88rem; font-weight: 600;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    margin-bottom: 0.1rem;
+  }
+  .ri-sub {
+    font-size: 0.72rem; color: var(--text-muted);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .ri-score {
+    font-size: 0.7rem; font-weight: 700;
+    color: var(--success); flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  /* Right: Detail panel */
+  .detail-panel {
+    overflow-y: auto;
+    background: var(--bg-card);
+    display: flex;
+    flex-direction: column;
+  }
+  .detail-panel::-webkit-scrollbar { width: 4px; }
+  .detail-panel::-webkit-scrollbar-track { background: transparent; }
+  .detail-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .panel-toolbar {
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(15,23,42,0.5);
+    flex-shrink: 0;
+  }
+  .panel-nav {
+    display: flex; gap: 0.5rem; align-items: center;
+    font-size: 0.78rem; color: var(--text-muted);
+  }
+  .nav-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid var(--border); background: transparent;
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.7rem;
+    transition: all 0.2s;
+  }
+  .nav-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .panel-actions {
+    display: flex; gap: 0.35rem;
+  }
+  .pa-btn {
+    width: 28px; height: 28px; border-radius: 6px;
+    border: 1px solid transparent; background: transparent;
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 0.75rem;
+    transition: all 0.2s;
+  }
+  .pa-btn:hover { border-color: var(--border); color: var(--text-primary); background: var(--bg-card-hover); }
+
+  .panel-content {
+    padding: 1.5rem 1.25rem;
+    flex: 1;
+  }
+
+  /* Detail header */
+  .detail-header {
+    margin-bottom: 1.5rem;
+  }
+  .detail-type {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.7rem; font-weight: 600;
+    margin-bottom: 0.75rem;
+    background: rgba(59,130,246,0.12); color: var(--accent);
+  }
+  .detail-title {
+    font-size: 1.2rem; font-weight: 700;
+    margin-bottom: 0.5rem;
+    line-height: 1.3;
+  }
+  .detail-meta {
+    display: flex; gap: 1.25rem;
+    font-size: 0.78rem; color: var(--text-muted);
+    flex-wrap: wrap;
+  }
+  .detail-meta span {
+    display: flex; align-items: center; gap: 0.35rem;
+  }
+
+  /* Score badge */
+  .score-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    margin-bottom: 1.5rem;
+  }
+  .score-badge .number {
+    font-size: 1.5rem; font-weight: 700; color: var(--success);
+  }
+  .score-badge .label {
+    font-size: 0.72rem; color: var(--text-muted);
+  }
+
+  /* Snippet */
+  .snippet-section {
+    margin-bottom: 1.5rem;
+  }
+  .section-title {
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin-bottom: 0.75rem;
+  }
+  .snippet-text {
+    font-size: 0.88rem; color: var(--text-secondary);
+    line-height: 1.7;
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .snippet-text mark {
+    background: rgba(59,130,246,0.2);
+    color: var(--accent); border-radius: 2px;
+    padding: 0 2px;
+  }
+
+  /* Key fields */
+  .fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+  }
+  .field-item {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+  }
+  .field-item .fl {
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--text-muted); margin-bottom: 0.2rem;
+  }
+  .field-item .fv {
+    font-size: 0.88rem; font-weight: 500;
+    color: var(--text-primary);
+  }
+
+  /* Tags */
+  .tags {
+    display: flex; gap: 0.35rem; flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+  .tag {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem; color: var(--text-muted);
+  }
+
+  /* Related items */
+  .related-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(51,65,85,0.4);
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .related-item:hover { color: var(--accent); }
+  .related-item:last-child { border-bottom: none; }
+  .rel-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.6rem; flex-shrink: 0;
+  }
+  .related-item .rel-score {
+    margin-left: auto;
+    font-size: 0.68rem; color: var(--text-muted);
+  }
+
+  /* Actions */
+  .detail-actions {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+    display: flex; gap: 0.5rem;
+    flex-shrink: 0;
+    background: rgba(15,23,42,0.3);
+  }
+  .action-btn {
+    flex: 1;
+    padding: 0.6rem;
+    border-radius: 8px;
+    font-size: 0.8rem; font-weight: 600;
+    cursor: pointer; transition: all 0.2s;
+    display: flex; align-items: center; justify-content: center; gap: 0.4rem;
+    border: 1px solid var(--border);
+    background: transparent; color: var(--text-secondary);
+  }
+  .action-btn:hover { border-color: var(--accent); color: var(--text-primary); }
+  .action-btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .action-btn.primary:hover { background: #2563eb; }
+
+  @media (max-width: 768px) {
+    .split-layout { grid-template-columns: 1fr; }
+    .results-list { display: none; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="split-layout">
+  <!-- Results list (left) -->
+  <div class="results-list">
+    <div class="search-info">
+      <h2>Results for "customer retention strategies"</h2>
+      <div class="meta">47 results &middot; 0.23s &middot; Sorted by relevance</div>
+    </div>
+
+    <div class="result-item active">
+      <div class="ri-icon blue"><i class="fa-solid fa-chart-line"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Q4 2025 Customer Retention Analysis</div>
+        <div class="ri-sub">Reports &middot; Updated 3 days ago</div>
+      </div>
+      <span class="ri-score">97%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon purple"><i class="fa-solid fa-star"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Customer Loyalty Program Strategy</div>
+        <div class="ri-sub">Content &middot; Updated 1 week ago</div>
+      </div>
+      <span class="ri-score">94%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon green"><i class="fa-solid fa-file-pdf"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Customer Success Playbook v3.pdf</div>
+        <div class="ri-sub">Document &middot; 42 pages</div>
+      </div>
+      <span class="ri-score">91%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon blue"><i class="fa-solid fa-building"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Acme Corp &mdash; At-Risk Account</div>
+        <div class="ri-sub">Accounts &middot; $2.4M ARR</div>
+      </div>
+      <span class="ri-score">87%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon purple"><i class="fa-solid fa-envelope"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Renewal Reminder Email Templates</div>
+        <div class="ri-sub">Content &middot; Email series</div>
+      </div>
+      <span class="ri-score">83%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon blue"><i class="fa-solid fa-user"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Sarah Chen &mdash; VP Customer Success</div>
+        <div class="ri-sub">Contacts &middot; Acme Corp</div>
+      </div>
+      <span class="ri-score">82%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon green"><i class="fa-solid fa-file-excel"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Churn Analysis Workbook.xlsx</div>
+        <div class="ri-sub">Document &middot; 6 sheets</div>
+      </div>
+      <span class="ri-score">78%</span>
+    </div>
+    <div class="result-item">
+      <div class="ri-icon blue"><i class="fa-solid fa-chart-bar"></i></div>
+      <div class="ri-info">
+        <div class="ri-title">Monthly Retention Dashboard</div>
+        <div class="ri-sub">Reports &middot; Auto-updated</div>
+      </div>
+      <span class="ri-score">76%</span>
+    </div>
+  </div>
+
+  <!-- Detail panel (right) -->
+  <div class="detail-panel">
+    <div class="panel-toolbar">
+      <div class="panel-nav">
+        <button class="nav-btn"><i class="fa-solid fa-chevron-up"></i></button>
+        <button class="nav-btn"><i class="fa-solid fa-chevron-down"></i></button>
+        <span>1 of 47</span>
+      </div>
+      <div class="panel-actions">
+        <button class="pa-btn" title="Bookmark"><i class="fa-regular fa-bookmark"></i></button>
+        <button class="pa-btn" title="Share"><i class="fa-solid fa-share-nodes"></i></button>
+        <button class="pa-btn" title="Open full"><i class="fa-solid fa-expand"></i></button>
+        <button class="pa-btn" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+    </div>
+
+    <div class="panel-content">
+      <div class="detail-header">
+        <div class="detail-type"><i class="fa-solid fa-chart-line"></i> Report &middot; Entity Record</div>
+        <div class="detail-title">Q4 2025 Customer Retention Analysis Report</div>
+        <div class="detail-meta">
+          <span><i class="fa-solid fa-user"></i> Marcus Johnson</span>
+          <span><i class="fa-solid fa-calendar"></i> Updated 3 days ago</span>
+          <span><i class="fa-solid fa-eye"></i> 234 views</span>
+        </div>
+      </div>
+
+      <div class="score-badge">
+        <span class="number">97%</span>
+        <div>
+          <div style="font-size: 0.82rem; font-weight: 600; color: var(--text-primary);">Similarity Score</div>
+          <div class="label">Vector + full-text match</div>
+        </div>
+      </div>
+
+      <div class="snippet-section">
+        <div class="section-title">Matching Excerpt</div>
+        <div class="snippet-text">
+          Comprehensive analysis of <mark>customer retention strategies</mark> across all segments. Churn rate decreased by 12% following implementation of personalized engagement campaigns. Key finding: customers who received proactive outreach had 3.2x higher <mark>retention</mark> rates than control group. Recommendation: expand program to mid-market segment in Q1 2026.
+        </div>
+      </div>
+
+      <div class="section-title">Key Fields</div>
+      <div class="fields-grid">
+        <div class="field-item">
+          <div class="fl">Report Type</div>
+          <div class="fv">Analysis</div>
+        </div>
+        <div class="field-item">
+          <div class="fl">Period</div>
+          <div class="fv">Q4 2025</div>
+        </div>
+        <div class="field-item">
+          <div class="fl">Department</div>
+          <div class="fv">Customer Success</div>
+        </div>
+        <div class="field-item">
+          <div class="fl">Status</div>
+          <div class="fv" style="color: var(--success);">Published</div>
+        </div>
+      </div>
+
+      <div class="section-title">Tags</div>
+      <div class="tags">
+        <span class="tag">retention</span>
+        <span class="tag">Q4-2025</span>
+        <span class="tag">customer-success</span>
+        <span class="tag">churn-analysis</span>
+        <span class="tag">engagement</span>
+      </div>
+
+      <div class="section-title">Related Items</div>
+      <div>
+        <div class="related-item">
+          <div class="rel-icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-star"></i></div>
+          Customer Loyalty Program Strategy
+          <span class="rel-score">94%</span>
+        </div>
+        <div class="related-item">
+          <div class="rel-icon" style="background: rgba(34,197,94,0.15); color: var(--success);"><i class="fa-solid fa-file-pdf"></i></div>
+          Customer Success Playbook v3.pdf
+          <span class="rel-score">91%</span>
+        </div>
+        <div class="related-item">
+          <div class="rel-icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-building"></i></div>
+          Acme Corp &mdash; At-Risk Account
+          <span class="rel-score">87%</span>
+        </div>
+        <div class="related-item">
+          <div class="rel-icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-chart-bar"></i></div>
+          Monthly Retention Dashboard
+          <span class="rel-score">76%</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-actions">
+      <button class="action-btn"><i class="fa-solid fa-external-link"></i> Open Record</button>
+      <button class="action-btn primary"><i class="fa-solid fa-robot"></i> Ask Agent</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

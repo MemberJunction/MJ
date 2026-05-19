@@ -7,6 +7,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SharedService, BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual, MJGlobal, MJEventType } from '@memberjunction/global';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface ModelDisplayData extends MJAIModelEntityExtended {
   VendorName?: string;
@@ -105,11 +106,10 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   constructor(
     private sharedService: SharedService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -124,6 +124,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     // Load saved user preferences first
     this.loadUserPreferences();
 
@@ -141,6 +142,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
     if (this.loadingMessageInterval) {
@@ -593,7 +595,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public async createNewModel(): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {
@@ -671,6 +673,97 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
     this.speedRankRange = { min: 0, max: this.maxSpeedRank };
     this.costRankRange = { min: 0, max: this.maxCostRank };
     this.searchSubject.next('');
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
+  public resetPopoverFilters(): void {
+    this.selectedVendor = 'all';
+    this.selectedType = 'all';
+    this.selectedStatus = 'all';
+    this.powerRankRange = { min: 0, max: this.maxPowerRank };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Number of active filter criteria inside the popover (excludes searchTerm + sortBy). */
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedVendor && this.selectedVendor !== 'all') n++;
+    if (this.selectedType && this.selectedType !== 'all') n++;
+    if (this.selectedStatus && this.selectedStatus !== 'all') n++;
+    if (this.powerRankRange.min > 0 || this.powerRankRange.max < this.maxPowerRank) n++;
+    return n;
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly modelViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+  ];
+
+  /** Values record consumed by the centralized <mj-filter-panel>. */
+  public get modelFilterValues(): Record<string, unknown> {
+    return {
+      sortBy:         this.sortBy,
+      selectedVendor: this.selectedVendor,
+      selectedType:   this.selectedType,
+      selectedStatus: this.selectedStatus,
+    };
+  }
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get modelFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'sortBy',
+        type: 'dropdown',
+        label: 'Sort By',
+        icon: 'fa-solid fa-sort',
+        options: this.sortOptions.map(o => ({ text: o.label, value: o.value })),
+      },
+      {
+        key: 'selectedVendor',
+        type: 'dropdown',
+        label: 'Vendor',
+        icon: 'fa-solid fa-building',
+        filterable: this.vendors.length > 10,
+        options: [
+          { text: 'All Vendors', value: 'all' },
+          ...this.vendors.map(v => ({ text: v.Name ?? '', value: v.ID })),
+        ],
+      },
+      {
+        key: 'selectedType',
+        type: 'dropdown',
+        label: 'Type',
+        icon: 'fa-solid fa-microchip',
+        options: [
+          { text: 'All Types', value: 'all' },
+          ...this.modelTypes.map(t => ({ text: t.Name ?? '', value: t.ID })),
+        ],
+      },
+      {
+        key: 'selectedStatus',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-toggle-on',
+        options: [
+          { text: 'All Statuses', value: 'all' },
+          { text: 'Active',       value: 'active' },
+          { text: 'Inactive',     value: 'inactive' },
+        ],
+      },
+    ];
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    this.sortBy         = (values['sortBy']         as string) ?? this.sortBy;
+    this.selectedVendor = (values['selectedVendor'] as string) ?? 'all';
+    this.selectedType   = (values['selectedType']   as string) ?? 'all';
+    this.selectedStatus = (values['selectedStatus'] as string) ?? 'all';
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }

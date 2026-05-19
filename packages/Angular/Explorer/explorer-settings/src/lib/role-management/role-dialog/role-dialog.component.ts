@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Metadata } from '@memberjunction/core';
 import { MJRoleEntity } from '@memberjunction/core-entities';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface RoleDialogData {
   role?: MJRoleEntity;
   mode: 'create' | 'edit';
@@ -21,7 +22,7 @@ export interface RoleDialogResult {
   templateUrl: './role-dialog.component.html',
   styleUrls: ['./role-dialog.component.css']
 })
-export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
+export class RoleDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: RoleDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<RoleDialogResult>();
@@ -29,13 +30,13 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   public roleForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
 
   constructor() {
+    super();
     this.roleForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(50)]],
       description: [''],

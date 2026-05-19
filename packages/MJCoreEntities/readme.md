@@ -34,8 +34,10 @@ flowchart TD
         AME["ArtifactMetadataEngine"]
         FE["FileStorageEngine"]
         EE["EncryptionEngineBase"]
+        CE["ConversationEngine"]
         ME["MCPEngine"]
         TTC["TypeTablesCache"]
+        KHE["KnowledgeHubMetadataEngine"]
     end
 
     subgraph Extraction["Artifact Extraction"]
@@ -63,6 +65,20 @@ CodeGen scans the MemberJunction database schema and produces:
 - **Entity subclasses** extending `BaseEntity<T>` with strongly-typed getter/setter properties for every column, typed `Load()` methods, and JSDoc annotations including SQL types, defaults, and foreign key references.
 
 There are currently **272 generated entity classes** covering approximately 78,000 lines of code in a single `entity_subclasses.ts` file.
+
+#### AIAgentNote Consolidation Schema (v5.30.x+)
+
+Migration `V202604260056__v5.30.x__Memory_Consolidation_Schema.sql` adds five columns to `AIAgentNote` to support the Memory Manager consolidation pipeline. The generated `MJAIAgentNoteEntity` getters/setters reflect these in `entity_subclasses.ts`:
+
+| Column | Type | Purpose |
+|---|---|---|
+| `ConsolidatedIntoNoteID` | uniqueidentifier (FK → AIAgentNote.ID, nullable) | When this note has been folded into a successor consolidation, points at the successor — preserves provenance after revocation |
+| `ConsolidationCount` | int | Number of times this note has itself absorbed clusters; capped at `maxConsolidationCount=3` for drift prevention |
+| `DerivedFromNoteIDs` | nvarchar(max) JSON array of UUIDs, nullable | For consolidated notes, the list of original sources the LLM merged into this one — enables anchored-mode drilling when a cluster reaches the cap |
+| `ProtectionTier` | nvarchar (Immutable / Protected / Standard / Ephemeral) | Modulates decay rate and consolidation eligibility |
+| `ImportanceScore` | float | Composite score driving Ebbinghaus decay and outlier auto-promotion |
+
+Server-side persistence and vector-store invariant maintenance for these fields lives in [`@memberjunction/core-entities-server`](../MJCoreEntitiesServer/README.md#mjaiagentnoteentityserver-v530x). The pipeline that produces them is documented in [`@memberjunction/ai-agents`](../AI/Agents/README.md#consolidation-pipeline) and [`specs/001-memory-consolidation/spec.md`](../../specs/001-memory-consolidation/spec.md).
 
 ### Extended Entity Classes
 
@@ -119,7 +135,7 @@ A metadata-driven system for extracting structured attributes from artifact cont
 - **272 strongly-typed entity classes** covering all MemberJunction core schema entities
 - **Zod runtime validation** with field-level constraints and value list enums
 - **Extended entity classes** with permission checks, workflow logic, and JSON state parsing
-- **9 singleton engine caches** eliminating redundant database queries
+- **10 singleton engine caches** eliminating redundant database queries (including KnowledgeHubMetadataEngine for vector/content metadata)
 - **Resource permission engine** with role-based access control (View/Edit/Owner levels)
 - **Dashboard permission engine** with owner/direct/category permission hierarchy
 - **User view engine** with filter-to-SQL conversion and smart filter AI support
@@ -387,10 +403,80 @@ Every generated entity class provides:
 | `DeserializeFromStorage(stored)` | Convert stored attributes back to runtime objects |
 | `GetStandardProperty(attributes, prop)` | Find a standard property value (name/description/etc.) |
 
+### ConversationEngine
+
+Centralized, reactive cache for conversations, conversation details (messages), and peripheral data such as agent runs. `ConversationEngine` is the single source of truth for conversation data across all UI consumers (chat area, sidebar, overlay, etc.), replacing per-component caching that previously lived in multiple scattered locations.
+
+The engine is user-scoped and environment-filtered, so it manages its own caching instead of using `BaseEngine.Load()` bulk-load pattern.
+
+```typescript
+import { ConversationEngine } from '@memberjunction/core-entities';
+
+// Initialize once at app startup
+await ConversationEngine.Instance.Config(false, contextUser);
+
+// Load conversations for the current user and environment
+await ConversationEngine.Instance.LoadConversations(environmentId, contextUser);
+
+// Subscribe to reactive conversation list changes
+ConversationEngine.Instance.Conversations$.subscribe(conversations => {
+    console.log(`${conversations.length} conversations loaded`);
+});
+
+// Load and cache details (messages) for a specific conversation
+const details = await ConversationEngine.Instance.LoadConversationDetails(conversationId, contextUser);
+
+// Instant cache reads (no DB round-trip)
+const cached = ConversationEngine.Instance.GetCachedDetails(conversationId);
+
+// CRUD operations that automatically update the reactive list
+await ConversationEngine.Instance.CreateConversation('New Chat', environmentId, contextUser);
+await ConversationEngine.Instance.PinConversation(conversationId, true, contextUser);
+await ConversationEngine.Instance.ArchiveConversation(conversationId, contextUser);
+
+// Cache management
+ConversationEngine.Instance.InvalidateConversation(conversationId);
+ConversationEngine.Instance.ClearCache();
+```
+
+Source: [`src/engines/conversations.ts`](src/engines/conversations.ts)
+
+### KnowledgeHubMetadataEngine
+
+Caches all Knowledge Hub-related metadata in a single singleton, providing fast lookups for entity documents, vector indexes, vector databases, content sources, content types, content source types, and content file types. Uses `BaseEngine` for automatic caching and entity-event auto-refresh.
+
+```typescript
+import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
+
+const khEngine = KnowledgeHubMetadataEngine.Instance;
+await khEngine.Config(false, contextUser);
+
+// Cached data access (no DB round-trip)
+const activeDocuments = khEngine.GetActiveEntityDocuments();
+const entitiesWithDocs = khEngine.GetEntitiesWithDocuments(); // For dropdowns
+const doc = khEngine.GetEntityDocumentById(docId);
+const docsForEntity = khEngine.GetEntityDocumentsForEntity('Contacts');
+const vectorIndex = khEngine.GetVectorIndexById(indexId);
+const vectorDB = khEngine.GetVectorDatabaseById(dbId);
+
+// Raw cached arrays
+khEngine.EntityDocuments;    // All entity documents
+khEngine.VectorIndexes;      // All vector indexes
+khEngine.VectorDatabases;    // All vector databases
+khEngine.ContentSources;     // All content sources
+khEngine.ContentTypes;       // All content types
+khEngine.ContentSourceTypes; // All content source types (Web, RSS, etc.)
+khEngine.ContentFileTypes;   // All content file types (.pdf, .html, etc.)
+```
+
+Source: [`src/engines/knowledgeHubMetadata.ts`](src/engines/knowledgeHubMetadata.ts)
+
 ### Other Engines
 
 | Engine | Purpose |
 |---|---|
+| `KnowledgeHubMetadataEngine` | Caches entity documents, vector indexes/databases, content sources/types/file types |
+| `ConversationEngine` | Reactive cache for conversations, messages, and agent runs (user-scoped) |
 | `EncryptionEngineBase` | Caches encryption keys, algorithms, and key sources |
 | `FileStorageEngine` | Caches file storage accounts and providers |
 | `MCPEngine` | Caches MCP servers, connections, and tools |

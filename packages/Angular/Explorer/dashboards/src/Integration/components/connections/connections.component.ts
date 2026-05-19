@@ -183,9 +183,27 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   IsAutoMapping = false;
   AutoMapResult: { EntityMapsCreated: number; FieldMapsCreated: number; Errors: string[] } | null = null;
 
+  // Create Tables panel state
+  ShowCreateTablesPanel = false;
+  CreateTablesObjects: Array<{
+    /** IntegrationObject.ID when AlreadyPersisted; undefined for freshly-discovered objects. */
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> = [];
+  IsLoadingCreateTablesObjects = false;
+  CreateTablesSearch = '';
+  CreateTablesSchema = '';
+  IsCreatingTables = false;
+  CreateTablesResult: { Success: boolean; Message: string } | null = null;
+
   // Sync state
   SyncingIntegrationID: string | null = null;
   SyncResult: { Success: boolean; Message: string } | null = null;
+  SyncMenuIntegrationID: string | null = null;
 
   // Delete confirmation state
   DeleteConfirmID: string | null = null;
@@ -196,9 +214,11 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
+    this.dataService.Provider = this.ProviderToUse;
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
@@ -338,7 +358,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(summary.Integration.ID);
       this.EditEntity = ci;
@@ -439,7 +459,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(integrationID);
       const deleted = await ci.Delete();
@@ -509,14 +529,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     return UUIDsEqual(this.SyncingIntegrationID, integrationID);
   }
 
-  async RunSync(integrationID: string): Promise<void> {
+  async RunSync(integrationID: string, fullSync = false): Promise<void> {
     if (this.SyncingIntegrationID) return;
     this.SyncingIntegrationID = integrationID;
     this.SyncResult = null;
     this.cdr.detectChanges();
 
     try {
-      const result = await this.dataService.RunSync(integrationID);
+      const result = await this.dataService.RunSync(integrationID, fullSync);
       this.SyncResult = result;
       if (!result.Success) {
         console.error('[IntegrationConnections] Sync failed:', result.Message);
@@ -530,6 +550,46 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
       this.SyncingIntegrationID = null;
       this.cdr.detectChanges();
       // Auto-clear result after 8 seconds
+      setTimeout(() => {
+        this.SyncResult = null;
+        this.cdr.detectChanges();
+      }, 8000);
+    }
+  }
+
+  ToggleSyncMenu(integrationID: string, event: Event): void {
+    event.stopPropagation();
+    this.SyncMenuIntegrationID = this.SyncMenuIntegrationID === integrationID ? null : integrationID;
+    this.cdr.detectChanges();
+  }
+
+  async RunSyncWithDirection(
+    integrationID: string,
+    fullSync: boolean,
+    syncDirection: 'Pull' | 'Push' | 'Bidirectional',
+    event: Event
+  ): Promise<void> {
+    event.stopPropagation();
+    this.SyncMenuIntegrationID = null;
+    if (this.SyncingIntegrationID) return;
+    this.SyncingIntegrationID = integrationID;
+    this.SyncResult = null;
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.StartSyncWithDirection(integrationID, fullSync, syncDirection);
+      this.SyncResult = result;
+      if (!result.Success) {
+        console.error('[IntegrationConnections] Sync failed:', result.Message);
+      }
+      await this.LoadData();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.SyncResult = { Success: false, Message: `Sync error: ${message}` };
+      console.error('[IntegrationConnections] RunSyncWithDirection error:', err);
+    } finally {
+      this.SyncingIntegrationID = null;
+      this.cdr.detectChanges();
       setTimeout(() => {
         this.SyncResult = null;
         this.cdr.detectChanges();
@@ -616,7 +676,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   private async loadScheduledJobForIntegration(companyIntegrationID: string): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(companyIntegrationID);
       const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
@@ -624,7 +684,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
       // Also look up the Integration Sync job type ID for pre-populating new schedules
       if (!this.integrationSyncJobTypeID) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const typeResult = await rv.RunView<{ ID: string }>({
           EntityName: 'MJ: Scheduled Job Types',
           ExtraFilter: `Name='Integration Sync'`,
@@ -666,6 +726,24 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     if (direction === 'Push') return 'direction-badge push';
     if (direction === 'Bidirectional') return 'direction-badge bidirectional';
     return 'direction-badge';
+  }
+
+  private static readonly DIRECTION_CYCLE: Array<'Pull' | 'Push' | 'Bidirectional'> = ['Pull', 'Bidirectional', 'Push'];
+
+  async CycleSyncDirection(em: EntityMapRow): Promise<void> {
+    const currentIdx = ConnectionsComponent.DIRECTION_CYCLE.indexOf(em.SyncDirection as 'Pull' | 'Push' | 'Bidirectional');
+    const nextIdx = (currentIdx + 1) % ConnectionsComponent.DIRECTION_CYCLE.length;
+    const newDirection = ConnectionsComponent.DIRECTION_CYCLE[nextIdx];
+    const oldDirection = em.SyncDirection;
+    em.SyncDirection = newDirection;
+    this.cdr.detectChanges();
+    try {
+      await this.dataService.UpdateSyncDirection(em.ID, newDirection);
+    } catch (err) {
+      em.SyncDirection = oldDirection;
+      console.error('[IntegrationConnections] Failed to update SyncDirection:', err);
+      this.cdr.detectChanges();
+    }
   }
 
   async OnToggleMapEnabled(em: EntityMapRow, event: Event): Promise<void> {
@@ -1021,7 +1099,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.IsLoadingCredentials = true;
     this.cdr.detectChanges();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const filter = this.IntegrationCredentialTypeID
       ? `CredentialTypeID='${this.IntegrationCredentialTypeID}' AND IsActive=1`
       : 'IsActive=1';
@@ -1116,7 +1194,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(this.SavedIntegrationID);
       ci.IsActive = true;
@@ -1197,6 +1275,138 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   // ---------------------------------------------------------------------------
+  // Create Tables panel (select source objects → batch create entity tables)
+  // ---------------------------------------------------------------------------
+
+  async ToggleCreateTablesPanel(): Promise<void> {
+    this.ShowCreateTablesPanel = !this.ShowCreateTablesPanel;
+    if (this.ShowCreateTablesPanel) {
+      this.ShowAddMapPanel = false;
+      this.ShowAutoMapPanel = false;
+      this.CreateTablesResult = null;
+      this.CreateTablesSchema = '';
+      await this.loadCreateTablesObjects();
+    }
+  }
+
+  CloseCreateTablesPanel(): void {
+    this.ShowCreateTablesPanel = false;
+    this.CreateTablesResult = null;
+    this.cdr.detectChanges();
+  }
+
+  ToggleAllCreateTablesObjects(selected: boolean): void {
+    // Only toggle what the user can currently see — otherwise hidden items
+    // silently get swept into the selection when they change filters.
+    for (const obj of this.FilteredCreateTablesObjects) {
+      obj.Selected = selected;
+    }
+  }
+
+  get CreateTablesSelectedCount(): number {
+    return this.CreateTablesObjects.filter(o => o.Selected).length;
+  }
+
+  get CanCreateTables(): boolean {
+    return this.CreateTablesSelectedCount > 0 && !this.IsCreatingTables;
+  }
+
+  async RunCreateTables(): Promise<void> {
+    if (!this.CanCreateTables || !this.SelectedSummary) return;
+    this.IsCreatingTables = true;
+    this.CreateTablesResult = null;
+    this.cdr.detectChanges();
+
+    try {
+      const selected = this.CreateTablesObjects.filter(o => o.Selected);
+
+      // Send Name for every selection; include ID when the object was already
+      // persisted so the server can skip the lookup. The server's SF branch
+      // describes just these N objects and hydrates IntegrationObject/Field
+      // rows for any that don't have them yet.
+      const selections = selected.map(o => ({
+        SourceObjectID: o.ID,
+        SourceObjectName: o.Name,
+      }));
+
+      const result = await this.dataService.ApplyAllBatch(
+        this.SelectedSummary.Integration.ID,
+        selections
+      );
+      this.CreateTablesResult = { Success: result.Success, Message: result.Message ?? '' };
+
+      if (result.Success) {
+        // Refresh entity maps
+        this.DetailEntityMaps = await this.loadEntityMapsForIntegration(this.SelectedSummary.Integration.ID);
+        this.DetailFilteredMaps = this.applyDetailFilter();
+        this.EntityMapCounts = this.countMapsByIntegration(await this.loadAllEntityMaps());
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.CreateTablesResult = { Success: false, Message: message };
+    } finally {
+      this.IsCreatingTables = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Search-only filter for the picker. Standard/Custom/Registered state
+   * shows up as badges — never hides anything — so Select All covers
+   * everything the user can see.
+   */
+  get FilteredCreateTablesObjects(): Array<{
+    ID?: string;
+    Name: string;
+    Label: string;
+    Selected: boolean;
+    AlreadyPersisted: boolean;
+    IsCustom: boolean;
+  }> {
+    const term = this.CreateTablesSearch.trim().toLowerCase();
+    if (!term) return this.CreateTablesObjects;
+    return this.CreateTablesObjects.filter(o =>
+      o.Name.toLowerCase().includes(term) || o.Label.toLowerCase().includes(term)
+    );
+  }
+
+  private async loadCreateTablesObjects(): Promise<void> {
+    if (!this.SelectedSummary) return;
+    this.IsLoadingCreateTablesObjects = true;
+    this.cdr.detectChanges();
+
+    try {
+      // Pull the full live catalog from the connector (e.g. all ~1,800 SF
+      // sobjects), not just the curated IntegrationObject subset. Objects
+      // that already have entity maps are filtered out — those are sync
+      // targets, not candidates for "create table".
+      const result = await this.dataService.ListSourceObjects(this.SelectedSummary.Integration.ID);
+      const mappedNames = new Set(this.DetailEntityMaps.map(m => m.ExternalObjectName));
+      if (result.Success) {
+        this.CreateTablesObjects = (result.Data ?? [])
+          .filter(o => !mappedNames.has(o.Name))
+          .map(o => ({
+            ID: o.IntegrationObjectID ?? undefined,
+            Name: o.Name,
+            Label: o.Label || o.Name,
+            Selected: false,
+            AlreadyPersisted: o.AlreadyPersisted,
+            IsCustom: o.IsCustom,
+          }));
+      } else {
+        console.error('[IntegrationConnections] ListSourceObjects failed:', result.Message);
+        this.CreateTablesObjects = [];
+      }
+    } catch (err) {
+      console.error('[IntegrationConnections] Failed to load source objects for Create Tables:', err);
+      this.CreateTablesObjects = [];
+    } finally {
+      this.IsLoadingCreateTablesObjects = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
@@ -1227,7 +1437,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private async saveCompanyIntegration(): Promise<string | null> {
     if (!this.SelectedCompanyID || !this.SelectedIntegration) return null;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
 
     if (this.SavedIntegrationID) {
@@ -1283,7 +1493,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async toggleConnectionActive(summary: IntegrationSummary): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
     await ci.Load(summary.Integration.ID);
     ci.IsActive = !summary.Integration.IsActive;
@@ -1294,7 +1504,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async loadEditCredentials(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJCredentialEntity>({
       EntityName: 'MJ: Credentials',
       ExtraFilter: 'IsActive=1',
@@ -1332,12 +1542,14 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private onDocumentClick(e: Event): void {
-    if (this.OpenMenuID) {
-      const target = e.target as HTMLElement;
-      if (!target.closest('.card-menu-wrapper')) {
-        this.OpenMenuID = null;
-        this.cdr.detectChanges();
-      }
+    const target = e.target as HTMLElement;
+    if (this.OpenMenuID && !target.closest('.card-menu-wrapper')) {
+      this.OpenMenuID = null;
+      this.cdr.detectChanges();
+    }
+    if (this.SyncMenuIntegrationID && !target.closest('.sync-menu-wrapper')) {
+      this.SyncMenuIntegrationID = null;
+      this.cdr.detectChanges();
     }
   }
 }

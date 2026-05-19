@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView, CompositeKey, LogError, EntityRecordNameInput } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, CompositeKey, LogError, EntityRecordNameInput } from '@memberjunction/core';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 import { MJUserRecordLogEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
@@ -23,24 +24,37 @@ export interface RecentAccessItem {
  * Service for tracking and retrieving recently accessed resources.
  * Uses the User Record Logs entity to persist access history.
  */
+/**
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class RecentAccessService {
-  private static _instance: RecentAccessService;
+  private static readonly _globalStoreKey = '___SINGLETON__RecentAccessService';
   private _recentItems$ = new BehaviorSubject<RecentAccessItem[]>([]);
   private _isLoading$ = new BehaviorSubject<boolean>(false);
   private _isLoaded = false;
 
+  private _provider: IMetadataProvider | null = null;
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
+
   constructor() {
-    if (RecentAccessService._instance) {
-      return RecentAccessService._instance;
+    const g = GetGlobalObjectStore()!;
+    if (g[RecentAccessService._globalStoreKey]) {
+      return g[RecentAccessService._globalStoreKey] as RecentAccessService;
     }
-    RecentAccessService._instance = this;
+    g[RecentAccessService._globalStoreKey] = this;
   }
 
   public static get Instance(): RecentAccessService {
-    return RecentAccessService._instance;
+    return GetGlobalObjectStore()![RecentAccessService._globalStoreKey] as RecentAccessService;
   }
 
   /**
@@ -78,7 +92,7 @@ export class RecentAccessService {
     resourceType: 'record' | 'view' | 'dashboard' | 'artifact' | 'report' = 'record'
   ): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) {
         console.warn(`RecentAccessService: Entity "${entityName}" not found in metadata`);
@@ -91,7 +105,7 @@ export class RecentAccessService {
         : recordId;
 
       // Check if we already have a log entry for this user/entity/record combination
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const existingResult = await rv.RunView<MJUserRecordLogEntity>({
         EntityName: 'MJ: User Record Logs',
         ExtraFilter: `UserID='${md.CurrentUser.ID}' AND EntityID='${entityInfo.ID}' AND RecordID='${recordIdString}'`,
@@ -116,7 +130,7 @@ export class RecentAccessService {
         }
       } else {
         // Create new entry
-        const newLog = await md.GetEntityObject<MJUserRecordLogEntity>('MJ: User Record Logs');
+        const newLog = await md.GetEntityObject<MJUserRecordLogEntity>('MJ: User Record Logs', md.CurrentUser);
         newLog.UserID = md.CurrentUser.ID;
         newLog.EntityID = entityInfo.ID;
         newLog.RecordID = recordIdString;
@@ -151,7 +165,7 @@ export class RecentAccessService {
     try {
       this._isLoading$.next(true);
 
-      const md = new Metadata();
+      const md = this.Provider;
 
       // Get recent records, limited to maxItems (already ordered by LatestAt DESC in engine)
       const userRecordLogs = UserInfoEngine.Instance.UserRecordLogs.slice(0, maxItems);
@@ -202,7 +216,7 @@ export class RecentAccessService {
    * Batch-resolve record names for a list of recent access items using GetEntityRecordNames().
    * Mutates the items in-place to set recordName where resolved.
    */
-  private async resolveRecordNames(items: RecentAccessItem[], md: Metadata): Promise<void> {
+  private async resolveRecordNames(items: RecentAccessItem[], md: IMetadataProvider): Promise<void> {
     const nameInputs: EntityRecordNameInput[] = [];
     const indexMap = new Map<string, number>();
 
@@ -239,7 +253,7 @@ export class RecentAccessService {
    * - Plain value: just the raw value (e.g. a GUID)
    * Detects the format and constructs the key accordingly.
    */
-  private buildCompositeKeyForRecord(entityName: string, recordId: string, md: Metadata): CompositeKey | null {
+  private buildCompositeKeyForRecord(entityName: string, recordId: string, md: IMetadataProvider): CompositeKey | null {
     if (!recordId) return null;
 
     // If recordId contains '|', it's in concatenated format

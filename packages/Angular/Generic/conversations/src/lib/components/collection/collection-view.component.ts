@@ -1,4 +1,5 @@
 import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -31,15 +32,15 @@ type SortBy = 'name' | 'date' | 'type';
             </button>
           </div>
     
-          <kendo-dropdownlist
-            [data]="sortOptions"
-            [textField]="'label'"
-            [valueField]="'value'"
-            [(value)]="sortBy"
-            (valueChange)="onSortChange()"
-            [style.width.px]="150"
-            placeholder="Sort by...">
-          </kendo-dropdownlist>
+          <select
+            [(ngModel)]="sortBy"
+            (ngModelChange)="onSortChange()"
+            class="mj-select"
+            style="width: 150px;">
+            @for (option of sortOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
     
           @if (canEdit) {
             <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
@@ -123,7 +124,7 @@ type SortBy = 'name' | 'date' | 'type';
     .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: var(--mj-bg-surface); border-radius: 12px; overflow: hidden; box-shadow: var(--mj-shadow-lg); }
   `]
 })
-export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
+export class CollectionViewComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
   @Input() collection!: MJCollectionEntity;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
@@ -146,7 +147,8 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     { label: 'Type', value: 'type' }
   ];
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit() {
     this.loadArtifacts();
@@ -169,8 +171,8 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
     if (!this.collection) return;
 
     try {
-      const rv = new RunView();
-      const md = new Metadata();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const md = this.ProviderToUse;
 
       // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
@@ -264,7 +266,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
     try {
       // Delete THIS SPECIFIC VERSION from the collection
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactVersionID='${item.version.ID}'`,
@@ -272,9 +274,20 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        // Delete this version association
+        // Delete all version associations atomically
+        const md = this.ProviderToUse;
+        const tg = await md.CreateTransactionGroup();
         for (const joinRecord of result.Results) {
+          joinRecord.TransactionGroup = tg;
           await joinRecord.Delete();
+        }
+        const success = await tg.Submit();
+        if (!success) {
+          MJNotificationService.Instance.CreateSimpleNotification(
+            `Failed to remove ${versionLabel} from collection`,
+            'error'
+          );
+          return;
         }
         await this.loadArtifacts();
         this.cdr.detectChanges();
@@ -301,7 +314,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
 
     try {
       // Create new artifact
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
 
       artifact.Name = name;
@@ -311,7 +324,7 @@ export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
       const saved = await artifact.Save();
       if (saved) {
         // Get the latest version of this artifact to add to collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const versionResult = await rv.RunView({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID='${artifact.ID}'`,

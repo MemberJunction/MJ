@@ -6,8 +6,8 @@
           <i class="fa-solid fa-folder-plus"></i>
           New Category
         </h2>
-        <button kendoButton
-          [fillMode]="'flat'"
+        <button mjButton
+          variant="flat"
           (click)="onClose()">
           <i class="fa-solid fa-times"></i>
         </button>
@@ -25,13 +25,12 @@
           <label for="categoryName" class="form-label required">
             Category Name
           </label>
-          <kendo-textbox
+          <input type="text" class="mj-input"
             id="categoryName"
             [(ngModel)]="Name"
-            [placeholder]="'Enter category name'"
+            placeholder="Enter category name"
             [maxlength]="200"
-            [class.invalid]="Errors['name']">
-          </kendo-textbox>
+            [class.invalid]="Errors['name']" />
           @if (Errors['name']) {
             <span class="error-text">{{ Errors['name'] }}</span>
           }
@@ -41,27 +40,25 @@
           <label for="categoryDescription" class="form-label">
             Description
           </label>
-          <kendo-textarea
+          <textarea class="mj-textarea"
             id="categoryDescription"
             [(ngModel)]="Description"
-            [placeholder]="'Optional description for this category'"
+            placeholder="Optional description for this category"
             [rows]="3"
-            [maxlength]="1000">
-          </kendo-textarea>
+            [maxlength]="1000"></textarea>
         </div>
 
         <div class="form-group">
           <label for="categoryParent" class="form-label">
             Parent Category
           </label>
-          <kendo-dropdownlist
-            id="categoryParent"
+          <mj-dropdown
             [(ngModel)]="ParentID"
-            [data]="getParentOptions()"
-            textField="text"
-            valueField="value"
-            [valuePrimitive]="true">
-          </kendo-dropdownlist>
+            [Data]="getParentOptions()"
+            TextField="text"
+            ValueField="value"
+            [ValuePrimitive]="true">
+          </mj-dropdown>
           <span class="help-text">
             Leave empty to create a root-level category
           </span>
@@ -69,9 +66,8 @@
       </div>
 
       <div class="panel-footer">
-        <button kendoButton
-          [fillMode]="'solid'"
-          [themeColor]="'primary'"
+        <button mjButton
+          variant="primary"
           [disabled]="IsSaving"
           (click)="onSave()">
           @if (IsSaving) {
@@ -82,8 +78,8 @@
             Create Category
           }
         </button>
-        <button kendoButton
-          [fillMode]="'outline'"
+        <button mjButton
+          variant="outline"
           [disabled]="IsSaving"
           (click)="onClose()">
           Cancel

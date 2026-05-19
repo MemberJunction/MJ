@@ -24,10 +24,12 @@ export class ContentSourceParams {
     maxTags?: number;
 }
 
+export type ContentSourceTypeParamValue = string | number | boolean | string[] | RegExp;
+
 export class ContentSourceTypeParams {
     contentSourceID: string;
     contentSourceTypeID: string;
     name: string;
-    value: string;
+    value: ContentSourceTypeParamValue;
     type: string;
 }

@@ -53,7 +53,7 @@ export interface MJEnvironmentConfig {
   /**
    * Authentication provider type
    */
-  AUTH_TYPE: 'msal' | 'auth0';
+  AUTH_TYPE: 'msal' | 'auth0' | 'okta' | 'cognito';
 
   /**
    * MemberJunction core schema name in the database
@@ -81,6 +81,18 @@ export interface MJEnvironmentConfig {
    * Auth0 client ID (for Auth0 auth)
    */
   AUTH0_CLIENTID?: string;
+
+  /**
+   * Master kill switch for the Angular service worker app-shell pre-cache.
+   * Only effective when `production` is also true. When false (default),
+   * `MJExplorerAppModule.forRoot()` does not register the service worker
+   * and the update-notification toast is inert.
+   *
+   * Set to `true` only after you've also added the `serviceWorker` entry
+   * to your `angular.json` build configuration so a real `ngsw-worker.js`
+   * is generated. See `@memberjunction/ng-explorer-service-worker` README.
+   */
+  enableServiceWorker?: boolean;
 
   /**
    * Additional custom environment properties

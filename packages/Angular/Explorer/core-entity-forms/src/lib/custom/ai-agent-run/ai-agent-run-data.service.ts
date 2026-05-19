@@ -1,5 +1,5 @@
 import { BehaviorSubject, Observable } from 'rxjs';
-import { RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJActionExecutionLogEntity, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 
 export interface AgentRunData {
@@ -19,7 +19,7 @@ export class AIAgentRunDataHelper {
   private subRunsSubject$ = new BehaviorSubject<MJAIAgentRunEntity[]>([]);
   private actionLogsSubject$ = new BehaviorSubject<MJActionExecutionLogEntity[]>([]);
   private promptRunsSubject$ = new BehaviorSubject<MJAIPromptRunEntity[]>([]);
-  private loadingSubject$ = new BehaviorSubject<boolean>(false);
+  private loadingSubject$ = new BehaviorSubject<boolean>(true);
   private errorSubject$ = new BehaviorSubject<string | null>(null);
   
   // Public observables
@@ -44,7 +44,22 @@ export class AIAgentRunDataHelper {
   private cacheAccessOrder: string[] = [];
   
   private currentAgentRunId: string | null = null;
-  
+
+  /**
+   * Optional explicit metadata provider. Set via `setProvider()` by the
+   * owning component (which has provider context via BaseAngularComponent).
+   * Falls back to `Metadata.Provider` when not set.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   constructor() {}
   
   /**
@@ -79,7 +94,7 @@ export class AIAgentRunDataHelper {
   }
   
   private async loadStepsAndSubRuns(agentRunId: string) {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     
     // First, get all steps to determine what additional data we need
     const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
@@ -190,8 +205,8 @@ export class AIAgentRunDataHelper {
       }
     }
     
-    const rv = new RunView();
-    
+    const rv = RunView.FromMetadataProvider(this.Provider);
+
     // Load steps first to determine what else we need
     const stepsResult = await rv.RunView<MJAIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',

@@ -21,8 +21,10 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'accessDetails', sectionName: 'Access Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJOAuthTokens', sectionName: 'O Auth Tokens', isExpanded: false },
+            { sectionKey: 'mJSearchProviders', sectionName: 'Search Providers', isExpanded: false },
             { sectionKey: 'mJFileStorageAccounts', sectionName: 'File Storage Accounts', isExpanded: false },
             { sectionKey: 'mJMCPServerConnections', sectionName: 'MCP Server Connections', isExpanded: false },
+            { sectionKey: 'mJVectorDatabases', sectionName: 'Vector Databases', isExpanded: false },
             { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false }
         ]);

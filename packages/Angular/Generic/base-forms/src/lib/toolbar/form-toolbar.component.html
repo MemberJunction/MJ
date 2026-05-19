@@ -52,8 +52,12 @@
         </button>
       }
       @if (Config.ShowHistoryButton && TracksChanges) {
-        <button class="mj-forms-btn" (click)="OnHistory()" title="MJ: Record Changes">
+        <button class="mj-forms-btn mj-forms-btn--history" (click)="OnHistory()"
+          [title]="VersionCount > 0 ? VersionCount + ' version(s) tracked' : 'Record Changes'">
           <i class="fa-regular fa-clock"></i>
+          @if (VersionCount > 0) {
+            <span class="mj-version-count-badge">v{{ VersionCount }}</span>
+          }
         </button>
       }
       @if (Config.ShowListButton) {
@@ -62,6 +66,15 @@
           <i class="fa-regular fa-bookmark"></i>
           @if (ListCount > 0) {
             <span class="mj-list-count-badge">{{ ListCount }}</span>
+          }
+        </button>
+      }
+      @if (Config.ShowTagsButton) {
+        <button class="mj-forms-btn" (click)="OnTagsPanel()"
+          [title]="TagCount > 0 ? TagCount + ' tag(s)' : 'View tags'">
+          <i class="fa-solid fa-tags"></i>
+          @if (TagCount > 0) {
+            <span class="mj-list-count-badge">{{ TagCount }}</span>
           }
         </button>
       }
@@ -131,16 +144,18 @@
             }
           </div>
         }
-        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
-          [disabled]="ExpandedSectionCount >= VisibleSectionCount"
-          (click)="OnExpandAll()" title="Expand all sections">
-          <i class="fa-solid fa-angles-down"></i>
-        </button>
-        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
-          [disabled]="ExpandedSectionCount === 0"
-          (click)="OnCollapseAll()" title="Collapse all sections">
-          <i class="fa-solid fa-angles-up"></i>
-        </button>
+        @if (Config.ShowExpandCollapseAllButtons) {
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+            [disabled]="ExpandedSectionCount >= VisibleSectionCount"
+            (click)="OnExpandAll()" title="Expand all sections">
+            <i class="fa-solid fa-angles-down"></i>
+          </button>
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+            [disabled]="ExpandedSectionCount === 0"
+            (click)="OnCollapseAll()" title="Collapse all sections">
+            <i class="fa-solid fa-angles-up"></i>
+          </button>
+        }
         @if (HasCustomSectionOrder) {
           <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only" (click)="OnResetSectionOrder()" title="Reset section order">
             <i class="fa-solid fa-arrow-rotate-left"></i>
@@ -152,11 +167,13 @@
             <i class="fa-solid fa-bars-staggered"></i>
           </button>
         }
-        <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
-          (click)="OnToggleWidthMode()"
-          [title]="WidthMode === 'centered' ? 'Expand to full width' : 'Center content'">
-          <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
-        </button>
+        @if (Config.ShowWidthToggle) {
+          <button class="mj-forms-btn mj-forms-btn--ghost mj-forms-btn--icon-only"
+            (click)="OnToggleWidthMode()"
+            [title]="WidthMode === 'centered' ? 'Expand to full width' : 'Center content'">
+            <i [class]="WidthMode === 'centered' ? 'fa-solid fa-arrows-left-right-to-line' : 'fa-solid fa-compress'"></i>
+          </button>
+        }
       </div>
     }
 

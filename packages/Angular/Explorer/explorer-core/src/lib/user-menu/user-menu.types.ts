@@ -81,10 +81,30 @@ export interface ApplicationInfoRef {
 }
 
 /**
+ * Minimal tab info exposed to user menu (avoids importing full WorkspaceTab)
+ */
+export interface WorkspaceTabRef {
+    id: string;
+    title: string;
+    applicationId: string;
+    resourceTypeId: string;
+    configuration: Record<string, unknown>;
+}
+
+/**
  * Interface for workspace manager operations needed by user menu
  */
 export interface WorkspaceManagerRef {
     GetConfiguration: () => unknown;
+    GetActiveTabId?: () => string | null;
+    GetTab?: (tabId: string) => WorkspaceTabRef | undefined;
+}
+
+/**
+ * Interface for pin service operations needed by user menu
+ */
+export interface PinServiceRef {
+    IsPinned: (resourceType: string, config: Record<string, unknown>) => boolean;
 }
 
 /**
@@ -125,6 +145,9 @@ export interface UserMenuContext {
     /** Auth service for logout operations */
     authService: AuthServiceRef;
 
+    /** Pin service for Home dashboard pinning */
+    pinService?: PinServiceRef;
+
     /** Function to open settings dialog */
     openSettings: () => void;
 
@@ -136,6 +159,9 @@ export interface UserMenuContext {
 
     /** Currently applied theme ID (resolved, never 'system') */
     appliedTheme?: string;
+
+    /** Whether the in-app feedback feature is enabled for this org */
+    feedbackEnabled?: boolean;
 }
 
 /**
@@ -150,6 +176,26 @@ export interface UserMenuActionResult {
 
     /** Optional message to display (toast notification) */
     message?: string;
+}
+
+/**
+ * User display information for the menu header
+ */
+export interface UserDisplayInfo {
+    /** User's display name */
+    name: string;
+
+    /** User's email address */
+    email: string;
+
+    /** URL to user's avatar image, or null */
+    avatarUrl: string | null;
+
+    /** Two-character initials derived from name */
+    initials: string;
+
+    /** Optional subtitle shown below email (e.g., organization name) */
+    subtitle?: string;
 }
 
 /**

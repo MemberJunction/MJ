@@ -68,6 +68,7 @@ flowchart TD
 - **CloudEvents**: Optional CloudEvent emission for entity lifecycle events
 - **Telemetry**: Configurable server-side telemetry with multiple verbosity levels
 - **Extensible Architecture**: Custom resolvers, entity subclasses, and new user handling via `@RegisterClass`
+- **Server Extensions**: Plugin architecture for auto-discovering and loading extension modules (webhooks, messaging adapters, custom integrations) via `@RegisterClass` + `mj.config.cjs`
 
 ## Configuration
 
@@ -414,7 +415,7 @@ The server includes resolvers for the following domains:
 | Resolver | Operations |
 |----------|------------|
 | `EntityResolver` | CRUD operations for all entities |
-| `RunViewResolver` | RunView by ID, name, or dynamic entity |
+| `RunViewResolver` | RunView by ID, name, or dynamic entity. All four input types (`RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`) expose an optional `AfterKey: CompositeKeyInputType` for keyset (seek) pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
 | `RunAIPromptResolver` | Execute AI prompts, simple prompts, text embeddings |
 | `RunAIAgentResolver` | Execute AI agents with session and streaming support |
 | `ActionResolver` | Execute MJ Actions |
@@ -481,6 +482,7 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `RunViewByNameGeneric()` | Execute a saved view by name |
 | `RunDynamicViewGeneric()` | Execute an ad-hoc view on an entity |
 | `RunViewsGeneric()` | Batch-execute multiple views |
+| `RunViewGenericInternal()` | Shared internal: extracts and forwards all RunView params including `AfterKey` (keyset pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)) |
 | `CheckUserReadPermissions()` | Validate entity-level read access |
 | `CheckAPIKeyScopeAuthorization()` | Validate API key scope |
 | `MapFieldNamesToCodeNames()` | Map field names for GraphQL transport |
@@ -800,13 +802,75 @@ databaseSettings: {
 
 Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptographic verification for the same token within its lifetime.
 
+## Server Extensions
+
+MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+### How It Works
+
+1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
+2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
+3. Configuration in `mj.config.cjs` defines which extensions to load
+4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
+
+### Configuration
+
+```javascript
+// mj.config.cjs
+module.exports = {
+    serverExtensions: [
+        {
+            Enabled: true,
+            DriverClass: 'SlackMessagingExtension',
+            RootPath: '/webhook/slack',
+            Settings: {
+                AgentID: 'your-agent-guid',
+                BotToken: process.env.SLACK_BOT_TOKEN,
+                SigningSecret: process.env.SLACK_SIGNING_SECRET,
+            }
+        },
+        {
+            Enabled: true,
+            DriverClass: 'TeamsMessagingExtension',
+            RootPath: '/webhook/teams',
+            Settings: {
+                AgentID: 'your-agent-guid',
+                MicrosoftAppId: process.env.MICROSOFT_APP_ID,
+                MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
+            }
+        }
+    ]
+};
+```
+
+### Health Monitoring
+
+MJServer exposes an aggregate health check endpoint for all loaded extensions:
+
+```
+GET /health/extensions
+```
+
+Returns `200` when all extensions are healthy, `503` when any extension reports unhealthy.
+
+### Available Extensions
+
+| Package | Extensions | Description |
+|---------|-----------|-------------|
+| [`@memberjunction/messaging-adapters`](../MessagingAdapters/) | `SlackMessagingExtension`, `TeamsMessagingExtension` | Slack & Teams integration for MJ AI agents |
+
+### Creating Custom Extensions
+
+See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) for documentation on building custom extensions.
+
 ## Graceful Shutdown
 
 The server registers handlers for `SIGTERM` and `SIGINT` to:
 
-1. Stop the scheduled jobs service
-2. Close the HTTP server
-3. Force-exit after a 10-second timeout if graceful shutdown stalls
+1. Shut down all server extensions (in reverse order of loading)
+2. Stop the scheduled jobs service
+3. Close the HTTP server
+4. Force-exit after a 10-second timeout if graceful shutdown stalls
 
 Unhandled promise rejections are caught and logged without crashing the server.
 
@@ -888,6 +952,50 @@ Enable verbose logging:
 DEBUG=mj:*
 NODE_ENV=development
 ```
+
+## Knowledge Hub Resolvers
+
+This package includes GraphQL resolvers for the Knowledge Hub:
+- **`SearchKnowledgeResolver`** — Unified search combining vector similarity (Pinecone) with full-text search via `Metadata.FullTextSearch()` and RRF fusion
+- **`VectorizeEntityResolver`** — Triggers entity vectorization via `EntityVectorSyncer`
+- **`PipelineProgressResolver`** — GraphQL subscription for real-time pipeline progress
+- **`FetchEntityVectorsResolver`** — Retrieves vectors and metadata from the vector database for a given entity document
+
+See the **[Full-Text Search Guide](../MJCore/docs/FULL_TEXT_SEARCH_GUIDE.md)** for the complete FTS architecture.
+
+### FetchEntityVectorsResolver
+
+Fetches vectors and their associated metadata from a vector database (e.g., Pinecone) for a specific entity document. Used by the clustering dashboard to obtain raw vectors for visualization.
+
+**How it works:** The resolver performs a zero-vector query against the vector index with an entity metadata filter (`Entity: { $eq: entityName }`). Since the query vector is all zeros, similarity scores are meaningless -- the purpose is purely to retrieve vectors matching the entity filter. This approach is used because Pinecone's list API does not support metadata filtering, but the query API does.
+
+```graphql
+query {
+  FetchEntityVectors(
+    entityDocumentID: "doc-uuid"
+    maxRecords: 500
+    filter: ""
+  ) {
+    Success
+    Results {
+      ID
+      Values
+      Metadata
+    }
+    TotalCount
+    ElapsedMs
+    ErrorMessage
+  }
+}
+```
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `entityDocumentID` | `String!` | -- | The entity document whose vector index to query |
+| `maxRecords` | `Int` | `1000` | Maximum number of vectors to return |
+| `filter` | `String` | -- | Reserved for future metadata filter extensions |
+
+The resolver resolves the vector index for the entity document using a fallback chain: explicit `VectorIndexID` on the document, then matching by `VectorDatabaseID` + `EmbeddingModelID`.
 
 ## Contributing
 

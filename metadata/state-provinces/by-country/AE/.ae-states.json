@@ -1,0 +1,149 @@
+[
+  {
+    "fields": {
+      "Name": "‘Ajmān",
+      "Code": "AJ",
+      "ISO3166_2": "AE-AJ",
+      "Latitude": 25.3971,
+      "Longitude": 55.5411,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-AJ.geojson",
+      "CommonAliases": [
+        "‘Ajmān"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "F75B2E54-FA11-4855-BC03-3522462AAF80"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.841Z",
+      "checksum": "7746116ce0730cee13d591fa8d61de91cdc3927f9a2e1f179c34a59f589e6900"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Abū Zaby (Abu Dhabi)",
+      "Code": "AZ",
+      "ISO3166_2": "AE-AZ",
+      "Latitude": 23.5238,
+      "Longitude": 54.0817,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-AZ.geojson",
+      "CommonAliases": [
+        "Abū Zaby (Abu Dhabi)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "78EE426B-1C55-4736-BB61-C70C44F8582B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.858Z",
+      "checksum": "1993e22c09edd3e5e76e88e96763f37706846faaec7d45956028c98dc77673f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Al Fujayrah",
+      "Code": "FU",
+      "ISO3166_2": "AE-FU",
+      "Latitude": 25.4752,
+      "Longitude": 56.2221,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-FU.geojson",
+      "CommonAliases": [
+        "Al Fujayrah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "01EFDE01-F408-4CC4-8676-1D7C9908E742"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.874Z",
+      "checksum": "f123a076606259cf34813c1719a78c04766f13137ea92f19edfaec1661391530"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash Shāriqah (Sharjah)",
+      "Code": "SH",
+      "ISO3166_2": "AE-SH",
+      "Latitude": 25.172,
+      "Longitude": 55.7788,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-SH.geojson",
+      "CommonAliases": [
+        "Ash Shāriqah (Sharjah)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "4E00B4A3-9842-4781-A710-1E8BBBC53D7C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.890Z",
+      "checksum": "2ae8d42842f85e2c93d844d929a8c34afa452233c0642c9e50a590912c6f9e9b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dubayy (Dubai)",
+      "Code": "DU",
+      "ISO3166_2": "AE-DU",
+      "Latitude": 24.9508,
+      "Longitude": 55.3436,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-DU.geojson",
+      "CommonAliases": [
+        "Dubayy (Dubai)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "867E5275-CF7B-421A-976D-C8C27C503E7B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.906Z",
+      "checksum": "a8fbad5c83f5e3a88d92f9743724ece2286da5b0863b44ac6c3537279271bc5e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "R'as al Khaymah",
+      "Code": "RK",
+      "ISO3166_2": "AE-RK",
+      "Latitude": 25.6964,
+      "Longitude": 55.9791,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-RK.geojson",
+      "CommonAliases": [
+        "R'as al Khaymah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "8EA05AD2-D304-4390-B6A4-689EBD016FA7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.921Z",
+      "checksum": "44237161d648227039f6559aacddc7440c2546f23fe644e4672cc29d845b3275"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Umm al Qaywayn",
+      "Code": "UQ",
+      "ISO3166_2": "AE-UQ",
+      "Latitude": 25.5218,
+      "Longitude": 55.7217,
+      "BoundaryGeoJSON": "@file:by-country/AE/boundaries/AE-UQ.geojson",
+      "CommonAliases": [
+        "Umm al Qaywayn"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AE"
+    },
+    "primaryKey": {
+      "ID": "492D46B2-767B-4A56-8633-F9DDC35DCD18"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:25.935Z",
+      "checksum": "7c1a7e9513501c58deca1e7ea6bb2fcd3f398b988a884b66ad3069f59894f9e9"
+    }
+  }
+]

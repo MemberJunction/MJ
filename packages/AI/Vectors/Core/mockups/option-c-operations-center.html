@@ -1,0 +1,364 @@
+<!--
+  Option C: Operations Center
+  Design Philosophy: Real-time operational monitoring and control.
+  This layout uses a quadrant grid optimized for ops teams who need to
+  monitor active jobs, investigate errors, manage the sync queue, and
+  track performance metrics simultaneously. A global action bar at the
+  top provides quick access to common bulk operations. Designed for
+  production monitoring where uptime and throughput matter most.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector DB Management - Operations Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Header + Action Bar */
+  .header { background: var(--mj-brand-primary); color: #fff; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 16px; font-weight: 600; }
+  .header h1 i { margin-right: 8px; }
+  .header .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mj-status-success); margin-left: 10px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .action-bar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 10px 24px; display: flex; align-items: center; gap: 10px; }
+  .action-bar button { padding: 7px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; border: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-success { background: var(--mj-status-success); color: #fff; }
+  .btn-warning { background: var(--mj-status-warning); color: #fff; }
+  .btn-danger { background: var(--mj-status-error); color: #fff; }
+  .btn-outline { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default) !important; color: var(--mj-text-primary); }
+  .action-bar .separator { width: 1px; height: 24px; background: var(--mj-border-default); }
+  .action-bar .status-text { font-size: 12px; color: var(--mj-text-secondary); margin-left: auto; }
+
+  /* Quadrant Grid */
+  .quadrants { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 1px; background: var(--mj-border-default); overflow: hidden; }
+  .quadrant { background: var(--mj-bg-surface); display: flex; flex-direction: column; overflow: hidden; }
+  .q-header { padding: 10px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .q-header h2 { font-size: 13px; font-weight: 600; }
+  .q-header h2 i { margin-right: 6px; color: var(--mj-brand-primary); }
+  .q-header .badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; border-radius: 10px; font-size: 11px; font-weight: 600; padding: 0 6px; }
+  .q-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+
+  /* Active Jobs */
+  .job-item { padding: 10px 0; border-bottom: 1px solid var(--mj-border-default); }
+  .job-item:last-child { border-bottom: none; }
+  .job-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .job-name { font-size: 13px; font-weight: 600; }
+  .job-meta { font-size: 11px; color: var(--mj-text-secondary); }
+  .progress-bar { height: 6px; background: var(--mj-border-default); border-radius: 3px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width 0.3s; }
+  .progress-fill.green { background: var(--mj-status-success); }
+  .progress-fill.blue { background: var(--mj-brand-primary); }
+  .progress-fill.yellow { background: var(--mj-status-warning); }
+  .job-stats { display: flex; gap: 16px; margin-top: 4px; font-size: 11px; color: var(--mj-text-secondary); }
+
+  /* Error Log */
+  .error-filters { display: flex; gap: 6px; margin-bottom: 10px; }
+  .error-filters button { padding: 3px 10px; border: 1px solid var(--mj-border-default); border-radius: 12px; background: var(--mj-bg-surface); font-size: 11px; cursor: pointer; color: var(--mj-text-secondary); }
+  .error-filters button.active { background: var(--mj-status-error); color: #fff; border-color: var(--mj-status-error); }
+  .error-filters button.warn-active { background: var(--mj-status-warning); color: #fff; border-color: var(--mj-status-warning); }
+
+  .error-item { padding: 8px 0; border-bottom: 1px solid var(--mj-border-default); font-size: 12px; }
+  .error-item:last-child { border-bottom: none; }
+  .error-level { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; margin-right: 6px; }
+  .level-error { background: #fee2e2; color: #991b1b; }
+  .level-warn { background: #fef3c7; color: #92400e; }
+  .level-info { background: #dbeafe; color: #1e40af; }
+  .error-time { color: var(--mj-text-secondary); font-size: 10px; float: right; }
+  .error-msg { margin-top: 3px; color: var(--mj-text-secondary); font-family: monospace; font-size: 11px; }
+
+  /* Schedule / Queue */
+  .queue-item { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--mj-border-default); font-size: 13px; }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-pos { width: 24px; height: 24px; border-radius: 50%; background: var(--mj-bg-page); border: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: var(--mj-text-secondary); flex-shrink: 0; }
+  .queue-entity { font-weight: 500; flex: 1; }
+  .queue-trigger { font-size: 11px; color: var(--mj-text-secondary); }
+  .queue-time { font-size: 11px; color: var(--mj-text-secondary); white-space: nowrap; }
+
+  /* Metrics */
+  .metrics-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .metric-card { background: var(--mj-bg-page); border-radius: 6px; padding: 12px; text-align: center; }
+  .metric-value { font-size: 22px; font-weight: 700; color: var(--mj-text-primary); }
+  .metric-label { font-size: 11px; color: var(--mj-text-secondary); margin-top: 2px; }
+  .metric-change { font-size: 10px; margin-top: 2px; }
+
+  /* Chart mockup */
+  .chart-mock { background: var(--mj-bg-page); border-radius: 6px; padding: 14px; }
+  .chart-mock h4 { font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 10px; }
+  .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+  .chart-bar { flex: 1; background: var(--mj-brand-primary); border-radius: 2px 2px 0 0; opacity: 0.7; min-width: 8px; }
+  .chart-bar:hover { opacity: 1; }
+  .chart-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--mj-text-secondary); margin-top: 4px; }
+
+  .cost-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+  .cost-row .label { color: var(--mj-text-secondary); }
+  .cost-row .value { font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <h1><i class="fa-solid fa-satellite-dish"></i> Vector Operations Center <span class="live-dot"></span></h1>
+  <span style="font-size:12px; opacity:0.8;">Last updated: Mar 27, 2026 10:45:12 AM</span>
+</div>
+
+<!-- Global Action Bar -->
+<div class="action-bar">
+  <button class="btn-success"><i class="fa-solid fa-play"></i> Start Sync</button>
+  <button class="btn-warning"><i class="fa-solid fa-pause"></i> Pause All</button>
+  <button class="btn-danger"><i class="fa-solid fa-ban"></i> Clear Queue</button>
+  <span class="separator"></span>
+  <button class="btn-outline"><i class="fa-solid fa-arrows-rotate"></i> Force Re-embed</button>
+  <button class="btn-outline"><i class="fa-solid fa-download"></i> Export Logs</button>
+  <span class="status-text">
+    <i class="fa-solid fa-circle" style="color:var(--mj-status-success);font-size:8px"></i> 3 active jobs |
+    <i class="fa-solid fa-circle" style="color:var(--mj-status-warning);font-size:8px"></i> 4 queued |
+    <i class="fa-solid fa-circle" style="color:var(--mj-status-error);font-size:8px"></i> 2 errors
+  </span>
+</div>
+
+<!-- Four Quadrants -->
+<div class="quadrants">
+
+  <!-- Q1: Active Sync Jobs -->
+  <div class="quadrant">
+    <div class="q-header">
+      <h2><i class="fa-solid fa-spinner fa-spin-pulse"></i> Active Sync Jobs</h2>
+      <span class="badge" style="background:#dcfce7;color:#166534;">3 running</span>
+    </div>
+    <div class="q-body">
+      <div class="job-item">
+        <div class="job-top">
+          <span class="job-name"><i class="fa-solid fa-building" style="color:var(--mj-brand-primary);margin-right:4px"></i> Deals</span>
+          <span class="job-meta">95% complete</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill green" style="width:95%"></div></div>
+        <div class="job-stats">
+          <span><i class="fa-solid fa-check"></i> 148,504 / 156,320</span>
+          <span><i class="fa-solid fa-clock"></i> ETA: 2 min</span>
+          <span><i class="fa-solid fa-bolt"></i> 1,240/sec</span>
+        </div>
+      </div>
+      <div class="job-item">
+        <div class="job-top">
+          <span class="job-name"><i class="fa-solid fa-envelope" style="color:var(--mj-brand-primary);margin-right:4px"></i> Emails</span>
+          <span class="job-meta">44% complete</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill blue" style="width:44%"></div></div>
+        <div class="job-stats">
+          <span><i class="fa-solid fa-check"></i> 389,021 / 892,104</span>
+          <span><i class="fa-solid fa-clock"></i> ETA: 38 min</span>
+          <span><i class="fa-solid fa-bolt"></i> 890/sec</span>
+        </div>
+      </div>
+      <div class="job-item">
+        <div class="job-top">
+          <span class="job-name"><i class="fa-solid fa-book" style="color:var(--mj-status-warning);margin-right:4px"></i> Knowledge Articles (retry)</span>
+          <span class="job-meta">12% complete</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill yellow" style="width:12%"></div></div>
+        <div class="job-stats">
+          <span><i class="fa-solid fa-check"></i> 4,105 / 34,208</span>
+          <span><i class="fa-solid fa-clock"></i> ETA: 14 min</span>
+          <span><i class="fa-solid fa-bolt"></i> 620/sec</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q2: Error Log -->
+  <div class="quadrant">
+    <div class="q-header">
+      <h2><i class="fa-solid fa-triangle-exclamation"></i> Error Log</h2>
+      <span class="badge" style="background:#fee2e2;color:#991b1b;">8 errors</span>
+    </div>
+    <div class="q-body">
+      <div class="error-filters">
+        <button class="active">Error (8)</button>
+        <button class="warn-active">Warning (14)</button>
+        <button>Info (42)</button>
+        <button>All</button>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-error">ERROR</span>
+        <strong>Knowledge Articles</strong> - Schema mismatch
+        <span class="error-time">10:35 AM</span>
+        <div class="error-msg">Weaviate: Property "category_v2" not found in class "KnowledgeArticle". Schema version mismatch detected.</div>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-error">ERROR</span>
+        <strong>Emails</strong> - Embedding timeout
+        <span class="error-time">10:33 AM</span>
+        <div class="error-msg">OpenAI API timeout after 30s for batch #4,201. Records e7f2..a1b3 through c4d8..9e2f. Retrying in 5s.</div>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-warn">WARN</span>
+        <strong>Deals</strong> - Rate limit approaching
+        <span class="error-time">10:31 AM</span>
+        <div class="error-msg">OpenAI rate limit at 85% (4,250 / 5,000 RPM). Reducing batch concurrency from 10 to 5.</div>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-warn">WARN</span>
+        <strong>Pinecone</strong> - High latency
+        <span class="error-time">10:28 AM</span>
+        <div class="error-msg">Upsert latency 450ms (threshold: 200ms) on index "contacts-index". Consider checking region health.</div>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-error">ERROR</span>
+        <strong>Knowledge Articles</strong> - Duplicate vector ID
+        <span class="error-time">10:22 AM</span>
+        <div class="error-msg">Vector ID collision for record a3b1..c8d4. Existing vector from stale index. Purging and re-embedding.</div>
+      </div>
+      <div class="error-item">
+        <span class="error-level level-info">INFO</span>
+        <strong>System</strong> - Auto-recovery triggered
+        <span class="error-time">10:20 AM</span>
+        <div class="error-msg">Circuit breaker opened for Weaviate after 3 consecutive failures. Will retry in 60s.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q3: Sync Schedule / Queue -->
+  <div class="quadrant">
+    <div class="q-header">
+      <h2><i class="fa-solid fa-calendar-check"></i> Sync Queue &amp; Schedule</h2>
+      <span class="badge" style="background:#e0e7ff;color:#3730a3;">4 queued</span>
+    </div>
+    <div class="q-body">
+      <div style="font-size:11px; font-weight:600; color:var(--mj-text-secondary); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px;"><i class="fa-solid fa-layer-group"></i> Queued (next up)</div>
+      <div class="queue-item">
+        <span class="queue-pos">1</span>
+        <span class="queue-entity">Products</span>
+        <span class="queue-trigger">Scheduled</span>
+        <span class="queue-time"><i class="fa-regular fa-clock"></i> In 2 min</span>
+      </div>
+      <div class="queue-item">
+        <span class="queue-pos">2</span>
+        <span class="queue-entity">Meeting Notes</span>
+        <span class="queue-trigger">Record change</span>
+        <span class="queue-time"><i class="fa-regular fa-clock"></i> In 5 min</span>
+      </div>
+      <div class="queue-item">
+        <span class="queue-pos">3</span>
+        <span class="queue-entity">Contacts (delta)</span>
+        <span class="queue-trigger">Record change</span>
+        <span class="queue-time"><i class="fa-regular fa-clock"></i> In 8 min</span>
+      </div>
+      <div class="queue-item">
+        <span class="queue-pos">4</span>
+        <span class="queue-entity">Invoices</span>
+        <span class="queue-trigger">Manual</span>
+        <span class="queue-time"><i class="fa-regular fa-clock"></i> In 12 min</span>
+      </div>
+
+      <div style="font-size:11px; font-weight:600; color:var(--mj-text-secondary); text-transform:uppercase; letter-spacing:0.4px; margin:16px 0 8px;"><i class="fa-solid fa-calendar"></i> Upcoming scheduled syncs</div>
+      <div class="queue-item">
+        <span class="queue-pos" style="background:none;border:none;color:var(--mj-text-secondary)"><i class="fa-regular fa-clock"></i></span>
+        <span class="queue-entity">Full re-sync (all entities)</span>
+        <span class="queue-trigger">Cron: daily</span>
+        <span class="queue-time">Tomorrow 2:00 AM</span>
+      </div>
+      <div class="queue-item">
+        <span class="queue-pos" style="background:none;border:none;color:var(--mj-text-secondary)"><i class="fa-regular fa-clock"></i></span>
+        <span class="queue-entity">Contacts (full)</span>
+        <span class="queue-trigger">Cron: 6h</span>
+        <span class="queue-time">Today 4:00 PM</span>
+      </div>
+      <div class="queue-item">
+        <span class="queue-pos" style="background:none;border:none;color:var(--mj-text-secondary)"><i class="fa-regular fa-clock"></i></span>
+        <span class="queue-entity">Support Tickets (full)</span>
+        <span class="queue-trigger">Cron: 6h</span>
+        <span class="queue-time">Today 4:00 PM</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Q4: Performance Metrics -->
+  <div class="quadrant">
+    <div class="q-header">
+      <h2><i class="fa-solid fa-chart-line"></i> Performance Metrics</h2>
+      <span style="font-size:11px;color:var(--mj-text-secondary);">Last 1 hour</span>
+    </div>
+    <div class="q-body">
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-value">1,142</div>
+          <div class="metric-label">Embeddings / sec</div>
+          <div class="metric-change" style="color:var(--mj-status-success)"><i class="fa-solid fa-arrow-up"></i> +12%</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">24ms</div>
+          <div class="metric-label">Avg Query Latency</div>
+          <div class="metric-change" style="color:var(--mj-status-success)"><i class="fa-solid fa-arrow-down"></i> -3ms</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">$4.82</div>
+          <div class="metric-label">Cost Today</div>
+          <div class="metric-change" style="color:var(--mj-text-secondary)">Budget: $15.00</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-value">99.7%</div>
+          <div class="metric-label">Success Rate</div>
+          <div class="metric-change" style="color:var(--mj-status-warning)"><i class="fa-solid fa-arrow-down"></i> -0.2%</div>
+        </div>
+      </div>
+
+      <!-- Chart mockup: Throughput over time -->
+      <div class="chart-mock">
+        <h4><i class="fa-solid fa-chart-bar"></i> Throughput (embeddings/sec, last 60 min)</h4>
+        <div class="chart-bars">
+          <div class="chart-bar" style="height:45%"></div>
+          <div class="chart-bar" style="height:52%"></div>
+          <div class="chart-bar" style="height:48%"></div>
+          <div class="chart-bar" style="height:60%"></div>
+          <div class="chart-bar" style="height:72%"></div>
+          <div class="chart-bar" style="height:68%"></div>
+          <div class="chart-bar" style="height:75%"></div>
+          <div class="chart-bar" style="height:82%"></div>
+          <div class="chart-bar" style="height:90%"></div>
+          <div class="chart-bar" style="height:85%"></div>
+          <div class="chart-bar" style="height:78%"></div>
+          <div class="chart-bar" style="height:92%"></div>
+          <div class="chart-bar" style="height:88%"></div>
+          <div class="chart-bar" style="height:95%"></div>
+          <div class="chart-bar" style="height:100%"></div>
+          <div class="chart-bar" style="height:96%"></div>
+          <div class="chart-bar" style="height:88%"></div>
+          <div class="chart-bar" style="height:30%" style="background:var(--mj-status-error)"></div>
+          <div class="chart-bar" style="height:65%"></div>
+          <div class="chart-bar" style="height:80%"></div>
+        </div>
+        <div class="chart-labels"><span>9:45 AM</span><span>10:00</span><span>10:15</span><span>10:30</span><span>10:45</span></div>
+      </div>
+
+      <!-- Cost breakdown -->
+      <div style="margin-top:12px;">
+        <div style="font-size:11px; font-weight:600; color:var(--mj-text-secondary); margin-bottom:6px;">Cost Breakdown (Today)</div>
+        <div class="cost-row"><span class="label">OpenAI Embeddings</span><span class="value">$3.41</span></div>
+        <div class="cost-row"><span class="label">Pinecone Storage</span><span class="value">$0.89</span></div>
+        <div class="cost-row"><span class="label">Weaviate Queries</span><span class="value">$0.52</span></div>
+        <div class="cost-row" style="border-top:1px solid var(--mj-border-default);padding-top:6px;margin-top:4px;"><span class="label"><strong>Total</strong></span><span class="value"><strong>$4.82</strong></span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

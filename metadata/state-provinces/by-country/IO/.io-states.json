@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "British Indian Ocean Territory",
+      "Code": "IO",
+      "ISO3166_2": "IO-IO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "British Indian Ocean Territory"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IO"
+    },
+    "primaryKey": {
+      "ID": "FC2C8804-20EB-4715-976C-BA16FD0D419F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:03.509Z",
+      "checksum": "a4af044d48a95750bc11ff9bce5a66d877e64b59805a44a16d265c381773b52c"
+    }
+  }
+]

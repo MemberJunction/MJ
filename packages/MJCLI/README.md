@@ -389,6 +389,52 @@ Clean build artifacts.
 mj clean
 ```
 
+### mj app
+
+Install, upgrade, and manage MJ Open Apps (packaged via `@memberjunction/open-app-engine`).
+
+```bash
+# List installed apps
+mj app list
+
+# Show detailed info for one app
+mj app info <name>
+
+# Install from a GitHub repository
+mj app install https://github.com/acme/mj-crm
+mj app install https://github.com/acme/mj-crm --version 1.2.0
+
+# Upgrade to a newer version (latest if --version omitted)
+mj app upgrade acme-crm
+mj app upgrade acme-crm --version 1.3.0
+
+# Enable / disable without removing
+mj app enable <name>
+mj app disable <name>
+
+# Remove (add --keep-data to preserve the schema)
+mj app remove <name>
+mj app remove <name> --keep-data
+
+# See which installed apps have newer versions available
+mj app check-updates
+```
+
+#### Internal / dangerous flags
+
+Intentionally omitted from `--help`. Only for MJ-internal apps that own a
+reserved-looking schema (e.g. `__bcsaas`). Do not use on third-party apps.
+
+- `--dangerously-ignore-dbl-underscore-schema-rule` — available on `mj app install`
+  and `mj app upgrade`. Bypasses the rule that blocks schema names starting with
+  `__` (reserved for MJ internals). Exact-match reserved names (`__mj`, `dbo`,
+  `sys`, `guest`, `INFORMATION_SCHEMA`) remain hard-blocked regardless.
+
+```bash
+mj app install https://github.com/BlueCypress/SaaS \
+  --dangerously-ignore-dbl-underscore-schema-rule
+```
+
 ## Hooks
 
 | Hook | Timing | Purpose |

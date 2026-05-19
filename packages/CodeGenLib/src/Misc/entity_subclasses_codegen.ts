@@ -1,6 +1,7 @@
-import { BaseEntity, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
+import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
+import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
@@ -58,6 +59,81 @@ export class EntitySubClassGeneratorBase {
   }
 
   /**
+   * Validates that a JSONTypeDefinition string contains valid TypeScript and (optionally)
+   * exports the expected type name. Uses the TypeScript compiler API to parse without
+   * writing any files to disk.
+   *
+   * @param definition - The raw TypeScript code from EntityField.JSONTypeDefinition
+   * @param expectedTypeName - The JSONType name that should be defined/exported in the definition
+   * @param entityName - Entity name for error messages
+   * @param fieldName - Field name for error messages
+   * @returns An object with `valid` boolean and optional `errors` array of diagnostic messages
+   */
+  protected static ValidateJSONTypeDefinition(
+      definition: string,
+      expectedTypeName: string,
+      entityName: string,
+      fieldName: string
+  ): { valid: boolean; errors: string[] } {
+      const errors: string[] = [];
+      const prefix = `[JSONType] ${entityName}.${fieldName}`;
+
+      // Parse the definition as a TypeScript source file
+      const sourceFile = ts.createSourceFile(
+          'jsontype-validation.ts',
+          definition,
+          ts.ScriptTarget.Latest,
+          true,
+          ts.ScriptKind.TS
+      );
+
+      // Check for syntax errors using a minimal compiler program
+      const compilerHost = ts.createCompilerHost({});
+      const originalGetSourceFile = compilerHost.getSourceFile;
+      compilerHost.getSourceFile = (fileName: string, languageVersion: ts.ScriptTarget) => {
+          if (fileName === 'jsontype-validation.ts') return sourceFile;
+          return originalGetSourceFile.call(compilerHost, fileName, languageVersion);
+      };
+
+      const program = ts.createProgram(
+          ['jsontype-validation.ts'],
+          { noEmit: true, strict: false, skipLibCheck: true },
+          compilerHost
+      );
+
+      const syntacticDiagnostics = program.getSyntacticDiagnostics(sourceFile);
+      for (const diag of syntacticDiagnostics) {
+          const message = ts.flattenDiagnosticMessageText(diag.messageText, '\n');
+          errors.push(`${prefix}: Syntax error — ${message}`);
+      }
+
+      if (errors.length > 0) {
+          return { valid: false, errors };
+      }
+
+      // Check that the expected type name is defined in the source
+      const definedNames = new Set<string>();
+      ts.forEachChild(sourceFile, (node) => {
+          if (ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+              ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) {
+              if (node.name) {
+                  definedNames.add(node.name.text);
+              }
+          }
+      });
+
+      if (!definedNames.has(expectedTypeName)) {
+          errors.push(
+              `${prefix}: JSONType "${expectedTypeName}" is not defined in JSONTypeDefinition. ` +
+              `Found: ${definedNames.size > 0 ? Array.from(definedNames).join(', ') : '(none)'}`
+          );
+          return { valid: false, errors };
+      }
+
+      return { valid: true, errors: [] };
+  }
+
+  /**
    *
    * @param pool
    * @param entities
@@ -109,7 +185,8 @@ export const loadModule = () => {
     } else {
       // Sort fields by Sequence, then by __mj_CreatedAt for consistent ordering
       const sortedFields = sortBySequenceAndCreatedAt(entity.Fields);
-      
+      const sClassName: string = `${entity.ClassName}Entity`;
+
       const fields: string = sortedFields.map((e) => {
         let values: string = '';
         let valueList: string = '';
@@ -121,8 +198,22 @@ export const loadModule = () => {
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        // JSONType: when a field has JSONType metadata, we emit the standard string getter/setter
+        // unchanged, plus an additional typed "Object" accessor (e.g., DefaultNavItemsObject) that
+        // handles JSON.parse/stringify with caching. Interface names are entity-prefixed for safety.
+        const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = TypeScriptTypeFromSQLType(e.Type) + (e.AllowsNull ? ' | null' : '');
-        if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        // Build the typed accessor info (used later for the Object suffix property)
+        let jsonTypeAccessorInfo: { prefixedTypeName: string; fullTypeString: string; isArray: boolean } | null = null;
+        if (hasJSONType) {
+          const originalTypeName = e.JSONType.trim();
+          const prefixedTypeName = `${sClassName}_${originalTypeName}`;
+          const isArray = e.JSONTypeIsArray === true;
+          const fullTypeString = isArray ? `Array<${prefixedTypeName}>` : prefixedTypeName;
+          jsonTypeAccessorInfo = { prefixedTypeName, fullTypeString: fullTypeString + (e.AllowsNull ? ' | null' : ''), isArray };
+          // typeString stays as the standard SQL-mapped type (string | null) for the base getter
+        }
+        if (!hasJSONType && e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -148,29 +239,67 @@ export const loadModule = () => {
             ? `\n    * * IS-A Source: Inherited from ${this.getISAFieldSourceEntity(entity, e)}`
             : '';
 
+        const jsonTypeComment = hasJSONType && jsonTypeAccessorInfo
+            ? `\n    * * JSON Type: ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}`
+            : '';
+
         const safeName = SafeCodeName(e);
         const conflictNote = safeName !== e.CodeName
             ? `\n    * * NOTE: Property renamed to \`${safeName}\` to avoid conflict with BaseEntity.${e.CodeName}`
             : '';
 
+        // Standard getter/setter (always uses raw string, even for JSONType fields)
+        const getterBody = `return this.Get('${e.Name}');`;
+        const setterBody = `this.Set('${e.Name}', value);`;
+
         let sRet: string = `    /**
     * * Field Name: ${e.Name}${e.DisplayName && e.DisplayName.length > 0 ? '\n    * * Display Name: ' + e.DisplayName : ''}
-    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
+    * * ${fieldDeprecatedFlag}${fieldDisabledFlag}SQL Data Type: ${e.SQLFullType}${e.RelatedEntity ? '\n    * * Related Entity/Foreign Key: ' + e.RelatedEntity + ' (' + e.RelatedEntityBaseView + '.' + e.RelatedEntityFieldName + ')' : ''}${e.DefaultValue && e.DefaultValue.length > 0 ? '\n    * * Default Value: ' + e.DefaultValue : ''}${valueList}${jsonTypeComment}${e.Description && e.Description.length > 0 ? '\n    * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(e.Description) : ''}${isaSourceComment}${conflictNote}
     */
     get ${safeName}(): ${typeString} {
-        return this.Get('${e.Name}');
+        ${getterBody}
     }`;
         if (!e.ReadOnly || (e.IsPrimaryKey && !e.AutoIncrement) || isISAParentField) {
-          // Generate setter for non-readonly fields, non-auto-increment PKs, or IS-A parent fields
           sRet += `
     set ${safeName}(value: ${typeString}) {
-        this.Set('${e.Name}', value);
+        ${setterBody}
     }`;
         }
+
+        // JSONType: emit additional typed "Object" accessor with caching
+        if (hasJSONType && jsonTypeAccessorInfo) {
+          const objName = `${safeName}Object`;
+          const cachedField = `_${objName}_cached`;
+          const lastRawField = `_${objName}_lastRaw`;
+          const ft = jsonTypeAccessorInfo.fullTypeString;
+
+          sRet += `
+
+    private ${cachedField}: ${ft} | undefined = undefined;
+    private ${lastRawField}: string | null = null;
+    /**
+    * Typed accessor for ${e.Name} — returns parsed JSON as ${jsonTypeAccessorInfo.isArray ? `Array<${jsonTypeAccessorInfo.prefixedTypeName}>` : jsonTypeAccessorInfo.prefixedTypeName}.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get ${objName}(): ${ft} {
+        const raw = this.${safeName};
+        if (raw !== this.${lastRawField}) {
+            this.${cachedField} = raw ? JSON.parse(raw) : null;
+            this.${lastRawField} = raw;
+        }
+        return this.${cachedField}!;
+    }
+    set ${objName}(value: ${ft}) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.${safeName} = raw;
+        this.${cachedField} = value;
+        this.${lastRawField} = raw;
+    }`;
+        }
+
         return sRet;
       }).join('\n\n');
 
-      const sClassName: string = `${entity.ClassName}Entity`;
       const subClass: string = entity.EntityObjectSubclassName ? entity.EntityObjectSubclassName : '';
       const subClassImport: string = entity.EntityObjectSubclassImport ? entity.EntityObjectSubclassImport : '';
       const sBaseClass: string = subClass.length > 0 && subClassImport.length > 0 ? `${subClass}` : 'BaseEntity';
@@ -204,7 +333,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.
     */
-    public async Delete(): Promise<boolean> {
+    public override async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
@@ -218,10 +347,10 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -267,8 +396,49 @@ export const loadModule = () => {
         `\n * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.` : '';
     const disabledFlag: string = status === 'disabled' ? 
         `\n * @disabled This entity is disabled and will not be available in the application. Attempting to use it will result in exceptions being thrown` : '';
-      let sRet: string = `
+      // Collect and deduplicate JSONTypeDefinitions for this entity.
+      // These are raw TypeScript interface/type definitions (from EntityField.JSONTypeDefinition)
+      // that get emitted above the entity class so the typed getters/setters can reference them.
+      // A Set is used because multiple fields may share the same definition (e.g., a shared config type).
+      // Each definition is validated via the TypeScript compiler API before inclusion.
+      const jsonTypeDefinitions = new Set<string>();
+      for (const field of sortedFields) {
+          if (field.JSONTypeDefinition && field.JSONTypeDefinition.trim().length > 0) {
+              const definition = field.JSONTypeDefinition.trim();
+              if (field.JSONType && field.JSONType.trim().length > 0) {
+                  const validation = EntitySubClassGeneratorBase.ValidateJSONTypeDefinition(
+                      definition, field.JSONType.trim(), entity.Name, field.Name
+                  );
+                  if (!validation.valid) {
+                      for (const err of validation.errors) {
+                          logError(err);
+                      }
+                      logError(`[JSONType] Skipping JSONTypeDefinition for ${entity.Name}.${field.Name} due to validation errors. The field will use a plain string getter/setter instead.`);
+                      (field as unknown as Record<string, unknown>).JSONType = null;
+                      continue;
+                  }
+              }
+              // Prefix all type names defined in this definition block with the entity class name
+              // to avoid naming conflicts across entities. Uses AST to find all defined type names.
+              let rewrittenDef = definition;
+              const sourceFile = ts.createSourceFile('temp.ts', definition, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+              ts.forEachChild(sourceFile, (node) => {
+                  if ((ts.isInterfaceDeclaration(node) || ts.isTypeAliasDeclaration(node) ||
+                       ts.isEnumDeclaration(node) || ts.isClassDeclaration(node)) && node.name) {
+                      const originalName = node.name.text;
+                      const prefixedName = `${sClassName}_${originalName}`;
+                      rewrittenDef = rewrittenDef.replace(new RegExp('\\b' + originalName + '\\b', 'g'), prefixedName);
+                  }
+              });
+              jsonTypeDefinitions.add(rewrittenDef);
+          }
+      }
+      const jsonTypeBlock = jsonTypeDefinitions.size > 0
+          ? '\n' + Array.from(jsonTypeDefinitions).join('\n\n') + '\n'
+          : '';
 
+      let sRet: string = `
+${jsonTypeBlock}
 /**
  * ${entity.Name} - strongly typed entity sub-class
  * * Schema: ${entity.SchemaName}
@@ -315,48 +485,55 @@ ${fields}
       // logging the generated function means that we want to EMIT SQL that will update the EntityField table for the fields that had emitted validation functions
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
-      const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      const entityFieldsEntityID = md.EntityByName('MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.EntityByName('MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
         // we have in the ret.validators array but this is an explicit flag to ensure we don't even bother checking
+        // Build SQL through the dialect rather than hardcoding T-SQL syntax — `[brackets]` and
+        // `GETUTCDATE()` are SS-only and PG's strict parser rejects both.
+        const dialect = pool.Dialect;
+        const qi = (n: string) => dialect.QuoteIdentifier(n);
+        const lit = (v: string) => dialect.QuoteStringLiteral(v);
+        const utcNow = dialect.CurrentTimestampUTC();
+        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
+
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
-          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
+          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
           sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
-          const code = v.functionText.replace(/'/g, "''");
-          const source = v.sourceCheckConstraint.replace(/'/g, "''");
-          const description = v.functionDescription.replace(/'/g, "''");
-          const name = v.functionName.replace(/'/g, "''");
-          const validatorCodeCategoryID = `(SELECT ID FROM ${mj_core_schema()}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators')`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
-            sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}',
-                        Code='${code}',
-                        Description='${description}',
-                        Name='${name}',
-                        GeneratedAt=GETUTCDATE(),
-                        GeneratedByModelID='${v.aiModelID}'
+            sSQL += `UPDATE ${generatedCodeTbl} SET
+                        ${qi('Source')}=${lit(v.sourceCheckConstraint)},
+                        ${qi('Code')}=${lit(v.functionText)},
+                        ${qi('Description')}=${lit(v.functionDescription)},
+                        ${qi('Name')}=${lit(v.functionName)},
+                        ${qi('GeneratedAt')}=${utcNow},
+                        ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ID='${v.generatedCodeId}';`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
-            sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
+            const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
+            const linkedRecordPK = f ? f.ID : entity.ID;
+            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
 
             `
           }
         }
-  
+
         // now Log and Execute the SQL
         try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
         }
         catch (e) {
           logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
@@ -461,8 +638,13 @@ ${validationFunctions}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
         }
+        // JSONType fields use z.any() in the Zod schema since the actual validation is
+        // handled by the TypeScript interface (full Zod schema generation is a future phase).
+        const hasJSONType = e.JSONType && e.JSONType.trim().length > 0;
         let typeString: string = `${TypeScriptTypeFromSQLType(e.Type).toLowerCase()}()` + (e.AllowsNull ? '.nullable()' : '');
-        if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
+        if (hasJSONType) {
+          typeString = `any()${e.AllowsNull ? '.nullable()' : ''}`;
+        } else if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
           // Sort deterministically by Sequence, CreatedAt, then Value to prevent flip-flopping across runs
@@ -478,7 +660,7 @@ ${validationFunctions}`
             typeString += '.nullable()';
           }
         }
-        let sRet: string = `    ${SafeCodeName(e)}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e)}\`),`;
+        let sRet: string = `    ${SafeCodeName(e)}: z.${typeString}.describe(\`\n${this.GenerateZodDescription(e, entity)}\`),`;
         return sRet;
       }).join('\n');
 
@@ -498,7 +680,14 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     return content;
   }
 
-  public GenerateZodDescription(entityField: EntityFieldInfo): string {
+  /**
+   * Generates the description string for a Zod schema field, including field metadata,
+   * value list documentation, and JSONType annotations with entity-prefixed type names.
+   * @param entityField - The entity field to generate a description for
+   * @param entity - Optional entity context, used to compute the entity-prefixed JSONType name
+   * @returns A formatted description string for the Zod `.describe()` call
+   */
+  public GenerateZodDescription(entityField: EntityFieldInfo, entity?: EntityInfo): string {
     let result: string = '';
 
     let valueList: string = '';
@@ -512,7 +701,16 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
     }
 
     result += `        * * Field Name: ${entityField.Name}${entityField.DisplayName && entityField.DisplayName.length > 0 ? '\n        * * Display Name: ' + entityField.DisplayName : ''}\n`;
-    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
+    let jsonTypeAnnotation = '';
+    if (entityField.JSONType && entityField.JSONType.trim().length > 0) {
+        const prefix = entity ? `${entity.ClassName}Entity_` : '';
+        const prefixedName = `${prefix}${entityField.JSONType.trim()}`;
+        jsonTypeAnnotation = entityField.JSONTypeIsArray
+            ? `\n        * * JSON Type: Array<${prefixedName}>`
+            : `\n        * * JSON Type: ${prefixedName}`;
+    }
+    result += `        * * SQL Data Type: ${entityField.SQLFullType}${entityField.RelatedEntity ? '\n        * * Related Entity/Foreign Key: ' + entityField.RelatedEntity + ' (' + entityField.RelatedEntityBaseView + '.' + entityField.RelatedEntityFieldName + ')' : ''}${entityField.DefaultValue && entityField.DefaultValue.length > 0 ? '\n        * * Default Value: ' + entityField.DefaultValue : ''}${jsonTypeAnnotation}${valueList}${entityField.Description && entityField.Description.length > 0 ? '\n        * * Description: ' + EntitySubClassGeneratorBase.SanitizeDescription(entityField.Description) : ''}`;
     return result;
   }
+
 }

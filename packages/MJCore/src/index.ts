@@ -11,6 +11,7 @@ export * from "./views/runView";
 export * from "./generic/runReport";
 export * from "./generic/runQuery";
 export * from "./generic/interfaces";
+export * from "./generic/scoring/ReciprocalRankFusion";
 export * from "./generic/baseEntity";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
@@ -44,9 +45,13 @@ export * from "./generic/RegisterForStartup";
 export * from "./generic/telemetryManager";
 export * from "./generic/InMemoryLocalStorageProvider";
 export * from "./generic/dataHooks";
+export * from "./generic/column-descriptors";
+export * from "./generic/data-table";
+export * from "./generic/data-snapshot";
+export * from "./generic/permissionInterfaces";
 
 export function SetProvider(provider) {
-    Metadata.Provider = provider;
+    Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
     BaseEntity.Provider = provider;
     RunView.Provider = provider;
     RunReport.Provider = provider;

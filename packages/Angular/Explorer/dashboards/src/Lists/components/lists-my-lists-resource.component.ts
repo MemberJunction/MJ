@@ -25,34 +25,30 @@ interface CategoryNode {
   standalone: false,
   selector: 'mj-lists-my-lists-resource',
   template: `
-    <div class="lists-my-lists-container">
-      <!-- Header -->
-      <div class="lists-header">
-        <div class="header-title">
-          <i class="fa-solid fa-list-check"></i>
-          <h2>My Lists</h2>
+    <mj-page-layout>
+      <mj-page-header
+        Title="My Lists"
+        Icon="fa-solid fa-list-check"
+        Subtitle="Lists you've created or have access to">
+        <div meta>
+          <mj-stat-badge [Count]="filteredLists.length" [Total]="allLists.length" Label="lists"></mj-stat-badge>
         </div>
-        <div class="header-actions">
-          <div class="search-box">
-            <i class="fa-solid fa-search"></i>
-            <input
-              type="text"
-              placeholder="Search lists..."
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onSearchChange($event)" />
-            @if (searchTerm) {
-              <button class="clear-search" (click)="clearSearch()">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            }
-          </div>
-          <button class="btn-create" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New List</span>
+        <div actions>
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> New List
           </button>
         </div>
-      </div>
-    
+        <div toolbar>
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
+        </div>
+      </mj-page-header>
+
+      <mj-page-body>
+
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -233,7 +229,7 @@ interface CategoryNode {
                     <span class="list-meta">{{item.entityName}} &middot; {{item.itemCount}} items</span>
                   </div>
                   <div class="list-actions">
-                    <button class="action-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
+                    <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
                       <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
                     </button>
                   </div>
@@ -393,7 +389,8 @@ interface CategoryNode {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -401,109 +398,6 @@ interface CategoryNode {
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    .lists-my-lists-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
-    }
-
-    /* Header */
-    .lists-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 24px;
-      background: var(--mj-bg-surface-card);
-      border-bottom: 1px solid var(--mj-border-default);
-      flex-shrink: 0;
-    }
-
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .header-title i {
-      font-size: 24px;
-      color: var(--mj-brand-primary);
-    }
-
-    .header-title h2 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--mj-text-primary);
-    }
-
-    .header-actions {
-      display: flex;
-      align-items: center;
-      gap: 16px;
-    }
-
-    .search-box {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .search-box i.fa-search {
-      position: absolute;
-      left: 12px;
-      color: var(--mj-text-muted);
-    }
-
-    .search-box input {
-      padding: 8px 36px 8px 36px;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 20px;
-      font-size: 14px;
-      width: 250px;
-      transition: border-color 0.2s, box-shadow 0.2s;
-    }
-
-    .search-box input:focus {
-      outline: none;
-      border-color: var(--mj-brand-primary);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-    }
-
-    .clear-search {
-      position: absolute;
-      right: 8px;
-      background: none;
-      border: none;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      padding: 4px;
-    }
-
-    .clear-search:hover {
-      color: var(--mj-text-secondary);
-    }
-
-    .btn-create {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-      border: none;
-      border-radius: 6px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-create:hover {
-      background: var(--mj-brand-primary-hover);
     }
 
     /* Loading */
@@ -1268,7 +1162,7 @@ interface CategoryNode {
   encapsulation: ViewEncapsulation.None
 })
 export class ListsMyListsResource extends BaseResourceComponent implements OnDestroy {
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
   isLoading = true;
   searchTerm = '';
@@ -1346,11 +1240,13 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
   }
 
   async ngOnInit() {
+    super.ngOnInit();
     await this.loadData();
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy() {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -1359,8 +1255,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userId = md.CurrentUser?.ID;
 
       if (!userId) {
@@ -1679,8 +1575,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
@@ -1789,7 +1685,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     const listName = this.newListName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let list: MJListEntity;
 
       if (this.editingList) {

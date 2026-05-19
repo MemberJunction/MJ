@@ -84,6 +84,40 @@ export interface ComponentExecutionOptions {
    *   .map(e => SimpleEntityInfo.FromEntityInfo(e));
    */
   entityMetadata?: SimpleEntityInfo[];
+
+  /**
+   * Optional callback invoked with the live Playwright page after the component
+   * has rendered successfully. The page remains open until this callback resolves,
+   * allowing the caller to perform interactions (clicks, form fills, etc.) and
+   * inspect the post-interaction state.
+   *
+   * The callback receives the Playwright Page object and the execution result
+   * captured so far. Any errors thrown inside the callback are caught and added
+   * to the result's error array — they do not prevent the result from being returned.
+   *
+   * @example
+   * const result = await harness.testComponent({
+   *   ...options,
+   *   onPageReady: async (page, result) => {
+   *     const buttons = await page.locator('button').all();
+   *     for (const btn of buttons) {
+   *       await btn.click();
+   *       await page.waitForTimeout(500);
+   *     }
+   *   }
+   * });
+   */
+  onPageReady?: (page: any, result: ComponentExecutionResult) => Promise<void>;
+
+  /**
+   * When true, the final screenshot captures the entire scrollable page content
+   * (Playwright's `fullPage: true`) instead of only the viewport. Use this when
+   * testing tall components (dashboards, long forms) where viewport-only
+   * screenshots can cut off content below the fold.
+   *
+   * Defaults to false to preserve existing behavior for other harness users.
+   */
+  fullPageScreenshot?: boolean;
 }
 
 export interface ComponentExecutionResult {
@@ -135,9 +169,10 @@ export class ComponentRunner {
   ];
 
   // Note: This counts React.createElement calls, not component re-renders
-  // A complex dashboard can easily have 5000+ createElement calls on initial mount
-  // Only flag if it's likely an infinite loop (10000+ is suspicious)
-  private static readonly MAX_RENDER_COUNT = 10000;
+  // Complex components with registry children (e.g. EntityDataGrid) can legitimately
+  // create 15,000-21,000 elements. We use a raised hard ceiling plus rate-of-growth
+  // detection to distinguish real infinite loops from large but finite renders.
+  private static readonly MAX_RENDER_COUNT = 50000;
 
   // Browser/page crash patterns - these are infrastructure issues, not code errors
   private static readonly BROWSER_CRASH_PATTERNS = [
@@ -751,21 +786,48 @@ export class ComponentRunner {
 
           const root = (window as any).ReactDOM.createRoot(rootElement);
           
-          // Set up render count protection
-          // This is for detecting infinite loops during execution
-          // Note: counts createElement calls, not re-renders
-          const MAX_RENDERS_ALLOWED = 10000; // Complex dashboards can have many createElement calls
-          
+          // Set up render count protection with rate-of-growth detection.
+          // Counts createElement calls, not re-renders.
+          // Strategy:
+          //   - Hard ceiling (50,000) triggers immediate failure at any time
+          //   - After a 3-second settling period, rapid sustained growth
+          //     (>1000 new calls per 100ms) combined with a moderate count (>15,000)
+          //     is flagged as a render loop. This avoids false positives for
+          //     large-but-finite components like EntityDataGrid (15k-21k elements).
+          const HARD_CEILING = 50000;          // must match ComponentRunner.MAX_RENDER_COUNT
+          const RATE_THRESHOLD = 1000;        // new calls per 100ms that indicate a loop
+          const RATE_COUNT_FLOOR = 15000;     // min count before rate detection kicks in
+          const SETTLING_CHECKS = 30;         // 30 × 100ms = 3 seconds settling period
+          let previousCount = 0;
+          let checkIndex = 0;
+
           if (typeof window !== 'undefined') {
             renderCheckInterval = setInterval(() => {
               const currentRenderCount = (window as any).__testHarnessRenderCount || 0;
-              if (currentRenderCount > MAX_RENDERS_ALLOWED) {
+              const delta = currentRenderCount - previousCount;
+              previousCount = currentRenderCount;
+              checkIndex++;
+
+              // Hard ceiling — always enforced
+              const exceededHardCeiling = currentRenderCount > HARD_CEILING;
+
+              // Rate-of-growth — only after settling period
+              const exceededRate = checkIndex > SETTLING_CHECKS &&
+                                   delta > RATE_THRESHOLD &&
+                                   currentRenderCount > RATE_COUNT_FLOOR;
+
+              if (exceededHardCeiling || exceededRate) {
                 clearInterval(renderCheckInterval);
+                const reason = exceededHardCeiling
+                  ? `exceeded hard ceiling of ${HARD_CEILING}`
+                  : `sustained rapid growth (${delta} calls/100ms after ${checkIndex * 100}ms)`;
+                const msg = `Likely infinite render loop: ${currentRenderCount} createElement calls (${reason})`;
+
                 // Mark test as failed due to excessive renders
                 (window as any).__testHarnessTestFailed = true;
                 (window as any).__testHarnessRuntimeErrors = (window as any).__testHarnessRuntimeErrors || [];
                 (window as any).__testHarnessRuntimeErrors.push({
-                  message: `Likely infinite render loop: ${currentRenderCount} createElement calls (max: ${MAX_RENDERS_ALLOWED})`,
+                  message: msg,
                   type: 'render-loop',
                   source: 'test-harness'
                 });
@@ -775,7 +837,7 @@ export class ComponentRunner {
                 } catch (e) {
                   console.error('Failed to unmount after render loop:', e);
                 }
-                throw new Error(`Likely infinite render loop: ${currentRenderCount} createElement calls detected`);
+                throw new Error(msg);
               }
             }, 100); // Check every 100ms
           }
@@ -1068,9 +1130,11 @@ export class ComponentRunner {
         }
       }
 
-      // Take screenshot with size protection
+      // Take screenshot with size protection. fullPage:true captures the entire
+      // scrollable content instead of just the viewport — required for tall
+      // components (dashboards, long forms) where the viewport cuts off content.
       try {
-        screenshot = await page.screenshot();
+        screenshot = await page.screenshot({ fullPage: options.fullPageScreenshot === true });
 
         // Check screenshot size (should be reasonable)
         const screenshotSize = screenshot.length;
@@ -1218,6 +1282,25 @@ export class ComponentRunner {
 
       if (debug) {
         this.dumpDebugInfo(result);
+      }
+
+      // Call onPageReady callback if provided, giving the caller access to the live page
+      if (options.onPageReady) {
+        try {
+          await options.onPageReady(page, result);
+        } catch (callbackError) {
+          const callbackMessage = callbackError instanceof Error ? callbackError.message : String(callbackError);
+          if (debug) {
+            console.log(`\n⚠️ onPageReady callback error: ${callbackMessage}`);
+          }
+          result.errors.push({
+            message: `onPageReady callback error: ${callbackMessage}`,
+            severity: 'medium' as const,
+            rule: 'page-ready-callback',
+            line: 0,
+            column: 0
+          });
+        }
       }
 
       return result;
@@ -1929,7 +2012,7 @@ export class ComponentRunner {
     console.log("   Building local MJ utilities");
     const rv = new RunView();
     const rq = new RunQuery();
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
     return {
       rv: {
         RunView: rv.RunView,
@@ -2408,7 +2491,7 @@ export class ComponentRunner {
         // Created global Metadata mock with Provider (late)
       } else {
         // Update the existing one to ensure it has the latest mock data
-        (window as any).Metadata.Provider = mockMd;
+        (window as any).Metadata.Provider = mockMd; // global-provider-ok: test/demo harness, single-provider context
         // Updated existing Metadata.Provider with mock data
       }
     });

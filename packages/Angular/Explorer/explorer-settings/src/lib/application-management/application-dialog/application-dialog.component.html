@@ -320,7 +320,7 @@
       <div class="modal-footer">
         <button
           type="submit"
-          class="mj-btn mj-btn-primary"
+          mjButton variant="primary"
           [disabled]="applicationForm.invalid || isLoading"
           (click)="onSubmit()"
           [attr.aria-busy]="isLoading"
@@ -333,7 +333,7 @@
             {{ isEditMode ? 'Update Application' : 'Create Application' }}
           }
         </button>
-        <button type="button" class="mj-btn mj-btn-secondary" (click)="onCancel()">
+        <button type="button" mjButton (click)="onCancel()">
           Cancel
         </button>
       </div>

@@ -1,0 +1,145 @@
+@if (Visible) {
+  <div class="apc-backdrop" (click)="Cancel()"></div>
+  <div class="apc-dialog" role="dialog" aria-modal="true" aria-labelledby="apc-title">
+    <div class="apc-header">
+      <h3 id="apc-title">
+        <i class="fa-solid fa-thumbtack"></i>
+        Pin Action
+      </h3>
+      <button class="apc-close" (click)="Cancel()" aria-label="Close">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="apc-body">
+      <div class="apc-action-chip">
+        <i class="fa-solid fa-bolt"></i>
+        <span>{{ ActionName }}</span>
+      </div>
+
+      <div class="apc-preview">
+        <div class="apc-preview-card" [style.background]="'linear-gradient(135deg, ' + AccentColor + ' 0%, ' + AccentColor + 'cc 100%)'">
+          <div class="apc-preview-icon">
+            <i [class]="FaIcon"></i>
+          </div>
+          <div class="apc-preview-title">{{ DisplayName || 'Untitled pin' }}</div>
+        </div>
+        <div class="apc-preview-hint">Live preview of how your pin will look on Home</div>
+      </div>
+
+      <div class="apc-field">
+        <label for="apc-name">Pin title</label>
+        <input id="apc-name" type="text" class="mj-input"
+               [(ngModel)]="DisplayName"
+               placeholder="e.g. Run Weekly Sales Report" />
+      </div>
+
+      <div class="apc-field">
+        <label>Accent color</label>
+        <div class="apc-color-grid">
+          @for (c of ColorPalette; track c.value) {
+            <button type="button"
+                    class="apc-color-swatch"
+                    [class.selected]="AccentColor === c.value"
+                    [style.background]="c.value"
+                    [attr.aria-label]="c.name"
+                    (click)="SelectColor(c.value)">
+              @if (AccentColor === c.value) {
+                <i class="fa-solid fa-check"></i>
+              }
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="apc-field">
+        <label>Icon</label>
+        <div class="apc-icon-grid">
+          @for (icon of FaIconPalette; track icon) {
+            <button type="button"
+                    class="apc-icon-swatch"
+                    [class.selected]="FaIcon === icon"
+                    (click)="SelectFaIcon(icon)">
+              <i [class]="icon"></i>
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="apc-field">
+        <label>Parameters</label>
+        @if (IsLoadingParams) {
+          <div class="apc-params-loading">
+            <i class="fa-solid fa-spinner fa-spin"></i> Loading parameters…
+          </div>
+        } @else if (Params.length === 0) {
+          <div class="apc-params-empty">This action takes no input parameters.</div>
+        } @else {
+          <div class="apc-params-help">
+            Choose which parameters are <strong>preset</strong> (baked into the pin) vs.
+            <strong>prompted at runtime</strong> each time the pin is clicked.
+          </div>
+          <div class="apc-params-table">
+            @for (p of Params; track p.Name) {
+              <div class="apc-param-row">
+                <div class="apc-param-info">
+                  <div class="apc-param-name">
+                    {{ p.Name }}
+                    @if (p.IsRequired) { <span class="apc-param-req">required</span> }
+                  </div>
+                  @if (p.Description) {
+                    <div class="apc-param-desc">{{ p.Description }}</div>
+                  }
+                </div>
+                <div class="apc-param-mode">
+                  <label class="apc-mode-option" [class.selected]="p.Mode === 'preset'">
+                    <input type="radio"
+                           [name]="'mode-' + p.Name"
+                           [checked]="p.Mode === 'preset'"
+                           (change)="SetParamMode(p, 'preset')" />
+                    <span>Preset</span>
+                  </label>
+                  <label class="apc-mode-option" [class.selected]="p.Mode === 'runtime'">
+                    <input type="radio"
+                           [name]="'mode-' + p.Name"
+                           [checked]="p.Mode === 'runtime'"
+                           (change)="SetParamMode(p, 'runtime')" />
+                    <span>Prompt</span>
+                  </label>
+                </div>
+                <div class="apc-param-value">
+                  @if (p.Mode === 'preset') {
+                    <input type="text" class="mj-input"
+                           [(ngModel)]="p.PresetValue"
+                           [placeholder]="p.DefaultValue || 'Preset value'" />
+                  } @else {
+                    <span class="apc-runtime-hint">
+                      <i class="fa-solid fa-keyboard"></i> Asked at click time
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      @if (ErrorMessage) {
+        <div class="apc-error">
+          <i class="fa-solid fa-triangle-exclamation"></i> {{ ErrorMessage }}
+        </div>
+      }
+    </div>
+
+    <div class="apc-footer">
+      <button type="button" class="apc-btn primary"
+              [disabled]="!CanSave()"
+              (click)="Save()">
+        <i class="fa-solid fa-thumbtack"></i> Pin to Home
+      </button>
+      <button type="button" class="apc-btn" (click)="Cancel()">
+        Cancel
+      </button>
+    </div>
+  </div>
+}

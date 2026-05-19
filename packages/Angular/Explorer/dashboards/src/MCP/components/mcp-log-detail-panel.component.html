@@ -94,7 +94,7 @@
                 Error
               </h3>
             </div>
-            <button kendoButton fillMode="flat" size="small" (click)="copyError(); $event.stopPropagation()" title="Copy error">
+            <button mjButton variant="flat" size="sm" (click)="copyError(); $event.stopPropagation()" title="Copy error">
               <i class="fa-solid fa-copy"></i>
             </button>
           </div>
@@ -116,7 +116,7 @@
                 Input Arguments
               </h3>
             </div>
-            <button kendoButton fillMode="flat" size="small" (click)="copyInputArgs(); $event.stopPropagation()" title="Copy input arguments">
+            <button mjButton variant="flat" size="sm" (click)="copyInputArgs(); $event.stopPropagation()" title="Copy input arguments">
               <i class="fa-solid fa-copy"></i>
             </button>
           </div>
@@ -142,7 +142,7 @@
                 Result
               </h3>
             </div>
-            <button kendoButton fillMode="flat" size="small" (click)="copyResult(); $event.stopPropagation()" title="Copy result">
+            <button mjButton variant="flat" size="sm" (click)="copyResult(); $event.stopPropagation()" title="Copy result">
               <i class="fa-solid fa-copy"></i>
             </button>
           </div>
@@ -176,12 +176,12 @@
     <!-- Panel Actions -->
     <div class="panel-actions">
       @if (Log.ToolID) {
-        <button kendoButton themeColor="primary" (click)="onRunAgain()">
+        <button mjButton variant="primary" (click)="onRunAgain()">
           <i class="fa-solid fa-play"></i>
           Run Again
         </button>
       }
-      <button kendoButton fillMode="flat" (click)="closePanel()">Close</button>
+      <button mjButton variant="flat" (click)="closePanel()">Close</button>
     </div>
   </div>
 }

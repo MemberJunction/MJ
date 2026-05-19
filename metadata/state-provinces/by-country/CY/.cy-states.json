@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Ammochostos (Mağusa)",
+      "Code": "04",
+      "ISO3166_2": "CY-04",
+      "Latitude": 35.0164,
+      "Longitude": 33.9489,
+      "BoundaryGeoJSON": "@file:by-country/CY/boundaries/CY-04.geojson",
+      "CommonAliases": [
+        "Ammochostos (Mağusa)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "55A6D3E3-DF80-4DCD-91C9-1E4E8EA3BE98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.918Z",
+      "checksum": "01df63611a0d38e8b6920eca23f0b36922ac1e1e20607499463a3e93f9096656"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Keryneia (Girne)",
+      "Code": "06",
+      "ISO3166_2": "CY-06",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Keryneia (Girne)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "BEA3C090-FC40-4AD1-BE8F-C60A3431951C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.934Z",
+      "checksum": "a7999bcc4c68827b1051822ab0730f9ddb70f41b7690140c59e49f5474efd239"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Larnaka",
+      "Code": "03",
+      "ISO3166_2": "CY-03",
+      "Latitude": 34.9728,
+      "Longitude": 33.8678,
+      "BoundaryGeoJSON": "@file:by-country/CY/boundaries/CY-03.geojson",
+      "CommonAliases": [
+        "Larnaka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "0357A43A-194F-40BA-AEEF-D27858888AF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.950Z",
+      "checksum": "e0f0d4b4df90033dba72c9d2b0f905c64d5d10298193c705b77d2572782709a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lefkosia (Lefkoşa)",
+      "Code": "01",
+      "ISO3166_2": "CY-01",
+      "Latitude": 35.0214,
+      "Longitude": 33.043,
+      "BoundaryGeoJSON": "@file:by-country/CY/boundaries/CY-01.geojson",
+      "CommonAliases": [
+        "Lefkosia (Lefkoşa)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "7CD096F0-9578-4D65-BCCE-849CB05CCD16"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.968Z",
+      "checksum": "66178dfefb278f3901d44509d654dc6439fd333f7ea7e17df7f717c3811b2647"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lemesos (Leymosun)",
+      "Code": "02",
+      "ISO3166_2": "CY-02",
+      "Latitude": 34.7755,
+      "Longitude": 32.9674,
+      "BoundaryGeoJSON": "@file:by-country/CY/boundaries/CY-02.geojson",
+      "CommonAliases": [
+        "Lemesos (Leymosun)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "E057A2E5-A784-4169-903F-65C5790842B7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.983Z",
+      "checksum": "bf9f69bf22cdf65563b468c51eaecd426aa93a9e4eda5189847e457555aef8cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pafos (Baf)",
+      "Code": "05",
+      "ISO3166_2": "CY-05",
+      "Latitude": 34.9307,
+      "Longitude": 32.5276,
+      "BoundaryGeoJSON": "@file:by-country/CY/boundaries/CY-05.geojson",
+      "CommonAliases": [
+        "Pafos (Baf)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CY"
+    },
+    "primaryKey": {
+      "ID": "5793B3E7-71C5-4205-B7F0-4349591D677C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:40.997Z",
+      "checksum": "cbd1a50696d254e546730a6afdc54534953a2f51be9fb67e277b834614218da8"
+    }
+  }
+]

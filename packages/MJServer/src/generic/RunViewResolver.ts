@@ -1,12 +1,12 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo, RunViewWithCacheCheckResult, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckParams, AggregateResult, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { KeyValuePairOutputType } from './KeyInputOutputTypes.js';
+import { CompositeKeyInputType, KeyValuePairOutputType } from './KeyInputOutputTypes.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 /********************************************************************************
@@ -159,6 +159,12 @@ export class RunViewByIDInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
@@ -260,6 +266,12 @@ export class RunViewByNameInput {
   })
   StartRow?: number;
 
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
+
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
@@ -346,6 +358,12 @@ export class RunDynamicViewInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
 
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
@@ -462,6 +480,12 @@ export class RunViewGenericInput {
     description: 'If a value > 0 is provided, this value will be used to offset the rows returned.',
   })
   StartRow?: number;
+
+  @Field(() => CompositeKeyInputType, {
+    nullable: true,
+    description: 'Keyset (seek) pagination cursor. When provided, returns the next page of records after the given PK value, ordered by the PK column. Requires a single-column PK on the entity. Cannot be combined with StartRow.',
+  })
+  AfterKey?: CompositeKeyInputType;
 
   @Field(() => [AggregateExpressionInput], {
     nullable: true,
@@ -765,6 +789,7 @@ export class RunViewResolver extends ResolverBase {
       for (const [index, data] of rawData.entries()) {
         // EntityName is backfilled by RunViewsGeneric when ViewID/ViewName was used
         const entity = input[index].EntityName ? provider.Entities.find((e) => e.Name === input[index].EntityName) : null;
+
         const returnData: any[] = this.processRawData(data.Results, entity ? entity.ID : null, entity);
 
         results.push({
@@ -1016,6 +1041,9 @@ export class RunViewResolver extends ResolverBase {
           AuditLogDescription: item.params.AuditLogDescription,
           ResultType: (item.params.ResultType || 'simple') as 'simple' | 'entity_object' | 'count_only',
           StartRow: item.params.StartRow,
+          AfterKey: item.params.AfterKey
+            ? CompositeKey.FromKeyValuePairs(item.params.AfterKey.KeyValuePairs)
+            : undefined,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

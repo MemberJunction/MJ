@@ -25,13 +25,13 @@
           <!-- Execution Order -->
           <div class="form-field">
             <label for="executionOrder">Execution Order *</label>
-            <kendo-numerictextbox 
+            <mj-numeric-input
               formControlName="executionOrder"
-              [min]="0"
-              [format]="'0'"
+              [Min]="0"
+              Format="0"
               [class.error-border]="hasExecutionOrderError()"
               class="form-control">
-            </kendo-numerictextbox>
+            </mj-numeric-input>
             @if (isFieldInvalid('executionOrder')) {
               <div class="field-error">{{ getFieldError('executionOrder') }}</div>
             }
@@ -44,25 +44,24 @@
           <!-- Purpose -->
           <div class="form-field">
             <label for="purpose">Purpose</label>
-            <kendo-textbox 
+            <input
+              class="mj-input form-control"
               formControlName="purpose"
-              placeholder="e.g., Initialize, ProcessData, Summarize"
-              class="form-control">
-            </kendo-textbox>
+              placeholder="e.g., Initialize, ProcessData, Summarize">
             <small class="field-hint">Functional purpose of this prompt within the agent workflow</small>
           </div>
           
           <!-- Status -->
           <div class="form-field">
             <label for="status">Status *</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="status"
-              [data]="statusOptions"
-              textField="text"
-              valueField="value"
-              [valuePrimitive]="true"
+              [Data]="statusOptions"
+              TextField="text"
+              ValueField="value"
+              [ValuePrimitive]="true"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             @if (isFieldInvalid('status')) {
               <div class="field-error">{{ getFieldError('status') }}</div>
             }
@@ -82,20 +81,14 @@
           <!-- Context Behavior -->
           <div class="form-field full-width">
             <label for="contextBehavior">Context Behavior *</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="contextBehavior"
-              [data]="contextBehaviorOptions"
-              textField="text"
-              valueField="value"
-              [valuePrimitive]="true"
+              [Data]="contextBehaviorOptions"
+              TextField="text"
+              ValueField="value"
+              [ValuePrimitive]="true"
               class="form-control">
-              <ng-template kendoDropDownListItemTemplate let-dataItem>
-                <div class="context-behavior-option">
-                  <div class="option-title">{{ dataItem.text }}</div>
-                  <div class="option-description">{{ dataItem.description }}</div>
-                </div>
-              </ng-template>
-            </kendo-dropdownlist>
+            </mj-dropdown>
             @if (isFieldInvalid('contextBehavior')) {
               <div class="field-error">{{ getFieldError('contextBehavior') }}</div>
             }
@@ -106,12 +99,12 @@
           @if (requiresMessageCount()) {
             <div class="form-field">
               <label for="contextMessageCount">Message Count *</label>
-              <kendo-numerictextbox 
+              <mj-numeric-input
                 formControlName="contextMessageCount"
-                [min]="1"
-                [format]="'0'"
+                [Min]="1"
+                Format="0"
                 class="form-control">
-              </kendo-numerictextbox>
+              </mj-numeric-input>
               @if (isFieldInvalid('contextMessageCount')) {
                 <div class="field-error">{{ getFieldError('contextMessageCount') }}</div>
               }
@@ -132,15 +125,15 @@
           <!-- Configuration Override -->
           <div class="form-field full-width">
             <label for="configurationID">AI Configuration</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="configurationID"
-              [data]="configurations$ | async"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="true"
-              [defaultItem]="{ Name: 'Use Agent Default', ID: null }"
+              [Data]="configurations$ | async"
+              TextField="Name"
+              ValueField="ID"
+              [ValuePrimitive]="true"
+              [DefaultItem]="{ Name: 'Use Agent Default', ID: null }"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             <small class="field-hint">Override the agent's default AI configuration for this specific prompt</small>
           </div>
         </div>
@@ -150,15 +143,15 @@
 
   <!-- Dialog Footer -->
   <div class="dialog-footer">
-    <button kendoButton 
-            look="flat" 
+    <button mjButton
+            variant="flat"
             (click)="cancel()"
             [disabled]="(isSaving$ | async) || false">
       Cancel
     </button>
-    
-    <button kendoButton 
-            themeColor="primary" 
+
+    <button mjButton
+            variant="primary"
             (click)="save()"
             [disabled]="((isSaving$ | async) || false) || ((isLoading$ | async) || false) || hasExecutionOrderError()">
       @if (isSaving$ | async) {

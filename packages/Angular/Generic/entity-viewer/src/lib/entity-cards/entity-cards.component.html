@@ -32,7 +32,7 @@
         }
 
         <div class="card-header-content">
-          <h3 class="card-title" [innerHTML]="highlightMatch(getFieldValue(record, effectiveTemplate?.titleField ?? null))"></h3>
+          <h3 class="card-title" [innerHTML]="highlightMatch(getCombinedTitle(record))"></h3>
           @if (effectiveTemplate?.subtitleField; as subField) {
             @if (subtitleIsPill) {
               <mj-pill [value]="getFieldValue(record, subField)"></mj-pill>

@@ -18,3 +18,4 @@ export * from './lib/AngularAuthProviderFactory';
 export * from './lib/providers/mjexplorer-msal-provider.service';
 export * from './lib/providers/mjexplorer-auth0-provider.service';
 export * from './lib/providers/mjexplorer-okta-provider.service';
+export * from './lib/providers/mjexplorer-cognito-provider.service';

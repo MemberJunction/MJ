@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="basicDefinition"
         SectionName="Basic Definition"
-        Icon="fa fa-tag"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -38,7 +38,7 @@
     <mj-collapsible-panel
         SectionKey="promptConfiguration"
         SectionName="Prompt Configuration"
-        Icon="fa fa-comment-dots"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -62,7 +62,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PromptParamsSchema"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -120,9 +120,28 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AssignmentStrategy"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Storage Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="storageSettings"
+        SectionName="Storage Settings"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

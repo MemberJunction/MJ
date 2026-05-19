@@ -1,0 +1,10 @@
+{
+  "verdicts": [],
+  "summary": {
+    "total_files_with_diff": 0,
+    "noise": 0,
+    "regression_candidates": 0,
+    "no_content_diff": 0,
+    "pass": true
+  }
+}

@@ -64,6 +64,8 @@ export interface IntegrationSyncJobConfiguration extends ScheduledJobConfigurati
     CompanyIntegrationID: string;
     EntityMapIDs?: string[];
     FullSync?: boolean;
+    /** Override sync direction for all entity maps in this scheduled run. */
+    SyncDirection?: 'Pull' | 'Push' | 'Bidirectional';
 }
 
 /**

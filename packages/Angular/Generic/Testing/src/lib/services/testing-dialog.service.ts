@@ -1,94 +1,60 @@
-import { Injectable, ViewContainerRef } from '@angular/core';
-import { DialogService, DialogRef } from '@progress/kendo-angular-dialog';
-import { TestRunDialogComponent } from '../components/test-run-dialog.component';
+import { Injectable } from '@angular/core';
+import { Subject } from 'rxjs';
 
 export interface TestDialogOptions {
   testId?: string;
   suiteId?: string;
-  mode?: 'test' | 'suite';
-  viewContainerRef?: ViewContainerRef;
+  mode?: 'test' | 'suite' | 'monitor';
 }
 
 @Injectable({
   providedIn: 'root'
 })
 export class TestingDialogService {
-  private activeDialogs: DialogRef[] = [];
+  // Slide panel state (used by dashboard template)
+  IsPanelOpen = false;
+  PanelOptions: TestDialogOptions | null = null;
 
-  constructor(private dialogService: DialogService) {}
+  // Emits whenever panel state changes so OnPush components can detect it
+  readonly PanelStateChanged$ = new Subject<boolean>();
 
-  OpenTestRunDialog(options?: TestDialogOptions): DialogRef {
-    // Close and destroy all existing dialogs
-    this.closeAllDialogs();
-
-    const dialogRef = this.dialogService.open({
-      title: 'Run Test',
-      content: TestRunDialogComponent,
-      width: 800,
-      height: 700,
-      minWidth: 600,
-      minHeight: 500,
-      appendTo: options?.viewContainerRef
-    });
-
-    // Track this dialog
-    this.activeDialogs.push(dialogRef);
-
-    // Remove from tracking and destroy when closed
-    dialogRef.result.subscribe(
-      () => {
-        this.removeDialog(dialogRef);
-      },
-      () => {
-        this.removeDialog(dialogRef);
-      }
-    );
-
-    const dialogInstance = dialogRef.content.instance as TestRunDialogComponent;
-
-    if (options?.mode) {
-      dialogInstance.runMode = options.mode;
-    }
-
-    if (options?.testId) {
-      dialogInstance.selectedTestId = options.testId;
-      dialogInstance.runMode = 'test';
-    }
-
-    if (options?.suiteId) {
-      dialogInstance.selectedSuiteId = options.suiteId;
-      dialogInstance.runMode = 'suite';
-    }
-
-    return dialogRef;
+  OpenAsPanel(options?: TestDialogOptions): void {
+    this.PanelOptions = options ?? null;
+    this.IsPanelOpen = true;
+    this.PanelStateChanged$.next(true);
   }
 
-  private closeAllDialogs(): void {
-    // Close all dialogs in reverse order (newest first)
-    while (this.activeDialogs.length > 0) {
-      const dialog = this.activeDialogs.pop();
-      if (dialog) {
-        try {
-          dialog.close();
-        } catch (e) {
-          // Dialog might already be closed
-        }
-      }
-    }
+  ClosePanel(): void {
+    this.IsPanelOpen = false;
+    this.PanelOptions = null;
+    this.PanelStateChanged$.next(false);
   }
 
-  private removeDialog(dialogRef: DialogRef): void {
-    const index = this.activeDialogs.indexOf(dialogRef);
-    if (index > -1) {
-      this.activeDialogs.splice(index, 1);
-    }
+  OpenTestPanel(testId: string): void {
+    this.OpenAsPanel({ testId, mode: 'test' });
   }
 
-  OpenTestDialog(testId: string, viewContainerRef?: ViewContainerRef): DialogRef {
-    return this.OpenTestRunDialog({ testId, mode: 'test', viewContainerRef });
+  /** Open the panel in monitor mode to view a running test's progress */
+  OpenTestMonitor(testId: string): void {
+    this.OpenAsPanel({ testId, mode: 'monitor' });
   }
 
-  OpenSuiteDialog(suiteId: string, viewContainerRef?: ViewContainerRef): DialogRef {
-    return this.OpenTestRunDialog({ suiteId, mode: 'suite', viewContainerRef });
+  OpenSuitePanel(suiteId: string): void {
+    this.OpenAsPanel({ suiteId, mode: 'suite' });
+  }
+
+  /** @deprecated Use OpenTestPanel instead - opens as slide panel */
+  OpenTestDialog(testId: string, _viewContainerRef?: unknown): void {
+    this.OpenTestPanel(testId);
+  }
+
+  /** @deprecated Use OpenSuitePanel instead - opens as slide panel */
+  OpenSuiteDialog(suiteId: string, _viewContainerRef?: unknown): void {
+    this.OpenSuitePanel(suiteId);
+  }
+
+  /** @deprecated Use OpenAsPanel instead - opens as slide panel */
+  OpenTestRunDialog(options?: TestDialogOptions): void {
+    this.OpenAsPanel(options);
   }
 }

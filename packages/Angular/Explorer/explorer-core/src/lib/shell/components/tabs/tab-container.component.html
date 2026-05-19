@@ -20,6 +20,16 @@
         <span>{{ isContextTabPinned ? 'Unpin Tab' : 'Pin Tab' }}</span>
       </div>
       <div class="context-menu-divider"></div>
+      <div class="context-menu-item" [class.new-item]="!isContextTabPinnedToHome" [class.disabled]="isContextTabPinnedToHome" (click)="onContextPinToHome()">
+        <i class="fa-solid fa-house-chimney"></i>
+        @if (isContextTabPinnedToHome) {
+          <span>Pinned to Home</span>
+          <span class="check"><i class="fa-solid fa-check"></i></span>
+        } @else {
+          <span>Pin to Home</span>
+        }
+      </div>
+      <div class="context-menu-divider"></div>
       <div class="context-menu-item" (click)="onContextClose()">
         <i class="fa-solid fa-xmark"></i>
         <span>Close Tab</span>

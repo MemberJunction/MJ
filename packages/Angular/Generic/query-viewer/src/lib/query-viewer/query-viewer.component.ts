@@ -11,7 +11,8 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, RunQueryResult, Metadata, QueryInfo } from '@memberjunction/core';
+import { RunQuery, RunQueryParams, RunQueryResult, QueryInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -56,7 +57,7 @@ import {
     styleUrls: ['./query-viewer.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class QueryViewerComponent implements OnInit, OnDestroy {
+export class QueryViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -183,11 +184,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public QueryTotalRowCount: number = 0;
     public CurrentPageNumber: number = 1;
 
-    private metadata = new Metadata();
     private destroy$ = new Subject<void>();
     private userInfoEngine = UserInfoEngine.Instance;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {}
 
@@ -219,7 +219,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.metadata.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
+        this.QueryInfo = this.ProviderToUse.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;
@@ -338,14 +338,19 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public async RunQuery(params: QueryParameterValues, pageNumber: number = 1): Promise<void> {
         if (!this.QueryInfo || !this._queryId) return;
 
+        // Normalize array parameters: saved state or callers may pass arrays
+        // with JSON fragment strings (e.g. ['["A"', '"B"]']) from the old
+        // comma-split bug. Re-join and re-parse to clean them up.
+        const normalizedParams = this.normalizeArrayParams(params);
+
         this.IsLoading = true;
         this.LastError = null;
         this.QueryStart.emit();
         this.cdr.markForCheck();
 
-        // Save parameters for next time
-        this.SavedParams = params;
-        await this.saveParameters(params);
+        // Save normalized parameters for next time
+        this.SavedParams = normalizedParams;
+        await this.saveParameters(normalizedParams);
 
         const startTime = performance.now();
 
@@ -353,7 +358,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
             const runQuery = new RunQuery();
             const runParams: RunQueryParams = {
                 QueryID: this._queryId,
-                Parameters: params as Record<string, unknown>
+                Parameters: normalizedParams as Record<string, unknown>
             };
 
             // Add server-side paging when PageSize > 0
@@ -478,5 +483,40 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
 
     public get HasParameters(): boolean {
         return (this.QueryInfo?.Parameters?.length || 0) > 0;
+    }
+
+    /**
+     * Normalizes array-typed parameters. Handles the case where saved state
+     * contains JSON fragment arrays (e.g. `['["A"', '"B"]']`) from the old
+     * comma-split bug. Joins the fragments back into a string, detects JSON
+     * array syntax, and parses cleanly.
+     */
+    private normalizeArrayParams(params: QueryParameterValues): QueryParameterValues {
+        if (!this.QueryInfo?.Parameters?.length) return params;
+
+        const result = { ...params };
+        for (const paramDef of this.QueryInfo.Parameters) {
+            if (paramDef.Type !== 'array' || !(paramDef.Name in result)) continue;
+
+            const value = result[paramDef.Name];
+            if (!Array.isArray(value) || value.length === 0) continue;
+
+            // Check if the array looks like it was produced by naive comma-splitting
+            // of a JSON array string (fragments contain brackets or quotes)
+            const joined = value.join(', ');
+            const trimmed = joined.trim();
+            if (trimmed.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(trimmed);
+                    if (Array.isArray(parsed)) {
+                        result[paramDef.Name] = parsed.map((v: unknown) => String(v).trim()).filter((s: string) => s);
+                        continue;
+                    }
+                } catch {
+                    // Not valid JSON after joining — leave as-is
+                }
+            }
+        }
+        return result;
     }
 }

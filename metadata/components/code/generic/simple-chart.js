@@ -37,18 +37,18 @@ function SimpleChart({
   const [error, setError] = React.useState(null);
   const [entityInfo, setEntityInfo] = React.useState(null);
 
-  // Default color palette - accessible and visually distinct
+  // Modern color palette - balanced saturation for polished dashboards
   const defaultColors = [
-    '#1890ff', // Blue
-    '#52c41a', // Green
-    '#fa8c16', // Orange
-    '#f5222d', // Red
-    '#722ed1', // Purple
-    '#13c2c2', // Cyan
-    '#fa541c', // Red-orange
-    '#2f54eb', // Deep blue
-    '#a0d911', // Lime
-    '#eb2f96'  // Magenta
+    '#4a90d9', // Steel blue
+    '#6abf69', // Soft green
+    '#f0a030', // Warm amber
+    '#e8665d', // Soft red
+    '#9270ca', // Soft purple
+    '#45b5b5', // Teal
+    '#e87040', // Soft coral
+    '#5c7cfa', // Periwinkle
+    '#8cc63f', // Olive green
+    '#d66ba0'  // Dusty rose
   ];
 
   // Load entity metadata
@@ -105,7 +105,7 @@ function SimpleChart({
   // Process and aggregate data
   const processData = React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
-      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
     }
 
     try {
@@ -117,21 +117,21 @@ function SimpleChart({
           const error = `Field "${groupBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
 
         if (stackBy && !(stackBy in data[0])) {
           const error = `Stack field "${stackBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
 
         if (valueField && !(valueField in data[0])) {
           const error = `Value field "${valueField}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
       }
 
@@ -147,7 +147,7 @@ function SimpleChart({
         const sampleValue = data[0][groupBy];
         isDateField = sampleValue && (
           sampleValue instanceof Date ||
-          (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+          (typeof sampleValue === 'string' && sampleValue.length >= 8 && !isNaN(Date.parse(sampleValue)))
         );
       }
 
@@ -156,13 +156,7 @@ function SimpleChart({
         // Collect all unique primary categories (X-axis)
         const categoriesSet = new Set();
         data.forEach(record => {
-          let key = record[groupBy] || 'Unknown';
-          if (isDateField && key !== 'Unknown') {
-            const date = new Date(key);
-            if (!isNaN(date.getTime())) {
-              key = date.toISOString().split('T')[0];
-            }
-          }
+          const key = record[groupBy] || 'Unknown';
           categoriesSet.add(key);
         });
 
@@ -192,13 +186,7 @@ function SimpleChart({
         // Group data by both primary category AND stack value
         const grouped = {};
         data.forEach(record => {
-          let categoryKey = record[groupBy] || 'Unknown';
-          if (isDateField && categoryKey !== 'Unknown') {
-            const date = new Date(categoryKey);
-            if (!isNaN(date.getTime())) {
-              categoryKey = date.toISOString().split('T')[0];
-            }
-          }
+          const categoryKey = record[groupBy] || 'Unknown';
 
           // Skip if category was filtered out by limit
           if (!categories.includes(categoryKey)) return;
@@ -270,7 +258,8 @@ function SimpleChart({
           categories: categories.map(c => String(c)),
           values: [], // Not used in stacked mode
           datasets: datasets,
-          isEmpty: false
+          isEmpty: false,
+          isDateField
         };
       }
 
@@ -278,17 +267,8 @@ function SimpleChart({
       const grouped = {};
 
       data.forEach(record => {
-        let key = record[groupBy] || 'Unknown';
-        
-        // Format date values for display
-        if (isDateField && key !== 'Unknown') {
-          const date = new Date(key);
-          if (!isNaN(date.getTime())) {
-            // Format as YYYY-MM-DD for grouping
-            key = date.toISOString().split('T')[0];
-          }
-        }
-        
+        const key = record[groupBy] || 'Unknown';
+
         if (!grouped[key]) {
           grouped[key] = {
             label: key,
@@ -361,12 +341,13 @@ function SimpleChart({
         categories,
         values,
         datasets: [], // Empty in non-stacked mode
-        isEmpty: false
+        isEmpty: false,
+        isDateField
       };
     } catch (err) {
       console.error('Error processing chart data:', err);
       setError(err.message);
-      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
     }
   }, [data, groupBy, stackBy, valueField, aggregateMethod, sortBy, sortOrder, limit, entityInfo]);
 
@@ -392,7 +373,7 @@ function SimpleChart({
       const sampleValue = data[0][groupBy];
       isDateField = sampleValue && (
         sampleValue instanceof Date ||
-        (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+        (typeof sampleValue === 'string' && sampleValue.length >= 8 && !isNaN(Date.parse(sampleValue)))
       );
     }
     
@@ -432,13 +413,18 @@ function SimpleChart({
                   ? 'rgba(24, 144, 255, 0.2)'
                   : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar
               borderColor: isPieOrDoughnut
-                ? undefined
+                ? '#fff'
                 : isLineOrArea
                   ? (colors || defaultColors)[0]
-                  : (colors || defaultColors).slice(0, processData.values.length), // Different color for each bar border
-              borderWidth: isLineOrArea ? 2 : 1,
+                  : (colors || defaultColors).slice(0, processData.values.length),
+              borderWidth: isPieOrDoughnut ? 2 : isLineOrArea ? 3 : 0,
+              borderRadius: isPieOrDoughnut || isLineOrArea ? undefined : 4,
               fill: actualChartType === 'area',
-              tension: isLineOrArea ? 0.1 : undefined
+              tension: isLineOrArea ? 0.35 : undefined,
+              pointRadius: isLineOrArea ? 4 : undefined,
+              pointBackgroundColor: isLineOrArea ? '#fff' : undefined,
+              pointBorderWidth: isLineOrArea ? 2 : undefined,
+              pointHoverRadius: isLineOrArea ? 7 : undefined
             }]
       },
       options: {
@@ -463,23 +449,21 @@ function SimpleChart({
         },
         elements: {
           bar: {
-            hoverBackgroundColor: undefined, // Use default color
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverBorderWidth: 0,
+            borderSkipped: false
           },
           arc: {
-            hoverOffset: 8,
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverOffset: 6,
+            hoverBorderWidth: 2,
+            hoverBorderColor: '#fff'
           },
           line: {
-            hoverBorderWidth: 4,
-            hoverBorderColor: '#1890ff'
+            hoverBorderWidth: 4
           },
           point: {
-            hoverRadius: 6,
-            hoverBorderWidth: 3,
-            hoverBorderColor: '#1890ff'
+            hoverRadius: 7,
+            hoverBorderWidth: 2,
+            hoverBackgroundColor: '#fff'
           }
         },
         onHover: (event, activeElements) => {
@@ -573,6 +557,9 @@ function SimpleChart({
               ? (isPieOrDoughnut ? 'bottom' : 'top')
               : legendPosition,
             labels: {
+              usePointStyle: true,
+              pointStyle: 'circle',
+              padding: 16,
               font: {
                 size: legendFontSize
               }
@@ -584,18 +571,30 @@ function SimpleChart({
             color: isPieOrDoughnut ? '#fff' : '#666'
           } : undefined,
           tooltip: {
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            backgroundColor: 'rgba(30, 30, 30, 0.9)',
             titleFont: {
-              size: 14,
-              weight: 'bold'
+              size: 13,
+              weight: 600
             },
             bodyFont: {
               size: 13
             },
-            padding: 12,
-            cornerRadius: 4,
+            padding: { top: 10, bottom: 10, left: 14, right: 14 },
+            cornerRadius: 8,
             displayColors: true,
+            usePointStyle: true,
+            boxPadding: 6,
             callbacks: {
+              title: (tooltipItems) => {
+                const raw = tooltipItems[0]?.label || '';
+                if (processData.isDateField && raw !== 'Unknown') {
+                  const date = new Date(raw);
+                  if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  }
+                }
+                return raw;
+              },
               label: (context) => {
                 const label = context.dataset.label || '';
                 const value = formatValue(context.parsed.y !== undefined ? context.parsed.y : context.parsed);
@@ -612,25 +611,44 @@ function SimpleChart({
       config.options.scales = {
         y: {
           beginAtZero: true,
-          stacked: isStacked, // Enable stacking on Y-axis
+          stacked: isStacked,
+          border: { display: false },
+          grid: {
+            color: '#f0f0f0',
+            drawTicks: false
+          },
           ticks: {
+            padding: 8,
             callback: (value) => formatValue(value)
           }
         },
         x: {
-          stacked: isStacked, // Enable stacking on X-axis
+          stacked: isStacked,
+          border: { display: false },
+          grid: { display: false },
           ticks: {
             autoSkip: true,
-            maxRotation: 45,
+            maxRotation: 60,
             minRotation: 0,
-            maxTicksLimit: 20, // Limit number of ticks to prevent overcrowding
+            maxTicksLimit: 20,
+            padding: 4,
             font: {
               size: 11
+            },
+            callback: function(value) {
+              const label = this.getLabelForValue(value);
+              // Format date values for display on the axis
+              if (processData.isDateField && typeof label === 'string' && label !== 'Unknown') {
+                const date = new Date(label);
+                if (!isNaN(date.getTime())) {
+                  return date.toISOString().split('T')[0];
+                }
+              }
+              if (typeof label === 'string' && label.length > 18) {
+                return label.substring(0, 16) + '…';
+              }
+              return label;
             }
-          },
-          // For charts with many categories, use better label management
-          grid: {
-            display: processData.categories.length <= 20
           }
         }
       };
@@ -756,7 +774,7 @@ function SimpleChart({
 
   // Render chart container with canvas
   return (
-    <div style={{ width: '100%', position: 'relative' }}>
+    <div style={{ width: '100%', position: 'relative', overflow: 'hidden' }}>
       {enableExport && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '8px' }}>
           <button

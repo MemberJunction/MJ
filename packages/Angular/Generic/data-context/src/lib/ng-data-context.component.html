@@ -29,11 +29,11 @@
                 </div>
             </div>
             <div class="header-actions">
-                <button kendoButton look="flat" (click)="refresh()" title="Refresh">
+                <button mjButton variant="flat" (click)="refresh()" title="Refresh">
                     <i class="fa-solid fa-rotate"></i>
                     Refresh
                 </button>
-                <button kendoButton look="flat" (click)="exportToCSV()" title="Export to CSV">
+                <button mjButton variant="flat" (click)="exportToCSV()" title="Export to CSV">
                     <i class="fa-solid fa-download"></i>
                     Export
                 </button>
@@ -49,16 +49,15 @@
 
         <!-- Search Bar -->
         <div class="search-container">
-            <kendo-textbox 
-                [(ngModel)]="searchTerm" 
-                (ngModelChange)="onSearchChange()"
-                placeholder="Search items by type, SQL, entity name, or description..."
-                [clearButton]="true"
-                class="search-input">
-                <ng-template kendoTextBoxPrefixTemplate>
-                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                </ng-template>
-            </kendo-textbox>
+            <div class="search-input-wrapper">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input
+                    class="mj-input search-input"
+                    [(ngModel)]="searchTerm"
+                    (ngModelChange)="onSearchChange()"
+                    placeholder="Search items by type, SQL, entity name, or description..."
+                />
+            </div>
         </div>
 
         <!-- Data Context Items as Cards -->
@@ -193,7 +192,7 @@
                     <pre><code>{{ previewSQL }}</code></pre>
                 </div>
                 <div class="sql-preview-actions">
-                    <button kendoButton (click)="copyToClipboard(previewSQL, 'preview-sql')">
+                    <button mjButton (click)="copyToClipboard(previewSQL, 'preview-sql')">
                         <i class="fa-solid" [class.fa-copy]="copiedField !== 'preview-sql'" [class.fa-check]="copiedField === 'preview-sql'"></i>
                         {{ copiedField === 'preview-sql' ? 'Copied!' : 'Copy SQL' }}
                     </button>

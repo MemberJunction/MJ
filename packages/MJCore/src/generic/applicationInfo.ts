@@ -1,7 +1,7 @@
 import { BaseInfo } from './baseInfo'
 import { EntityInfo } from './entityInfo'
 import { IMetadataProvider } from './interfaces';
-import { UUIDsEqual } from '@memberjunction/global';
+
 
 /**
  * Stores configuration settings and preferences for applications, including key-value pairs for runtime parameters and user-specific customizations.
@@ -257,21 +257,19 @@ export class ApplicationInfo extends BaseInfo {
         if (initData) {
             let ae = initData.ApplicationEntities || initData._ApplicationEntities;
             if (ae) {
-                const mdEntities = md.Entities;
-                this._ApplicationEntities=  [];
+                this._ApplicationEntities = [];
                 for (let i = 0; i < ae.length; i++) {
-                    // 
                     const aei = new ApplicationEntityInfo(ae[i])
                     this._ApplicationEntities.push(aei)
-    
-                    const match = mdEntities.find(e => UUIDsEqual(e.ID, ae[i].EntityID)) 
+
+                    const match = md.EntityByID(ae[i].EntityID);
                     if (match)
                         aei._setEntity(match)
                 }
             }
 
             let as = initData.ApplicationSettings || initData._ApplicationSettings;
-            if (as) 
+            if (as)
                 this._ApplicationSettings = as.map(s => new ApplicationSettingInfo(s));
         }
     }

@@ -1,0 +1,296 @@
+[
+  {
+    "fields": {
+      "Name": "Ayeyarwady",
+      "Code": "07",
+      "ISO3166_2": "MM-07",
+      "Latitude": 16.7457,
+      "Longitude": 95.1083,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-07.geojson",
+      "CommonAliases": [
+        "Ayeyarwady"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "1F58F26A-4558-43BA-B7F6-7EDE0C3B8C21"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.638Z",
+      "checksum": "c0071807a6fec7ffe3a65b0f559be38b71f23d9d284e2961257678dc0f1ffb4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bago",
+      "Code": "02",
+      "ISO3166_2": "MM-02",
+      "Latitude": 18.518,
+      "Longitude": 96.1485,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-02.geojson",
+      "CommonAliases": [
+        "Bago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "F7FB17EA-A426-4187-97D7-4E94B9EF44F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.654Z",
+      "checksum": "8875fcd281f5c015dd7c3060a18a475e96e1bcf8e28e6e0c3a943dbdb5257491"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chin",
+      "Code": "14",
+      "ISO3166_2": "MM-14",
+      "Latitude": 21.9262,
+      "Longitude": 93.3727,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-14.geojson",
+      "CommonAliases": [
+        "Chin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "FE8E5FBD-635F-4FFB-91CF-B15D7EF74E3E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.671Z",
+      "checksum": "9115626b338cb0e58171f2786241609025017fb9d3a5b9cbf2f816762177ef0f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kachin",
+      "Code": "11",
+      "ISO3166_2": "MM-11",
+      "Latitude": 25.7926,
+      "Longitude": 97.2978,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-11.geojson",
+      "CommonAliases": [
+        "Kachin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "3DA121DD-6D47-47D3-A9CB-1DFE8834F57D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.688Z",
+      "checksum": "9b0b7f92337545c8e3266a907be5cfc73a6c58af58955e64172907247f828571"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kayah",
+      "Code": "12",
+      "ISO3166_2": "MM-12",
+      "Latitude": 19.2658,
+      "Longitude": 97.3526,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-12.geojson",
+      "CommonAliases": [
+        "Kayah"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "2F476412-7C4F-46C5-8482-89F3A87A1A5B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.706Z",
+      "checksum": "8ead5216d9c20f4100254cd8fa693eb351b6e95f4ceddc3389d36cf84678940c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kayin",
+      "Code": "13",
+      "ISO3166_2": "MM-13",
+      "Latitude": 17.3996,
+      "Longitude": 97.651,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-13.geojson",
+      "CommonAliases": [
+        "Kayin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "12699B11-557D-46FE-8635-4E1E305897CE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.722Z",
+      "checksum": "0b4d18cfd372a1de7c0dd754e4cd7be7bc17b832bf8af76d7bdfa01279082d12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Magway",
+      "Code": "03",
+      "ISO3166_2": "MM-03",
+      "Latitude": 19.6473,
+      "Longitude": 94.8807,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-03.geojson",
+      "CommonAliases": [
+        "Magway"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "480C509F-35BA-4239-A817-84B670A7B9D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.739Z",
+      "checksum": "23b7437e1b17bc686e2189f9da9e9f3fcb129e6d2feeaa324898e3e01f27af6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mandalay",
+      "Code": "04",
+      "ISO3166_2": "MM-04",
+      "Latitude": 20.6284,
+      "Longitude": 96.0614,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-04.geojson",
+      "CommonAliases": [
+        "Mandalay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "81310676-DC6D-4D8D-B8E2-927472EB6763"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.755Z",
+      "checksum": "67b4e7847c711372f2cec1404c6052d31c1a2789f802864c685b90a90980462b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mon",
+      "Code": "15",
+      "ISO3166_2": "MM-15",
+      "Latitude": 16.3045,
+      "Longitude": 97.8062,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-15.geojson",
+      "CommonAliases": [
+        "Mon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "06419BC3-BD4A-4D83-945E-93A1BDA730B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.772Z",
+      "checksum": "0a3c3e1e3a974e9b7031fed9f11b54a577b371b63e6ec4aa79ad33c29b694c48"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rakhine",
+      "Code": "16",
+      "ISO3166_2": "MM-16",
+      "Latitude": 20.2747,
+      "Longitude": 93.6396,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-16.geojson",
+      "CommonAliases": [
+        "Rakhine"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "E7DA5823-726C-421A-941B-1A459357B510"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.785Z",
+      "checksum": "f1aaf70bea7d67031ec5aaa496c491a7e617b5957a364ab8e6cb289b7a343165"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sagaing",
+      "Code": "01",
+      "ISO3166_2": "MM-01",
+      "Latitude": 23.7031,
+      "Longitude": 95.1821,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-01.geojson",
+      "CommonAliases": [
+        "Sagaing"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "B2B4BD28-CA03-4B63-82FF-2FAFB70FFE8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.822Z",
+      "checksum": "604446f3045b59ec7cee030ba72c048c6c4c4078455f177fe0acc0d8f48deb5b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shan",
+      "Code": "17",
+      "ISO3166_2": "MM-17",
+      "Latitude": 21.5185,
+      "Longitude": 98.1593,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-17.geojson",
+      "CommonAliases": [
+        "Shan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "A227E9B0-FBB6-45D0-A352-7DF29F542556"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.839Z",
+      "checksum": "99e25494f3721dad22e99ddba7faa280090867c55ef00aae705c8e043056e474"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tanintharyi",
+      "Code": "05",
+      "ISO3166_2": "MM-05",
+      "Latitude": 13.6116,
+      "Longitude": 98.7746,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-05.geojson",
+      "CommonAliases": [
+        "Tanintharyi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "BF1A07BC-6FB7-420F-B68D-67D7DB4EB488"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.856Z",
+      "checksum": "5a9a49fc7ee3f0872f260295445a1a3c53a3475281456e006c3f73e2f63fea06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yangon",
+      "Code": "06",
+      "ISO3166_2": "MM-06",
+      "Latitude": 17.1117,
+      "Longitude": 96.111,
+      "BoundaryGeoJSON": "@file:by-country/MM/boundaries/MM-06.geojson",
+      "CommonAliases": [
+        "Yangon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MM"
+    },
+    "primaryKey": {
+      "ID": "BE656A4A-F719-42A0-9AC0-7A2715F5C131"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:17.870Z",
+      "checksum": "497f13d0c42b08b0d246af147b80f4b086f253e970a429d8a7c1bd411a080f6f"
+    }
+  }
+]

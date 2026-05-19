@@ -14,7 +14,6 @@
 
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 /**
@@ -24,7 +23,6 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 @NgModule({
     imports: [
         CommonModule,
-        ButtonsModule,
         SharedGenericModule
     ]
 })

@@ -185,6 +185,42 @@ const telemetrySchema = z.object({
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
+const serverExtensionSchema = z.object({
+  Enabled: z.boolean().default(true),
+  DriverClass: z.string(),
+  RootPath: z.string(),
+  Settings: z.record(z.unknown()).default({})
+}).passthrough();
+
+const cacheSettingsSchema = z.object({
+  /** Maximum total estimated memory for all cached results in MB. Default: 150. Set to 0 to disable memory-based eviction. */
+  maxMemoryMB: z.number().optional().default(150),
+  /** Maximum percentage of total cache memory that any single entity can occupy. Default: 50. Set to 0 to disable. */
+  maxPercentOfCachePerEntity: z.number().optional().default(50),
+  /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
+  defaultTTLSeconds: z.number().optional().default(0),
+  /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
+  evictionSweepIntervalSeconds: z.number().optional().default(300),
+  /** Enable verbose cache logging (hits, misses, evictions). Default: false. */
+  verboseLogging: z.boolean().optional().default(false),
+});
+
+const feedbackGithubSettingsSchema = z.object({
+  owner: z.string().optional(),
+  repo: z.string().optional(),
+  defaultLabels: z.array(z.string()).optional(),
+  categoryLabels: z.record(z.string()).optional(),
+  severityLabels: z.record(z.string()).optional(),
+  assignees: z.array(z.string()).optional(),
+});
+
+const feedbackSettingsSchema = z.object({
+  /** Org-level kill switch for the in-app feedback feature. Defaults to true (enabled). */
+  enabled: z.boolean().optional().default(true),
+  /** Optional GitHub-specific settings used by the feedback resolver. */
+  github: feedbackGithubSettingsSchema.optional(),
+});
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -198,6 +234,9 @@ const configInfoSchema = z.object({
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
+  serverExtensions: z.array(serverExtensionSchema).optional().default([]),
+  cacheSettings: cacheSettingsSchema.optional().default({}),
+  feedbackSettings: feedbackSettingsSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -243,6 +282,10 @@ export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
+export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
+export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
+export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
+export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 /**
@@ -369,6 +412,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     level: 'standard'
   },
 
+  // Cache settings defaults
+  cacheSettings: {
+    maxMemoryMB: 150,
+    maxPercentOfCachePerEntity: 50,
+    defaultTTLSeconds: 0,
+    evictionSweepIntervalSeconds: 300,
+    verboseLogging: false,
+  },
+
   // Auth providers (environment-driven)
   authProviders: [
     // Microsoft Azure AD / Entra ID
@@ -392,6 +444,17 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
       clientId: process.env.AUTH0_CLIENT_ID,
       clientSecret: process.env.AUTH0_CLIENT_SECRET,
       domain: process.env.AUTH0_DOMAIN
+    } : null,
+    // AWS Cognito
+    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
+      name: 'cognito',
+      type: 'cognito',
+      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
+      audience: process.env.COGNITO_CLIENT_ID,
+      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+      clientId: process.env.COGNITO_CLIENT_ID,
+      region: process.env.AWS_REGION,
+      userPoolId: process.env.COGNITO_USER_POOL_ID
     } : null,
   ].filter(Boolean),
 };

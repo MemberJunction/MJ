@@ -101,6 +101,11 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   EditorSaving = false;
   EditorSaveSuccess = false;
 
+  /** Schema pipeline state */
+  IsRunningPipeline = false;
+  PipelineResultMessage: string | null = null;
+  PipelineResultSuccess = false;
+
   /** Currently selected connection index (opens transform panel) */
   SelectedConnectionIdx: number | null = null;
 
@@ -159,10 +164,14 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   // ---------------------------------------------------------------------------
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     // Clean up if needed
   }
 
@@ -267,6 +276,12 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
   OnGlobalSearchChange(event: Event): void {
     const input = event.target as HTMLInputElement;
     this.GlobalSearch = input.value;
+    this.cdr.detectChanges();
+  }
+
+  /** Bridge for <mj-page-search> which emits a plain string. */
+  OnGlobalSearchValue(value: string): void {
+    this.GlobalSearch = value;
     this.cdr.detectChanges();
   }
 
@@ -855,6 +870,31 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
 
   get HasEditorChanges(): boolean {
     return this.EditorConnections.some(c => c.IsDirty);
+  }
+
+  async RunSchemaPipeline(): Promise<void> {
+    if (!this.EditorEntityMap || !this.EditorCard) return;
+    this.IsRunningPipeline = true;
+    this.PipelineResultMessage = null;
+    this.PipelineResultSuccess = false;
+    this.cdr.detectChanges();
+
+    try {
+      const result = await this.dataService.RunSchemaPipeline(
+        this.EditorCard.IntegrationID,
+        this.EditorEntityMap
+      );
+      this.PipelineResultSuccess = result.Success;
+      this.PipelineResultMessage = result.Success
+        ? 'Pipeline complete — schema updated'
+        : result.Message ?? 'Pipeline failed';
+    } catch (err: unknown) {
+      this.PipelineResultSuccess = false;
+      this.PipelineResultMessage = `Error: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      this.IsRunningPipeline = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async SaveVisualEditor(): Promise<void> {

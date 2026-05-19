@@ -1,0 +1,15 @@
+[
+  {
+    "fields": {
+      "Name": "Embedding",
+      "Description": "Uses an embedding model to convert text or other modalities into vector representation. Used for semantic search, content classification vectorization, and tag similarity matching."
+    },
+    "primaryKey": {
+      "ID": "7FC8D291-562B-48A2-98AE-BAE3DA011BDD"
+    },
+    "sync": {
+      "lastModified": "2026-04-06T11:01:23.382Z",
+      "checksum": "a754a7d7674779dc6d6a320b1f810e9eb739ecb110a942768524d913f0a20cfd"
+    }
+  }
+]

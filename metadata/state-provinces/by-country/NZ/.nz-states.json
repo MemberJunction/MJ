@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Auckland",
+      "Code": "AUK",
+      "ISO3166_2": "NZ-AUK",
+      "Latitude": -36.8521,
+      "Longitude": 174.7632,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-AUK.geojson",
+      "CommonAliases": [
+        "Auckland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "D7E35B38-AD40-424B-9AFE-CC0905869A14"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.501Z",
+      "checksum": "3367ac66b9dfbaa46b7c2b34efddd5f1aa3c88328fc65bd1a7828a1a7cdb9614"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bay of Plenty",
+      "Code": "BOP",
+      "ISO3166_2": "NZ-BOP",
+      "Latitude": -37.4969,
+      "Longitude": 176.9228,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-BOP.geojson",
+      "CommonAliases": [
+        "Bay of Plenty"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "325B4764-7A63-42EF-B37E-470BB299842F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.518Z",
+      "checksum": "c7fcd8149eae793a37e61c389f4fd7e164a2a577d1992d14561dda189074be94"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Canterbury",
+      "Code": "CAN",
+      "ISO3166_2": "NZ-CAN",
+      "Latitude": -43.4942,
+      "Longitude": 171.8098,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-CAN.geojson",
+      "CommonAliases": [
+        "Canterbury"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "EAD38604-458C-4781-BFA1-9EAE0A1289C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.536Z",
+      "checksum": "343c8a188c8a2f33d7f0bf826da6467cbb0aaa64436ed2fec75a26a4ae2a132b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chatham Islands",
+      "Code": "CIT",
+      "ISO3166_2": "NZ-CIT",
+      "Latitude": -43.9175,
+      "Longitude": -176.1873,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-CIT.geojson",
+      "CommonAliases": [
+        "Chatham Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "569EBDC7-4E4D-4AAB-AD3B-53431E39C1FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.555Z",
+      "checksum": "20daae52d9cbbde3319927c490214db2635d903ff85dbf2155a107a09bc529fb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gisborne",
+      "Code": "GIS",
+      "ISO3166_2": "NZ-GIS",
+      "Latitude": -38.1532,
+      "Longitude": 178.1368,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-GIS.geojson",
+      "CommonAliases": [
+        "Gisborne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "9D08832B-0543-482B-88F4-AF1A42BBB70A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.574Z",
+      "checksum": "b5e3b137b9b6fbbbe9835b02b57a619c7df6c6d8776b2558e33f0581aee8ccb6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hawke's Bay",
+      "Code": "HKB",
+      "ISO3166_2": "NZ-HKB",
+      "Latitude": -39.5257,
+      "Longitude": 176.7611,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-HKB.geojson",
+      "CommonAliases": [
+        "Hawke's Bay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "A5BDBA62-0F74-4CA0-824E-D252087C94C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.590Z",
+      "checksum": "753fbc0df1623816110c42fd3c57bf98cd6a55f5be0710508826d23f8d3bf931"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manawatu-Whanganui",
+      "Code": "MWT",
+      "ISO3166_2": "NZ-MWT",
+      "Latitude": -39.6408,
+      "Longitude": 175.5714,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-MWT.geojson",
+      "CommonAliases": [
+        "Manawatu-Whanganui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "1A247A97-99DC-456E-87F4-FDE79B9ABCF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.607Z",
+      "checksum": "ba5b79191ad55411062e8d2881110d5e284f665a17a6d6ae41669504a2b02670"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marlborough",
+      "Code": "MBH",
+      "ISO3166_2": "NZ-MBH",
+      "Latitude": -41.4745,
+      "Longitude": 173.833,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-MBH.geojson",
+      "CommonAliases": [
+        "Marlborough"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "70A357EE-3902-43D5-8445-4897F4738D34"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.624Z",
+      "checksum": "a555aec9a5457f8251a2d47da3b7b0fed585b12b66d43f38bd12bc4ba79deaee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nelson",
+      "Code": "NSN",
+      "ISO3166_2": "NZ-NSN",
+      "Latitude": -41.2711,
+      "Longitude": 173.2837,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-NSN.geojson",
+      "CommonAliases": [
+        "Nelson"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "258926E2-7C53-49CF-AD1D-D02E9CA7C443"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.640Z",
+      "checksum": "8899febca4a2a094456aa00bf02463e4973aa7c0c3edd7fe5318493fe4137123"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northland",
+      "Code": "NTL",
+      "ISO3166_2": "NZ-NTL",
+      "Latitude": -35.3755,
+      "Longitude": 173.947,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-NTL.geojson",
+      "CommonAliases": [
+        "Northland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "E368A52E-410F-4908-A46D-0E746907658A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.654Z",
+      "checksum": "ab8b258188a51c519172cdd6c8b1ba86fff9c38a677e5ad008b4ed2f16ed9a31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Otago",
+      "Code": "OTA",
+      "ISO3166_2": "NZ-OTA",
+      "Latitude": -45.3975,
+      "Longitude": 170.1779,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-OTA.geojson",
+      "CommonAliases": [
+        "Otago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "7DF9B535-FCA6-4530-B74E-CB7F83EA4438"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.698Z",
+      "checksum": "89104c89781c21c60d9a4067191a5a51b913cd7c94585cb584f3db23a1073c4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southland",
+      "Code": "STL",
+      "ISO3166_2": "NZ-STL",
+      "Latitude": -45.9254,
+      "Longitude": 167.6068,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-STL.geojson",
+      "CommonAliases": [
+        "Southland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "446D3A4B-0A8F-41D0-AB8C-FE9397AAF1EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.715Z",
+      "checksum": "3d178905caeb08268afcf4b2c93540f8f48550e15eb5408b9f3c37c24b1aa918"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Taranaki",
+      "Code": "TKI",
+      "ISO3166_2": "NZ-TKI",
+      "Latitude": -39.3848,
+      "Longitude": 174.1974,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-TKI.geojson",
+      "CommonAliases": [
+        "Taranaki"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "68D95954-3D52-4556-A5FA-52472863763D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.731Z",
+      "checksum": "7e9f76379d2932bb828bb0667d94c0c0b8efe95914cecd570d61151dfc48f710"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tasman",
+      "Code": "TAS",
+      "ISO3166_2": "NZ-TAS",
+      "Latitude": -41.3022,
+      "Longitude": 172.8945,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-TAS.geojson",
+      "CommonAliases": [
+        "Tasman"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "7FFA8FFA-7F2B-4881-9B77-D32B5FDFBA4F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.748Z",
+      "checksum": "78f386dcea626bcfc7380665a4de2676e26d7c9af97b7c196ddbc67076fc3876"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Waikato",
+      "Code": "WKO",
+      "ISO3166_2": "NZ-WKO",
+      "Latitude": -37.7792,
+      "Longitude": 175.201,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-WKO.geojson",
+      "CommonAliases": [
+        "Waikato"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "253783CB-14A7-4FAE-AE6F-F944658D7710"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.764Z",
+      "checksum": "7168f3c6fd241232cefe03fe6ea0cbee2377d06f9cc489608e74b664eb1bcabb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wellington",
+      "Code": "WGN",
+      "ISO3166_2": "NZ-WGN",
+      "Latitude": -41.2235,
+      "Longitude": 175.4158,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-WGN.geojson",
+      "CommonAliases": [
+        "Wellington"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "95884993-1FB4-4502-A682-5CB6608FED39"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.781Z",
+      "checksum": "0c079583ddebbf0ac134bd083f080c4673dd50535c558abfbe770f65651db514"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West Coast",
+      "Code": "WTC",
+      "ISO3166_2": "NZ-WTC",
+      "Latitude": -42.5639,
+      "Longitude": 171.4523,
+      "BoundaryGeoJSON": "@file:by-country/NZ/boundaries/NZ-WTC.geojson",
+      "CommonAliases": [
+        "West Coast"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NZ"
+    },
+    "primaryKey": {
+      "ID": "6957F808-5F0B-4120-BE69-D543BD00A389"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:23.796Z",
+      "checksum": "de4b5837f0923437a868d206825010880ce258f43c0953cc7be895af3d1b2188"
+    }
+  }
+]

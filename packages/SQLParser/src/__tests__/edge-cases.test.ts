@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { SQLParser } from '../sql-parser.js';
 import { MJLexer } from '../mj-lexer.js';
 import { MJPlaceholderSubstitution } from '../mj-placeholder.js';
-const mjAstify = SQLParser.Astify.bind(SQLParser);
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+const tsqlDialect = new SQLServerDialect();
+const mjAstify = (sql: string) => SQLParser.Astify(sql, tsqlDialect);
 const mjSqlify = SQLParser.Sqlify.bind(SQLParser);
 const extractTemplateExpressions = SQLParser.ExtractTemplateExpressions.bind(SQLParser);
 const extractCompositionRefs = SQLParser.ExtractCompositionRefs.bind(SQLParser);
@@ -42,6 +44,7 @@ import {
     COND_AROUND_GROUP_BY,
     COND_AROUND_JOIN,
     COND_GUARD_THEN_USE,
+    COND_CONTROL_FLOW_ONLY_PARAM,
     COND_NEGATION,
     COMP_NO_PARAMS,
     COMP_NESTED_NUNJUCKS_PARAM,
@@ -107,6 +110,7 @@ const ALL_EDGE_CASES: { name: string; sql: string }[] = [
     { name: 'COND_AROUND_GROUP_BY', sql: COND_AROUND_GROUP_BY },
     { name: 'COND_AROUND_JOIN', sql: COND_AROUND_JOIN },
     { name: 'COND_GUARD_THEN_USE', sql: COND_GUARD_THEN_USE },
+    { name: 'COND_CONTROL_FLOW_ONLY_PARAM', sql: COND_CONTROL_FLOW_ONLY_PARAM },
     { name: 'COND_NEGATION', sql: COND_NEGATION },
     { name: 'COMP_NO_PARAMS', sql: COMP_NO_PARAMS },
     { name: 'COMP_NESTED_NUNJUCKS_PARAM', sql: COMP_NESTED_NUNJUCKS_PARAM },
@@ -393,11 +397,61 @@ describe('Edge Cases — Conditional Blocks', () => {
         expect(params[0].isRequired).toBe(false);
     });
 
+    it('COND_CONTROL_FLOW_ONLY_PARAM: variables only in if/elif conditions are extracted as optional params', () => {
+        const params = extractParameterInfo(COND_CONTROL_FLOW_ONLY_PARAM);
+        const groupingLevel = params.find(p => p.name === 'GroupingLevel');
+        expect(groupingLevel).toBeDefined();
+        expect(groupingLevel!.isRequired).toBe(false);
+        expect(groupingLevel!.type).toBe('string');
+
+        // Template expression params should still be extracted normally
+        const startDate = params.find(p => p.name === 'StartDate');
+        expect(startDate).toBeDefined();
+        expect(startDate!.isRequired).toBe(false); // inside conditional
+        expect(startDate!.type).toBe('date');
+
+        const endDate = params.find(p => p.name === 'EndDate');
+        expect(endDate).toBeDefined();
+        expect(endDate!.isRequired).toBe(false);
+
+        // String literals like 'Year', 'Quarter' must NOT be extracted as params
+        const bogusYear = params.find(p => p.name === 'Year');
+        expect(bogusYear).toBeUndefined();
+        const bogusQuarter = params.find(p => p.name === 'Quarter');
+        expect(bogusQuarter).toBeUndefined();
+    });
+
+    it('COND_LONG_ELIF_CHAIN: condition-only variable Status is extracted as optional param', () => {
+        const params = extractParameterInfo(COND_LONG_ELIF_CHAIN);
+        const status = params.find(p => p.name === 'Status');
+        expect(status).toBeDefined();
+        expect(status!.isRequired).toBe(false);
+        expect(status!.type).toBe('string');
+
+        // String literals from conditions must NOT leak as params
+        expect(params.find(p => p.name === 'active')).toBeUndefined();
+        expect(params.find(p => p.name === 'pending')).toBeUndefined();
+    });
+
+    it('COND_AROUND_GROUP_BY: condition-only boolean variable is extracted as optional param', () => {
+        const params = extractParameterInfo(COND_AROUND_GROUP_BY);
+        const groupBy = params.find(p => p.name === 'GroupByCategory');
+        expect(groupBy).toBeDefined();
+        expect(groupBy!.isRequired).toBe(false);
+    });
+
     it('COND_NEGATION: negation operator in condition', () => {
         const tokens = MJLexer.Tokenize(COND_NEGATION);
         const ifToken = tokens.find(t => t.type === 'MJ_IF_OPEN')!;
         const parsed = ifToken.parsed as MJBlockTagContent;
         expect(parsed.expression).toBe('not HideResults');
+    });
+
+    it('COND_NEGATION: negated condition-only variable is extracted as optional param', () => {
+        const params = extractParameterInfo(COND_NEGATION);
+        const hideResults = params.find(p => p.name === 'HideResults');
+        expect(hideResults).toBeDefined();
+        expect(hideResults!.isRequired).toBe(false);
     });
 });
 

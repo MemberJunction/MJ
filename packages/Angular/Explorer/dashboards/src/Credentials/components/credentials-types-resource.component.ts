@@ -5,6 +5,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { CredentialTypeEditPanelComponent } from '@memberjunction/ng-credentials';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 interface FieldSchemaProperty {
     name: string;
     type: string;
@@ -42,23 +43,55 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     public categories: string[] = [];
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     @ViewChild('typeEditPanel') typeEditPanel!: CredentialTypeEditPanelComponent;
 
+    public get FilterFields(): FilterFieldConfig[] {
+        return [
+            {
+                key: 'categoryFilter',
+                type: 'dropdown',
+                label: 'Category',
+                icon: 'fa-solid fa-folder',
+                placeholder: 'All Categories',
+                filterable: true,
+                options: [
+                    { text: 'All Categories', value: '' },
+                    ...this.categories.map(c => ({ text: c, value: c }))
+                ]
+            }
+        ];
+    }
+    public get FilterValues(): Record<string, unknown> {
+        return { categoryFilter: this.selectedCategoryFilter };
+    }
+    public get ActiveFilterCount(): number {
+        return this.selectedCategoryFilter ? 1 : 0;
+    }
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+        const next = (v ?? {}) as { categoryFilter?: string };
+        if ((next.categoryFilter ?? '') !== this.selectedCategoryFilter) {
+            this.onCategoryFilterChange(next.categoryFilter ?? '');
+        }
+    }
+    public resetFilters(): void {
+        if (this.selectedCategoryFilter) this.onCategoryFilterChange('');
+    }
+
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Cleanup if needed
     }
 
@@ -125,7 +158,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [typeResult, credResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Credential Types',

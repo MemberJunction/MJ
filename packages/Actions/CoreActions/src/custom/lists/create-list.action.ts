@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, RunView } from "@memberjunction/core";
+import { DatabaseProviderBase, Metadata, RunView } from "@memberjunction/core";
 import { MJListEntity, MJListDetailEntity, MJEntityEntity } from "@memberjunction/core-entities";
 
 /**
@@ -51,7 +51,7 @@ export class CreateListAction extends BaseAction {
         };
       }
 
-      const md = new Metadata();
+      const md = params.Provider ?? new Metadata();
       const rv = new RunView();
 
       // Resolve entity ID if name provided
@@ -74,7 +74,7 @@ export class CreateListAction extends BaseAction {
         resolvedEntityId = entityResult.Results[0].ID;
       }
 
-      // Create the list
+      // Create the list and its initial details atomically — if any detail fails, the list itself rolls back
       const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', params.ContextUser);
       list.NewRecord();
       list.Name = name;
@@ -86,22 +86,17 @@ export class CreateListAction extends BaseAction {
         list.CategoryID = categoryId;
       }
 
-      const saveResult = await list.Save();
-      if (!saveResult) {
-        return {
-          Success: false,
-          ResultCode: 'SAVE_FAILED',
-          Message: 'Failed to create list'
-        };
-      }
-
-      // Add initial records if provided
+      const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
       let recordsAdded = 0;
-      const errors: string[] = [];
 
-      if (addRecordIds && addRecordIds.length > 0) {
-        for (const recordId of addRecordIds) {
-          try {
+      await provider.BeginTransaction();
+      try {
+        if (!await list.Save()) {
+          throw new Error(`Failed to create list: ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        if (addRecordIds && addRecordIds.length > 0) {
+          for (const recordId of addRecordIds) {
             const listDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', params.ContextUser);
             listDetail.NewRecord();
             listDetail.ListID = list.ID;
@@ -109,29 +104,28 @@ export class CreateListAction extends BaseAction {
             listDetail.Sequence = recordsAdded;
             listDetail.Status = 'Active';
 
-            const detailSaveResult = await listDetail.Save();
-            if (detailSaveResult) {
-              recordsAdded++;
-            } else {
-              errors.push(`Failed to add record '${recordId}'`);
+            if (!await listDetail.Save()) {
+              throw new Error(`Failed to add record '${recordId}': ${listDetail.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            errors.push(`Error adding record '${recordId}': ${errorMessage}`);
+            recordsAdded++;
           }
         }
+
+        await provider.CommitTransaction();
+      } catch (error) {
+        await provider.RollbackTransaction();
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        return {
+          Success: false,
+          ResultCode: 'SAVE_FAILED',
+          Message: `Failed to create list: ${errorMessage}`
+        };
       }
 
       // Add output parameters
       this.addOutputParam(params, 'ListID', list.ID);
       this.addOutputParam(params, 'ListName', list.Name);
       this.addOutputParam(params, 'RecordsAdded', recordsAdded);
-
-      const result = {
-        ListID: list.ID,
-        ListName: list.Name,
-        RecordsAdded: recordsAdded
-      };
 
       return {
         Success: true,

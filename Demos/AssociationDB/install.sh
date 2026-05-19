@@ -10,9 +10,18 @@
 
 cd "$(dirname "$0")"
 
-# Load environment variables from .env file
+# Load DB_* environment variables from .env file
 if [ -f .env ]; then
-    export $(grep -v '^#' .env | xargs)
+    while IFS='=' read -r key value; do
+        key="${key// /}"
+        value="${value%$'\r'}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value#[\'\"]}"
+        value="${value%[\'\"]}"
+        [ -z "$key" ] && continue
+        export "$key"="$value"
+    done < <(grep -v '^\s*#' .env | grep -E '^\s*(DB_|CODEGEN_DB_)')
 else
     echo "Error: .env file not found!"
     echo "Please create a .env file with database credentials."
@@ -20,10 +29,18 @@ else
     exit 1
 fi
 
+# Support both naming conventions: DB_HOST/DB_USERNAME/DB_DATABASE (repo root)
+# and DB_SERVER/DB_USER/DB_NAME (legacy local .env)
+# Uses CODEGEN_DB_USERNAME/PASSWORD for DDL permissions (schema/table creation)
+DB_SERVER="${DB_SERVER:-$DB_HOST}"
+DB_USER="${CODEGEN_DB_USERNAME:-${DB_USER:-$DB_USERNAME}}"
+DB_PASSWORD="${CODEGEN_DB_PASSWORD:-$DB_PASSWORD}"
+DB_NAME="${DB_NAME:-$DB_DATABASE}"
+
 # Validate required environment variables
 if [ -z "$DB_SERVER" ] || [ -z "$DB_NAME" ] || [ -z "$DB_USER" ] || [ -z "$DB_PASSWORD" ]; then
     echo "Error: Missing required environment variables in .env file"
-    echo "Required: DB_SERVER, DB_NAME, DB_USER, DB_PASSWORD"
+    echo "Required: DB_SERVER (or DB_HOST), DB_NAME (or DB_DATABASE), CODEGEN_DB_USERNAME (or DB_USERNAME), CODEGEN_DB_PASSWORD (or DB_PASSWORD)"
     exit 1
 fi
 

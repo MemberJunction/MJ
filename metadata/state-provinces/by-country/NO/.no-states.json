@@ -1,0 +1,359 @@
+[
+  {
+    "fields": {
+      "Name": "Agder",
+      "Code": "42",
+      "ISO3166_2": "NO-42",
+      "Latitude": 58.7194,
+      "Longitude": 8.035,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Agder"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "545894A9-A182-4D21-9B6D-31E0D22E256B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.677Z",
+      "checksum": "81cff1da6f3bc3c951508ccbfc8e2228e10a339e6ec06990b75bccd23609ddfe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Akershus",
+      "Code": "32",
+      "ISO3166_2": "NO-32",
+      "Latitude": 60.0312,
+      "Longitude": 11.3175,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Akershus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "19E16020-9522-4AF1-AE7F-4255E42DB182"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.693Z",
+      "checksum": "620959f6b116aa34be4b25fe56c0519813475a69aa7131abc4e9898e26e214bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Buskerud",
+      "Code": "33",
+      "ISO3166_2": "NO-33",
+      "Latitude": 60.2498,
+      "Longitude": 8.9628,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Buskerud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "8E47446A-EB6B-41C0-9815-2C56FB4C27EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.710Z",
+      "checksum": "14bd34009aaab227244bbde9e0592da9049ccb1be24895299b8dd3190cb10d1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Finnmark",
+      "Code": "56",
+      "ISO3166_2": "NO-56",
+      "Latitude": 69.9698,
+      "Longitude": 24.7686,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Finnmark"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "E9FBCB38-DA13-42A9-A5B3-F869D6D1E160"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.727Z",
+      "checksum": "cc1a7ddd88ec0ba26be849f68b2fa313e8eb234f4b9e792e72e55adcb5a2293c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Innlandet",
+      "Code": "34",
+      "ISO3166_2": "NO-34",
+      "Latitude": 63.1048,
+      "Longitude": 7.7352,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Innlandet"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "BC4E9D1F-D865-450A-89A9-104F0CFB5B31"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.744Z",
+      "checksum": "90b8fe625e6265c55adc79d8512ee494d52666c914a9c3ff9dd620b4aba40bc8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jan Mayen",
+      "Code": "22",
+      "ISO3166_2": "NO-22",
+      "Latitude": 70.9931,
+      "Longitude": -8.3521,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Jan Mayen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "8301C677-961B-46E5-B671-5433C91CD7F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.760Z",
+      "checksum": "cc176625f41f241b5f7c5472b152d1d221542edecdfa7607f01586c75ebdef21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Møre og Romsdal",
+      "Code": "15",
+      "ISO3166_2": "NO-15",
+      "Latitude": 62.8453,
+      "Longitude": 7.5182,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-15.geojson",
+      "CommonAliases": [
+        "Møre og Romsdal"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "E2877BC1-6E6E-43BB-B501-0479451FA3B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.778Z",
+      "checksum": "3d1b3852d7fa0fe9a6d003aafece4d17e5bb406413eb7f6aea44871ff8bcf412"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nordland",
+      "Code": "18",
+      "ISO3166_2": "NO-18",
+      "Latitude": 67.2756,
+      "Longitude": 13.8624,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-18.geojson",
+      "CommonAliases": [
+        "Nordland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "00C2FD65-0695-4A6D-A6FF-D02D988926FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.796Z",
+      "checksum": "8064c1fa86a825f23c35cfbe236dba30cc608c7ac48054ee4633c3b8a556a26c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Oslo",
+      "Code": "03",
+      "ISO3166_2": "NO-03",
+      "Latitude": 59.9139,
+      "Longitude": 10.7522,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-03.geojson",
+      "CommonAliases": [
+        "Oslo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "AF11768A-C284-45BE-8693-888B745EE4F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.813Z",
+      "checksum": "ac252a2ad243609a31de755d5a1799b0df6befd62a7278268049822d6a4420c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rogaland",
+      "Code": "11",
+      "ISO3166_2": "NO-11",
+      "Latitude": 58.9363,
+      "Longitude": 5.8059,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-11.geojson",
+      "CommonAliases": [
+        "Rogaland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "C5C49C1C-AF3A-43D2-86A6-8AC3E15FE389"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.830Z",
+      "checksum": "47a7e492aa2efe9ef6633edb82b866edb19228e630b33ea1be6dfb7abbe1b8c7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Svalbard",
+      "Code": "21",
+      "ISO3166_2": "NO-21",
+      "Latitude": 78.7199,
+      "Longitude": 20.3493,
+      "BoundaryGeoJSON": "@file:by-country/NO/boundaries/NO-21.geojson",
+      "CommonAliases": [
+        "Svalbard"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "9B2CDF77-8A4A-4207-9CD2-A6A575C04376"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.873Z",
+      "checksum": "52d3c80c30d943cb5af7453f9a93d828575f4b10e90529d780fd905c87015ea1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Telemark",
+      "Code": "40",
+      "ISO3166_2": "NO-40",
+      "Latitude": 59.3963,
+      "Longitude": 8.6627,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Telemark"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "3D7B8CB3-8262-4B32-922B-AF6E67B9712D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.889Z",
+      "checksum": "bec428231160e645cfa6231c9bb89175bae741912c6b760fe6eb114e75fa4321"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Troms",
+      "Code": "55",
+      "ISO3166_2": "NO-55",
+      "Latitude": 69.5311,
+      "Longitude": 19.5297,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Troms"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "E3EA808E-1ACE-4A5B-8319-60A861614A48"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.903Z",
+      "checksum": "45ebbaf865ff532b19caf9585f163afa46fee3c5612c83179d764a33039e0c1e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trøndelag",
+      "Code": "50",
+      "ISO3166_2": "NO-50",
+      "Latitude": 63.8776,
+      "Longitude": 10.1951,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Trøndelag"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "819B94A5-E7E0-47C6-9CE0-92D19DF07DE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.917Z",
+      "checksum": "700d5434efaa965bd3fe1a7a1ff81fa64d09833b85bace200b0b2f4bb091b22b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vestfold",
+      "Code": "39",
+      "ISO3166_2": "NO-39",
+      "Latitude": 59.1955,
+      "Longitude": 10.2663,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vestfold"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "A780FE53-5C52-454D-9929-A3B48D1CA9FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.931Z",
+      "checksum": "439875254017e50f4eacd00d15ff9ed2fb28bd3041cd0b59e86e4fc965789f38"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vestland",
+      "Code": "46",
+      "ISO3166_2": "NO-46",
+      "Latitude": 60.9291,
+      "Longitude": 6.1079,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Vestland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "75A2027B-032A-4180-9080-8F47857C4303"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.945Z",
+      "checksum": "eaac78b59f89b37b39e202e9a3d09c6941966ec19ab66006508f46aaa2c989af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Østfold",
+      "Code": "31",
+      "ISO3166_2": "NO-31",
+      "Latitude": 59.2669,
+      "Longitude": 11.2086,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Østfold"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NO"
+    },
+    "primaryKey": {
+      "ID": "DBC50C38-B0DD-4878-B95B-10FA3DBCFE8D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.958Z",
+      "checksum": "a81a7aa5773eeb94cfcabdc50872a14fcbeb8568030a2af97ad1fea93ab312f2"
+    }
+  }
+]

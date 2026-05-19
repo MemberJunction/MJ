@@ -4,7 +4,7 @@
     <!-- Action Buttons -->
     <div class="action-buttons" role="toolbar" aria-label="Application management actions">
       <button
-        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        mjButton variant="secondary" class="mj-btn-icon-mobile"
         (click)="refreshData()"
         [disabled]="isLoading"
         aria-label="Refresh applications"
@@ -12,7 +12,7 @@
         <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
         <span class="btn-text">Refresh</span>
       </button>
-      <button class="mj-btn mj-btn-primary mj-btn-icon-mobile" (click)="createNewApplication()" aria-label="Add new application">
+      <button mjButton variant="primary" class="mj-btn-icon-mobile" (click)="createNewApplication()" aria-label="Add new application">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         <span class="btn-text">Add Application</span>
       </button>
@@ -81,25 +81,22 @@
         <div class="mj-filter-group">
           <label class="mj-filter-label" id="status-filter-label">Status</label>
           <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'all'"
+            <button mjButton
+              [variant]="filters$.value.status === 'all' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('all')"
               [attr.aria-pressed]="filters$.value.status === 'all'"
             >
               All
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'active'"
+            <button mjButton
+              [variant]="filters$.value.status === 'active' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('active')"
               [attr.aria-pressed]="filters$.value.status === 'active'"
             >
               Active
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.status === 'inactive'"
+            <button mjButton
+              [variant]="filters$.value.status === 'inactive' ? 'primary' : 'flat'"
               (click)="onStatusFilterChange('inactive')"
               [attr.aria-pressed]="filters$.value.status === 'inactive'"
             >
@@ -126,7 +123,7 @@
       <div class="error-content">
         <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
         <p class="error-message">{{ error }}</p>
-        <button class="mj-btn mj-btn-primary" (click)="loadInitialData()">
+        <button mjButton variant="primary" (click)="loadInitialData()">
           <i class="fa-solid fa-refresh"></i>
           Try Again
         </button>
@@ -157,7 +154,7 @@
                 </span>
                 <div class="app-actions" (click)="$event.stopPropagation()">
                   <button
-                    class="mj-btn mj-btn-ghost mj-btn-sm"
+                    mjButton variant="flat" size="sm"
                     (click)="editApplication(app)"
                     title="Edit"
                     [attr.aria-label]="'Edit ' + app.Name"
@@ -165,7 +162,7 @@
                     <i class="fa-solid fa-edit"></i>
                   </button>
                   <button
-                    class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                    mjButton variant="danger" size="sm"
                     (click)="confirmDeleteApplication(app)"
                     title="Delete"
                     [attr.aria-label]="'Delete ' + app.Name"
@@ -188,7 +185,7 @@
                   </span>
                   <div class="mobile-action-buttons">
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      mjButton variant="flat" size="sm"
                       (click)="editApplication(app)"
                       title="Edit"
                       [attr.aria-label]="'Edit ' + app.Name"
@@ -197,7 +194,7 @@
                       <span class="btn-label">Edit</span>
                     </button>
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      mjButton variant="danger" size="sm"
                       (click)="confirmDeleteApplication(app)"
                       title="Delete"
                       [attr.aria-label]="'Delete ' + app.Name"
@@ -309,7 +306,7 @@
         </div>
         <div class="modal-footer">
           <!-- Primary action (Delete) on LEFT per MD3 design guide -->
-          <button class="mj-btn mj-btn-danger" (click)="deleteApplication()" [disabled]="isLoading">
+          <button mjButton variant="danger" (click)="deleteApplication()" [disabled]="isLoading">
             @if (isLoading) {
               <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Deleting...
@@ -318,7 +315,7 @@
               Delete Application
             }
           </button>
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+          <button mjButton (click)="showDeleteConfirm = false">
             Cancel
           </button>
         </div>

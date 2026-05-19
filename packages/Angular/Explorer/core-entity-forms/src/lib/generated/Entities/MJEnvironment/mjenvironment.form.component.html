@@ -125,31 +125,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Projects Section -->
-    <mj-collapsible-panel
-        SectionKey="mJProjects"
-        SectionName="Projects"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJProjects')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Projects')"
-                [AllowLoad]="IsSectionExpanded('mJProjects')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Collections Section -->
     <mj-collapsible-panel
         SectionKey="mJCollections"
@@ -175,25 +150,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tasks Section -->
+    <!-- Projects Section -->
     <mj-collapsible-panel
-        SectionKey="mJTasks"
-        SectionName="Tasks"
-        Icon="fa fa-tasks"
+        SectionKey="mJProjects"
+        SectionName="Projects"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTasks')"
+        [BadgeCount]="GetSectionRowCount('mJProjects')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
-                [AllowLoad]="IsSectionExpanded('mJTasks')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Projects','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Projects')"
+                [AllowLoad]="IsSectionExpanded('mJProjects')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJProjects', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -219,6 +194,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tasks Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTasks"
+        SectionName="Tasks"
+        Icon="fa fa-tasks"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTasks')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','EnvironmentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                [AllowLoad]="IsSectionExpanded('mJTasks')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTasks', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

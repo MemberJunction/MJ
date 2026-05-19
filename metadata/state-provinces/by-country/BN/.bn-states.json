@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "Belait",
+      "Code": "BE",
+      "ISO3166_2": "BN-BE",
+      "Latitude": 4.4556,
+      "Longitude": 114.408,
+      "BoundaryGeoJSON": "@file:by-country/BN/boundaries/BN-BE.geojson",
+      "CommonAliases": [
+        "Belait"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BN"
+    },
+    "primaryKey": {
+      "ID": "75C81C43-C975-42FD-94D5-BA55C225435F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.436Z",
+      "checksum": "c9300afce37fcb81cf09fded89175a8a091acf692e028017787b03304ca7ba36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brunei-Muara",
+      "Code": "BM",
+      "ISO3166_2": "BN-BM",
+      "Latitude": 4.9021,
+      "Longitude": 114.92,
+      "BoundaryGeoJSON": "@file:by-country/BN/boundaries/BN-BM.geojson",
+      "CommonAliases": [
+        "Brunei-Muara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BN"
+    },
+    "primaryKey": {
+      "ID": "FF7F0F08-3EAF-4864-AFBD-C6E4042828D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.452Z",
+      "checksum": "44285c14c124be236c5615f81550bb90d401ca99eb5a9ea81d5298f80950a506"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Temburong",
+      "Code": "TE",
+      "ISO3166_2": "BN-TE",
+      "Latitude": 4.6025,
+      "Longitude": 115.191,
+      "BoundaryGeoJSON": "@file:by-country/BN/boundaries/BN-TE.geojson",
+      "CommonAliases": [
+        "Temburong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BN"
+    },
+    "primaryKey": {
+      "ID": "485C9B65-AFA5-42D8-9AD9-0D6196D9C184"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.470Z",
+      "checksum": "3340c5baff6284051355bc8c981524ab26ed55815f2f413ec6a32fc0cc8b3bcd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tutong",
+      "Code": "TU",
+      "ISO3166_2": "BN-TU",
+      "Latitude": 4.645,
+      "Longitude": 114.671,
+      "BoundaryGeoJSON": "@file:by-country/BN/boundaries/BN-TU.geojson",
+      "CommonAliases": [
+        "Tutong"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BN"
+    },
+    "primaryKey": {
+      "ID": "36B3330A-C7F7-4D60-AF74-988485C06171"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.484Z",
+      "checksum": "c70805f34352db2ce9a426e8911fcef2d260676469c34eca60010f94be6993bd"
+    }
+  }
+]

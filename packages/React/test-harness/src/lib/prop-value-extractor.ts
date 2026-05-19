@@ -2,8 +2,8 @@
  * Prop Value Extractor Utility
  *
  * Extracts static values from JSX attribute AST nodes for validation purposes.
- * This utility is foundational for constraint validation - it converts AST nodes
- * into analyzable values that constraint validators can work with.
+ * This utility is foundational for semantic validation - it converts AST nodes
+ * into analyzable values that semantic validators can work with.
  *
  * Supported Extractions:
  * - Literal values: strings, numbers, booleans, null

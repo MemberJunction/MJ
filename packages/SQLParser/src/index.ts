@@ -1,9 +1,18 @@
 // MJ SQL Parser — unified parser for MJ's SQL superset
 export { SQLParser } from './sql-parser.js';
+// Re-export SQLParserDialect so consumers can import from either sql-parser or sql-dialect
+export type { SQLParserDialect } from '@memberjunction/sql-dialect';
+// ORDER BY analysis (shared between composition and paging engines)
+export { AnalyzeTopLevelOrderBy, HasTopLevelOrderBy, ExtractOrderBy, findOrderByStatement, isOrderByLegalInCTE } from './orderByAnalyzer.js';
+export type { OrderByAnalysis } from './orderByAnalyzer.js';
+// Structural parser and composition IR
+export { ParseToIR, RenderIR } from './structuralParser.js';
+export type { QueryIR, CTENode, Fragment, SQLFragment, TemplateExprFragment, BlockFragment, CommentFragment, CompositionRefFragment, CTEOrigin } from './compositionIR.js';
 export type {
     MJAstifyResult,
     SQLTableReference,
     SQLColumnReference,
+    SQLSelectColumn,
     SQLCTEExtraction,
     MJParameterInfo,
     SQLParseResult,

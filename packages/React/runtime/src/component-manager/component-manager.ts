@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, MJComponentLibraryEntity, MJComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -84,6 +84,25 @@ export class ComponentManager {
     // Check if already loading to prevent duplicate work
     const existingPromise = this.loadingPromises.get(componentKey);
     if (existingPromise && !options.forceRefresh) {
+      // Before returning the pending promise, check if the compiled component
+      // is already in the registry. This prevents deadlock in circular dependency
+      // chains: A's Step 6 loads B, B's Step 6 loads A again — but A was already
+      // compiled and registered (Step 5 runs before Step 6). Returning the pending
+      // promise would deadlock because it's waiting on its own call chain.
+      const namespace = spec.namespace || options.defaultNamespace || 'Global';
+      const version = spec.version || options.defaultVersion || 'latest';
+      const contentHash = this.calculateHash(spec);
+      const registered = this.registry.get(spec.name, namespace, version, contentHash);
+      if (registered) {
+        this.log(`Component already registered (circular dep resolution): ${spec.name}`);
+        return {
+          success: true,
+          component: registered,
+          spec,
+          fromCache: true
+        };
+      }
+
       this.log(`Component already loading: ${spec.name}, waiting...`);
       return existingPromise;
     }
@@ -115,8 +134,9 @@ export class ComponentManager {
       // STEP 1: Check if already loaded in ComponentRegistry
       const namespace = spec.namespace || options.defaultNamespace || 'Global';
       const version = spec.version || options.defaultVersion || 'latest';
-      
-      const existing = this.registry.get(spec.name, namespace, version);
+      const contentHash = this.calculateHash(spec);
+
+      const existing = this.registry.get(spec.name, namespace, version, contentHash);
       if (existing && !options.forceRefresh && !options.forceRecompile) {
         this.log(`Component found in registry: ${spec.name}`);
         
@@ -149,7 +169,7 @@ export class ComponentManager {
           this.fetchCache.set(componentKey, {
             spec: fullSpec,
             fetchedAt: new Date(),
-            hash: await this.calculateHash(fullSpec),
+            hash: this.calculateHash(fullSpec),
             usageNotified: false
           });
         } catch (error) {
@@ -173,7 +193,7 @@ export class ComponentManager {
           this.fetchCache.set(componentKey, {
             spec: fullSpec,
             fetchedAt: new Date(),
-            hash: await this.calculateHash(fullSpec),
+            hash: this.calculateHash(fullSpec),
             usageNotified: false
           });
         }
@@ -203,11 +223,16 @@ export class ComponentManager {
       // STEP 5: Register in ComponentRegistry
       if (!existing || options.forceRefresh || options.forceRecompile) {
         this.log(`Registering component: ${spec.name}`);
+        // Register under the INPUT spec's hash so callers passing the same
+        // spec shape on subsequent loads hit the cache. If we keyed by the
+        // post-fetch fullSpec hash instead, registry-stub callers would
+        // never re-find the entry they just cached.
         this.registry.register(
           fullSpec.name,
           compiledComponent,
           namespace,
-          version
+          version,
+          contentHash
         );
       }
       
@@ -399,9 +424,9 @@ export class ComponentManager {
         }
       }
       
-      // Load dependencies
-      if (result.spec?.dependencies) {
-        for (const dep of result.spec.dependencies) {
+      const dependencies = this.resolveDependencies(spec.dependencies, result.spec?.dependencies);
+      if (dependencies) {
+        for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
           const depSpec = { ...dep };
           // OPTIMIZATION: If the dependency already has code (from registry population),
@@ -460,6 +485,29 @@ export class ComponentManager {
   }
   
   /**
+   * Determines which dependency list to use when loading a component's children.
+   *
+   * - Input deps with code take priority (caller has the latest version).
+   * - When input has no deps at all, fall back to fetched/cached deps
+   *   (e.g., a registry reference spec with no dependency list).
+   * - When input has only stubs (no code), prefer fetched deps if they
+   *   contain code (registry-populated hierarchies from Skip where the
+   *   full tree is returned in one response).
+   */
+  private resolveDependencies(
+      inputDeps: ComponentSpec[] | undefined,
+      fetchedDeps: ComponentSpec[] | undefined
+  ): ComponentSpec[] | undefined {
+      const inputHasDeps = inputDeps && inputDeps.length > 0;
+      const inputHasCode = inputHasDeps && inputDeps.some(d => !!d.code);
+
+      if (inputHasCode) return inputDeps;
+      if (!inputHasDeps) return fetchedDeps || inputDeps;
+      if (fetchedDeps?.some(d => !!d.code)) return fetchedDeps;
+      return inputDeps;
+  }
+
+  /**
    * Check if a component needs to be fetched from a registry
    */
   private needsFetch(spec: ComponentSpec): boolean {
@@ -485,87 +533,82 @@ export class ComponentManager {
     // Check cache first
     const cacheKey = this.getComponentKey(spec, {});
     const cached = this.fetchCache.get(cacheKey);
-    
+
     if (cached && this.isCacheValid(cached)) {
       this.log(`Using cached spec for: ${spec.name}`);
       return cached.spec;
     }
-    
+
     // Handle LOCAL registry components (registry is null/undefined)
     if (!spec.registry) {
-      this.log(`Fetching from local registry: ${spec.name}`);
-      
-      // Find component in local ComponentMetadataEngine
-      const localComponent = this.componentEngine.Components?.find(
-        (c: MJComponentEntityExtended) => {
-          // Match by name (case-insensitive for better compatibility)
-          const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
-          
-          // Match by namespace if provided (handle different formats)
-          const namespaceMatch = !spec.namespace || c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
+      const localComponent = await this.componentEngine.FindComponent(spec.name, spec.namespace);
 
-          if (nameMatch && !namespaceMatch) {
-          }
-          
-          return nameMatch && namespaceMatch;
-        }
-      );
-      
       if (!localComponent) {
         throw new Error(`Local component not found: ${spec.name}`);
       }
-      
-      // Parse specification from local component
+
       if (!localComponent.Specification) {
         throw new Error(`Local component ${spec.name} has no specification`);
       }
-      
+
       const fullSpec = JSON.parse(localComponent.Specification);
-      
-      // Cache it
+
       this.fetchCache.set(cacheKey, {
         spec: fullSpec,
         fetchedAt: new Date(),
         usageNotified: false
       });
-      
+
       return fullSpec;
     }
-    
+
     // Handle EXTERNAL registry components (registry has a name)
-    // Initialize GraphQL client if needed
     if (!this.graphQLClient) {
       await this.initializeGraphQLClient();
     }
-    
+
     if (!this.graphQLClient) {
       throw new Error('GraphQL client not available for registry fetching');
     }
-    
-    // Fetch from external registry
+
+    // Fetch from external registry, passing the cached hash (if any) so the
+    // server can return 304 Not Modified when the spec hasn't changed
     this.log(`Fetching from external registry: ${spec.registry}/${spec.name}`);
-    
-    const fullSpec = await this.graphQLClient.GetRegistryComponent({
+    const cachedHash = cached?.hash;
+
+    const response = await this.graphQLClient.GetRegistryComponentWithHash({
       registryName: spec.registry,
       namespace: spec.namespace || 'Global',
       name: spec.name,
-      version: spec.version || 'latest'
+      version: spec.version || 'latest',
+      hash: cachedHash
     });
-    
-    if (!fullSpec) {
+
+    // If not modified (304), reuse the cached spec and refresh the TTL
+    if (response.notModified && cached) {
+      this.log(`Registry returned 304 for ${spec.name}, reusing cached spec`);
+      this.fetchCache.set(cacheKey, {
+        ...cached,
+        fetchedAt: new Date()
+      });
+      return cached.spec;
+    }
+
+    if (!response.specification) {
       throw new Error(`Component not found in registry: ${spec.registry}/${spec.name}`);
     }
-    
-    // Apply resolution mode if specified
+
+    const fullSpec = response.specification as ComponentSpec;
     const processedSpec = this.applyResolutionMode(fullSpec, spec, options?.resolutionMode);
-    
-    // Cache it
+
+    // Cache it with the registry hash for future 304 checks
     this.fetchCache.set(cacheKey, {
       spec: processedSpec,
       fetchedAt: new Date(),
+      hash: response.hash,
       usageNotified: false
     });
-    
+
     return processedSpec;
   }
   
@@ -720,9 +763,14 @@ export class ComponentManager {
   }
   
   /**
-   * Calculate a hash for a component spec (for cache validation)
+   * Calculate a content fingerprint for a component spec. Used both as a
+   * cache-validation marker on `CacheEntry` and as part of the cache key so
+   * specs that share `(registry, namespace, name, version)` but carry
+   * different `code` (e.g. a registry-reference stub vs. an inline-code
+   * Studio export of the same artifact) do not collide on a single cache
+   * slot. Sync because callers use it to build keys in non-async paths.
    */
-  private async calculateHash(spec: ComponentSpec): Promise<string> {
+  private calculateHash(spec: ComponentSpec): string {
     // Simple hash based on spec content
     const content = JSON.stringify({
       name: spec.name,
@@ -730,25 +778,30 @@ export class ComponentManager {
       code: spec.code,
       libraries: spec.libraries
     });
-    
-    // Simple hash function (in production, use crypto)
+
+    // FNV-style 32-bit integer hash
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
     return hash.toString(16);
   }
   
   /**
-   * Generate a unique key for a component
+   * Generate a unique key for a component. Includes a content fingerprint so
+   * specs that share `(registry, namespace, name, version)` but carry
+   * different `code` (e.g. a registry-reference stub vs. an inline-code
+   * Studio export of the same artifact) are cached as separate entries
+   * instead of clobbering each other on a single slot.
    */
   private getComponentKey(spec: ComponentSpec, options: LoadOptions): string {
     const registry = spec.registry || 'local';
     const namespace = spec.namespace || options.defaultNamespace || 'Global';
     const version = spec.version || options.defaultVersion || 'latest';
-    return `${registry}:${namespace}:${spec.name}:${version}`;
+    const hash = this.calculateHash(spec);
+    return `${registry}:${namespace}:${spec.name}:${version}#${hash}`;
   }
   
   /**

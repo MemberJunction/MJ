@@ -78,6 +78,7 @@ The core execution engine that all agents use. Handles:
 
 - Hierarchical prompt execution (agent type's system prompt as parent, agent's prompts as children)
 - Action execution through the MJ Actions framework
+- **Client tool invocation** for browser-side UI operations (navigate to records, switch tabs, show search results) via PubSub round-trip
 - Sub-agent orchestration with full context propagation
 - Conversation context management with automatic message compaction
 - Memory retrieval (notes and examples) with optional reranking
@@ -117,7 +118,8 @@ Abstract base that all agent types extend. Defines the `DetermineNextStep()` int
 | Step | Description |
 |---|---|
 | `Chat` | Send a message back to the user |
-| `Actions` | Execute one or more actions |
+| `Actions` | Execute one or more server-side actions |
+| `ClientTools` | Invoke browser-side tools (navigate, switch tabs, show results) |
 | `SubAgents` | Delegate to sub-agents |
 | `MoreInfo` | Ask the user for additional information |
 | `Retry` | Retry the current step (e.g., after validation failure) |
@@ -207,6 +209,32 @@ Handles persistent memory operations for agents:
 - Creating and updating agent notes
 - Managing agent examples
 - Scoped memory for multi-tenant deployments (UserScope support)
+- Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
+
+#### Consolidation Pipeline
+
+When invoked in maintenance mode, MemoryManagerAgent runs an end-to-end pipeline over the agent's notes to keep the memory pool useful and bounded over time. The pipeline is a sequence of phases on the run, each emitting its own observability data.
+
+- **Clustering** — groups semantically similar notes by cosine similarity. The clustering threshold is `0.60` (intentionally broad — the LLM is the final arbiter for ambiguous clusters during the consolidate phase).
+- **Cluster splitting** — `splitOversizedCluster` breaks any cluster larger than 7 notes so the consolidation prompt stays focused.
+- **Drift prevention** — `maxConsolidationCount = 3` caps the number of times any one note can be folded into successor consolidations. When a cluster reaches the cap, anchored-mode drilling resolves the original sources via `DerivedFromNoteIDs` so consolidation operates on the underlying facts rather than re-summarizing summaries.
+- **Consolidate** — the LLM generates a merged note for each cluster. The pipeline records `DerivedFromNoteIDs`, increments `ConsolidationCount`, and revokes source notes with `ConsolidatedIntoNoteID` back-links to preserve provenance.
+- **Verify Consolidation Output** — post-check phase (`verifyConsolidationOutput`) confirms entity-attribute coverage hasn't been lost in the merge; reports `entitiesChecked` and `entitiesMissing`.
+- **Contradiction detection** — extracts entity-attribute-value triples across active notes, flags conflicting values, and resolves contradictions by revoking the older or lower-importance side.
+- **Ebbinghaus decay archival** — applies a forgetting curve to the importance score over time; low-importance notes that haven't been retrieved are archived. `ProtectionTier` modulates the decay rate.
+- **Protection tiers** — `Immutable` / `Protected` / `Standard` / `Ephemeral`. Immutable notes are never modified; Protected notes are excluded from consolidation but still age normally; Ephemeral notes decay faster.
+- **Outlier auto-promotion** — notes whose semantic uniqueness lands in the 95th percentile are auto-promoted to `Protected` so they aren't swallowed by future consolidations.
+
+The pipeline emits two new run-step types for observability:
+
+- `Process Consolidation Cluster` — one child step per cluster, with `clusterSize`, `noteIds`, `shouldConsolidate`, `consolidatedNoteId`, `sourceNotesArchived`, `verificationPassed`, `entitiesChecked`, `entitiesMissing`.
+- `Verify Consolidation Output` — phase-level step covering the post-consolidation verification pass.
+
+Run-level payload fields added: `scoreDistribution`, `entityTriplesExtracted`, `decayScoreDistribution`, `protectedPreserved`, `ephemeralAccelerated`, and consolidation `triggerType` (one of `forced` / `time` / `event` / `count`).
+
+Memory Cleanup Agent has been deprecated — its responsibilities are folded into MemoryManagerAgent's pipeline.
+
+For the full design (functional requirements, threshold rationale, decay curve, contradiction taxonomy), see [`specs/001-memory-consolidation/spec.md`](../../../specs/001-memory-consolidation/spec.md) and the implementation in [`src/memory-manager-agent.ts`](./src/memory-manager-agent.ts).
 
 ## Usage
 
@@ -260,20 +288,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-### With User Scope (Multi-Tenant)
+### With Memory Scope (Multi-Tenant)
+
+Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
 
 ```typescript
 const result = await runner.ExecuteAgent({
     agentId: 'my-agent-id',
     conversationMessages: messages,
     contextUser: currentUser,
-    userScope: {
-        primaryEntityName: 'Organizations',
-        primaryRecordId: orgId,
-        secondary: { TeamID: teamId }
-    }
+    // Primary scope (indexed for fast filtering)
+    PrimaryScopeEntityName: 'Organizations',
+    PrimaryScopeRecordID: orgId,
+    // Secondary scopes (arbitrary dimensions, validated against the agent's ScopeConfig)
+    SecondaryScopes: { TeamID: teamId }
 });
 ```
+
+See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
 ### With Message Lifecycle Management
 
@@ -294,21 +326,22 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-## Human-in-the-Loop (HITL)
+## Documentation
 
-MemberJunction agents support **human-in-the-loop feedback requests** — a mechanism for agents to pause execution and request human input before proceeding. This enables approval workflows, quality review gates, and collaborative decision-making between agents and humans.
+Detailed guides are available in the [`docs/`](./docs/) directory:
 
-Key capabilities:
-- **Assignment strategies**: 5-level resolution chain (per-invocation → agent type → category tree → request type → fallback) determines who receives each request
-- **Agent categories**: Hierarchical category tree with inherited assignment strategies
-- **Request types**: Configurable request types (Approval, Review, Input, Escalation, Custom) with response schemas
-- **Request lifecycle**: Pending → Assigned → In Progress → Completed/Expired/Cancelled with full audit trail
-
-For the complete guide including architecture diagrams, integration examples, and API reference, see [HUMAN_IN_THE_LOOP.md](./HUMAN_IN_THE_LOOP.md).
-
-## Architecture Documentation
-
-For multi-tenant memory scoping (notes/examples), see [AGENT_MEMORY_SCOPING.md](./AGENT_MEMORY_SCOPING.md).
+| Guide | Description |
+|---|---|
+| [Actions Guide](./docs/actions-guide.md) | Action discovery, execution, result lifecycle, expiration/compaction, context recovery |
+| [Client Tools Guide](./docs/CLIENT_TOOLS_GUIDE.md) | Browser-side tool invocation, runtime decoration, timeout config, prompt design, security |
+| [Sub-Agents Guide](./docs/sub-agents-guide.md) | Child agents, related agents, payload flow, context propagation, loops |
+| [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md) | Feedback requests, assignment strategies, request lifecycle |
+| [Agent Memory Scoping](./docs/AGENT_MEMORY_SCOPING.md) | Multi-tenant memory (notes/examples) with UserScope support |
+| [Iterative Operations](./docs/guide-to-iterative-operations-in-agents.md) | ForEach and While loop patterns, parallel execution |
+| [State Management](./docs/state-management.md) | Payload management, agent type state |
+| [Expression Context (PRD)](./docs/prd-expression-context-phase1.md) | Expression evaluation in agent contexts |
+| [Agent Profiles (Proposal)](./docs/agent-profiles-proposal.md) | Proposed agent profile system |
+| [Code Refactoring Notes](./docs/code-refactoring.md) | Internal refactoring notes |
 
 ## Re-exports
 
@@ -329,6 +362,38 @@ New code should import these directly from `@memberjunction/ai-reranker`.
 - `@memberjunction/aiengine` -- AIEngine for metadata and vector search
 - `@memberjunction/ai-core-plus` -- Shared types (ExecuteAgentParams, ExecuteAgentResult)
 - `@memberjunction/ai-engine-base` -- Base metadata cache and permissions
+## Storage Account Resolution
+
+When agents create file-based artifacts (PDF, Excel, Word), the system resolves which `FileStorageAccount` to use via a hierarchical chain. The first non-null value wins:
+
+| Priority | Source | Field |
+|----------|--------|-------|
+| 1 (highest) | Runtime | `ExecuteAgentParams.override.storageAccountId` |
+| 2 | Agent | `AIAgent.DefaultStorageAccountID` |
+| 3 | Category tree | `AIAgentCategory.DefaultStorageAccountID` (walks up `ParentID`) |
+| 4 (lowest) | Agent Type | `AIAgentType.DefaultStorageAccountID` |
+| Fallback | System | Single active account (if only one exists) |
+
+### How it works
+
+- `BaseAgent.getStorageAccountID(params)` implements the resolution logic. It is `protected` so subclasses can override it for custom routing.
+- The resolved ID is stored in `ExecuteAgentResult.resolvedStorageAccountId` and passed to `AgentRunner.ProcessFileArtifacts()` for upload routing.
+- `AgentRunner.uploadBase64ToStorage()` uses `FileStorageEngine.Instance.GetAccountWithProvider()` to get the account + provider, then `initializeDriverWithAccountCredentials()` for proper OAuth credential handling.
+
+### Startup validation
+
+`AIEngine.validateStorageAccountDefaults()` runs at server startup. If 2+ active storage accounts exist but agent types lack a `DefaultStorageAccountID`, it auto-assigns the highest-priority account and logs a prominent warning.
+
+### Configuration
+
+Set `DefaultStorageAccountID` at any level via the admin UI or metadata sync:
+- **Agent Type** -- broadest default (e.g., all Loop agents → Dropbox)
+- **Agent Category** -- business-domain default (e.g., Marketing → Box, Finance → SharePoint)
+- **Agent** -- per-agent override
+- **Runtime** -- `ExecuteAgentParams.override.storageAccountId` for programmatic callers
+
+## Dependencies
+
 - `@memberjunction/ai` -- Core AI abstractions
 - `@memberjunction/ai-reranker` -- Two-stage retrieval reranking
 - `@memberjunction/actions` -- Server-side action execution

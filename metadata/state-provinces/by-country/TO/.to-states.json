@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Tonga",
+      "Code": "TO",
+      "ISO3166_2": "TO-TO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Tonga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TO"
+    },
+    "primaryKey": {
+      "ID": "1B253D68-AB9B-4FE9-9CAE-E6E245F9A4BB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.296Z",
+      "checksum": "294d4b6905183e374a73b48bda78a18425d7ebb5d11aa7c6da926d12aabb7ef3"
+    }
+  }
+]

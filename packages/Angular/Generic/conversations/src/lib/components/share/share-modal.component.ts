@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
@@ -17,21 +18,23 @@ interface SharePermission {
   selector: 'mj-share-modal',
   template: `
     @if (isOpen) {
-      <kendo-dialog
-        [title]="'Share: ' + (conversation.Name || '')"
-        [width]="500"
-        [height]="600"
-        (close)="onClose()">
+      <mj-dialog
+        [Title]="'Share: ' + (conversation.Name || '')"
+        [Width]="500"
+        [Height]="600"
+        [Visible]="true"
+        (Close)="onClose()">
         <div class="share-content">
           <div class="add-user-section">
             <h4>Add People</h4>
             <div class="add-user-form">
-              <kendo-textbox
-                [(value)]="newUserEmail"
+              <input
+                type="text"
+                [(ngModel)]="newUserEmail"
                 placeholder="Enter email address"
-                [style.flex]="1">
-              </kendo-textbox>
-              <button kendoButton [primary]="true" (click)="onAddUser()">
+                class="mj-textbox"
+                style="flex: 1;">
+              <button mjButton variant="primary" (click)="onAddUser()">
                 Add
               </button>
             </div>
@@ -54,14 +57,14 @@ interface SharePermission {
                     </div>
                   </div>
                   <div class="permission-controls">
-                    <kendo-dropdownlist
-                      [data]="accessLevels"
-                      [textField]="'label'"
-                      [valueField]="'value'"
-                      [value]="getAccessLevel(permission)"
-                      (valueChange)="onAccessLevelChange(permission, $event)"
-                      [style.width.px]="120">
-                    </kendo-dropdownlist>
+                    <select
+                      [ngModel]="permission.permissionLevel"
+                      (ngModelChange)="onAccessLevelChange(permission, $event)"
+                      style="width: 120px;" class="mj-select">
+                      @for (level of accessLevels; track level.value) {
+                        <option [value]="level.value">{{ level.label }}</option>
+                      }
+                    </select>
                     <button
                       class="btn-remove"
                       (click)="onRemoveUser(permission)"
@@ -76,30 +79,31 @@ interface SharePermission {
           <div class="link-section">
             <h4>Share Link</h4>
             <div class="link-controls">
-              <kendo-switch
+              <input
+                type="checkbox"
                 [(ngModel)]="isPublicLink"
-                (valueChange)="onTogglePublicLink()">
-              </kendo-switch>
+                (ngModelChange)="onTogglePublicLink()">
               <label>Anyone with the link can view</label>
             </div>
             @if (isPublicLink) {
               <div class="link-display">
-                <kendo-textbox
+                <input
+                  type="text"
                   [value]="shareLink"
-                  [readonly]="true"
-                  [style.flex]="1">
-                </kendo-textbox>
-                <button kendoButton (click)="onCopyLink()">
+                  readonly
+                  class="mj-textbox"
+                  style="flex: 1;">
+                <button mjButton variant="flat" (click)="onCopyLink()">
                   <i class="fas fa-copy"></i> Copy
                 </button>
               </div>
             }
           </div>
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton (click)="onClose()">Close</button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        <mj-dialog-actions>
+          <button mjButton (click)="onClose()">Close</button>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -134,7 +138,7 @@ interface SharePermission {
     .link-display { display: flex; gap: 8px; }
   `]
 })
-export class ShareModalComponent implements OnInit {
+export class ShareModalComponent extends BaseAngularComponent implements OnInit  {
   @Input() conversation!: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Input() isOpen: boolean = false;
@@ -158,7 +162,8 @@ export class ShareModalComponent implements OnInit {
     private dialogService: DialogService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
     if (this.conversation) {
@@ -169,7 +174,7 @@ export class ShareModalComponent implements OnInit {
 
   private async loadPermissions(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
         ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
@@ -179,7 +184,7 @@ export class ShareModalComponent implements OnInit {
       if (result.Success && result.Results) {
         const permissionPromises = result.Results.map(async (perm) => {
           if (perm.UserID) {
-            const userRv = new RunView();
+            const userRv = RunView.FromMetadataProvider(this.ProviderToUse);
             const userResult = await userRv.RunView<MJUserEntity>({
               EntityName: 'MJ: Users',
               ExtraFilter: `ID='${perm.UserID}'`,
@@ -237,7 +242,7 @@ export class ShareModalComponent implements OnInit {
 
     try {
       // Look up user by email
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userResult = await rv.RunView<MJUserEntity>({
         EntityName: 'MJ: Users',
         ExtraFilter: `Email='${email}'`,
@@ -281,7 +286,7 @@ export class ShareModalComponent implements OnInit {
 
     try {
       if (permission.permissionId) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
         await permEntity.Load(permission.permissionId);
 
@@ -301,7 +306,7 @@ export class ShareModalComponent implements OnInit {
 
   private async savePermission(permission: SharePermission): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       if (permission.permissionId) {

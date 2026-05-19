@@ -47,7 +47,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Excel Reader")
+@RegisterClass(BaseAction, "__ExcelReader")
 export class ExcelReaderAction extends BaseFileHandlerAction {
     
     /**

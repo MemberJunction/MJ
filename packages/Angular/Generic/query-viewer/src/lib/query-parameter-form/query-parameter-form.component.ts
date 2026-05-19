@@ -320,11 +320,18 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
             return;
         }
 
-        // Build parameter values object
+        // Build parameter values object, normalizing array fields through
+        // the same parse logic used by OnArrayInputChange so that saved
+        // state from before the JSON-array fix is cleaned up on re-submit.
         const values: QueryParameterValues = {};
         for (const field of this.Fields) {
             if (field.value !== null && field.value !== undefined) {
-                values[field.info.Name] = field.value;
+                if (field.info.Type === 'array') {
+                    const display = this.GetArrayDisplayValue(field.value);
+                    values[field.info.Name] = display ? this.parseArrayInput(display) : [];
+                } else {
+                    values[field.info.Name] = field.value;
+                }
             }
         }
 
@@ -436,9 +443,26 @@ export class QueryParameterFormComponent implements OnInit, OnChanges, OnDestroy
 
     public OnArrayInputChange(field: ParameterField, event: Event): void {
         const input = event.target as HTMLInputElement;
-        const value = input.value
-            ? input.value.split(',').map(s => s.trim()).filter(s => s)
-            : [];
+        const raw = input.value?.trim();
+        const value = raw ? this.parseArrayInput(raw) : [];
         this.OnValueChange(field, value);
+    }
+
+    /**
+     * Parses array parameter input, supporting both JSON array syntax
+     * (`["A","B","C"]`) and plain comma-separated values (`A, B, C`).
+     */
+    private parseArrayInput(raw: string): string[] {
+        if (raw.startsWith('[')) {
+            try {
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    return parsed.map(v => String(v).trim()).filter(s => s);
+                }
+            } catch {
+                // Not valid JSON — fall through to comma-split
+            }
+        }
+        return raw.split(',').map(s => s.trim()).filter(s => s);
     }
 }

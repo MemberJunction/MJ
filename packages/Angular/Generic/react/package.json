@@ -1,11 +1,11 @@
 {
   "name": "@memberjunction/ng-react",
-  "version": "5.15.0",
+  "version": "5.34.1",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
     "build": "ngc -p tsconfig.json",
     "watch": "ngc -p tsconfig.json --watch",
-    "test": "echo \"Tests not yet implemented\"",
+    "test": "vitest run",
     "patchVersion": "npm version patch",
     "test:watch": "vitest"
   },
@@ -41,14 +41,14 @@
     "styles"
   ],
   "dependencies": {
-    "@memberjunction/ai-vectors-memory": "5.15.0",
-    "@memberjunction/core": "5.15.0",
-    "@memberjunction/core-entities": "5.15.0",
-    "@memberjunction/global": "5.15.0",
-    "@memberjunction/graphql-dataprovider": "5.15.0",
-    "@memberjunction/interactive-component-types": "5.15.0",
-    "@memberjunction/ng-notifications": "5.15.0",
-    "@memberjunction/react-runtime": "5.15.0",
+    "@memberjunction/ai-vectors-memory": "5.34.1",
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/core-entities": "5.34.1",
+    "@memberjunction/global": "5.34.1",
+    "@memberjunction/graphql-dataprovider": "5.34.1",
+    "@memberjunction/interactive-component-types": "5.34.1",
+    "@memberjunction/ng-notifications": "5.34.1",
+    "@memberjunction/react-runtime": "5.34.1",
     "@angular/common": "21.1.3",
     "@angular/core": "21.1.3",
     "@angular/platform-browser": "21.1.3",
@@ -57,7 +57,8 @@
     "react-dom": "^19.2.4",
     "rxjs": "^7.8.2",
     "@types/react": "^19.2.13",
-    "@types/react-dom": "^19.2.3"
+    "@types/react-dom": "^19.2.3",
+    "@memberjunction/ng-base-types": "5.34.1"
   },
   "devDependencies": {
     "@angular/compiler": "21.1.3",

@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Anjouan (Ndzouani)",
+      "Code": "A",
+      "ISO3166_2": "KM-A",
+      "Latitude": -12.226,
+      "Longitude": 44.4518,
+      "BoundaryGeoJSON": "@file:by-country/KM/boundaries/KM-A.geojson",
+      "CommonAliases": [
+        "Anjouan (Ndzouani)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KM"
+    },
+    "primaryKey": {
+      "ID": "914000E8-51B0-440E-99FA-1E89C9579EBF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.648Z",
+      "checksum": "7d615f8eda2ce9b21b5b7597ee12a761f84532adf140ea2607a17ec910365601"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grande Comore (Ngazidja)",
+      "Code": "G",
+      "ISO3166_2": "KM-G",
+      "Latitude": -11.6952,
+      "Longitude": 43.3378,
+      "BoundaryGeoJSON": "@file:by-country/KM/boundaries/KM-G.geojson",
+      "CommonAliases": [
+        "Grande Comore (Ngazidja)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KM"
+    },
+    "primaryKey": {
+      "ID": "1B42C15E-1800-4C1A-A8CE-7D0886866A35"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.664Z",
+      "checksum": "9edccccf4dbba27a1f7916035602ccd1bbc249f36e0509d533107b3d27d4ae42"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mohéli (Moili)",
+      "Code": "M",
+      "ISO3166_2": "KM-M",
+      "Latitude": -12.3178,
+      "Longitude": 43.7462,
+      "BoundaryGeoJSON": "@file:by-country/KM/boundaries/KM-M.geojson",
+      "CommonAliases": [
+        "Mohéli (Moili)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KM"
+    },
+    "primaryKey": {
+      "ID": "69E989BE-2B5F-4CC9-BF4A-64559BF0EE0F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.677Z",
+      "checksum": "4bf30e1c42e57a7b751891d57b1351a67eaa2baebb4bef871502920d7c41f682"
+    }
+  }
+]

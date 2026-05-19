@@ -1,5 +1,512 @@
 # @memberjunction/generic-database-provider
 
+## 5.34.1
+
+### Patch Changes
+
+- 3a35358: Surface engine load health in System Diagnostics with per-property success/failure status and error messages, add recovery telemetry to ApplicationManager, cache architecture fixes including schema hash staleness detection, empty result timestamp handling, and timestamp precision tolerance
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/encryption@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/query-processor@5.34.1
+  - @memberjunction/geo-core@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/sql-parser@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- cfffb6d: Add keyset (seek) pagination to `RunView` via the new `RunViewParams.AfterKey: CompositeKey` field. Iterating large entities (background jobs, scheduled actions, bulk processing) now stays O(log N) per page regardless of depth — `StartRow`-based OFFSET pagination is unchanged and remains the right choice for UI grids.
+
+  **Framework changes**
+  - New `RunViewParams.AfterKey: CompositeKey` accepted by all RunView entry points (TS, GraphQL, REST flows that go through RunView).
+  - New exported error class `AfterKeyNotSupportedError` (with `Reason` codes `CompositePK | UnsupportedPKType | IncompatibleOrderBy | StartRowConflict | AfterKeyShape`).
+  - New exported helper `IsKeysetPaginationOrderableType(sqlType)` and constant `KEYSET_PAGINATION_ORDERABLE_PK_TYPES`.
+  - Keyset queries bypass server cache (read + write) automatically — they're inherently single-use so caching is pure overhead.
+  - v1 constraint: single-column PK only. Composite-PK entities throw `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`.
+
+  **Migrated callers (now use keyset by default when entity has a single-column PK)**
+  - `ScheduledGeocodingAction` (`processMissingForEntity`) — falls back to OFFSET on composite-PK entities.
+  - `VectorBase.PageRecordsByEntityID` + `EntityVectorSyncer.startDataPaging` — auto-promotes to keyset when possible. New helper `VectorBase.CanUseKeysetPagination()`. New optional `PageRecordsParams.AfterKey`.
+
+  **Metadata**
+  - `Geocoding Maintenance` scheduled job cron updated to weekly (Saturdays 2 AM UTC); description reworded to not hard-code a cadence. Administrators can adjust the `CronExpression` as needed.
+
+  **Documentation**
+  - New guide: `guides/KEYSET_PAGINATION_GUIDE.md`.
+  - `CLAUDE.md` performance section updated.
+
+  **Out of scope for v1**
+  - `ExternalChangeDetection.ChangeDetector` uses `RunQuery` (saved queries with arbitrary SQL), which the framework can't safely rewrite. Stays on OFFSET; tracked as a follow-up.
+
+  **Backwards compatibility**
+  - Fully additive. Existing callers that don't pass `AfterKey` are unaffected.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/encryption@5.34.0
+  - @memberjunction/query-processor@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sql-parser@5.34.0
+  - @memberjunction/geo-core@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/queue@5.34.0
+
+## 5.33.0
+
+### Minor Changes
+
+- 7e4957d: Universal search performance + correctness fix: honor `EntityField.UserSearchPredicateAPI`, escape LIKE metacharacters, add resilience layer, and stop CodeGen from re-introducing invalid search flags.
+
+  **Why:** `LIKE '%term%'` was the only SQL the data provider ever generated for non-FTX entities, regardless of the configured predicate. CodeGen has been populating `UserSearchPredicateAPI` (Exact / BeginsWith / EndsWith / Contains) for months, but the runtime was discarding it. Combined with primary keys, non-text columns, and `nvarchar(MAX)` columns being auto-flagged as searchable, every keystroke against the global search box produced unindexed scans across tables of arbitrary size.
+
+  **`@memberjunction/generic-database-provider`** — `GenericDatabaseProvider.createViewUserSearchSQL` now:
+  - Honors `UserSearchPredicateAPI`: `Exact` emits `= N'term'` (index-seekable), `BeginsWith` emits `LIKE N'term%' ESCAPE '\'` (index-seekable), `EndsWith` emits `LIKE N'%term' ESCAPE '\'`, and the default `Contains` emits `LIKE N'%term%' ESCAPE '\'`. `UserSearchParamFormatAPI` still wins when set.
+  - Escapes LIKE metacharacters (`%`, `_`, `[`, `]`, `\`) in user input with `ESCAPE '\'`. Previously a query of `50%` was treated as a wildcard.
+  - Skips fields that aren't sensible text-search targets (non-text types; unbounded text on non-FTX entities) so an OR'd OR-predicate isn't built around an implicit per-row CONVERT.
+  - Emits `N''` Unicode literals throughout to avoid collation surprises.
+
+  **`@memberjunction/core`** — adds `EntityFieldInfo.UserSearchPredicateAPI: string` so consumers see the value the runtime now honors. Default `'Contains'`.
+
+  **`@memberjunction/search-engine`** — Resilience layer:
+  - `EntitySearchProvider`, `FullTextSearchProvider`, and `SearchEngine.Search` reject queries shorter than 3 characters early — these always fan out to full-database scans across every searchable entity.
+  - `EntitySearchProvider` wraps each per-entity RunView in a 5-second hard timeout. A slow entity no longer holds up the whole fan-out; the other entities' results still land for the user. The underlying SQL keeps running on the server until it finishes (Request cancellation is a follow-up).
+  - `SearchEngine.Search` has an in-process LRU result cache keyed by `(userID, query, MaxResults, MinScore, Filters)` with a 30s TTL and 500-entry cap. Preview-mode searches skip the cache. New `ClearResultCache()` admin/test hook.
+
+  **`@memberjunction/codegen-lib`** — CodeGen guardrails so the metadata stays clean:
+  - `applySearchableFieldUpdates` now refuses to set `IncludeInUserSearchAPI = 1` on primary keys, non-text columns, or unbounded text columns whose parent entity has `FullTextSearchEnabled = 0`. The LLM can still propose them; CodeGen drops the proposal silently.
+  - `applyEntitySearchConfig` refuses to flip `AllowUserSearchAPI` from `0` to `1` on entities whose names match log/audit/run-history patterns (`*Logs`, `*Audit*`, `*Record Changes`, `*Runs`, `*Run Steps/Messages/History`, `*Execution Logs`). It still allows the LLM to _disable_ search on any entity.
+
+  **Migrations (run via Flyway in the same release):**
+  - `migrations/v5/V202605041250__v5.33.x__Search_Hygiene_For_Mj_Schema_And_Field_Types.sql` — disables `AllowUserSearchAPI` on 40 `__mj` log / audit / run-history / snapshot entities (Record Changes, Audit Logs, AI Agent + Prompt Runs, Company Integration Runs/Details/API Logs, Error Logs, Action Execution Logs, Test/Workflow/Recommendation/Scheduled/Duplicate Runs, User View Runs/Details, Report Snapshots, Archive Runs/Details, etc.) and clears `IncludeInUserSearchAPI` on PKs, non-text columns, and non-FTX unbounded text columns system-wide. Freezes the corresponding `AutoUpdate*` flags so CodeGen doesn't re-promote any of these silently.
+  - `migrations/v5/V202605041300__v5.33.x__EntityField_UserSearchPredicateAPI_Check_Constraint.sql` — adds a trusted CHECK constraint enforcing the four documented values. Defensively normalizes any out-of-band rows to `'Contains'` first.
+
+  **Behavior change to call out:** any caller that previously relied on `%` or `_` in a `UserSearchString` being interpreted as a SQL wildcard will now match those characters literally. There were no such known callers in the MJ ecosystem; this aligns the runtime with the documented contract.
+
+- b0329f6: PG: JSON-arg CRUD sprocs for wide entities + Bug 5 four-pass fix + codegen lookup fixes (#2552)
+
+### Patch Changes
+
+- 74b0be0: Tolerate non-ISO `maxUpdatedAt` values in the smart cache check so a malformed timestamp degrades to a cache miss instead of throwing `Invalid time value`. Also expand the MJAPI GraphQL operation log so nested variables render as truncated JSON instead of Node's `[Object]` placeholders.
+- f94ebd6: Fix silent NVARCHAR(4000) truncation in `_escapeFlywaySyntaxInStrings` that corrupted component Specifications with many `${…}` template-literal expressions on Flyway apply. Interleave `CAST(N'' AS NVARCHAR(MAX))` between every split so the concat chain inherits NVARCHAR(MAX) precedence and the full literal value survives.
+- 7add405: Lift Flyway placeholder escaping from `SqlLogger` into the `SQLDialect` abstraction. Each dialect now declares its own `EscapeFlywayStringInterpolation` form (SQL Server interleaves a `CAST(N'' AS NVARCHAR(MAX))` to defeat the NVARCHAR(4000) concat cap; PostgreSQL uses a plain `||` split since TEXT has no length cap), so the shared `SqlLoggingSessionImpl` can be used safely across providers without hard-coding T-SQL syntax.
+- fad046c: Repair createViewUserSearchSQL.test.ts so its assertions actually run. The test factory was setting EntityInfo's getter-only properties (FirstPrimaryKey, Fields) via Object.assign, which threw TypeError before any assertion executed. Switched to seeding the private \_Fields backing store with a synthetic primary-key field so both getters resolve naturally, and corrected each assertion's parenthesization to match the SUT's actual (defensive, pre-existing) per-field paren wrap.
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [7e4957d]
+- Updated dependencies [7add405]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/sql-dialect@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/actions@5.33.0
+  - @memberjunction/encryption@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/queue@5.33.0
+  - @memberjunction/query-processor@5.33.0
+  - @memberjunction/geo-core@5.33.0
+  - @memberjunction/sql-parser@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/geo-core@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/encryption@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/queue@5.32.0
+  - @memberjunction/query-processor@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/sql-dialect@5.32.0
+  - @memberjunction/sql-parser@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/encryption@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/queue@5.31.0
+  - @memberjunction/query-processor@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+  - @memberjunction/sql-parser@5.31.0
+  - @memberjunction/geo-core@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/encryption@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/queue@5.30.1
+- @memberjunction/query-processor@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+- @memberjunction/sql-parser@5.30.1
+- @memberjunction/geo-core@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/actions@5.30.0
+  - @memberjunction/encryption@5.30.0
+  - @memberjunction/queue@5.30.0
+  - @memberjunction/geo-core@5.30.0
+  - @memberjunction/query-processor@5.30.0
+  - @memberjunction/global@5.30.0
+  - @memberjunction/sql-dialect@5.30.0
+  - @memberjunction/sql-parser@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- e02e24e: Query rendering pipeline redesign: fix Bug D (Nunjucks expression inside SQL string literal breaks ORDER BY detection), consolidate duplicated ORDER BY logic into shared analyzer, add RenderPipeline entry point with diagnostic tracing, introduce structural parser and symbol table for composition IR, and integrate SQL dialect objects throughout the parser removing all hardcoded dialect switch statements. SQL comments are now stripped before template evaluation instead of escaped. Production callers (RunQuery, TestQuerySQL) delegate to RenderPipeline. 65+ new tests including recursive CTEs, PostgreSQL dialect variants, and comment-stripping coverage.
+
+  Query dashboard and form UI improvements: replace flat category dropdowns with hierarchical tree dropdowns, default new query category to active folder context, add per-folder create buttons, expose Reusable/CacheEnabled/AuditQueryRuns fields in entity form Details panel, add saving indicator with spinner overlay, fix sub-entity delete by reloading fresh entity copies, and fix tree dropdown not showing pre-selected text for branch-only configurations. Fix extraction pipeline not cleaning up stale Query Fields and Query Entities when extraction produces no results, with 9 regression tests.
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/sql-dialect@5.29.0
+  - @memberjunction/sql-parser@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/aiengine@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/encryption@5.29.0
+  - @memberjunction/queue@5.29.0
+  - @memberjunction/query-processor@5.29.0
+  - @memberjunction/geo-core@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/encryption@5.28.0
+  - @memberjunction/queue@5.28.0
+  - @memberjunction/query-processor@5.28.0
+  - @memberjunction/geo-core@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-dialect@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/encryption@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/queue@5.27.1
+  - @memberjunction/query-processor@5.27.1
+  - @memberjunction/geo-core@5.27.1
+  - @memberjunction/sql-dialect@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- Updated dependencies [4357090]
+  - @memberjunction/sql-parser@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/actions@5.27.0
+  - @memberjunction/encryption@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/queue@5.27.0
+  - @memberjunction/query-processor@5.27.0
+  - @memberjunction/sql-dialect@5.27.0
+  - @memberjunction/geo-core@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/encryption@5.26.0
+  - @memberjunction/queue@5.26.0
+  - @memberjunction/geo-core@5.26.0
+  - @memberjunction/query-processor@5.26.0
+  - @memberjunction/global@5.26.0
+  - @memberjunction/sql-dialect@5.26.0
+  - @memberjunction/sql-parser@5.26.0
+
+## 5.25.0
+
+### Patch Changes
+
+- fc8cd52: Autotagging pipeline with run tracking, retry, and tag merge/delete; taxonomy server-side SQL aggregates; vector sync credential engine integration; search resolver and organic key support; unit test fixes across geo-core, ai-vector-sync, MJServer, and UUID compliance.
+- Updated dependencies [fc8cd52]
+- Updated dependencies [4f8e980]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/geo-core@5.25.0
+  - @memberjunction/sql-parser@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/encryption@5.25.0
+  - @memberjunction/queue@5.25.0
+  - @memberjunction/query-processor@5.25.0
+  - @memberjunction/global@5.25.0
+  - @memberjunction/sql-dialect@5.25.0
+
+## 5.24.0
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/encryption@5.24.0
+  - @memberjunction/queue@5.24.0
+  - @memberjunction/query-processor@5.24.0
+  - @memberjunction/global@5.24.0
+  - @memberjunction/sql-dialect@5.24.0
+  - @memberjunction/sql-parser@5.24.0
+
+## 5.23.0
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/encryption@5.23.0
+  - @memberjunction/queue@5.23.0
+  - @memberjunction/query-processor@5.23.0
+  - @memberjunction/sql-dialect@5.23.0
+  - @memberjunction/sql-parser@5.23.0
+
+## 5.22.0
+
+### Patch Changes
+
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/sql-parser@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/encryption@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/queue@5.22.0
+  - @memberjunction/query-processor@5.22.0
+  - @memberjunction/sql-dialect@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- Updated dependencies [c7dfb20]
+- Updated dependencies [72fc93b]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/query-processor@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/encryption@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/queue@5.21.0
+  - @memberjunction/global@5.21.0
+  - @memberjunction/sql-dialect@5.21.0
+  - @memberjunction/sql-parser@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- cc954e1: fix: prevent NVARCHAR truncation when escaping Flyway placeholders in long string literals
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/encryption@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/queue@5.20.0
+  - @memberjunction/query-processor@5.20.0
+  - @memberjunction/global@5.20.0
+  - @memberjunction/sql-dialect@5.20.0
+  - @memberjunction/sql-parser@5.20.0
+
+## 5.19.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/encryption@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+- @memberjunction/queue@5.19.0
+- @memberjunction/query-processor@5.19.0
+- @memberjunction/sql-dialect@5.19.0
+- @memberjunction/sql-parser@5.19.0
+
+## 5.18.0
+
+### Patch Changes
+
+- Updated dependencies [931740a]
+  - @memberjunction/sql-parser@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/queue@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/encryption@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+  - @memberjunction/query-processor@5.18.0
+  - @memberjunction/sql-dialect@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- 4b6fd2a: Add composable query passthrough parameter bubbling, deterministic field type resolution from dependency queries and entity metadata, MJLexer-based template variable manipulation, and refactor MJQueryEntityServer into a 5-stage extraction pipeline
+- Updated dependencies [4b6fd2a]
+- Updated dependencies [9881045]
+  - @memberjunction/sql-parser@5.17.0
+  - @memberjunction/core@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/encryption@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/queue@5.17.0
+  - @memberjunction/query-processor@5.17.0
+  - @memberjunction/global@5.17.0
+  - @memberjunction/sql-dialect@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/encryption@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/queue@5.16.0
+  - @memberjunction/query-processor@5.16.0
+  - @memberjunction/global@5.16.0
+  - @memberjunction/sql-dialect@5.16.0
+  - @memberjunction/sql-parser@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

@@ -1,5 +1,6 @@
 import { Component } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DataSnapshot } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 
@@ -128,6 +129,15 @@ export class SvgArtifactViewerComponent extends BaseArtifactViewerPluginComponen
     this.svgContent = this.getContent();
     // For SVG, we use sanitize with SecurityContext.HTML (1) to allow safe rendering
     this.safeSvgContent = this.sanitizer.sanitize(1, this.svgContent) || '';
+  }
+
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    const content = this.getRawContent();
+    if (!content) return null;
+    const snap = new DataSnapshot();
+    snap.title = this.getDisplayTitle() ?? undefined;
+    snap.custom = { content };
+    return snap;
   }
 
   onCopy(): void {

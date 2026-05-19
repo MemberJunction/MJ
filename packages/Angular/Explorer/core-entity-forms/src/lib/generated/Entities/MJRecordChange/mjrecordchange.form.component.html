@@ -12,7 +12,7 @@
     <mj-collapsible-panel
         SectionKey="recordContext"
         SectionName="Record Context"
-        Icon="fa fa-link"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -74,7 +74,7 @@
     <mj-collapsible-panel
         SectionKey="changeSummary"
         SectionName="Change Summary"
-        Icon="fa fa-clipboard"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -124,7 +124,7 @@
     <mj-collapsible-panel
         SectionKey="changeContent"
         SectionName="Change Content"
-        Icon="fa fa-file-code"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -148,6 +148,41 @@
             [ShowLabel]="true"
             FieldName="FullRecordJSON"
             Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Audit Lineage Section -->
+    <mj-collapsible-panel
+        SectionKey="auditLineage"
+        SectionName="Audit Lineage"
+        Icon="fa fa-code-branch"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RestoredFromID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RestoreReason"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RootRestoredFromID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -183,6 +218,31 @@
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
+
+    <!-- Record Changes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordChanges"
+        SectionName="Record Changes"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordChanges')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Changes','RestoredFromID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Changes')"
+                [AllowLoad]="IsSectionExpanded('mJRecordChanges')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordChanges', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <!-- Version Label Items Section -->
     <mj-collapsible-panel

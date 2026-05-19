@@ -1386,7 +1386,11 @@ export class DropboxFileStorage extends FileStorageBase {
       const results: FileSearchResult[] = [];
 
       // Process search results
-      for (const match of response.result.matches || []) {
+      const matches = response.result.matches || [];
+      const totalMatches = matches.length;
+
+      for (let i = 0; i < totalMatches; i++) {
+        const match = matches[i];
         // The metadata field is MetadataV2, which can be MetadataV2Metadata or MetadataV2Other
         // We only want MetadataV2Metadata which has the actual file/folder metadata
         if (match.metadata['.tag'] !== 'metadata') {
@@ -1424,6 +1428,29 @@ export class DropboxFileStorage extends FileStorageBase {
         const pathParts = fullPath.split('/');
         const fileName = pathParts.pop() || metadata.name;
 
+        // Determine matchInFilename from Dropbox's match_type (more accurate than string matching)
+        const matchTag = match.match_type?.['.tag'];
+        let matchInFilename: boolean | undefined;
+        if (matchTag === 'filename') {
+          matchInFilename = true;
+        } else if (matchTag === 'file_content' || matchTag === 'image_content') {
+          matchInFilename = false;
+        } else if (matchTag === 'filename_and_content') {
+          matchInFilename = true; // Match was in both, but filename did match
+        } else {
+          // Fallback to client-side check if match_type is 'other' or undefined
+          matchInFilename = this._checkFilenameMatch(fileName, query);
+        }
+
+        // Build excerpt from highlight_spans if available
+        let excerpt: string | undefined;
+        if (match.highlight_spans && match.highlight_spans.length > 0) {
+          excerpt = match.highlight_spans.map((span) => span.highlight_str).join('');
+        }
+
+        // Dropbox results are ordered by relevance; use rank-based scoring
+        const relevance = totalMatches === 1 ? 0.95 : Math.max(0.1, 0.95 - results.length * 0.05);
+
         results.push({
           path: fullPath,
           name: fileName,
@@ -1431,7 +1458,9 @@ export class DropboxFileStorage extends FileStorageBase {
           contentType: mime.lookup(fileName) || 'application/octet-stream',
           lastModified: new Date(metadata.server_modified),
           objectId: metadata.id || '', // Dropbox file ID for direct access
-          matchInFilename: this._checkFilenameMatch(fileName, query),
+          relevance,
+          excerpt,
+          matchInFilename,
           customMetadata: {
             id: metadata.id,
             rev: metadata.rev,
@@ -1439,6 +1468,8 @@ export class DropboxFileStorage extends FileStorageBase {
           providerData: {
             dropboxId: metadata.id,
             pathLower: metadata.path_lower,
+            matchType: matchTag,
+            highlightSpans: match.highlight_spans,
           },
         });
       }

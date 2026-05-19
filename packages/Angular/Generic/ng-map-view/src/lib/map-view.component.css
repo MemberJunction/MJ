@@ -1,0 +1,119 @@
+:host {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.mj-map-view-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    position: relative;
+}
+
+.mj-map-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
+    flex-shrink: 0;
+    z-index: 1000;
+}
+
+.mj-map-mode-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.mj-map-mode-btn {
+    padding: 6px 12px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.15s ease;
+}
+
+.mj-map-mode-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.mj-map-mode-btn.active {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-brand-primary);
+}
+
+.mj-map-info {
+    font-size: 13px;
+    color: var(--mj-text-muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mj-map-truncated {
+    color: var(--mj-status-warning-text);
+    font-size: 12px;
+}
+
+.mj-map-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 500;
+    background: var(--mj-bg-surface);
+}
+
+.mj-map-container {
+    flex: 1;
+    min-height: 400px;
+    width: 100%;
+}
+
+.mj-map-container.hidden {
+    display: none;
+}
+
+/* Leaflet popup styling — use hardcoded colors, NOT design tokens.
+   Leaflet has its own light theme and popups are always white background.
+   Using --mj-text-primary would make text white in dark mode = invisible. */
+:host ::ng-deep .leaflet-popup-content-wrapper {
+    border-radius: 6px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+:host ::ng-deep .leaflet-popup-content {
+    color: #1e293b;
+    font-size: 13px;
+    margin: 10px 14px;
+}
+
+/* Ensure Leaflet container fills its parent */
+:host ::ng-deep .leaflet-container {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Compact attribution — required by OSM terms but unobtrusive */
+:host ::ng-deep .leaflet-control-attribution {
+    font-size: 9px;
+    padding: 1px 5px;
+    background: rgba(255, 255, 255, 0.6);
+    color: #666;
+}
+
+:host ::ng-deep .leaflet-control-attribution a {
+    color: #666;
+}

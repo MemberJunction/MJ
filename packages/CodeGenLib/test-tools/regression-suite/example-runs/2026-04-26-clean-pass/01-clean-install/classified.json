@@ -1,0 +1,186 @@
+{
+  "verdicts": [
+    {
+      "path": "packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.html",
+      "removed": [
+        "    <!-- Company Integration Field Maps Section -->",
+        "        SectionKey=\"mJCompanyIntegrationFieldMaps\"",
+        "        SectionName=\"Company Integration Field Maps\"",
+        "        Icon=\"fa fa-exchange-alt\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJCompanyIntegrationFieldMaps')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Company Integration Field Maps')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJCompanyIntegrationFieldMaps')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)\"",
+        "    <!-- Company Integration Sync Watermarks Section -->",
+        "        SectionKey=\"mJCompanyIntegrationSyncWatermarks\"",
+        "        SectionName=\"Company Integration Sync Watermarks\"",
+        "        Icon=\"fa fa-sync-alt\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Company Integration Sync Watermarks')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)\""
+      ],
+      "added": [
+        "    <!-- Company Integration Sync Watermarks Section -->",
+        "        SectionKey=\"mJCompanyIntegrationSyncWatermarks\"",
+        "        SectionName=\"Company Integration Sync Watermarks\"",
+        "        Icon=\"fa fa-sync-alt\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Company Integration Sync Watermarks')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)\"",
+        "    <!-- Company Integration Field Maps Section -->",
+        "        SectionKey=\"mJCompanyIntegrationFieldMaps\"",
+        "        SectionName=\"Company Integration Field Maps\"",
+        "        Icon=\"fa fa-exchange-alt\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJCompanyIntegrationFieldMaps')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Company Integration Field Maps')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJCompanyIntegrationFieldMaps')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)\""
+      ],
+      "verdict": "noise",
+      "reason": "relationship sections match (0 related entities) — diffs are AI-driven layout/labels"
+    },
+    {
+      "path": "packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJCompanyIntegrationEntityMap/mjcompanyintegrationentitymap.form.component.ts",
+      "removed": [
+        "            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false },",
+        "            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false }"
+      ],
+      "added": [
+        "            { sectionKey: 'mJCompanyIntegrationSyncWatermarks', sectionName: 'Company Integration Sync Watermarks', isExpanded: false },",
+        "            { sectionKey: 'mJCompanyIntegrationFieldMaps', sectionName: 'Company Integration Field Maps', isExpanded: false }"
+      ],
+      "verdict": "noise",
+      "reason": "relationship sections match (0 related entities) — diffs are AI-driven layout/labels"
+    },
+    {
+      "path": "packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.html",
+      "removed": [
+        "    <!-- Tag Audit Logs Section -->",
+        "        SectionKey=\"mJTagAuditLogs\"",
+        "        SectionName=\"Tag Audit Logs\"",
+        "        Icon=\"fa fa-history\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJTagAuditLogs')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Tag Audit Logs')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJTagAuditLogs')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)\"",
+        "    <!-- Knowledge Hub Saved Searches Section -->",
+        "        SectionKey=\"mJKnowledgeHubSavedSearches\"",
+        "        SectionName=\"Knowledge Hub Saved Searches\"",
+        "        Icon=\"fa fa-search-plus\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJKnowledgeHubSavedSearches')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Knowledge Hub Saved Searches')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJKnowledgeHubSavedSearches')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)\""
+      ],
+      "added": [
+        "    <!-- Knowledge Hub Saved Searches Section -->",
+        "        SectionKey=\"mJKnowledgeHubSavedSearches\"",
+        "        SectionName=\"Knowledge Hub Saved Searches\"",
+        "        Icon=\"fa fa-search-plus\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJKnowledgeHubSavedSearches')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Knowledge Hub Saved Searches','UserID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Knowledge Hub Saved Searches')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJKnowledgeHubSavedSearches')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJKnowledgeHubSavedSearches', $event.totalRowCount)\"",
+        "    <!-- Tag Audit Logs Section -->",
+        "        SectionKey=\"mJTagAuditLogs\"",
+        "        SectionName=\"Tag Audit Logs\"",
+        "        Icon=\"fa fa-history\"",
+        "        [BadgeCount]=\"GetSectionRowCount('mJTagAuditLogs')\"",
+        "                [Params]=\"BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')\"",
+        "                [NewRecordValues]=\"NewRecordValues('MJ: Tag Audit Logs')\"",
+        "                [AllowLoad]=\"IsSectionExpanded('mJTagAuditLogs')\"",
+        "                (AfterDataLoad)=\"SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)\""
+      ],
+      "verdict": "noise",
+      "reason": "relationship sections match (0 related entities) — diffs are AI-driven layout/labels"
+    },
+    {
+      "path": "packages/Angular/Explorer/core-entity-forms/src/lib/generated/Entities/MJUser/mjuser.form.component.ts",
+      "removed": [
+        "            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },"
+      ],
+      "added": [
+        "            { sectionKey: 'mJTagAuditLogs', sectionName: 'Tag Audit Logs', isExpanded: false },"
+      ],
+      "verdict": "noise",
+      "reason": "relationship sections match (0 related entities) — diffs are AI-driven layout/labels"
+    },
+    {
+      "path": "packages/MJServer/src/generated/generated.ts",
+      "removed": [
+        "    @Field(() => [MJCompanyIntegrationFieldMap_])",
+        "    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps",
+        "    ",
+        "    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])",
+        "    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {",
+        "        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);",
+        "        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });",
+        "        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');",
+        "        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));",
+        "        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));",
+        "        return result;",
+        "    }",
+        "        ",
+        "    @Field(() => [MJTagAuditLog_])",
+        "    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs",
+        "    ",
+        "    @FieldResolver(() => [MJTagAuditLog_])",
+        "    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {",
+        "        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);",
+        "        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });",
+        "        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');",
+        "        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));",
+        "        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));",
+        "        return result;",
+        "    }",
+        "        "
+      ],
+      "added": [
+        "    @Field(() => [MJCompanyIntegrationFieldMap_])",
+        "    MJCompanyIntegrationFieldMaps_EntityMapIDArray: MJCompanyIntegrationFieldMap_[]; // Link to MJCompanyIntegrationFieldMaps",
+        "    ",
+        "    @FieldResolver(() => [MJCompanyIntegrationFieldMap_])",
+        "    async MJCompanyIntegrationFieldMaps_EntityMapIDArray(@Root() mjcompanyintegrationentitymap_: MJCompanyIntegrationEntityMap_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {",
+        "        this.CheckUserReadPermissions('MJ: Company Integration Field Maps', userPayload);",
+        "        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });",
+        "        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCompanyIntegrationFieldMaps')} WHERE ${provider.QuoteIdentifier('EntityMapID')}='${mjcompanyintegrationentitymap_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Company Integration Field Maps', userPayload, EntityPermissionType.Read, 'AND');",
+        "        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));",
+        "        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Company Integration Field Maps', rows, this.GetUserFromPayload(userPayload));",
+        "        return result;",
+        "    }",
+        "        ",
+        "    @Field(() => [MJTagAuditLog_])",
+        "    MJTagAuditLogs_PerformedByUserIDArray: MJTagAuditLog_[]; // Link to MJTagAuditLogs",
+        "    ",
+        "        return result;",
+        "    }",
+        "        ",
+        "    @FieldResolver(() => [MJTagAuditLog_])",
+        "    async MJTagAuditLogs_PerformedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {",
+        "        this.CheckUserReadPermissions('MJ: Tag Audit Logs', userPayload);",
+        "        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });",
+        "        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTagAuditLogs')} WHERE ${provider.QuoteIdentifier('PerformedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tag Audit Logs', userPayload, EntityPermissionType.Read, 'AND');",
+        "        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));",
+        "        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Tag Audit Logs', rows, this.GetUserFromPayload(userPayload));"
+      ],
+      "verdict": "noise",
+      "reason": "generated.ts: same content, reordered (likely FieldResolver block move)"
+    }
+  ],
+  "summary": {
+    "total_files_with_diff": 5,
+    "noise": 5,
+    "regression_candidates": 0,
+    "no_content_diff": 0,
+    "pass": true
+  }
+}

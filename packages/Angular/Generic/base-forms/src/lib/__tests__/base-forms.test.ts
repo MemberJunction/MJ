@@ -24,18 +24,22 @@ vi.mock('@angular/core', () => ({
   ViewContainerRef: class {},
 }));
 
-vi.mock('@memberjunction/core', () => ({
-  Metadata: class {
+vi.mock('@memberjunction/core', () => {
+  const MockMetadata: any = class {
     CurrentUser = { ID: 'user-123' };
-  },
-  BaseEntity: class {},
-  RunView: class {},
-  CompositeKey: class {},
-  EntityField: class {},
-  EntityFieldInfo: class {},
-  EntityInfo: class {},
-  LogError: vi.fn(),
-}));
+  };
+  MockMetadata.Provider = { CurrentUser: { ID: 'user-123' } };
+  return {
+    Metadata: MockMetadata,
+    BaseEntity: class {},
+    RunView: class {},
+    CompositeKey: class {},
+    EntityField: class {},
+    EntityFieldInfo: class {},
+    EntityInfo: class {},
+    LogError: vi.fn(),
+  };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
   UserInfoEngine: {

@@ -8,11 +8,11 @@
  * @since 3.0.0
  */
 
-import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
-import { BaseReranker, RerankDocument } from '@memberjunction/ai';
+import { BaseReranker, RerankDocument, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIModelEntityExtended } from '@memberjunction/ai-core-plus';
 import { RerankerConfiguration, parseRerankerConfiguration } from './config.types';
 
@@ -98,24 +98,19 @@ export interface RerankObservabilityOptions {
  * }
  * ```
  */
-export class RerankerService {
-    private static _instance: RerankerService | null = null;
+export class RerankerService extends BaseSingleton<RerankerService> {
     private _rerankerCache: Map<string, BaseReranker> = new Map();
 
     /**
      * Get the singleton instance of RerankerService
      */
     public static get Instance(): RerankerService {
-        if (!RerankerService._instance) {
-            RerankerService._instance = new RerankerService();
-        }
-        return RerankerService._instance;
+        return RerankerService.getInstance<RerankerService>();
     }
 
-    /**
-     * Private constructor to enforce singleton pattern
-     */
-    private constructor() {}
+    public constructor() {
+        super();
+    }
 
     /**
      * Parse RerankerConfiguration JSON from agent settings.
@@ -260,21 +255,13 @@ export class RerankerService {
     }
 
     /**
-     * Get API key for a reranker driver from environment variables.
-     * Uses naming convention: AI_VENDOR_API_KEY__<DRIVERCLASS>
+     * Get API key for a reranker driver using the standard MJ API key utility.
+     * Delegates to GetAIAPIKey which handles case-insensitive env var lookup.
      */
     private getAPIKeyForDriver(driverClass: string): string | null {
         if (!driverClass) return null;
-
-        // Standard MemberJunction API key naming convention
-        const envVar = `AI_VENDOR_API_KEY__${driverClass}`;
-        const apiKey = process.env[envVar];
-
-        if (apiKey && apiKey.trim().length > 0) {
-            return apiKey;
-        }
-
-        return null;
+        const key = GetAIAPIKey(driverClass);
+        return key || null;
     }
 
     /**
@@ -441,9 +428,10 @@ export class RerankerService {
         options: RerankObservabilityOptions,
         contextUser: UserInfo,
         input: { query: string; noteCount: number; config: RerankerConfiguration; notes: NoteMatchResult[] },
-        startTime: number
+        startTime: number,
+        provider?: IMetadataProvider
     ): Promise<MJAIAgentRunStepEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntity>(
             'MJ: AI Agent Run Steps',
             contextUser

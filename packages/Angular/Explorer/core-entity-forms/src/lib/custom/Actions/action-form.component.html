@@ -1,7 +1,20 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+<!--
+    NOTE: We wrap the form content in <mj-record-form-container> rather than
+    using <mj-form-toolbar> directly. The container owns the toolbar AND the
+    panels behind History/Tags/List buttons — without it those buttons emit
+    events that nothing listens to and the features silently break. Follow
+    this pattern for every custom entity form — see packages/Angular/CLAUDE.md.
+-->
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-            <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
             <!-- Main Content Area -->
             <div class="action-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
@@ -15,19 +28,25 @@
                             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                                 <i [class]="getActionIcon()" [style.color]="getTypeColor()" style="font-size: 1.4em;"></i>
                                 @if (EditMode) {
-                                    <kendo-textbox [(ngModel)]="record.Name" 
-                                                  name="actionName"
-                                                  placeholder="Enter action name..."
-                                                  style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                    </kendo-textbox>
+                                    <input type="text" class="mj-input"
+                                           [(ngModel)]="record.Name"
+                                           name="actionName"
+                                           placeholder="Enter action name..."
+                                           style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;" />
                                 } @else {
                                     <h4 style="margin: 0; color: var(--mj-text-secondary); font-weight: 600; flex: 1;">{{ record.Name || 'Untitled Action' }}</h4>
-                                    <button kendoButton
-                                            [themeColor]="record.Status === 'Active' ? 'success' : record.Status === 'Pending' ? 'warning' : 'error'"
-                                            size="small"
-                                            style="pointer-events: none; cursor: default;">
+                                    <span class="status-chip"
+                                          [attr.data-color]="record.Status === 'Active' ? 'success' : record.Status === 'Pending' ? 'warning' : 'error'">
                                         {{ record.Status }}
-                                    </button>
+                                    </span>
+                                    @if (hasCodeApproval && record.CodeApprovalStatus) {
+                                        <span class="status-chip"
+                                              [attr.data-color]="record.CodeApprovalStatus === 'Approved' ? 'success' : record.CodeApprovalStatus === 'Pending' ? 'warning' : 'error'"
+                                              [title]="'Code ' + record.CodeApprovalStatus">
+                                            <i [class]="'fa-solid ' + getApprovalStatusIcon()" style="margin-right: 4px;"></i>
+                                            {{ record.CodeApprovalStatus }}
+                                        </span>
+                                    }
                                 }
                             </div>
                             
@@ -36,49 +55,65 @@
                                 <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
                                     <div>
                                         <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">Status</label>
-                                        <kendo-dropdownlist [(ngModel)]="record.Status"
-                                                           name="actionStatus"
-                                                           [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
-                                                           textField="text"
-                                                           valueField="value"
-                                                           [valuePrimitive]="true"
-                                                           style="width: 150px;">
-                                        </kendo-dropdownlist>
+                                        <mj-dropdown [(ngModel)]="record.Status"
+                                                     name="actionStatus"
+                                                     [Data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
+                                                     TextField="text"
+                                                     ValueField="value"
+                                                     [ValuePrimitive]="true"
+                                                     style="width: 150px;">
+                                        </mj-dropdown>
                                     </div>
                                     <div>
                                         <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
                                             Type <span style="color: var(--mj-status-error);">*</span>
                                         </label>
-                                        <kendo-dropdownlist [(ngModel)]="record.Type"
-                                                           name="actionType"
-                                                           [data]="[{text: 'Generated', value: 'Generated'}, {text: 'Custom', value: 'Custom'}]"
-                                                           textField="text"
-                                                           valueField="value"
-                                                           [valuePrimitive]="true"
-                                                           style="width: 150px;">
-                                        </kendo-dropdownlist>
+                                        <mj-dropdown [(ngModel)]="record.Type"
+                                                     name="actionType"
+                                                     [Data]="[{text: 'Generated', value: 'Generated'}, {text: 'Custom', value: 'Custom'}]"
+                                                     TextField="text"
+                                                     ValueField="value"
+                                                     [ValuePrimitive]="true"
+                                                     style="width: 150px;">
+                                        </mj-dropdown>
                                     </div>
                                     <div>
                                         <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
                                             Category <span style="color: var(--mj-status-error);">*</span>
                                         </label>
-                                        <kendo-dropdownlist [(ngModel)]="record.CategoryID"
-                                                           name="categoryID"
-                                                           [data]="[]"
-                                                           placeholder="Select category..."
-                                                           style="width: 200px;">
-                                        </kendo-dropdownlist>
+                                        <mj-dropdown [(ngModel)]="record.CategoryID"
+                                                     name="categoryID"
+                                                     [Data]="[]"
+                                                     Placeholder="Select category..."
+                                                     style="width: 200px;">
+                                        </mj-dropdown>
                                     </div>
+                                    @if (hasCodeApproval) {
+                                        <div>
+                                            <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()" style="margin-right: 4px;"></i>
+                                                Code Approval
+                                            </label>
+                                            <mj-dropdown [(ngModel)]="record.CodeApprovalStatus"
+                                                         name="codeApprovalStatus"
+                                                         [Data]="[{text: 'Approved', value: 'Approved'}, {text: 'Pending', value: 'Pending'}, {text: 'Rejected', value: 'Rejected'}]"
+                                                         TextField="text"
+                                                         ValueField="value"
+                                                         [ValuePrimitive]="true"
+                                                         style="width: 160px;">
+                                            </mj-dropdown>
+                                        </div>
+                                    }
                                 </div>
                             }
                             
                             @if (EditMode) {
-                                <kendo-textarea [(ngModel)]="record.Description" 
+                                <textarea class="mj-textarea" [(ngModel)]="record.Description" 
                                                name="actionDescription"
                                                [rows]="2"
                                                placeholder="Enter action description..."
                                                style="width: 100%; max-width: 600px; margin-bottom: 12px;">
-                                </kendo-textarea>
+                                </textarea>
                             } @else if (record.Description) {
                                 <p style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
                             }
@@ -102,7 +137,7 @@
                                     <span style="color: var(--mj-text-secondary); font-weight: 500;">{{ record.Type }}</span>
                                 </div>
                                 
-                                @if (record.Type === 'Generated' && record.CodeApprovalStatus) {
+                                @if (hasCodeApproval && record.CodeApprovalStatus) {
                                     <div class="config-item" style="display: flex; align-items: center; gap: 6px; font-size: 0.85em;">
                                         <i [class]="'fa-solid ' + getApprovalStatusIcon()" [style.color]="getApprovalStatusColor()"></i>
                                         <span style="color: var(--mj-text-muted);">Code:</span>
@@ -122,8 +157,8 @@
                         <!-- Right: Action Buttons -->
                         <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
                             <div style="display: flex; gap: 8px;">
-                                @if (record.ID) {
-                                    <button kendoButton themeColor="primary" size="large"
+                                @if (record.ID && !EditMode) {
+                                    <button mjButton variant="primary" size="lg"
                                                 (click)="openTestHarness()"
                                                 title="Open Run Harness"
                                                 [disabled]="record.Status !== 'Active'">
@@ -131,26 +166,13 @@
                                     </button>
                                 }
                                 @if (EditMode && record.Type === 'Generated') {
-                                    <button kendoButton themeColor="info" size="medium"
+                                    <button mjButton variant="outline" size="md"
                                                 (click)="regenerateCode()"
                                                 title="Regenerate Code">
                                         <i class="fa-solid fa-robot"></i> Regenerate
                                     </button>
                                 }
                             </div>
-                            
-                            @if (EditMode && record.CodeApprovalStatus === 'Pending' && record.Type === 'Generated') {
-                                <div style="display: flex; gap: 8px;">
-                                    <button kendoButton themeColor="success" size="small"
-                                                (click)="approveCode()">
-                                        <i class="fa-solid fa-check"></i> Approve
-                                    </button>
-                                    <button kendoButton themeColor="error" size="small"
-                                                (click)="rejectCode()">
-                                        <i class="fa-solid fa-times"></i> Reject
-                                    </button>
-                                </div>
-                            }
                             
                             @if (!EditMode && record.Status !== 'Active' && record.ID) {
                                 <div style="font-size: 0.75em; color: var(--mj-status-error); text-align: right;">
@@ -165,10 +187,10 @@
                 <div class="configuration-sections" style="flex: 1; background: var(--mj-bg-surface-card); border-top: 2px solid var(--mj-border-default); padding: 16px; min-height: 0;">
                     
                     <!-- Parameters Section (FIRST) -->
-                    <kendo-expansionpanel 
-                        [expanded]="true"
+                    <mj-accordion-panel
+                        [Expanded]="true"
                         style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
+                        <ng-template mjAccordionTitle>
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                 <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                                 Parameters
@@ -200,7 +222,7 @@
                                     <div class="params-header">
                                         <h3><i class="fa-solid fa-sign-in-alt"></i> Input Parameters</h3>
                                         @if (EditMode && record.IsSaved) {
-                                            <button kendoButton fillMode="flat" size="small" (click)="addParameter('Input')">
+                                            <button mjButton variant="flat" size="sm" (click)="addParameter('Input')">
                                                 <i class="fa-solid fa-plus"></i> Add Input
                                             </button>
                                         }
@@ -260,7 +282,7 @@
                                     <div class="params-header">
                                         <h3><i class="fa-solid fa-sign-out-alt"></i> Output Parameters</h3>
                                         @if (EditMode && record.IsSaved) {
-                                            <button kendoButton fillMode="flat" size="small" (click)="addParameter('Output')">
+                                            <button mjButton variant="flat" size="sm" (click)="addParameter('Output')">
                                                 <i class="fa-solid fa-plus"></i> Add Output
                                             </button>
                                         }
@@ -312,17 +334,17 @@
                                 </div>
                             }
                         </div>
-                    </kendo-expansionpanel>
+                    </mj-accordion-panel>
 
                     <!-- Code & Generation Section (Only for Generated type) -->
                     @if (record.Type === 'Generated') {
-                        <kendo-expansionpanel 
-                            [expanded]="expandedSections.code"
+                        <mj-accordion-panel
+                            [Expanded]="expandedSections.code"
                             style="margin-bottom: 12px;">
-                            <ng-template kendoExpansionPanelTitleDirective>
+                            <ng-template mjAccordionTitle>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                     <i class="fa-solid fa-code" style="color: var(--mj-text-muted);"></i>
-                                    Code & Generation
+                                    Code &amp; Generation
                                     @if (record.CodeLocked) {
                                         <span style="background: var(--mj-status-warning); color: var(--mj-color-warning-800); padding: 2px 6px; border-radius: 10px; font-size: 0.7em;">
                                             <i class="fa-solid fa-lock"></i> Locked
@@ -337,26 +359,26 @@
                                         <h3><i class="fa-solid fa-robot"></i> AI Generation</h3>
                                         <div class="prompt-section">
                                             <label>User Prompt</label>
-                                            <kendo-textarea [(ngModel)]="record.UserPrompt"
+                                            <textarea class="mj-textarea" [(ngModel)]="record.UserPrompt"
                                                            name="userPrompt"
                                                            [rows]="8"
                                                            placeholder="Describe what this action should do..."
                                                            style="width: 100%; min-height: 120px;">
-                                            </kendo-textarea>
+                                            </textarea>
                                         </div>
                                         <div class="comments-section">
                                             <label>Internal Comments (not sent to AI)</label>
-                                            <kendo-textarea [(ngModel)]="record.UserComments"
+                                            <textarea class="mj-textarea" [(ngModel)]="record.UserComments"
                                                            name="userComments"
                                                            [rows]="2"
                                                            placeholder="Internal notes..."
                                                            style="width: 100%;">
-                                            </kendo-textarea>
+                                            </textarea>
                                         </div>
                                         <div class="generation-controls">
-                                            <kendo-switch [(ngModel)]="record.CodeLocked"
-                                                         name="codeLocked">
-                                            </kendo-switch>
+                                            <mj-switch [(ngModel)]="record.CodeLocked"
+                                                       name="codeLocked">
+                                            </mj-switch>
                                             <label style="margin-left: 8px;">Lock Code (prevent regeneration)</label>
                                         </div>
                                     </div>
@@ -367,12 +389,12 @@
                                         <h3><i class="fa-solid fa-file-code"></i> Action Code</h3>
                                         <div class="code-actions">
                                             @if (record.CodeComments) {
-                                                <button kendoButton fillMode="flat" size="small" (click)="toggleCodeComments()">
+                                                <button mjButton variant="flat" size="sm" (click)="toggleCodeComments()">
                                                     <i class="fa-solid fa-comment"></i> 
                                                     {{ showCodeComments ? 'Hide' : 'Show' }} AI Comments
                                                 </button>
                                             }
-                                            <button kendoButton fillMode="flat" size="small" (click)="copyToClipboard(record.Code || '')">
+                                            <button mjButton variant="flat" size="sm" (click)="copyToClipboard(record.Code || '')">
                                                 <i class="fa-solid fa-copy"></i> Copy
                                             </button>
                                         </div>
@@ -396,24 +418,190 @@
                                     @if (EditMode && record.CodeApprovalStatus === 'Rejected') {
                                         <div class="approval-comments">
                                             <label>Rejection Comments</label>
-                                            <kendo-textarea [(ngModel)]="record.CodeApprovalComments"
+                                            <textarea class="mj-textarea" [(ngModel)]="record.CodeApprovalComments"
                                                            name="codeApprovalComments"
                                                            [rows]="2"
                                                            placeholder="Explain why the code was rejected..."
                                                            style="width: 100%;">
-                                            </kendo-textarea>
+                                            </textarea>
                                         </div>
                                     }
                                 </div>
                             </div>
-                        </kendo-expansionpanel>
+                        </mj-accordion-panel>
+                    }
+
+                    <!-- Runtime Action Configuration Section (only for Type='Runtime') -->
+                    @if (isRuntimeAction) {
+                        <mj-accordion-panel
+                            [Expanded]="true"
+                            style="margin-bottom: 12px;">
+                            <ng-template mjAccordionTitle>
+                                <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--mj-status-warning);"></i>
+                                    Runtime Configuration &amp; Permissions
+                                    <span style="color: var(--mj-text-muted); font-weight: 400; font-size: 0.85em;">
+                                        ({{ getRuntimeConfigSummary() }})
+                                    </span>
+                                </span>
+                            </ng-template>
+
+                            <div style="padding: 16px;">
+                                @if (!runtimeConfig) {
+                                    <div style="padding: 12px; background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface)); border-left: 3px solid var(--mj-status-error); border-radius: 4px;">
+                                        <i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-error); margin-right: 8px;"></i>
+                                        <strong>Missing or malformed RuntimeActionConfiguration.</strong>
+                                        This Runtime action cannot run until a valid configuration is supplied. Approval should not be granted in this state.
+                                    </div>
+                                } @else {
+                                    @if (getWildcardFlags().any) {
+                                        <div style="padding: 12px; background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface)); border-left: 3px solid var(--mj-status-warning); border-radius: 4px; margin-bottom: 16px;">
+                                            <div style="font-weight: 600; margin-bottom: 4px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-warning); margin-right: 6px;"></i>
+                                                Wildcard permissions enabled
+                                            </div>
+                                            <div style="color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                This runtime action has one or more wildcard flags set that bypass the specific allowlists below:
+                                                @if (getWildcardFlags().entity) { <strong>allowAnyEntity</strong> }
+                                                @if (getWildcardFlags().action) { <strong>allowAnyAction</strong> }
+                                                @if (getWildcardFlags().agent) { <strong>allowAnyAgent</strong> }
+                                                . Approving grants this action unrestricted access to that namespace on behalf of any user who invokes it. Only approve if the action is framework-authored or you have personally reviewed every place it touches those resources.
+                                            </div>
+                                        </div>
+                                    }
+                                    <!-- Declared permissions — the security contract an approver is blessing -->
+                                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                                        <!-- Entities -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-database" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Entities ({{ getAllowedEntities().length }})
+                                            </div>
+                                            @if (getAllowedEntities().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (e of getAllowedEntities(); track e.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ e.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Actions -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-bolt" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Actions ({{ getAllowedActions().length }})
+                                            </div>
+                                            @if (getAllowedActions().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (a of getAllowedActions(); track a.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ a.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+
+                                        <!-- Agents -->
+                                        <div style="border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 12px; background: var(--mj-bg-surface-card);">
+                                            <div style="font-weight: 600; margin-bottom: 8px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-robot" style="margin-right: 6px; color: var(--mj-brand-primary);"></i>
+                                                Allowed Agents ({{ getAllowedAgents().length }})
+                                            </div>
+                                            @if (getAllowedAgents().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None requested</div>
+                                            } @else {
+                                                <div style="display: flex; flex-direction: column; gap: 4px;">
+                                                    @for (g of getAllowedAgents(); track g.id) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 4px 8px; border-radius: 4px; font-size: 0.9em; color: var(--mj-text-primary);">
+                                                            {{ g.name }}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Limits + libraries -->
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                                        <div>
+                                            <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-gauge-high" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                                Resource Limits
+                                            </div>
+                                            <div style="color: var(--mj-text-secondary); font-size: 0.9em;">
+                                                <div>Max memory: {{ getRuntimeLimits().maxMemoryMB }} MB</div>
+                                                <div>Max bridge calls: {{ getRuntimeLimits().maxBridgeCalls }}</div>
+                                                @if (record.MaxExecutionTimeMS) {
+                                                    <div>Max execution time: {{ record.MaxExecutionTimeMS }} ms</div>
+                                                }
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                                <i class="fa-solid fa-book" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                                Additional Libraries
+                                            </div>
+                                            @if (getRequestedLibraries().length === 0) {
+                                                <div style="color: var(--mj-text-muted); font-style: italic;">None (only default set: lodash, date-fns, uuid, validator)</div>
+                                            } @else {
+                                                <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+                                                    @for (lib of getRequestedLibraries(); track lib.name) {
+                                                        <span style="background: var(--mj-bg-surface-sunken); padding: 2px 8px; border-radius: 10px; font-size: 0.85em;">
+                                                            {{ lib.name }}@if (lib.version) {<span style="color: var(--mj-text-muted);"> @{{ lib.version }}</span>}
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Code payload -->
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 6px; color: var(--mj-text-primary);">
+                                        <i class="fa-solid fa-code" style="margin-right: 6px; color: var(--mj-text-muted);"></i>
+                                        JavaScript Payload
+                                    </div>
+                                    <pre style="background: var(--mj-bg-surface-sunken); color: var(--mj-text-primary); padding: 12px; border-radius: 4px; overflow-x: auto; max-height: 400px; font-family: 'SF Mono', Monaco, Consolas, monospace; font-size: 0.85em; margin: 0;"><code>{{ record.Code }}</code></pre>
+                                </div>
+
+                                <!-- Approval actions (Runtime-specific labels) -->
+                                @if (EditMode && record.CodeApprovalStatus === 'Pending') {
+                                    <div style="margin-top: 16px; padding: 12px; background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface)); border-radius: 6px;">
+                                        <div style="font-weight: 600; margin-bottom: 8px;">
+                                            <i class="fa-solid fa-circle-exclamation" style="color: var(--mj-status-warning); margin-right: 6px;"></i>
+                                            Approval required before this Runtime action can execute.
+                                        </div>
+                                        <div style="color: var(--mj-text-secondary); font-size: 0.9em; margin-bottom: 12px;">
+                                            Approving grants this action the permissions listed above on behalf of any user who invokes it. Review the code and permissions carefully before approving.
+                                        </div>
+                                        <div style="display: flex; gap: 8px;">
+                                            <button class="mj-button mj-button-primary" (click)="approveCode()">
+                                                <i class="fa-solid fa-check"></i> Approve
+                                            </button>
+                                            <button class="mj-button" (click)="rejectCode()">
+                                                <i class="fa-solid fa-ban"></i> Reject
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </mj-accordion-panel>
                     }
 
                     <!-- Result Codes Section -->
-                    <kendo-expansionpanel 
-                        [expanded]="expandedSections.resultCodes"
+                    <mj-accordion-panel
+                        [Expanded]="expandedSections.resultCodes"
                         style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
+                        <ng-template mjAccordionTitle>
                             <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                 <i class="fa-solid fa-flag-checkered" style="color: var(--mj-text-muted);"></i>
                                 Result Codes
@@ -429,7 +617,7 @@
                             <!-- Add Result Code Button -->
                             @if (EditMode && record.IsSaved) {
                                 <div style="display: flex; justify-content: flex-end; margin-bottom: 12px;">
-                                    <button kendoButton [primary]="true" size="small" (click)="addResultCode()">
+                                    <button mjButton variant="primary" size="sm" (click)="addResultCode()">
                                         <i class="fa-solid fa-plus"></i> Add Result Code
                                     </button>
                                 </div>
@@ -480,17 +668,17 @@
                                 </div>
                             }
                         </div>
-                    </kendo-expansionpanel>
+                    </mj-accordion-panel>
 
                     <!-- Execution & Monitoring Section -->
                     @if (record.IsSaved) {
-                        <kendo-expansionpanel 
-                            [expanded]="expandedSections.execution"
+                        <mj-accordion-panel
+                            [Expanded]="expandedSections.execution"
                             style="margin-bottom: 12px;">
-                            <ng-template kendoExpansionPanelTitleDirective>
+                            <ng-template mjAccordionTitle>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                     <i class="fa-solid fa-chart-line" style="color: var(--mj-text-muted);"></i>
-                                    Execution & Monitoring
+                                    Execution &amp; Monitoring
                                 </span>
                             </ng-template>
                             
@@ -562,7 +750,7 @@
                                                             </span>
                                                         </td>
                                                         <td>
-                                                            <button kendoButton fillMode="flat" size="small" (click)="navigateToExecution(execution.ID)">
+                                                            <button mjButton variant="flat" size="sm" (click)="navigateToExecution(execution.ID)">
                                                                 <i class="fa-solid fa-external-link"></i>
                                                             </button>
                                                         </td>
@@ -573,15 +761,15 @@
                                     </div>
                                 }
                             </div>
-                        </kendo-expansionpanel>
+                        </mj-accordion-panel>
                     }
 
                     <!-- Related Configuration Section -->
                     @if (record.IsSaved) {
-                        <kendo-expansionpanel 
-                            [expanded]="expandedSections.configuration"
+                        <mj-accordion-panel
+                            [Expanded]="expandedSections.configuration"
                             style="margin-bottom: 12px;">
-                            <ng-template kendoExpansionPanelTitleDirective>
+                            <ng-template mjAccordionTitle>
                                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                                     <i class="fa-solid fa-cogs" style="color: var(--mj-text-muted);"></i>
                                     Related Configuration
@@ -643,13 +831,13 @@
                                     </div>
                                 </div>
                             </div>
-                        </kendo-expansionpanel>
+                        </mj-accordion-panel>
                     }
                 </div>
             </div>
         </form>
-    }
-</div>
+</mj-record-form-container>
+}
 
 <!-- Action Test Harness Dialog -->
 <mj-action-test-harness-dialog

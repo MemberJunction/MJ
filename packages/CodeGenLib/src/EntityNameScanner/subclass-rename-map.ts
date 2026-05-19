@@ -174,12 +174,6 @@ export const SUBCLASS_RENAME_MAP: SubclassRenameEntry[] = [
         entityName: "MJ: Communication Providers"
     },
     {
-        oldClassName: "ReportEntity_Server",
-        newClassName: "MJReportEntityServer",
-        category: "server-only",
-        entityName: "MJ: Reports"
-    },
-    {
         oldClassName: "AIAgentExampleEntityExtended",
         newClassName: "MJAIAgentExampleEntityServer",
         category: "server-only",

@@ -1,0 +1,569 @@
+[
+  {
+    "fields": {
+      "Name": "Cherkas'ka Oblast'",
+      "Code": "71",
+      "ISO3166_2": "UA-71",
+      "Latitude": 49.1506,
+      "Longitude": 31.2241,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-71.geojson",
+      "CommonAliases": [
+        "Cherkas'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "1654CF95-02E3-45D8-BF3A-EDD1CAC52D47"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.048Z",
+      "checksum": "90fbe80d278ab0523019115e4d59b8615ff08c084d3649fd9a906609e3d71d7e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chernihivs'ka Oblast'",
+      "Code": "74",
+      "ISO3166_2": "UA-74",
+      "Latitude": 51.2597,
+      "Longitude": 32.0287,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-74.geojson",
+      "CommonAliases": [
+        "Chernihivs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "E2F59AB3-22FC-41FC-8CDF-569FC64F0C2C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.064Z",
+      "checksum": "09d1e644c6f28287a462763d46c18f99158d6400df3b64395c7c2de2034ce647"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chernivets'ka Oblast'",
+      "Code": "77",
+      "ISO3166_2": "UA-77",
+      "Latitude": 48.2892,
+      "Longitude": 26.2156,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-77.geojson",
+      "CommonAliases": [
+        "Chernivets'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "12E8F5E4-D33B-4D0B-8A36-EC0E1C4992DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.081Z",
+      "checksum": "802f4047efca5d32d53e01ea5d9956b7cac94ef5d6f30d706df76c2e7e0f87db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dnipropetrovs'ka Oblast'",
+      "Code": "12",
+      "ISO3166_2": "UA-12",
+      "Latitude": 48.6313,
+      "Longitude": 34.9555,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-12.geojson",
+      "CommonAliases": [
+        "Dnipropetrovs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "8736D4A4-F538-4839-B65C-EA96A72DD775"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.099Z",
+      "checksum": "895bb4907ffeefa5d5ea48fb44bb1f0e8a2b9e108b990b163dc6e5d84716e174"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Donets'ka Oblast'",
+      "Code": "14",
+      "ISO3166_2": "UA-14",
+      "Latitude": 48.145,
+      "Longitude": 37.7933,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-14.geojson",
+      "CommonAliases": [
+        "Donets'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "FD3EB1AC-E815-47C8-B0FA-1A063B3518C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.116Z",
+      "checksum": "61a4bf7198d380116a1c21c33a58e41a418a48cdf3c9a5bbaf7046b25a421059"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivano-Frankivs'ka Oblast'",
+      "Code": "26",
+      "ISO3166_2": "UA-26",
+      "Latitude": 48.665,
+      "Longitude": 24.6363,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-26.geojson",
+      "CommonAliases": [
+        "Ivano-Frankivs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "ECA5B3AE-ED4A-45A9-B19B-3E87DD71B105"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.131Z",
+      "checksum": "773d41cbc44f617dc76126c9c9d2f62b152512257cd9c3730e52bcf760fa89e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kharkivs'ka Oblast'",
+      "Code": "63",
+      "ISO3166_2": "UA-63",
+      "Latitude": 49.4655,
+      "Longitude": 36.4612,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-63.geojson",
+      "CommonAliases": [
+        "Kharkivs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "197C6369-5558-4BA3-9721-AB7A84897EC0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.147Z",
+      "checksum": "63b6b3641888243cae3625049147d68ac7890d2409c1dae18ab4eaebe778acd3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khersons'ka Oblast'",
+      "Code": "65",
+      "ISO3166_2": "UA-65",
+      "Latitude": 46.6964,
+      "Longitude": 33.5787,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-65.geojson",
+      "CommonAliases": [
+        "Khersons'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "CEF44C4A-A025-4718-A1FF-23633F09FE9E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.164Z",
+      "checksum": "ecb987657b529855fb44c85d35906fb35504f74a99b561d4638b71fe4a0ce48c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Khmel'nyts'ka Oblast'",
+      "Code": "68",
+      "ISO3166_2": "UA-68",
+      "Latitude": 49.5537,
+      "Longitude": 27.0187,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-68.geojson",
+      "CommonAliases": [
+        "Khmel'nyts'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "E656A3E9-F83E-48E8-82DF-67F66DF2DB85"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.181Z",
+      "checksum": "72bb8c24c3e69f7cbbd70158abd6d86a362ca07f63a83615121338388415866d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kirovohrads'ka Oblast'",
+      "Code": "35",
+      "ISO3166_2": "UA-35",
+      "Latitude": 48.4261,
+      "Longitude": 31.8288,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-35.geojson",
+      "CommonAliases": [
+        "Kirovohrads'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "26E2CC37-26BA-49A8-AD92-BD27A91F73EE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.194Z",
+      "checksum": "fce2d9ee9a5b519a6e83695991238676f9193f484fe0a41a586a676073685a91"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kyïv",
+      "Code": "30",
+      "ISO3166_2": "UA-30",
+      "Latitude": 50.383,
+      "Longitude": 30.5277,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-30.geojson",
+      "CommonAliases": [
+        "Kyïv"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "09CC581B-442C-4804-BF7B-1E5BF2B15244"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.254Z",
+      "checksum": "a0e8a7db87bbce36bda46668d4ef9da6a33b547593efde309d279ba1984bd304"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kyïvs'ka Oblast'",
+      "Code": "32",
+      "ISO3166_2": "UA-32",
+      "Latitude": 50.0894,
+      "Longitude": 31.0214,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-32.geojson",
+      "CommonAliases": [
+        "Kyïvs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "65FB47B5-BE4B-4892-AB3B-7205344345E3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.271Z",
+      "checksum": "979336a9631057d5d68cc419330a6974f177d8c89857938fed2ae3b1ba2bbb22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "L'vivs'ka Oblast'",
+      "Code": "46",
+      "ISO3166_2": "UA-46",
+      "Latitude": 49.8152,
+      "Longitude": 24.0372,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-46.geojson",
+      "CommonAliases": [
+        "L'vivs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "C14F79A6-FC1A-47AD-A31A-2D8F8362C669"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.288Z",
+      "checksum": "bc6525e6afe19600b5d46f34a8b50f8ad16ae1ac5e1c31d386ce68b6e2875c22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luhans'ka Oblast'",
+      "Code": "09",
+      "ISO3166_2": "UA-09",
+      "Latitude": 48.9084,
+      "Longitude": 39.0033,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-09.geojson",
+      "CommonAliases": [
+        "Luhans'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "08BA9E09-6633-4CEF-BF1B-65CA1E451B5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.315Z",
+      "checksum": "bf498c64eb1a39e70ebe12138dd482ba58dbf197231bfd0b6dcc4593ada08be1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mykolaïvs'ka Oblast'",
+      "Code": "48",
+      "ISO3166_2": "UA-48",
+      "Latitude": 47.0902,
+      "Longitude": 31.6498,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-48.geojson",
+      "CommonAliases": [
+        "Mykolaïvs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "BAB530FD-0041-497B-8E51-1ECCA422E1A1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.337Z",
+      "checksum": "682a938616e6cdbf34bcc80c09069cf0594ed49d9b7512391e3734f2994f590f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Odes'ka Oblast'",
+      "Code": "51",
+      "ISO3166_2": "UA-51",
+      "Latitude": 46.0315,
+      "Longitude": 29.7568,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-51.geojson",
+      "CommonAliases": [
+        "Odes'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "1C12AF21-E671-4C3F-9F52-D4D4DAE56F6C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.357Z",
+      "checksum": "2671e3f2d39d5890dfa9b87e34f42b5ee243623ab016cb494a58c7108446657d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poltavs'ka Oblast'",
+      "Code": "53",
+      "ISO3166_2": "UA-53",
+      "Latitude": 49.6978,
+      "Longitude": 33.7723,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-53.geojson",
+      "CommonAliases": [
+        "Poltavs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "8248AE12-8E72-46BE-8F10-2C771CE6AB1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.376Z",
+      "checksum": "69d1e1ffd94e840f2526a88ef74004872a0abdff324585b2491f291dedbc831d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Respublika Krym",
+      "Code": "43",
+      "ISO3166_2": "UA-43",
+      "Latitude": 45.3115,
+      "Longitude": 34.2784,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-43.geojson",
+      "CommonAliases": [
+        "Respublika Krym"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "3ACEB3B4-AF1E-4521-8E38-A0F1A2AA835B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.394Z",
+      "checksum": "422b1760cf78436234e0abaa6fa6bcd91987f260e0de480edf3fee9dc9778402"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rivnens'ka Oblast'",
+      "Code": "56",
+      "ISO3166_2": "UA-56",
+      "Latitude": 51.048,
+      "Longitude": 26.3841,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-56.geojson",
+      "CommonAliases": [
+        "Rivnens'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "A22382B5-6031-455B-A772-AB2957C79FCC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.410Z",
+      "checksum": "fca2d4f57c4a0d86d2896d4c12e667b9ed4e787ba2540e45bb034b1580c1ae99"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sevastopol'",
+      "Code": "40",
+      "ISO3166_2": "UA-40",
+      "Latitude": 44.5182,
+      "Longitude": 33.6396,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-40.geojson",
+      "CommonAliases": [
+        "Sevastopol'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "514C59D6-BBA2-467F-8C72-F669870BD5CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.423Z",
+      "checksum": "a7c3743c914cc3694c27459d79916172f77abdab4c46d116c4206183ef250900"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sums'ka Oblast'",
+      "Code": "59",
+      "ISO3166_2": "UA-59",
+      "Latitude": 50.8153,
+      "Longitude": 34.3159,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-59.geojson",
+      "CommonAliases": [
+        "Sums'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "3ED96D0B-D576-4004-A59F-EE53DB3B6ECF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.465Z",
+      "checksum": "f1e7d4573de1189104fd0e014bb2c663076070b00719d4d64e346d2be228f310"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ternopil's'ka Oblast'",
+      "Code": "61",
+      "ISO3166_2": "UA-61",
+      "Latitude": 49.4739,
+      "Longitude": 25.5438,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-61.geojson",
+      "CommonAliases": [
+        "Ternopil's'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "DF122A0E-0F66-4EF1-95E7-11FD45EFED0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.482Z",
+      "checksum": "eebe006321d6f10339920131cd4b1909050c396b1f30029e4ae5631b37fefcb9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vinnyts'ka Oblast'",
+      "Code": "05",
+      "ISO3166_2": "UA-05",
+      "Latitude": 48.9623,
+      "Longitude": 28.7233,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-05.geojson",
+      "CommonAliases": [
+        "Vinnyts'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "84636CFF-1379-448F-9B8A-BE4340E49810"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.497Z",
+      "checksum": "2becf8656540f55dca2b600bb5d5dc032a22014258e0842889a7bb627a445258"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Volyns'ka Oblast'",
+      "Code": "07",
+      "ISO3166_2": "UA-07",
+      "Latitude": 51.1247,
+      "Longitude": 24.8444,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-07.geojson",
+      "CommonAliases": [
+        "Volyns'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "E2C96302-1BF8-4A9B-B8BB-2D8962B7D203"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.512Z",
+      "checksum": "07b66a465c8cf566778b0e05ad729071a7e1e8320da03ebabc16904d41ada146"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zakarpats'ka Oblast'",
+      "Code": "21",
+      "ISO3166_2": "UA-21",
+      "Latitude": 48.3634,
+      "Longitude": 23.3868,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-21.geojson",
+      "CommonAliases": [
+        "Zakarpats'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "65FDBFD8-93A7-47A7-B6A7-6B0BB16F9E43"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.527Z",
+      "checksum": "ada446137309daeea72780d50e50ed41d6f4596a45fb0ec946d57dce378db793"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zaporiz'ka Oblast'",
+      "Code": "23",
+      "ISO3166_2": "UA-23",
+      "Latitude": 47.3346,
+      "Longitude": 35.7123,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-23.geojson",
+      "CommonAliases": [
+        "Zaporiz'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "BC5D1B78-450D-4CEE-8DB4-04B67B68266F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.542Z",
+      "checksum": "663f1ea4ab3845839786347b6ec5cda40ca0d99246d903f72e873d3844f2f03d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zhytomyrs'ka Oblast'",
+      "Code": "18",
+      "ISO3166_2": "UA-18",
+      "Latitude": 50.6898,
+      "Longitude": 28.4643,
+      "BoundaryGeoJSON": "@file:by-country/UA/boundaries/UA-18.geojson",
+      "CommonAliases": [
+        "Zhytomyrs'ka Oblast'"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=UA"
+    },
+    "primaryKey": {
+      "ID": "B27F584F-B5C4-4733-8A48-6473641FEDBA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:40.557Z",
+      "checksum": "5248f248c44a0df78dbcfaaa2b1a18596d573aec0703c86f23397c1c416ee083"
+    }
+  }
+]

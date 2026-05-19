@@ -1,11 +1,10 @@
-import { Component, ComponentRef, EventEmitter, inject, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, ComponentRef, EnvironmentInjector, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild, inject } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Container } from '@memberjunction/ng-container-directives';
 import { BaseEntity, LogError } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { LazyModuleRegistry } from '../services/lazy-module-registry';
 
 @Component({
   standalone: false,
@@ -33,7 +32,11 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
 
   private _loaded: boolean = false;
   private _componentRef: ComponentRef<any> | null = null;
-  private lazyRegistry = inject(LazyModuleRegistry);
+
+  /** Root environment injector, used when creating dynamic resource components so their
+   *  NgModule-declared pipes/directives/sub-components (e.g. mj-mcp-filter-panel, | date,
+   *  cdkVirtualFor) resolve correctly. */
+  private readonly envInjector = inject(EnvironmentInjector);
 
   constructor(public sharedService: SharedService) { }
 
@@ -55,15 +58,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
   async loadComponent() {
     try {
       this._loaded = true;
-      let resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType);
-
-      if (!resourceReg) {
-        // Try lazy loading the feature module containing this resource type
-        const loaded = await this.lazyRegistry.Load(this.Data.ResourceType);
-        if (loaded) {
-          resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType);
-        }
-      }
+      const resourceReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(BaseResourceComponent, this.Data.ResourceType);
 
       if (!resourceReg) {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);
@@ -75,7 +70,13 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
       }
 
       viewContainerRef.clear();
-      const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(resourceReg.SubClass);
+      // Pass environmentInjector so dynamically-created resource components (e.g. MCPResource)
+      // can resolve their NgModule's declarations — sub-components, directives, and pipes —
+      // at render time. Without it, things declared in the feature module silently fail.
+      const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(
+        resourceReg.SubClass,
+        { environmentInjector: this.envInjector }
+      );
 
       // Track the component reference for cleanup
       this._componentRef = componentRef;

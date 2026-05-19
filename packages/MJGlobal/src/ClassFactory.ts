@@ -37,6 +37,91 @@ export class ClassFactory {
     private _registrations: ClassRegistration[] = [];
 
     /**
+     * Registered lazy loader callbacks. When `GetRegistrationAsync` or `CreateInstanceAsync`
+     * cannot find a registration synchronously, these loaders are called in order until one
+     * succeeds (returns `true`). This allows multiple consumers/layers to register their own
+     * lazy loading strategies (e.g., Angular chunk loading, server-side dynamic imports).
+     *
+     * Each loader receives the base class name and key, and should return `true` if it
+     * successfully loaded the module containing the requested class registration.
+     */
+    private _lazyLoaders: ((baseClassName: string, key: string) => Promise<boolean>)[] = [];
+
+    /**
+     * Registers a lazy loader callback that will be called when a class registration cannot
+     * be found synchronously. Multiple loaders can be registered and will be called in order
+     * until one succeeds.
+     *
+     * @param loader A function that receives (baseClassName, key) and returns a Promise<boolean>
+     *               indicating whether it successfully loaded the module containing the registration.
+     */
+    public RegisterLazyLoader(loader: (baseClassName: string, key: string) => Promise<boolean>): void {
+        this._lazyLoaders.push(loader);
+    }
+
+    /**
+     * Attempts to lazy-load a missing registration by calling registered lazy loaders in order.
+     * Returns true if any loader successfully loaded the requested class.
+     */
+    private async tryLazyLoad(baseClass: unknown, key: string): Promise<boolean> {
+        const baseClassName = (baseClass as NamedClass).name;
+        for (const loader of this._lazyLoaders) {
+            const loaded = await loader(baseClassName, key);
+            if (loaded) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Async version of GetRegistration that supports lazy loading. If no registration is found
+     * synchronously and lazy loaders are registered, attempts to load the missing module before
+     * retrying the lookup.
+     *
+     * @param baseClass The base class to look up
+     * @param key Optional key to differentiate registrations
+     * @returns The matching ClassRegistration, or null if not found even after lazy loading
+     */
+    public async GetRegistrationAsync(baseClass: unknown, key?: string | null): Promise<ClassRegistration | null> {
+        let reg = this.GetRegistration(baseClass, key);
+        if (!reg && key && this._lazyLoaders.length > 0) {
+            const loaded = await this.tryLazyLoad(baseClass, key);
+            if (loaded) {
+                reg = this.GetRegistration(baseClass, key);
+            }
+        }
+        return reg;
+    }
+
+    /**
+     * Async version of CreateInstance that supports lazy loading. If no registration is found
+     * synchronously and lazy loaders are registered, attempts to load the missing module before
+     * retrying and creating the instance.
+     *
+     * Falls back to instantiating the base class directly if no registration is found even
+     * after lazy loading (same behavior as the sync CreateInstance).
+     */
+    public async CreateInstanceAsync<T>(baseClass: unknown, key: string | null = null, ...params: unknown[]): Promise<T | null> {
+        if (!baseClass) {
+            return null;
+        }
+
+        const reg = await this.GetRegistrationAsync(baseClass, key);
+        if (reg) {
+            const SubClassConstructor = reg.SubClass as new (...args: unknown[]) => T;
+            if (params !== undefined) {
+                return new SubClassConstructor(...params);
+            }
+            return new SubClassConstructor();
+        }
+
+        // Fallback to base class (same as sync CreateInstance)
+        const BaseClassConstructor = baseClass as new (...args: unknown[]) => T;
+        return new BaseClassConstructor(...params);
+    }
+
+    /**
      * Use this method or the @RegisterClass decorator to register a sub-class for a given base class.
      * @param baseClass A reference to the base class you are registering a sub-class for
      * @param subClass A reference to the sub-class you are registering

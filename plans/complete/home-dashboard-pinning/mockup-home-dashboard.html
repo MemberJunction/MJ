@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Dashboard with Pinned Items - Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6f9;
+    --bg-surface: #ffffff;
+    --bg-surface-card: #f8f9fb;
+    --bg-surface-sunken: #f0f2f5;
+    --bg-surface-hover: #eef1f5;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-disabled: #cbd5e1;
+    --text-inverse: #ffffff;
+    --border-default: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --brand-primary: #264FAF;
+    --brand-primary-hover: #1e3f8f;
+    --status-warning: #f59e0b;
+    --status-error: #ef4444;
+    --status-success: #22c55e;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --transition: 0.2s ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  /* ========== SHELL HEADER (simulated) ========== */
+  .shell-header {
+    height: 56px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    gap: 16px;
+  }
+  .shell-header .logo {
+    font-weight: 700;
+    color: var(--brand-primary);
+    font-size: 18px;
+  }
+  .shell-header .app-badge {
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .shell-header .spacer { flex: 1; }
+  .shell-header .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--bg-surface-sunken);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    border: 2px solid var(--border-default);
+  }
+
+  /* ========== HOME DASHBOARD ========== */
+  .home-dashboard {
+    margin-top: 56px;
+    padding: 32px;
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* Header */
+  .home-header {
+    margin-bottom: 32px;
+  }
+  .home-header h1 {
+    font-size: 32px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+  }
+  .home-header .date {
+    font-size: 15px;
+    color: var(--text-muted);
+  }
+
+  /* ========== PINNED SECTION ========== */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .section-header h2 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+  .section-header h2 i {
+    color: var(--text-muted);
+    font-size: 16px;
+  }
+  .section-header .actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .section-header .actions button {
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    color: var(--text-secondary);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all var(--transition);
+  }
+  .section-header .actions button:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--brand-primary);
+    color: var(--brand-primary);
+  }
+  .section-header .actions button.primary {
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+    border-color: var(--brand-primary);
+  }
+  .section-header .actions button.primary:hover {
+    background: var(--brand-primary-hover);
+  }
+
+  /* Pin Grid */
+  .pin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+
+  /* Group Header */
+  .group-header {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 4px 0;
+    margin-top: 8px;
+  }
+  .group-header .group-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .group-header .group-line {
+    flex: 1;
+    height: 1px;
+    background: var(--border-default);
+  }
+  .group-header .group-count {
+    font-size: 11px;
+    color: var(--text-disabled);
+    background: var(--bg-surface-card);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+
+  /* Pin Card */
+  .pin-card {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+  }
+  .pin-card:hover {
+    border-color: color-mix(in srgb, var(--brand-primary) 40%, var(--border-default));
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+
+  /* Thumbnail area */
+  .pin-thumbnail {
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    position: relative;
+  }
+  .pin-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  /* Icon fallback when no thumbnail */
+  .pin-thumbnail.icon-mode {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--icon-bg, var(--bg-surface-card));
+  }
+  .pin-thumbnail.icon-mode i {
+    font-size: 36px;
+    color: var(--icon-color, var(--text-muted));
+    opacity: 0.7;
+  }
+
+  /* Hover overlay */
+  .pin-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+  .pin-card:hover .pin-overlay {
+    opacity: 1;
+  }
+  .pin-overlay .open-btn {
+    padding: 8px 20px;
+    background: var(--text-inverse);
+    color: var(--text-primary);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+  }
+
+  /* Pin info */
+  .pin-info {
+    padding: 10px 12px;
+  }
+  .pin-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .pin-name .more-btn {
+    margin-left: auto;
+    opacity: 0;
+    transition: opacity var(--transition);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  .pin-card:hover .pin-name .more-btn {
+    opacity: 1;
+  }
+  .pin-name .more-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-surface-hover);
+  }
+  .pin-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+  .pin-meta i {
+    font-size: 10px;
+  }
+  .pin-meta .app-badge {
+    background: var(--bg-surface-card);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  /* ========== APPS SECTION ========== */
+  .apps-section {
+    margin-top: 36px;
+  }
+  .apps-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+  }
+  .app-card {
+    --app-color: var(--text-muted);
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px;
+    background: var(--bg-surface-card);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .app-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: var(--app-color);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .app-card:hover {
+    border-color: var(--app-color);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .app-card:hover::before { opacity: 1; }
+  .app-icon {
+    width: 48px; height: 48px;
+    border-radius: var(--radius-lg);
+    background: color-mix(in srgb, var(--app-color) 12%, transparent);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.25s ease;
+  }
+  .app-icon i {
+    font-size: 20px;
+    color: var(--app-color);
+    transition: all 0.25s ease;
+  }
+  .app-card:hover .app-icon {
+    background: var(--app-color);
+  }
+  .app-card:hover .app-icon i {
+    color: var(--text-inverse);
+  }
+  .app-info h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 2px;
+  }
+  .app-info p {
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .nav-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+  }
+  .nav-chip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px;
+    background: var(--bg-surface);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .nav-chip i { font-size: 9px; color: var(--text-muted); }
+
+  /* ========== RECENTS SECTION ========== */
+  .recents-section {
+    margin-top: 36px;
+  }
+  .recents-row {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+  }
+  .recent-card {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    cursor: pointer;
+    transition: all var(--transition);
+    white-space: nowrap;
+  }
+  .recent-card:hover {
+    background: var(--bg-surface-hover);
+    border-color: var(--brand-primary);
+    transform: translateY(-1px);
+  }
+  .recent-icon {
+    width: 32px; height: 32px;
+    border-radius: var(--radius-md);
+    background: var(--bg-surface-card);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .recent-icon i { font-size: 13px; color: var(--text-muted); }
+  .recent-info .recent-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+  }
+  .recent-info .recent-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  /* ========== FAB BUTTON ========== */
+  .fab-toggle {
+    position: fixed;
+    top: 76px;
+    right: 24px;
+    width: 48px; height: 48px;
+    border: none;
+    border-radius: 50%;
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: var(--shadow-md);
+    transition: all var(--transition);
+    z-index: 100;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .fab-toggle:hover {
+    background: var(--brand-primary-hover);
+    transform: scale(1.05);
+  }
+  .fab-badge {
+    position: absolute;
+    top: -4px; right: -4px;
+    min-width: 18px; height: 18px;
+    padding: 0 5px;
+    background: var(--status-error);
+    color: var(--text-inverse);
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ========== EMPTY PINS STATE ========== */
+  .empty-pins {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    background: var(--bg-surface);
+    border-radius: var(--radius-xl);
+    border: 2px dashed var(--border-default);
+    text-align: center;
+  }
+  .empty-pins i {
+    font-size: 40px;
+    color: var(--text-disabled);
+    margin-bottom: 16px;
+  }
+  .empty-pins h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+  .empty-pins p {
+    font-size: 13px;
+    color: var(--text-muted);
+    max-width: 360px;
+    margin-bottom: 16px;
+  }
+  .empty-pins button {
+    padding: 8px 20px;
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* ========== ANNOTATION LABEL ========== */
+  .annotation {
+    display: inline-block;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    border: 1px solid #fcd34d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  /* ========== RESPONSIVE ========== */
+  @media (max-width: 768px) {
+    .home-dashboard { padding: 20px; }
+    .home-header h1 { font-size: 24px; }
+    .pin-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+    .apps-grid { grid-template-columns: 1fr; }
+    .section-header { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Shell Header -->
+<div class="shell-header">
+  <div class="logo">MJ</div>
+  <div class="app-badge"><i class="fa-solid fa-home" style="margin-right:4px"></i> Home</div>
+  <div class="spacer"></div>
+  <div class="avatar"><i class="fa-solid fa-user"></i></div>
+</div>
+
+<!-- FAB Button -->
+<button class="fab-toggle" title="Quick Access">
+  <i class="fa-solid fa-bolt"></i>
+  <span class="fab-badge">2</span>
+</button>
+
+<!-- Home Dashboard -->
+<div class="home-dashboard">
+
+  <!-- Header -->
+  <div class="home-header">
+    <h1>Good morning, Sarah</h1>
+    <p class="date">Monday, March 31, 2026</p>
+  </div>
+
+  <!-- ===== PINNED SECTION ===== -->
+  <div class="pinned-section">
+    <div class="section-header">
+      <h2>
+        <i class="fa-solid fa-thumbtack"></i>
+        Pinned
+      </h2>
+      <span class="annotation">NEW</span>
+      <div class="actions">
+        <button class="primary"><i class="fa-solid fa-plus"></i> Add Pin</button>
+        <button><i class="fa-solid fa-pen"></i> Edit</button>
+      </div>
+    </div>
+
+    <!-- Ungrouped Pins -->
+    <div class="pin-grid">
+
+      <!-- Pin 1: Dashboard with thumbnail -->
+      <div class="pin-card">
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); display:flex;align-items:center;justify-content:center;color:white;font-size:12px;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-chart-line" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot Preview</span>
+          </div>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Sales Dashboard
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i>
+            Dashboard
+            <span class="app-badge" style="color:#d32f2f">AI</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 2: View with thumbnail -->
+      <div class="pin-card">
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #11998e 0%, #38ef7d 100%); display:flex;align-items:center;justify-content:center;color:white;font-size:12px;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-table" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot Preview</span>
+          </div>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Active Contacts
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-table-list"></i>
+            View
+            <span class="app-badge" style="color:#5c6bc0">Data Explorer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 3: Report with thumbnail -->
+      <div class="pin-card">
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #f093fb 0%, #f5576c 100%); display:flex;align-items:center;justify-content:center;color:white;font-size:12px;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-chart-bar" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot Preview</span>
+          </div>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Q1 Revenue Report
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-chart-bar"></i>
+            Report
+            <span class="app-badge" style="color:#e65100">Finance</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 4: Query with icon fallback (no thumbnail) -->
+      <div class="pin-card">
+        <div class="pin-thumbnail icon-mode" style="--icon-bg: color-mix(in srgb, #5c6bc0 10%, #f8f9fb); --icon-color: #5c6bc0;">
+          <i class="fa-solid fa-database"></i>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Top 10 Customers
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-database"></i>
+            Query
+            <span class="app-badge" style="color:#5c6bc0">Data Explorer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 5: Entity Record with icon fallback -->
+      <div class="pin-card">
+        <div class="pin-thumbnail icon-mode" style="--icon-bg: color-mix(in srgb, #0288d1 10%, #f8f9fb); --icon-color: #0288d1;">
+          <i class="fa-solid fa-user-tie"></i>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            John Anderson
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-user-tie"></i>
+            Contact
+            <span class="app-badge" style="color:#5c6bc0">Data Explorer</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- GROUP: Analytics -->
+      <div class="group-header">
+        <span class="group-name">Analytics</span>
+        <div class="group-line"></div>
+        <span class="group-count">3 pins</span>
+      </div>
+
+      <!-- Pin 6: Dashboard in Analytics group with thumbnail -->
+      <div class="pin-card">
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); display:flex;align-items:center;justify-content:center;color:white;font-size:12px;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-chart-pie" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot Preview</span>
+          </div>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Monthly KPIs
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i>
+            Dashboard
+            <span class="app-badge" style="color:#264FAF">Admin</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 7 -->
+      <div class="pin-card">
+        <div class="pin-thumbnail">
+          <div style="width:100%;height:100%;background:linear-gradient(135deg, #fa709a 0%, #fee140 100%); display:flex;align-items:center;justify-content:center;color:white;font-size:12px;flex-direction:column;gap:4px;">
+            <i class="fa-solid fa-users" style="font-size:28px;opacity:0.9"></i>
+            <span style="opacity:0.7;font-size:10px">Screenshot Preview</span>
+          </div>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            Team Performance
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-gauge-high"></i>
+            Dashboard
+            <span class="app-badge" style="color:#264FAF">Admin</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pin 8: Custom app resource -->
+      <div class="pin-card">
+        <div class="pin-thumbnail icon-mode" style="--icon-bg: color-mix(in srgb, #d32f2f 10%, #f8f9fb); --icon-color: #d32f2f;">
+          <i class="fa-solid fa-robot"></i>
+          <div class="pin-overlay">
+            <button class="open-btn">Open</button>
+          </div>
+        </div>
+        <div class="pin-info">
+          <div class="pin-name">
+            AI Monitor
+            <button class="more-btn"><i class="fa-solid fa-ellipsis"></i></button>
+          </div>
+          <div class="pin-meta">
+            <i class="fa-solid fa-cube"></i>
+            Custom
+            <span class="app-badge" style="color:#d32f2f">AI</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== APPS SECTION ===== -->
+  <div class="apps-section">
+    <div class="section-header">
+      <h2>
+        <i class="fa-solid fa-grid-2"></i>
+        Your Applications
+      </h2>
+    </div>
+    <div class="apps-grid">
+
+      <div class="app-card" style="--app-color: #d32f2f">
+        <div class="app-icon"><i class="fa-solid fa-robot"></i></div>
+        <div class="app-info">
+          <h3>AI</h3>
+          <p>AI Administration and monitoring</p>
+          <div class="nav-chips">
+            <span class="nav-chip"><i class="fa-solid fa-chart-line"></i> Monitor</span>
+            <span class="nav-chip"><i class="fa-solid fa-comment-dots"></i> Prompts</span>
+            <span class="nav-chip"><i class="fa-solid fa-brain"></i> Agents</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-card" style="--app-color: #5c6bc0">
+        <div class="app-icon"><i class="fa-solid fa-compass"></i></div>
+        <div class="app-info">
+          <h3>Data Explorer</h3>
+          <p>Explore data across entities with grid views</p>
+          <div class="nav-chips">
+            <span class="nav-chip"><i class="fa-solid fa-table-cells"></i> Data</span>
+            <span class="nav-chip"><i class="fa-solid fa-database"></i> Queries</span>
+            <span class="nav-chip"><i class="fa-solid fa-gauge-high"></i> Dashboards</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-card" style="--app-color: #264FAF">
+        <div class="app-icon"><i class="fa-solid fa-shield-halved"></i></div>
+        <div class="app-info">
+          <h3>Admin</h3>
+          <p>System administration and configuration</p>
+          <div class="nav-chips">
+            <span class="nav-chip"><i class="fa-solid fa-database"></i> ERD</span>
+            <span class="nav-chip"><i class="fa-solid fa-cogs"></i> Settings</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="app-card" style="--app-color: #00897b">
+        <div class="app-icon"><i class="fa-solid fa-comments"></i></div>
+        <div class="app-info">
+          <h3>Communications</h3>
+          <p>Email templates and messaging</p>
+          <div class="nav-chips">
+            <span class="nav-chip"><i class="fa-solid fa-envelope"></i> Templates</span>
+            <span class="nav-chip"><i class="fa-solid fa-paper-plane"></i> Send</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== RECENTS SECTION ===== -->
+  <div class="recents-section">
+    <div class="section-header">
+      <h2>
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        Recent
+      </h2>
+    </div>
+    <div class="recents-row">
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-gauge-high"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">Sales Dashboard</div>
+          <div class="recent-sub">Dashboard &middot; Today</div>
+        </div>
+      </div>
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-users"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">Active Contacts</div>
+          <div class="recent-sub">View &middot; Today</div>
+        </div>
+      </div>
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-chart-bar"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">Q1 Revenue Report</div>
+          <div class="recent-sub">Report &middot; Yesterday</div>
+        </div>
+      </div>
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-user-tie"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">John Anderson</div>
+          <div class="recent-sub">Contact &middot; Yesterday</div>
+        </div>
+      </div>
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-database"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">Top 10 Customers</div>
+          <div class="recent-sub">Query &middot; 2 days ago</div>
+        </div>
+      </div>
+      <div class="recent-card">
+        <div class="recent-icon"><i class="fa-solid fa-robot"></i></div>
+        <div class="recent-info">
+          <div class="recent-name">AI Agent Config</div>
+          <div class="recent-sub">Record &middot; 3 days ago</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -83,6 +83,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="IsComputed"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="FieldCodeName"
             Type="textbox"
             [EditMode]="EditMode"
@@ -288,7 +296,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CodeType"
-            Type="select"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -337,6 +345,38 @@
             [ShowLabel]="true"
             FieldName="AutoUpdateIncludeInUserSearchAPI"
             Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="JSONType"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="JSONTypeIsArray"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="JSONTypeDefinition"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="UserSearchPredicateAPI"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -493,6 +533,30 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AutoUpdateCategory"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateUserSearchPredicate"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateFullTextSearch"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AutoUpdateExtendedType"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"

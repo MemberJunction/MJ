@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: File Storage Accounts') // Tell MemberJunction about this class
 @Component({
@@ -17,7 +18,13 @@ export class MJFileStorageAccountFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'accountOverview', sectionName: 'Account Overview', isExpanded: true },
             { sectionKey: 'connectionDetails', sectionName: 'Connection Details', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
+            { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
+            { sectionKey: 'mJSearchScopeStorageAccounts', sectionName: 'Search Scope Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIAgentCategories', sectionName: 'AI Agent Categories', isExpanded: false },
+            { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false },
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }
 }

@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/sage/check-intent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
       "ParallelizationMode": "None",
@@ -73,8 +76,8 @@
       "ID": "278E47C4-7D0C-46A7-B178-7C68D1DD9756"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:49:10.750Z",
-      "checksum": "c2a42b2bb1bd62fc3ebc3b105214c14f4351e04a4247b74c87d513a150a92873"
+      "lastModified": "2026-04-20T23:56:03.857Z",
+      "checksum": "b1218acb99bcd6bcec0f93e9cd68dd8e5b8f829994bf5d85a0e05a837d758616"
     }
   }
 ]

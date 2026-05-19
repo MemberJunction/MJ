@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Management — Option C: Operations Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1400px; margin: 2rem auto 0; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+  .live-indicator {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: rgba(34,197,94,0.1);
+    border: 1px solid rgba(34,197,94,0.3);
+    border-radius: 20px;
+    padding: 0.35rem 0.85rem;
+    font-size: 0.78rem; font-weight: 600; color: var(--success);
+  }
+  .live-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--success);
+    animation: blink 1s infinite;
+  }
+  @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+  /* Metrics row */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+    margin-bottom: 2rem;
+  }
+  .metric {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    transition: all 0.2s;
+  }
+  .metric:hover { border-color: var(--accent); }
+  .metric-label {
+    font-size: 0.72rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--text-muted); margin-bottom: 0.5rem;
+    display: flex; align-items: center; gap: 0.4rem;
+  }
+  .metric-val {
+    font-size: 1.6rem; font-weight: 700; line-height: 1;
+    margin-bottom: 0.25rem;
+  }
+  .metric-sub {
+    font-size: 0.72rem; color: var(--text-muted);
+    display: flex; align-items: center; gap: 0.3rem;
+  }
+  .metric-sub.up { color: var(--success); }
+  .metric-sub.down { color: var(--error); }
+
+  /* Main grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+  }
+  .card-head {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .card-head h3 {
+    font-size: 0.95rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+
+  /* Sync Status Timeline */
+  .sync-timeline {
+    padding: 0;
+  }
+  .sync-row {
+    display: grid;
+    grid-template-columns: 100px 1fr 80px 80px 100px;
+    align-items: center;
+    padding: 0.65rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    font-size: 0.83rem;
+    transition: background 0.15s;
+  }
+  .sync-row:hover { background: var(--bg-card-hover); }
+  .sync-row:last-child { border-bottom: none; }
+  .sync-row .entity {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .sync-row .entity .dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .sync-bar-wrap {
+    padding: 0 0.5rem;
+  }
+  .sync-bar {
+    height: 6px;
+    background: var(--bg-page);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .sync-bar-fill {
+    height: 100%; border-radius: 3px;
+    transition: width 0.6s ease;
+  }
+  .sync-pct {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: right;
+  }
+  .sync-speed {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: right;
+  }
+  .sync-status {
+    text-align: right;
+  }
+  .s-pill {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 10px;
+    font-size: 0.68rem; font-weight: 600;
+  }
+  .s-pill.ok { background: rgba(34,197,94,0.12); color: var(--success); }
+  .s-pill.run { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .s-pill.wait { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .s-pill.err { background: rgba(239,68,68,0.12); color: var(--error); }
+
+  /* Throughput chart (fake) */
+  .chart-area {
+    padding: 1.25rem;
+    height: 200px;
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .chart-bar {
+    flex: 1;
+    border-radius: 3px 3px 0 0;
+    min-height: 4px;
+    transition: height 0.3s;
+    position: relative;
+  }
+  .chart-bar:hover { opacity: 0.8; }
+  .chart-labels {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.25rem 1.25rem 0.75rem;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+  }
+
+  /* Alerts */
+  .alert-item {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    padding: 0.85rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    transition: background 0.15s;
+  }
+  .alert-item:hover { background: var(--bg-card-hover); }
+  .alert-item:last-child { border-bottom: none; }
+  .alert-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; flex-shrink: 0; margin-top: 1px;
+  }
+  .alert-icon.err { background: rgba(239,68,68,0.12); color: var(--error); }
+  .alert-icon.warn { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .alert-icon.info { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .alert-text { flex: 1; font-size: 0.83rem; color: var(--text-secondary); line-height: 1.4; }
+  .alert-text strong { color: var(--text-primary); }
+  .alert-time { font-size: 0.68rem; color: var(--text-muted); flex-shrink: 0; margin-top: 2px; }
+
+  /* Resource usage */
+  .resource-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.65rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+  }
+  .resource-row:last-child { border-bottom: none; }
+  .res-label {
+    font-size: 0.83rem; color: var(--text-secondary); width: 120px; flex-shrink: 0;
+  }
+  .res-bar {
+    flex: 1; height: 8px;
+    background: var(--bg-page);
+    border-radius: 4px; overflow: hidden;
+  }
+  .res-fill { height: 100%; border-radius: 4px; }
+  .res-val {
+    font-size: 0.78rem; font-weight: 600; width: 50px; text-align: right; flex-shrink: 0;
+  }
+
+  /* Queue */
+  .queue-item {
+    display: flex; align-items: center; gap: 0.6rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    font-size: 0.83rem;
+  }
+  .queue-item:last-child { border-bottom: none; }
+  .queue-pos {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--bg-page); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem; font-weight: 700; color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .queue-info { flex: 1; color: var(--text-secondary); }
+  .queue-info strong { color: var(--text-primary); font-weight: 600; }
+  .queue-count { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+
+  @media (max-width: 1024px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .metrics { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 768px) {
+    body { padding: 1rem; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+    .sync-row { grid-template-columns: 80px 1fr 60px; }
+    .sync-speed, .sync-status { display: none; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-satellite-dish"></i> Operations Center</h1>
+    <div class="live-indicator"><span class="live-dot"></span> Live</div>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="metric">
+      <div class="metric-label"><i class="fa-solid fa-bolt"></i> Throughput</div>
+      <div class="metric-val" style="color: var(--accent);">1,247</div>
+      <div class="metric-sub up"><i class="fa-solid fa-arrow-up"></i> 18% vs last hour</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label"><i class="fa-solid fa-database"></i> Total Vectors</div>
+      <div class="metric-val" style="color: var(--purple);">246,832</div>
+      <div class="metric-sub up"><i class="fa-solid fa-arrow-up"></i> +3,140 today</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label"><i class="fa-solid fa-clock"></i> Avg Latency</div>
+      <div class="metric-val" style="color: var(--cyan);">142ms</div>
+      <div class="metric-sub down"><i class="fa-solid fa-arrow-down"></i> -12ms improvement</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label"><i class="fa-solid fa-triangle-exclamation"></i> Errors (24h)</div>
+      <div class="metric-val" style="color: var(--error);">257</div>
+      <div class="metric-sub" style="color: var(--text-muted);">Documents entity</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label"><i class="fa-solid fa-list-check"></i> Queue Depth</div>
+      <div class="metric-val" style="color: var(--warning);">6,254</div>
+      <div class="metric-sub" style="color: var(--text-muted);">~45 min remaining</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="main-col">
+      <!-- Sync Status -->
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="fa-solid fa-arrows-rotate"></i> Real-Time Sync Status</h3>
+        </div>
+        <div class="sync-timeline">
+          <div class="sync-row" style="font-size: 0.7rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; background: rgba(15,23,42,0.5);">
+            <span>Entity</span>
+            <span style="padding-left: 0.5rem;">Progress</span>
+            <span style="text-align: right;">Coverage</span>
+            <span style="text-align: right;">Speed</span>
+            <span style="text-align: right;">Status</span>
+          </div>
+          <div class="sync-row">
+            <div class="entity"><span class="dot" style="background: var(--accent);"></span> Accounts</div>
+            <div class="sync-bar-wrap"><div class="sync-bar"><div class="sync-bar-fill" style="width: 100%; background: var(--success);"></div></div></div>
+            <div class="sync-pct" style="color: var(--success);">100%</div>
+            <div class="sync-speed">--</div>
+            <div class="sync-status"><span class="s-pill ok"><i class="fa-solid fa-check"></i> Done</span></div>
+          </div>
+          <div class="sync-row">
+            <div class="entity"><span class="dot" style="background: var(--purple);"></span> Contacts</div>
+            <div class="sync-bar-wrap"><div class="sync-bar"><div class="sync-bar-fill" style="width: 96%; background: var(--accent);"></div></div></div>
+            <div class="sync-pct" style="color: var(--accent);">96%</div>
+            <div class="sync-speed">~420/min</div>
+            <div class="sync-status"><span class="s-pill run"><i class="fa-solid fa-spinner fa-spin"></i> Syncing</span></div>
+          </div>
+          <div class="sync-row">
+            <div class="entity"><span class="dot" style="background: var(--success);"></span> Reports</div>
+            <div class="sync-bar-wrap"><div class="sync-bar"><div class="sync-bar-fill" style="width: 100%; background: var(--success);"></div></div></div>
+            <div class="sync-pct" style="color: var(--success);">100%</div>
+            <div class="sync-speed">--</div>
+            <div class="sync-status"><span class="s-pill ok"><i class="fa-solid fa-check"></i> Done</span></div>
+          </div>
+          <div class="sync-row">
+            <div class="entity"><span class="dot" style="background: var(--warning);"></span> Activities</div>
+            <div class="sync-bar-wrap"><div class="sync-bar"><div class="sync-bar-fill" style="width: 95%; background: var(--warning);"></div></div></div>
+            <div class="sync-pct" style="color: var(--warning);">95%</div>
+            <div class="sync-speed">Queued</div>
+            <div class="sync-status"><span class="s-pill wait"><i class="fa-solid fa-clock"></i> Waiting</span></div>
+          </div>
+          <div class="sync-row">
+            <div class="entity"><span class="dot" style="background: var(--error);"></span> Documents</div>
+            <div class="sync-bar-wrap"><div class="sync-bar"><div class="sync-bar-fill" style="width: 92%; background: var(--error);"></div></div></div>
+            <div class="sync-pct" style="color: var(--error);">92%</div>
+            <div class="sync-speed">Failed</div>
+            <div class="sync-status"><span class="s-pill err"><i class="fa-solid fa-exclamation"></i> Error</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Throughput Chart -->
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="fa-solid fa-chart-area"></i> Embedding Throughput (last 24h)</h3>
+        </div>
+        <div class="chart-area">
+          <div class="chart-bar" style="height: 30%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 45%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 35%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 20%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 15%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 10%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 25%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 40%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 55%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 70%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 85%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 75%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 90%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 80%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 65%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 50%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 60%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 75%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 95%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 85%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 70%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 80%; background: var(--accent);"></div>
+          <div class="chart-bar" style="height: 90%; background: linear-gradient(to top, var(--accent), var(--purple));"></div>
+          <div class="chart-bar" style="height: 100%; background: linear-gradient(to top, var(--accent), var(--purple));"></div>
+        </div>
+        <div class="chart-labels">
+          <span>12:00 AM</span>
+          <span>6:00 AM</span>
+          <span>12:00 PM</span>
+          <span>6:00 PM</span>
+          <span>Now</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sidebar-col">
+      <!-- Alerts -->
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="fa-solid fa-bell"></i> Alerts</h3>
+          <span style="font-size: 0.72rem; color: var(--error); font-weight: 600;">3 active</span>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon err"><i class="fa-solid fa-exclamation"></i></div>
+          <div class="alert-text"><strong>Documents</strong> sync failed: embedding model timeout (257 records)</div>
+          <span class="alert-time">4h ago</span>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon warn"><i class="fa-solid fa-triangle-exclamation"></i></div>
+          <div class="alert-text"><strong>Contacts</strong> sync rate limited by Pinecone (429 response)</div>
+          <span class="alert-time">6h ago</span>
+        </div>
+        <div class="alert-item">
+          <div class="alert-icon info"><i class="fa-solid fa-info"></i></div>
+          <div class="alert-text"><strong>Index</strong> approaching 80% capacity (246K / 300K)</div>
+          <span class="alert-time">12h ago</span>
+        </div>
+      </div>
+
+      <!-- Resource Usage -->
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="fa-solid fa-server"></i> Resources</h3>
+        </div>
+        <div class="resource-row">
+          <span class="res-label">Index Capacity</span>
+          <div class="res-bar"><div class="res-fill" style="width: 82%; background: var(--warning);"></div></div>
+          <span class="res-val" style="color: var(--warning);">82%</span>
+        </div>
+        <div class="resource-row">
+          <span class="res-label">Embedding API</span>
+          <div class="res-bar"><div class="res-fill" style="width: 45%; background: var(--success);"></div></div>
+          <span class="res-val" style="color: var(--success);">45%</span>
+        </div>
+        <div class="resource-row">
+          <span class="res-label">Query Budget</span>
+          <div class="res-bar"><div class="res-fill" style="width: 28%; background: var(--accent);"></div></div>
+          <span class="res-val" style="color: var(--accent);">28%</span>
+        </div>
+        <div class="resource-row">
+          <span class="res-label">Storage</span>
+          <div class="res-bar"><div class="res-fill" style="width: 61%; background: var(--cyan);"></div></div>
+          <span class="res-val" style="color: var(--cyan);">61%</span>
+        </div>
+      </div>
+
+      <!-- Queue -->
+      <div class="card">
+        <div class="card-head">
+          <h3><i class="fa-solid fa-list-ol"></i> Sync Queue</h3>
+        </div>
+        <div class="queue-item">
+          <span class="queue-pos">1</span>
+          <div class="queue-info"><strong>Contacts</strong> &mdash; remaining records</div>
+          <span class="queue-count">3,114</span>
+        </div>
+        <div class="queue-item">
+          <span class="queue-pos">2</span>
+          <div class="queue-info"><strong>Activities</strong> &mdash; pending batch</div>
+          <span class="queue-count">3,140</span>
+        </div>
+        <div class="queue-item">
+          <span class="queue-pos">3</span>
+          <div class="queue-info"><strong>Documents</strong> &mdash; retry failed</div>
+          <span class="queue-count">257</span>
+        </div>
+        <div class="queue-item">
+          <span class="queue-pos">4</span>
+          <div class="queue-info"><strong>Products</strong> &mdash; scheduled sync</div>
+          <span class="queue-count">4,820</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

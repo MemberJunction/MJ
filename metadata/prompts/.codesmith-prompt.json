@@ -13,6 +13,36 @@
       {
         "fields": {
           "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 6
+        },
+        "primaryKey": {
+          "ID": "3B961499-D248-4BC2-83DD-46FFFFEA72CD"
+        },
+        "sync": {
+          "lastModified": "2026-04-24T00:50:24.642Z",
+          "checksum": "6cc52c3d83ec3f1a91b7679fe32dca36c145f0b5cc64eb590417991f0b3a7911"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+          "Priority": 5
+        },
+        "primaryKey": {
+          "ID": "C820B858-C2B7-49AE-8958-35A390B9C40A"
+        },
+        "sync": {
+          "lastModified": "2026-04-24T00:50:24.662Z",
+          "checksum": "ef4ac5c92dbc4dece3ca9a2f2128b600c3207c30077052deeaacf34afcaa6dce"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
           "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
           "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
           "Priority": 1

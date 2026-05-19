@@ -193,7 +193,7 @@
     flex-shrink: 0;
 }
 
-:host ::ng-deep .slideout-footer .k-button {
+.slideout-footer .mj-btn {
     min-width: 80px;
     padding: 8px 16px;
     font-weight: 500;
@@ -848,24 +848,24 @@
 /* Legacy kendo-window styles removed - now using slideout-panel */
 
 /* Input and form field styling */
-:host ::ng-deep .form-input .k-input,
-:host ::ng-deep .form-textarea .k-input-inner,
-:host ::ng-deep .k-datepicker .k-input {
+.form-input.mj-input,
+.form-textarea.mj-textarea,
+:host ::ng-deep mj-datepicker .mj-input {
     padding: 10px 14px;
     border-radius: 8px;
     font-size: 14px;
-    border-color: var(--mj-border-default);
+    border: 1px solid var(--mj-border-default);
     transition: all 0.2s ease;
 }
 
-:host ::ng-deep .form-input:focus-within,
-:host ::ng-deep .form-textarea:focus-within,
-:host ::ng-deep .k-datepicker:focus-within {
+.form-input.mj-input:focus,
+.form-textarea.mj-textarea:focus,
+:host ::ng-deep mj-datepicker:focus-within {
     box-shadow: var(--mj-focus-ring);
 }
 
 /* Button styling in edit actions */
-:host ::ng-deep .edit-actions .k-button {
+.edit-actions .mj-btn {
     min-width: 120px;
     padding: 10px 20px;
     font-weight: 600;
@@ -873,19 +873,17 @@
     transition: all 0.2s ease;
 }
 
-:host ::ng-deep .edit-actions .k-button-solid-primary {
-    background: var(--mj-brand-primary);
-    border: none;
+.edit-actions .mj-btn--primary {
     box-shadow: var(--mj-shadow-brand-sm);
 }
 
-:host ::ng-deep .edit-actions .k-button-solid-primary:hover {
+.edit-actions .mj-btn--primary:hover {
     transform: translateY(-1px);
     box-shadow: var(--mj-shadow-brand-md);
 }
 
 /* Scopes header button styling */
-:host ::ng-deep .scopes-header .k-button {
+.scopes-header .mj-btn {
     min-width: 120px;
     padding: 10px 20px;
     font-weight: 600;
@@ -893,13 +891,11 @@
     transition: all 0.2s ease;
 }
 
-:host ::ng-deep .scopes-header .k-button-solid-primary {
-    background: var(--mj-brand-primary);
-    border: none;
+.scopes-header .mj-btn--primary {
     box-shadow: var(--mj-shadow-brand-sm);
 }
 
-:host ::ng-deep .scopes-header .k-button-solid-primary:hover {
+.scopes-header .mj-btn--primary:hover {
     transform: translateY(-1px);
     box-shadow: var(--mj-shadow-brand-md);
 }

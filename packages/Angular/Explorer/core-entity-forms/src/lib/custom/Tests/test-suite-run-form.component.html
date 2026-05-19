@@ -1,4 +1,4 @@
-<div class="test-suite-run-form" kendoDialogContainer>
+<div class="test-suite-run-form">
   <!-- Header Section -->
   <div class="suite-run-header">
     <!-- Breadcrumb Navigation -->
@@ -58,11 +58,11 @@
         <!-- Evaluation Mode Toggle -->
         <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
         @if (record.SuiteID) {
-          <button kendoButton (click)="reRunSuite()" themeColor="primary">
+          <button mjButton (click)="reRunSuite()" variant="primary">
             <i class="fas fa-play"></i> Re-run Suite
           </button>
         }
-        <button kendoButton (click)="refresh()" [disabled]="isRefreshing">
+        <button mjButton (click)="refresh()" [disabled]="isRefreshing">
           <i class="fas" [ngClass]="isRefreshing ? 'fa-sync fa-spin' : 'fa-sync'"></i>
           {{ isRefreshing ? 'Refreshing...' : 'Refresh' }}
         </button>
@@ -206,19 +206,19 @@
               placeholder="Type a tag and press Enter..."
               (keyup.enter)="addTag()"
               class="tag-text-input" />
-            <button kendoButton (click)="addTag()" [disabled]="!newTag.trim()" fillMode="flat">
+            <button mjButton (click)="addTag()" [disabled]="!newTag.trim()" variant="flat">
               <i class="fas fa-plus"></i>
             </button>
           </div>
         </div>
         <div class="tags-editor-footer">
-          <button kendoButton (click)="saveTags()" themeColor="primary" [disabled]="savingTags">
+          <button mjButton (click)="saveTags()" variant="primary" [disabled]="savingTags">
             @if (savingTags) {
               <i class="fas fa-spinner fa-spin"></i>
             }
             {{ savingTags ? 'Saving...' : 'Save' }}
           </button>
-          <button kendoButton (click)="cancelEditingTags()" fillMode="flat">Cancel</button>
+          <button mjButton (click)="cancelEditingTags()" variant="flat">Cancel</button>
         </div>
       </div>
     }
@@ -437,7 +437,7 @@
               }
               @if (needsReviewItems.length > 5) {
                 <div class="review-more">
-                  <button kendoButton fillMode="flat" (click)="changeTab('runs')">
+                  <button mjButton variant="flat" (click)="changeTab('runs')">
                     View all {{ needsReviewItems.length }} items
                   </button>
                 </div>
@@ -499,7 +499,7 @@
               }
             </div>
             <div class="runs-actions">
-              <button kendoButton (click)="exportToCSV()">
+              <button mjButton (click)="exportToCSV()">
                 <i class="fas fa-download"></i> Export CSV
               </button>
             </div>
@@ -633,11 +633,11 @@
                         rows="3"></textarea>
                       </div>
                       <div class="feedback-actions" (click)="$event.stopPropagation()">
-                        <button kendoButton (click)="openTestRun(run.ID)">
+                        <button mjButton (click)="openTestRun(run.ID)">
                           <i class="fas fa-external-link-alt"></i> View Full Details
                         </button>
-                        <button kendoButton
-                          themeColor="primary"
+                        <button mjButton
+                          variant="primary"
                           (click)="saveInlineFeedback()"
                           [disabled]="!canSubmitInlineFeedback() || savingInlineFeedback">
                           <i class="fas" [ngClass]="savingInlineFeedback ? 'fa-spinner fa-spin' : 'fa-save'"></i>
@@ -669,7 +669,7 @@
             </div>
             <h4>No Matching Runs</h4>
             <p>No test runs match the current filter.</p>
-            <button kendoButton (click)="setRunStatusFilter(null)">Clear Filter</button>
+            <button mjButton (click)="setRunStatusFilter(null)">Clear Filter</button>
           </div>
         }
       </div>

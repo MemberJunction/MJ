@@ -1,0 +1,278 @@
+<!--
+  Option B: Entity-Focused View
+  Design Philosophy: Deep-dive into a single entity's vector configuration and data.
+  This layout uses a master-detail pattern: the left nav lists all vector-enabled
+  entities with status indicators, and the main area shows the selected entity's
+  full configuration, record-level vectorization status, similarity search,
+  and document template editing. Designed for developers and data engineers
+  who need to configure, debug, and test vector sync at the entity level.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector DB Management - Entity-Focused View</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); display: flex; height: 100vh; overflow: hidden; }
+
+  /* Left Nav */
+  .left-nav { width: 260px; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; flex-shrink: 0; }
+  .nav-header { padding: 16px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-brand-primary); color: #fff; }
+  .nav-header h1 { font-size: 15px; font-weight: 600; }
+  .nav-header h1 i { margin-right: 6px; }
+  .nav-search { padding: 12px; border-bottom: 1px solid var(--mj-border-default); }
+  .nav-search input { width: 100%; padding: 7px 10px 7px 30px; border: 1px solid var(--mj-border-default); border-radius: 4px; font-size: 13px; background: var(--mj-bg-page); }
+  .nav-search { position: relative; }
+  .nav-search i { position: absolute; left: 22px; top: 22px; color: var(--mj-text-secondary); font-size: 12px; }
+  .nav-list { flex: 1; overflow-y: auto; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid var(--mj-border-default); font-size: 13px; }
+  .nav-item:hover { background: var(--mj-bg-page); }
+  .nav-item.active { background: #e8edf5; border-left: 3px solid var(--mj-brand-primary); }
+  .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .nav-item .count { margin-left: auto; font-size: 11px; color: var(--mj-text-secondary); }
+
+  /* Main content */
+  .main { flex: 1; overflow-y: auto; padding: 20px; }
+  .entity-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .entity-header h2 { font-size: 20px; font-weight: 700; }
+  .entity-header h2 i { margin-right: 8px; color: var(--mj-brand-primary); }
+  .entity-meta { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
+  .entity-actions button { padding: 7px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; border: none; margin-left: 8px; }
+  .btn-primary { background: var(--mj-brand-primary); color: #fff; }
+  .btn-outline { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default) !important; color: var(--mj-text-primary); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .panel { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; overflow: hidden; }
+  .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+  .panel-header i { margin-right: 6px; color: var(--mj-brand-primary); }
+  .panel-body { padding: 16px; font-size: 13px; }
+
+  /* Config panel */
+  .config-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--mj-border-default); }
+  .config-row:last-child { border-bottom: none; }
+  .config-label { color: var(--mj-text-secondary); font-size: 12px; }
+  .config-value { font-weight: 500; }
+
+  /* Template preview */
+  .template-preview { background: #1e293b; color: #e2e8f0; padding: 14px; border-radius: 4px; font-family: 'Fira Code', monospace; font-size: 12px; line-height: 1.7; white-space: pre-wrap; }
+  .template-var { color: #60a5fa; }
+  .template-label { color: #94a3b8; }
+
+  /* Records table */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 9px 12px; background: var(--mj-bg-page); color: var(--mj-text-secondary); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid var(--mj-border-default); }
+  tbody tr:hover { background: #f1f5f9; }
+
+  .status-dot { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; }
+  .status-dot i { font-size: 10px; }
+
+  /* Similarity search */
+  .search-input-row { display: flex; gap: 8px; margin-bottom: 14px; }
+  .search-input-row input { flex: 1; padding: 8px 12px; border: 1px solid var(--mj-border-default); border-radius: 4px; font-size: 13px; }
+  .search-input-row button { padding: 8px 16px; background: var(--mj-brand-primary); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; }
+
+  .result-item { padding: 10px 0; border-bottom: 1px solid var(--mj-border-default); }
+  .result-item:last-child { border-bottom: none; }
+  .result-score { display: inline-block; background: #dbeafe; color: var(--mj-brand-primary); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; margin-right: 8px; }
+  .result-title { font-weight: 600; font-size: 13px; }
+  .result-snippet { font-size: 12px; color: var(--mj-text-secondary); margin-top: 4px; }
+
+  /* Template editor */
+  .editor-area textarea { width: 100%; height: 120px; font-family: 'Fira Code', monospace; font-size: 12px; padding: 12px; border: 1px solid var(--mj-border-default); border-radius: 4px; resize: vertical; background: #1e293b; color: #e2e8f0; }
+  .editor-toolbar { display: flex; gap: 6px; margin-bottom: 8px; }
+  .editor-toolbar button { padding: 4px 10px; border: 1px solid var(--mj-border-default); border-radius: 3px; background: var(--mj-bg-surface); font-size: 11px; cursor: pointer; color: var(--mj-text-secondary); }
+
+  .badge-sm { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- Left Nav: Entity List -->
+<div class="left-nav">
+  <div class="nav-header">
+    <h1><i class="fa-solid fa-database"></i> Vector Entities</h1>
+  </div>
+  <div class="nav-search">
+    <i class="fa-solid fa-search"></i>
+    <input type="text" placeholder="Search entities...">
+  </div>
+  <div class="nav-list">
+    <div class="nav-item active">
+      <span class="nav-dot" style="background:var(--mj-status-success)"></span>
+      <span>Contacts</span>
+      <span class="count">245K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-success)"></span>
+      <span>Companies</span>
+      <span class="count">89K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-warning)"></span>
+      <span>Deals</span>
+      <span class="count">156K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-success)"></span>
+      <span>Support Tickets</span>
+      <span class="count">412K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-error)"></span>
+      <span>Knowledge Articles</span>
+      <span class="count">34K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-text-secondary)"></span>
+      <span>Emails</span>
+      <span class="count">892K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-success)"></span>
+      <span>Products</span>
+      <span class="count">5.2K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-status-success)"></span>
+      <span>Meeting Notes</span>
+      <span class="count">18K</span>
+    </div>
+    <div class="nav-item">
+      <span class="nav-dot" style="background:var(--mj-text-secondary)"></span>
+      <span>Invoices</span>
+      <span class="count">67K</span>
+    </div>
+  </div>
+</div>
+
+<!-- Main Content: Selected Entity Detail -->
+<div class="main">
+  <div class="entity-header">
+    <div>
+      <h2><i class="fa-solid fa-address-book"></i> Contacts</h2>
+      <div class="entity-meta">245,891 records | 245,891 vectorized | Last synced 3 min ago | Pinecone (us-east-1)</div>
+    </div>
+    <div class="entity-actions">
+      <button class="btn-outline"><i class="fa-solid fa-gear"></i> Configure</button>
+      <button class="btn-primary"><i class="fa-solid fa-rotate"></i> Sync Now</button>
+    </div>
+  </div>
+
+  <!-- Config + Template Preview -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><i class="fa-solid fa-sliders"></i> Sync Configuration</div>
+      <div class="panel-body">
+        <div class="config-row"><span class="config-label">Entity Document Template</span><span class="config-value">Contact Summary v2</span></div>
+        <div class="config-row"><span class="config-label">AI Embedding Model</span><span class="config-value">text-embedding-3-large</span></div>
+        <div class="config-row"><span class="config-label">Vector Dimensions</span><span class="config-value">3072</span></div>
+        <div class="config-row"><span class="config-label">Vector Database</span><span class="config-value">Pinecone / contacts-index</span></div>
+        <div class="config-row"><span class="config-label">Sync Trigger</span><span class="config-value">On Record Change + Scheduled (6h)</span></div>
+        <div class="config-row"><span class="config-label">Batch Size</span><span class="config-value">500 records</span></div>
+        <div class="config-row"><span class="config-label">Metadata Fields</span><span class="config-value">CompanyID, Status, Region</span></div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><i class="fa-solid fa-file-code"></i> Template Preview <span class="badge-sm" style="background:#dbeafe;color:var(--mj-brand-primary);margin-left:auto;">Contact Summary v2</span></div>
+      <div class="panel-body">
+        <div class="template-preview"><span class="template-label">Name:</span> <span class="template-var">{{FirstName}} {{LastName}}</span>
+<span class="template-label">Title:</span> <span class="template-var">{{Title}}</span> at <span class="template-var">{{Company}}</span>
+<span class="template-label">Email:</span> <span class="template-var">{{Email}}</span>
+<span class="template-label">Region:</span> <span class="template-var">{{Region}}</span>
+<span class="template-label">Notes:</span> <span class="template-var">{{Notes}}</span>
+<span class="template-label">Tags:</span> <span class="template-var">{{Tags}}</span>
+<span class="template-label">Last Activity:</span> <span class="template-var">{{LastActivityDate}}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Records Table -->
+  <div class="panel" style="margin-bottom:20px">
+    <div class="panel-header">
+      <span><i class="fa-solid fa-list"></i> Records (showing 1-10 of 245,891)</span>
+      <span style="font-size:12px; color:var(--mj-text-secondary);">Filter: <select style="padding:3px 6px; border:1px solid var(--mj-border-default); border-radius:3px; font-size:12px;"><option>All</option><option>Pending</option><option>Vectorized</option><option>Error</option></select></span>
+    </div>
+    <table>
+      <thead><tr><th>ID</th><th>Name</th><th>Company</th><th>Vector Status</th><th>Last Embedded</th><th>Vector ID</th></tr></thead>
+      <tbody>
+        <tr><td style="font-family:monospace;font-size:11px">c8a1..f3d2</td><td>Sarah Chen</td><td>Acme Corp</td><td><span class="status-dot" style="color:var(--mj-status-success)"><i class="fa-solid fa-circle"></i> Synced</span></td><td>3 min ago</td><td style="font-family:monospace;font-size:11px">vec_8f2a1c</td></tr>
+        <tr><td style="font-family:monospace;font-size:11px">d4b2..a1e8</td><td>James Wilson</td><td>TechStart Inc</td><td><span class="status-dot" style="color:var(--mj-status-success)"><i class="fa-solid fa-circle"></i> Synced</span></td><td>3 min ago</td><td style="font-family:monospace;font-size:11px">vec_3d9b7e</td></tr>
+        <tr><td style="font-family:monospace;font-size:11px">a7f3..b9c4</td><td>Maria Garcia</td><td>Global Solutions</td><td><span class="status-dot" style="color:var(--mj-status-success)"><i class="fa-solid fa-circle"></i> Synced</span></td><td>3 min ago</td><td style="font-family:monospace;font-size:11px">vec_1a4f2d</td></tr>
+        <tr><td style="font-family:monospace;font-size:11px">e2d5..c7a1</td><td>Alex Thompson</td><td>DataFlow Ltd</td><td><span class="status-dot" style="color:var(--mj-status-warning)"><i class="fa-solid fa-circle"></i> Stale</span></td><td>2 days ago</td><td style="font-family:monospace;font-size:11px">vec_5c8e3a</td></tr>
+        <tr><td style="font-family:monospace;font-size:11px">b1c8..d4f6</td><td>Priya Patel</td><td>InnoSys</td><td><span class="status-dot" style="color:var(--mj-status-success)"><i class="fa-solid fa-circle"></i> Synced</span></td><td>3 min ago</td><td style="font-family:monospace;font-size:11px">vec_7b2d9f</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Similarity Search + Template Editor -->
+  <div class="grid-2">
+    <div class="panel">
+      <div class="panel-header"><i class="fa-solid fa-magnifying-glass"></i> Similarity Search</div>
+      <div class="panel-body">
+        <div class="search-input-row">
+          <input type="text" placeholder="Enter text to find similar contacts..." value="enterprise sales lead in healthcare sector">
+          <button><i class="fa-solid fa-search"></i> Search</button>
+        </div>
+        <div class="result-item">
+          <span class="result-score">0.94</span>
+          <span class="result-title">Dr. Rachel Kim</span>
+          <div class="result-snippet">VP of Procurement at MedTech Health Systems. Enterprise healthcare accounts, 15 years in medical device sales...</div>
+        </div>
+        <div class="result-item">
+          <span class="result-score">0.91</span>
+          <span class="result-title">David Okonkwo</span>
+          <div class="result-snippet">Director of Strategic Partnerships at HealthFirst. Manages enterprise contracts for hospital network...</div>
+        </div>
+        <div class="result-item">
+          <span class="result-score">0.87</span>
+          <span class="result-title">Lisa Nakamura</span>
+          <div class="result-snippet">Senior Account Executive at PharmaCo. Specializes in enterprise healthcare SaaS platform sales...</div>
+        </div>
+        <div class="result-item">
+          <span class="result-score">0.82</span>
+          <span class="result-title">Robert Fernandez</span>
+          <div class="result-snippet">Regional Sales Manager at BioSync. Covers Southeast enterprise healthcare clients, 200+ bed facilities...</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><i class="fa-solid fa-pen-to-square"></i> Document Template Editor</div>
+      <div class="panel-body editor-area">
+        <div class="editor-toolbar">
+          <button><i class="fa-solid fa-plus"></i> Insert Field</button>
+          <button><i class="fa-solid fa-eye"></i> Preview</button>
+          <button><i class="fa-solid fa-clock-rotate-left"></i> History</button>
+          <button style="margin-left:auto; background:var(--mj-brand-primary); color:#fff; border-color:var(--mj-brand-primary)"><i class="fa-solid fa-save"></i> Save</button>
+        </div>
+        <textarea>Name: {{FirstName}} {{LastName}}
+Title: {{Title}} at {{Company}}
+Email: {{Email}}
+Region: {{Region}}
+Notes: {{Notes}}
+Tags: {{Tags}}
+Last Activity: {{LastActivityDate}}</textarea>
+        <div style="margin-top:8px; font-size:11px; color:var(--mj-text-secondary);">
+          <i class="fa-solid fa-info-circle"></i> Available fields: FirstName, LastName, Title, Company, Email, Phone, Region, Notes, Tags, Status, LastActivityDate, CreatedAt
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

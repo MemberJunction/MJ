@@ -2,12 +2,13 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
-// Kendo UI imports
-import { DialogsModule } from '@progress/kendo-angular-dialog';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { LayoutModule } from '@progress/kendo-angular-layout';
+// MJ UI Components
+import {
+  MJButtonDirective,
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJDropdownComponent
+} from '@memberjunction/ng-ui-components';
 
 // MemberJunction imports
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -23,29 +24,6 @@ import { ListSharingService } from './services/list-sharing.service';
 
 /**
  * Module providing list management components for MemberJunction.
- *
- * Import this module to use the list management dialog:
- *
- * @example
- * ```typescript
- * import { ListManagementModule } from '@memberjunction/ng-list-management';
- *
- * @NgModule({
- *   imports: [ListManagementModule]
- * })
- * export class YourModule { }
- * ```
- *
- * Then use in templates:
- *
- * ```html
- * <mj-list-management-dialog
- *   [config]="dialogConfig"
- *   [visible]="showDialog"
- *   (complete)="onComplete($event)"
- *   (cancel)="onCancel()">
- * </mj-list-management-dialog>
- * ```
  */
 @NgModule({
   declarations: [
@@ -55,11 +33,10 @@ import { ListSharingService } from './services/list-sharing.service';
   imports: [
     CommonModule,
     FormsModule,
-    DialogsModule,
-    ButtonsModule,
-    InputsModule,
-    DropDownsModule,
-    LayoutModule,
+    MJButtonDirective,
+    MJDialogComponent,
+    MJDialogActionsComponent,
+    MJDropdownComponent,
     ContainerDirectivesModule,
     SharedGenericModule
   ],

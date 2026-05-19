@@ -1,10 +1,14 @@
 # @memberjunction/content-autotagging
 
-AI-powered content ingestion and autotagging engine for MemberJunction. Scans content from multiple sources (local files, websites, RSS feeds, cloud storage), extracts text from documents, and uses LLMs to generate tags, summaries, and metadata attributes.
+AI-powered content ingestion, autotagging, and vectorization engine for MemberJunction. Scans content from multiple sources (local files, websites, RSS feeds, cloud storage), extracts text from documents, uses LLMs to generate weighted tags and metadata attributes, and vectorizes content for semantic search.
+
+> **Read these guides first** if you're working on tag classification, taxonomy growth, or governance:
+> - [Content Autotagging Guide](../../guides/CONTENT_AUTOTAGGING_GUIDE.md) — pipeline architecture, prompt structure, source-type providers
+> - [Taxonomy & Tagging Guide](../../guides/TAXONOMY_TAGGING_GUIDE.md) — the tag taxonomy itself: 4+1-tier resolver, per-tag governance, scoping, the suggestion queue, Tag Health, and per-source configuration knobs
 
 ## Overview
 
-The `@memberjunction/content-autotagging` package provides an extensible framework for ingesting content from diverse sources and leveraging AI models to extract meaningful tags, summaries, and metadata. Built on the MemberJunction platform, it helps organizations automatically organize and categorize their content.
+The `@memberjunction/content-autotagging` package provides an extensible framework for ingesting content from diverse sources and leveraging AI models to extract meaningful tags, summaries, and metadata. Built on the MemberJunction platform, it helps organizations automatically organize and categorize their content. The engine uses the managed **"Content Autotagging"** AI prompt via `AIPromptRunner` (rather than direct `BaseLLM` calls), enabling prompt versioning, model routing, and centralized prompt management.
 
 ```mermaid
 graph TD
@@ -19,9 +23,13 @@ graph TD
     G --> I["Office Parser"]
     G --> J["HTML Parser<br/>(Cheerio)"]
 
-    A --> K["LLM Processing"]
-    K --> L["Tag Generation"]
+    A --> K["AIPromptRunner<br/>(Content Autotagging prompt)"]
+    K --> L["Tag Generation<br/>(with weights)"]
     K --> M["Attribute Extraction"]
+
+    A --> V["Vectorization"]
+    V --> W["Embedding Model"]
+    V --> X["Vector DB Upsert"]
 
     A --> N["Content Items<br/>(Database)"]
     A --> O["Content Item Attributes<br/>(Database)"]
@@ -34,9 +42,20 @@ graph TD
     style F fill:#2d8659,stroke:#1a5c3a,color:#fff
     style G fill:#b8762f,stroke:#8a5722,color:#fff
     style K fill:#7c5295,stroke:#563a6b,color:#fff
+    style V fill:#2d6a9f,stroke:#1a4971,color:#fff
     style N fill:#2d6a9f,stroke:#1a4971,color:#fff
     style O fill:#2d6a9f,stroke:#1a4971,color:#fff
 ```
+
+## Key Features
+
+- **AIPromptRunner integration**: Uses the managed "Content Autotagging" prompt, enabling prompt versioning and model routing through MJ's prompt management system (no direct `BaseLLM` calls)
+- **Tag weights**: Each generated tag includes a relevance weight (0.0--1.0) indicating how strongly the tag relates to the content
+- **Batch processing**: Configurable batch size (default: 20) with concurrent processing within each batch
+- **Parallel tagging + vectorization**: Tagging and vectorization run in parallel for maximum throughput
+- **Per-source/type embedding model selection**: Cascade resolution for embedding model and vector index -- source override, then content type default, then global fallback (first active vector index)
+- **Real-time progress reporting**: `AutotagProgressCallback` provides per-item progress updates during processing
+- **Graceful provider skip**: Providers skip gracefully when no content sources are configured for their type
 
 ## Installation
 
@@ -51,7 +70,8 @@ sequenceDiagram
     participant Source as Content Source
     participant Engine as AutotagBaseEngine
     participant Extract as Text Extractor
-    participant AI as LLM
+    participant Prompt as AIPromptRunner
+    participant Vec as Embedding + VectorDB
     participant DB as Database
 
     Source->>Engine: Provide content items
@@ -59,9 +79,14 @@ sequenceDiagram
     Engine->>Extract: Extract text (PDF/Office/HTML)
     Extract-->>Engine: Raw text
     Engine->>Engine: Chunk text for token limits
-    Engine->>AI: Generate tags and attributes
-    AI-->>Engine: Structured metadata
-    Engine->>DB: Save ContentItem + Attributes
+    par Tagging
+        Engine->>Prompt: Run "Content Autotagging" prompt
+        Prompt-->>Engine: Tags (with weights) + Attributes
+    and Vectorization
+        Engine->>Vec: Embed text + upsert to vector DB
+        Vec-->>Engine: Vectorization result
+    end
+    Engine->>DB: Save ContentItem + Tags + Attributes
     Engine->>DB: Create ProcessRun record
 ```
 
@@ -74,7 +99,7 @@ sequenceDiagram
 | RSS Feeds | `AutotagRSSFeed` | Parses RSS/Atom feeds for articles |
 | Azure Blob | `AutotagAzureBlob` | Processes files from Azure Blob Storage |
 
-All sources extend `AutotagBase`, which provides the common interface for content discovery and ingestion.
+All sources extend `AutotagBase`, which provides the common interface for content discovery and ingestion. Each source's `Autotag()` method accepts an optional `AutotagProgressCallback` for real-time progress reporting. Sources skip gracefully when no content sources of their type are configured in the database.
 
 ## Supported File Formats
 
@@ -85,6 +110,32 @@ All sources extend `AutotagBase`, which provides the common interface for conten
 | HTML/Web Pages | `cheerio` | .html, .htm |
 | Plain Text | Native | .txt, .md, .csv |
 
+## Tag Weights
+
+The LLM prompt returns tags with relevance weights between 0.0 and 1.0 indicating how strongly each tag relates to the content. Both old-style (plain string array) and new-style (object with `tag` + `weight`) responses are supported:
+
+```json
+// New format (preferred) — returned by the "Content Autotagging" prompt
+[
+  { "tag": "machine learning", "weight": 0.95 },
+  { "tag": "neural networks", "weight": 0.82 },
+  { "tag": "data science", "weight": 0.70 }
+]
+
+// Legacy format — auto-normalized with weight 1.0
+["machine learning", "neural networks", "data science"]
+```
+
+## Embedding Model and Vector Index Resolution
+
+The engine resolves the embedding model and vector index for each content item using a three-level cascade:
+
+1. **Content Source override**: If the source has `EmbeddingModelID` and `VectorIndexID` set, those are used
+2. **Content Type default**: If the source has no override, the content type's defaults are used
+3. **Global fallback**: If neither source nor type specifies, the first active vector index in the system is used
+
+Items sharing the same (embeddingModel, vectorIndex) pair are grouped and processed together for efficient batching.
+
 ## Usage
 
 ### RSS Feed Processing
@@ -93,7 +144,9 @@ All sources extend `AutotagBase`, which provides the common interface for conten
 import { AutotagRSSFeed } from '@memberjunction/content-autotagging';
 
 const rssTagger = new AutotagRSSFeed();
-await rssTagger.Autotag(contextUser);
+await rssTagger.Autotag(contextUser, (processed, total, currentItem) => {
+    console.log(`[${processed}/${total}] Processing: ${currentItem}`);
+});
 ```
 
 ### Website Content Processing
@@ -133,13 +186,19 @@ await blobTagger.Autotag(contextUser);
 import { AutotagBaseEngine } from '@memberjunction/content-autotagging';
 
 const engine = AutotagBaseEngine.Instance;
-await engine.ExtractTextAndProcessWithLLM(contentItems, contextUser);
+
+// Process content items with custom batch size
+await engine.ExtractTextAndProcessWithLLM(contentItems, contextUser, batchSize);
+
+// Vectorize content items (runs in parallel with tagging)
+const result = await engine.VectorizeContentItems(contentItems, tagMap, contextUser, batchSize);
+console.log(`Vectorized: ${result.vectorized}, Skipped: ${result.skipped}`);
 ```
 
 ## Creating a Custom Content Source
 
 ```typescript
-import { AutotagBase } from '@memberjunction/content-autotagging';
+import { AutotagBase, AutotagProgressCallback } from '@memberjunction/content-autotagging';
 import { RegisterClass } from '@memberjunction/global';
 
 @RegisterClass(AutotagBase, 'AutotagCustomSource')
@@ -149,13 +208,14 @@ export class AutotagCustomSource extends AutotagBase {
     return contentItems;
   }
 
-  public async Autotag(contextUser) {
+  public async Autotag(contextUser, onProgress?: AutotagProgressCallback) {
     const contentSourceTypeID = await this.engine.setSubclassContentSourceType(
       'Custom Source', contextUser
     );
     const contentSources = await this.engine.getAllContentSources(
       contextUser, contentSourceTypeID
     );
+    if (contentSources.length === 0) return; // Skip gracefully
     const contentItems = await this.SetContentItemsToProcess(contentSources);
     await this.engine.ExtractTextAndProcessWithLLM(contentItems, contextUser);
   }
@@ -166,12 +226,12 @@ export class AutotagCustomSource extends AutotagBase {
 
 | Entity | Purpose |
 |--------|---------|
-| Content Sources | Configuration for each content source |
+| Content Sources | Configuration for each content source (with optional EmbeddingModelID/VectorIndexID overrides) |
 | Content Items | Individual pieces of content with extracted text |
-| Content Item Tags | AI-generated tags |
+| Content Item Tags | AI-generated tags with relevance weights (0.0--1.0) |
 | Content Item Attributes | Additional extracted metadata |
 | Content Process Runs | Processing history and audit trail |
-| Content Types | Content categorization definitions |
+| Content Types | Content categorization definitions (with default EmbeddingModelID/VectorIndexID) |
 | Content Source Types | Source type definitions |
 | Content File Types | Supported file format definitions |
 
@@ -182,8 +242,12 @@ export class AutotagCustomSource extends AutotagBase {
 | `@memberjunction/core` | Entity system and metadata |
 | `@memberjunction/global` | Class registration |
 | `@memberjunction/core-entities` | Content entity types |
-| `@memberjunction/ai` | LLM integration |
-| `@memberjunction/aiengine` | AI Engine base class |
+| `@memberjunction/ai` | Embedding model integration |
+| `@memberjunction/aiengine` | AI Engine for prompt cache access |
+| `@memberjunction/ai-prompts` | AIPromptRunner for managed prompt execution |
+| `@memberjunction/ai-core-plus` | AIPromptParams types |
+| `@memberjunction/ai-vectors` | TextChunker for content chunking |
+| `@memberjunction/ai-vectordb` | VectorDBBase for vector storage |
 | `pdf-parse` | PDF text extraction |
 | `officeparser` | Office document parsing |
 | `cheerio` | HTML parsing |

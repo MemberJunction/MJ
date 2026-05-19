@@ -1,7 +1,7 @@
 import { ProviderBase } from "./providerBase";
 import { UserInfo } from "./securityInfo";
-import { EntityDependency, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
-import { BaseEntity, BaseEntityResult } from "./baseEntity";
+import { EntityDependency, EntityFieldInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, RecordMergeDetailResult } from "./entityInfo";
+import { BaseEntity, BaseEntityResult, RecordChangePayload, RecordChangeSource, RestoreContext } from "./baseEntity";
 import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDuplicateRequest, PotentialDuplicateResponse } from "./interfaces";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
@@ -10,6 +10,7 @@ import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunRepo
 import { QueryExecutionSpec } from "./queryExecutionSpec";
 import { RunReportParams } from "./runReport";
 import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
 export { DatabasePlatform, PlatformSQL, IsPlatformSQL } from "./platformSQL";
@@ -46,6 +47,38 @@ export interface DeleteSQLResult {
     fullSQL: string;
     simpleSQL?: string;
     parameters?: unknown[] | null;
+}
+
+/**
+ * Pre-save snapshot of a single field's state.
+ * Captures dirty flag and old value before the save clears them.
+ * The EntityFieldInfo reference provides access to all field metadata
+ * (Name, ExtendedType, TSType, etc.) without duplication.
+ */
+export interface SaveContextField {
+    /** Reference to the field's metadata (Name, ExtendedType, TSType, etc.) */
+    FieldInfo: EntityFieldInfo;
+    /** Whether this field was modified before save */
+    WasDirty: boolean;
+    /** The value before the save (original loaded value) */
+    OldValue: unknown;
+}
+
+/**
+ * Context object that flows through the entire save pipeline.
+ * Created once at the start of Save(), populated with pre-save field state,
+ * and passed to every hook. Hooks can read field state and write to the
+ * extensible State bag to pass data to downstream hooks.
+ *
+ * This is parallel-safe — each Save() call gets its own SaveContext instance.
+ */
+export interface SaveContext {
+    /** Whether this is a new record (not yet saved to the database) */
+    IsNew: boolean;
+    /** Pre-save snapshot of all field states (dirty flags, old/new values) */
+    Fields: SaveContextField[];
+    /** Extensible key-value bag for hooks to pass data across the save pipeline */
+    State: Record<string, unknown>;
 }
 
 /**
@@ -95,6 +128,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     abstract RollbackTransaction(): Promise<void>;
 
     /**
+     * Whether this provider currently has an active transaction. Subclasses
+     * that track transaction state should override this. Used by callers
+     * (e.g. `runMaybeSerial`) to decide whether to fan out concurrent saves
+     * or run them sequentially. Defaults to `false` for providers that don't
+     * expose this state.
+     */
+    public get IsInTransaction(): boolean {
+        return false;
+    }
+
+    /**
      * Internal implementation for spec-based query execution.
      * Subclasses must provide the concrete pipeline (composition → templates → execute).
      */
@@ -108,6 +152,28 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     override get PlatformKey(): DatabasePlatform {
         return 'sqlserver';
     }
+
+    /**
+     * The {@link SQLDialect} instance matching this provider's `PlatformKey`.
+     *
+     * Use this whenever runtime code needs to emit dialect-specific SQL
+     * (boolean literals, identifier quoting, casts, …) — it spares callers
+     * from doing `GetDialect(provider.PlatformKey)` every time, and keeps
+     * dialect resolution in one place. Resolves lazily and is cached so
+     * repeated access is free.
+     *
+     * Example:
+     * ```typescript
+     * const lit = provider.Dialect.BooleanLiteral(true); // '1' on SS, 'TRUE' on PG
+     * ```
+     */
+    public get Dialect(): SQLDialect {
+        if (!this._dialect) {
+            this._dialect = GetDialect(this.PlatformKey);
+        }
+        return this._dialect;
+    }
+    private _dialect: SQLDialect | null = null;
 
     /**
      * Gets the MemberJunction core schema name (e.g. '__mj').
@@ -592,7 +658,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const currentFavoriteId = await this.GetRecordFavoriteID(userId, entityName, compositeKey);
             if ((currentFavoriteId === null && !isFavorite) || (currentFavoriteId !== null && isFavorite)) return;
 
-            const e = this.Entities.find((e) => e.Name === entityName);
+            const e = this.EntityByName(entityName);
             const ufEntity: BaseEntity = await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
             if (currentFavoriteId !== null) {
                 // delete the record since we are setting isFavorite to FALSE
@@ -660,9 +726,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     private parseRecordDependencyResults(result: Record<string, unknown>[]): RecordDependency[] {
         const recordDependencies: RecordDependency[] = [];
         for (const r of result) {
-            const entityInfo: EntityInfo | undefined = this.Entities.find(
-                (e) => e.Name.trim().toLowerCase() === (r.EntityName as string)?.trim().toLowerCase()
-            );
+            const entityInfo = this.EntityByName(r.EntityName as string);
             if (!entityInfo) {
                 throw new Error(`Entity ${r.EntityName} not found in metadata`);
             }
@@ -702,7 +766,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Return a non-empty string to abort the save with that message; return null to proceed.
      * SQL Server overrides this to delegate to HandleEntityActions('validate', ...).
      */
-    protected async OnValidateBeforeSave(_entity: BaseEntity, _user: UserInfo): Promise<string | null> {
+    protected async OnValidateBeforeSave(_entity: BaseEntity, _user: UserInfo, _context: SaveContext): Promise<string | null> {
         return null;
     }
 
@@ -710,7 +774,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Called before the save SQL is executed.
      * SQL Server overrides this to fire before-save entity actions and AI actions.
      */
-    protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
+    protected async OnBeforeSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): Promise<void> {
         /* no-op by default */
     }
 
@@ -719,7 +783,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * Intentionally synchronous (fire-and-forget) — SQL Server overrides to dispatch
      * after-save entity actions and AI actions without awaiting.
      */
-    protected OnAfterSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions): void {
+    protected OnAfterSaveExecute(_entity: BaseEntity, _user: UserInfo, _options: EntitySaveOptions, _context: SaveContext): void {
         /* no-op by default */
     }
 
@@ -749,11 +813,64 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
-     * Called after a direct (non-transaction) save succeeds, before returning.
-     * SQL Server overrides to propagate record-change entries to IS-A sibling branches.
+     * Called after a direct (non-transaction) save succeeds, before the result is returned
+     * to the caller and loaded into the entity via finalizeSave().
+     *
+     * ## Post-Save Patch Mechanism
+     *
+     * This hook can optionally return a `Record<string, unknown>` containing field values
+     * that should be patched onto the SP result row before it is loaded into the entity.
+     * This solves a timing problem: the SP result is captured before OnSaveCompleted runs,
+     * so any data created by post-save hooks (e.g., geocoding writing to a JOINed table)
+     * would be stale in the returned entity without this patch.
+     *
+     * ### How it works:
+     * 1. The SP executes and returns `result[0]` with the current view data
+     * 2. `OnSaveCompleted` runs post-save logic (geocoding, ISA propagation, etc.)
+     * 3. If this method returns a non-null Record, those key/value pairs are merged
+     *    onto `result[0]` via `Object.assign()`, overwriting stale values
+     * 4. The patched result is then returned to BaseEntity.finalizeSave() which calls
+     *    SetMany() to load the corrected data into the entity
+     *
+     * ### Example — Geocoding patch:
+     * After geocoding updates RecordGeoCode, the new lat/lng are returned as patches
+     * for the `__mj_Latitude` and `__mj_Longitude` virtual fields that come from the
+     * RecordGeoCode JOIN in the entity's base view. Without this patch, those fields
+     * would contain the pre-geocoding values until the next query.
+     *
+     * ### Guidelines for subclass implementors:
+     * - Return `null` if no patches are needed (default behavior)
+     * - Only include fields that were actually changed by your post-save logic
+     * - Always call `await super.OnSaveCompleted(...)` and merge its patches with yours
+     * - Patches are shallow-merged via Object.assign — last writer wins for each key
+     *
+     * @returns Patch fields to apply to the SP result, or null if no patches needed
      */
-    protected async OnSaveCompleted(_entity: BaseEntity, _saveSQLResult: SaveSQLResult, _user: UserInfo, _options: EntitySaveOptions): Promise<void> {
-        /* no-op by default */
+    protected async OnSaveCompleted(entity: BaseEntity, saveSQLResult: SaveSQLResult, user: UserInfo, options: EntitySaveOptions, _context: SaveContext): Promise<Record<string, unknown> | null> {
+        // ISA overlapping-subtype record-change propagation is DB-agnostic: if the save SQL
+        // generation populated `overlappingChangeData` in extraData and the entity tracks
+        // record changes across multiple subtypes, fan the change record out to siblings.
+        // The provider-specific transaction handle (if any) is passed through opaquely
+        // via `connectionSource`; each provider treats it as its native type downstream.
+        const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
+            | { changesJSON: string; changesDescription: string }
+            | undefined;
+        if (
+            overlappingChangeData &&
+            entity.EntityInfo.AllowMultipleSubtypes &&
+            entity.EntityInfo.TrackRecordChanges
+        ) {
+            const transaction = entity.ProviderTransaction;
+            await this.PropagateRecordChangesToSiblings(
+                entity.EntityInfo,
+                overlappingChangeData,
+                entity.PrimaryKey.Values(),
+                user?.ID ?? '',
+                options.ISAActiveChildEntityName,
+                transaction ? { connectionSource: transaction } : undefined,
+            );
+        }
+        return null;
     }
 
     /**
@@ -831,7 +948,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
     /**
      * Validates a user-provided SQL clause (WHERE, ORDER BY, etc.) to prevent SQL injection.
-     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, CAST, etc.)
+     * Checks for forbidden keywords (INSERT, UPDATE, DELETE, EXEC, DROP, UNION, etc.)
      * and dangerous patterns (comments, semicolons, xp_ prefix).
      * String literals are stripped before validation to avoid false positives.
      *
@@ -847,7 +964,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
-            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bcast\b/, /\bxp_/, /;/,
+            /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
         ];
 
         for (const pattern of forbiddenPatterns) {
@@ -865,7 +982,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @throws Error if contextUser is null, entity is not found, or user lacks read permission
      */
     protected CheckUserReadPermissions(entityName: string, contextUser: UserInfo): void {
-        const entityInfo = this.Entities.find((e) => e.Name === entityName);
+        const entityInfo = this.EntityByName(entityName);
         if (!contextUser) throw new Error('contextUser is null');
         if (entityInfo) {
             const userPermissions = entityInfo.GetUserPermisions(contextUser);
@@ -1018,13 +1135,23 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns The SQL query string, or null if the entity has no name field
      */
     protected BuildEntityRecordNameSQL(entityName: string, compositeKey: CompositeKey): string | null {
-        const e = this.Entities.find((e) => e.Name === entityName);
+        const e = this.EntityByName(entityName);
         if (!e) throw new Error('Entity ' + entityName + ' not found');
 
-        const f = e.NameField;
-        if (!f) {
-            LogError('Entity ' + entityName + ' does not have a NameField, returning null');
-            return null;
+        // Collect ALL IsNameField fields in Sequence order for multi-field name support
+        // (e.g., FirstName + LastName → "Elizabeth Rodriguez")
+        const nameFields = e.Fields
+            .filter(f => f.IsNameField)
+            .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+
+        // Fall back to the single NameField if no IsNameField flags are set
+        if (nameFields.length === 0) {
+            const f = e.NameField;
+            if (!f) {
+                LogError('Entity ' + entityName + ' does not have a NameField, returning null');
+                return null;
+            }
+            nameFields.push(f);
         }
 
         let where = '';
@@ -1034,7 +1161,10 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (where.length > 0) where += ' AND ';
             where += this.QuoteIdentifier(pkv.FieldName) + '=' + quotes + pkv.Value + quotes;
         }
-        return 'SELECT ' + this.QuoteIdentifier(f.Name) + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
+
+        // SELECT all name fields so InternalGetEntityRecordName can concatenate them
+        const selectFields = nameFields.map(f => this.QuoteIdentifier(f.Name)).join(', ');
+        return 'SELECT ' + selectFields + ' FROM ' + this.QuoteSchemaAndView(e.SchemaName, e.BaseView) + ' WHERE ' + where;
     }
 
     /**
@@ -1051,8 +1181,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             if (sql) {
                 const data = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
                 if (data && data.length === 1) {
-                    const fields = Object.keys(data[0]);
-                    return String(data[0][fields[0]] ?? '');
+                    // Concatenate all returned fields with spaces (supports multi-name entities)
+                    const values = Object.values(data[0])
+                        .filter(v => v != null && String(v).trim() !== '')
+                        .map(v => String(v));
+                    return values.join(' ');
                 } else {
                     LogError('Entity ' + entityName + ' record ' + compositeKey.ToString() + ' not found');
                     return '';
@@ -1125,6 +1258,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 entityResult.StartedAt = new Date();
                 entityResult.Type = bNewRecord ? 'create' : 'update';
 
+                // Build SaveContext with pre-save field state snapshot
+                const saveContext: SaveContext = {
+                    IsNew: bNewRecord,
+                    Fields: entity.Fields.map(f => ({
+                        FieldInfo: f.EntityFieldInfo,
+                        WasDirty: f.Dirty,
+                        OldValue: f.OldValue,
+                    })),
+                    State: {},
+                };
+
                 entityResult.OriginalValues = entity.Fields.map((f) => {
                     const tempStatus = f.ActiveStatusAssertions;
                     f.ActiveStatusAssertions = false;
@@ -1132,11 +1276,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     f.ActiveStatusAssertions = tempStatus;
                     return ret;
                 });
-                entity.ResultHistory.push(entityResult);
+                entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook
                 if (!bReplay) {
-                    const validationMessage = await this.OnValidateBeforeSave(entity, user);
+                    const validationMessage = await this.OnValidateBeforeSave(entity, user, saveContext);
                     if (validationMessage) {
                         entityResult.Success = false;
                         entityResult.EndedAt = new Date();
@@ -1170,7 +1314,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
 
                 // Step 3: Before-save hook (entity actions, AI actions)
                 if (!bReplay) {
-                    await this.OnBeforeSaveExecute(entity, user, options);
+                    await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
                 // Step 4: Generate provider-specific SQL
@@ -1198,7 +1342,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                                 this.OnResumeRefresh();
                                 entityResult.EndedAt = new Date();
                                 if (success && transactionResult) {
-                                    this.OnAfterSaveExecute(entity, user, options);
+                                    this.OnAfterSaveExecute(entity, user, options, saveContext);
                                     entityResult.Success = true;
                                     entityResult.NewValues = this.MapTransactionResultToNewValues(transactionResult);
                                 } else {
@@ -1231,9 +1375,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     entityResult.EndedAt = new Date();
 
                     if (result && result.length > 0) {
-                        this.OnAfterSaveExecute(entity, user, options);
+                        this.OnAfterSaveExecute(entity, user, options, saveContext);
                         entityResult.Success = true;
-                        await this.OnSaveCompleted(entity, sqlDetails, user, options);
+
+                        // OnSaveCompleted may return patch fields (e.g., updated lat/lng
+                        // from geocoding) that need to be merged onto the SP result before
+                        // the entity loads the data via finalizeSave().
+                        const patches = await this.OnSaveCompleted(entity, sqlDetails, user, options, saveContext);
+                        if (patches) {
+                            Object.assign(result[0], patches);
+                        }
+
                         return result[0];
                     } else {
                         if (bNewRecord)
@@ -1282,7 +1434,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 FieldName: f.Name,
                 Value: f.Value,
             }));
-            entity.ResultHistory.push(entityResult);
+            entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user);
@@ -1585,12 +1737,95 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         entityInfo: EntityInfo,
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
+        restoreContext?: RestoreContext | null,
     ): Promise<unknown[] | undefined> {
-        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user);
+        const sqlResult = this.BuildRecordChangeSQL(newData, oldData, entityName, recordID, entityInfo, type, user, restoreContext);
         if (sqlResult) {
             return await this.ExecuteSQL(sqlResult.sql, sqlResult.parameters ?? undefined, undefined, user);
         }
         return undefined;
+    }
+
+    /**
+     * Dialect-agnostic predicate: should we write a RecordChange entry for
+     * this entity? Excludes the Record Changes entity itself to prevent
+     * recursion. Provider implementations should call this before invoking
+     * {@link BuildRecordChangePayload} or constructing dialect SQL.
+     */
+    protected ShouldTrackRecordChanges(entityInfo: EntityInfo): boolean {
+        if (!entityInfo.TrackRecordChanges) return false;
+        const lower = entityInfo.Name.trim().toLowerCase();
+        return lower !== 'record changes' && lower !== 'mj: record changes';
+    }
+
+    /**
+     * Builds the dialect-agnostic payload for a RecordChange row from the
+     * entity's old/new data and an optional restore context. Concrete
+     * providers consume the returned payload to render their dialect-specific
+     * SQL (SQL Server EXEC, PostgreSQL INSERT, etc.).
+     *
+     * Returns null when there's nothing to log — i.e., an Update where
+     * {@link DiffObjects} found no field-level changes. Creates and Deletes
+     * are always logged (one side of `oldData`/`newData` is null).
+     *
+     * The payload's `recordID` is whatever the caller passes in. PG's
+     * inline CTE save/delete paths can pass an empty string and resolve
+     * the actual RecordID expression in SQL (because the post-INSERT PK
+     * isn't known in JS); the standalone {@link BuildRecordChangeSQL} path
+     * passes a fully-resolved composite-key string.
+     *
+     * @param newData Post-change data (null for deletes).
+     * @param oldData Pre-change data (null for creates).
+     * @param recordID Composite-key serialized RecordID, or empty for CTE callers.
+     * @param entityInfo Entity metadata (provides EntityID + field shapes for diff).
+     * @param type Change type. `Create` and `Delete` skip the change-key short-circuit.
+     * @param user Acting user (provides UserID).
+     * @param restoreContext When non-null, populates `source='Restore'` plus the
+     *   lineage columns; otherwise `source='Internal'`.
+     * @param quoteToEscape Quote character for `EscapeQuotesInProperties` and
+     *   `DiffObjects`. Defaults to single quote.
+     */
+    protected BuildRecordChangePayload(
+        newData: Record<string, unknown> | null,
+        oldData: Record<string, unknown> | null,
+        recordID: string,
+        entityInfo: EntityInfo,
+        type: 'Create' | 'Update' | 'Delete',
+        user: UserInfo,
+        restoreContext?: RestoreContext | null,
+        quoteToEscape: string = "'",
+    ): RecordChangePayload | null {
+        const isCreateOrDelete = oldData === null || newData === null;
+        const changes = this.DiffObjects(
+            oldData as Record<string, unknown>,
+            newData as Record<string, unknown>,
+            entityInfo,
+            quoteToEscape,
+        );
+        const changesKeys = changes ? Object.keys(changes) : [];
+        if (changesKeys.length === 0 && !isCreateOrDelete) return null;
+
+        const dataForFullJSON = newData ?? oldData;
+        const fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
+        const changesJSON = changes !== null ? JSON.stringify(changes) : '';
+        const changesDescription = (oldData && newData)
+            ? this.CreateUserDescriptionOfChanges(changes!)
+            : (!oldData ? 'Record Created' : 'Record Deleted');
+
+        const source: RecordChangeSource = restoreContext ? 'Restore' : 'Internal';
+
+        return {
+            entityID: entityInfo.ID,
+            recordID,
+            userID: user.ID,
+            type,
+            source,
+            changesJSON,
+            changesDescription,
+            fullRecordJSON,
+            restoredFromID: restoreContext?.SourceChangeID ?? null,
+            restoreReason: restoreContext?.Reason ?? null,
+        };
     }
 
     /**
@@ -1599,6 +1834,16 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * PostgreSQL uses INSERT INTO "RecordChange" with parameterized values.
      *
      * Returns null if there are no changes to log.
+     *
+     * Implementations should delegate the dialect-agnostic assembly work to
+     * {@link BuildRecordChangePayload} and only handle SQL string rendering
+     * locally — that's how the duplication between SQL Server and PostgreSQL
+     * stays minimal.
+     *
+     * @param restoreContext When non-null, the resulting RecordChange row is
+     *   written with `Source='Restore'`, `RestoredFromID = SourceChangeID`,
+     *   and `RestoreReason = Reason`. Read by callers from
+     *   `BaseEntity.RestoreContext` immediately before generating SQL.
      */
     protected abstract BuildRecordChangeSQL(
         newData: Record<string, unknown> | null,
@@ -1608,6 +1853,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         entityInfo: EntityInfo,
         type: 'Create' | 'Update' | 'Delete',
         user: UserInfo,
+        restoreContext?: RestoreContext | null,
     ): { sql: string; parameters?: unknown[] } | null;
 
     /**
@@ -1745,7 +1991,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns The merge result
      */
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, _options?: EntityMergeOptions): Promise<RecordMergeResult> {
-        const e = this.Entities.find((e) => e.Name.trim().toLowerCase() === request.EntityName.trim().toLowerCase());
+        const e = this.EntityByName(request.EntityName);
         if (!e || !e.AllowRecordMerge)
             throw new Error(`Entity ${request.EntityName} does not allow record merging, check the AllowRecordMerge property in the entity metadata`);
 
@@ -1827,7 +2073,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     protected async StartMergeLogging(request: RecordMergeRequest, result: RecordMergeResult, contextUser?: UserInfo): Promise<BaseEntity> {
         try {
             const recordMergeLog: BaseEntity = await this.GetEntityObject('MJ: Record Merge Logs', contextUser);
-            const entity = this.Entities.find((e) => e.Name === request.EntityName);
+            const entity = this.EntityByName(request.EntityName);
             if (!entity) throw new Error(`Entity ${request.EntityName} not found in metadata`);
             if (!contextUser && !this.CurrentUser) throw new Error('contextUser is null and no CurrentUser is set');
 

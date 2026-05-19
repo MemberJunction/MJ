@@ -1,6 +1,5 @@
 // import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
 // import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-// import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 // import { RunView, Metadata } from '@memberjunction/core';
 // import { MJAIAgentEntityExtended, MJAIAgentTypeEntity, MJAIPromptEntityExtended } from '@memberjunction/core-entities';
@@ -158,7 +157,7 @@
 //     this.isLoading$.next(true);
     
 //     try {
-//       const rv = new RunView();
+//       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
 //       const agentTypesResult = await rv.RunView<MJAIAgentTypeEntity>({
 //         EntityName: 'MJ: AI Agent Types',
@@ -187,7 +186,7 @@
 //   private async loadSelectedCompressionPrompt() {
 //     if (this.agent.ContextCompressionPromptID) {
 //       try {
-//         const rv = new RunView();
+//         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 //         const result = await rv.RunView<MJAIPromptEntityExtended>({
 //           EntityName: 'MJ: AI Prompts',
 //           ExtraFilter: `ID = '${this.agent.ContextCompressionPromptID}'`,

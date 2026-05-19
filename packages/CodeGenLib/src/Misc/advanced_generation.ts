@@ -4,18 +4,36 @@ import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
+import { CodeGenReporter } from "./codegen-reporter";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
 export type SmartFieldIdentificationResult = {
-    nameField: string;
-    nameFieldReason: string;
+    /**
+     * One or more fields that together form the human-readable record name.
+     * For person entities: ["FirstName", "LastName"]
+     * For simple entities: ["Name"]
+     * Displayed concatenated with spaces in card titles, tooltips, etc.
+     */
+    nameFields: string[];
+    nameFieldsReason: string;
     defaultInView: string[];
     defaultInViewReason: string;
     searchableFields: string[];
     searchableFieldsReason: string;
+    /** Whether this entity should be searchable by users via the search API */
+    allowUserSearch?: boolean;
+    allowUserSearchReason?: string;
+    /** Per-field search predicate recommendations (BeginsWith, Contains, EndsWith, Exact) */
+    searchPredicates?: Array<{ field: string; predicate: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' }>;
+    searchPredicatesReason?: string;
+    /** Whether full-text search should be enabled for this entity */
+    enableFullTextSearch?: boolean;
+    /** Which fields should be included in the full-text search index */
+    fullTextSearchFields?: string[];
+    fullTextSearchReason?: string;
     confidence: 'high' | 'medium' | 'low';
 }
 
@@ -74,7 +92,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
         displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
+        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     /** @deprecated Use categoryInfo instead */
@@ -93,7 +111,7 @@ export class AdvancedGeneration {
     private _promptRunner: AIPromptRunner;
 
     constructor() {
-        this._metadata = new Metadata();
+        this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         this._promptRunner = new AIPromptRunner();
     }
 
@@ -134,8 +152,23 @@ export class AdvancedGeneration {
     private async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
+        const startMs = Date.now();
+        const promptName = params.prompt?.Name ?? 'unknown';
         try {
             const result = await this._promptRunner.ExecutePrompt<T>(params);
+            // Record telemetry for this LLM call. Entity attribution falls back to the
+            // entityPhase in processEntityAdvancedGeneration via CodeGenReporter's
+            // _currentEntity. No-op if no run is active.
+            CodeGenReporter.Instance.recordLLMCall({
+                promptName,
+                // Model name lives on the promptRun entity once the call succeeds;
+                // falls back to null for runs where the entity didn't get populated.
+                model: (result.promptRun as unknown as { Model?: string })?.Model ?? null,
+                tokensIn: result.promptTokens ?? 0,
+                tokensOut: result.completionTokens ?? 0,
+                costUSD: result.cost ?? 0,
+                latencyMs: result.executionTimeMS ?? (Date.now() - startMs),
+            });
             return result;
         } catch (error) {
             LogError(`AdvancedGeneration:Prompt execution failed: ${error}`);
@@ -165,17 +198,23 @@ export class AdvancedGeneration {
                 fields: entity.Fields.map((f: any) => ({
                     Name: f.Name,
                     Type: f.Type,
+                    MaxLength: f.MaxLength ?? null,
                     IsNullable: f.AllowsNull,
                     IsPrimaryKey: f.IsPrimaryKey,
                     IsUnique: f.IsUnique,
                     IsForeignKey: f.EntityIDFieldName != null || (f.RelatedEntityID && f.RelatedEntityID.length > 0),
                     RelatedEntity: f.RelatedEntity || null,
-                    Description: f.Description
+                    Description: f.Description,
+                    ExtendedType: f.ExtendedType || null,
+                    ValueListType: f.ValueListType || null,
+                    DefaultValue: f.DefaultValue || null,
+                    Sequence: f.Sequence ?? null,
                 })),
                 relationships: entity.RelatedEntities?.map((r: any) => ({
                     Name: r.Name,
                     RelatedEntity: r.RelatedEntity
-                })) || []
+                })) || [],
+                allowFullTextSearch: configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate ?? false
             };
             params.contextUser = contextUser;
 

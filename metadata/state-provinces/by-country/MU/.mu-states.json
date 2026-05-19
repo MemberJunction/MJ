@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Agalega Islands",
+      "Code": "AG",
+      "ISO3166_2": "MU-AG",
+      "Latitude": -10.3512,
+      "Longitude": 56.5372,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-AG.geojson",
+      "CommonAliases": [
+        "Agalega Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "F2FE1C86-4DB8-4D6E-A04F-DD665F49A793"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.313Z",
+      "checksum": "16a021a806f4b2b11fe00151d170af4b65494deede92beee5afee10124353b20"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beau Bassin-Rose Hill",
+      "Code": "BR",
+      "ISO3166_2": "MU-BR",
+      "Latitude": -20.2387,
+      "Longitude": 57.4713,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-BR.geojson",
+      "CommonAliases": [
+        "Beau Bassin-Rose Hill"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "10CA4551-F493-4100-8BB3-0B21498B23D8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.331Z",
+      "checksum": "b20cc9afc3d0acba10e366cae42548bfa39745d45a0b8fcf1137260d011f1bef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Black River",
+      "Code": "BL",
+      "ISO3166_2": "MU-BL",
+      "Latitude": -20.3424,
+      "Longitude": 57.4149,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-BL.geojson",
+      "CommonAliases": [
+        "Black River"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "0A00BD1E-B82E-4603-BE5E-335B5D59E75A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.349Z",
+      "checksum": "973ff2c2e00cc75873736148e15ed906ca7b7ae166f30e86a53aaa817414cc06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cargados Carajos Shoals [Saint Brandon Islands]",
+      "Code": "CC",
+      "ISO3166_2": "MU-CC",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Cargados Carajos Shoals [Saint Brandon Islands]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "13533D34-F378-4835-B83D-CE7A1913967E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.366Z",
+      "checksum": "1381a3207dfda4c10b2dbad5dd7867f810497d0715af29cd2b17377e75e6c9a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Curepipe",
+      "Code": "CU",
+      "ISO3166_2": "MU-CU",
+      "Latitude": -20.3183,
+      "Longitude": 57.5168,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-CU.geojson",
+      "CommonAliases": [
+        "Curepipe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "165FC2E0-6DF3-4636-8806-2E89576734BD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.382Z",
+      "checksum": "d589f7b9591e4ffc81536d03360523e1efa139a5f8cd2fb6f785a76f06918c4f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Flacq",
+      "Code": "FL",
+      "ISO3166_2": "MU-FL",
+      "Latitude": -20.2173,
+      "Longitude": 57.7206,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-FL.geojson",
+      "CommonAliases": [
+        "Flacq"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "6F5C1C3B-37BF-4A04-BF05-E1FFF6A76BFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.399Z",
+      "checksum": "5620e8b96152dc6f96374f066d3a6e774e976b5ebbf7b258aee73cebec8dd340"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grand Port",
+      "Code": "GP",
+      "ISO3166_2": "MU-GP",
+      "Latitude": -20.392,
+      "Longitude": 57.6498,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-GP.geojson",
+      "CommonAliases": [
+        "Grand Port"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "446424CC-16FB-480C-8BD2-10731D8D28B5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.415Z",
+      "checksum": "8a3e46cb963468c96899240bd3537fe86cd1a9e5b5de1d1a715d3d1ef40ca35b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moka",
+      "Code": "MO",
+      "ISO3166_2": "MU-MO",
+      "Latitude": -20.2492,
+      "Longitude": 57.5955,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-MO.geojson",
+      "CommonAliases": [
+        "Moka"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "1920AEBE-469E-47FB-8D68-83819F256EE0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.432Z",
+      "checksum": "ed35a33f0ae8db748375e8b8925e4db552383bbc3fe826f1ea13a2b0da378c8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pamplemousses",
+      "Code": "PA",
+      "ISO3166_2": "MU-PA",
+      "Latitude": -20.0899,
+      "Longitude": 57.573,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-PA.geojson",
+      "CommonAliases": [
+        "Pamplemousses"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "1F208176-F912-441E-B7DE-49ED8404E92E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.449Z",
+      "checksum": "a83a4bbce79b5615c65f6db9b6327e864ef2a68402dd9e5bdc4d942f10af40ee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plaines Wilhems",
+      "Code": "PW",
+      "ISO3166_2": "MU-PW",
+      "Latitude": -20.3599,
+      "Longitude": 57.5197,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-PW.geojson",
+      "CommonAliases": [
+        "Plaines Wilhems"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "48F69DA5-1DA1-422D-AA71-7102F7BE65B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.463Z",
+      "checksum": "7ca605ba6924b389b0074b4bc2c289273e4624526a41b833a724bb8a51d3ac04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Port Louis",
+      "Code": "PL",
+      "ISO3166_2": "MU-PL",
+      "Latitude": -20.1667,
+      "Longitude": 57.5296,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-PL.geojson",
+      "CommonAliases": [
+        "Port Louis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "5271D342-15BC-496E-9E05-43302236ED0D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.510Z",
+      "checksum": "a56cfdcbc72921cda0a85af1b132ee1543832a779493c4421b13ed41080ce622"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quatre Bornes",
+      "Code": "QB",
+      "ISO3166_2": "MU-QB",
+      "Latitude": -20.2688,
+      "Longitude": 57.4801,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-QB.geojson",
+      "CommonAliases": [
+        "Quatre Bornes"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "F1E5149D-0C81-4BA4-A1D4-4B6489D3FEAD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.526Z",
+      "checksum": "897b781fb3d90b482f3156c683e5e1a4f8d6deee13045862c0df6b5ca1185153"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rivière du Rempart",
+      "Code": "RR",
+      "ISO3166_2": "MU-RR",
+      "Latitude": -20.0651,
+      "Longitude": 57.6557,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-RR.geojson",
+      "CommonAliases": [
+        "Rivière du Rempart"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "27C44EFF-F368-4D15-822F-CDA7BFDF412C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.543Z",
+      "checksum": "138e61875c9fc490d6d6390e41032d43ec9a1cee30e809d600491f0d3bcfd982"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rodrigues Island",
+      "Code": "RO",
+      "ISO3166_2": "MU-RO",
+      "Latitude": -19.697,
+      "Longitude": 63.4542,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-RO.geojson",
+      "CommonAliases": [
+        "Rodrigues Island"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "9FF080B6-1936-4BAA-AF5C-0F2D6F073C86"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.559Z",
+      "checksum": "add0eb00a00d5e0c52a19a738e3a469a60b6523d5a27adcb8e5cbd676cbb845d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Savanne",
+      "Code": "SA",
+      "ISO3166_2": "MU-SA",
+      "Latitude": -20.464,
+      "Longitude": 57.5211,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-SA.geojson",
+      "CommonAliases": [
+        "Savanne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "468B4A2B-A233-4369-850C-9C8E54B73161"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.579Z",
+      "checksum": "514255e1567bb38667741fb53de33fe28eec12d623700b683c4e0e1fac7f1a47"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vacoas-Phoenix",
+      "Code": "VP",
+      "ISO3166_2": "MU-VP",
+      "Latitude": -20.3024,
+      "Longitude": 57.4908,
+      "BoundaryGeoJSON": "@file:by-country/MU/boundaries/MU-VP.geojson",
+      "CommonAliases": [
+        "Vacoas-Phoenix"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MU"
+    },
+    "primaryKey": {
+      "ID": "F7CE8802-D00B-4618-BBCF-9F2566DA5749"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:18.593Z",
+      "checksum": "d3326fbf1f81fa4e0ca01a046ac2c6cdbd4e408aeab8ff0e34a51cd61bc107c5"
+    }
+  }
+]

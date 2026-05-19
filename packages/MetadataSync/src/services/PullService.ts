@@ -7,6 +7,12 @@ import { configManager } from '../lib/config-manager';
 import { FileWriteBatch } from '../lib/file-write-batch';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
+import { SyncStateManager } from '../lib/sync-state-manager';
+
+/** Validates that a string is a well-formed ISO 8601 timestamp. */
+function isValidISOTimestamp(value: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(value);
+}
 
 export interface PullOptions {
   entity: string;
@@ -20,6 +26,8 @@ export interface PullOptions {
   createNewFileIfNotFound?: boolean;
   include?: string[]; // Only process these directories (whitelist, supports patterns)
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
+  since?: string;       // ISO timestamp — only pull records updated after this time
+  incremental?: boolean; // Use stored last-pull timestamp for this entity
 }
 
 export interface PullCallbacks {
@@ -45,12 +53,19 @@ export class PullService {
   private createdBackupDirs: Set<string> = new Set();
   private fileWriteBatch: FileWriteBatch;
   private recordProcessor: RecordProcessor;
-  
-  constructor(syncEngine: SyncEngine, contextUser: UserInfo) {
+  private stateManager: SyncStateManager | undefined;
+
+  constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
     this.fileWriteBatch = new FileWriteBatch();
     this.recordProcessor = new RecordProcessor(syncEngine, contextUser);
+    this.stateManager = stateManager;
+  }
+
+  /** Set or replace the state manager after construction. */
+  setStateManager(stateManager: SyncStateManager): void {
+    this.stateManager = stateManager;
   }
   
   async pull(options: PullOptions, callbacks?: PullCallbacks): Promise<PullResult> {
@@ -119,14 +134,31 @@ export class PullService {
     // Pull records
     callbacks?.onProgress?.(`Pulling ${options.entity} records`);
     const rv = new RunView();
-    
+
     let filter = '';
     if (options.filter) {
       filter = options.filter;
     } else if (entityConfig?.pull?.filter) {
       filter = entityConfig.pull.filter;
     }
-    
+
+    // Build incremental filter using __mj_UpdatedAt
+    let sinceTimestamp: string | undefined;
+    if (options.since) {
+      sinceTimestamp = options.since;
+    } else if (options.incremental && this.stateManager) {
+      sinceTimestamp = this.stateManager.getLastPullTimestamp(options.entity);
+    }
+
+    if (sinceTimestamp) {
+      if (!isValidISOTimestamp(sinceTimestamp)) {
+        throw new Error('Invalid --since timestamp format. Expected ISO 8601 (e.g., 2026-04-07T10:00:00Z)');
+      }
+      const dateFilter = `[__mj_UpdatedAt] > '${sinceTimestamp}'`;
+      filter = filter ? `(${filter}) AND ${dateFilter}` : dateFilter;
+      callbacks?.onLog?.(`Incremental pull: fetching records updated after ${sinceTimestamp}`);
+    }
+
     const result = await rv.RunView({
       EntityName: options.entity,
       ExtraFilter: filter,
@@ -191,6 +223,19 @@ export class PullService {
       throw error;
     }
     
+    // Incremental pull: detect soft-deleted records and remove their local files.
+    // Records deleted via __mj_DeletedAt won't appear in the UpdatedAt query,
+    // so we need a separate check.
+    if (sinceTimestamp && !options.dryRun) {
+      await this.removeDeletedRecordFiles(options, sinceTimestamp, targetDir, callbacks);
+    }
+
+    // Persist incremental state after a successful pull
+    if (this.stateManager && (options.incremental || options.since)) {
+      this.stateManager.setLastPullTimestamp(options.entity, new Date().toISOString());
+      await this.stateManager.save();
+    }
+
     return {
       ...pullResult,
       targetDir
@@ -215,11 +260,16 @@ export class PullService {
     let created = 0;
     let skipped = 0;
     
+    // Pre-fetch all related entities in batch when there are multiple records
+    const batchedRelatedData = await this.prefetchRelatedEntities(
+      records, entityConfig, entityInfo, options.verbose, callbacks
+    );
+
     // If multi-file flag is set, collect all records
     if (options.multiFile) {
       const allRecords: RecordData[] = [];
       const errors: string[] = [];
-      
+
       // Process records in parallel for multi-file mode
       const recordPromises = records.map(async (record, index) => {
         try {
@@ -228,17 +278,22 @@ export class PullService {
           for (const pk of entityInfo.PrimaryKeys) {
             primaryKey[pk.Name] = (record as any)[pk.Name];
           }
-          
+
           // Process record for multi-file
           const recordData = await this.recordProcessor.processRecord(
-            record, 
-            primaryKey, 
-            targetDir, 
-            entityConfig, 
-            options.verbose, 
-            true
+            record,
+            primaryKey,
+            targetDir,
+            entityConfig,
+            options.verbose,
+            true,
+            undefined,
+            0,
+            new Set(),
+            undefined,
+            batchedRelatedData
           );
-          
+
           return { success: true, recordData, index };
         } catch (error) {
           const errorMessage = `Failed to process record ${index + 1}: ${(error as any).message || error}`;
@@ -282,7 +337,8 @@ export class PullService {
         targetDir,
         entityConfig,
         entityInfo,
-        callbacks
+        callbacks,
+        batchedRelatedData
       );
       
       processed = result.processed;
@@ -377,6 +433,80 @@ export class PullService {
   }
   
   /**
+   * Detect records that were soft-deleted since the last pull and remove
+   * their corresponding local JSON files. Without this, incremental pull
+   * (which filters by __mj_UpdatedAt) would never notice deletions.
+   */
+  private async removeDeletedRecordFiles(
+    options: PullOptions,
+    sinceTimestamp: string,
+    targetDir: string,
+    callbacks?: PullCallbacks,
+  ): Promise<void> {
+    try {
+      if (!isValidISOTimestamp(sinceTimestamp)) {
+        throw new Error('Invalid --since timestamp format. Expected ISO 8601 (e.g., 2026-04-07T10:00:00Z)');
+      }
+      const rv = new RunView();
+      const deletedFilter = `[__mj_DeletedAt] > '${sinceTimestamp}'`;
+      const baseFilter = options.filter || '';
+      const fullFilter = baseFilter
+        ? `(${baseFilter}) AND ${deletedFilter}`
+        : deletedFilter;
+
+      const result = await rv.RunView({
+        EntityName: options.entity,
+        ExtraFilter: fullFilter,
+        ResultType: 'simple',
+      }, this.contextUser);
+
+      if (!result.Success || result.Results.length === 0) {
+        return;
+      }
+
+      const entityInfo = this.syncEngine.getEntityInfo(options.entity);
+      const pkField = entityInfo?.PrimaryKeys?.[0]?.Name ?? 'ID';
+
+      let removed = 0;
+      for (const record of result.Results) {
+        const id = record[pkField];
+        if (!id) continue;
+
+        // Try common file naming patterns.
+        // NOTE: This is a best-effort heuristic. If the entity uses a custom
+        // file naming scheme (e.g., via newFileName config) these patterns may
+        // miss. A single-file-per-entity layout is also not covered here.
+        const candidates = [
+          path.join(targetDir, `${id}.json`),
+          path.join(targetDir, `${record.Name ?? id}.json`),
+          path.join(targetDir, `${(record.Name ?? '').replace(/[^a-zA-Z0-9-_ ]/g, '')}.json`),
+        ];
+
+        for (const filePath of candidates) {
+          if (await fs.pathExists(filePath)) {
+            await fs.remove(filePath);
+            removed++;
+            if (options.verbose) {
+              callbacks?.onLog?.(`   Removed deleted record file: ${path.basename(filePath)}`);
+            }
+            break;
+          }
+        }
+      }
+
+      if (removed > 0) {
+        callbacks?.onSuccess?.(`Removed ${removed} files for soft-deleted records`);
+      }
+    } catch (error) {
+      // Non-fatal — log and continue. Entity may not support soft deletes
+      // (__mj_DeletedAt column may not exist), in which case the query fails.
+      if (options.verbose) {
+        callbacks?.onLog?.(`   Note: could not check for deleted records (entity may use hard deletes)`);
+      }
+    }
+  }
+
+  /**
    * Rollback file changes by restoring from backup files
    * Called when pull operation fails after files have been modified
    */
@@ -423,7 +553,8 @@ export class PullService {
     targetDir: string,
     entityConfig: EntityConfig,
     entityInfo: EntityInfo,
-    callbacks?: PullCallbacks
+    callbacks?: PullCallbacks,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
   ): Promise<{ processed: number; updated: number; created: number; skipped: number }> {
     let processed = 0;
     let updated = 0;
@@ -517,13 +648,17 @@ export class PullService {
           
           // Process the new record data (isNewRecord = false for updates)
           const newRecordData = await this.recordProcessor.processRecord(
-            record, 
-            primaryKey, 
-            targetDir, 
-            entityConfig, 
-            options.verbose, 
-            false, 
-            existingRecordData
+            record,
+            primaryKey,
+            targetDir,
+            entityConfig,
+            options.verbose,
+            false,
+            existingRecordData,
+            0,
+            new Set(),
+            undefined,
+            batchedRelatedData
           );
           
           // Apply merge strategy
@@ -582,12 +717,17 @@ export class PullService {
           try {
             // For new records, pass isNewRecord = true (default)
             const recordData = await this.recordProcessor.processRecord(
-              record, 
-              primaryKey, 
-              targetDir, 
-              entityConfig, 
-              options.verbose, 
-              true
+              record,
+              primaryKey,
+              targetDir,
+              entityConfig,
+              options.verbose,
+              true,
+              undefined,
+              0,
+              new Set(),
+              undefined,
+              batchedRelatedData
             );
             
             // Use queueArrayUpdate to append the new record without overwriting existing updates
@@ -615,7 +755,7 @@ export class PullService {
         // Create individual files for each new record in parallel
         const individualRecordPromises = newRecords.map(async ({ record, primaryKey }, index) => {
           try {
-            await this.processRecord(record, primaryKey, targetDir, entityConfig, options.verbose);
+            await this.processRecord(record, primaryKey, targetDir, entityConfig, options.verbose, batchedRelatedData);
             return { success: true, index };
           } catch (error) {
             const errorMessage = `Failed to process new record ${index + 1}: ${(error as any).message || error}`;
@@ -644,19 +784,25 @@ export class PullService {
   }
   
   private async processRecord(
-    record: BaseEntity, 
+    record: BaseEntity,
     primaryKey: Record<string, any>,
-    targetDir: string, 
+    targetDir: string,
     entityConfig: EntityConfig,
-    verbose?: boolean
+    verbose?: boolean,
+    batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
   ): Promise<void> {
     const recordData = await this.recordProcessor.processRecord(
-      record, 
-      primaryKey, 
-      targetDir, 
-      entityConfig, 
-      verbose, 
-      true
+      record,
+      primaryKey,
+      targetDir,
+      entityConfig,
+      verbose,
+      true,
+      undefined,
+      0,
+      new Set(),
+      undefined,
+      batchedRelatedData
     );
     
     // Determine file path
@@ -670,6 +816,72 @@ export class PullService {
   
 
 
+
+  /**
+   * Pre-fetch all related entities in batch for all parent records.
+   * Returns undefined if no related entities are configured or only 1 record.
+   * Only pre-fetches top-level relations; nested relations fall back to per-record loading.
+   */
+  private async prefetchRelatedEntities(
+    records: BaseEntity[],
+    entityConfig: EntityConfig,
+    entityInfo: EntityInfo,
+    verbose?: boolean,
+    callbacks?: PullCallbacks
+  ): Promise<Map<string, Map<string, BaseEntity[]>> | undefined> {
+    if (!entityConfig.pull?.relatedEntities || records.length <= 1) {
+      return undefined;
+    }
+
+    const relatedEntityEntries = Object.entries(entityConfig.pull.relatedEntities);
+    if (relatedEntityEntries.length === 0) {
+      return undefined;
+    }
+
+    // Extract all parent primary key values using the entity's actual PK field name
+    const pkFieldName = entityInfo.PrimaryKeys[0].Name;
+    const allParentIds: string[] = [];
+    for (const record of records) {
+      const id = record.Get(pkFieldName);
+      if (id != null) {
+        allParentIds.push(String(id));
+      }
+    }
+
+    if (allParentIds.length === 0) {
+      return undefined;
+    }
+
+    if (verbose) {
+      callbacks?.onLog?.(`Batch pre-fetching related entities for ${allParentIds.length} parent records`);
+    }
+
+    const batchedRelatedData = new Map<string, Map<string, BaseEntity[]>>();
+
+    for (const [relationKey, relationConfig] of relatedEntityEntries) {
+      try {
+        const batchResults = await this.recordProcessor.batchPrefetchRelatedEntities(
+          allParentIds,
+          relationConfig,
+          verbose
+        );
+        batchedRelatedData.set(relationKey, batchResults);
+
+        if (verbose) {
+          const totalRelated = Array.from(batchResults.values()).reduce((sum, arr) => sum + arr.length, 0);
+          callbacks?.onLog?.(`  ${relationKey}: ${totalRelated} related records across ${batchResults.size} parents`);
+        }
+      } catch (error: unknown) {
+        if (verbose) {
+          const message = error instanceof Error ? error.message : String(error);
+          callbacks?.onWarn?.(`Failed to batch pre-fetch ${relationKey}: ${message}`);
+        }
+        // Don't add to batchedRelatedData — processRelatedEntities will fall back to per-record
+      }
+    }
+
+    return batchedRelatedData.size > 0 ? batchedRelatedData : undefined;
+  }
 
   private async findEntityDirectories(entityName: string): Promise<string[]> {
     const dirs: string[] = [];

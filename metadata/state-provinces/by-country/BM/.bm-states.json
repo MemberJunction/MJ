@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Bermuda",
+      "Code": "BM",
+      "ISO3166_2": "BM-BM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Bermuda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=BM"
+    },
+    "primaryKey": {
+      "ID": "C71016FE-2AF7-40E2-8F38-850F17020A9A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:33.399Z",
+      "checksum": "65c1c6e9f9e48b1b8f1478f3a29ecb7db798fef27210f7dd8eee5f77391c1255"
+    }
+  }
+]

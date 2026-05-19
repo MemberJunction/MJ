@@ -1,0 +1,38 @@
+{
+  "name": "EntityFieldNonexistentBroken",
+  "type": "generic",
+  "title": "Entity Field Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of accessing non-existent field on entity",
+  "code": "function EntityFieldNonexistentBroken({ utilities }) {\n  const [salaries, setSalaries] = useState([]);\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rv.RunView({ EntityName: 'MJ: Employees' });\n      if (result?.Success) {\n        // ❌ Field doesn't exist: Employees entity has no Salary field\n        const data = result.Results.map(m => ({\n          name: m.FirstName,\n          salary: m.Salary\n        }));\n        setSalaries(data);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      {salaries.map((item, i) => (\n        <div key={i}>{item.name}: ${item.salary}</div>\n      ))}\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "mode": "views",
+    "entities": [{
+      "name": "MJ: Employees",
+      "type": "view",
+      "fieldMetadata": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "FirstName", "type": "nvarchar"},
+        {"name": "LastName", "type": "nvarchar"},
+        {"name": "Email", "type": "nvarchar"},
+        {"name": "Phone", "type": "nvarchar"},
+        {"name": "Title", "type": "nvarchar"},
+        {"name": "Active", "type": "bit"},
+        {"name": "CompanyID", "type": "uniqueidentifier"},
+        {"name": "SupervisorID", "type": "uniqueidentifier"},
+        {"name": "FirstLast", "type": "nvarchar"},
+        {"name": "Supervisor", "type": "nvarchar"},
+        {"name": "SupervisorEmail", "type": "nvarchar"},
+        {"name": "SupervisorFirstName", "type": "nvarchar"},
+        {"name": "SupervisorLastName", "type": "nvarchar"},
+        {"name": "BCMID", "type": "uniqueidentifier"},
+        {"name": "__mj_CreatedAt", "type": "datetimeoffset"},
+        {"name": "__mj_UpdatedAt", "type": "datetimeoffset"}
+      ]
+    }]
+  }
+}

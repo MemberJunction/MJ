@@ -3,7 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { MJGlobal } from "@memberjunction/global";
@@ -23,25 +27,28 @@ private _dbProvider: CodeGenDatabaseProvider | null = null;
 /**
  * Lazy-initialized database provider. Uses the same factory pattern as ManageMetadataBase
  * and SQLCodeGenBase to resolve the correct provider for the configured database platform.
+ *
+ * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+ * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+ * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+ * Mismatched keys silently fall back to the abstract base class — fail loud
+ * with an explicit error so a misconfigured platform doesn't ship as a
+ * runtime breakage in dialect-specific methods.
  */
 protected get dbProvider(): CodeGenDatabaseProvider {
    if (!this._dbProvider) {
-      const platform = configInfo.dbType;
-      if (platform === 'postgresql') {
-         const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-            CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider'
+      const platform = configInfo.dbPlatform;
+      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+         CodeGenDatabaseProvider,
+         platform
+      );
+      if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+         throw new Error(
+            `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
          );
-         if (pgProvider) {
-            this._dbProvider = pgProvider;
-         } else {
-            throw new Error(
-               'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-               'is installed and its CodeGen provider is registered before running CodeGen.'
-            );
-         }
-      } else {
-         this._dbProvider = new SQLServerCodeGenProvider();
       }
+      this._dbProvider = provider;
    }
    return this._dbProvider;
 }
@@ -148,7 +155,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 
 public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
-   const md: Metadata = new Metadata();
+   const md: Metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
    // Build the dependency order tree, provide ALL entities for this process
    const entityLevelTree = this.buildEntityLevelsTree(md.Entities);
@@ -282,34 +289,71 @@ public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string
  }
  
  /**
-  * Regenerates base views for entities that failed the refresh process using the full CodeGen approach
+  * Regenerates base views for entities that failed the refresh process using the full CodeGen approach.
+  *
+  * Every entity is attempted so the caller sees the full scope of failures in a single pass
+  * rather than bisecting one at a time. At the end, a batch summary is logged listing every
+  * entity that failed and the corresponding error. When `MJ_CODEGEN_STRICT_VIEW_REGEN=true`
+  * is set in the environment, a non-empty failure list becomes a thrown error, halting the
+  * install pipeline loudly rather than reporting success while views are missing.
+  *
   * @param ds DataSource for database operations
   * @param entities List of entities whose views need to be regenerated
   * @returns True if all regenerations succeeded, false otherwise
+  * @throws Error when `MJ_CODEGEN_STRICT_VIEW_REGEN=true` and any regeneration failed
   */
  private async regenerateFailedBaseViews(ds: CodeGenConnection, entities: EntityInfo[]): Promise<boolean> {
-   let bSuccess = true;
-   
    const sqlCodeGen = new SQLCodeGenBase();
-   
+   const failures: Array<{ entity: EntityInfo; error: unknown }> = [];
+
+   // Build the will-regenerate set once for the whole batch. Dialect-specific
+   // regeneration paths (like the PG 42P16 fallback) use this to avoid
+   // restoring dependents that CodeGen is about to rebuild with a fresh
+   // definition — the stale captured definition could otherwise be
+   // incompatible with the newly-regenerated target.
+   const willRegenerate = new Set(entities.map(e => `${e.SchemaName}.${e.BaseView}`));
+
    for (const entity of entities) {
      try {
        logMessage(`Regenerating base view for ${entity.Name}...`, 'Info');
-       
+
        // Generate the new view definition using the CodeGen approach
        const viewSQL = await sqlCodeGen.generateBaseView(ds, entity);
-       
-       // Execute the new view definition
-       await this.executeSQLScript(ds, viewSQL, false);
-       
+
+       // Route through the provider's dialect-specific fast path when present
+       // (PG overrides with capture/drop/recreate/restore recovery); fall back
+       // to the generic executeSQLScript path for dialects that don't override.
+       if (this.dbProvider.regenerateBaseView) {
+         await this.dbProvider.regenerateBaseView(entity, viewSQL, willRegenerate);
+       } else {
+         await this.executeSQLScript(ds, viewSQL, false);
+       }
+
        logMessage(`Successfully regenerated base view for ${entity.Name}`, 'Info');
      } catch (e) {
        logError(`Failed to regenerate base view for ${entity.Name}: ${e}`);
-       bSuccess = false;
+       failures.push({ entity, error: e });
      }
    }
-   
-   return bSuccess;
+
+   if (failures.length > 0) {
+     const summary = failures
+       .map(f => {
+         const msg = f.error instanceof Error ? f.error.message : String(f.error);
+         return `  - ${f.entity.SchemaName}.${f.entity.Name}: ${msg}`;
+       })
+       .join('\n');
+     logError(`Base view regeneration failed for ${failures.length} of ${entities.length} entity(ies):\n${summary}`);
+
+     if (process.env.MJ_CODEGEN_STRICT_VIEW_REGEN === 'true') {
+       throw new Error(
+         `Base view regeneration failed for ${failures.length} entity(ies) with MJ_CODEGEN_STRICT_VIEW_REGEN=true. ` +
+         `See the log above for per-entity errors.`
+       );
+     }
+   }
+
+   return failures.length === 0;
  }
  
  public async executeSQLFiles(filePaths: string[], outputMessages: boolean): Promise<boolean> {

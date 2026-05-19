@@ -376,8 +376,12 @@ describe('SalesforceConnector (mocked API)', () => {
             expect(result.Records[0].ExternalID).toBe('001A000001');
             expect(result.Records[0].ObjectType).toBe('Account');
             expect(result.Records[0].Fields['Name']).toBe('Acme Inc');
-            // Watermark should be the max SystemModstamp
-            expect(result.NewWatermarkValue).toBe('2026-03-11T12:00:00.000Z');
+            // Watermark = max SystemModstamp + 1ms. The SOQL filter uses `>=`
+            // to avoid dropping records modified at the exact watermark instant,
+            // so the saved watermark is shifted past the max we just observed.
+            // SF's SystemModstamp is millisecond-precision, so +1ms cannot skip
+            // a real record. See SalesforceConnector.ExtractMaxWatermark.
+            expect(result.NewWatermarkValue).toBe('2026-03-11T12:00:00.001Z');
         });
 
         it('should indicate HasMore when query is not done', async () => {

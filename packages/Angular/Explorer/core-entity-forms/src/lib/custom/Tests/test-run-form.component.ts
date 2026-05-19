@@ -224,7 +224,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
     try {
       // Load test
       if (this.record.TestID) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const test = await md.GetEntityObject<MJTestEntity>('MJ: Tests');
         if (test && await test.Load(this.record.TestID)) {
           this.test = test;
@@ -233,7 +233,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
 
       // Load test suite run if part of a suite
       if (this.record.TestSuiteRunID) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const suiteRun = await md.GetEntityObject<MJTestSuiteRunEntity>('MJ: Test Suite Runs');
         if (suiteRun && await suiteRun.Load(this.record.TestSuiteRunID)) {
           this.testSuiteRun = suiteRun;
@@ -262,7 +262,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [agentRuns, promptRuns] = await rv.RunViews([
         {
           EntityName: 'MJ: AI Agent Runs',
@@ -303,7 +303,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID='${this.record.ID}'`,
@@ -465,7 +465,7 @@ export class MJTestRunFormComponentExtended extends MJTestRunFormComponent imple
       return;
     }
 
-    this.testingDialogService.OpenTestDialog(this.record.TestID, this.viewContainerRef);
+    this.testingDialogService.OpenTestPanel(this.record.TestID);
   }
 
   async refresh() {

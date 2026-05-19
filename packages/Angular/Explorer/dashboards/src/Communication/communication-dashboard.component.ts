@@ -45,6 +45,7 @@ export class CommunicationDashboardComponent extends BaseDashboard implements Af
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.stateChangeSubject.complete();
     }
 

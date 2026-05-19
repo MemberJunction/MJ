@@ -127,7 +127,63 @@
 
       <div class="header-right">
         @if (selectedEntity) {
-          <!-- View Mode Toggle -->
+          <!-- View-specific controls — positioned LEFT of the view mode toggle -->
+          <!-- These controls are contextual to the active view mode -->
+          @if (state.viewMode === 'timeline' && entityHasDateFields) {
+            <div class="view-specific-controls">
+              <!-- Date Field Selector -->
+              <div class="date-field-selector-container">
+                @if (isDateFieldDropdownOpen) {
+                  <div class="date-field-backdrop" (click)="closeDateFieldDropdown()"></div>
+                }
+                <div class="date-field-selector-wrapper">
+                  <button
+                    class="date-field-selector-button"
+                    [class.open]="isDateFieldDropdownOpen"
+                    [disabled]="availableDateFields.length <= 1"
+                    (click)="toggleDateFieldDropdown()">
+                    <i class="fa-solid fa-calendar-days date-field-icon"></i>
+                    <span class="date-field-name">{{ effectiveTimelineDateFieldDisplayName }}</span>
+                    @if (availableDateFields.length > 1) {
+                      <i class="fa-solid fa-chevron-down date-field-arrow" [class.rotated]="isDateFieldDropdownOpen"></i>
+                    }
+                  </button>
+                  @if (isDateFieldDropdownOpen && availableDateFields.length > 1) {
+                    <div class="date-field-dropdown-panel">
+                      @for (field of availableDateFields; track field.name) {
+                        <div
+                          class="date-field-dropdown-item"
+                          [class.selected]="field.name === effectiveTimelineDateField"
+                          (click)="setTimelineDateField(field.name)">
+                          <i class="fa-regular fa-calendar item-icon"></i>
+                          <span class="item-name">{{ field.displayName }}</span>
+                          @if (field.name === effectiveTimelineDateField) {
+                            <i class="fa-solid fa-check selected-check"></i>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+              <!-- Orientation Toggle -->
+              <button
+                class="view-specific-btn"
+                (click)="toggleTimelineOrientation()"
+                [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
+                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
+              </button>
+              <!-- Sort Order Toggle -->
+              <button
+                class="view-specific-btn"
+                (click)="toggleTimelineSortOrder()"
+                [title]="state.timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
+                <i [class]="state.timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
+              </button>
+            </div>
+          }
+
+          <!-- View Mode Toggle — always rightmost in the header -->
           <div class="view-mode-toggle">
             <button
               class="toggle-btn"
@@ -152,69 +208,16 @@
                 <i class="fa-solid fa-timeline"></i>
               </button>
             }
+            @if (selectedEntity.SupportsGeoCoding) {
+              <button
+                class="toggle-btn"
+                [class.active]="state.viewMode === 'map'"
+                (click)="onViewModeChanged('map')"
+                title="Map View">
+                <i class="fa-solid fa-map-location-dot"></i>
+              </button>
+            }
           </div>
-
-          <!-- Timeline Controls (only shown when timeline view is active) -->
-          @if (state.viewMode === 'timeline' && entityHasDateFields) {
-            <!-- Date Field Selector -->
-            <div class="date-field-selector-container">
-              <!-- Backdrop for closing dropdown -->
-              @if (isDateFieldDropdownOpen) {
-                <div class="date-field-backdrop" (click)="closeDateFieldDropdown()"></div>
-              }
-
-              <div class="date-field-selector-wrapper">
-                <button
-                  class="date-field-selector-button"
-                  [class.open]="isDateFieldDropdownOpen"
-                  [disabled]="availableDateFields.length <= 1"
-                  (click)="toggleDateFieldDropdown()">
-                  <i class="fa-solid fa-calendar-days date-field-icon"></i>
-                  <span class="date-field-name">{{ effectiveTimelineDateFieldDisplayName }}</span>
-                  @if (availableDateFields.length > 1) {
-                    <i class="fa-solid fa-chevron-down date-field-arrow" [class.rotated]="isDateFieldDropdownOpen"></i>
-                  }
-                </button>
-
-                @if (isDateFieldDropdownOpen && availableDateFields.length > 1) {
-                  <div class="date-field-dropdown-panel">
-                    @for (field of availableDateFields; track field.name) {
-                      <div
-                        class="date-field-dropdown-item"
-                        [class.selected]="field.name === effectiveTimelineDateField"
-                        (click)="setTimelineDateField(field.name)">
-                        <i class="fa-regular fa-calendar item-icon"></i>
-                        <span class="item-name">{{ field.displayName }}</span>
-                        @if (field.name === effectiveTimelineDateField) {
-                          <i class="fa-solid fa-check selected-check"></i>
-                        }
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            </div>
-
-            <!-- Orientation Toggle -->
-            <div class="timeline-orientation-toggle">
-              <button
-                class="toggle-btn"
-                (click)="toggleTimelineOrientation()"
-                [title]="state.timelineOrientation === 'vertical' ? 'Switch to Horizontal' : 'Switch to Vertical'">
-                <i [class]="state.timelineOrientation === 'vertical' ? 'fa-solid fa-ellipsis-vertical' : 'fa-solid fa-ellipsis'"></i>
-              </button>
-            </div>
-
-            <!-- Sort Order Toggle -->
-            <div class="timeline-sort-toggle">
-              <button
-                class="toggle-btn"
-                (click)="toggleTimelineSortOrder()"
-                [title]="state.timelineSortOrder === 'desc' ? 'Showing Newest First (click for Oldest First)' : 'Showing Oldest First (click for Newest First)'">
-                <i [class]="state.timelineSortOrder === 'desc' ? 'fa-solid fa-arrow-down-wide-short' : 'fa-solid fa-arrow-up-wide-short'"></i>
-              </button>
-            </div>
-          }
         }
         @if (!selectedEntity) {
           <!-- Quick Access panel toggle -->
@@ -495,7 +498,11 @@
           (filteredCountChanged)="onFilteredCountChanged($event)"
           (gridStateChanged)="onGridStateChanged($event)"
           (selectionChanged)="onSelectionChanged($event)"
-          (addToListRequested)="onAddToListRequested($event)">
+          (addToListRequested)="onAddToListRequested($event)"
+          [mapRenderMode]="state.mapRenderMode || 'point'"
+          [mapDisplayState]="mapDisplayState"
+          (mapRenderModeChange)="onMapRenderModeChange($event)"
+          (mapDisplayStateChange)="onMapDisplayStateChange($event)">
         </mj-entity-viewer>
       }
     </div>

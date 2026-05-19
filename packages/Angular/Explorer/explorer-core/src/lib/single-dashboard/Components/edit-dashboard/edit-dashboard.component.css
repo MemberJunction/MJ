@@ -1,34 +1,136 @@
-.dialog-content .dialog-actions {
-    display: flex;
-    justify-content: flex-end;
+.edit-dashboard-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: var(--mj-bg-overlay, rgba(0, 0, 0, 0.5));
+    z-index: 999;
 }
-.dialog-footer {
-    display: flex;
-    justify-content: flex-end;
-    align-items: center;
-    width: auto;
-    height: 40px;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-    background: var(--mj-bg-surface);
-    padding: 8px 16px;
-}
+
 .custom-dialog-body {
-flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    height: 100%;
+    flex: 1;
 }
+
 .custom-dialog-body .dialog-content {
     flex: 1;
     overflow: auto;
     padding: 16px;
     box-sizing: border-box;
 }
-.dialog-footer .k-card-footer {
+
+.dialog-content .dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.dialog-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    width: auto;
+    height: 40px;
+    border-top: 1px solid var(--mj-border-subtle);
+    background: var(--mj-bg-surface);
+    padding: 8px 16px;
+}
+
+.dialog-footer-actions {
     display: flex;
     gap: 8px;
     padding: 0;
 }
-::ng-deep .kendo-window-hide-restore .k-window-content {
-    padding: 0;
-}
-.custom-dialog-body .dialog-content .k-tilelayout {
+
+/* CSS Grid tile layout */
+.mj-tile-layout {
+    display: grid;
+    gap: 12px;
     background: var(--mj-bg-surface);
 }
+
+.mj-tile-item {
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    display: flex;
+    flex-direction: column;
+}
+
+.mj-tile-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse, white);
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.mj-tile-header-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.remove-item-btn {
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+
+.mj-tile-body {
+    flex: 1;
+    overflow: auto;
+    background: var(--mj-bg-surface-sunken);
+}
+
+/* Dropdown menu for Add Item */
+.add-dropdown-wrapper {
+    position: relative;
+}
+
+.add-dropdown-arrow {
+    font-size: 12px;
+    margin-left: 4px;
+}
+
+.add-dropdown-panel {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 200px;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    z-index: 100;
+    overflow: hidden;
+}
+
+.add-dropdown-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+}
+
+.add-dropdown-item:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.add-dropdown-item-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+

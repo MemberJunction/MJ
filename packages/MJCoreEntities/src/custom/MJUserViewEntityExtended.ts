@@ -1,6 +1,23 @@
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { Metadata, BaseEntity, BaseInfo, EntityInfo, EntityFieldInfo,RunView, UserInfo, EntitySaveOptions, LogError, EntityFieldTSType, EntityPermissionType, BaseEntityResult, IMetadataProvider } from "@memberjunction/core";
-import { MJUserViewEntity } from "../generated/entity_subclasses";
+import {
+    MJUserViewEntity,
+    MJUserViewEntity_IColumnFormat as ColumnFormat,
+    MJUserViewEntity_IGridSortSetting as ViewGridSortSetting,
+    MJUserViewEntity_IGridColumnSetting as ViewGridColumnSetting,
+    MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+    MJUserViewEntity_IGridAggregateDisplay as ViewGridAggregateDisplay,
+    MJUserViewEntity_IGridAggregate as ViewGridAggregate,
+    MJUserViewEntity_IAggregateValueFormat as AggregateValueFormat,
+    MJUserViewEntity_IAggregateConditionalStyle as AggregateConditionalStyle,
+    MJUserViewEntity_IDisplayState as ViewDisplayState,
+    MJUserViewEntity_ITimelineState as ViewTimelineState,
+    MJUserViewEntity_IDisplayCardState as ViewCardState,
+    MJUserViewEntity_IGridDisplayState as ViewGridDisplayState,
+    MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+    MJUserViewEntity_IColumnConditionalRule as ColumnConditionalRule,
+    MJUserViewEntity_IFilterNode as FilterNode,
+} from "../generated/entity_subclasses";
 import { ResourcePermissionEngine } from "./ResourcePermissions/ResourcePermissionEngine";
 
 
@@ -147,13 +164,13 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * @param state The ViewDisplayState object to serialize and store
      */
     public setDisplayState(state: ViewDisplayState): void {
-        this.DisplayState = JSON.stringify(state);
+        this.DisplayStateObject = state;
     }
 
     /**
      * Get the default view mode from DisplayState, or 'grid' if not set.
      */
-    public get DefaultViewMode(): ViewDisplayMode {
+    public get DefaultViewMode(): 'grid' | 'cards' | 'timeline' {
         return this.ParsedDisplayState?.defaultMode || 'grid';
     }
 
@@ -171,7 +188,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * @param config The timeline configuration to set
      */
     public setTimelineConfig(config: ViewTimelineState): void {
-        const current = this.ParsedDisplayState || { defaultMode: 'grid' as ViewDisplayMode };
+        const current = this.ParsedDisplayState || { defaultMode: 'grid' as const };
         current.timeline = config;
         this.setDisplayState(current);
     }
@@ -181,7 +198,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
      * By default, all modes are enabled unless explicitly disabled.
      * @param mode The view mode to check
      */
-    public isViewModeEnabled(mode: ViewDisplayMode): boolean {
+    public isViewModeEnabled(mode: 'grid' | 'cards' | 'timeline'): boolean {
         const enabledModes = this.ParsedDisplayState?.enabledModes;
         if (!enabledModes) return true; // All modes enabled by default
         return enabledModes[mode] !== false;
@@ -230,7 +247,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     override async LoadFromData(data: any): Promise<boolean> {
         // in this case we need to make sure we ge the _ViewEntityInfo property set up correctly
         if (data && data.EntityID) {
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const match = md.Entities.find(e => UUIDsEqual(e.ID, data.EntityID))
             if (match) {
                 this._ViewEntityInfo = match
@@ -270,7 +287,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         return this._cachedCanUserView;
     }
     private CalculateUserCanView(): boolean {
-        const md = new Metadata();
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const bOwner = UUIDsEqual(this.UserID, md.CurrentUser.ID);
         if (bOwner) {
             return true
@@ -319,7 +336,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         else {
             // EXISTING record in the database
             // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
             if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner' ) {
                 return this.CheckPermissions(EntityPermissionType.Delete, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
@@ -340,7 +357,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // EXISTING record in the database
             // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
             // so of course they can save it
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
             if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner') {
                 return this.CheckPermissions(EntityPermissionType.Update, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
@@ -372,7 +389,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         // first load up the view info, use the superclass to do this
         const result = await super.Load(ID, EntityRelationshipsToLoad)
         if (result) {
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             // first, cache a copy of the entity info for the entity that is used in this view
             const match = md.Entities.find(e => UUIDsEqual(e.ID, this.EntityID))
             if (match)
@@ -402,7 +419,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             res.Message = 'User does not have permission to delete this view';
             res.StartedAt = new Date();
             res.EndedAt = new Date();
-            this.ResultHistory.push(res);
+            this.RegisterResultHistoryEntry(res);
             return false;
         }
     }
@@ -438,7 +455,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             res.Message = this.ID ? 'User does not have permission to edit this view' : 'User does not have permission to create a new view';
             res.StartedAt = new Date();
             res.EndedAt = new Date();
-            this.ResultHistory.push(res);
+            this.RegisterResultHistoryEntry(res);
             return false;
         }
     }
@@ -457,7 +474,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 orderIndex: newGridState.columnSettings.length
             });
         });
-        this.GridState = JSON.stringify(newGridState); // default columns for a view are the ones with DefaultInView turned on
+        this.GridStateObject = newGridState; // default columns for a view are the ones with DefaultInView turned on
     }
 
     override NewRecord(): boolean {
@@ -467,7 +484,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 this.UserID = this.ContextCurrentUser.ID;
             }
             else {
-                const md = new Metadata();
+                const md = this.ProviderToUse as unknown as IMetadataProvider;
                 if (md.CurrentUser)
                     this.UserID = md.CurrentUser.ID;   
                 else
@@ -478,8 +495,8 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             this.IsDefault = false;
             this.WhereClause = '';
             this.Description = '';
-            this.FilterState = JSON.stringify({"logic" : "and", "filters" : [] }); // blank default for filter
-            this.GridState = JSON.stringify({}); // blank object initially
+            this.FilterStateObject = { logic: 'and', filters: [] }; // blank default for filter
+            this.GridStateObject = {}; // blank object initially
             this.CustomFilterState = false;
             this.CustomWhereClause = false;
             //this.SmartFilterEnabled = false;
@@ -558,7 +575,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
 
         if (FieldName.toLowerCase() == 'entityid') {
             // we're updating the entityID, need to upate the _ViewEntityInfo property so it is always in sync
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const match = md.Entities.find(e => UUIDsEqual(e.ID, Value))
             if (match)
                 this._ViewEntityInfo = match 
@@ -732,7 +749,7 @@ export class ViewInfo {
      */
     static async GetViewsForUser(entityId?: string, contextUser?: UserInfo): Promise<MJUserViewEntityExtended[]> {
         const rv = new RunView();
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: utility helper — single-provider context
         const result = await rv.RunView({
             EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${contextUser ? contextUser.ID : md.CurrentUser.ID}'
@@ -804,11 +821,6 @@ export class ViewInfo {
 }
 
 /**
- * Column pinning position for AG Grid
- */
-export type ViewColumnPinned = 'left' | 'right' | null;
-
-/**
  * Column information for a saved view, including AG Grid-specific properties
  */
 export class ViewColumnInfo extends BaseInfo {
@@ -829,7 +841,7 @@ export class ViewColumnInfo extends BaseInfo {
 
     // AG Grid-specific properties
     /** Column pinning position ('left', 'right', or null for not pinned) */
-    pinned?: ViewColumnPinned = null
+    pinned?: 'left' | 'right' | null = null
     /** Flex grow factor (for auto-sizing columns) */
     flex?: number = null
     /** Minimum column width */
@@ -898,127 +910,6 @@ export class ViewSortInfo extends BaseInfo {
     }
 }
 
-
-/**
- * Sort setting for a single column
- */
-export interface ViewGridSortSetting {
-    /** Field name to sort by */
-    field: string;
-    /** Sort direction */
-    dir: 'asc' | 'desc';
-}
-
-/**
- * Column setting as persisted in GridState JSON
- * This is the serializable form of ViewColumnInfo (without EntityField reference)
- */
-export interface ViewGridColumnSetting {
-    /** Entity field ID */
-    ID?: string;
-    /** Field name */
-    Name: string;
-    /** Display name for column header (from entity metadata) */
-    DisplayName?: string;
-    /** User-defined display name override for column header */
-    userDisplayName?: string;
-    /** Whether column is hidden */
-    hidden?: boolean;
-    /** Column width in pixels */
-    width?: number;
-    /** Column order index */
-    orderIndex?: number;
-    /** Column pinning position */
-    pinned?: ViewColumnPinned;
-    /** Flex grow factor */
-    flex?: number;
-    /** Minimum column width */
-    minWidth?: number;
-    /** Maximum column width */
-    maxWidth?: number;
-    /** Column formatting configuration */
-    format?: ColumnFormat;
-}
-
-/**
- * Text styling options for column headers and cells
- */
-export interface ColumnTextStyle {
-    /** Bold text */
-    bold?: boolean;
-    /** Italic text */
-    italic?: boolean;
-    /** Underlined text */
-    underline?: boolean;
-    /** Text color (CSS color value) */
-    color?: string;
-    /** Background color (CSS color value) */
-    backgroundColor?: string;
-}
-
-/**
- * Conditional formatting rule for dynamic cell styling
- */
-export interface ColumnConditionalRule {
-    /** Condition type */
-    condition: 'equals' | 'notEquals' | 'greaterThan' | 'lessThan' | 'greaterThanOrEqual' | 'lessThanOrEqual' | 'between' | 'contains' | 'startsWith' | 'endsWith' | 'isEmpty' | 'isNotEmpty';
-    /** Value to compare against */
-    value?: string | number | boolean;
-    /** Second value for 'between' condition */
-    value2?: number;
-    /** Style to apply when condition is met */
-    style: ColumnTextStyle;
-}
-
-/**
- * Column formatting configuration
- * Supports value formatting, alignment, header/cell styling, and conditional formatting
- */
-export interface ColumnFormat {
-    /**
-     * Format type - determines which formatter to use
-     * 'auto' uses smart defaults based on field metadata
-     */
-    type?: 'auto' | 'number' | 'currency' | 'percent' | 'date' | 'datetime' | 'boolean' | 'text';
-
-    /** Decimal places for number/currency/percent types */
-    decimals?: number;
-
-    /** Currency code (ISO 4217) for currency type, e.g., 'USD', 'EUR' */
-    currencyCode?: string;
-
-    /** Show thousands separator for number types */
-    thousandsSeparator?: boolean;
-
-    /**
-     * Date format preset or custom pattern
-     * Presets: 'short', 'medium', 'long'
-     * Custom: Any valid date format string
-     */
-    dateFormat?: 'short' | 'medium' | 'long' | string;
-
-    /** Label to display for true values (boolean type) */
-    trueLabel?: string;
-
-    /** Label to display for false values (boolean type) */
-    falseLabel?: string;
-
-    /** How to display boolean values */
-    booleanDisplay?: 'text' | 'checkbox' | 'icon';
-
-    /** Text alignment */
-    align?: 'left' | 'center' | 'right';
-
-    /** Header styling (bold, italic, color, etc.) */
-    headerStyle?: ColumnTextStyle;
-
-    /** Cell styling (applies to all cells in the column) */
-    cellStyle?: ColumnTextStyle;
-
-    /** Conditional formatting rules (applied in order, first match wins) */
-    conditionalRules?: ColumnConditionalRule[];
-}
-
 /**
  * Grid state persisted in UserView.GridState column
  * Contains column configuration, sort settings, and optional filter state
@@ -1032,241 +923,6 @@ export class ViewGridState {
     filter?: ViewFilterInfo;
     /** Aggregate calculations and display configuration */
     aggregates?: ViewGridAggregatesConfig;
-}
-
-/**
- * View display modes supported by the entity viewer
- */
-export type ViewDisplayMode = 'grid' | 'cards' | 'timeline';
-
-/**
- * Timeline segment grouping options
- */
-export type ViewTimelineSegmentGrouping = 'none' | 'day' | 'week' | 'month' | 'quarter' | 'year';
-
-/**
- * Timeline-specific configuration state
- */
-export interface ViewTimelineState {
-    /** The date field name to use for timeline ordering */
-    dateFieldName: string;
-    /** Time segment grouping */
-    segmentGrouping?: ViewTimelineSegmentGrouping;
-    /** Sort order for timeline events */
-    sortOrder?: 'asc' | 'desc';
-    /** Whether segments are collapsible */
-    segmentsCollapsible?: boolean;
-    /** Whether segments start expanded */
-    segmentsDefaultExpanded?: boolean;
-}
-
-/**
- * Card-specific configuration state
- */
-export interface ViewCardState {
-    /** Custom card size */
-    cardSize?: 'small' | 'medium' | 'large';
-}
-
-/**
- * Grid-specific display configuration
- */
-export interface ViewGridDisplayState {
-    /** Row height preference */
-    rowHeight?: 'compact' | 'normal' | 'comfortable';
-}
-
-/**
- * View display state - persisted in UserView.DisplayState
- * Contains the default view mode and mode-specific configuration
- */
-export interface ViewDisplayState {
-    /** The default view mode to show when loading this view */
-    defaultMode: ViewDisplayMode;
-    /** Which view modes are enabled/visible for this view */
-    enabledModes?: {
-        grid?: boolean;
-        cards?: boolean;
-        timeline?: boolean;
-    };
-    /** Timeline-specific configuration */
-    timeline?: ViewTimelineState;
-    /** Card-specific configuration */
-    cards?: ViewCardState;
-    /** Grid-specific configuration */
-    grid?: ViewGridDisplayState;
-}
-
-/**
- * Display location for aggregate values
- */
-export type AggregateDisplayType = 'column' | 'card';
-
-/**
- * Value formatting options for aggregates
- */
-export interface AggregateValueFormat {
-    /** Number of decimal places */
-    decimals?: number;
-    /** Currency code (ISO 4217) for currency format, e.g., 'USD', 'EUR' */
-    currencyCode?: string;
-    /** Show thousands separator */
-    thousandsSeparator?: boolean;
-    /** Prefix to add before value (e.g., '$') */
-    prefix?: string;
-    /** Suffix to add after value (e.g., '%') */
-    suffix?: string;
-    /** Date format for date aggregates */
-    dateFormat?: string;
-}
-
-/**
- * Conditional styling for aggregate values
- */
-export interface AggregateConditionalStyle {
-    /** Condition operator */
-    operator: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'between';
-    /** Value to compare against */
-    value: number | string;
-    /** Second value for 'between' operator */
-    value2?: number | string;
-    /** Style class to apply: 'success' (green), 'warning' (yellow), 'danger' (red), 'info' (blue), 'muted' (gray) */
-    style: 'success' | 'warning' | 'danger' | 'info' | 'muted';
-}
-
-/**
- * Configuration for a single aggregate expression.
- * Each aggregate can optionally have a `smartPrompt` for AI-generated expressions.
- */
-export interface ViewGridAggregate {
-    /**
-     * Unique ID for this aggregate (for UI reference).
-     * Auto-generated if not provided.
-     */
-    id?: string;
-
-    /**
-     * SQL expression to calculate.
-     * Examples:
-     *   - "SUM(OrderTotal)"
-     *   - "COUNT(*)"
-     *   - "SUM(Quantity * Price * (1 - Discount/100))"
-     *
-     * If smartPrompt is set and expression is empty, the expression will be
-     * auto-generated from the natural language prompt.
-     */
-    expression: string;
-
-    /**
-     * Natural language prompt for AI-generated expression.
-     * When set, the server will use AI to generate/update the expression
-     * based on this description.
-     *
-     * Examples:
-     *   - "Total revenue"
-     *   - "Average order size excluding cancelled orders"
-     *   - "Count of unique customers"
-     *
-     * The generated expression is stored in `expression` for caching.
-     * Re-generation only happens when smartPrompt changes.
-     */
-    smartPrompt?: string;
-
-    /**
-     * Display type:
-     * - 'column': Show in pinned row under a specific column
-     * - 'card': Show in summary card panel
-     */
-    displayType: AggregateDisplayType;
-
-    /**
-     * For 'column' displayType: which column to display under.
-     * Should match a field name in the grid.
-     */
-    column?: string;
-
-    /** Human-readable label */
-    label: string;
-
-    /** Optional description (shown in tooltip) */
-    description?: string;
-
-    /** Value formatting */
-    format?: AggregateValueFormat;
-
-    /** Icon for card display (Font Awesome class) */
-    icon?: string;
-
-    /**
-     * Conditional styling rules (applied in order, first match wins).
-     * Used for visual indicators like red/yellow/green based on value.
-     */
-    conditionalStyles?: AggregateConditionalStyle[];
-
-    /**
-     * Whether this aggregate is enabled (visible).
-     * Allows users to toggle without deleting configuration.
-     */
-    enabled?: boolean;
-
-    /**
-     * Sort order for display (lower = earlier).
-     * Cards are sorted by this, columns use column order.
-     */
-    order?: number;
-}
-
-/**
- * Display settings for the aggregate panel/row
- */
-export interface ViewGridAggregateDisplay {
-    /** Whether to show column-bound aggregates in pinned row */
-    showColumnAggregates?: boolean;
-
-    /** Where to show column aggregates: pinned top or bottom row */
-    columnPosition?: 'top' | 'bottom';
-
-    /** Whether to show card aggregates in a panel */
-    showCardAggregates?: boolean;
-
-    /** Where to show the card panel */
-    cardPosition?: 'right' | 'bottom';
-
-    /** Card panel width in pixels (for 'right' position) */
-    cardPanelWidth?: number;
-
-    /** Card layout style */
-    cardLayout?: 'horizontal' | 'vertical' | 'grid';
-
-    /** Number of columns for 'grid' layout */
-    cardGridColumns?: number;
-
-    /** Card panel title (optional) */
-    cardPanelTitle?: string;
-
-    /** Whether card panel is collapsible */
-    cardPanelCollapsible?: boolean;
-
-    /** Whether card panel starts collapsed */
-    cardPanelStartCollapsed?: boolean;
-}
-
-/**
- * Complete aggregate configuration for a view's grid state
- */
-export interface ViewGridAggregatesConfig {
-    /** Display settings for aggregate panel/row */
-    display?: ViewGridAggregateDisplay;
-
-    /**
-     * Aggregate expressions and their display configuration.
-     *
-     * Each aggregate can optionally have a `smartPrompt` for AI-generated expressions.
-     * When smartPrompt is set:
-     *   - If expression is empty, server generates it from the prompt
-     *   - If expression exists, it's cached; regenerate only when smartPrompt changes
-     */
-    expressions?: ViewGridAggregate[];
 }
 
 /**

@@ -30,23 +30,23 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
     public searchText = '';
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     @ViewChild('categoryEditPanel') categoryEditPanel!: CredentialCategoryEditPanelComponent;
 
     constructor(
-        private cdr: ChangeDetectorRef,
-        private navigationService: NavigationService
-    ) {
+        private cdr: ChangeDetectorRef) {
         super();
     }
 
     ngOnInit(): void {
+        super.ngOnInit();
         this.loadData();
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         // Cleanup if needed
     }
 
@@ -109,7 +109,7 @@ export class CredentialsCategoriesResourceComponent extends BaseResourceComponen
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [catResult, typeResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Credential Categories',

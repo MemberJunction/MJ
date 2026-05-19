@@ -1,11 +1,21 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { LayoutModule } from '@progress/kendo-angular-layout';
+import {
+  MJButtonDirective,
+  MJComboboxComponent,
+  MJDropdownComponent,
+  MJSwitchComponent,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterChipComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { NgTreesModule } from '@memberjunction/ng-trees';
@@ -37,11 +47,19 @@ import { IntegrationDataService } from './services/integration-data.service';
   imports: [
     CommonModule,
     FormsModule,
-    ButtonsModule,
-    DropDownsModule,
-    InputsModule,
-    GridModule,
-    LayoutModule,
+    MJButtonDirective,
+    MJComboboxComponent,
+    MJDropdownComponent,
+    MJSwitchComponent,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterChipComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

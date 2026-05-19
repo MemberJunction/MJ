@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat Overlay — Option A: Slack-Style Sidebar</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59,130,246,0.15);
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow: hidden;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 200;
+    display: flex; align-items: center; gap: 0.5rem; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  /* Background app content */
+  .app-content {
+    padding: 3rem 2rem;
+    max-width: 900px;
+    margin: 0 auto;
+    transition: margin-right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .app-content.shifted { margin-right: 420px; }
+  .app-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    color: var(--text-primary);
+  }
+  .placeholder-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2rem;
+    margin-bottom: 1rem;
+  }
+  .placeholder-card .line {
+    height: 12px;
+    background: var(--border);
+    border-radius: 4px;
+    margin-bottom: 0.75rem;
+  }
+  .placeholder-card .line:last-child { margin-bottom: 0; width: 60%; }
+
+  /* Toggle button (minimized state) */
+  .chat-toggle {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 90;
+    box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+    transition: all 0.3s;
+    font-size: 1.3rem;
+    color: white;
+  }
+  .chat-toggle:hover {
+    transform: scale(1.08);
+    box-shadow: 0 6px 28px rgba(59,130,246,0.4);
+  }
+  .chat-toggle .badge {
+    position: absolute;
+    top: -2px; right: -2px;
+    width: 20px; height: 20px;
+    background: var(--error);
+    border-radius: 50%;
+    font-size: 0.65rem;
+    font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid var(--bg-page);
+  }
+  .chat-toggle.hidden { display: none; }
+
+  /* Sidebar overlay */
+  .sidebar-overlay {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 100vh;
+    background: var(--bg-card);
+    border-left: 1px solid var(--border);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 30px rgba(0,0,0,0.3);
+  }
+  .sidebar-overlay.open { transform: translateX(0); }
+
+  /* Sidebar header */
+  .sidebar-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(15,23,42,0.5);
+  }
+  .agent-avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .agent-info h4 {
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .agent-status {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--success);
+  }
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .sidebar-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+  }
+  .sidebar-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    font-size: 0.8rem;
+    transition: all 0.2s;
+  }
+  .sidebar-btn:hover {
+    border-color: var(--accent);
+    color: var(--text-primary);
+    background: var(--bg-card-hover);
+  }
+
+  /* Messages area */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .message {
+    display: flex;
+    gap: 0.6rem;
+    max-width: 92%;
+  }
+  .message.user { align-self: flex-end; flex-direction: row-reverse; }
+  .msg-avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .msg-avatar.agent {
+    background: linear-gradient(135deg, var(--accent), var(--purple));
+  }
+  .msg-avatar.user-av {
+    background: var(--border);
+    color: var(--text-secondary);
+  }
+  .msg-bubble {
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .message.agent .msg-bubble {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-top-left-radius: 4px;
+    color: var(--text-secondary);
+  }
+  .message.user .msg-bubble {
+    background: var(--accent);
+    color: white;
+    border-top-right-radius: 4px;
+  }
+  .msg-time {
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+  }
+  .message.user .msg-time { text-align: right; }
+
+  /* Tool execution */
+  .tool-execution {
+    background: rgba(59,130,246,0.08);
+    border: 1px solid rgba(59,130,246,0.2);
+    border-radius: 8px;
+    padding: 0.6rem 0.75rem;
+    margin: 0.25rem 0;
+    font-size: 0.78rem;
+  }
+  .tool-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+  }
+  .tool-header i { font-size: 0.7rem; }
+  .tool-detail {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+  }
+  .tool-execution.completed {
+    border-color: rgba(34,197,94,0.2);
+    background: rgba(34,197,94,0.08);
+  }
+  .tool-execution.completed .tool-header { color: var(--success); }
+
+  /* Thinking indicator */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.5rem 0;
+  }
+  .thinking .dots {
+    display: flex;
+    gap: 4px;
+  }
+  .thinking .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: thinking 1.4s infinite;
+  }
+  .thinking .dot:nth-child(2) { animation-delay: 0.2s; }
+  .thinking .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes thinking {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+  .thinking .text {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-style: italic;
+  }
+
+  /* Input area */
+  .input-area {
+    padding: 1rem 1.25rem;
+    border-top: 1px solid var(--border);
+    background: rgba(15,23,42,0.5);
+  }
+  .input-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    background: var(--bg-page);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 0.5rem 0.75rem;
+    transition: border-color 0.2s;
+  }
+  .input-wrap:focus-within {
+    border-color: var(--accent);
+  }
+  .chat-input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 0.88rem;
+    outline: none;
+    resize: none;
+    min-height: 20px;
+    max-height: 100px;
+    line-height: 1.4;
+  }
+  .chat-input::placeholder { color: var(--text-muted); }
+  .send-btn {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--accent);
+    border: none;
+    color: white;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .send-btn:hover { background: #2563eb; }
+
+  /* Expand button */
+  .expand-link {
+    text-align: center;
+    padding: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+  .expand-link:hover { color: var(--accent); }
+
+  /* Instructions label */
+  .demo-label {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  @media (max-width: 768px) {
+    .sidebar-overlay { width: 100%; }
+    .app-content.shifted { margin-right: 0; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Background app content -->
+<div class="app-content shifted" id="appContent">
+  <h2>Knowledge Hub Dashboard</h2>
+  <div class="placeholder-card">
+    <div class="line" style="width: 90%"></div>
+    <div class="line" style="width: 75%"></div>
+    <div class="line" style="width: 60%"></div>
+  </div>
+  <div class="placeholder-card">
+    <div class="line" style="width: 85%"></div>
+    <div class="line" style="width: 70%"></div>
+    <div class="line" style="width: 80%"></div>
+    <div class="line" style="width: 50%"></div>
+  </div>
+  <div class="placeholder-card">
+    <div class="line" style="width: 95%"></div>
+    <div class="line" style="width: 65%"></div>
+    <div class="line"></div>
+  </div>
+</div>
+
+<!-- Chat toggle button (shows when sidebar is closed) -->
+<div class="chat-toggle hidden" id="chatToggle" onclick="toggleSidebar()">
+  <i class="fa-solid fa-robot"></i>
+  <span class="badge">2</span>
+</div>
+
+<!-- Sidebar -->
+<div class="sidebar-overlay open" id="sidebar">
+  <div class="sidebar-header">
+    <div class="agent-avatar"><i class="fa-solid fa-robot"></i></div>
+    <div class="agent-info">
+      <h4>Knowledge Agent</h4>
+      <div class="agent-status">
+        <span class="status-dot"></span>
+        Online
+      </div>
+    </div>
+    <div class="sidebar-actions">
+      <div class="sidebar-btn" title="Expand to full conversation"><i class="fa-solid fa-expand"></i></div>
+      <div class="sidebar-btn" title="Close" onclick="toggleSidebar()"><i class="fa-solid fa-xmark"></i></div>
+    </div>
+  </div>
+
+  <div class="messages">
+    <div class="message agent">
+      <div class="msg-avatar agent"><i class="fa-solid fa-robot"></i></div>
+      <div>
+        <div class="msg-bubble">
+          Hi! I'm the Knowledge Agent. I can search across your entire knowledge base, find related records, and help you understand your data. What would you like to know?
+        </div>
+        <div class="msg-time">10:23 AM</div>
+      </div>
+    </div>
+
+    <div class="message user">
+      <div class="msg-avatar user-av"><i class="fa-solid fa-user"></i></div>
+      <div>
+        <div class="msg-bubble">
+          Which accounts are at the highest risk of churning this quarter?
+        </div>
+        <div class="msg-time">10:24 AM</div>
+      </div>
+    </div>
+
+    <div class="message agent">
+      <div class="msg-avatar agent"><i class="fa-solid fa-robot"></i></div>
+      <div>
+        <div class="msg-bubble">
+          Let me search the knowledge base for at-risk accounts.
+
+          <div class="tool-execution completed">
+            <div class="tool-header"><i class="fa-solid fa-check-circle"></i> Vector Search: "at-risk accounts churn Q1"</div>
+            <div class="tool-detail">Found 23 matching records across Accounts, Reports, Activities</div>
+          </div>
+
+          <div class="tool-execution completed">
+            <div class="tool-header"><i class="fa-solid fa-check-circle"></i> Entity Query: Accounts (Health Score &lt; 70)</div>
+            <div class="tool-detail">Returned 8 accounts with declining health scores</div>
+          </div>
+
+          I found <strong>8 accounts</strong> at high churn risk this quarter:<br><br>
+          1. <strong>Acme Corp</strong> ($2.4M ARR) — Health: 62/100, delayed implementation<br>
+          2. <strong>TechFlow Inc</strong> ($1.8M ARR) — Health: 58/100, support escalations<br>
+          3. <strong>DataSphere</strong> ($960K ARR) — Health: 65/100, low product adoption<br><br>
+          Want me to pull the full list or dig deeper into any of these?
+        </div>
+        <div class="msg-time">10:24 AM</div>
+      </div>
+    </div>
+
+    <div class="message user">
+      <div class="msg-avatar user-av"><i class="fa-solid fa-user"></i></div>
+      <div>
+        <div class="msg-bubble">
+          Tell me more about Acme Corp. What's the history?
+        </div>
+        <div class="msg-time">10:25 AM</div>
+      </div>
+    </div>
+
+    <div class="message agent">
+      <div class="msg-avatar agent"><i class="fa-solid fa-robot"></i></div>
+      <div>
+        <div class="thinking">
+          <div class="dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <span class="text">Searching knowledge base...</span>
+        </div>
+
+        <div class="tool-execution">
+          <div class="tool-header"><i class="fa-solid fa-spinner fa-spin"></i> Searching related records for Acme Corp</div>
+          <div class="tool-detail">Querying Activities, Notes, Reports, Contacts...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <textarea class="chat-input" placeholder="Ask the Knowledge Agent..." rows="1"></textarea>
+      <button class="send-btn"><i class="fa-solid fa-paper-plane" style="font-size: 0.8rem;"></i></button>
+    </div>
+    <div class="expand-link"><i class="fa-solid fa-expand"></i> Expand to full conversation</div>
+  </div>
+</div>
+
+<div class="demo-label">
+  <i class="fa-solid fa-info-circle"></i>
+  Click <strong>&times;</strong> to see minimized state, then click the bubble to reopen
+</div>
+
+<script>
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const toggle = document.getElementById('chatToggle');
+  const content = document.getElementById('appContent');
+  const isOpen = sidebar.classList.contains('open');
+
+  if (isOpen) {
+    sidebar.classList.remove('open');
+    toggle.classList.remove('hidden');
+    content.classList.remove('shifted');
+  } else {
+    sidebar.classList.add('open');
+    toggle.classList.add('hidden');
+    content.classList.add('shifted');
+  }
+}
+</script>
+</body>
+</html>

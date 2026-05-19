@@ -6,6 +6,9 @@ import {
     SchemaIntrospectionSQL,
     TriggerOptions,
     IndexOptions,
+    ColumnDDLOptions,
+    AlterColumnOptions,
+    ResolveTypeOptions,
 } from './sqlDialect.js';
 
 /**
@@ -165,6 +168,17 @@ export class PostgreSQLDialect extends SQLDialect {
         return `${schema}."${object}"`;
     }
 
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, which would turn
+     * `AS EntityName` into the result column `entityname`. Quoting the
+     * alias preserves the requested casing for callers that key off the
+     * column name (e.g. when consuming results into a TypeScript object
+     * with a PascalCase property).
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return `"${aliasName}"`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
@@ -181,9 +195,83 @@ export class PostgreSQLDialect extends SQLDialect {
         return value ? 'true' : 'false';
     }
 
+    BooleanParameterType(): string {
+        return 'boolean';
+    }
+
+    /**
+     * PostgreSQL has no `ISNULL` keyword; the standard is `COALESCE` (which
+     * SQL Server also supports). PG generated SPs/functions emit COALESCE
+     * everywhere a null-coalescing wrap is needed.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL's n-ary null-coalescing is also `COALESCE`. Same form as
+     * the two-arg `IsNull` since PG has no `ISNULL` to differentiate from.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL function parameters use a `p_<flat lowercase>` convention
+     * (no `@`-prefix syntax in PG). This matches the baseline-ported SP names
+     * (which lowercased SQL Server's PascalCase parameter names without
+     * separators — e.g. `@CompanyID` → `p_companyid`) and the runtime
+     * PostgreSQLDataProvider, which calls procs with `p_${field.Name.toLowerCase()}`.
+     *
+     * Earlier this used a snake_case transform (`p_company_id`), which
+     * produced functions the runtime could never invoke. Underscores already
+     * in the input (e.g. the `_Clear` companion suffix) are preserved.
+     */
+    ParameterRef(name: string): string {
+        return `p_${name.toLowerCase()}`;
+    }
+
+    /**
+     * PostgreSQL functions use the `DEFAULT <value>` clause for parameter defaults.
+     */
+    ParameterDefault(value: string): string {
+        return ` DEFAULT ${value}`;
+    }
+
     CurrentTimestampUTC(): string {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
+
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // PostgreSQL's column-type names as they appear in `pg_catalog` /
+    // `information_schema` / `EntityField.Type` for entities backed by PG.
+    // Includes both the formal name (`character varying`) and the internal
+    // / short alias (`varchar`, `bpchar`) since both surface depending on
+    // the metadata source.
+
+    private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
+    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
+    private static readonly _UuidTypeNames = ['uuid'] as const;
+    private static readonly _BinaryTypeNames = ['bytea'] as const;
+    private static readonly _JsonTypeNames = ['json', 'jsonb', 'xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money'] as const;
+    private static readonly _IntervalTypeNames = ['interval'] as const;
+    private static readonly _NetworkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._NetworkTypeNames; }
 
     NewUUID(): string {
         return 'gen_random_uuid()';
@@ -193,8 +281,29 @@ export class PostgreSQLDialect extends SQLDialect {
         return `CAST(${expr} AS TEXT)`;
     }
 
+    /**
+     * PostgreSQL-specific Flyway escape. PostgreSQL string concatenation uses
+     * `||` (not `+`), and TEXT has no length cap — so a simple split with `||`
+     * suffices and no cast-to-MAX dance is needed (unlike SQL Server, which
+     * silently truncates `NVARCHAR(N) + NVARCHAR(M)` past 4,000 chars).
+     * PostgreSQL string literals don't take an `N` prefix either; everything
+     * is already Unicode.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'||'{");
+    }
+
     CastToUUID(expr: string): string {
         return `CAST(${expr} AS UUID)`;
+    }
+
+    /**
+     * PostgreSQL strict typing requires an explicit `::UUID` cast when
+     * comparing the empty-GUID sentinel against a UUID-typed column.
+     * Without it, PG raises "operator does not exist: uuid = text".
+     */
+    EmptyUUIDLiteral(): string {
+        return `${super.EmptyUUIDLiteral()}::UUID`;
     }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
@@ -301,6 +410,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return true;
     }
 
+    get DefaultPagingOrderBy(): string {
+        return '1';
+    }
+
     // ─── Data Types ──────────────────────────────────────────────────
 
     get TypeMap(): DataTypeMap {
@@ -335,7 +448,74 @@ export class PostgreSQLDialect extends SQLDialect {
         return `SELECT * FROM ${schema}."${name}"(${paramList})`;
     }
 
-    // ─── DDL Generation ──────────────────────────────────────────────
+    // ─── DDL Generation (Schema/Table) ──────────────────────────────
+
+    CreateSchemaDDL(schemaName: string): string {
+        return `CREATE SCHEMA IF NOT EXISTS "${schemaName}";`;
+    }
+
+    // ─── DDL Generation (Conditional/Procedural) ────────────────────
+
+    DateAddExpression(unit: 'MINUTE' | 'HOUR' | 'DAY', amount: number, baseExpr: string): string {
+        const pgUnit = unit.toLowerCase() + 's'; // MINUTE -> minutes, HOUR -> hours, DAY -> days
+        return `${baseExpr} + INTERVAL '${amount} ${pgUnit}'`;
+    }
+
+    CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
+        const quotedTable = this.QuoteSchema(schema, tableName);
+        return [
+            `CREATE TABLE IF NOT EXISTS ${quotedTable} (`,
+            columnsDDL,
+            `);`,
+        ].join('\n');
+    }
+
+    ConditionalBlock(condition: string, thenSQL: string, elseSQL?: string): string {
+        const lines = [
+            `DO $$`,
+            `BEGIN`,
+            `  IF ${condition} THEN`,
+            `    ${thenSQL};`,
+        ];
+        if (elseSQL) {
+            lines.push(`  ELSE`);
+            lines.push(`    ${elseSQL};`);
+        }
+        lines.push(`  END IF;`);
+        lines.push(`END $$;`);
+        return lines.join('\n');
+    }
+
+    RaiseSignalSQL(message: string): string {
+        return `RAISE NOTICE '${message}'`;
+    }
+
+    // ─── DDL Generation (Schema/Table continued) ────────────────────
+
+    AddColumnClause(col: ColumnDDLOptions): string {
+        const nullable = col.nullable ? 'NULL' : 'NOT NULL';
+        const defaultExpr = col.defaultValue != null ? ` DEFAULT ${col.defaultValue}` : '';
+        return `ADD COLUMN "${col.name}" ${col.sqlType} ${nullable}${defaultExpr}`;
+    }
+
+    AlterColumnDDL(quotedTable: string, options: AlterColumnOptions): string {
+        return (
+            `ALTER TABLE ${quotedTable}\n` +
+            `    ALTER COLUMN "${options.columnName}" TYPE ${options.newType},\n` +
+            `    ALTER COLUMN "${options.columnName}" ${options.newNullable ? 'DROP NOT NULL' : 'SET NOT NULL'};`
+        );
+    }
+
+    CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
+        const escaped = comment.replace(/'/g, "''");
+        return `COMMENT ON COLUMN "${schema}"."${table}"."${column}" IS '${escaped}';`;
+    }
+
+    FallbackType(): string {
+        return 'TEXT';
+    }
+
+    // ─── DDL Generation (Triggers/Indexes) ──────────────────────────
 
     TriggerDDL(options: TriggerOptions): string {
         const events = options.events.join(' OR ');
@@ -452,6 +632,46 @@ export class PostgreSQLDialect extends SQLDialect {
 
     IIF(condition: string, trueVal: string, falseVal: string): string {
         return `CASE WHEN ${condition} THEN ${trueVal} ELSE ${falseVal} END`;
+    }
+
+    // ─── Abstract Type Resolution ─────────────────────────────────────
+
+    ResolveAbstractType(options: ResolveTypeOptions): string {
+        switch (options.type) {
+            case 'string':
+                return this.resolveStringType(options.maxLength);
+            case 'text':
+                return 'TEXT';
+            case 'integer':
+                return 'INTEGER';
+            case 'bigint':
+                return 'BIGINT';
+            case 'decimal':
+                return `NUMERIC(${options.precision ?? 18},${options.scale ?? 2})`;
+            case 'boolean':
+                return 'BOOLEAN';
+            case 'datetime':
+                return 'TIMESTAMPTZ';
+            case 'date':
+                return 'DATE';
+            case 'uuid':
+                return 'UUID';
+            case 'json':
+                return 'JSONB';
+            case 'float':
+                return 'DOUBLE PRECISION';
+            case 'time':
+                return 'TIME';
+            default:
+                return this.FallbackType();
+        }
+    }
+
+    private resolveStringType(maxLength?: number): string {
+        if (maxLength != null && maxLength > 0) {
+            return `VARCHAR(${maxLength})`;
+        }
+        return 'VARCHAR(255)';
     }
 
     // ─── Private Helpers ─────────────────────────────────────────────

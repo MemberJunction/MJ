@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJDataContextEntity, MJDataContextItemEntity } from '@memberjunction/core-entities';
 
@@ -26,7 +26,7 @@ export class DataContextComponent implements OnInit {
   public expandedItems: { [key: string]: boolean } = {};
 
   public get ProviderToUse(): IMetadataProvider {
-    return this.Provider || Metadata.Provider;
+    return this.Provider ?? Metadata.Provider;
   }
 
   public get filteredItems(): MJDataContextItemEntity[] {
@@ -61,7 +61,7 @@ export class DataContextComponent implements OnInit {
         this.dataContextRecord = await p.GetEntityObject<MJDataContextEntity>("MJ: Data Contexts", p.CurrentUser);
         await this.dataContextRecord.Load(dataContextId);
 
-        const rv = new RunView(<IRunViewProvider><any>p);
+        const rv = RunView.FromMetadataProvider(p);
         const response = await rv.RunView<MJDataContextItemEntity>(
           { 
             EntityName: "MJ: Data Context Items", 
@@ -112,7 +112,7 @@ export class DataContextComponent implements OnInit {
 
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Entities.find(e => UUIDsEqual(e.ID, entityId))?.Name;
   }
 

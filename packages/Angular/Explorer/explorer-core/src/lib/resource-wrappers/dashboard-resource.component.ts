@@ -6,7 +6,6 @@ import { Metadata, CompositeKey, RunView, LogError } from '@memberjunction/core'
 import type { DataExplorerFilter } from '@memberjunction/ng-dashboards/data-explorer-dashboards.module';
 import type { ShareDialogResult } from '@memberjunction/ng-dashboards/core-dashboards.module';
 import { DashboardViewerComponent, DashboardNavRequestEvent, PanelInteractionEvent, AddPanelResult, DashboardPanel } from '@memberjunction/ng-dashboard-viewer';
-import { LazyModuleRegistry } from '../services/lazy-module-registry';
 /**
  * Dashboard Resource Wrapper - displays a single dashboard in a tab
  * Extends BaseResourceComponent to work with the resource type system
@@ -220,12 +219,12 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 2px 4px rgba(92, 107, 192, 0.3);
+            box-shadow: 0 2px 4px color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
         }
         .btn-add-part:hover {
             background: var(--mj-brand-primary-hover);
             transform: translateY(-1px);
-            box-shadow: 0 3px 6px rgba(92, 107, 192, 0.4);
+            box-shadow: 0 3px 6px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
         }
         .btn-add-part i { font-size: 12px; }
 
@@ -233,7 +232,7 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
         .header-separator {
             width: 1px;
             height: 28px;
-            background: rgba(92, 107, 192, 0.3);
+            background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
             margin: 0 4px;
         }
 
@@ -312,7 +311,7 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
         .dashboard-name-input:focus {
             background: var(--mj-bg-surface-card);
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
         }
         .dashboard-description-input {
             border: 1px solid transparent;
@@ -331,7 +330,7 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
         .dashboard-description-input:focus {
             background: var(--mj-bg-surface-card);
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 0 0 2px rgba(92, 107, 192, 0.2);
+            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
         }
         .dashboard-description-input::placeholder {
             color: var(--mj-text-muted);
@@ -351,7 +350,7 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
         }
         .error-icon {
             font-size: 64px;
-            color: #f44336;
+            color: var(--mj-status-error);
             margin-bottom: 24px;
             opacity: 0.8;
         }
@@ -386,7 +385,7 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
             margin: 0;
             white-space: pre-wrap;
             word-break: break-word;
-            color: #d32f2f;
+            color: var(--mj-status-error-text);
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 12px;
         }
@@ -409,7 +408,6 @@ import { LazyModuleRegistry } from '../services/lazy-module-registry';
     `]
 })
 export class DashboardResource extends BaseResourceComponent {
-    private lazyRegistry = inject(LazyModuleRegistry);
     private componentRef: ComponentRef<unknown> | null = null;
     private dataLoaded = false;
     @ViewChild('container', { static: true }) containerElement!: ElementRef<HTMLDivElement>;
@@ -474,7 +472,6 @@ export class DashboardResource extends BaseResourceComponent {
 
     constructor(
         private viewContainer: ViewContainerRef,
-        private navigationService: NavigationService,
         private cdr: ChangeDetectorRef
     ) {
         super();
@@ -507,6 +504,7 @@ export class DashboardResource extends BaseResourceComponent {
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         if (this.componentRef) {
             this.componentRef.destroy();
         }
@@ -617,7 +615,7 @@ export class DashboardResource extends BaseResourceComponent {
 
         if (result.Action === 'save' && this.configDashboard) {
             // Recompute permissions after sharing changes
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 this.configDashboard.ID,
                 md.CurrentUser.ID
@@ -756,18 +754,11 @@ export class DashboardResource extends BaseResourceComponent {
                 throw new Error(`Dashboard '${dashboard.Name}' is marked as Code type but has no DriverClass specified`);
             }
 
-            // Look up the registered class using the DriverClass name (with lazy loading fallback)
-            let classReg = MJGlobal.Instance.ClassFactory.GetRegistration(
+            // Look up the registered class using the DriverClass name (with lazy loading fallback via ClassFactory)
+            const classReg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(
                 BaseDashboard,
                 dashboard.DriverClass
             );
-
-            if (!classReg?.SubClass) {
-                const loaded = await this.lazyRegistry.Load(dashboard.DriverClass);
-                if (loaded) {
-                    classReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseDashboard, dashboard.DriverClass);
-                }
-            }
 
             if (!classReg?.SubClass) {
                 throw new Error(`Dashboard class '${dashboard.DriverClass}' is not registered. Please check the class registration.`);
@@ -831,7 +822,7 @@ export class DashboardResource extends BaseResourceComponent {
 
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
@@ -861,7 +852,7 @@ export class DashboardResource extends BaseResourceComponent {
             this.configDashboard = dashboard;
 
             // Compute user permissions for this dashboard
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 dashboard.ID,
                 md.CurrentUser.ID
@@ -959,7 +950,7 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {

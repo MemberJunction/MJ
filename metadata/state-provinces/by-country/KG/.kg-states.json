@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Chu (Chuyskaya oblast')",
+      "Code": "C",
+      "ISO3166_2": "KG-C",
+      "Latitude": 42.6512,
+      "Longitude": 75.1456,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-C.geojson",
+      "CommonAliases": [
+        "Chu (Chuyskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "053B42FB-276A-4FB6-966F-0614AA78E06F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:08.990Z",
+      "checksum": "bcedd8ecbdba5c04a26fcc5530100e6dfccd33a0352512b85d434d4997fc9aa8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Jalal-Abad (Dzhalal-Abadskaya oblast')",
+      "Code": "J",
+      "ISO3166_2": "KG-J",
+      "Latitude": 41.5886,
+      "Longitude": 72.4506,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-J.geojson",
+      "CommonAliases": [
+        "Jalal-Abad (Dzhalal-Abadskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "E55622D9-F980-4E13-8D72-6A50F40C9560"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.008Z",
+      "checksum": "f07f2dc262a7a0ce83cf499b5f9e4721de49dfd61b80c5edf3b39ab11b6a4553"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Naryn (Narynskaya Oblast’)",
+      "Code": "N",
+      "ISO3166_2": "KG-N",
+      "Latitude": 41.3438,
+      "Longitude": 75.9766,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-N.geojson",
+      "CommonAliases": [
+        "Naryn (Narynskaya Oblast’)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "BC5F4B81-1171-4270-9244-E6C8F76707DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.030Z",
+      "checksum": "a356992dd13bee5f3fecb3baed24991d006d9e9a2d004c093cac43bcf5efee98"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Osh (Oshskaya oblast')",
+      "Code": "O",
+      "ISO3166_2": "KG-O",
+      "Latitude": 40.1122,
+      "Longitude": 73.177,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-O.geojson",
+      "CommonAliases": [
+        "Osh (Oshskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "47791F18-34B7-4188-B831-302E04B2C7AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.048Z",
+      "checksum": "bd4899fb060188d68303bbba1ba8e2f87de64c25c6e8ada38617b36def5afcc8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Talas (Talasskaya oblast')",
+      "Code": "T",
+      "ISO3166_2": "KG-T",
+      "Latitude": 42.4795,
+      "Longitude": 72.2727,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-T.geojson",
+      "CommonAliases": [
+        "Talas (Talasskaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "E87288D9-729C-478D-8BAE-722E7A7607A3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.063Z",
+      "checksum": "478531eeff29ed3449f249943420216d038576be0021c64d233b08cf51d54e27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ysyk-Köl (Issyk-Kul'skaya oblast')",
+      "Code": "Y",
+      "ISO3166_2": "KG-Y",
+      "Latitude": 42.0387,
+      "Longitude": 77.9472,
+      "BoundaryGeoJSON": "@file:by-country/KG/boundaries/KG-Y.geojson",
+      "CommonAliases": [
+        "Ysyk-Köl (Issyk-Kul'skaya oblast')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=KG"
+    },
+    "primaryKey": {
+      "ID": "FAEF0EC5-DB2D-43B9-87D1-753E9AF76D67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:09.076Z",
+      "checksum": "975385b9ceee6e378804322fd85633f66453646266c9b3d2e0f340c2bfde19c2"
+    }
+  }
+]

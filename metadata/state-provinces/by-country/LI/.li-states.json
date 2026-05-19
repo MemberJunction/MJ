@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Liechtenstein",
+      "Code": "LI",
+      "ISO3166_2": "LI-LI",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Liechtenstein"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=LI"
+    },
+    "primaryKey": {
+      "ID": "13383023-78ED-470C-B499-F3D65E944161"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:11.374Z",
+      "checksum": "4c0f890be4044db32f5526ca9f8ffa863a854641dff546b04616508ec5404087"
+    }
+  }
+]

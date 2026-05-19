@@ -1,0 +1,276 @@
+[
+  {
+    "_comments": [
+      "Runtime Actions demo #1 — pure compute. No bridge calls, exercises the",
+      "sandbox + lodash library. Use this to validate the sandbox is working",
+      "end-to-end before trusting any bridge-based Runtime actions."
+    ],
+    "fields": {
+      "Name": "Calculate Array Statistics",
+      "Description": "Takes an array of numbers and returns summary statistics: count, min, max, sum, mean, median, stdDev, variance, and outliers detected via n-sigma distance from the mean. Pure compute — runs entirely inside the sandbox, no MJ metadata or entity access required. Useful as a building block for numeric summarization inside agent workflows, and as a smoke test for the Runtime Actions pipeline.",
+      "Type": "Runtime",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-calculator",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities",
+      "Code": "@file:runtime/code/calculate-array-statistics.js",
+      "RuntimeActionConfiguration": {
+        "permissions": {
+          "allowedActions": [],
+          "allowedAgents": [],
+          "allowedEntities": []
+        },
+        "limits": {
+          "maxMemoryMB": 128,
+          "maxBridgeCalls": 0
+        }
+      },
+      "MaxExecutionTimeMS": 10000
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "numbers",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of numbers to analyze. Non-finite values (null, undefined, NaN, Infinity) are silently dropped and counted in droppedCount.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D0023C91-C694-4A3E-828B-176F70219C24"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.451Z",
+            "checksum": "4e09da4383e781177e2db6ad3a4f108c9db57e7a986868787cd8d7b8d705cce3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "outlierThresholdSigma",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Outlier threshold in standard deviations. A value is an outlier when |value - mean| > outlierThresholdSigma * stdDev. Default: 2.",
+            "IsRequired": false,
+            "DefaultValue": "2"
+          },
+          "primaryKey": {
+            "ID": "138D0B6A-D7F2-43EC-BAB0-5BAD929EE50E"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.486Z",
+            "checksum": "9cc9693468fcbfcdc5061d3c3d25e4dd3ddbd8096e55711d5973f6f655b937f6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of finite numeric values analyzed (excludes dropped values).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6B3211FB-0880-4EC4-9952-43BA2A8F4B0B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.516Z",
+            "checksum": "6e02d125effe1ff4ec8f78a02839ef73348f0e957e203fecafe02ca61bcc1e73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "droppedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of array entries that were dropped because they were not finite numbers.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2EF61578-9123-42A3-B801-5837DCC00700"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.548Z",
+            "checksum": "f6edef8a30fc02b9a88687ce69ed13f040f082fba435ef87bdcb89e120202e9e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "min",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Minimum value."
+          },
+          "primaryKey": {
+            "ID": "F762D690-A98F-4E44-B4B9-95EDF5F2A1E4"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.578Z",
+            "checksum": "4be31520a70616ff34c38d8c92a6812b1265a19d1cd1ccf737449a990bff5eb6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "max",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Maximum value."
+          },
+          "primaryKey": {
+            "ID": "DAC39DCF-0C8E-45BE-B278-C54D89CF1668"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.609Z",
+            "checksum": "6e64dde84da85e1d321043793e28fd5a9357da332a6cf65bf7579ccf19fdc88a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "sum",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sum of all values."
+          },
+          "primaryKey": {
+            "ID": "9F0E5A74-9353-4924-B430-BC06AE088EDA"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.638Z",
+            "checksum": "0592800e13e3645cf2c14a73be8c3d0a099f7e9f87debae8d1b6f9b53bee55bf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "mean",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Arithmetic mean."
+          },
+          "primaryKey": {
+            "ID": "886613F1-0AEA-458D-8DDA-5CF80A9F4E53"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.668Z",
+            "checksum": "97aa83dce1ee0180058bbc7b6b26ce488080cd4a3d492bdd7a90d58dea5ac7b7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "median",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Median value (middle value when sorted; average of two middles for even-count arrays)."
+          },
+          "primaryKey": {
+            "ID": "54FA7B33-2314-4D0F-9762-41396B134B14"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.696Z",
+            "checksum": "cbc956cf7e679681b694a9727c13bae3f35021d1c4ba7b7f5366b769ff6a037a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "stdDev",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Population standard deviation."
+          },
+          "primaryKey": {
+            "ID": "E061E87A-53E3-492C-91DF-C7512755E65B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.725Z",
+            "checksum": "bcbd59856089465b767fba2451e9d0e2b97281802f60ed98ec0b94473ec71c9d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "variance",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Population variance."
+          },
+          "primaryKey": {
+            "ID": "5B7B65F7-7E56-429F-A991-212E68DA4631"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.768Z",
+            "checksum": "3c3601189c2267753f911513e0dbc654328134809f1292a8b955153047d5dfba"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "outliers",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Values whose distance from the mean exceeds outlierThresholdSigma standard deviations."
+          },
+          "primaryKey": {
+            "ID": "7D03919A-2BE4-4A9D-B33B-84889268450B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.798Z",
+            "checksum": "9ac1e55f90de3ca31adef3146809e5b41e40920e6083eb07a572c869ce9e1018"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Statistics calculated successfully."
+          },
+          "primaryKey": {
+            "ID": "AE6C9A8E-FAE3-4465-BFAB-91A311F7FC33"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.821Z",
+            "checksum": "fa2c234ffd5b6efe1fcc87af428944bd343407eb35552653d08d0d9a1d836680"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4DE6BA03-86AB-42E1-8EC6-9B0AD0473095"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:46.381Z",
+      "checksum": "9da30005ce9930cba163338702d72a4272fdf3eddb04f58922981c41d65e8d0d"
+    }
+  }
+]

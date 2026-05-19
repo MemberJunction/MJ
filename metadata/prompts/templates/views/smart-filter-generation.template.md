@@ -108,3 +108,5 @@ AccountID IN ({%UserView "ViewID"%})
 
 The `{%UserView "ViewID"%}` placeholder will be replaced with the actual SQL at runtime.
 {% endraw %}
+
+{@include ../_includes/geo-context.md}

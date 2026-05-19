@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ts from 'typescript';
 import * as fs from 'fs';
+import * as path from 'path';
 import { glob } from 'glob';
-import { generateClassRegistrationsManifest } from '../Manifest/GenerateClassRegistrationsManifest';
+import { generateClassRegistrationsManifest, resolveSubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
 
 // We test the pure functions from the manifest generator by importing via a module-level mock setup.
 // Many functions in the manifest generator are module-private, but we can test the exported types
@@ -29,10 +30,16 @@ vi.mock('fs', async () => {
     };
 });
 
-vi.mock('glob', () => ({
-    glob: vi.fn().mockResolvedValue([]),
-    globSync: vi.fn().mockReturnValue([])
-}));
+vi.mock('glob', () => {
+    // Create the mock glob function with a .sync property attached
+    const mockGlob = Object.assign(vi.fn().mockResolvedValue([]), {
+        sync: vi.fn().mockReturnValue([])
+    });
+    return {
+        glob: mockGlob,
+        globSync: vi.fn().mockReturnValue([])
+    };
+});
 
 // Since the functions we want to test are not exported, we test the underlying TypeScript AST parsing
 // which is the core logic of the manifest generator
@@ -574,8 +581,13 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     /** Captures every writeFileSync call for assertions. */
     let writtenFiles: Array<{ path: string; content: string }>;
 
-    const appDir = '/test-app';
-    const outputPath = '/test-app/src/generated/manifest.ts';
+    // Use platform-resolved absolute paths so virtualFiles keys match what
+    // the function-under-test sees after `path.resolve()` / `path.join()` —
+    // on Windows this becomes `C:/test-app/...`, on Unix `/test-app/...`.
+    // We always normalize backslashes to forward slashes (see `norm` below)
+    // so virtualFiles keys can be written with one consistent style.
+    const appDir = path.resolve('/test-app').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
 
     /**
      * Builds a minimal dependency graph where:
@@ -615,6 +627,11 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
         };
     }
 
+    // Normalize path separators so the virtual filesystem (forward-slash keys)
+    // can be looked up with paths that node's `path.join` may have produced
+    // with backslashes on Windows.
+    const norm = (p: string) => p.replace(/\\/g, '/');
+
     beforeEach(() => {
         vi.clearAllMocks();
         writtenFiles = [];
@@ -622,7 +639,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 
         // existsSync: true for files in virtualFiles or directories containing them
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return true;
             // Directory check: exists if any file lives under it
             return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
@@ -630,24 +647,25 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 
         // readFileSync: return content from virtual filesystem
         vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
             const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
             (err as NodeJS.ErrnoException).code = 'ENOENT';
             throw err;
         });
 
-        // writeFileSync: capture all writes
+        // writeFileSync: capture all writes (normalize so test assertions match
+        // the forward-slash paths used in virtualFiles keys)
         vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
-            writtenFiles.push({ path: p.toString(), content: content.toString() });
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
         });
 
         vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
-        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
 
         // glob: return .ts source files under the requested cwd
         vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
-            const cwd = (opts?.cwd as string) || '';
+            const cwd = norm((opts?.cwd as string) || '');
             return Object.keys(virtualFiles).filter(
                 f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
             );
@@ -765,8 +783,8 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
     let virtualFiles: Record<string, string>;
     let writtenFiles: Array<{ path: string; content: string }>;
-    const appDir = '/test-scan-dist';
-    const outputPath = '/test-scan-dist/src/generated/manifest.ts';
+    const appDir = path.resolve('/test-scan-dist').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
 
     function setupDistOnlyPackage(): void {
         virtualFiles = {
@@ -806,14 +824,18 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         writtenFiles = [];
         setupDistOnlyPackage();
 
+        // Normalize path separators so the forward-slash virtualFiles keys
+        // resolve regardless of platform (Windows path.join produces backslashes).
+        const norm = (p: string) => p.replace(/\\/g, '/');
+
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return true;
             return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
         });
 
         vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
             const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
             (err as NodeJS.ErrnoException).code = 'ENOENT';
@@ -821,15 +843,15 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         });
 
         vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
-            writtenFiles.push({ path: p.toString(), content: content.toString() });
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
         });
 
         vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
-        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
 
         // glob: return matching files under the requested cwd based on pattern
         vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
-            const cwd = (opts?.cwd as string) || '';
+            const cwd = norm((opts?.cwd as string) || '');
             const patternStr = Array.isArray(_pattern) ? _pattern.join(',') : _pattern;
             const wantsTS = patternStr.includes('.ts');
             const wantsJS = patternStr.includes('js'); // matches .js, .mjs, .cjs, and {js,mjs,cjs}
@@ -888,5 +910,326 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         // Should find the TS source class, not the dist class
         expect(result.classes.some(c => c.className === 'SrcOnlyClass')).toBe(true);
         expect(result.classes.some(c => c.className === 'DistOnlyClass')).toBe(false);
+    });
+});
+
+// =============================================================================
+// Lazy Config Generation Tests
+// =============================================================================
+
+describe('resolveSubpathExports', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
+    it('should return empty map for package with no exports field', () => {
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+            name: '@test/no-exports',
+            main: './dist/index.js'
+        }) as string & Buffer);
+
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(0);
+    });
+
+    it('should return empty map for package with only main entry', () => {
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify({
+            name: '@test/main-only',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' }
+            }
+        }) as string & Buffer);
+
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(0);
+    });
+
+    it('should collect class names from subpath .d.ts files', () => {
+        const pkgJson = JSON.stringify({
+            name: '@test/dashboards',
+            exports: {
+                '.': { types: './dist/public-api.d.ts', default: './dist/public-api.js' },
+                './feature-a.module': { types: './dist/feature-a.module.d.ts', default: './dist/feature-a.module.js' }
+            }
+        });
+        const featureDts = 'export declare class FeatureAComponent {}\nexport declare class FeatureBComponent {}\n';
+
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr.endsWith('package.json')) return pkgJson as string & Buffer;
+            if (pathStr.endsWith('feature-a.module.d.ts')) return featureDts as string & Buffer;
+            return '{}' as string & Buffer;
+        });
+
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(1);
+        expect(result.has('./feature-a.module')).toBe(true);
+        const names = result.get('./feature-a.module')!;
+        expect(names.has('FeatureAComponent')).toBe(true);
+        expect(names.has('FeatureBComponent')).toBe(true);
+    });
+
+    it('should follow import * as patterns in Angular module .d.ts files', () => {
+        const pkgJson = JSON.stringify({
+            name: '@test/dashboards',
+            exports: {
+                '.': { types: './dist/public-api.d.ts', default: './dist/public-api.js' },
+                './ai.module': { types: './dist/ai.module.d.ts', default: './dist/ai.module.js' }
+            }
+        });
+        // Angular module .d.ts uses import * as iN pattern
+        const moduleDts = [
+            'import * as i0 from "@angular/core";',
+            'import * as i1 from "./components/model.component";',
+            'import * as i2 from "./components/agent.component";',
+            'export declare class AIDashboardsModule {}',
+        ].join('\n');
+        const modelDts = 'export declare class ModelComponent {}\n';
+        const agentDts = 'export declare class AgentComponent {}\n';
+
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr.endsWith('package.json')) return pkgJson as string & Buffer;
+            if (pathStr.endsWith('ai.module.d.ts')) return moduleDts as string & Buffer;
+            if (pathStr.endsWith('model.component.d.ts')) return modelDts as string & Buffer;
+            if (pathStr.endsWith('agent.component.d.ts')) return agentDts as string & Buffer;
+            return '' as string & Buffer;
+        });
+
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(1);
+        const names = result.get('./ai.module')!;
+        expect(names.has('AIDashboardsModule')).toBe(true);
+        expect(names.has('ModelComponent')).toBe(true);
+        expect(names.has('AgentComponent')).toBe(true);
+    });
+
+    it('should skip subpaths without types field', () => {
+        const pkgJson = JSON.stringify({
+            name: '@test/pkg',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './no-types': { default: './dist/no-types.js' }
+            }
+        });
+
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockReturnValue(pkgJson as string & Buffer);
+
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(0);
+    });
+
+    it('should handle circular re-exports without infinite loop', () => {
+        const pkgJson = JSON.stringify({
+            name: '@test/circular',
+            exports: {
+                '.': { types: './dist/index.d.ts', default: './dist/index.js' },
+                './a': { types: './dist/a.d.ts', default: './dist/a.js' }
+            }
+        });
+        // a.d.ts re-exports from b.d.ts which re-exports from a.d.ts
+        const aDts = 'export * from "./b";\nexport declare class ClassA {}\n';
+        const bDts = 'export * from "./a";\nexport declare class ClassB {}\n';
+
+        vi.mocked(fs.existsSync).mockReturnValue(true);
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = p.toString();
+            if (pathStr.endsWith('package.json')) return pkgJson as string & Buffer;
+            if (pathStr.endsWith('a.d.ts')) return aDts as string & Buffer;
+            if (pathStr.endsWith('b.d.ts')) return bDts as string & Buffer;
+            return '' as string & Buffer;
+        });
+
+        // Should not hang or throw
+        const result = resolveSubpathExports('/test/pkg');
+        expect(result.size).toBe(1);
+        const names = result.get('./a')!;
+        expect(names.has('ClassA')).toBe(true);
+        expect(names.has('ClassB')).toBe(true);
+    });
+});
+
+describe('Lazy Config Generation - Integration', () => {
+    let virtualFiles: Record<string, string>;
+    let writtenFiles: Array<{ path: string; content: string }>;
+    const appDir = path.resolve('/test-lazy').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
+    const lazyConfigPath = `${appDir}/src/generated/lazy-config.ts`;
+
+    function setupLazyTestFiles(): void {
+        virtualFiles = {
+            // App package.json — depends on an excluded package with subpath exports
+            [`${appDir}/package.json`]: JSON.stringify({
+                name: 'test-lazy-app',
+                dependencies: { '@test/dashboards': '1.0.0' }
+            }, null, 2),
+
+            // Excluded package with subpath exports
+            [`${appDir}/node_modules/@test/dashboards/package.json`]: JSON.stringify({
+                name: '@test/dashboards',
+                version: '1.0.0',
+                exports: {
+                    '.': { types: './dist/public-api.d.ts', default: './dist/public-api.js' },
+                    './ai.module': { types: './dist/ai.module.d.ts', default: './dist/ai.module.js' },
+                    './actions.module': { types: './dist/actions.module.d.ts', default: './dist/actions.module.js' }
+                },
+                dependencies: {}
+            }),
+
+            // AI module .d.ts with Angular-style import pattern
+            [`${appDir}/node_modules/@test/dashboards/dist/ai.module.d.ts`]: [
+                'import * as i0 from "@angular/core";',
+                'import * as i1 from "./ai/model.component";',
+                'export declare class AIDashboardsModule {}',
+            ].join('\n'),
+
+            [`${appDir}/node_modules/@test/dashboards/dist/ai/model.component.d.ts`]:
+                'export declare class ModelComponent extends BaseResourceComponent {}\n',
+
+            // Actions module .d.ts
+            [`${appDir}/node_modules/@test/dashboards/dist/actions.module.d.ts`]:
+                'import * as i0 from "./actions/overview.component";\nexport declare class ActionsModule {}\n',
+
+            [`${appDir}/node_modules/@test/dashboards/dist/actions/overview.component.d.ts`]:
+                'export declare class OverviewComponent extends BaseResourceComponent {}\n',
+
+            // Public API .d.ts
+            [`${appDir}/node_modules/@test/dashboards/dist/public-api.d.ts`]:
+                'export {};\n',
+
+            // Source files with @RegisterClass
+            [`${appDir}/node_modules/@test/dashboards/src/ai/model.component.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseResourceComponent, 'AIModels')",
+                "export class ModelComponent extends BaseResourceComponent {}"
+            ].join('\n'),
+
+            [`${appDir}/node_modules/@test/dashboards/src/actions/overview.component.ts`]: [
+                "import { RegisterClass } from '@memberjunction/global';",
+                "@RegisterClass(BaseResourceComponent, 'ActionsOverview')",
+                "export class OverviewComponent extends BaseResourceComponent {}"
+            ].join('\n'),
+        };
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        writtenFiles = [];
+        setupLazyTestFiles();
+
+        // Normalize backslashes so virtualFiles keys (forward-slash) resolve
+        // when path.join produces Windows-style paths.
+        const norm = (p: string) => p.replace(/\\/g, '/');
+
+        vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return true;
+            return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
+            const pathStr = norm(p.toString());
+            if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
+            const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
+            (err as NodeJS.ErrnoException).code = 'ENOENT';
+            throw err;
+        });
+
+        vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
+        });
+
+        vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
+
+        vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
+            const cwd = norm((opts?.cwd as string) || '');
+            return Object.keys(virtualFiles).filter(
+                f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
+            );
+        });
+
+        // Mock glob.sync for the lazy config scanner (findSourceFilesSync/findDistFilesSync)
+        const mockedGlob = vi.mocked(glob) as unknown as { sync: ReturnType<typeof vi.fn> };
+        mockedGlob.sync.mockImplementation((_pattern: string, opts?: Record<string, unknown>) => {
+            const syncCwd = norm((opts?.cwd as string) || '');
+            return Object.keys(virtualFiles).filter(
+                f => f.startsWith(syncCwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
+            );
+        });
+    });
+
+    it('should generate lazy config with keys grouped by subpath', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/dashboards'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent'],
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.LazyConfigChanged).toBe(true);
+
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeDefined();
+        const content = lazyWrite!.content;
+
+        // Should contain both compound keys (BaseClassName::Key format)
+        expect(content).toContain("'BaseResourceComponent::AIModels'");
+        expect(content).toContain("'BaseResourceComponent::ActionsOverview'");
+
+        // Should have correct import paths
+        expect(content).toContain("@test/dashboards/ai.module");
+        expect(content).toContain("@test/dashboards/actions.module");
+
+        // Should have LAZY_FEATURE_CONFIG export
+        expect(content).toContain('export const LAZY_FEATURE_CONFIG');
+        expect(content).toContain('export const LAZY_FEATURE_CONFIG_COUNT');
+    });
+
+    it('should not generate lazy config when lazyConfigPath is not set', async () => {
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/dashboards'],
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.LazyConfigChanged).toBe(false);
+
+        const lazyWrite = writtenFiles.find(w => w.path === lazyConfigPath);
+        expect(lazyWrite).toBeUndefined();
+    });
+
+    it('should detect key collisions across subpaths', async () => {
+        // Add a duplicate key in the actions module
+        virtualFiles[`${appDir}/node_modules/@test/dashboards/src/actions/overview.component.ts`] = [
+            "import { RegisterClass } from '@memberjunction/global';",
+            "@RegisterClass(BaseResourceComponent, 'AIModels')", // Same key as AI module!
+            "export class OverviewComponent extends BaseResourceComponent {}"
+        ].join('\n');
+
+        const result = await generateClassRegistrationsManifest({
+            outputPath,
+            appDir,
+            verbose: false,
+            syncDependencies: false,
+            excludePackages: ['@test/dashboards'],
+            lazyConfigPath,
+            lazyBaseClasses: ['BaseResourceComponent'],
+        });
+
+        // Should report an error for the collision
+        expect(result.errors.some(e => e.includes('collision') || e.includes('AIModels'))).toBe(true);
     });
 });

@@ -1,5 +1,642 @@
 # @memberjunction/ai-agents
 
+## 5.34.1
+
+### Patch Changes
+
+- 5abf790: fix(ai-agents): preserve context class identity through action and data preload pipelines
+
+  `ExecuteSingleAction` was spreading `params.context` into a plain object to stamp `AgentID`, which destroyed class instances (getters, methods, prototype chain). This broke downstream consumers like Skip's `SkipAgentContext` whose `skipAPIRequest` getter became `undefined` after spreading. Similarly, `preloadAgentData` was spreading `params.context` when merging preloaded data.
+
+  Fixed by mutating properties directly onto the original context object instead of spreading. Also changed `InjectContextMemory` to use `agent.RerankerConfiguration` property instead of `agent.Get('RerankerConfiguration')`. Added JSDoc to `ExecuteAgentParams.context` documenting that `TContext` may be a class instance and must never be spread. Added 20 unit tests covering context identity preservation.
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-reranker@5.34.1
+  - @memberjunction/ai-vector-dupe@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-prompts@5.34.0
+  - @memberjunction/ai-reranker@5.34.0
+  - @memberjunction/ai-vector-dupe@5.34.0
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/search-engine@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+- Updated dependencies [7716c98]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai-prompts@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/ai-reranker@5.33.0
+  - @memberjunction/ai-vector-dupe@5.33.0
+  - @memberjunction/ai-vector-sync@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/actions@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/storage@5.33.0
+  - @memberjunction/ai@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/ai-prompts@5.32.0
+  - @memberjunction/ai-reranker@5.32.0
+  - @memberjunction/ai-vector-dupe@5.32.0
+  - @memberjunction/ai-vector-sync@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/storage@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-prompts@5.31.0
+  - @memberjunction/ai-reranker@5.31.0
+  - @memberjunction/ai-vector-dupe@5.31.0
+  - @memberjunction/ai-vector-sync@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/storage@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-reranker@5.30.1
+- @memberjunction/ai-vector-dupe@5.30.1
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/storage@5.30.1
+
+## 5.30.0
+
+### Minor Changes
+
+- c2c5892: Activate Memory Manager consolidation pipeline with drift prevention, entity-attribute contradiction detection, Ebbinghaus decay-based archival, protection tiers, and composite importance scoring. Adds the `AIAgentNote` consolidation schema (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`) and enforces the vector-store Status invariant write-side in `MJAIAgentNoteEntityServer.Save()` / `.Delete()` so revoked notes are removed from retrieval without an MJAPI restart. Expands Memory Manager observability with per-phase run-step payloads: `scoreDistribution`, `entityTriplesExtracted`, `decayScoreDistribution`, `protectedPreserved`, `ephemeralAccelerated`, consolidation `triggerType` (forced/time/event/count), a new `Verify Consolidation Output` phase-level run step, and per-cluster `Process Consolidation Cluster` child steps. Adds 95th-percentile uniqueness outlier auto-protection in importance scoring. Deprecates the Memory Cleanup Agent in favor of the unified Memory Manager pipeline.
+- 4729398: Runtime Actions — Phase 1 complete. Introduces `Action.Type='Runtime'`, a new action type where agents dynamically generate, test, and persist JavaScript actions that execute in MJ's isolated-vm sandbox with a permissioned bridge to metadata, views, queries, entity CRUD, other actions, agents, and AI prompts. Ships the v5.29.x migration (new `RuntimeActionConfiguration`, universal `MaxExecutionTimeMS`, and `CreatedByAgentID` columns on `Action`), the JSONType-authored config interface, the Zod validator with drift detection, the bidirectional IPC bridge in WorkerPool, the full `utilities.*` handler surface, the ActionSmith meta-agent with `Create Runtime Action` / `Test Runtime Action` helpers, Agent Manager wiring, the generic `Execute Agent` action, and Runtime-aware approval UI enhancements. Minor bumps across all touched packages because the schema migration + metadata records are coupled surface changes.
+
+### Patch Changes
+
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/actions@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ai-prompts@5.30.0
+  - @memberjunction/ai-reranker@5.30.0
+  - @memberjunction/ai-vector-dupe@5.30.0
+  - @memberjunction/ai-vector-sync@5.30.0
+  - @memberjunction/storage@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/aiengine@5.29.0
+  - @memberjunction/ai-prompts@5.29.0
+  - @memberjunction/ai-reranker@5.29.0
+  - @memberjunction/ai-vector-dupe@5.29.0
+  - @memberjunction/ai-vector-sync@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/actions@5.29.0
+  - @memberjunction/storage@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-reranker@5.28.0
+  - @memberjunction/ai-vector-sync@5.28.0
+  - @memberjunction/actions@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vector-dupe@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/storage@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/ai-reranker@5.27.1
+  - @memberjunction/ai-vector-dupe@5.27.1
+  - @memberjunction/ai-vector-sync@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/actions@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/storage@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.27.0
+- @memberjunction/ai@5.27.0
+- @memberjunction/ai-core-plus@5.27.0
+- @memberjunction/aiengine@5.27.0
+- @memberjunction/ai-prompts@5.27.0
+- @memberjunction/ai-reranker@5.27.0
+- @memberjunction/ai-vector-dupe@5.27.0
+- @memberjunction/ai-vector-sync@5.27.0
+- @memberjunction/actions-base@5.27.0
+- @memberjunction/actions@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/storage@5.27.0
+
+## 5.26.0
+
+### Patch Changes
+
+- 55de456: Fix missing dependencies across 17 packages that accumulated while knip dependency checking was silently broken. Repair knip infrastructure: disable crashing vitest plugin, harden CI workflow to fail-fast on tool crashes instead of silently passing, and fix hardcoded Angular version in auto-fix script.
+- Updated dependencies [55de456]
+- Updated dependencies [a1002f4]
+  - @memberjunction/core-entities@5.26.0
+  - @memberjunction/core@5.26.0
+  - @memberjunction/ai-engine-base@5.26.0
+  - @memberjunction/ai-core-plus@5.26.0
+  - @memberjunction/aiengine@5.26.0
+  - @memberjunction/ai-prompts@5.26.0
+  - @memberjunction/ai-reranker@5.26.0
+  - @memberjunction/ai-vector-dupe@5.26.0
+  - @memberjunction/ai-vector-sync@5.26.0
+  - @memberjunction/actions-base@5.26.0
+  - @memberjunction/actions@5.26.0
+  - @memberjunction/storage@5.26.0
+  - @memberjunction/ai@5.26.0
+  - @memberjunction/global@5.26.0
+
+## 5.25.0
+
+### Minor Changes
+
+- 008a62d: Add file based artifact I/O
+- 62af878: Split Sage prompt into Sage + Workflow Planner sub-agent for reduced token usage and faster responses
+
+### Patch Changes
+
+- Updated dependencies [fc8cd52]
+- Updated dependencies [d6370e8]
+- Updated dependencies [008a62d]
+- Updated dependencies [7ddf732]
+- Updated dependencies [cbcf477]
+  - @memberjunction/core@5.25.0
+  - @memberjunction/core-entities@5.25.0
+  - @memberjunction/actions@5.25.0
+  - @memberjunction/ai-engine-base@5.25.0
+  - @memberjunction/ai-core-plus@5.25.0
+  - @memberjunction/aiengine@5.25.0
+  - @memberjunction/ai-prompts@5.25.0
+  - @memberjunction/ai-reranker@5.25.0
+  - @memberjunction/ai-vector-dupe@5.25.0
+  - @memberjunction/actions-base@5.25.0
+  - @memberjunction/ai@5.25.0
+  - @memberjunction/global@5.25.0
+
+## 5.24.0
+
+### Minor Changes
+
+- c318a0c: metadata + migrations in this PR == minor
+
+### Patch Changes
+
+- Updated dependencies [c318a0c]
+- Updated dependencies [1912726]
+  - @memberjunction/ai-core-plus@5.24.0
+  - @memberjunction/ai-prompts@5.24.0
+  - @memberjunction/ai-vector-dupe@5.24.0
+  - @memberjunction/core@5.24.0
+  - @memberjunction/core-entities@5.24.0
+  - @memberjunction/ai-engine-base@5.24.0
+  - @memberjunction/aiengine@5.24.0
+  - @memberjunction/ai-reranker@5.24.0
+  - @memberjunction/actions@5.24.0
+  - @memberjunction/actions-base@5.24.0
+  - @memberjunction/ai@5.24.0
+  - @memberjunction/global@5.24.0
+
+## 5.23.0
+
+### Minor Changes
+
+- 513b20c: migration/metadata
+
+### Patch Changes
+
+- 247df16: Fix server-side RunView cache write asymmetry that caused repeated DB queries during metadata sync, add deterministic Nunjucks template parameter extraction via AST, support comma-delimited multi-value fields in validation, and redesign QueryPagingEngine to append paging directly instead of wrapping in CTEs (fixing ORDER BY on non-projected columns and apostrophe-in-comments bugs).
+- 1d1e02e: Knowledge Hub Phase 2: autotagging pipeline, duplicate detection dashboards, and client tool invocation system.
+
+  Autotagging: Run Pipeline button with real-time progress, direct vectorization of content items (bypasses entity documents), pipeline stage visualization, Gemini 3 Flash tagging.
+
+  Duplicate Detection: Run Detection button with entity document picker, progress via PubSub, Kanban approve/reject with persistence.
+
+  Client Tools: New 'ClientTools' step type in BaseAgent enabling browser-side tool invocation (navigation, UI display, tab switching) during agent execution. Includes ClientToolRequestManager server singleton, GraphQL subscription transport, runtime tool decoration, three-level timeout, loop agent integration, and 646-line documentation guide.
+
+- Updated dependencies [247df16]
+- Updated dependencies [9250070]
+- Updated dependencies [513b20c]
+- Updated dependencies [44bc22b]
+- Updated dependencies [1d1e02e]
+  - @memberjunction/core@5.23.0
+  - @memberjunction/global@5.23.0
+  - @memberjunction/ai-prompts@5.23.0
+  - @memberjunction/ai-vector-dupe@5.23.0
+  - @memberjunction/core-entities@5.23.0
+  - @memberjunction/ai-core-plus@5.23.0
+  - @memberjunction/ai-engine-base@5.23.0
+  - @memberjunction/aiengine@5.23.0
+  - @memberjunction/ai-reranker@5.23.0
+  - @memberjunction/actions-base@5.23.0
+  - @memberjunction/actions@5.23.0
+  - @memberjunction/ai@5.23.0
+
+## 5.22.0
+
+### Minor Changes
+
+- 21e0b69: Auto-inject current date/time into Loop Agent system prompt
+- a42aba6: metadata
+
+### Patch Changes
+
+- 0b23772: Ensure agents use an isolated per-request database provider instead of the shared global singleton.
+- cf91278: Fix NVARCHAR(MAX) mangling in SQL parser, resolve Invalid string length error in AI monitoring dashboard, add unit tests for AI agent components, and add replaceElements guidance for loop agent prompts
+- Updated dependencies [0b23772]
+- Updated dependencies [cf91278]
+- Updated dependencies [6a5093b]
+- Updated dependencies [e123e4b]
+- Updated dependencies [a42aba6]
+- Updated dependencies [f2a6bec]
+  - @memberjunction/ai-core-plus@5.22.0
+  - @memberjunction/ai-prompts@5.22.0
+  - @memberjunction/core@5.22.0
+  - @memberjunction/ai-vector-dupe@5.22.0
+  - @memberjunction/global@5.22.0
+  - @memberjunction/ai-engine-base@5.22.0
+  - @memberjunction/aiengine@5.22.0
+  - @memberjunction/ai-reranker@5.22.0
+  - @memberjunction/actions@5.22.0
+  - @memberjunction/actions-base@5.22.0
+  - @memberjunction/core-entities@5.22.0
+  - @memberjunction/ai@5.22.0
+
+## 5.21.0
+
+### Patch Changes
+
+- b29716c: no metadata/migration
+- 76cd2bc: no migration/metadata changes
+- Updated dependencies [c7dfb20]
+- Updated dependencies [76cd2bc]
+- Updated dependencies [845c980]
+  - @memberjunction/core@5.21.0
+  - @memberjunction/ai-core-plus@5.21.0
+  - @memberjunction/ai-prompts@5.21.0
+  - @memberjunction/aiengine@5.21.0
+  - @memberjunction/ai-engine-base@5.21.0
+  - @memberjunction/ai-reranker@5.21.0
+  - @memberjunction/actions-base@5.21.0
+  - @memberjunction/actions@5.21.0
+  - @memberjunction/core-entities@5.21.0
+  - @memberjunction/ai@5.21.0
+  - @memberjunction/global@5.21.0
+
+## 5.20.0
+
+### Patch Changes
+
+- 7ab01a8: Fix 'Retry' nextStep type handling for message expansion in LoopAgentType to prevent skipped messages during agent loop iterations
+- Updated dependencies [2298f8a]
+  - @memberjunction/core@5.20.0
+  - @memberjunction/ai-engine-base@5.20.0
+  - @memberjunction/ai-core-plus@5.20.0
+  - @memberjunction/aiengine@5.20.0
+  - @memberjunction/ai-prompts@5.20.0
+  - @memberjunction/ai-reranker@5.20.0
+  - @memberjunction/actions-base@5.20.0
+  - @memberjunction/actions@5.20.0
+  - @memberjunction/core-entities@5.20.0
+  - @memberjunction/ai@5.20.0
+  - @memberjunction/global@5.20.0
+
+## 5.19.0
+
+### Minor Changes
+
+- f9001de: metadata
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.19.0
+- @memberjunction/ai@5.19.0
+- @memberjunction/ai-core-plus@5.19.0
+- @memberjunction/aiengine@5.19.0
+- @memberjunction/ai-prompts@5.19.0
+- @memberjunction/ai-reranker@5.19.0
+- @memberjunction/actions-base@5.19.0
+- @memberjunction/actions@5.19.0
+- @memberjunction/core@5.19.0
+- @memberjunction/core-entities@5.19.0
+- @memberjunction/global@5.19.0
+
+## 5.18.0
+
+### Minor Changes
+
+- 322dac6: metadata update
+- 5f91957: metadata update
+
+### Patch Changes
+
+- ee4bf94: no migration
+- Updated dependencies [322dac6]
+- Updated dependencies [48f7296]
+  - @memberjunction/ai-core-plus@5.18.0
+  - @memberjunction/ai-prompts@5.18.0
+  - @memberjunction/ai-engine-base@5.18.0
+  - @memberjunction/aiengine@5.18.0
+  - @memberjunction/ai-reranker@5.18.0
+  - @memberjunction/actions@5.18.0
+  - @memberjunction/ai@5.18.0
+  - @memberjunction/actions-base@5.18.0
+  - @memberjunction/core@5.18.0
+  - @memberjunction/core-entities@5.18.0
+  - @memberjunction/global@5.18.0
+
+## 5.17.0
+
+### Patch Changes
+
+- Updated dependencies [9881045]
+  - @memberjunction/core@5.17.0
+  - @memberjunction/ai-engine-base@5.17.0
+  - @memberjunction/ai-core-plus@5.17.0
+  - @memberjunction/aiengine@5.17.0
+  - @memberjunction/ai-prompts@5.17.0
+  - @memberjunction/ai-reranker@5.17.0
+  - @memberjunction/actions-base@5.17.0
+  - @memberjunction/actions@5.17.0
+  - @memberjunction/core-entities@5.17.0
+  - @memberjunction/ai@5.17.0
+  - @memberjunction/global@5.17.0
+
+## 5.16.0
+
+### Patch Changes
+
+- Updated dependencies [2387400]
+- Updated dependencies [11dba07]
+  - @memberjunction/core@5.16.0
+  - @memberjunction/ai-engine-base@5.16.0
+  - @memberjunction/ai-core-plus@5.16.0
+  - @memberjunction/aiengine@5.16.0
+  - @memberjunction/ai-prompts@5.16.0
+  - @memberjunction/ai-reranker@5.16.0
+  - @memberjunction/actions-base@5.16.0
+  - @memberjunction/actions@5.16.0
+  - @memberjunction/core-entities@5.16.0
+  - @memberjunction/ai@5.16.0
+  - @memberjunction/global@5.16.0
+
 ## 5.15.0
 
 ### Patch Changes

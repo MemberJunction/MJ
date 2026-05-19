@@ -16,8 +16,8 @@
     min-width: 0;
 }
 
-.param-name kendo-textbox,
-.param-value kendo-textarea {
+.param-name .mj-input,
+.param-value .mj-textarea {
     width: 100%;
 }
 
@@ -85,12 +85,12 @@
     transition: transform 0.2s ease;
 }
 
-.test-results .result-header kendo-button {
+.test-results .result-header [mjButton] {
     opacity: 0.8;
     transition: opacity 0.2s ease;
 }
 
-.test-results .result-header:hover kendo-button {
+.test-results .result-header:hover [mjButton] {
     opacity: 1;
 }
 

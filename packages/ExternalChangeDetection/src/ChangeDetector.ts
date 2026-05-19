@@ -1,6 +1,7 @@
 import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, CompositeKey, ConsoleColor, EntityFieldTSType, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunQuery, RunView, UpdateCurrentConsoleLine, UpdateCurrentConsoleProgress, UserInfo } from "@memberjunction/core";
 import { MJRecordChangeReplayRunEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
+import { EncryptionEngine } from "@memberjunction/encryption";
 import { SQLServerDataProvider, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { PostgreSQLDialect, SQLDialect, SQLServerDialect } from "@memberjunction/sql-dialect";
 import { getHeapStatistics } from "v8";
@@ -82,7 +83,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     private _dialect: SQLDialect;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        const p = <SQLServerDataProvider> ( provider || Metadata.Provider );
+        const p = <SQLServerDataProvider> ( provider ?? Metadata.Provider );
         
         // Initialize dialect
         const platform = (p as any).DatabasePlatform || 'sqlserver';
@@ -92,11 +93,25 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             {
                 EntityName: "MJ: Entities",
                 PropertyName: "_EligibleEntities",
-                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view. This view has the logic which basically is TrackRecordChanges=1 and also has an UpdatedAt field
+                Filter: `ID IN (SELECT ID FROM ${p.MJCoreSchemaName}.vwEntitiesWithExternalChangeTracking)`, // limit to entities that are in this view: TrackRecordChanges=1, DetectExternalChanges=1, and has __mj_UpdatedAt/__mj_CreatedAt fields
                 CacheLocal: true
             }
         ];
         await this.Load(c, provider, forceRefresh, contextUser);
+
+        // BaseEngine loads "MJ: Entities" as MJEntityEntity objects (BaseEntity subclass),
+        // but this class needs EntityInfo objects which have the correct PrimaryKeys for each
+        // represented entity. MJEntityEntity.PrimaryKeys returns the PK of the "MJ: Entities"
+        // table itself (always "ID"), not the PK of the entity the record represents.
+        // Map each loaded record to its corresponding EntityInfo from the metadata provider.
+        const md = this.ProviderToUse;
+        this._EligibleEntities = (this._EligibleEntities || [])
+            .map(e => md.EntityByID(e.ID))
+            .filter((e): e is EntityInfo => e != null);
+
+        // Log enrollment summary so administrators can verify the opt-in filter is working
+        const totalWithTracking = md.Entities.filter(e => e.TrackRecordChanges).length;
+        LogStatus(`External Change Detection: ${this._EligibleEntities.length} of ${totalWithTracking} entities with TrackRecordChanges=1 have DetectExternalChanges=1`);
     }
 
     public static get Instance(): ExternalChangeDetectorEngine {
@@ -122,11 +137,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
 
     private _EligibleEntities: EntityInfo[];
     /**
-     * A list of the entities that are eligible for external change detection. This is determined by using the underlying 
+     * A list of the entities that are eligible for external change detection. This is determined by using the underlying
      * database view vwEntitiesWithExternalChangeTracking which is a view that is maintained by the MJ system and is used to
      * find a list of entities that have the required characteristics that support external change detection. These characteristics
      * include:
      *  * The entity has the TrackRecordChanges property set to 1
+     *  * The entity has DetectExternalChanges set to 1 (opt-in flag, defaults to 0)
      *  * The entity has the special UpdatedAt/CreatedAt fields (which are called __mj_UpdatedAt and __mj_CreatedAt in the database). These fields are AUTOMATICALLY added to an entity that has TrackRecordChanges set to 1 by the MJ CodeGen tool.
      *  * The entity is not in the IneligibleEntities list. See info on the IneligibleEntities property for more information on excluded entities.
      */
@@ -147,7 +163,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             this.validateEntityEligibility(entity);
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const rq = new RunQuery();
             const params = this.buildDetectionParams(entity);
             const changes: ChangeDetectionItem[] = [];
@@ -348,9 +364,19 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * Creates a BaseEntity instance and loads it with data from a query result row.
      * Strips __ecd_ prefixed columns (our timestamp aliases) before loading to
      * avoid "field not found in entity" warnings from BaseEntity.SetMany().
+     *
+     * Also decrypts any Encrypt=1 field values. Detection queries run via
+     * RunQuery which does not call PostProcessRows, so encrypted fields arrive
+     * here as raw `$ENC$...` strings. Loading those directly and then calling
+     * Save() risks double-encryption — application-level Save() overrides that
+     * apply their own encryption will wrap the ciphertext again, and MJ's
+     * generic encrypt layer then wraps that. Decrypting here makes the replay
+     * path behave identically to a normal Load/Save cycle.
+     *
+     * Regression for https://github.com/MemberJunction/MJ/issues/2367
      */
     private async buildEntityFromRow(
-        md: Metadata,
+        md: IMetadataProvider,
         entity: EntityInfo,
         row: Record<string, unknown>
     ): Promise<BaseEntity> {
@@ -359,15 +385,58 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             if (!key.startsWith('__ecd_'))
                 cleanRow[key] = row[key];
         }
+
+        await this.decryptEncryptedFieldsInRow(entity, cleanRow);
+
         const record = await md.GetEntityObject(entity.Name, this.ContextUser);
         await record.LoadFromData(cleanRow);
         return record;
     }
 
     /**
+     * Decrypts any `Encrypt=1` field values in-place on the row so the replay
+     * path sees plaintext. No-op if the entity has no encrypted fields or if
+     * a field value is already plaintext / null / not a string.
+     *
+     * If decryption fails for any reason (misconfigured key, rotated key,
+     * corrupted ciphertext), the `$ENC$` value is left untouched. The
+     * provider's `EncryptFieldValuesForSave` guard will then detect the
+     * existing marker and skip re-encryption, so the DB value is preserved
+     * rather than corrupted — but the operator needs to see the error.
+     */
+    private async decryptEncryptedFieldsInRow(
+        entity: EntityInfo,
+        row: Record<string, unknown>
+    ): Promise<void> {
+        const encryptedFields = entity.Fields.filter(f => f.Encrypt && f.EncryptionKeyID);
+        if (encryptedFields.length === 0) return;
+
+        const engine = EncryptionEngine.Instance;
+        await engine.Config(false, this.ContextUser);
+
+        for (const field of encryptedFields) {
+            const value = row[field.Name];
+            if (typeof value !== 'string' || value.length === 0) continue;
+
+            const keyMarker = engine.GetKeyByID(field.EncryptionKeyID)?.Marker;
+            if (!engine.IsEncrypted(value, keyMarker)) continue;
+
+            try {
+                row[field.Name] = await engine.Decrypt(value, this.ContextUser);
+            }
+            catch (e) {
+                const detail = e instanceof Error ? e.message : String(e);
+                LogError(
+                    `ExternalChangeDetection: failed to decrypt ${entity.Name}.${field.Name} — leaving $ENC$ value intact to avoid corruption: ${detail}`
+                );
+            }
+        }
+    }
+
+    /**
      * Compares the current record with the last RecordChange snapshot to determine field-level changes.
      */
-    public async DetermineRecordChanges(md: Metadata, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
+    public async DetermineRecordChanges(md: IMetadataProvider, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
         try {
             const record = change.LatestRecord;
             if (!record)
@@ -674,7 +743,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     private async getApproxRowCounts(entities: EntityInfo[]): Promise<Map<string, number>> {
         try {
-            const provider = Metadata.Provider as SQLServerDataProvider;
+            const provider = this.ProviderToUse as SQLServerDataProvider;
             const entityIDs = entities.map(e => `'${e.ID}'`).join(',');
             const sql = `
                 SELECT
@@ -864,7 +933,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * is fast with no DB round trips for metadata loading.
      */
     private async createReplayProviders(count: number): Promise<SQLServerDataProvider[]> {
-        const singletonProvider = Metadata.Provider as SQLServerDataProvider;
+        const singletonProvider = this.ProviderToUse as SQLServerDataProvider;
         const pool = singletonProvider.DatabaseConnection;
         const schema = singletonProvider.MJCoreSchemaName;
 
@@ -896,7 +965,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const hours = diff / (1000 * 60 * 60);
                 if (hours > staleTimeoutHours) {
                     // this is a stale run, so mark it as error and allow a new run to proceed
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const staleRun = await md.GetEntityObject<MJRecordChangeReplayRunEntity>("MJ: Record Change Replay Runs", this.ContextUser);
                     await staleRun.InnerLoad(runData.ID);
                     staleRun.Status = 'Error';
@@ -910,7 +979,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             }
 
             // if we get here, either there was no existing run, or we just marked a stale run as error
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const run = await md.GetEntityObject<MJRecordChangeReplayRunEntity>("MJ: Record Change Replay Runs", this.ContextUser)
             run.StartedAt = new Date();
             run.UserID = this.ContextUser.ID;

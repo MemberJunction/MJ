@@ -1,5 +1,5 @@
 @if (isVisible) {
-  <div class="harness-container" kendoWindowContainer>
+  <div class="harness-container">
     <!-- Header -->
     <div class="harness-header">
       @if (entity) {
@@ -68,14 +68,12 @@
     <!-- Main Content Area with Splitter -->
     <div class="harness-body">
       @if (showSidebar) {
-        <kendo-splitter
-          orientation="horizontal"
+        <as-split
+          direction="horizontal"
           style="height: 100%; width: 100%;">
           <!-- Chat Area (Left Pane) -->
-          <kendo-splitter-pane
-            [collapsible]="false"
-            [resizable]="true"
-            [min]="'400px'">
+          <as-split-area
+            [size]="70">
             <div class="chat-area">
               <!-- Messages Container -->
               <div class="messages-container" #messagesContainer>
@@ -200,15 +198,14 @@
                 } @else {
                   <!-- Normal mode - show text input -->
                   <div class="input-container">
-                    <kendo-textarea
+                    <textarea
                       #messageInput
+                      class="mj-textarea message-input"
                       [(ngModel)]="currentUserMessage"
                       [rows]="3"
                       placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
                       (keypress)="handleKeyPress($event)"
-                      [disabled]="isExecuting"
-                      class="message-input">
-                    </kendo-textarea>
+                      [disabled]="isExecuting"></textarea>
                     <button
                       class="send-button"
                       (click)="sendMessage()"
@@ -224,13 +221,10 @@
                 }
               </div>
             </div>
-          </kendo-splitter-pane>
+          </as-split-area>
           <!-- Sidebar (Right Pane) -->
-          <kendo-splitter-pane
-            [collapsible]="false"
-            [resizable]="true"
-            [size]="'30%'"
-            [min]="'300px'">
+          <as-split-area
+            [size]="30">
             <div class="sidebar">
               <!-- Tab Navigation -->
               <div class="sidebar-tabs">
@@ -303,32 +297,30 @@
                       }
                       @for (variable of agentVariables; track $index) {
                         <div class="variable-item">
-                          <kendo-textbox
+                          <input type="text"
+                            class="mj-input variable-name"
                             [(ngModel)]="variable.name"
                             placeholder="Variable name"
-                            [disabled]="isExecuting"
-                            class="variable-name">
-                          </kendo-textbox>
-                          <kendo-dropdownlist
+                            [disabled]="isExecuting" />
+                          <mj-dropdown
                             [(ngModel)]="variable.type"
-                                                [data]="[
-                                                    {text: 'String', value: 'string'}, 
-                                                    {text: 'Number', value: 'number'}, 
-                                                    {text: 'Boolean', value: 'boolean'}, 
-                                                    {text: 'Object', value: 'object'}
-                                                ]"
-                            textField="text"
-                            valueField="value"
-                            [valuePrimitive]="true"
-                            [disabled]="isExecuting"
+                            [Data]="[
+                                {text: 'String', value: 'string'},
+                                {text: 'Number', value: 'number'},
+                                {text: 'Boolean', value: 'boolean'},
+                                {text: 'Object', value: 'object'}
+                            ]"
+                            TextField="text"
+                            ValueField="value"
+                            [ValuePrimitive]="true"
+                            [Disabled]="isExecuting"
                             class="variable-type">
-                          </kendo-dropdownlist>
-                          <kendo-textbox
+                          </mj-dropdown>
+                          <input type="text"
+                            class="mj-input variable-value"
                             [(ngModel)]="variable.value"
                             [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
-                            [disabled]="isExecuting"
-                            class="variable-value">
-                          </kendo-textbox>
+                            [disabled]="isExecuting" />
                           <button
                             class="remove-button"
                             (click)="removeAgentVariable($index)"
@@ -371,15 +363,15 @@
                     <div class="model-settings">
                       <div class="setting-group">
                         <label>AI Configuration</label>
-                        <kendo-dropdownlist
+                        <mj-dropdown
                           [(ngModel)]="agentConfigurationId"
-                          [data]="availableConfigurations"
-                          textField="Name"
-                          valueField="ID"
-                          [valuePrimitive]="true"
-                          placeholder="Select a configuration..."
+                          [Data]="availableConfigurations"
+                          TextField="Name"
+                          ValueField="ID"
+                          [ValuePrimitive]="true"
+                          Placeholder="Select a configuration..."
                           class="configuration-selector">
-                        </kendo-dropdownlist>
+                        </mj-dropdown>
                         <div class="setting-help">
                           @if (agentConfigurationId) {
                             @for (config of availableConfigurations; track config.ID) {
@@ -405,32 +397,30 @@
                     <div class="variables-list">
                       @for (variable of templateVariables; track $index) {
                         <div class="variable-item">
-                          <kendo-textbox
+                          <input type="text"
+                            class="mj-input variable-name"
                             [(ngModel)]="variable.name"
                             placeholder="Variable name"
-                            [disabled]="isExecuting"
-                            class="variable-name">
-                          </kendo-textbox>
-                          <kendo-dropdownlist
+                            [disabled]="isExecuting" />
+                          <mj-dropdown
                             [(ngModel)]="variable.type"
-                                                [data]="[
-                                                    {text: 'String', value: 'string'}, 
-                                                    {text: 'Number', value: 'number'}, 
-                                                    {text: 'Boolean', value: 'boolean'}, 
-                                                    {text: 'Object', value: 'object'}
-                                                ]"
-                            textField="text"
-                            valueField="value"
-                            [valuePrimitive]="true"
-                            [disabled]="isExecuting"
+                            [Data]="[
+                                {text: 'String', value: 'string'},
+                                {text: 'Number', value: 'number'},
+                                {text: 'Boolean', value: 'boolean'},
+                                {text: 'Object', value: 'object'}
+                            ]"
+                            TextField="text"
+                            ValueField="value"
+                            [ValuePrimitive]="true"
+                            [Disabled]="isExecuting"
                             class="variable-type">
-                          </kendo-dropdownlist>
-                          <kendo-textbox
+                          </mj-dropdown>
+                          <input type="text"
+                            class="mj-input variable-value"
                             [(ngModel)]="variable.value"
                             [placeholder]="variable.type === 'object' ? 'JSON value' : 'Value'"
-                            [disabled]="isExecuting"
-                            class="variable-value">
-                          </kendo-textbox>
+                            [disabled]="isExecuting" />
                           <button
                             class="remove-button"
                             (click)="removeTemplateVariable($index)"
@@ -461,29 +451,29 @@
                     <div class="model-settings">
                       <div class="setting-group">
                         <label>AI Model</label>
-                        <kendo-dropdownlist
+                        <mj-dropdown
                           [(ngModel)]="selectedModelId"
                           (ngModelChange)="onModelSelectionChange()"
-                          [data]="availableModels"
-                          textField="Name"
-                          valueField="ID"
-                          [valuePrimitive]="true"
-                          placeholder="Select a model..."
+                          [Data]="availableModels"
+                          TextField="Name"
+                          ValueField="ID"
+                          [ValuePrimitive]="true"
+                          Placeholder="Select a model..."
                           class="model-selector">
-                        </kendo-dropdownlist>
+                        </mj-dropdown>
                       </div>
                       <div class="setting-group">
                         <label>AI Vendor</label>
-                        <kendo-dropdownlist
+                        <mj-dropdown
                           [(ngModel)]="selectedVendorId"
-                          [data]="availableVendors"
-                          textField="Name"
-                          valueField="ID"
-                          [valuePrimitive]="true"
-                          [disabled]="availableVendors.length <= 1 || !selectedModelId"
-                          placeholder="Select a vendor..."
+                          [Data]="availableVendors"
+                          TextField="Name"
+                          ValueField="ID"
+                          [ValuePrimitive]="true"
+                          [Disabled]="availableVendors.length <= 1 || !selectedModelId"
+                          Placeholder="Select a vendor..."
                           class="vendor-selector">
-                        </kendo-dropdownlist>
+                        </mj-dropdown>
                         <div class="setting-help">
                           @if (!selectedModelId) {
                             Using default vendor for the default model
@@ -496,15 +486,15 @@
                       </div>
                       <div class="setting-group">
                         <label>AI Configuration</label>
-                        <kendo-dropdownlist
+                        <mj-dropdown
                           [(ngModel)]="selectedConfigurationId"
-                          [data]="availableConfigurations"
-                          textField="Name"
-                          valueField="ID"
-                          [valuePrimitive]="true"
-                          placeholder="Select a configuration..."
+                          [Data]="availableConfigurations"
+                          TextField="Name"
+                          ValueField="ID"
+                          [ValuePrimitive]="true"
+                          Placeholder="Select a configuration..."
                           class="configuration-selector">
-                        </kendo-dropdownlist>
+                        </mj-dropdown>
                         <div class="setting-help">
                           @if (selectedConfigurationId) {
                             @for (config of availableConfigurations; track config.ID) {
@@ -519,28 +509,28 @@
                       </div>
                       <div class="setting-group">
                         <label>Response Format</label>
-                        <kendo-dropdownlist
+                        <mj-dropdown
                           [(ngModel)]="selectedResponseFormat"
-                          [data]="responseFormatOptions"
-                          textField="text"
-                          valueField="value"
-                          placeholder="Select format..."
+                          [Data]="responseFormatOptions"
+                          TextField="text"
+                          ValueField="value"
+                          Placeholder="Select format..."
                           class="format-selector">
-                        </kendo-dropdownlist>
+                        </mj-dropdown>
                         <div class="setting-help">
                           Expected format for AI response (defaults to prompt setting)
                         </div>
                       </div>
                       <div class="setting-group">
                         <label>Max Tokens</label>
-                        <kendo-numerictextbox
+                        <mj-numeric-input
                           [(ngModel)]="maxTokens"
-                          [min]="100"
-                          [max]="8000"
-                          [step]="100"
-                          placeholder="Max tokens..."
+                          [Min]="100"
+                          [Max]="8000"
+                          [Step]="100"
+                          Placeholder="Max tokens..."
                           class="max-tokens-input">
-                        </kendo-numerictextbox>
+                        </mj-numeric-input>
                         <div class="setting-help">
                           Maximum length of generated response
                         </div>
@@ -557,118 +547,116 @@
                         </div>
                       </div>
                       <!-- Advanced Parameters Expansion Panel -->
-                      <kendo-expansionpanel
-                        [expanded]="advancedParamsExpanded"
-                        (action)="toggleAdvancedParams()"
-                        title="Advanced Parameters"
+                      <mj-accordion-panel
+                        [Title]="'Advanced Parameters'"
+                        [Expanded]="advancedParamsExpanded"
                         class="advanced-params-panel">
                         <div class="advanced-settings">
                           <div class="setting-group">
                             <label title="Controls randomness: 0 = more focused and deterministic, 2 = more random and creative">
                               Temperature
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.temperature"
-                              [min]="0"
-                              [max]="2"
-                              [step]="0.1"
-                              [format]="'n1'"
-                              placeholder="None"
+                              [Min]="0"
+                              [Max]="2"
+                              [Step]="0.1"
+                              [Format]="'n1'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Nucleus sampling: only consider tokens with cumulative probability up to this value. 1 = consider all tokens">
                               Top P
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.topP"
-                              [min]="0"
-                              [max]="1"
-                              [step]="0.01"
-                              [format]="'n2'"
-                              placeholder="None"
+                              [Min]="0"
+                              [Max]="1"
+                              [Step]="0.01"
+                              [Format]="'n2'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Only sample from the top K tokens. Lower values reduce randomness">
                               Top K
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.topK"
-                              [min]="1"
-                              [max]="100"
-                              [step]="1"
-                              [format]="'n0'"
-                              placeholder="None"
+                              [Min]="1"
+                              [Max]="100"
+                              [Step]="1"
+                              [Format]="'n0'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Minimum probability for token selection. Filters out low-probability tokens">
                               Min P
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.minP"
-                              [min]="0"
-                              [max]="1"
-                              [step]="0.01"
-                              [format]="'n2'"
-                              placeholder="None"
+                              [Min]="0"
+                              [Max]="1"
+                              [Step]="0.01"
+                              [Format]="'n2'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Penalizes tokens based on their frequency in the text. Positive values reduce repetition">
                               Frequency Penalty
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.frequencyPenalty"
-                              [min]="-2"
-                              [max]="2"
-                              [step]="0.1"
-                              [format]="'n1'"
-                              placeholder="None"
+                              [Min]="-2"
+                              [Max]="2"
+                              [Step]="0.1"
+                              [Format]="'n1'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Penalizes tokens that have appeared in the text. Positive values increase topic diversity">
                               Presence Penalty
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.presencePenalty"
-                              [min]="-2"
-                              [max]="2"
-                              [step]="0.1"
-                              [format]="'n1'"
-                              placeholder="None"
+                              [Min]="-2"
+                              [Max]="2"
+                              [Step]="0.1"
+                              [Format]="'n1'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Random seed for deterministic generation. Same seed produces same output">
                               Seed
                             </label>
-                            <kendo-numerictextbox
+                            <mj-numeric-input
                               [(ngModel)]="advancedParams.seed"
-                              [format]="'n0'"
-                              placeholder="None"
+                              [Format]="'n0'"
+                              Placeholder="None"
                               class="advanced-param-input">
-                            </kendo-numerictextbox>
+                            </mj-numeric-input>
                           </div>
                           <div class="setting-group">
                             <label title="Sequences that will stop generation when encountered. Enter comma-separated values">
                               Stop Sequences
                             </label>
-                            <kendo-textarea
+                            <textarea
+                              class="mj-textarea advanced-param-input"
                               [(ngModel)]="stopSequencesText"
                               (ngModelChange)="updateStopSequences()"
                               [rows]="2"
-                              placeholder="Enter comma-separated sequences"
-                              class="advanced-param-input">
-                            </kendo-textarea>
+                              placeholder="Enter comma-separated sequences"></textarea>
                             <div class="setting-help">
                               Separate multiple sequences with commas
                             </div>
@@ -677,29 +665,29 @@
                             <label title="Include log probabilities of the output tokens in the response">
                               Include Log Probs
                             </label>
-                            <kendo-switch
+                            <mj-switch
                               [(ngModel)]="advancedParams.includeLogProbs"
                               class="advanced-param-switch">
-                            </kendo-switch>
+                            </mj-switch>
                           </div>
                           @if (advancedParams.includeLogProbs) {
                             <div class="setting-group">
                               <label title="Number of top log probabilities to include for each token">
                                 Top Log Probs
                               </label>
-                              <kendo-numerictextbox
+                              <mj-numeric-input
                                 [(ngModel)]="advancedParams.topLogProbs"
-                                [min]="2"
-                                [max]="20"
-                                [step]="1"
-                                [format]="'n0'"
-                                placeholder="2"
+                                [Min]="2"
+                                [Max]="20"
+                                [Step]="1"
+                                [Format]="'n0'"
+                                Placeholder="2"
                                 class="advanced-param-input">
-                              </kendo-numerictextbox>
+                              </mj-numeric-input>
                             </div>
                           }
                         </div>
-                      </kendo-expansionpanel>
+                      </mj-accordion-panel>
                     </div>
                   </div>
                 }
@@ -745,8 +733,8 @@
                 }
               </div>
             </div>
-          </kendo-splitter-pane>
-        </kendo-splitter>
+          </as-split-area>
+        </as-split>
       } @else {
         <!-- No sidebar - full width chat -->
         <div class="chat-area">
@@ -834,15 +822,14 @@
           <!-- Input Area -->
           <div class="input-area">
             <div class="input-container">
-              <kendo-textarea
+              <textarea
                 #messageInput
+                class="mj-textarea message-input"
                 [(ngModel)]="currentUserMessage"
                 [rows]="3"
                 placeholder="Type your message here... (Press Enter to send, Shift+Enter for new line)"
                 (keypress)="handleKeyPress($event)"
-                [disabled]="isExecuting"
-                class="message-input">
-              </kendo-textarea>
+                [disabled]="isExecuting"></textarea>
               <button
                 class="send-button"
                 (click)="sendMessage()"
@@ -864,11 +851,12 @@
 
 <!-- Save Conversation Dialog -->
 @if (showSaveDialog) {
-  <kendo-dialog
-    [title]="'Save Conversation'"
-    [width]="400"
-    (close)="cancelSaveDialog()"
+  <mj-dialog
+    [Visible]="true"
+    [Width]="400"
+    (Close)="cancelSaveDialog()"
     class="save-dialog">
+    <mj-dialog-titlebar>Save Conversation</mj-dialog-titlebar>
     <div class="dialog-content">
       <p>Enter a name for this conversation:</p>
       <input
@@ -876,39 +864,56 @@
         type="text"
         (keyup)="updateTempConversation()"
         placeholder="Conversation name"
-        class="k-textbox k-input k-input-md k-rounded-md k-input-solid full-width"  />
+        class="mj-input full-width"  />
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="cancelSaveDialog()">Cancel</button>
-      <button kendoButton
-        [primary]="true"
+    <mj-dialog-actions>
+      <button mjButton (click)="cancelSaveDialog()">Cancel</button>
+      <button mjButton
+        variant="primary"
         (click)="confirmSaveConversation()"
         [disabled]="tempConversationName === ''">
         Save
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }
 
 <!-- Load Confirmation Dialog -->
 @if (showLoadConfirmDialog) {
-  <kendo-dialog
-    [title]="'Replace Current Conversation?'"
-    [width]="400"
-    (close)="cancelLoadConversation()"
+  <mj-dialog
+    [Visible]="true"
+    [Width]="400"
+    (Close)="cancelLoadConversation()"
     class="confirm-dialog">
+    <mj-dialog-titlebar>Replace Current Conversation?</mj-dialog-titlebar>
     <div class="dialog-content">
       <p>Loading this conversation will replace the current one. Any unsaved changes will be lost.</p>
       <p>Do you want to continue?</p>
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="cancelLoadConversation()">Cancel</button>
-      <button kendoButton
-        [primary]="true"
+    <mj-dialog-actions>
+      <button mjButton (click)="cancelLoadConversation()">Cancel</button>
+      <button mjButton
+        variant="primary"
         (click)="confirmLoadConversation()">
         Load Conversation
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
+
+<!-- JSON Viewer Window -->
+@if (showJsonWindow) {
+  <mj-window
+    [Visible]="true"
+    Title="Raw JSON Response"
+    [Width]="900"
+    [Height]="700"
+    [MinWidth]="600"
+    [MinHeight]="400"
+    [Draggable]="true"
+    [Resizable]="true"
+    (Close)="closeJsonWindow()">
+    <mj-json-viewer-window [jsonContent]="currentJsonContent"></mj-json-viewer-window>
+  </mj-window>
 }
 

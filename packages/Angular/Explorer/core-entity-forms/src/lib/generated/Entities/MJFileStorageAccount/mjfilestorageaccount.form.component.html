@@ -31,6 +31,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IncludeInGlobalSearch"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -86,6 +94,160 @@
             [FormContext]="formContext"
         ></mj-form-field>
 
+    </mj-collapsible-panel>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- AI Agent Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentTypes"
+        SectionName="AI Agent Types"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Types','DefaultStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Types')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentTypes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Archive Configurations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArchiveConfigurations"
+        SectionName="Archive Configurations"
+        Icon="fa fa-archive"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArchiveConfigurations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configurations','StorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJArchiveConfigurations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Storage Accounts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeStorageAccounts"
+        SectionName="Search Scope Storage Accounts"
+        Icon="fa fa-folder-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','FileStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Categories Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentCategories"
+        SectionName="AI Agent Categories"
+        Icon="fa fa-sitemap"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentCategories')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Categories','DefaultStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Categories')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentCategories')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- File Storage Account Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFileStorageAccountPermissions"
+        SectionName="File Storage Account Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFileStorageAccountPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Account Permissions','FileStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJFileStorageAccountPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agents Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgents"
+        SectionName="AI Agents"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agents','DefaultStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agents')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgents', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         

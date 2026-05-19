@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Barima-Waini",
+      "Code": "BA",
+      "ISO3166_2": "GY-BA",
+      "Latitude": 7.7423,
+      "Longitude": -59.7502,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-BA.geojson",
+      "CommonAliases": [
+        "Barima-Waini"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "5F0AFFCB-60C5-455C-AF0E-3AD5CABB25F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.323Z",
+      "checksum": "aa3fb65a0e29b85e2d9738f98b236d97c97bff38aa921ff107d9d84dbdbd4e4e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuyuni-Mazaruni",
+      "Code": "CU",
+      "ISO3166_2": "GY-CU",
+      "Latitude": 7.1688,
+      "Longitude": -58.8206,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-CU.geojson",
+      "CommonAliases": [
+        "Cuyuni-Mazaruni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "881F0A0A-6C13-423B-A9DF-3BD2AC6A3EFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.342Z",
+      "checksum": "63a8110e60f42f911a22ec64c75cd7e4f14b5729de715454e153c6efb9134545"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Demerara-Mahaica",
+      "Code": "DE",
+      "ISO3166_2": "GY-DE",
+      "Latitude": 6.5413,
+      "Longitude": -58.3773,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-DE.geojson",
+      "CommonAliases": [
+        "Demerara-Mahaica"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "A697FF0D-FA8D-4F83-B7E7-6E353054DF73"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.357Z",
+      "checksum": "149d50bf6516c874d05020656243f5a570185da6ccc3fd7b0aed5a36ab021e49"
+    }
+  },
+  {
+    "fields": {
+      "Name": "East Berbice-Corentyne",
+      "Code": "EB",
+      "ISO3166_2": "GY-EB",
+      "Latitude": 6.5642,
+      "Longitude": -58.0942,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-EB.geojson",
+      "CommonAliases": [
+        "East Berbice-Corentyne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "A9E6EBBB-B99E-4A74-ACA4-AD2B6BD64915"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.372Z",
+      "checksum": "fed21f2f81303df1ebf6b8497af0da633c730a08dc37ae46b9847b601c051005"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Essequibo Islands-West Demerara",
+      "Code": "ES",
+      "ISO3166_2": "GY-ES",
+      "Latitude": 6.2371,
+      "Longitude": -57.8277,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-ES.geojson",
+      "CommonAliases": [
+        "Essequibo Islands-West Demerara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "D75CCDE3-E5C6-4B50-A3E5-A54938975946"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.386Z",
+      "checksum": "b9cd9df825b743c7b5732f8f917c0b111e14a493918c05fef893d6b2373d0cf1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mahaica-Berbice",
+      "Code": "MA",
+      "ISO3166_2": "GY-MA",
+      "Latitude": 2.5672,
+      "Longitude": -57.4923,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-MA.geojson",
+      "CommonAliases": [
+        "Mahaica-Berbice"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "E4A693BE-FDBD-415E-82E9-05E5E6C22A2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.404Z",
+      "checksum": "585c513137cac34c0a583f02e7ce658ab9d93f6f1a4788ea9102dea42161655b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pomeroon-Supenaam",
+      "Code": "PM",
+      "ISO3166_2": "GY-PM",
+      "Latitude": 6.1836,
+      "Longitude": -59.9838,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-PM.geojson",
+      "CommonAliases": [
+        "Pomeroon-Supenaam"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "AA9E66DE-54DF-41E1-B035-DD7F628A6E80"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.419Z",
+      "checksum": "1cce27a4eda6a5ee86b6d1e3a145bb1fdfff2b79caf5d5acefc6b40b14a25115"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Potaro-Siparuni",
+      "Code": "PT",
+      "ISO3166_2": "GY-PT",
+      "Latitude": 4.9315,
+      "Longitude": -59.2238,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-PT.geojson",
+      "CommonAliases": [
+        "Potaro-Siparuni"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "EBECDEDD-0D49-4590-BC87-D87DE850B15A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.433Z",
+      "checksum": "0cb7ca0a0b2920eab77fe609429ffb15c4dc7d4c512082a57ea00582ee751a3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper Demerara-Berbice",
+      "Code": "UD",
+      "ISO3166_2": "GY-UD",
+      "Latitude": 2.6693,
+      "Longitude": -58.9648,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-UD.geojson",
+      "CommonAliases": [
+        "Upper Demerara-Berbice"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "8844D958-639D-4757-BA32-96C678BA9F0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.447Z",
+      "checksum": "b3a9c88b70629924d097ea9150ebfa6051319602167671e8fc3185b61369e6a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper Takutu-Upper Essequibo",
+      "Code": "UT",
+      "ISO3166_2": "GY-UT",
+      "Latitude": 5.3648,
+      "Longitude": -58.2455,
+      "BoundaryGeoJSON": "@file:by-country/GY/boundaries/GY-UT.geojson",
+      "CommonAliases": [
+        "Upper Takutu-Upper Essequibo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GY"
+    },
+    "primaryKey": {
+      "ID": "AF6776FD-834B-478A-BFF4-BF18D987316D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.460Z",
+      "checksum": "1ab06c22ae167b1ca3f3e141d55ccde12203e0e6e06acc0e1a0add9f41e60745"
+    }
+  }
+]

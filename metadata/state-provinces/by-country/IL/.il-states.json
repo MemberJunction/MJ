@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "HaDarom (El Janūbī)",
+      "Code": "D",
+      "ISO3166_2": "IL-D",
+      "Latitude": 30.935,
+      "Longitude": 34.8419,
+      "BoundaryGeoJSON": "@file:by-country/IL/boundaries/IL-D.geojson",
+      "CommonAliases": [
+        "HaDarom (El Janūbī)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "34B64B70-31EA-4355-A33B-E15B60908305"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.659Z",
+      "checksum": "4cb551cd8543a6f491280a058d0043ad02bfe176f7de74786470c712e63429d5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HaMerkaz (El Awsat)",
+      "Code": "M",
+      "ISO3166_2": "IL-M",
+      "Latitude": 31.9068,
+      "Longitude": 34.8491,
+      "BoundaryGeoJSON": "@file:by-country/IL/boundaries/IL-M.geojson",
+      "CommonAliases": [
+        "HaMerkaz (El Awsat)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "8FA99096-1DB7-4F9B-B039-5532D9E83C1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.675Z",
+      "checksum": "002f4bc488839a340e47e683d1805a7dbe372be798ea8716ea5e6adb2a5db4bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "HaZafon (Esh Shamālī)",
+      "Code": "2",
+      "ISO3166_2": "IL-2",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "HaZafon (Esh Shamālī)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "1BAD49A9-EB02-460B-9A23-CA33778886EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.691Z",
+      "checksum": "bd70c482c5dde56756b01e8754f6f77d0fe0ca15b7e5ddb81c0058a3be6db939"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hefa (Heifā)",
+      "Code": "HA",
+      "ISO3166_2": "IL-HA",
+      "Latitude": 32.5523,
+      "Longitude": 34.9727,
+      "BoundaryGeoJSON": "@file:by-country/IL/boundaries/IL-HA.geojson",
+      "CommonAliases": [
+        "Hefa (Heifā)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "B4D8AE8F-9D4D-4500-A8A1-8622BDE316AF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.706Z",
+      "checksum": "745935ccbe6042640f1d4ec9cdaa69d1d1cb7ccfbf68d04935ca93a4ad543092"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tel-Aviv (Tell Abīb)",
+      "Code": "TA",
+      "ISO3166_2": "IL-TA",
+      "Latitude": 32.0966,
+      "Longitude": 34.8091,
+      "BoundaryGeoJSON": "@file:by-country/IL/boundaries/IL-TA.geojson",
+      "CommonAliases": [
+        "Tel-Aviv (Tell Abīb)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "276784FE-4905-4594-9547-245FF128FC13"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.721Z",
+      "checksum": "47290b5102f083fb80c7af1caf8fa31502711b9c4c8c3802f138d9f1bbb19eb5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yerushalayim (Al Quds)",
+      "Code": "JM",
+      "ISO3166_2": "IL-JM",
+      "Latitude": 31.7397,
+      "Longitude": 35.0176,
+      "BoundaryGeoJSON": "@file:by-country/IL/boundaries/IL-JM.geojson",
+      "CommonAliases": [
+        "Yerushalayim (Al Quds)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=IL"
+    },
+    "primaryKey": {
+      "ID": "D1DE1334-50E0-46FB-BE6C-B935AFEAF30D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:02.735Z",
+      "checksum": "e9e12af0e8207b58354fbe8d4a46044c2990f87775807be1aab046a1de0d2893"
+    }
+  }
+]

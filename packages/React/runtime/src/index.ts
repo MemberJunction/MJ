@@ -79,7 +79,9 @@ export {
 export {
   ReactRootManager,
   reactRootManager,
-  ManagedReactRoot
+  ManagedReactRoot,
+  RuntimeHook,
+  RootHookContext
 } from './runtime';
 
 // Export utilities

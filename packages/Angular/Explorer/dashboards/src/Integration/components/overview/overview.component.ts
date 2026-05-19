@@ -50,10 +50,14 @@ export class OverviewComponent extends BaseResourceComponent implements OnInit, 
   private notificationTimer: ReturnType<typeof setTimeout> | null = null;
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
+    this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.clearNotificationTimer();
   }
 

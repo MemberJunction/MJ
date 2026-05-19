@@ -1,4 +1,4 @@
-<div [class]="messageClasses" [attr.data-message-id]="message.ID">
+<div [class]="messageClasses" [attr.data-message-id]="message.ID" (click)="onMessageBubbleClick($event)">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
       @if (isUserMessage) {
@@ -81,10 +81,10 @@
         @if (hasAttachments) {
           <div class="message-attachments">
             @for (attachment of attachments; track attachment.id) {
-              <div class="attachment-item"
-                [class.image-attachment]="attachment.type === 'Image'"
-                (click)="onAttachmentClick(attachment)">
-                @if (attachment.type === 'Image') {
+              @if (attachment.type === 'Image') {
+                <div class="attachment-item image-attachment"
+                  (click)="onAttachmentClick(attachment)"
+                  [title]="attachment.fileName || 'Image attachment'">
                   <img
                     [src]="attachment.thumbnailUrl || attachment.contentUrl"
                     [alt]="attachment.fileName || 'Image attachment'"
@@ -93,19 +93,19 @@
                   <div class="attachment-overlay">
                     <i class="fas fa-expand"></i>
                   </div>
-                } @else {
-                  <div class="attachment-file">
-                    <i class="fas"
-                       [ngClass]="{
-                         'fa-file-video': attachment.type === 'Video',
-                         'fa-file-audio': attachment.type === 'Audio',
-                         'fa-file': attachment.type === 'Document'
-                       }"></i>
+                </div>
+              } @else {
+                <div class="attachment-strip"
+                  [class.is-artifact]="!!attachment.artifactTypeName"
+                  (click)="onAttachmentClick(attachment)"
+                  [title]="attachment.fileName || 'File'">
+                  <div class="attachment-badge">{{ badgeTextFor(attachment) }}</div>
+                  <div class="attachment-meta">
                     <span class="file-name">{{ attachment.fileName || 'File' }}</span>
                     <span class="file-size">{{ formatFileSize(attachment.sizeBytes) }}</span>
                   </div>
-                }
-              </div>
+                </div>
+              }
             }
           </div>
         }
@@ -180,24 +180,30 @@
       }
     </div>
 
-    <!-- Message Footer: Rating buttons and action buttons for last completed AI message -->
-    @if (isAIMessage && !isEditing && messageStatus === 'Complete' && (isLastMessage || hasRatings())) {
+    <!-- Message Footer: only rendered on the last message.
+         Non-last messages have no footer — pin/delete/rating live in the gear panel. -->
+    @if (!isEditing && isLastMessage && (isConversationOwner || (isAIMessage && messageStatus === 'Complete'))) {
       <div class="message-footer">
-        <!-- Rating component (thumbs up/down) -->
-        <mj-conversation-message-rating
-          [conversationDetailId]="message.ID"
-          [currentUser]="currentUser"
-          [ratingsData]="ratings">
-        </mj-conversation-message-rating>
-
-        <!-- Pin/Delete buttons (only for last message) -->
-        @if (isLastMessage) {
-          <div class="inline-actions">
-            <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
-              <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
-            </button>
-            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
-              <i class="fas fa-trash"></i>
+        @if (isConversationOwner) {
+          <button class="action-bar-btn danger inline-delete" (click)="onDeleteClick()" title="Delete this message and all messages below it">
+            <i class="fas fa-trash"></i>
+          </button>
+        }
+        @if (isAIMessage && messageStatus === 'Complete') {
+          <div class="ai-message-actions">
+            <!-- Thumbs visible inline only on the latest AI message, left of pin -->
+            <mj-conversation-message-rating
+              [conversationDetailId]="message.ID"
+              [currentUser]="currentUser"
+              [ratingsData]="ratings">
+            </mj-conversation-message-rating>
+            <button
+              class="action-bar-btn pin-btn"
+              [class.pinned]="message.IsPinned"
+              (click)="PinMessage()"
+              [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+              type="button">
+              <i class="fas fa-thumbtack"></i>
             </button>
           </div>
         }
@@ -206,28 +212,6 @@
 
     <!-- Agent details content section -->
     <div class="agent-details-section">
-      <!-- Message Action Bar (appears when gear expanded for non-last messages) -->
-      @if (isAgentDetailsExpanded && !isLastMessage && isAIMessage && messageStatus === 'Complete') {
-        <div class="message-action-bar">
-          <div class="action-bar-container">
-            <mj-conversation-message-rating
-              [conversationDetailId]="message.ID"
-              [currentUser]="currentUser"
-              [ratingsData]="ratings">
-            </mj-conversation-message-rating>
-
-            <div class="action-buttons">
-              <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
-                <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
-              </button>
-              <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
-          </div>
-        </div>
-      }
-
       <!-- Agent Run Details Panel (expandable) -->
       @if (isAgentDetailsExpanded && hasAgentRun) {
         <!-- Agent Run Details Panel -->
@@ -285,6 +269,43 @@
                   </div>
                 }
               </div>
+            </div>
+          }
+
+          <!-- Delete + Rating + Pin in gear panel for non-last messages — mirrors last-message footer layout -->
+          @if (!isLastMessage) {
+            <div class="agent-panel-actions">
+              @if (isConversationOwner) {
+                <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete this message and all messages below it">
+                  <i class="fas fa-trash"></i>
+                </button>
+              }
+              @if (messageStatus === 'Complete') {
+                <div class="ai-message-actions">
+                  <mj-conversation-message-rating
+                    [conversationDetailId]="message.ID"
+                    [currentUser]="currentUser"
+                    [ratingsData]="ratings">
+                  </mj-conversation-message-rating>
+                  <button
+                    class="action-bar-btn pin-btn"
+                    [class.pinned]="message.IsPinned"
+                    (click)="PinMessage()"
+                    [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                    type="button">
+                    <i class="fas fa-thumbtack"></i>
+                  </button>
+                </div>
+              } @else {
+                <button
+                  class="action-bar-btn pin-btn"
+                  [class.pinned]="message.IsPinned"
+                  (click)="PinMessage()"
+                  [title]="message.IsPinned ? 'Unpin message' : 'Pin message'"
+                  type="button">
+                  <i class="fas fa-thumbtack"></i>
+                </button>
+              }
             </div>
           }
 

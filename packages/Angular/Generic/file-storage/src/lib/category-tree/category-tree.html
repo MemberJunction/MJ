@@ -1,73 +1,103 @@
 <div class="container">
   <div class="tree-header">
-    <button kendoButton (click)="clearSelection()">All Files</button>
-    <button kendoButton (click)="createNewCategory()" size="small">Add category</button>
+    <button mjButton (click)="clearSelection()">All Files</button>
+    <button mjButton variant="primary" size="sm" (click)="createNewCategory()">Add category</button>
   </div>
-  <kendo-treeview
-    [nodes]="categoriesData"
-    textField="Name"
-    kendoTreeViewExpandable
-    kendoTreeViewFlatDataBinding
-    idField="ID"
-    parentIdField="ParentID"
-    (selectionChange)="categorySelected.emit($event.dataItem.ID)"
-    kendoTreeViewDragAndDrop
-    kendoTreeViewSelectable
-    (addItem)="handleDrop($event)"
-    [selectedKeys]="selectedKeys"
-    >
-    <ng-template kendoTreeViewNodeTemplate let-dataItem>
-      <span #target>{{ dataItem.Name }} </span>
-      <kendo-contextmenu [target]="target" (select)="handleMenuSelect($event)">
-        <kendo-menu-item text="Rename" [data]="dataItem"> </kendo-menu-item>
-        <kendo-menu-item text="Delete" [data]="dataItem" [disabled]="true"> </kendo-menu-item>
-      </kendo-contextmenu>
-    </ng-template>
-  </kendo-treeview>
 
-  @if (showNew) {
-    <kendo-dialog title="New file category" (close)="cancelNewCategory()" [minWidth]="250" [width]="450">
-      <div class="container">
-        <form #templateForm="ngForm">
-          <kendo-label class="k-form" text="Name">
-            <kendo-textbox
-              name="name"
-              [(ngModel)]="newCategoryName"
-              [showSuccessIcon]="newCategoryName.length > 0"
-              showErrorIcon="initial"
-              required
-              [disabled]="isLoading"
-            ></kendo-textbox>
-          </kendo-label>
-        </form>
+  <div class="category-tree">
+    @for (node of rootNodes; track node.ID) {
+      <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: node, level: 0 }"></ng-container>
+    }
+  </div>
+
+  <ng-template #treeNode let-node let-level="level">
+    <div class="tree-node" [style.padding-left.px]="level * 20">
+      <div class="tree-node-row"
+           [class.selected]="isSelected(node)"
+           (click)="selectNode(node)"
+           (contextmenu)="onContextMenu($event, node)">
+        @if (hasChildren(node)) {
+          <button class="tree-expand-btn" (click)="toggleExpand(node, $event)">
+            <i class="fa-solid" [class.fa-chevron-right]="!isExpanded(node)" [class.fa-chevron-down]="isExpanded(node)"></i>
+          </button>
+        } @else {
+          <span class="tree-expand-placeholder"></span>
+        }
+        <i class="fa-solid fa-folder tree-folder-icon"></i>
+        <span class="tree-node-label">{{ node.Name }}</span>
       </div>
-      <kendo-dialog-actions>
-        <button kendoButton (click)="cancelNewCategory()" [disabled]="isLoading">Cancel</button>
-        <button kendoButton (click)="saveNewCategory()" [disabled]="isLoading" themeColor="primary">Save</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+      @if (isExpanded(node)) {
+        @for (child of getChildren(node); track child.ID) {
+          <ng-container *ngTemplateOutlet="treeNode; context: { $implicit: child, level: level + 1 }"></ng-container>
+        }
+      }
+    </div>
+  </ng-template>
+
+  <!-- Context Menu -->
+  @if (contextMenuVisible) {
+    <div class="context-menu"
+         [style.top.px]="contextMenuY"
+         [style.left.px]="contextMenuX"
+         (document:click)="closeContextMenu()">
+      <button class="context-menu-item" (click)="onContextMenuAction('rename')">
+        <i class="fa-solid fa-pen"></i> Rename
+      </button>
+      <button class="context-menu-item" (click)="onContextMenuAction('delete')" disabled>
+        <i class="fa-solid fa-trash-can"></i> Delete
+      </button>
+    </div>
   }
 
+  <mj-dialog
+    [Visible]="showNew"
+    Title="New file category"
+    [Width]="450"
+    [MinWidth]="250"
+    (Close)="cancelNewCategory()">
+    <div class="dialog-form-container">
+      <form #newForm="ngForm">
+        <label class="mj-form-field">
+          <span class="mj-form-label">Name</span>
+          <input
+            class="mj-input"
+            name="name"
+            [(ngModel)]="newCategoryName"
+            required
+            [disabled]="isLoading" />
+        </label>
+      </form>
+    </div>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="saveNewCategory()" [disabled]="isLoading">Save</button>
+      <button mjButton (click)="cancelNewCategory()" [disabled]="isLoading">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+
   @if (!!renameFileCategory) {
-    <kendo-dialog title="Rename file category" (close)="cancelRename()" [minWidth]="250" [width]="450">
-      <div class="container">
-        <form #templateForm="ngForm">
-          <kendo-label class="k-form" text="Name">
-            <kendo-textbox
+    <mj-dialog
+      [Visible]="true"
+      Title="Rename file category"
+      [Width]="450"
+      [MinWidth]="250"
+      (Close)="cancelRename()">
+      <div class="dialog-form-container">
+        <form #renameForm="ngForm">
+          <label class="mj-form-field">
+            <span class="mj-form-label">Name</span>
+            <input
+              class="mj-input"
               name="Name"
               [(ngModel)]="renameFileCategory.Name"
-              [showSuccessIcon]="renameFileCategory.Name.length > 0"
-              showErrorIcon="initial"
               required
-              [disabled]="isLoading"
-            ></kendo-textbox>
-          </kendo-label>
+              [disabled]="isLoading" />
+          </label>
         </form>
       </div>
-      <kendo-dialog-actions>
-        <button kendoButton (click)="cancelRename()" [disabled]="isLoading">Cancel</button>
-        <button kendoButton (click)="saveRename()" [disabled]="isLoading || !renameFileCategory.Dirty" themeColor="primary">Save</button>
-      </kendo-dialog-actions>
-    </kendo-dialog>
+      <mj-dialog-actions>
+        <button mjButton variant="primary" (click)="saveRename()" [disabled]="isLoading || !renameFileCategory.Dirty">Save</button>
+        <button mjButton (click)="cancelRename()" [disabled]="isLoading">Cancel</button>
+      </mj-dialog-actions>
+    </mj-dialog>
   }
 </div>

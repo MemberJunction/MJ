@@ -1,50 +1,39 @@
 @if (isVisible) {
-  <kendo-dialog
-    [width]="500"
-    [height]="400"
-    (close)="close()">
-    <kendo-dialog-titlebar>
+  <mj-dialog
+    [Visible]="true"
+    [Width]="500"
+    (Close)="close()">
+    <mj-dialog-titlebar>
       <div style="display: flex; align-items: center; gap: 8px;">
         <i class="fa-solid fa-folder-plus" style="color: #28a745;"></i>
         Create New Query Category
       </div>
-    </kendo-dialog-titlebar>
+    </mj-dialog-titlebar>
     <div style="padding: 20px;">
       <div class="form-group" style="margin-bottom: 20px;">
         <label for="categoryName" style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--mj-text-secondary);">
           <i class="fa-solid fa-tag"></i> Category Name <span style="color: #dc3545;">*</span>
         </label>
-        <kendo-textbox
+        <input class="mj-input"
           [(ngModel)]="categoryName"
           name="categoryName"
           placeholder="Enter category name..."
-          style="width: 100%;">
-        </kendo-textbox>
+          style="width: 100%;" />
       </div>
       <div class="form-group">
         <label for="parentCategory" style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--mj-text-secondary);">
           <i class="fa-solid fa-folder-tree"></i> Parent Category (Optional)
         </label>
-        <kendo-dropdownlist
+        <mj-dropdown
           [(ngModel)]="selectedParentId"
           name="parentCategory"
-          [data]="flattenedCategories"
-          [textField]="'name'"
-          [valueField]="'id'"
-          [valuePrimitive]="true"
-          [defaultItem]="{id: null, name: '-- No Parent (Top Level) --'}"
+          [Data]="flattenedCategories"
+          TextField="name"
+          ValueField="id"
+          [ValuePrimitive]="true"
+          Placeholder="-- No Parent (Top Level) --"
           style="width: 100%;">
-          <ng-template kendoDropDownListItemTemplate let-dataItem>
-            <div style="padding-left: {{getCategoryIndent(dataItem)}}; display: flex; align-items: center; gap: 6px;">
-              @if (dataItem.children && dataItem.children.length > 0) {
-                <i class="fa-solid fa-folder" style="color: #ffc107; font-size: 0.9em;"></i>
-              } @else {
-                <i class="fa-solid fa-folder-open" style="color: var(--mj-text-muted); font-size: 0.9em;"></i>
-              }
-              <span>{{ dataItem.name }}</span>
-            </div>
-          </ng-template>
-        </kendo-dropdownlist>
+        </mj-dropdown>
         @if (selectedParentId) {
           <div style="margin-top: 8px; padding: 8px; background: var(--mj-bg-surface-sunken); border-radius: 4px; font-size: 0.85em; color: var(--mj-text-muted);">
             <i class="fa-solid fa-info-circle"></i>
@@ -53,12 +42,12 @@
         }
       </div>
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton (click)="close()">
+    <mj-dialog-actions>
+      <button mjButton (click)="close()">
         <i class="fa-solid fa-times"></i> Cancel
       </button>
-      <button kendoButton
-        [themeColor]="'primary'"
+      <button mjButton
+        variant="primary"
         [disabled]="!categoryName.trim() || isCreating"
         (click)="createCategory()">
         @if (isCreating) {
@@ -67,6 +56,6 @@
           <i class="fa-solid fa-check"></i> Create Category
         }
       </button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

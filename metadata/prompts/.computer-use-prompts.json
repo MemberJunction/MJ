@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/computer-use/controller.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
@@ -42,8 +45,8 @@
       "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
     },
     "sync": {
-      "lastModified": "2026-02-19T20:08:12.657Z",
-      "checksum": "b67c1b8308419175f9eeb754e9ff07485aa15fd71952c739daa42f200f2f8b13"
+      "lastModified": "2026-04-20T23:53:41.172Z",
+      "checksum": "ed3d31c862828b19ef813bd9507a5ffeb8094e179a6307b9e857a7f7f8542eb8"
     }
   },
   {
@@ -54,6 +57,9 @@
       "TemplateText": "@file:templates/computer-use/judge.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "PromptRole": "System",
       "PromptPosition": "First",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
@@ -89,8 +95,8 @@
       "ID": "DAFE960C-1CDA-4612-965C-A3CD400387E6"
     },
     "sync": {
-      "lastModified": "2026-02-19T20:08:12.136Z",
-      "checksum": "c50b5dd3559abaa66d7187fd6f27466a305533b005bcf50852cff4dbf34c50b9"
+      "lastModified": "2026-04-20T23:53:41.194Z",
+      "checksum": "857a04d7b20ce01e185b446912dffe91d70122381e439397908b8938198bdf2b"
     }
   }
 ]

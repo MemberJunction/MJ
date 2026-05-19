@@ -9,6 +9,16 @@ import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
 
 /**
+ * Valid values for EntityField.ExtendedType.
+ * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ */
+export type EntityFieldExtendedType =
+    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
+    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
+    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
+    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+
+/**
  * The possible status values for a record change
  */
 export const RecordChangeStatus = {
@@ -152,13 +162,13 @@ export class EntityOrganicKeyInfo extends BaseInfo {
         return this.MatchFieldNames ? this.MatchFieldNames.split(',').map(f => f.trim()) : [];
     }
 
-    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
+    constructor(initData: {EntityOrganicKeyRelatedEntities?: unknown[]; _RelatedEntities?: unknown[]; RelatedEntities?: unknown[]} & Record<string, unknown> = null) {
         super();
         if (initData) {
             this.copyInitData(initData);
 
             this._RelatedEntities = [];
-            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities;
+            const re = initData.EntityOrganicKeyRelatedEntities || initData._RelatedEntities || initData.RelatedEntities;
             if (re && Array.isArray(re)) {
                 // sort by sequence
                 const sorted = [...re] as Record<string, unknown>[];
@@ -173,6 +183,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
             }
         }
     }
+
 }
 
 /**
@@ -245,6 +256,7 @@ export class EntityOrganicKeyRelatedEntityInfo extends BaseInfo {
             this.copyInitData(initData);
         }
     }
+
 }
 
 export const EntityPermissionType = {
@@ -255,6 +267,19 @@ export const EntityPermissionType = {
 } as const;
 
 export type EntityPermissionType = typeof EntityPermissionType[keyof typeof EntityPermissionType];
+
+/**
+ * Distinguishes an additive grant from an explicit refusal on an EntityPermission row.
+ * A matching Deny row overrides any Allow rows for the same action across all of the
+ * user's roles. Default is 'Allow' to preserve backwards compatibility for rows
+ * created before the Type column existed.
+ */
+export const EntityPermissionEffect = {
+    Allow: 'Allow',
+    Deny: 'Deny',
+} as const;
+
+export type EntityPermissionEffect = typeof EntityPermissionEffect[keyof typeof EntityPermissionEffect];
 
 
 export class EntityUserPermissionInfo {
@@ -277,6 +302,13 @@ export class EntityPermissionInfo extends BaseInfo{
 
     EntityID: string = null
     RoleID: string = null
+    /**
+     * Allow (default) or Deny. Deny rows override matching Allow rows for the same action
+     * during `EntityInfo.GetUserPermisions()` aggregation. Added in Phase 2b of the unified
+     * permissions architecture; defaults to 'Allow' for backwards compatibility with rows
+     * materialized before the column existed.
+     */
+    Type: string = 'Allow'
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
@@ -328,7 +360,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));
+            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     constructor (initData: any) {
@@ -421,6 +453,17 @@ export class EntityFieldValueInfo extends BaseInfo {
         super();
         this.copyInitData(initData);
     }
+
+    /**
+     * Returns a plain object suitable for JSON serialization.
+     * Called automatically by JSON.stringify().
+     */
+    toJSON(): { Value: string; Code: string } {
+        return {
+            Value: this.Value,
+            Code: this.Code,
+        };
+    }
 }
 
 export const GeneratedFormSectionType = {
@@ -484,7 +527,7 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
-    ExtendedType: string = null
+    ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
     DefaultColumnWidth: number = null 
@@ -493,10 +536,32 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeInUserSearchAPI: boolean = null
     FullTextSearchEnabled: boolean = false
     UserSearchParamFormatAPI: string = null
+    /**
+     * Search predicate controlling how user-search queries match against this field
+     * in the LIKE-based search path used when the entity does not have FullTextSearchEnabled.
+     * Valid values: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact'. Default 'Contains'.
+     * Honored by GenericDatabaseProvider.createViewUserSearchSQL.
+     */
+    UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
+    IsVirtual: boolean = null
+    /**
+     * When true, this field is a SQL Server computed column or PostgreSQL generated column —
+     * physically present in the base table but read-only at the SQL layer. Distinct from
+     * IsVirtual, which is also set to 1 for these fields (because they are read-only at the
+     * API layer) but is additionally set for view-only columns that don't exist in the base
+     * table at all (e.g., joined name lookups in the base view). Use the combination to
+     * disambiguate:
+     *   IsVirtual=0, IsComputed=0 → regular base-table column (writable)
+     *   IsVirtual=1, IsComputed=0 → view-only column (no physical storage)
+     *   IsVirtual=1, IsComputed=1 → computed/generated column (physical, read-only in SQL)
+     * Only relevant downstream consumer that branches on this is base-view JOIN target
+     * selection in CodeGen — when an FK's related Name Field is IsComputed=1, the join
+     * targets the related entity's base table (not its view).
+     */
+    IsComputed: boolean = null
+    IsNameField: boolean = null
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
@@ -506,6 +571,24 @@ export class EntityFieldInfo extends BaseInfo {
      * Parsed from the RelatedEntityJoinFields column.
      */
     RelatedEntityJoinFields: string = null
+    /**
+     * The name of the TypeScript interface/type for this JSON field.
+     * When set, CodeGen will emit a strongly-typed getter/setter using this type
+     * instead of the default string getter/setter.
+     */
+    JSONType: string = null;
+    /**
+     * If true, the field holds a JSON array of JSONType items.
+     * The getter returns JSONType[] | null and the setter accepts JSONType[] | null.
+     */
+    JSONTypeIsArray: boolean = false;
+    /**
+     * Raw TypeScript code emitted by CodeGen above the entity class definition.
+     * Typically contains the interface/type definition referenced by JSONType.
+     * Can include imports, multiple types, or any valid TypeScript.
+     */
+    JSONTypeDefinition: string = null;
+
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
     __mj_CreatedAt: Date = null
@@ -632,6 +715,15 @@ export class EntityFieldInfo extends BaseInfo {
     AutoUpdateCategory: boolean = true;
 
     /**
+    * * Field Name: AutoUpdateExtendedType
+    * * Display Name: Auto Update Extended Type
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, allows CodeGen to auto-suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, etc.); when 0, user has locked this field
+    */
+    AutoUpdateExtendedType: boolean = true;
+
+    /**
     * * Field Name: AutoUpdateDisplayName
     * * Display Name: Auto Update Display Name
     * * SQL Data Type: bit
@@ -724,6 +816,15 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    /**
+     * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
+     * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
+     * prefer the related entity's base table when the Name Field is a SQL computed/
+     * generated column (physically present in the base table even though IsVirtual=1).
+     */
+    _RelatedEntityNameFieldIsComputed: boolean
+    private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
+    private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
     /**
@@ -733,6 +834,7 @@ export class EntityFieldInfo extends BaseInfo {
         sourceField: string;
         alias: string;
         isVirtual: boolean;
+        isComputed: boolean;
     }>;
 
     /**
@@ -781,6 +883,11 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     get EntityFieldValues(): EntityFieldValueInfo[] {
+        if (!this._entityFieldValuesConstructed && this._rawEntityFieldValues) {
+            this._EntityFieldValues = this._rawEntityFieldValues.map(v => new EntityFieldValueInfo(v));
+            this._rawEntityFieldValues = null; // free raw data
+            this._entityFieldValuesConstructed = true;
+        }
         return this._EntityFieldValues;
     }
 
@@ -972,6 +1079,92 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default.
+     *
+     * Codegen emits the companion so a caller can disambiguate
+     * "leave unchanged / apply default" (omit the parameter) from
+     * "explicitly set this column to NULL" (`<Param>_Clear = 1`).
+     * Without it, the SP body's `ISNULL(@Param, [Col])` merge silently
+     * substitutes the existing value or default, and a literal NULL
+     * could never be persisted.
+     *
+     * Save-time callers in the data providers use this to decide whether
+     * to also emit the `_Clear` companion parameter when the entity
+     * intentionally sets such a field to NULL. Stays in sync with
+     * `CodeGenLib`'s `needsClearCompanion`.
+     *
+     * Note: relies on `DefaultValue` already being normalized by
+     * `ExtractActualDefaultValue` at populate time — that helper strips
+     * the DB's wrapping parens and converts a literal `NULL` default to
+     * JS `null`. So if `HasDefaultValue` is true, the default is
+     * guaranteed to be non-NULL.
+     */
+    get NeedsClearCompanion(): boolean {
+        return this.AllowsNull;
+    }
+
+    /**
+     * Returns true when this field appears as a parameter in the entity's
+     * `spCreate` (when `isUpdate=false`) or `spUpdate` (when `isUpdate=true`)
+     * stored procedure.
+     *
+     * This is the **single source of truth** for the SP parameter contract,
+     * consumed by both:
+     *
+     *   • **CodeGen**, when emitting the SP body (which `@params` to declare
+     *     and which columns to `INSERT`/`UPDATE`), and
+     *   • **Runtime data providers**, via the `RenderSaveCallBinding` hook
+     *     implemented by `SQLServerDataProvider` and `PostgreSQLDataProvider`
+     *     (orchestrated by `GenericDatabaseProvider.GenerateSaveSQL`), when
+     *     building the EXEC / parameter list passed to the SP.
+     *
+     * Keeping both sides on the same predicate guarantees the SP signature
+     * and the call-site argument list always agree. Drift between them
+     * surfaces as a SQL Server "Procedure or function ... has too many
+     * arguments specified" error at save time (or its PG equivalent).
+     *
+     * **Exclusion rules** (in order):
+     *
+     *   • `IsVirtual` — view-only / joined columns. Not present in the base
+     *     table; the SP body never references them. Also covers IS-A parent
+     *     fields on child entities — those are saved via the parent's SP,
+     *     not the child's, so they must not appear in the child's SP params.
+     *   • `IsComputed` — SQL Server computed columns and PG generated
+     *     columns. Physically present in the base table but read-only at
+     *     the SQL layer (`INSERT`/`UPDATE` cannot target them). Today
+     *     `IsComputed=1` implies `IsVirtual=1`, but checking both is
+     *     defensive against future decoupling of the flags.
+     *   • `IsSpecialDateField` — `__mj_CreatedAt`, `__mj_UpdatedAt`,
+     *     `__mj_DeletedAt`. Set inside the SP body / trigger from
+     *     `GETUTCDATE()` rather than by the caller.
+     *   • Non-PK fields without `AllowUpdateAPI` — by definition not
+     *     callable via the SP signature.
+     *
+     * **PK handling**:
+     *
+     *   • On **update**, the PK is always a parameter (required to identify
+     *     the row).
+     *   • On **create**, the PK is a parameter only when it's NOT
+     *     auto-increment — the SP body declares it with a default so the
+     *     caller can either supply a value or let the database default fire
+     *     (e.g. `NEWSEQUENTIALID()`). For auto-increment PKs, the SP
+     *     intentionally doesn't expose the PK as a parameter.
+     *
+     * @param isUpdate `true` for `spUpdate`, `false` for `spCreate`.
+     */
+    public IsSPParameter(isUpdate: boolean): boolean {
+        if (this.IsVirtual) return false;
+        if (this.IsComputed) return false;
+        if (this.IsSpecialDateField) return false;
+        if (this.IsPrimaryKey) {
+            return isUpdate || !this.AutoIncrement;
+        }
+        return this.AllowUpdateAPI;
+    }
+
+    /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key
@@ -1021,17 +1214,21 @@ export class EntityFieldInfo extends BaseInfo {
         if (initData) {
             this.copyInitData(initData);
 
-            // do some special handling to create class instances instead of just data objects
-            // copy the Entity Field Values
-            this._EntityFieldValues = [];
+            // Lazy-construct EntityFieldValueInfo objects — stash raw data now,
+            // construct typed instances on first access via the getter.
+            // This eliminates ~36,000 object constructions during startup deserialization.
             const efv = initData.EntityFieldValues || initData._EntityFieldValues;
-            if (efv) {
-                for (let j = 0; j < efv.length; j++) {
-                    this._EntityFieldValues.push(new EntityFieldValueInfo(efv[j]));
-                }
+            if (efv && efv.length > 0) {
+                this._rawEntityFieldValues = efv;
+                this._entityFieldValuesConstructed = false;
+                this._EntityFieldValues = []; // placeholder until getter is called
+            } else {
+                this._EntityFieldValues = [];
+                this._entityFieldValuesConstructed = true;
             }
         }
     }
+
 
 
     /**
@@ -1244,6 +1441,22 @@ export class EntityInfo extends BaseInfo {
      */
     AuditViewRuns: boolean = null
     /**
+     * When true (default), the server-side RunView cache will store and return cached results
+     * for this entity, trusting that all mutations flow through BaseEntity.Save() which fires
+     * cache invalidation events. Set to false for entities whose rows are created as side-effects
+     * of other operations via raw SQL (e.g., Record Changes created by spCreateRecordChange_Internal),
+     * since those inserts bypass BaseEntity and never trigger cache invalidation.
+     */
+    TrustServerCacheCompletely: boolean = true
+    /**
+     * Controls whether this entity participates in server-side and client-side
+     * caching at all. When false (default for non-__mj entities), the entire
+     * cache code path is short-circuited: no PreRunView cache check, no
+     * auto-cache storage, no HandleBaseEntityEvent fingerprint scan, no
+     * client-side IndexedDB cache. Zero overhead on hot save/query paths.
+     */
+    AllowCaching: boolean = false
+    /**
      * Whether this entity is available through the GraphQL API
      */
     IncludeInAPI: boolean = false
@@ -1299,6 +1512,17 @@ export class EntityInfo extends BaseInfo {
      * Whether the full-text search function is generated by CodeGen
      */
     FullTextSearchFunctionGenerated: boolean = true
+    /**
+     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
+     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
+     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     */
+    SupportsGeoCoding: boolean = false
+    /**
+     * When true (default), CodeGen can automatically set SupportsGeoCoding based on
+     * LLM analysis of entity fields. Set to false to lock the value.
+     */
+    AutoUpdateSupportsGeoCoding: boolean = true
     /**
      * Maximum number of rows to return in user views to prevent performance issues
      */
@@ -1484,13 +1708,13 @@ export class EntityInfo extends BaseInfo {
     private _FieldCategories: Record<string, FieldCategoryInfo> | null = null
     private _OrganicKeys: EntityOrganicKeyInfo[] = []
     _hasIdField: boolean = false
-    _virtualCount: number = 0 
-    _manyToManyCount: number = 0 
+    _virtualCount: number = 0
+    _manyToManyCount: number = 0
     _oneToManyCount: number = 0
     _floatCount: number = 0
 
     /**
-     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all. 
+     * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
@@ -1644,12 +1868,29 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-      const f = this.Fields.find((f) => f.IsNameField);
-
-      if (!f)
-        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
-      else
-        return f;
+      // Multiple fields can have IsNameField=true (e.g. Entity has both `Name`
+      // and `DisplayName` marked). Without a deterministic preference, the
+      // pick depends on `this.Fields` insertion order — which differs between
+      // SQL Server (where `Name` happens to come first) and PostgreSQL (where
+      // `DisplayName` does). Codegen builds JOIN aliases off NameField, so
+      // the divergence produces views like `vwDatasetItems` that SELECT the
+      // wrong column on PG (`DisplayName AS "Entity"` instead of
+      // `Name AS "Entity"`), and downstream consumers like
+      // TemplateEngineBase.GetDatasetByName then look up `"Templates"`
+      // (the DisplayName) instead of `"MJ: Templates"` (the actual Name) and
+      // crash with `Entity Templates not found in metadata`.
+      //
+      // Resolution rule: when more than one field claims IsNameField, prefer
+      // the one literally named `Name`. Falls back to the first IsNameField
+      // match (preserves prior behavior when there's no `Name` field), then
+      // to a field named `Name` even without IsNameField set (legacy default).
+      const candidates = this.Fields.filter((f) => f.IsNameField);
+      if (candidates.length > 1) {
+        const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
+        if (literalName) return literalName;
+      }
+      if (candidates.length > 0) return candidates[0];
+      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
     }
 
     /**************************************************************************
@@ -1667,7 +1908,11 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        return Metadata.Provider?.Entities?.find(e => UUIDsEqual(e.ID, this.ParentID)) ?? null;
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
+        if (p?.EntityByID) {
+            return p.EntityByID(this.ParentID) ?? null;
+        }
+        return p?.Entities?.find(e => UUIDsEqual(e.ID, this.ParentID)) ?? null;
     }
 
     /**
@@ -1680,7 +1925,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
+        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**
@@ -1780,9 +2025,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Returns the Permissions for this entity for a given user, based on the roles the user is part of
-     * @param user
-     * @returns
+     * Returns the Permissions for this entity for a given user, based on the roles the user is part of.
+     *
+     * Allow rows are OR-aggregated across all of the user's matching roles; any single
+     * Allow on an action yields permission for that action. Deny rows from any matching
+     * role then *subtract* from the aggregated Allow set — so a Deny on `CanDelete`
+     * overrides a Delete grant that the user otherwise has from another role. This lets
+     * administrators carve out specific role exclusions without restructuring the Allow
+     * hierarchy. Rows with a missing/unknown Type default to Allow for backwards
+     * compatibility with data written before the Type column existed (Phase 2b).
      */
     public GetUserPermisions(user: UserInfo ): EntityUserPermissionInfo {
         try {
@@ -1794,19 +2045,27 @@ export class EntityInfo extends BaseInfo {
                 if (roleMatch) // user has this role
                     permissionList.push(ep)
             }
-            // now that we have matched any number of EntityPermissions to the current user, aggregate the permissions
-            const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
-            userPermission.CanCreate = false; userPermission.CanDelete = false; userPermission.CanRead = false; userPermission.CanUpdate = false;
-            for (let j: number = 0; j < permissionList.length; j++) {
-                const ep: EntityPermissionInfo = permissionList[j];
-                userPermission.CanCreate = userPermission.CanCreate || ep.CanCreate;
-                userPermission.CanRead = userPermission.CanRead || ep.CanRead;
-                userPermission.CanUpdate = userPermission.CanUpdate || ep.CanUpdate;
-                userPermission.CanDelete = userPermission.CanDelete || ep.CanDelete;
+
+            // Aggregate Allow and Deny separately, then subtract Deny from Allow per action.
+            const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
+            const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
+            for (const ep of permissionList) {
+                const isDeny = (ep.Type || 'Allow').trim().toLowerCase() === 'deny';
+                const bucket = isDeny ? deny : allow;
+                bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
+                bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
+                bucket.CanUpdate = bucket.CanUpdate || !!ep.CanUpdate;
+                bucket.CanDelete = bucket.CanDelete || !!ep.CanDelete;
             }
+
+            const userPermission: EntityUserPermissionInfo = new EntityUserPermissionInfo();
+            userPermission.CanCreate = allow.CanCreate && !deny.CanCreate;
+            userPermission.CanRead   = allow.CanRead   && !deny.CanRead;
+            userPermission.CanUpdate = allow.CanUpdate && !deny.CanUpdate;
+            userPermission.CanDelete = allow.CanDelete && !deny.CanDelete;
             userPermission.Entity = this;
             userPermission.User = user;
-    
+
             return userPermission;
         }
         catch (err) {
@@ -2115,9 +2374,9 @@ export class EntityInfo extends BaseInfo {
             this.copyInitData(initData);
 
             // do some special handling to create class instances instead of just data objects
-            // copy the Entity Fields
+            // copy the Entity Fields (accept EntityFields, _Fields, or Fields as input names)
             this._Fields = [];
-            const ef = initData.EntityFields || initData._Fields;
+            const ef = initData.EntityFields || initData._Fields || initData.Fields;
             if (ef) {
                 for (let j = 0; j < ef.length; j++) {
                     this._Fields.push(new EntityFieldInfo(ef[j]));
@@ -2126,7 +2385,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity Permissions
             this._Permissions = [];
-            const ep = initData.EntityPermissions || initData._Permissions;
+            const ep = initData.EntityPermissions || initData._Permissions || initData.Permissions;
             if (ep) {
                 for (let j = 0; j < ep.length; j++) {
                     this._Permissions.push(new EntityPermissionInfo(ep[j]));
@@ -2135,7 +2394,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Entity settings
             this._Settings = [];
-            const es = initData.EntitySettings || initData._Settings;
+            const es = initData.EntitySettings || initData._Settings || initData.Settings;
             if (es) {
                 es.map((s) => this._Settings.push(new EntitySettingInfo(s)));
             }
@@ -2143,9 +2402,9 @@ export class EntityInfo extends BaseInfo {
             // auto-populate FieldCategories from the FieldCategoryInfo setting
             this._FieldCategories = this.parseFieldCategoriesFromSettings();
 
-            // copy the Related Entities
+            // copy the Related Entities (accept EntityRelationships, _RelatedEntities, or RelatedEntities as input names)
             this._RelatedEntities = [];
-            const er = initData.EntityRelationships || initData._RelatedEntities;
+            const er = initData.EntityRelationships || initData._RelatedEntities || initData.RelatedEntities;
             if (er) {
                 // check to see if ANY of the records in the er array have a non-null or non-zero sequence value. The reason is 
                 // if we have any sequence values populated we want to sort by that sequence, and we want to consider null to be a high number
@@ -2174,7 +2433,7 @@ export class EntityInfo extends BaseInfo {
 
             // copy the Organic Keys (sorted by sequence inside EntityOrganicKeyInfo constructor)
             this._OrganicKeys = [];
-            const ok = initData.EntityOrganicKeys || initData._OrganicKeys;
+            const ok = initData.EntityOrganicKeys || initData._OrganicKeys || initData.OrganicKeys;
             if (ok && Array.isArray(ok)) {
                 for (const item of ok) {
                     this._OrganicKeys.push(new EntityOrganicKeyInfo(item));

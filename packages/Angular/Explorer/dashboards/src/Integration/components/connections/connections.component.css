@@ -10,6 +10,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 .connections-container {
   padding: 24px;
   max-width: 1400px;
@@ -28,35 +30,6 @@
 .connections-container.detail-active,
 .connections-container.editor-active {
   overflow: hidden;
-}
-
-.connections-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--mj-text-primary);
-}
-
-.header-count {
-  font-size: 14px;
-  color: var(--mj-text-disabled);
-}
-
-.add-connection-btn i {
-  margin-right: 6px;
 }
 
 /* ---------------------------------------------------------------------------
@@ -264,6 +237,81 @@
 
 .card-footer button {
   font-size: 13px;
+}
+
+/* Sync dropdown menu */
+.sync-menu-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.sync-caret {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.8;
+}
+
+.sync-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 1000;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  min-width: 220px;
+  overflow: hidden;
+}
+
+.sync-dropdown-left {
+  left: auto;
+  right: 0;
+}
+
+.sync-dropdown-group {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.sync-dropdown-group:last-child {
+  border-bottom: none;
+}
+
+.sync-dropdown-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--mj-text-muted);
+  padding: 0 12px 4px;
+}
+
+.sync-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.sync-dropdown-item:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.sync-dropdown-item i {
+  width: 16px;
+  text-align: center;
+  color: var(--mj-text-secondary);
+  flex-shrink: 0;
 }
 
 /* Card Delete Button */
@@ -1392,8 +1440,8 @@
 
 /* Schedule section */
 .schedule-section {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
   border-radius: 12px;
   padding: 16px 20px;
   margin-bottom: 16px;
@@ -1409,13 +1457,13 @@
   gap: 8px;
   font-size: 0.8rem;
   font-weight: 700;
-  color: #475569;
+  color: var(--mj-text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .schedule-section-title i {
-  color: #0076b6;
+  color: var(--mj-brand-primary);
 }
 
 .schedule-empty {
@@ -1427,7 +1475,7 @@
 
 .schedule-empty-text {
   font-size: 0.85rem;
-  color: #94a3b8;
+  color: var(--mj-text-disabled);
 }
 
 .schedule-create-btn {
@@ -1435,7 +1483,7 @@
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: linear-gradient(135deg, #0076b6 0%, #005a8c 100%);
+  background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1447,7 +1495,7 @@
 
 .schedule-create-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 118, 182, 0.4);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 /* Detail toolbar */
@@ -1524,6 +1572,22 @@
   background: var(--mj-brand-primary);
   color: var(--mj-bg-surface);
   border-color: var(--mj-brand-primary);
+}
+
+.apply-all-btn {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-color: var(--mj-brand-primary);
+}
+
+.apply-all-btn:hover {
+  background: var(--mj-brand-primary-hover);
+  border-color: var(--mj-brand-primary-hover);
+}
+
+.apply-all-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .add-map-btn-lg {
@@ -2246,6 +2310,17 @@
   white-space: nowrap;
 }
 
+/* Clickable direction toggle button */
+button.direction-toggle {
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+button.direction-toggle:hover {
+  border-color: var(--mj-border-strong);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+}
+
 .direction-badge.pull {
   background: var(--mj-status-info-bg);
   color: var(--mj-brand-primary);
@@ -2259,6 +2334,99 @@
 .direction-badge.bidirectional {
   background: var(--mj-status-warning-subtle);
   color: var(--mj-status-warning);
+}
+
+/* Create Tables list */
+.create-tables-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  margin-top: 8px;
+  background: var(--mj-bg-surface);
+}
+.create-tables-select-all {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  font-weight: 600;
+}
+.create-tables-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--mj-text-primary);
+}
+.create-tables-checkbox:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.create-tables-checkbox input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+.create-tables-name-hint {
+  color: var(--mj-text-muted);
+  font-size: 11px;
+  margin-left: 8px;
+}
+.create-tables-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  flex-wrap: wrap;
+}
+.create-tables-search {
+  flex: 1 1 240px;
+  min-width: 200px;
+}
+.create-tables-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+}
+.create-tables-toggle input[type="checkbox"] {
+  margin: 0;
+}
+.create-tables-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+.create-tables-badge-custom {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+.create-tables-badge-registered {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+}
+.add-map-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+.add-map-input:focus {
+  outline: none;
+  border-color: var(--mj-brand-primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 /* Config badges */
@@ -2368,4 +2536,159 @@
   text-align: center;
   color: var(--mj-text-disabled);
   font-size: 13px;
+}
+
+/* ---------------------------------------------------------------------------
+   Discovered Source Objects Section
+   --------------------------------------------------------------------------- */
+
+.discovered-objects-section {
+  margin: 12px 0;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  background: var(--mj-bg-surface);
+  overflow: hidden;
+}
+
+.discovered-objects-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.discovered-objects-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.discovered-objects-title i {
+  color: var(--mj-brand-primary);
+}
+
+.discovered-count {
+  font-weight: 400;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+}
+
+.discovered-objects-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.discovered-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.discovered-action-btn:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.discovered-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.discovered-loading,
+.discovered-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--mj-text-muted);
+}
+
+.discovered-loading i {
+  margin-right: 6px;
+}
+
+.discovered-objects-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.discovered-object-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  border-bottom: 1px solid var(--mj-border-subtle);
+  font-size: 13px;
+}
+
+.discovered-object-row:last-child {
+  border-bottom: none;
+}
+
+.discovered-object-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.discovered-object-row.selected {
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+}
+
+.discovered-object-row input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--mj-brand-primary);
+  cursor: pointer;
+}
+
+.discovered-object-name {
+  flex: 1;
+  color: var(--mj-text-primary);
+  font-weight: 500;
+}
+
+.discovered-object-api-name {
+  flex: 1;
+  color: var(--mj-text-muted);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.discovered-object-badges {
+  display: flex;
+  gap: 4px;
+}
+
+.discovered-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.discovered-badge.incremental {
+  color: var(--mj-status-success);
+  background: var(--mj-status-success-bg);
+}
+
+.discovered-badge.writable {
+  color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
 }

@@ -19,7 +19,8 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
-         MJAIModelModalityEntity } from "@memberjunction/core-entities";
+         MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
+         MJAIAgentClientToolEntity, MJAIAgentCategoryEntity } from "@memberjunction/core-entities";
 import { AIEngineBase } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -64,6 +65,20 @@ export class EntityAIActionParams extends AIActionParams {
 export class AIEngine extends BaseSingleton<AIEngine> {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
+
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `AIEngine.Instance.Provider = providerToUse` before invoking entity-AI execution methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     // Vector service for agent embeddings - initialized during Config
     private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
@@ -114,6 +129,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }
     public get AgentPrompts(): MJAIAgentPromptEntity[] { return this.Base.AgentPrompts; }
     public get AgentConfigurations(): MJAIAgentConfigurationEntity[] { return this.Base.AgentConfigurations; }
@@ -125,6 +141,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public get Vendors(): MJAIVendorEntity[] { return this.Base.Vendors; }
     public get ModelVendors(): MJAIModelVendorEntity[] { return this.Base.ModelVendors; }
     public get CredentialBindings(): MJAICredentialBindingEntity[] { return this.Base.CredentialBindings; }
+    public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] { return this.Base.ClientToolDefinitions; }
+    public get AgentClientTools(): MJAIAgentClientToolEntity[] { return this.Base.AgentClientTools; }
+    public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] { return this.Base.GetClientToolsForAgent(agentId); }
     public GetCredentialBindingsForTarget(
         bindingType: 'Vendor' | 'ModelVendor' | 'PromptModel',
         targetId: string
@@ -361,6 +380,25 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
+     * Ensures AIEngine is fully loaded (both base metadata and server-specific
+     * capabilities like vector services) before the caller reads engine state.
+     * Idempotent: if already loaded, returns immediately. If a load is in flight
+     * (e.g. the deferred startup or another consumer triggered it), returns the
+     * same in-progress promise.
+     *
+     * Mirrors BaseEngine.EnsureLoaded — added here because AIEngine extends
+     * BaseSingleton (not BaseEngine) and has its own load orchestration to
+     * cover server-specific setup (`RefreshServerSpecificMetadata`).
+     *
+     * Use at any consumption point that touches AIEngine state, especially
+     * given AIEngineBase is registered as deferred at startup.
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
+    }
+
+    /**
      * Internal loading logic - separated for clean promise management
      */
     private async innerLoad(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
@@ -400,15 +438,40 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         // Load actions from the Action system
         await this.RefreshActions(contextUser);
 
-        // Load all embeddings in parallel since they are independent
-        await Promise.all([
-            this.RefreshAgentEmbeddings(),
-            this.RefreshActionEmbeddings(),
-            this.RefreshNoteEmbeddings(contextUser),
-            this.RefreshExampleEmbeddings(contextUser)
-        ]);
+        // Embedding generation is deferred to first use (FindSimilar* calls).
+        // This avoids loading the ~50MB local embedding model during Config(),
+        // which is expensive in short-lived CLI processes that never need search.
+        this._embeddingsGenerated = false;
+    }
 
-        this._embeddingsGenerated = true;
+    /**
+     * Ensures embeddings are generated, loading the model if needed.
+     * Called lazily from FindSimilar* methods on first use.
+     */
+    private _embeddingsPromise: Promise<void> | null = null;
+
+    private async ensureEmbeddingsGenerated(): Promise<void> {
+        if (this._embeddingsGenerated) return;
+        if (!this._embeddingsPromise) {
+            this._embeddingsPromise = (async () => {
+                try {
+                    await Promise.all([
+                        this.RefreshAgentEmbeddings(),
+                        this.RefreshActionEmbeddings(),
+                        this.RefreshNoteEmbeddings(this._contextUser),
+                        this.RefreshExampleEmbeddings(this._contextUser)
+                    ]);
+                    this._embeddingsGenerated = true;
+                } finally {
+                    // Always clear the in-flight promise so the next caller can retry
+                    // after a transient failure (e.g., model download flake). Without
+                    // this, a single failed load would poison every subsequent
+                    // FindSimilar* call for the lifetime of the process.
+                    this._embeddingsPromise = null;
+                }
+            })();
+        }
+        await this._embeddingsPromise;
     }
 
     // ========================================================================
@@ -611,7 +674,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     /**
      * Updates the vector service to the latest vector containd within the specified agent note that is passed in
-     * @param note 
+     * @param note
      */
     public AddOrUpdateSingleNoteEmbedding(note: MJAIAgentNoteEntity) {
         if (this._noteVectorService) {
@@ -620,6 +683,17 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         else {
             throw new Error('note vector service not initialized, error state')
         }
+    }
+
+    /**
+     * Drops a note from the in-memory vector service. Called by the server-side entity
+     * subclass when a note is saved with a non-Active Status or is deleted, so subsequent
+     * FindSimilarAgentNotes calls cannot return it. Silently no-ops if the vector service
+     * isn't initialized yet (e.g., during early startup before Config has run).
+     * @param noteId
+     */
+    public RemoveSingleNoteEmbedding(noteId: string): void {
+        this._noteVectorService?.RemoveVector(noteId);
     }
 
     /**
@@ -651,6 +725,17 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         else {
             throw new Error('example vector service not initialized, error state')
         }
+    }
+
+    /**
+     * Drops an example from the in-memory vector service. Called by the server-side entity
+     * subclass when an example is saved with a non-Active Status or is deleted, so subsequent
+     * FindSimilarAgentExamples calls cannot return it. Silently no-ops if the vector service
+     * isn't initialized yet (e.g., during early startup before Config has run).
+     * @param exampleId
+     */
+    public RemoveSingleExampleEmbedding(exampleId: string): void {
+        this._exampleVectorService?.RemoveVector(exampleId);
     }
 
     /**
@@ -905,6 +990,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<AgentMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._agentVectorService) {
             throw new Error('Agent embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -926,6 +1012,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 10,
         minSimilarity: number = 0.5
     ): Promise<ActionMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._actionVectorService) {
             throw new Error('Action embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -952,8 +1039,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): Promise<NoteMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._noteVectorService) {
-            // Vector service not available - fall back to returning notes from cache filtered by scope
             LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
@@ -987,28 +1074,37 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
      * into a single filter callback for use with FindNearest.
+     *
+     * Status filtering is NOT performed here. The invariant the retrieval path relies on is:
+     * `_noteVectorService` contains an entry for a note iff its persisted Status is `'Active'`.
+     * That invariant is maintained write-side by `MJAIAgentNoteEntityServer.Save()`, which calls
+     * `AddOrUpdateSingleNoteEmbedding` on Active saves and `RemoveSingleNoteEmbedding` on
+     * non-Active saves. Deletes are handled by the same subclass's `Delete()` override.
+     *
+     * This avoids a subtle bug the earlier Status-check-at-retrieval approach had: BaseAIEngine
+     * overrides `AdditionalLoading()`, which disables BaseEngine's immediate-mutation path for
+     * `_agentNotes`. Newly-created notes don't appear in `this.AgentNotes` until the next
+     * `Config(true)` — so any retrieval-time lookup against that cache returned `undefined` for
+     * post-startup notes and rejected everything.
      */
-    private composeNoteFilters(
+    protected composeNoteFilters(
         agentId?: string,
         userId?: string,
         companyId?: string,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
-    ): ((metadata: NoteEmbeddingMetadata) => boolean) | undefined {
-        const needsBaseFilter = agentId || userId || companyId;
-        const baseFilter = needsBaseFilter
-            ? (metadata: NoteEmbeddingMetadata): boolean => {
-                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-                if (userId && metadata.userId && metadata.userId !== userId) return false;
-                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-                return true;
-            }
-            : undefined;
+    ): ((metadata: NoteEmbeddingMetadata) => boolean) {
+        const baseFilter = (metadata: NoteEmbeddingMetadata): boolean => {
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
+            return true;
+        };
 
-        if (baseFilter && additionalFilter) {
+        if (additionalFilter) {
             return (metadata: NoteEmbeddingMetadata): boolean =>
                 baseFilter(metadata) && additionalFilter(metadata);
         }
-        return baseFilter || additionalFilter || undefined;
+        return baseFilter;
     }
 
     /**
@@ -1056,8 +1152,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): Promise<ExampleMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._exampleVectorService) {
-            // Vector service not available - fall back to returning examples from cache filtered by scope
             LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
@@ -1091,28 +1187,30 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Compose base scope filters (agentId/userId/companyId) with an optional additional filter
      * into a single filter callback for use with FindNearest on examples.
+     *
+     * Mirrors `composeNoteFilters`: Status filtering is NOT performed here. The vector store
+     * is kept in sync with persisted Status by `MJAIAgentExampleEntityServer.Save()` /
+     * `Delete()`, which call `AddOrUpdateSingleExampleEmbedding` / `RemoveSingleExampleEmbedding`
+     * based on the example's current Status.
      */
-    private composeExampleFilters(
+    protected composeExampleFilters(
         agentId?: string,
         userId?: string,
         companyId?: string,
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
-    ): ((metadata: ExampleEmbeddingMetadata) => boolean) | undefined {
-        const needsBaseFilter = agentId || userId || companyId;
-        const baseFilter = needsBaseFilter
-            ? (metadata: ExampleEmbeddingMetadata): boolean => {
-                if (agentId && metadata.agentId && metadata.agentId !== agentId) return false;
-                if (userId && metadata.userId && metadata.userId !== userId) return false;
-                if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
-                return true;
-            }
-            : undefined;
+    ): ((metadata: ExampleEmbeddingMetadata) => boolean) {
+        const baseFilter = (metadata: ExampleEmbeddingMetadata): boolean => {
+            if (agentId && metadata.agentId && !UUIDsEqual(metadata.agentId, agentId)) return false;
+            if (userId && metadata.userId && !UUIDsEqual(metadata.userId, userId)) return false;
+            if (companyId && metadata.companyId && !UUIDsEqual(metadata.companyId, companyId)) return false;
+            return true;
+        };
 
-        if (baseFilter && additionalFilter) {
+        if (additionalFilter) {
             return (metadata: ExampleEmbeddingMetadata): boolean =>
                 baseFilter(metadata) && additionalFilter(metadata);
         }
-        return baseFilter || additionalFilter || undefined;
+        return baseFilter;
     }
 
     /**
@@ -1222,7 +1320,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                     }
                 }
                 else if (entityAction.OutputType.trim().toLowerCase() === 'entity') {
-                    const md = new Metadata();
+                    const md = this.Provider;
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);

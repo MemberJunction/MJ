@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Dakar",
+      "Code": "DK",
+      "ISO3166_2": "SN-DK",
+      "Latitude": 14.7835,
+      "Longitude": -17.3327,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-DK.geojson",
+      "CommonAliases": [
+        "Dakar"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "C616D342-A8B2-4734-B218-5F4C63250D33"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:31.983Z",
+      "checksum": "2499c4acb6f6b5384025db8ff798c2f78cbe259b20df0114505c4f54fd26b005"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diourbel",
+      "Code": "DB",
+      "ISO3166_2": "SN-DB",
+      "Latitude": 14.7509,
+      "Longitude": -16.1895,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-DB.geojson",
+      "CommonAliases": [
+        "Diourbel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "0E1816FB-4F8F-49DB-80FF-B420530DCCA1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.000Z",
+      "checksum": "c42f2fd9f0913e51f5b7beaf623152c9b067cc54d54a52a48034999eca30ee06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fatick",
+      "Code": "FK",
+      "ISO3166_2": "SN-FK",
+      "Latitude": 13.8699,
+      "Longitude": -16.4165,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-FK.geojson",
+      "CommonAliases": [
+        "Fatick"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "580D9F9B-4135-4386-B805-6E45A7721F57"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.016Z",
+      "checksum": "e0eb25d0ca13e5472364bb49aac6f792f9ef7a1b8f1f555602b87b0b96a8cdc0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kaolack",
+      "Code": "KL",
+      "ISO3166_2": "SN-KL",
+      "Latitude": 13.8846,
+      "Longitude": -15.9845,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-KL.geojson",
+      "CommonAliases": [
+        "Kaolack"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "6AD532FB-E61F-4D5D-97B8-FE23CC6664FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.033Z",
+      "checksum": "c8b85d12057dbcd1ffd5f0a9de9d0aa280af607c5917fa8e6622ba472cff401b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kolda",
+      "Code": "KD",
+      "ISO3166_2": "SN-KD",
+      "Latitude": 12.9574,
+      "Longitude": -14.422,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-KD.geojson",
+      "CommonAliases": [
+        "Kolda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "0198DD91-5CD7-416B-9A4B-E58AA2648412"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.049Z",
+      "checksum": "441931a8785f85b5cf9d26f76e7073f980cc08acc88eb3c0bf3760a4147d2bd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Louga",
+      "Code": "LG",
+      "ISO3166_2": "SN-LG",
+      "Latitude": 15.4183,
+      "Longitude": -15.5162,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-LG.geojson",
+      "CommonAliases": [
+        "Louga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "78254118-78D6-4A36-99BC-16161337519E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.065Z",
+      "checksum": "9e270aa2372c97e3b40909423f59226b13f1e4abd7028731f124267a73b38928"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Saint-Louis",
+      "Code": "SL",
+      "ISO3166_2": "SN-SL",
+      "Latitude": 16.3051,
+      "Longitude": -14.9945,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-SL.geojson",
+      "CommonAliases": [
+        "Saint-Louis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "99433554-59EA-4A21-B040-B882683CA4F7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.083Z",
+      "checksum": "c31de1ce27589f113e464d5ecbed4467a6576ebd31ede442389a152f67d64eda"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tambacounda",
+      "Code": "TC",
+      "ISO3166_2": "SN-TC",
+      "Latitude": 13.9278,
+      "Longitude": -13.2878,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-TC.geojson",
+      "CommonAliases": [
+        "Tambacounda"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "D6011B01-4084-40B3-9E46-DC0A0C30CE9D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.099Z",
+      "checksum": "873d4f8c4aa5a1555bb3d7c7d46cfffc2cb13832724c5c1a238873dfee719ccd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thiès",
+      "Code": "TH",
+      "ISO3166_2": "SN-TH",
+      "Latitude": 14.6931,
+      "Longitude": -16.8671,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-TH.geojson",
+      "CommonAliases": [
+        "Thiès"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "C8E0D3B8-6916-4459-9840-11FE048988FA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.117Z",
+      "checksum": "fb66725ab29ac3a625cb0099bb5708ca108e2b6157a13c3e15c901a95193b4a7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ziguinchor",
+      "Code": "ZG",
+      "ISO3166_2": "SN-ZG",
+      "Latitude": 12.4818,
+      "Longitude": -16.3435,
+      "BoundaryGeoJSON": "@file:by-country/SN/boundaries/SN-ZG.geojson",
+      "CommonAliases": [
+        "Ziguinchor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SN"
+    },
+    "primaryKey": {
+      "ID": "9E57CE37-ED32-4523-93BF-BF4FFAA49E9B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.130Z",
+      "checksum": "9b2a8675994037a9ec5afcfb1bf8d7c082e4cb5c6e03c8cc16726f9b25f4c6e5"
+    }
+  }
+]

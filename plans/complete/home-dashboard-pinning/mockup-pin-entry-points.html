@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pin Entry Points - Tab Context Menu &amp; Avatar Menu - Mockup</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #f4f6f9;
+    --bg-surface: #ffffff;
+    --bg-surface-card: #f8f9fb;
+    --bg-surface-sunken: #f0f2f5;
+    --bg-surface-hover: #eef1f5;
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+    --text-disabled: #cbd5e1;
+    --text-inverse: #ffffff;
+    --border-default: #e2e8f0;
+    --border-subtle: #f1f5f9;
+    --border-focus: #264FAF;
+    --brand-primary: #264FAF;
+    --brand-primary-hover: #1e3f8f;
+    --status-warning: #f59e0b;
+    --status-error: #ef4444;
+    --status-success: #22c55e;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+    --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --transition: 0.2s ease;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    line-height: 1.5;
+  }
+
+  .scenarios {
+    display: flex;
+    flex-direction: column;
+    gap: 60px;
+    padding: 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .scenario {
+    background: var(--bg-surface);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-default);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+  }
+  .scenario-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 16px 24px;
+    background: var(--bg-surface-card);
+    border-bottom: 1px solid var(--border-default);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .scenario-title .badge {
+    display: inline-block;
+    background: #fef3c7;
+    color: #92400e;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid #fcd34d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+  .scenario-body {
+    position: relative;
+    min-height: 400px;
+  }
+
+  /* ========== SIMULATED SHELL ========== */
+  .sim-shell {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+  .sim-header {
+    height: 52px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 12px;
+    position: relative;
+  }
+  .sim-header .logo { font-weight: 700; color: var(--brand-primary); font-size: 16px; }
+  .sim-header .app-switcher {
+    display: flex;
+    gap: 4px;
+  }
+  .sim-header .app-btn {
+    padding: 5px 12px;
+    border-radius: 20px;
+    border: none;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all var(--transition);
+  }
+  .sim-header .app-btn.active {
+    background: var(--brand-primary);
+    color: var(--text-inverse);
+  }
+  .sim-header .app-btn:not(.active) {
+    background: transparent;
+    color: var(--text-secondary);
+  }
+  .sim-header .app-btn:not(.active):hover {
+    background: var(--bg-surface-hover);
+  }
+  .sim-header .spacer { flex: 1; }
+  .sim-header .avatar-wrapper { position: relative; }
+  .sim-header .avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--bg-surface-sunken);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-muted); cursor: pointer;
+    border: 2px solid var(--border-default);
+    font-size: 14px;
+    transition: all var(--transition);
+  }
+  .sim-header .avatar:hover { border-color: var(--brand-primary); }
+
+  /* ========== TAB BAR ========== */
+  .sim-tab-bar {
+    height: 38px;
+    background: var(--bg-surface-card);
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: flex-end;
+    padding: 0 8px;
+    gap: 2px;
+    overflow-x: auto;
+  }
+  .sim-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px 8px 0 0;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: all var(--transition);
+    white-space: nowrap;
+    position: relative;
+  }
+  .sim-tab.active {
+    background: var(--bg-surface);
+    border-color: var(--border-default);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .sim-tab:not(.active) {
+    color: var(--text-muted);
+    background: transparent;
+  }
+  .sim-tab:not(.active):hover {
+    color: var(--text-secondary);
+    background: var(--bg-surface-hover);
+  }
+  .sim-tab .tab-icon { font-size: 11px; }
+  .sim-tab .close-btn {
+    font-size: 10px;
+    color: var(--text-disabled);
+    cursor: pointer;
+    padding: 2px;
+    border-radius: 3px;
+    margin-left: 4px;
+  }
+  .sim-tab .close-btn:hover { color: var(--text-primary); background: var(--bg-surface-hover); }
+  .sim-tab .pin-indicator {
+    font-size: 8px;
+    color: var(--text-disabled);
+  }
+  /* Color accent on left side of tab */
+  .sim-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 4px; bottom: 0; left: 0;
+    width: 3px;
+    border-radius: 0 2px 0 0;
+    background: var(--tab-color, var(--brand-primary));
+  }
+
+  /* Tab content area */
+  .sim-content {
+    flex: 1;
+    background: var(--bg-page);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-disabled);
+    font-size: 14px;
+    font-style: italic;
+    padding: 40px;
+    text-align: center;
+  }
+
+  /* ========== CONTEXT MENU ========== */
+  .context-menu {
+    position: absolute;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    min-width: 200px;
+    z-index: 100;
+    overflow: hidden;
+    animation: menuIn 0.15s ease;
+  }
+  @keyframes menuIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  .context-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: background 0.15s;
+  }
+  .context-menu-item:hover { background: var(--bg-surface-hover); }
+  .context-menu-item i {
+    width: 16px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+  }
+  .context-menu-item.new-item i { color: var(--brand-primary); }
+  .context-menu-item.new-item { font-weight: 500; }
+  .context-menu-item.disabled {
+    color: var(--text-disabled);
+    cursor: default;
+  }
+  .context-menu-item.disabled:hover { background: transparent; }
+  .context-menu-item.disabled i { color: var(--text-disabled); }
+  .context-menu-item .check { margin-left: auto; color: var(--status-success); font-size: 12px; }
+  .context-menu-divider { height: 1px; background: var(--border-default); margin: 4px 0; }
+
+  /* ========== USER MENU ========== */
+  .user-menu {
+    position: absolute;
+    top: 46px;
+    right: 8px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    min-width: 240px;
+    z-index: 200;
+    overflow: hidden;
+    animation: menuIn 0.15s ease;
+  }
+  .user-menu-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-default);
+    background: var(--bg-surface-card);
+  }
+  .user-menu-header .user-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: block;
+  }
+  .user-menu-header .user-email {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: block;
+    margin-top: 2px;
+  }
+  .user-menu-divider { height: 1px; background: var(--border-default); margin: 4px 0; }
+  .user-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    transition: background 0.15s;
+  }
+  .user-menu-item:hover { background: var(--bg-surface-hover); }
+  .user-menu-item i {
+    width: 18px;
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 14px;
+  }
+  .user-menu-item.new-item { font-weight: 500; }
+  .user-menu-item.new-item i { color: var(--brand-primary); }
+  .user-menu-item.disabled {
+    color: var(--text-disabled);
+    cursor: default;
+  }
+  .user-menu-item.disabled:hover { background: transparent; }
+  .user-menu-item.disabled i { color: var(--text-disabled); }
+  .user-menu-item .check { margin-left: auto; color: var(--status-success); font-size: 12px; }
+  .user-menu-item .shortcut { margin-left: auto; font-size: 11px; color: var(--text-disabled); font-family: monospace; }
+  .user-menu-item.danger { color: var(--status-error); }
+  .user-menu-item.danger i { color: var(--status-error); }
+  .user-menu-item.danger:hover { background: #fef2f2; }
+
+  /* Theme toggle */
+  .theme-toggle-track {
+    margin-left: auto;
+    width: 36px; height: 20px;
+    background: var(--border-default);
+    border-radius: 10px;
+    position: relative;
+    transition: background var(--transition);
+  }
+  .theme-toggle-thumb {
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 16px; height: 16px;
+    background: var(--bg-surface);
+    border-radius: 50%;
+    box-shadow: var(--shadow-sm);
+    display: flex; align-items: center; justify-content: center;
+    transition: left var(--transition);
+  }
+  .theme-toggle-thumb i { font-size: 9px; color: var(--status-warning); }
+
+  /* ========== SINGLE RESOURCE MODE HEADER ========== */
+  .single-resource-bar {
+    height: 44px;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-default);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 10px;
+  }
+  .single-resource-bar .resource-icon {
+    width: 28px; height: 28px;
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, #d32f2f 10%, #f8f9fb);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .single-resource-bar .resource-icon i { font-size: 12px; color: #d32f2f; }
+  .single-resource-bar .resource-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .single-resource-bar .resource-type { font-size: 12px; color: var(--text-muted); }
+
+  /* ========== TOAST ========== */
+  .toast {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text-primary);
+    color: var(--text-inverse);
+    padding: 10px 24px;
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: var(--shadow-lg);
+    z-index: 300;
+    white-space: nowrap;
+  }
+  .toast i { color: var(--status-success); }
+
+  /* Annotation arrow */
+  .annotation-arrow {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--status-error);
+    z-index: 150;
+  }
+  .annotation-arrow .arrow-line {
+    width: 40px;
+    height: 2px;
+    background: var(--status-error);
+    position: relative;
+  }
+  .annotation-arrow .arrow-line::after {
+    content: '';
+    position: absolute;
+    right: 0; top: -4px;
+    border: 5px solid transparent;
+    border-left-color: var(--status-error);
+  }
+
+  /* Scenario description */
+  .scenario-desc {
+    padding: 16px 24px;
+    background: color-mix(in srgb, var(--brand-primary) 5%, var(--bg-surface));
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-default);
+    line-height: 1.6;
+  }
+  .scenario-desc strong { color: var(--brand-primary); }
+</style>
+</head>
+<body>
+
+<div class="scenarios">
+
+  <!-- ==========================================
+       SCENARIO 1: TAB RIGHT-CLICK CONTEXT MENU
+       ========================================== -->
+  <div class="scenario">
+    <div class="scenario-title">
+      <i class="fa-solid fa-mouse-pointer"></i>
+      Scenario 1: Right-Click Tab to Pin
+      <span class="badge">Golden Layout Mode</span>
+    </div>
+    <div class="scenario-desc">
+      User has multiple tabs open in the <strong>AI</strong> app. They right-click the "Sales Dashboard" tab
+      to open the context menu, which now includes a <strong>"Pin to Home"</strong> option. The resource is
+      not yet pinned, so the option is clickable.
+    </div>
+    <div class="scenario-body">
+      <div class="sim-shell">
+        <div class="sim-header">
+          <span class="logo">MJ</span>
+          <div class="app-switcher">
+            <button class="app-btn"><i class="fa-solid fa-home"></i></button>
+            <button class="app-btn active"><i class="fa-solid fa-robot"></i> AI</button>
+            <button class="app-btn"><i class="fa-solid fa-compass"></i> Data Explorer</button>
+            <button class="app-btn"><i class="fa-solid fa-shield-halved"></i> Admin</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="avatar-wrapper">
+            <div class="avatar"><i class="fa-solid fa-user"></i></div>
+          </div>
+        </div>
+
+        <div class="sim-tab-bar">
+          <div class="sim-tab active" style="--tab-color: #d32f2f;">
+            <span class="pin-indicator"><i class="fa-solid fa-thumbtack"></i></span>
+            <span class="tab-icon" style="color:#d32f2f"><i class="fa-solid fa-chart-line"></i></span>
+            Sales Dashboard
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+          <div class="sim-tab">
+            <span class="tab-icon" style="color:#d32f2f"><i class="fa-solid fa-comment-dots"></i></span>
+            Prompts
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+          <div class="sim-tab">
+            <span class="tab-icon" style="color:#d32f2f"><i class="fa-solid fa-brain"></i></span>
+            Agents
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+          <div class="sim-tab">
+            <span class="tab-icon" style="color:#d32f2f"><i class="fa-solid fa-microchip"></i></span>
+            Models
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+        </div>
+
+        <!-- Context Menu on the first tab -->
+        <div class="context-menu" style="top: 96px; left: 24px;">
+          <div class="context-menu-item">
+            <i class="fa-solid fa-thumbtack"></i>
+            <span>Pin Tab</span>
+          </div>
+          <div class="context-menu-divider"></div>
+          <div class="context-menu-item new-item">
+            <i class="fa-solid fa-house-chimney"></i>
+            <span>Pin to Home</span>
+          </div>
+          <div class="context-menu-divider"></div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Close Tab</span>
+          </div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Close Others</span>
+          </div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-angles-right"></i>
+            <span>Close to Right</span>
+          </div>
+        </div>
+
+        <!-- Annotation -->
+        <div class="annotation-arrow" style="top: 135px; left: 240px;">
+          <span>NEW</span>
+          <div class="arrow-line"></div>
+        </div>
+
+        <div class="sim-content">
+          <div>
+            <i class="fa-solid fa-chart-line" style="font-size: 48px; display:block; margin-bottom: 12px;"></i>
+            Sales Dashboard Content Area
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       SCENARIO 2: TAB ALREADY PINNED
+       ========================================== -->
+  <div class="scenario">
+    <div class="scenario-title">
+      <i class="fa-solid fa-check-circle" style="color: var(--status-success);"></i>
+      Scenario 2: Already Pinned Resource
+      <span class="badge">Duplicate Prevention</span>
+    </div>
+    <div class="scenario-desc">
+      User right-clicks a tab for a resource that is <strong>already pinned to Home</strong>.
+      The "Pin to Home" option shows a checkmark and is disabled, preventing duplicates.
+    </div>
+    <div class="scenario-body">
+      <div class="sim-shell">
+        <div class="sim-header">
+          <span class="logo">MJ</span>
+          <div class="app-switcher">
+            <button class="app-btn"><i class="fa-solid fa-home"></i></button>
+            <button class="app-btn active"><i class="fa-solid fa-compass"></i> Data Explorer</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="avatar-wrapper">
+            <div class="avatar"><i class="fa-solid fa-user"></i></div>
+          </div>
+        </div>
+
+        <div class="sim-tab-bar">
+          <div class="sim-tab active" style="--tab-color: #5c6bc0;">
+            <span class="tab-icon" style="color:#5c6bc0"><i class="fa-solid fa-table"></i></span>
+            Active Contacts
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+          <div class="sim-tab">
+            <span class="tab-icon" style="color:#5c6bc0"><i class="fa-solid fa-database"></i></span>
+            Top 10 Customers
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+        </div>
+
+        <!-- Context Menu: already pinned -->
+        <div class="context-menu" style="top: 96px; left: 24px;">
+          <div class="context-menu-item">
+            <i class="fa-solid fa-thumbtack"></i>
+            <span>Pin Tab</span>
+          </div>
+          <div class="context-menu-divider"></div>
+          <div class="context-menu-item disabled">
+            <i class="fa-solid fa-house-chimney"></i>
+            <span>Pinned to Home</span>
+            <span class="check"><i class="fa-solid fa-check"></i></span>
+          </div>
+          <div class="context-menu-divider"></div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-xmark"></i>
+            <span>Close Tab</span>
+          </div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Close Others</span>
+          </div>
+          <div class="context-menu-item">
+            <i class="fa-solid fa-angles-right"></i>
+            <span>Close to Right</span>
+          </div>
+        </div>
+
+        <div class="sim-content">
+          <div>
+            <i class="fa-solid fa-table" style="font-size: 48px; display:block; margin-bottom: 12px;"></i>
+            Active Contacts View Content Area
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       SCENARIO 3: USER AVATAR MENU
+       ========================================== -->
+  <div class="scenario">
+    <div class="scenario-title">
+      <i class="fa-solid fa-circle-user"></i>
+      Scenario 3: Avatar Menu - Pin to Home
+      <span class="badge">Works in All Modes</span>
+    </div>
+    <div class="scenario-desc">
+      User clicks the avatar menu in the top-right. The menu now includes a <strong>"Pin to Home"</strong> option
+      in the primary section. This works in both Golden Layout (multi-tab) and single-resource mode.
+      The option is context-aware: it pins whatever resource is currently active.
+    </div>
+    <div class="scenario-body">
+      <div class="sim-shell">
+        <div class="sim-header">
+          <span class="logo">MJ</span>
+          <div class="app-switcher">
+            <button class="app-btn"><i class="fa-solid fa-home"></i></button>
+            <button class="app-btn active"><i class="fa-solid fa-robot"></i> AI</button>
+            <button class="app-btn"><i class="fa-solid fa-compass"></i> Data Explorer</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="avatar-wrapper">
+            <div class="avatar" style="border-color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 10%, #f0f2f5);">
+              <i class="fa-solid fa-user" style="color: var(--brand-primary);"></i>
+            </div>
+
+            <!-- User Menu -->
+            <div class="user-menu">
+              <div class="user-menu-header">
+                <span class="user-name">Sarah Johnson</span>
+                <span class="user-email">sarah@company.com</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-user"></i>
+                <span>My Profile</span>
+              </div>
+              <div class="user-menu-item new-item">
+                <i class="fa-solid fa-house-chimney"></i>
+                <span>Pin to Home</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-sun"></i>
+                <span>Theme</span>
+                <div class="theme-toggle-track">
+                  <div class="theme-toggle-thumb">
+                    <i class="fa-solid fa-sun"></i>
+                  </div>
+                </div>
+              </div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Reset Layout</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item danger">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>Sign Out</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-tab-bar">
+          <div class="sim-tab active" style="--tab-color: #d32f2f;">
+            <span class="tab-icon" style="color:#d32f2f"><i class="fa-solid fa-chart-line"></i></span>
+            AI Monitor
+            <span class="close-btn"><i class="fa-solid fa-xmark"></i></span>
+          </div>
+        </div>
+
+        <!-- Annotation -->
+        <div class="annotation-arrow" style="top: 104px; right: 264px; flex-direction: row-reverse;">
+          <span>NEW</span>
+          <div class="arrow-line" style="transform: scaleX(-1);"></div>
+        </div>
+
+        <div class="sim-content">
+          <div>
+            <i class="fa-solid fa-robot" style="font-size: 48px; display:block; margin-bottom: 12px;"></i>
+            AI Monitor Dashboard Content Area
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       SCENARIO 4: SINGLE RESOURCE MODE + AVATAR
+       ========================================== -->
+  <div class="scenario">
+    <div class="scenario-title">
+      <i class="fa-solid fa-expand"></i>
+      Scenario 4: Single Resource Mode - Avatar Menu
+      <span class="badge">No Tab Bar Visible</span>
+    </div>
+    <div class="scenario-desc">
+      In <strong>single-resource mode</strong> (only one unpinned tab), there is no tab bar and
+      no way to right-click a tab. The avatar menu is the <strong>only entry point</strong> for
+      pinning. The user clicks avatar &rarr; "Pin to Home" to pin the current resource.
+    </div>
+    <div class="scenario-body">
+      <div class="sim-shell">
+        <div class="sim-header">
+          <span class="logo">MJ</span>
+          <div class="app-switcher">
+            <button class="app-btn"><i class="fa-solid fa-home"></i></button>
+            <button class="app-btn active"><i class="fa-solid fa-robot"></i> AI</button>
+            <button class="app-btn"><i class="fa-solid fa-compass"></i> Data Explorer</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="avatar-wrapper">
+            <div class="avatar" style="border-color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 10%, #f0f2f5);">
+              <i class="fa-solid fa-user" style="color: var(--brand-primary);"></i>
+            </div>
+            <!-- User Menu -->
+            <div class="user-menu">
+              <div class="user-menu-header">
+                <span class="user-name">Sarah Johnson</span>
+                <span class="user-email">sarah@company.com</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-user"></i>
+                <span>My Profile</span>
+              </div>
+              <div class="user-menu-item new-item">
+                <i class="fa-solid fa-house-chimney"></i>
+                <span>Pin to Home</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-sun"></i>
+                <span>Theme</span>
+                <div class="theme-toggle-track">
+                  <div class="theme-toggle-thumb">
+                    <i class="fa-solid fa-sun"></i>
+                  </div>
+                </div>
+              </div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Reset Layout</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item danger">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>Sign Out</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- NO TAB BAR in single resource mode -->
+
+        <!-- Content (full height, no tab bar) -->
+        <div class="sim-content" style="background: var(--bg-surface);">
+          <div>
+            <i class="fa-solid fa-chart-line" style="font-size: 48px; display:block; margin-bottom: 12px; color: var(--text-disabled);"></i>
+            <div style="color: var(--text-muted);">Sales Dashboard - Single Resource Mode</div>
+            <div style="color: var(--text-disabled); font-size: 12px; margin-top: 4px;">No tab bar visible &mdash; avatar menu is the only way to pin</div>
+          </div>
+        </div>
+
+        <!-- Toast -->
+        <div class="toast">
+          <i class="fa-solid fa-check-circle"></i>
+          "Sales Dashboard" pinned to Home
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       SCENARIO 5: AVATAR MENU ON HOME (DISABLED)
+       ========================================== -->
+  <div class="scenario">
+    <div class="scenario-title">
+      <i class="fa-solid fa-ban" style="color: var(--text-disabled);"></i>
+      Scenario 5: On Home Dashboard - Pin Disabled
+      <span class="badge">Edge Case</span>
+    </div>
+    <div class="scenario-desc">
+      When the user is <strong>on the Home dashboard itself</strong>, there is nothing to pin.
+      The "Pin to Home" option is <strong>disabled</strong> with a tooltip explaining why.
+    </div>
+    <div class="scenario-body" style="min-height: 320px;">
+      <div class="sim-shell">
+        <div class="sim-header">
+          <span class="logo">MJ</span>
+          <div class="app-switcher">
+            <button class="app-btn active"><i class="fa-solid fa-home"></i> Home</button>
+            <button class="app-btn"><i class="fa-solid fa-robot"></i> AI</button>
+            <button class="app-btn"><i class="fa-solid fa-compass"></i> Data Explorer</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="avatar-wrapper">
+            <div class="avatar" style="border-color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 10%, #f0f2f5);">
+              <i class="fa-solid fa-user" style="color: var(--brand-primary);"></i>
+            </div>
+            <div class="user-menu">
+              <div class="user-menu-header">
+                <span class="user-name">Sarah Johnson</span>
+                <span class="user-email">sarah@company.com</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-user"></i>
+                <span>My Profile</span>
+              </div>
+              <div class="user-menu-item disabled" title="Navigate to a resource first">
+                <i class="fa-solid fa-house-chimney"></i>
+                <span>Pin to Home</span>
+                <span class="shortcut" style="font-family: inherit; font-style: italic;">on Home</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-sun"></i>
+                <span>Theme</span>
+                <div class="theme-toggle-track">
+                  <div class="theme-toggle-thumb">
+                    <i class="fa-solid fa-sun"></i>
+                  </div>
+                </div>
+              </div>
+              <div class="user-menu-item">
+                <i class="fa-solid fa-rotate"></i>
+                <span>Reset Layout</span>
+              </div>
+              <div class="user-menu-divider"></div>
+              <div class="user-menu-item danger">
+                <i class="fa-solid fa-right-from-bracket"></i>
+                <span>Sign Out</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sim-content" style="background: var(--bg-surface);">
+          <div>
+            <i class="fa-solid fa-home" style="font-size: 48px; display:block; margin-bottom: 12px; color: var(--text-disabled);"></i>
+            <div style="color: var(--text-muted);">Home Dashboard</div>
+            <div style="color: var(--text-disabled); font-size: 12px; margin-top: 4px;">"Pin to Home" is disabled here &mdash; nothing to pin</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

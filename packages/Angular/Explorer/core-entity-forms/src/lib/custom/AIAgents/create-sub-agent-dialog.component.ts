@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewContainerRef, Output, EventEmitter } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity, MJAIAgentPromptEntity, MJAIAgentActionEntity, MJActionEntity } from '@memberjunction/core-entities';
@@ -8,6 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIAgentManagementService } from './ai-agent-management.service';
 import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CreateSubAgentConfig {
   /** Title for the dialog */
   title?: string;
@@ -47,7 +47,7 @@ export interface CreateSubAgentResult {
   templateUrl: './create-sub-agent-dialog.component.html',
   styleUrls: ['./create-sub-agent-dialog.component.css']
 })
-export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
+export class CreateSubAgentDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Configuration
   config: CreateSubAgentConfig = {} as CreateSubAgentConfig;
@@ -80,12 +80,14 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
   newlyCreatedPromptTemplates: any[] = [];
   newlyCreatedTemplateContents: any[] = [];
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private agentManagementService: AIAgentManagementService,
     private viewContainerRef: ViewContainerRef
   ) {
+    super();
     this.subAgentForm = this.createForm();
   }
 
@@ -132,7 +134,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Load all data in a single batch for better performance
       const results = await rv.RunViews([
@@ -183,7 +185,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
       }
 
       // Create the sub-agent entity
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.subAgentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       this.subAgentEntity.NewRecord();
       
@@ -261,7 +263,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               this.linkedPrompts.push(...newPrompts);
               
               // Create agent prompt link entities
-              const md = new Metadata();
+              const md = this.ProviderToUse;
               for (const prompt of newPrompts) {
                 const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                 agentPrompt.NewRecord();
@@ -331,7 +333,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               this.linkedPrompts.push(result.prompt);
               
               // Create agent prompt link entity
-              const md = new Metadata();
+              const md = this.ProviderToUse;
               const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
               agentPrompt.NewRecord();
               agentPrompt.AgentID = this.subAgentEntity!.ID;
@@ -401,7 +403,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
               this.linkedActions.push(...newActions);
               
               // Create agent action link entities
-              const md = new Metadata();
+              const md = this.ProviderToUse;
               for (const action of newActions) {
                 const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                 agentAction.NewRecord();
@@ -519,7 +521,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
       };
 
       this.result.next(result);
-      this.dialogRef.close();
+      this.DialogClose.emit();
 
     } catch (error) {
       console.error('Error preparing sub-agent for creation:', error);
@@ -535,7 +537,7 @@ export class CreateSubAgentDialogComponent implements OnInit, OnDestroy {
 
   public cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   // Helper methods for UI

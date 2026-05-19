@@ -1,9 +1,8 @@
-<kendo-dialog title="Dashboard Preferences" 
-              [width]="800" 
-              [height]="600"
-              [minWidth]="600"
-              [minHeight]="400"
-              (close)="onCancel()">
+<mj-dialog [Visible]="true" Title="Dashboard Preferences"
+              [Width]="800"
+              [Height]="600"
+              [MinWidth]="600"
+              (Close)="onCancel()">
 <div class="dashboard-preferences-dialog">
   <div class="dialog-header">
     <h3><i class="fa-solid fa-sliders"></i> Dashboard Preferences</h3>
@@ -17,17 +16,17 @@
     @if (isSysAdmin && scope === 'Global') {
       <div class="preference-mode-selector">
         <label>
-          <input type="radio" 
-                 name="preferenceMode" 
-                 value="personal" 
+          <input type="radio"
+                 name="preferenceMode"
+                 value="personal"
                  [(ngModel)]="preferenceMode"
                  (change)="onPreferenceModeChange()">
           Personal Preferences
         </label>
         <label>
-          <input type="radio" 
-                 name="preferenceMode" 
-                 value="system" 
+          <input type="radio"
+                 name="preferenceMode"
+                 value="system"
                  [(ngModel)]="preferenceMode"
                  (change)="onPreferenceModeChange()">
           System Defaults
@@ -55,13 +54,13 @@
         <!-- Available Dashboards Panel -->
         <div class="panel available-panel">
           <h4><i class="fa-solid fa-list"></i> Available Dashboards</h4>
-          <div class="dashboard-list" 
-               cdkDropList 
+          <div class="dashboard-list"
+               cdkDropList
                #availableList="cdkDropList"
                [cdkDropListData]="availableDashboards"
                [cdkDropListConnectedTo]="[configuredList]"
                (cdkDropListDropped)="onDrop($event)">
-            
+
             @if (availableDashboards.length === 0) {
               <div class="empty-state">
                 <i class="fa-solid fa-info-circle"></i>
@@ -70,7 +69,7 @@
             }
 
             @for (dashboard of availableDashboards; track dashboard.ID) {
-              <div class="dashboard-item available-item" 
+              <div class="dashboard-item available-item"
                    cdkDrag
                    [cdkDragData]="dashboard">
                 <div class="dashboard-item-content">
@@ -81,7 +80,7 @@
                       <span class="dashboard-description">{{ dashboard.Description }}</span>
                     }
                   </div>
-                  <button type="button" 
+                  <button type="button"
                           class="add-button"
                           (click)="addDashboard(dashboard)"
                           title="Add to configured dashboards">
@@ -96,13 +95,13 @@
         <!-- Configured Dashboards Panel -->
         <div class="panel configured-panel">
           <h4><i class="fa-solid fa-list-ol"></i> Configured Dashboards</h4>
-          <div class="dashboard-list" 
-               cdkDropList 
+          <div class="dashboard-list"
+               cdkDropList
                #configuredList="cdkDropList"
                [cdkDropListData]="configuredDashboards"
                [cdkDropListConnectedTo]="[availableList]"
                (cdkDropListDropped)="onDrop($event)">
-            
+
             @if (configuredDashboards.length === 0) {
               <div class="empty-state">
                 <i class="fa-solid fa-info-circle"></i>
@@ -111,7 +110,7 @@
             }
 
             @for (dashboard of configuredDashboards; track dashboard.ID; let i = $index) {
-              <div class="dashboard-item configured-item" 
+              <div class="dashboard-item configured-item"
                    cdkDrag
                    [cdkDragData]="dashboard">
                 <div class="dashboard-item-content">
@@ -123,7 +122,7 @@
                       <span class="dashboard-description">{{ dashboard.Description }}</span>
                     }
                   </div>
-                  <button type="button" 
+                  <button type="button"
                           class="remove-button"
                           (click)="removeDashboard(dashboard)"
                           title="Remove from configured dashboards">
@@ -138,14 +137,14 @@
     }
   </div>
 
-  <div class="dialog-footer">
-    <button type="button" 
-            class="btn btn-secondary" 
+  <mj-dialog-actions>
+    <button type="button"
+            class="btn btn-secondary"
             (click)="onCancel()">
       <i class="fa-solid fa-times"></i> Cancel
     </button>
-    <button type="button" 
-            class="btn btn-primary" 
+    <button type="button"
+            class="btn btn-primary"
             [disabled]="!hasChanges || saving"
             (click)="onSave()">
       @if (saving) {
@@ -155,6 +154,6 @@
         <i class="fa-solid fa-check"></i> Save Changes
       }
     </button>
-  </div>
+  </mj-dialog-actions>
 </div>
-</kendo-dialog>
+</mj-dialog>

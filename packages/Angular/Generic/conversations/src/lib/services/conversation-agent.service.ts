@@ -1,14 +1,15 @@
-import { DestroyRef, Injectable } from '@angular/core';
+import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
-import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
+import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { AgentClientService } from '@memberjunction/ng-agent-client';
+import { RunAgentFromConversationDetailParams } from '@memberjunction/ai-agent-client';
 import { LazyArtifactInfo } from '../models/lazy-artifact-info';
 import { MentionParserService } from './mention-parser.service';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -40,6 +41,7 @@ export interface IntentCheckResult {
   providedIn: 'root'
 })
 export class ConversationAgentService {
+  /** GraphQL AI client - retained for RunAIPrompt (intent checking) which AgentClientService doesn't wrap */
   private _aiClient: GraphQLAIClient | null = null;
   private _conversationManagerAgent: MJAIAgentEntityExtended | null = null;
   private _sessionIds: Map<string, string> = new Map(); // conversationId -> sessionId
@@ -50,16 +52,35 @@ export class ConversationAgentService {
    */
   public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
-  constructor(private mentionParser: MentionParserService) {
+  private _provider: IMetadataProvider | null = null;
+
+  constructor(
+    private mentionParser: MentionParserService,
+    private agentClientService: AgentClientService
+  ) {
     this.initializeAIClient();
   }
 
   /**
-   * Initialize the GraphQL AI Client
+   * The metadata provider this service uses. When unset, falls back to Metadata.Provider.
+   * Setting it re-initializes the AI client to bind to the supplied provider.
+   */
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+    this.initializeAIClient();
+  }
+
+  /**
+   * Initialize the GraphQL AI Client.
+   * Retained for RunAIPrompt calls (intent checking) which the AgentClientService doesn't wrap.
+   * Agent execution (RunAIAgentFromConversationDetail) now goes through AgentClientService.
    */
   private initializeAIClient(): void {
     try {
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.Provider as GraphQLDataProvider;
       if (provider) {
         this._aiClient = new GraphQLAIClient(provider);
       } else {
@@ -123,17 +144,11 @@ export class ConversationAgentService {
     message: MJConversationDetailEntity,
     conversationHistory: MJConversationDetailEntity[],
     conversationDetailId: string,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    appContext?: Record<string, unknown> | null
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
     // For now, we'll always send to the ambient agent
-
-    if (!this._aiClient) {
-      const errorMsg = 'AI Client not initialized, cannot process message through agent';
-      console.warn(errorMsg);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
-      return null;
-    }
 
     const agent = await this.getConversationManagerAgent();
     if (!agent || !agent.ID) {
@@ -148,7 +163,7 @@ export class ConversationAgentService {
       this._isProcessing$.next(true);
 
       // Get current user for permission filtering
-      const currentUser = Metadata.Provider.CurrentUser;
+      const currentUser = this.Provider.CurrentUser;
       if (!currentUser) {
         console.warn('⚠️ No current user available for permission filtering, using unfiltered agents');
       }
@@ -168,35 +183,55 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
-      // Use optimized mutation that loads conversation history server-side
-      // This avoids sending large attachment data from client to server
-      const result = await this._aiClient.RunAIAgentFromConversationDetail({
-        conversationDetailId: conversationDetailId,
-        agentId: agent.ID,
-        maxHistoryMessages: 20,
-        data: {
+      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
+      // and automatically integrates with client tool request handling
+      const agentParams: RunAgentFromConversationDetailParams = {
+        ConversationDetailId: conversationDetailId,
+        AgentId: agent.ID,
+        MaxHistoryMessages: 20,
+        Data: {
           ALL_AVAILABLE_AGENTS: availAgents.map(a => ({
             ID: a.ID,
             Name: a.Name,
             Description: a.Description
           })),
           conversationId: conversationId,
-          latestMessageId: message.ID
+          latestMessageId: message.ID,
+          ...(appContext ? { appContext } : {}),
+          // Include all registered client tools so the LLM sees them in the prompt.
+          // These are ephemeral tools registered by the client app (CopyToClipboard, etc.)
+          // that supplement the metadata-defined tools from the junction table.
+          clientTools: this.agentClientService.GetRegisteredTools().map(t => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.ParameterSchema
+          }))
         },
-        createArtifacts: true,
-        createNotification: true,
-        // Adapt progress callback format: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
-        onProgress: onProgress ? (progress) => {
+        CreateArtifacts: true,
+        CreateNotification: true,
+        OnProgress: onProgress ? (progress) => {
           onProgress({
-            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
-            percentage: progress.percentage,
-            message: progress.message,
-            metadata: progress.metadata
+            step: progress.CurrentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.Percentage,
+            message: progress.Message,
+            metadata: progress.Metadata
           });
         } : undefined
-      });
+      };
 
-      return result;
+      const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
+
+      // Unwrap RunAgentResult to get the original ExecuteAgentResult
+      if (runResult.Success && runResult.Result) {
+        return runResult.Result as ExecuteAgentResult;
+      } else if (!runResult.Success) {
+        const errorMsg = runResult.ErrorMessage || 'Agent execution failed';
+        console.error('Agent execution failed:', errorMsg);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+        return null;
+      }
+
+      return null;
     } catch (error) {
       const errorMsg = 'Error processing message through agent: ' + (error instanceof Error ? error.message : String(error));
       console.error('Error processing message through agent:', error);
@@ -277,7 +312,7 @@ export class ConversationAgentService {
     const attachmentsByDetailId = new Map<string, AttachmentData[]>(); // DetailID -> array of AttachmentData
 
     if (messageIds.length > 0) {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Load artifacts and attachments in parallel
       const [artifactsLoaded, attachmentsLoaded] = await Promise.all([
@@ -304,7 +339,7 @@ export class ConversationAgentService {
 
       if (attachments && attachments.length > 0) {
         // Use BuildChatMessageContent to create proper content blocks for multimodal
-        content = ConversationUtility.BuildChatMessageContent(messageText, attachments);
+        content = await ConversationUtility.BuildChatMessageContent(messageText, attachments);
 
         // Append artifacts to text content if present
         if (artifacts && artifacts.length > 0) {
@@ -524,19 +559,12 @@ export class ConversationAgentService {
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
-    payload?: any,
+    payload?: unknown,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
     agentConfigurationPresetId?: string
   ): Promise<ExecuteAgentResult | null> {
-    if (!this._aiClient) {
-      const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
-      console.warn(errorMsg);
-      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
-      return null;
-    }
-
     try {
       // Ensure AIEngineBase is configured
       await AIEngineBase.Instance.Config(false);
@@ -546,12 +574,12 @@ export class ConversationAgentService {
 
       if (!agent || !agent.ID) {
         const errorMsg = `Sub-agent "${agentName}" not found`;
-        console.warn(`❌ ${errorMsg}`);
+        console.warn(`${errorMsg}`);
         MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
         return null;
       }
 
-      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
+      console.log(`Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload, hasConfigPreset: !!agentConfigurationPresetId });
 
       // Map AIAgentConfiguration preset ID to actual AIConfiguration ID
       let aiConfigurationId: string | undefined = undefined;
@@ -564,42 +592,52 @@ export class ConversationAgentService {
 
         if (preset) {
           aiConfigurationId = preset.AIConfigurationID || undefined;
-          console.log(`🎯 Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
+          console.log(`Mapped agent configuration preset "${preset.Name}" to AIConfigurationID: ${aiConfigurationId || 'default'}`);
         } else {
-          console.warn(`⚠️ Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
+          console.warn(`Agent configuration preset ${agentConfigurationPresetId} not found for agent ${agent.ID}`);
         }
       }
 
-      // Use fire-and-forget mutation to avoid Azure proxy timeouts (~230s).
-      // Server loads conversation history from DB, avoiding large client→server payload.
-      // Client receives completion via WebSocket PubSub event.
-      const result = await this._aiClient.RunAIAgentFromConversationDetail({
-        conversationDetailId: conversationDetailId,
-        agentId: agent.ID,
-        maxHistoryMessages: 20,
-        data: {
+      // Use AgentClientService which wraps GraphQLAIClient.RunAIAgentFromConversationDetail
+      // and integrates with client tool request handling
+      const agentParams: RunAgentFromConversationDetailParams = {
+        ConversationDetailId: conversationDetailId,
+        AgentId: agent.ID,
+        MaxHistoryMessages: 20,
+        Data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
           invocationReason: reasoning
         },
-        ...(payload ? { payload } : {}),
-        ...(aiConfigurationId ? { configurationId: aiConfigurationId } : {}),
-        createArtifacts: true,
-        createNotification: true,
-        sourceArtifactId: sourceArtifactId,
-        sourceArtifactVersionId: sourceArtifactVersionId,
-        // Adapt progress callback: GraphQL uses currentStep, AgentExecutionProgressCallback uses step
-        onProgress: onProgress ? (progress) => {
+        ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
+        ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
+        CreateArtifacts: true,
+        CreateNotification: true,
+        SourceArtifactId: sourceArtifactId,
+        SourceArtifactVersionId: sourceArtifactVersionId,
+        OnProgress: onProgress ? (progress) => {
           onProgress({
-            step: progress.currentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
-            percentage: progress.percentage,
-            message: progress.message,
-            metadata: progress.metadata
+            step: progress.CurrentStep as 'initialization' | 'validation' | 'prompt_execution' | 'action_execution' | 'subagent_execution' | 'decision_processing' | 'finalization',
+            percentage: progress.Percentage,
+            message: progress.Message,
+            metadata: progress.Metadata
           });
         } : undefined
-      });
+      };
 
-      return result;
+      const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);
+
+      // Unwrap RunAgentResult to get the original ExecuteAgentResult
+      if (runResult.Success && runResult.Result) {
+        return runResult.Result as ExecuteAgentResult;
+      } else if (!runResult.Success) {
+        const errorMsg = `Sub-agent "${agentName}" failed: ${runResult.ErrorMessage || 'unknown error'}`;
+        console.error(errorMsg);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+        return null;
+      }
+
+      return null;
     } catch (error) {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);

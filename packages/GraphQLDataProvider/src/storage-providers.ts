@@ -1,26 +1,31 @@
-import { ILocalStorageProvider, LogError, LogErrorEx } from '@memberjunction/core';
+import { ILocalStorageProvider, LogError, LogErrorEx, LogStatus } from '@memberjunction/core';
 import { openDB, DBSchema, IDBPDatabase } from '@tempfix/idb';
+import { PACKAGE_VERSION } from './version.generated';
 
 // Default category used when no category is specified
 const DEFAULT_CATEGORY = 'default';
 
 // ============================================================================
-// IN-MEMORY STORAGE PROVIDER (Map of Maps)
+// IN-MEMORY STORAGE PROVIDER (Map of Maps) — base class
 // ============================================================================
 
 /**
- * In-memory storage provider using nested Map structure for category isolation.
- * Used as a fallback when browser storage is not available.
+ * In-memory storage provider using a nested Map structure for category isolation.
+ * Used as a fallback when browser storage is not available, and as the base for
+ * the localStorage / IndexedDB providers below.
  *
- * Storage structure: Map<category, Map<key, value>>
+ * Stores values by reference — no serialization. Suitable as long as the calling
+ * tier doesn't need persistence across page loads.
+ *
+ * Storage structure: `Map<category, Map<key, unknown>>`
  */
 export class BrowserStorageProviderBase implements ILocalStorageProvider {
-    private _storage: Map<string, Map<string, string>> = new Map();
+    private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
      * Gets or creates a category map
      */
-    private getCategoryMap(category: string): Map<string, string> {
+    private getCategoryMap(category: string): Map<string, unknown> {
         const cat = category || DEFAULT_CATEGORY;
         let categoryMap = this._storage.get(cat);
         if (!categoryMap) {
@@ -30,12 +35,25 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
         return categoryMap;
     }
 
-    public async GetItem(key: string, category?: string): Promise<string | null> {
+    public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
         const categoryMap = this.getCategoryMap(category || DEFAULT_CATEGORY);
-        return categoryMap.get(key) ?? null;
+        const value = categoryMap.get(key);
+        return (value === undefined ? null : (value as T));
     }
 
-    public async SetItem(key: string, value: string, category?: string): Promise<void> {
+    public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        // Map.get is O(1); no batching benefit. Implementing for API uniformity.
+        const out = new Map<string, T | null>();
+        if (keys.length === 0) return out;
+        const categoryMap = this.getCategoryMap(category || DEFAULT_CATEGORY);
+        for (const key of new Set(keys)) {
+            const value = categoryMap.get(key);
+            out.set(key, value === undefined ? null : (value as T));
+        }
+        return out;
+    }
+
+    public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
         const categoryMap = this.getCategoryMap(category || DEFAULT_CATEGORY);
         categoryMap.set(key, value);
     }
@@ -63,15 +81,19 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
 /**
  * Browser localStorage provider with category support via key prefixing.
  *
- * Key format: [mj]:[category]:[key]
- * Example: [mj]:[RunViewCache]:[Users|Active=1|Name ASC]
+ * Key format: `[mj]:[category]:[key]`
+ * Example: `[mj]:[RunViewCache]:[Users|Active=1|Name ASC]`
+ *
+ * **Internal serialization**: localStorage only stores strings, so SetItem/GetItem
+ * JSON-encode/decode the value internally. Callers see the same generic-typed
+ * interface as the IndexedDB provider.
  *
  * Falls back to in-memory storage if localStorage is not available.
  */
 class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
     /**
      * Builds a prefixed key for localStorage
-     * Format: [mj]:[category]:[key]
+     * Format: `[mj]:[category]:[key]`
      */
     private buildKey(key: string, category?: string): string {
         const cat = category || DEFAULT_CATEGORY;
@@ -89,18 +111,53 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
         return null;
     }
 
-    public override async GetItem(key: string, category?: string): Promise<string | null> {
+    public override async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
         if (typeof localStorage !== 'undefined') {
-            return localStorage.getItem(this.buildKey(key, category));
+            const json = localStorage.getItem(this.buildKey(key, category));
+            if (json === null) return null;
+            try {
+                return JSON.parse(json) as T;
+            } catch {
+                // Corrupt entry — treat as cache miss. Caller will repopulate.
+                return null;
+            }
         }
-        return await super.GetItem(key, category);
+        return await super.GetItem<T>(key, category);
     }
 
-    public override async SetItem(key: string, value: string, category?: string): Promise<void> {
+    public override async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        if (keys.length === 0) return new Map();
+        if (typeof localStorage === 'undefined') {
+            return await super.GetItems<T>(keys, category);
+        }
+        // localStorage has no batched API — getItem is synchronous and cheap, so we just
+        // loop. Each call is in-process (no IPC), so overhead is negligible vs IDB.
+        const out = new Map<string, T | null>();
+        for (const key of new Set(keys)) {
+            const json = localStorage.getItem(this.buildKey(key, category));
+            if (json === null) {
+                out.set(key, null);
+                continue;
+            }
+            try {
+                out.set(key, JSON.parse(json) as T);
+            } catch {
+                out.set(key, null);
+            }
+        }
+        return out;
+    }
+
+    public override async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
         if (typeof localStorage !== 'undefined') {
-            localStorage.setItem(this.buildKey(key, category), value);
+            try {
+                localStorage.setItem(this.buildKey(key, category), JSON.stringify(value));
+            } catch (e) {
+                // localStorage quota exceeded, JSON serialization failure (cycles), etc.
+                LogErrorEx({ error: e, message: (e as Error)?.message });
+            }
         } else {
-            await super.SetItem(key, value, category);
+            await super.SetItem<T>(key, value, category);
         }
     }
 
@@ -160,9 +217,55 @@ class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
 // ============================================================================
 
 const IDB_DB_NAME = 'MJ_Metadata';
-const IDB_DB_VERSION = 3; // v3: Remove legacy Metadata_KVPairs store
 
-// Known object store names as a const tuple for type safety
+/**
+ * Optional manual revision applied on top of the auto-derived major*1000+minor
+ * version. Bump within a single minor release if you ship a cache schema change
+ * mid-version (rare — usually a hotfix). Reset back to 0 after the next minor.
+ */
+const MANUAL_CACHE_REVISION = 0;
+
+/**
+ * IndexedDB schema version, derived from this package's `package.json` version
+ * field at build time (`scripts/generate-version.mjs` writes `version.generated.ts`).
+ *
+ * Encoding: `major * 1000 + minor + MANUAL_CACHE_REVISION`. Examples:
+ *   - 5.30.x → 5030
+ *   - 5.31.x → 5031
+ *   - 6.0.x  → 6000
+ *
+ * **Patch releases keep the same DB version** (cache survives), so frequent
+ * patch deploys don't force users into cold-cache loads. Each minor bump
+ * triggers a one-time IDB `onupgradeneeded` that drops every object store —
+ * stale entries from any prior schema are wiped, fresh stores recreated, and
+ * caches repopulate on first use.
+ *
+ * This is an intentional trade: ~one slow page load per user per minor release
+ * in exchange for never having to track "did this PR change cache format?" in
+ * code review. MJ's LTS / monthly cadence makes the cost negligible.
+ */
+function computeIdbVersion(): number {
+    try {
+        const parts = PACKAGE_VERSION.split('.');
+        const major = parseInt(parts[0], 10);
+        const minor = parseInt(parts[1], 10);
+        if (!Number.isFinite(major) || !Number.isFinite(minor)) {
+            throw new Error(`Could not parse major.minor from version "${PACKAGE_VERSION}"`);
+        }
+        return major * 1000 + minor + MANUAL_CACHE_REVISION;
+    } catch (e) {
+        // Defensive: if version parse ever fails for some reason, use a sentinel
+        // high enough to still be > any plausible past version. This forces a
+        // wipe rather than silently using a stale version number that might
+        // collide with a real version.
+        LogErrorEx({ error: e, message: 'Failed to derive IDB version from PACKAGE_VERSION; using fallback 99999' });
+        return 99999;
+    }
+}
+
+const IDB_DB_VERSION = computeIdbVersion();
+
+// Known object store names as a const tuple for type safety.
 const KNOWN_OBJECT_STORES = [
     'mj:default',       // Default category
     'mj:Metadata',      // Metadata cache
@@ -174,46 +277,38 @@ const KNOWN_OBJECT_STORES = [
 // Type for known store names
 type KnownStoreName = typeof KNOWN_OBJECT_STORES[number];
 
-// Legacy store name - kept for cleanup during upgrade
-const LEGACY_STORE_NAME = 'Metadata_KVPairs';
-
 /**
- * IndexedDB schema with dynamic object stores per category.
- * Each category gets its own object store: mj:CategoryName
+ * IndexedDB schema. Values are stored natively (structured clone) — not JSON strings.
+ * The `unknown` value type reflects that callers control the runtime shape via the
+ * generic `SetItem<T>` / `GetItem<T>` typing on the provider.
  */
 export interface MJ_MetadataDB extends DBSchema {
-    // Default category store
-    'mj:default': {
-        key: string;
-        value: string;
-    };
-    // Metadata store
-    'mj:Metadata': {
-        key: string;
-        value: string;
-    };
-    // RunView cache store
-    'mj:RunViewCache': {
-        key: string;
-        value: string;
-    };
-    // RunQuery cache store
-    'mj:RunQueryCache': {
-        key: string;
-        value: string;
-    };
-    // Dataset cache store
-    'mj:DatasetCache': {
-        key: string;
-        value: string;
-    };
+    'mj:default':       { key: string; value: unknown };
+    'mj:Metadata':      { key: string; value: unknown };
+    'mj:RunViewCache':  { key: string; value: unknown };
+    'mj:RunQueryCache': { key: string; value: unknown };
+    'mj:DatasetCache':  { key: string; value: unknown };
 }
 
 /**
  * IndexedDB storage provider with category support via separate object stores.
  *
- * Known categories (mj:Metadata, mj:RunViewCache, etc.) get dedicated object stores.
- * Unknown categories fall back to the default store with prefixed keys.
+ * **Native object storage**: values pass through IndexedDB's structured clone
+ * algorithm — no JSON.stringify/parse round-trip. This preserves `Date`, `Map`,
+ * `Set`, typed arrays, nested objects, and is significantly faster than JSON
+ * (parse/serialize implemented in browser-native C++ vs. JS-level JSON).
+ *
+ * **Class instances lose their prototype** — store the raw data form (e.g. via
+ * `entity.GetAll()` for BaseEntity). This matches how the cache layer above
+ * already operates.
+ *
+ * **Schema upgrades** are version-driven: bumping `IDB_DB_VERSION` (auto-derived
+ * from the package's minor version) fires `onupgradeneeded` on the next page
+ * load, wipes all stores, and recreates them. Stale entries from any prior
+ * schema are gone in one atomic transition; no backward-compat read paths.
+ *
+ * Known categories (mj:Metadata, mj:RunViewCache, etc.) get dedicated stores;
+ * unknown categories share `mj:default` with prefixed keys.
  */
 export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
     private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
@@ -222,37 +317,65 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
     constructor() {
         super();
         this.dbPromise = openDB<MJ_MetadataDB>(IDB_DB_NAME, IDB_DB_VERSION, {
-            upgrade(db) {
+            upgrade: (db, oldVersion, newVersion) => {
                 try {
-                    // Remove legacy store if it exists (cleanup from v1/v2)
-                    // Cast needed because LEGACY_STORE_NAME is not in current schema (it's being removed)
-                    if (db.objectStoreNames.contains(LEGACY_STORE_NAME as KnownStoreName)) {
-                        db.deleteObjectStore(LEGACY_STORE_NAME as KnownStoreName);
+                    LogStatus(
+                        `[IDBCache] Upgrading IndexedDB schema v${oldVersion} → v${newVersion} ` +
+                        `(package ${PACKAGE_VERSION}). Dropping all stores; caches will repopulate on first use.`
+                    );
+
+                    // Drop every existing store. All data may have been written by prior
+                    // schemas (different formats, different stores) — fresh start is safer
+                    // than maintaining backward-compat read paths forever.
+                    for (const storeName of Array.from(db.objectStoreNames)) {
+                        db.deleteObjectStore(storeName);
                     }
 
-                    // Create known category stores
+                    // Recreate the known stores fresh.
                     for (const storeName of KNOWN_OBJECT_STORES) {
                         if (!db.objectStoreNames.contains(storeName)) {
                             db.createObjectStore(storeName);
                         }
                     }
                 } catch (e) {
-                    LogErrorEx({
-                        error: e,
-                        message: (e as Error)?.message
-                    });
+                    LogErrorEx({ error: e, message: (e as Error)?.message });
                 }
+            },
+            blocked: (currentVersion, blockedVersion) => {
+                // Another tab has the DB open at an older version, blocking our upgrade.
+                // Log so devs can see why startup is stalled. Closing or reloading the
+                // other tab will unblock; the user typically just refreshes anyway.
+                LogStatus(
+                    `[IDBCache] Upgrade from v${currentVersion} to v${blockedVersion} blocked by another tab. ` +
+                    `Close other tabs to allow the upgrade to proceed.`
+                );
             },
         });
 
-        this.dbPromise.then(() => {
+        this.dbPromise.then(db => {
             this._dbReady = true;
+            // Cross-tab handler: if another tab triggers an upgrade, our connection
+            // becomes a liability. Close it gracefully so the upgrade isn't blocked.
+            // Subsequent reads/writes will reopen at the new version.
+            db.onversionchange = () => {
+                LogStatus(`[IDBCache] DB schema upgraded in another tab — closing local connection.`);
+                db.close();
+                this._dbReady = false;
+            };
         }).catch(e => {
             LogErrorEx({
                 error: e,
                 message: 'IndexedDB initialization failed: ' + (e as Error)?.message
             });
         });
+    }
+
+    /**
+     * Whether the IDB connection has been established. Useful for tests and
+     * for callers that want to skip a slow first-call open if not needed yet.
+     */
+    public get IsReady(): boolean {
+        return this._dbReady;
     }
 
     /**
@@ -289,40 +412,81 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
         return `[${cat}]:${key}`;
     }
 
-    public override async SetItem(key: string, value: string, category?: string): Promise<void> {
+    public override async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
         try {
             const db = await this.dbPromise;
             const storeName = this.getStoreName(category);
             const storeKey = this.getStoreKey(key, category);
 
             const tx = db.transaction(storeName, 'readwrite');
-            await tx.objectStore(storeName).put(value, storeKey);
+            // Native structured clone — IDB stores the object directly. No JSON.stringify.
+            await tx.objectStore(storeName).put(value as unknown, storeKey);
             await tx.done;
         } catch (e) {
-            LogErrorEx({
-                error: e,
-                message: (e as Error)?.message
-            });
-            // Fall back to in-memory
-            await super.SetItem(key, value, category);
+            // DataCloneError surfaces here for un-cloneable values (functions, DOM refs,
+            // class instances with un-cloneable internal slots, circular refs of certain
+            // shapes). Log loudly — silently falling back to the in-memory base would
+            // hide a real bug in the caller's data.
+            LogErrorEx({ error: e, message: (e as Error)?.message });
         }
     }
 
-    public override async GetItem(key: string, category?: string): Promise<string | null> {
+    public override async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
         try {
             const db = await this.dbPromise;
             const storeName = this.getStoreName(category);
             const storeKey = this.getStoreKey(key, category);
 
             const value = await db.transaction(storeName).objectStore(storeName).get(storeKey);
-            return value ?? null;
+            return (value === undefined ? null : (value as T));
         } catch (e) {
-            LogErrorEx({
-                error: e,
-                message: (e as Error)?.message
-            });
-            // Fall back to in-memory
-            return await super.GetItem(key, category);
+            LogErrorEx({ error: e, message: (e as Error)?.message });
+            return null;
+        }
+    }
+
+    /**
+     * Batched read using a single IndexedDB transaction. The IndexedDB engine
+     * serializes transactions on the same object store, so `Promise.all([...N gets])`
+     * actually pays per-transaction setup overhead (~3–10ms each in most browsers).
+     * Issuing all `get()` calls inside one transaction amortizes that overhead — for
+     * 85 keys, this is the difference between ~425ms of IDB bookkeeping and ~10ms.
+     *
+     * Inputs are deduplicated (same key requested twice → one read, one map entry).
+     * Missing keys map to `null`.
+     */
+    public override async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        const out = new Map<string, T | null>();
+        if (keys.length === 0) return out;
+
+        try {
+            const db = await this.dbPromise;
+            const storeName = this.getStoreName(category);
+            const uniqueKeys = Array.from(new Set(keys));
+            const storeKeys = uniqueKeys.map(k => this.getStoreKey(k, category));
+
+            // Single transaction → single commit cost. The N gets within run in
+            // parallel against the same store with no per-call transaction tax.
+            const tx = db.transaction(storeName, 'readonly');
+            const store = tx.objectStore(storeName);
+            const promises = storeKeys.map(sk => store.get(sk));
+            const values = await Promise.all(promises);
+            await tx.done;
+
+            for (let i = 0; i < uniqueKeys.length; i++) {
+                const value = values[i];
+                out.set(uniqueKeys[i], value === undefined ? null : (value as T));
+            }
+            return out;
+        } catch (e) {
+            LogErrorEx({ error: e, message: (e as Error)?.message });
+            // On error, return null entries for every requested key so callers can
+            // distinguish "I asked but got nothing" from "key not present" if they
+            // need to. They both look like cache misses to the consumer.
+            for (const key of new Set(keys)) {
+                out.set(key, null);
+            }
+            return out;
         }
     }
 
@@ -336,12 +500,7 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
             await tx.objectStore(storeName).delete(storeKey);
             await tx.done;
         } catch (e) {
-            LogErrorEx({
-                error: e,
-                message: (e as Error)?.message
-            });
-            // Fall back to in-memory
-            await super.Remove(key, category);
+            LogErrorEx({ error: e, message: (e as Error)?.message });
         }
     }
 
@@ -371,12 +530,7 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
                 await tx.done;
             }
         } catch (e) {
-            LogErrorEx({
-                error: e,
-                message: (e as Error)?.message
-            });
-            // Fall back to in-memory
-            await super.ClearCategory(category);
+            LogErrorEx({ error: e, message: (e as Error)?.message });
         }
     }
 
@@ -402,12 +556,8 @@ export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase 
                 .filter(k => k.startsWith(prefix))
                 .map(k => k.slice(prefix.length));
         } catch (e) {
-            LogErrorEx({
-                error: e,
-                message: (e as Error)?.message
-            });
-            // Fall back to in-memory
-            return await super.GetCategoryKeys(category);
+            LogErrorEx({ error: e, message: (e as Error)?.message });
+            return [];
         }
     }
 }

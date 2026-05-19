@@ -1,0 +1,296 @@
+[
+  {
+    "fields": {
+      "Name": "Ahuachapán",
+      "Code": "AH",
+      "ISO3166_2": "SV-AH",
+      "Latitude": 13.8657,
+      "Longitude": -89.9057,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-AH.geojson",
+      "CommonAliases": [
+        "Ahuachapán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "D6939189-D773-460B-9501-14F14A32872D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.875Z",
+      "checksum": "64a15154c0f9d7e1f24de5589e542384ed291b70e8593b9fc2152927758074fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cabañas",
+      "Code": "CA",
+      "ISO3166_2": "SV-CA",
+      "Latitude": 13.9079,
+      "Longitude": -88.7326,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-CA.geojson",
+      "CommonAliases": [
+        "Cabañas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "2DB024A4-8A13-40E8-B98A-DD57C0ED2E4A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.890Z",
+      "checksum": "980bc82b8607a8cf5ec75db5eb6863b23c9f32052df966db4ef052c3c71cfd9f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chalatenango",
+      "Code": "CH",
+      "ISO3166_2": "SV-CH",
+      "Latitude": 14.1895,
+      "Longitude": -89.0591,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-CH.geojson",
+      "CommonAliases": [
+        "Chalatenango"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "40CC7885-976F-4544-9D2D-1201C976CC38"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.904Z",
+      "checksum": "c08dc0b6c4ceb7e3cf4af76c3609c4e7aae7c8c9ca6527bda9848277db94d0c0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cuscatlán",
+      "Code": "CU",
+      "ISO3166_2": "SV-CU",
+      "Latitude": 13.8166,
+      "Longitude": -89.0055,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-CU.geojson",
+      "CommonAliases": [
+        "Cuscatlán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "50976204-6771-4D87-A00C-F5B5E83C1160"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.920Z",
+      "checksum": "db29f9519d962ccc5e42ff3cf1f82c7f90285cac9691108ac2f1002584aa10a2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Libertad",
+      "Code": "LI",
+      "ISO3166_2": "SV-LI",
+      "Latitude": 13.7727,
+      "Longitude": -89.3593,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-LI.geojson",
+      "CommonAliases": [
+        "La Libertad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "29EC1419-4B46-4A8C-9822-D8880C13D3BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.934Z",
+      "checksum": "beb59e45e579e3096b32104317bf1d45055dc8e0920602784cfc1573bc90d955"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Paz",
+      "Code": "PA",
+      "ISO3166_2": "SV-PA",
+      "Latitude": 13.4872,
+      "Longitude": -88.9628,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-PA.geojson",
+      "CommonAliases": [
+        "La Paz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "23371F16-8654-463C-811F-4D6FF796DEB0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.949Z",
+      "checksum": "ec9fddd811dc2124d164b044ebf7aabff8e12a9a43995f9f641fdc10a940b043"
+    }
+  },
+  {
+    "fields": {
+      "Name": "La Unión",
+      "Code": "UN",
+      "ISO3166_2": "SV-UN",
+      "Latitude": 13.302,
+      "Longitude": -87.9301,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-UN.geojson",
+      "CommonAliases": [
+        "La Unión"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "797C4749-DD18-43C8-B394-6592411A354D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.964Z",
+      "checksum": "bd6082945b4a245a1d6a291a8cabe742d55520c24215ad60f61e191034fe4f69"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morazán",
+      "Code": "MO",
+      "ISO3166_2": "SV-MO",
+      "Latitude": 13.7736,
+      "Longitude": -88.1055,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-MO.geojson",
+      "CommonAliases": [
+        "Morazán"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "741A225A-5F4E-4948-AADC-5336D3EEFA99"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.979Z",
+      "checksum": "acb6834257124550dc0e2886e93d03826a513a4b6ccfdec21d0a907439a351a5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Miguel",
+      "Code": "SM",
+      "ISO3166_2": "SV-SM",
+      "Latitude": 13.4882,
+      "Longitude": -88.1953,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-SM.geojson",
+      "CommonAliases": [
+        "San Miguel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "F40D3A18-F6DB-4C85-973F-42FA26238E42"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:32.993Z",
+      "checksum": "81f5749e898f34878e0d333699e3f85f0cdb1295e9f99a57b67bd37433874d46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Salvador",
+      "Code": "SS",
+      "ISO3166_2": "SV-SS",
+      "Latitude": 13.713,
+      "Longitude": -89.1488,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-SS.geojson",
+      "CommonAliases": [
+        "San Salvador"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "39B253DB-D179-46D3-9ADD-E8741884D9AB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.007Z",
+      "checksum": "a4d69d3464ee24ac9dbd9f83ec61c9bb48b2ba4e308e5d60fe807a97e85bbc99"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Vicente",
+      "Code": "SV",
+      "ISO3166_2": "SV-SV",
+      "Latitude": 13.6291,
+      "Longitude": -88.6917,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-SV.geojson",
+      "CommonAliases": [
+        "San Vicente"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "82294FAD-2B3F-4CF6-90AB-61613D38C663"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.043Z",
+      "checksum": "9c7aca12837e27c684b1abe006ccdf1de493edd8e2cba8acf0a88900697f666b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Santa Ana",
+      "Code": "SA",
+      "ISO3166_2": "SV-SA",
+      "Latitude": 14.1024,
+      "Longitude": -89.5013,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-SA.geojson",
+      "CommonAliases": [
+        "Santa Ana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "2EA568D0-3D4F-4DBA-B7CC-719735FBD28E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.059Z",
+      "checksum": "cd6d164a72ada0acf301cc57446c08533ddeeb00ccd32a4b88867c953c45a312"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sonsonate",
+      "Code": "SO",
+      "ISO3166_2": "SV-SO",
+      "Latitude": 13.7165,
+      "Longitude": -89.6937,
+      "BoundaryGeoJSON": "@file:by-country/SV/boundaries/SV-SO.geojson",
+      "CommonAliases": [
+        "Sonsonate"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "7B65D369-0AA0-45E1-86AA-0469C598D255"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.075Z",
+      "checksum": "236523a10c813808136ca4fb5cee996f179ef8d28fd2f3e26b587d48ab24a4d2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Usulután",
+      "Code": "SU",
+      "ISO3166_2": "SV-SU",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Usulután"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=SV"
+    },
+    "primaryKey": {
+      "ID": "58AA8C11-B6A5-456F-A9F1-D59A10C8CCEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:33.089Z",
+      "checksum": "a1cd87f1317bad42a3cf38c83938dee3eb806d729fe4c8c9db30828bcd48e04d"
+    }
+  }
+]

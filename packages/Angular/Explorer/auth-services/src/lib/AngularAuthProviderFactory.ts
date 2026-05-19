@@ -1,5 +1,5 @@
 import { Injectable, Injector } from '@angular/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { MJAuthBase } from './mjexplorer-auth-base.service';
 import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider';
 
@@ -11,22 +11,27 @@ import { IAngularAuthProvider, AngularAuthProviderConfig } from './IAuthProvider
   providedIn: 'root'
 })
 export class AngularAuthProviderFactory {
-  private static instance: AngularAuthProviderFactory;
+  private static readonly _globalStoreKey = '___SINGLETON__AngularAuthProviderFactory';
   private providers: Map<string, IAngularAuthProvider> = new Map();
   private providerConfigs: Map<string, any> = new Map();
 
   constructor(private injector: Injector) {
-    AngularAuthProviderFactory.instance = this;
+    const g = GetGlobalObjectStore()!;
+    if (g[AngularAuthProviderFactory._globalStoreKey]) {
+      return g[AngularAuthProviderFactory._globalStoreKey] as AngularAuthProviderFactory;
+    }
+    g[AngularAuthProviderFactory._globalStoreKey] = this;
   }
 
   /**
    * Get singleton instance
    */
-  static getInstance(): AngularAuthProviderFactory {
-    if (!AngularAuthProviderFactory.instance) {
+  public static get Instance(): AngularAuthProviderFactory {
+    const instance = GetGlobalObjectStore()![AngularAuthProviderFactory._globalStoreKey] as AngularAuthProviderFactory;
+    if (!instance) {
       throw new Error('AngularAuthProviderFactory not initialized. Ensure it is provided in your module.');
     }
-    return AngularAuthProviderFactory.instance;
+    return instance;
   }
 
   /**

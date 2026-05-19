@@ -1,14 +1,14 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
-import { Router, NavigationEnd } from '@angular/router';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Input, Output, EventEmitter, OnChanges, SimpleChanges, HostListener, ElementRef, ViewChild, NgZone } from '@angular/core';
+
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
-import { takeUntil, debounceTime, distinctUntilChanged, filter } from 'rxjs/operators';
+import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { Metadata, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
-import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, ViewGridAggregatesConfig } from '@memberjunction/core-entities';
+import { MJApplicationEntityEntity, ResourceData, UserInfoEngine, MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig, MJUserViewEntity_IGridColumnSetting, MJUserViewEntity_IGridSortSetting, MJUserViewEntity_IGridState, MJUserViewEntity_ISortStateItem } from '@memberjunction/core-entities';
 import {
   RecordSelectedEvent,
   RecordOpenedEvent,
@@ -32,9 +32,10 @@ import {
 } from '@memberjunction/ng-entity-viewer';
 import { ViewSelectedEvent, SaveViewRequestedEvent, ViewSelectorComponent } from './components/view-selector/view-selector.component';
 import { CompositeFilterDescriptor, FilterFieldInfo, createEmptyFilter } from '@memberjunction/ng-filter-builder';
-import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
+import { MJUserViewEntityExtended, UserViewEngine } from '@memberjunction/core-entities';
 import { ExplorerStateService } from './services/explorer-state.service';
-import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { DataExplorerState, DataExplorerFilter, BreadcrumbItem, DataExplorerDeepLink, DataExplorerViewMode, RecentRecordAccess, FavoriteRecord, AppEntityGroup } from './models/explorer-state.interface';
+import { MapRenderMode } from '@memberjunction/ng-map-view';
 import { OpenRecordEvent, SelectRecordEvent } from './components/navigation-panel/navigation-panel.component';
 import { DisplaySimpleNotificationRequestData, MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListManagementDialogConfig, ListManagementResult } from '@memberjunction/ng-list-management';
@@ -74,8 +75,8 @@ import {
 })
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
-  private destroy$ = new Subject<void>();
-  private metadata = new Metadata();
+  protected override destroy$ = new Subject<void>();
+  private metadata = this.ProviderToUse;
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -112,6 +113,18 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Use this alongside contextName for a fully customized header (e.g., "fa-solid fa-users" for CRM).
    */
   @Input() contextIcon: string | null = null;
+
+  /**
+   * Initial query params forwarded from the resource wrapper.
+   * On hard refresh, the shell delivers params to the wrapper (which has Data.Configuration.queryParams),
+   * not to this inner dashboard component. This input bridges that gap.
+   */
+  @Input() initialQueryParams: Record<string, string> = {};
+
+  /**
+   * Emitted when the display title should change (entity selected, record opened, etc.)
+   */
+  @Output() DisplayNameChanged = new EventEmitter<string>();
 
   // State
   public state: DataExplorerState;
@@ -157,12 +170,6 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
   // Date field dropdown state
   public isDateFieldDropdownOpen: boolean = false;
-
-  // Flag to skip URL updates during initialization (when applying deep link)
-  private skipUrlUpdates: boolean = true;
-
-  // Track the last URL we navigated to, to avoid reacting to our own navigation
-  private lastNavigatedUrl: string = '';
 
   // Recent records from User Record Logs
   public recentRecords: RecentRecordAccess[] = [];
@@ -565,9 +572,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   constructor(
     public stateService: ExplorerStateService,
     private cdr: ChangeDetectorRef,
-    private router: Router,
     private recentAccessService: RecentAccessService,
-    private navigationService: NavigationService,
     private exportService: ExportService,
     private ngZone: NgZone
   ) {
@@ -576,16 +581,25 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   async ngOnInit(): Promise<void> {
+    super.ngOnInit();
     // Ensure UserInfoEngine is configured before we try to access user settings
     // This prevents race conditions where we try to load default view settings
     // before the user settings have been loaded from the server
     await UserInfoEngine.Instance.Config(false);
 
-    // Parse URL state FIRST - URL wins over persisted state
-    // This must happen before loading entities to prevent race conditions
-    const urlState = this.parseUrlState();
+    // Read initial query params — prefer params forwarded from the resource wrapper
+    // (which has Data.Configuration.queryParams from the shell), then fall back to
+    // this component's own GetQueryParams() for cases where the dashboard is used standalone.
+    const wrapperParams = this.initialQueryParams && Object.keys(this.initialQueryParams).length > 0
+      ? this.initialQueryParams
+      : null;
+    const ownParams = this.GetQueryParams();
+    const rawParams = wrapperParams || (Object.keys(ownParams).length > 0 ? ownParams : {});
+
+    const urlState = this.buildDeepLinkFromParams(rawParams);
 
     // Set context for state service (enables context-specific settings)
+    this.stateService.Provider = this.ProviderToUse;
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
@@ -599,10 +613,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Apply URL state after entities are loaded
     if (urlState) {
-      // URL has state - apply it (overrides persisted state)
-      this.applyUrlState(urlState);
+      await this.applyUrlState(urlState);
     } else if (this.deepLink) {
-      // No URL state but @Input deepLink provided - use that
       await this.applyDeepLink(this.deepLink);
     }
 
@@ -614,18 +626,27 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
         this.state = state;
 
-        // When entity changes, clear user search text
+        // Self-correct map mode: if a URL-sourced mode is pending and state
+        // has diverged (e.g., reset to 'point' by some init step), re-apply it.
+        // _pendingMapMode stays alive until the map component emits real state
+        // via onMapDisplayStateChange (user interaction), NOT on first state match.
+        if (this._pendingMapMode && state.mapRenderMode !== this._pendingMapMode) {
+          const mode = this._pendingMapMode;
+          this.stateService.updateState({ mapRenderMode: mode });
+          return; // Let the next subscription fire handle the rest
+        }
+
+        // When entity changes, clear user search text and update title
         if (entityChanged) {
           this.liveFilterText = '';
           this.debouncedFilterText = '';
+          this.emitDisplayName();
         }
 
         this.onStateChanged();
 
-        // Update URL to reflect current state (for deep linking)
-        if (!this.skipUrlUpdates) {
-          this.updateUrl();
-        }
+        // Update URL query params to reflect current state (for deep linking)
+        this.pushCurrentStateToUrl();
 
         this.cdr.detectChanges();
       });
@@ -640,9 +661,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     // Setup debounced filter - 500ms delay allows comfortable typing before triggering search
     // IMPORTANT: Do NOT call setSmartFilterPrompt here. Updating the state service triggers
-    // URL updates via the shell's workspace sync, which fires NavigationEnd, which triggers
-    // applyUrlState, which clears the filter text. The debouncedFilterText flows directly
-    // to the entity-viewer via [filterText] binding — no state service involvement needed.
+    // URL updates (via pushCurrentStateToUrl → UpdateQueryParams), which in turn can trigger
+    // OnQueryParamsChanged, which would clear the filter text. The debouncedFilterText flows
+    // directly to the entity-viewer via [filterText] binding — no state service involvement needed.
     this.filterInput$
       .pipe(
         debounceTime(500),
@@ -671,30 +692,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.cdr.detectChanges();
       });
 
-    // Subscribe to router NavigationEnd events for back/forward button support
-    this.router.events
-      .pipe(
-        filter((event): event is NavigationEnd => event instanceof NavigationEnd),
-        takeUntil(this.destroy$)
-      )
-      .subscribe(event => {
-        // Only react to navigation events that weren't triggered by us
-        // Normalize URLs by decoding to handle + vs %20 encoding differences
-        // Note: decodeURIComponent doesn't decode +, so we also replace + with space
-        const currentUrl = event.urlAfterRedirects || event.url;
-        const normalizedCurrentUrl = decodeURIComponent(currentUrl).replace(/\+/g, ' ');
-        const normalizedLastUrl = decodeURIComponent(this.lastNavigatedUrl).replace(/\+/g, ' ');
-        const isExternal = normalizedCurrentUrl !== normalizedLastUrl;
-        if (isExternal) {
-          this.onExternalNavigation(currentUrl);
-        }
-      });
-
-    // Enable URL updates now that initialization is complete
-    this.skipUrlUpdates = false;
-
-    // Update URL to reflect current state (whether from URL, deepLink, or persisted)
-    this.updateUrl();
+    // Push initial state to URL (covers deepLink and persisted state)
+    this.pushCurrentStateToUrl();
 
     // Notify that loading is complete (for resource wrapper integration)
     this.NotifyLoadComplete();
@@ -858,7 +857,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private async loadApplicationEntityIds(applicationId: string): Promise<void> {
     this.applicationEntityIds.clear();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
@@ -928,6 +927,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     // state would leak into the new entity's query (e.g., ORDER BY FirstName on Groups)
     this.selectedViewEntity = null;
     this.selectedEntity = entity;
+    this.reconcileViewModeForEntity(entity);
     // Load user's saved default grid state for this entity (if any)
     // This ensures formatting and column settings persist across sessions
     this.currentGridState = this.loadUserDefaultGridState();
@@ -944,8 +944,25 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.state.selectedEntityName !== this.selectedEntity?.Name) {
       this.resetRecordCounts();
       this.selectedEntity = this.entities.find(e => e.Name === this.state.selectedEntityName) || null;
+      this.reconcileViewModeForEntity(this.selectedEntity);
       // Load user's saved default grid state for this entity (if any)
       this.currentGridState = this.loadUserDefaultGridState();
+    }
+  }
+
+  /**
+   * Reset viewMode to 'grid' if the current mode isn't supported by the given entity
+   * (e.g., switching to an entity without geocoding while viewMode is 'map').
+   */
+  private reconcileViewModeForEntity(entity: EntityInfo | null): void {
+    if (!entity) return;
+    const mode = this.state.viewMode;
+    const hasDateFields = entity.Fields.some(f => f.TSType === EntityFieldTSType.Date);
+    const modeUnsupported =
+      (mode === 'map' && !entity.SupportsGeoCoding) ||
+      (mode === 'timeline' && !hasDateFields);
+    if (modeUnsupported) {
+      this.stateService.setViewMode('grid');
     }
   }
 
@@ -1049,7 +1066,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     try {
-      const parsed = JSON.parse(view.GridState);
+      const parsed = view.GridStateObject;
 
       // Validate structure - expect columnSettings array
       if (parsed && Array.isArray(parsed.columnSettings)) {
@@ -1057,12 +1074,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         // fields from a previously viewed entity leaking into the query
         const validColumns = this.selectedEntity
           ? parsed.columnSettings.filter(
-              (col: { Name: string }) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
+              (col: MJUserViewEntity_IGridColumnSetting) => this.selectedEntity!.Fields.some(f => f.Name === col.Name)
             )
           : parsed.columnSettings;
         const validSorts = this.selectedEntity
           ? (parsed.sortSettings || []).filter(
-              (s: { field: string }) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
+              (s: MJUserViewEntity_IGridSortSetting) => this.selectedEntity!.Fields.some(f => f.Name === s.field)
             )
           : parsed.sortSettings || [];
 
@@ -1198,7 +1215,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Build GridState in Kendo-compatible format
       const gridState = this.buildGridState(event);
@@ -1221,19 +1238,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         newView.IsShared = event.isShared;
         newView.IsDefault = false;
 
-        // Set GridState and SortState
+        // Set state via typed object setters
         if (gridState) {
-          newView.GridState = JSON.stringify(gridState);
+          newView.GridStateObject = gridState;
         }
         if (sortState) {
-          newView.SortState = JSON.stringify(sortState);
+          newView.SortStateObject = sortState;
         }
 
         // Set Smart Filter settings
         newView.SmartFilterEnabled = event.smartFilterEnabled;
         newView.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // BUG-008: Always set FilterState consistently
+        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
         newView.FilterState = filterStateJson;
 
         const saved = await newView.Save();
@@ -1262,19 +1279,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         this.selectedViewEntity.Description = event.description;
         this.selectedViewEntity.IsShared = event.isShared;
 
-        // Update GridState and SortState
+        // Update state via typed object setters
         if (gridState) {
-          this.selectedViewEntity.GridState = JSON.stringify(gridState);
+          this.selectedViewEntity.GridStateObject = gridState;
         }
         if (sortState) {
-          this.selectedViewEntity.SortState = JSON.stringify(sortState);
+          this.selectedViewEntity.SortStateObject = sortState;
         }
 
         // Update Smart Filter settings
         this.selectedViewEntity.SmartFilterEnabled = event.smartFilterEnabled;
         this.selectedViewEntity.SmartFilterPrompt = event.smartFilterPrompt;
 
-        // BUG-008: Always set FilterState consistently
+        // BUG-008: Always set FilterState consistently (raw string — Kendo CompositeFilterDescriptor shape)
         this.selectedViewEntity.FilterState = filterStateJson;
 
         const saved = await this.selectedViewEntity.Save();
@@ -1383,8 +1400,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * 2. If currentGridState exists (from grid interactions) - use that
    * 3. Otherwise return null
    */
-  private buildGridState(event: ViewSaveEvent): { columnSettings: object[]; sortSettings?: object[]; aggregates?: ViewGridAggregatesConfig } | null {
-    let columnSettings: object[];
+  private buildGridState(event: ViewSaveEvent): MJUserViewEntity_IGridState | null {
+    let columnSettings: MJUserViewEntity_IGridColumnSetting[];
 
     // First check if the event has columns configured (from config panel)
     if (event.columns.length > 0) {
@@ -1394,7 +1411,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
         DisplayName: col.displayName,
         userDisplayName: col.userDisplayName, // Include user-defined column alias
         hidden: false, // Visible columns only
-        width: col.width || null,
+        width: col.width || undefined,
         orderIndex: idx,
         format: col.format // Include column format settings
       }));
@@ -1412,7 +1429,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           Name: f.Name,
           DisplayName: f.DisplayNameOrName,
           hidden: false,
-          width: f.DefaultColumnWidth || null,
+          width: f.DefaultColumnWidth || undefined,
           orderIndex: idx
         }));
       if (columnSettings.length === 0) {
@@ -1425,7 +1442,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     // Build sort settings - prefer event.sortItems (multi-sort), fall back to currentGridState
-    let sortSettings: object[] | undefined;
+    let sortSettings: MJUserViewEntity_IGridSortSetting[] | undefined;
     if (event.sortItems && event.sortItems.length > 0) {
       sortSettings = event.sortItems.map(item => ({
         field: item.field,
@@ -1457,12 +1474,12 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
    * Format: [{field, direction}] where direction is 'asc' or 'desc'
    * Supports multi-column sorting via sortItems array
    */
-  private buildSortState(event: ViewSaveEvent): object[] | null {
+  private buildSortState(event: ViewSaveEvent): MJUserViewEntity_ISortStateItem[] | null {
     // Prefer sortItems array (multi-sort) over deprecated sortField
     if (event.sortItems && event.sortItems.length > 0) {
       return event.sortItems.map(item => ({
         field: item.field,
-        direction: item.direction // 'asc' or 'desc'
+        direction: item.direction
       }));
     }
 
@@ -1645,19 +1662,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     let aggregateCount = 0;
 
     try {
-      const gridState = view.GridState ? JSON.parse(view.GridState) : null;
-      if (Array.isArray(gridState)) {
-        columnCount = gridState.filter((c: Record<string, unknown>) => !c['hidden']).length;
+      const gridState = view.GridStateObject;
+      if (gridState?.columnSettings && Array.isArray(gridState.columnSettings)) {
+        columnCount = gridState.columnSettings.filter((c: MJUserViewEntity_IGridColumnSetting) => !c.hidden).length;
       }
     } catch { /* ignore */ }
 
     try {
-      const filterState = view.FilterState ? JSON.parse(view.FilterState) : null;
+      const filterState = view.FilterStateObject;
       if (filterState?.filters?.length) filterCount = filterState.filters.length;
     } catch { /* ignore */ }
 
     try {
-      const sortState = view.SortState ? JSON.parse(view.SortState) : null;
+      const sortState = view.SortStateObject;
       if (Array.isArray(sortState)) sortCount = sortState.length;
     } catch { /* ignore */ }
 
@@ -1681,8 +1698,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     if (!targetId || !this.selectedEntity) return;
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     try {
       const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
@@ -1808,6 +1825,44 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     if (this.state.selectedViewId) {
       this.stateService.setViewModified(true);
     }
+  }
+
+  /**
+   * Get the current map display state for passing to the EntityViewer/MapView.
+   */
+  get mapDisplayState(): { ZoomLevel: number; CenterLat: number; CenterLng: number } | null {
+    if (this.state.mapZoom == null) {
+      return null;
+    }
+    return {
+      ZoomLevel: this.state.mapZoom,
+      CenterLat: this.state.mapCenterLat ?? 20,
+      CenterLng: this.state.mapCenterLng ?? 0
+    };
+  }
+
+  /**
+   * Handle map display state changes from the map component.
+   * Persists zoom, center, and render mode across page reloads.
+   */
+  /**
+   * Handle map render mode change (user clicked mode button in map component).
+   */
+  public onMapRenderModeChange(mode: MapRenderMode): void {
+    this._pendingMapMode = null; // User-initiated — clear any pending URL mode
+    this.stateService.updateState({ mapRenderMode: mode });
+  }
+
+  /**
+   * Handle map display state change (zoom/pan — fires on moveend).
+   */
+  public onMapDisplayStateChange(state: { ZoomLevel?: number; CenterLat?: number; CenterLng?: number }): void {
+    this._pendingMapMode = null; // Map is interactive now — clear pending
+    this.stateService.updateState({
+      mapZoom: state.ZoomLevel ?? null,
+      mapCenterLat: state.CenterLat ?? null,
+      mapCenterLng: state.CenterLng ?? null
+    });
   }
 
   /**
@@ -2116,8 +2171,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       throw new Error('No entity selected for export');
     }
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Build the run view params based on current state
     const baseParams = {
@@ -2282,7 +2337,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     try {
       // Load the record
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
         ExtraFilter: `ID='${recordId}'`,
@@ -2388,6 +2443,13 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   /** Record ID to select once data loads (from deep link) */
   private pendingRecordSelection: string | null = null;
 
+  /**
+   * Pending map mode from URL that must survive initialization state resets.
+   * Set during applyUrlState, cleared once state matches or after first successful re-apply.
+   * The state subscription self-corrects: any time state diverges from this value, it re-applies.
+   */
+  private _pendingMapMode: MapRenderMode | null = null;
+
   // ========================================
   // BREADCRUMB NAVIGATION
   // ========================================
@@ -2470,54 +2532,109 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   // ========================================
-  // URL DEEP LINKING
+  // URL DEEP LINKING (Framework Query Param Lifecycle)
   // ========================================
 
   /**
-   * Parse URL query string and return a deep link object.
+   * Build a DataExplorerDeepLink from framework query params.
    * Returns null if no relevant params found.
-   *
-   * Query params:
-   * - entity: Selected entity name
-   * - record: Selected record ID (URL segment format via CompositeKey)
-   * - filter: Current filter text
-   * - view: View mode (grid or cards)
    */
-  private parseUrlState(): DataExplorerDeepLink | null {
-    const url = this.router.url;
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) {
-      return null;
-    }
+  private buildDeepLinkFromParams(params: Record<string, string>): DataExplorerDeepLink | null {
+    const entity = params['entity'] || null;
+    const record = params['record'] || null;
+    const filterParam = params['filter'] || null;
+    const view = (params['view'] as DataExplorerViewMode) || null;
+    const viewId = params['viewId'] || null;
+    const mapMode = params['mapMode'] || null;
 
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const entity = params.get('entity');
-    const record = params.get('record');
-    const filter = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
-
-    // If no params, return null
-    if (!entity && !record && !filter && !view) {
+    if (!entity && !record && !filterParam && !view && !viewId && !mapMode) {
       return null;
     }
 
     return {
       entity: entity || undefined,
       record: record || undefined,
-      filter: filter || undefined,
-      viewMode: view || undefined
+      filter: filterParam || undefined,
+      viewMode: view || undefined,
+      viewId: viewId || undefined,
+      mapMode: mapMode || undefined
     };
+  }
+
+  /**
+   * React to back/forward navigation or deep-link entry.
+   * The base class calls this when query params change via popstate or deeplink.
+   */
+  protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    this.applyParams(params);
+  }
+
+  /**
+   * Public entry point for the resource wrapper to forward query param changes.
+   * The wrapper receives OnQueryParamsChanged from the framework and delegates here.
+   */
+  public HandleQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    this.applyParams(params);
+  }
+
+  /**
+   * Apply a params map (from framework query params) to the component state.
+   */
+  private async applyParams(params: Record<string, string>): Promise<void> {
+    const deepLink = this.buildDeepLinkFromParams(params);
+    if (deepLink) {
+      await this.applyUrlState(deepLink);
+    } else {
+      // No params — go to home view
+      this.selectedEntity = null;
+      this.selectedRecord = null;
+      this.detailPanelEntity = null;
+      this.stateService.selectEntity(null);
+      this.stateService.closeDetailPanel();
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Push current navigation state to the URL via the framework.
+   * Called whenever state changes so users can bookmark/share URLs.
+   */
+  private pushCurrentStateToUrl(): void {
+    const hasEntity = !!this.state.selectedEntityName;
+    const hasViewId = !!(this.state.selectedViewId && hasEntity);
+
+    const queryParams: Record<string, string | null> = {
+      entity: this.state.selectedEntityName || null,
+      record: (this.state.selectedRecordId && hasEntity) ? this.state.selectedRecordId : null,
+      filter: null, // Never in URL — filters live in saved views (DB), not query strings
+      view: (this.state.viewMode && this.state.viewMode !== 'grid') ? this.state.viewMode : null,
+      viewId: hasViewId ? this.state.selectedViewId : null,
+      mapMode: this.state.viewMode === 'map' ? (this.state.mapRenderMode || 'point') : null
+    };
+
+
+    this.UpdateQueryParams(queryParams);
   }
 
   /**
    * Apply URL state to the component.
    * Used both during init and for popstate handling.
    */
-  private applyUrlState(urlState: DataExplorerDeepLink): void {
-    // Apply view mode if specified
+  private async applyUrlState(urlState: DataExplorerDeepLink): Promise<void> {
+    // Store URL-sourced map mode BEFORE switching to map view — various init steps
+    // can reset mapRenderMode to 'point'. The state subscription self-corrects using this.
+    if (urlState.mapMode && ['point', 'choropleth', 'heatmap'].includes(urlState.mapMode)) {
+      this._pendingMapMode = urlState.mapMode as MapRenderMode;
+    }
+
+    // Apply view mode (may trigger map component creation if switching to 'map')
     if (urlState.viewMode) {
       this.stateService.setViewMode(urlState.viewMode);
+    }
+
+    // Apply map render mode to state
+    if (this._pendingMapMode) {
+      this.stateService.updateState({ mapRenderMode: this._pendingMapMode });
     }
 
     // Navigate to entity if specified
@@ -2536,11 +2653,19 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
           this.stateService.selectEntity(entity.Name);
         }
 
-        // Apply filter if specified (to smart filter state, not user search)
-        if (urlState.filter) {
-          this.stateService.setSmartFilterPrompt(urlState.filter);
-        } else if (entityChanged) {
-          // Only clear filter if entity changed (selectEntity already handles this)
+        // Restore saved view by ID if specified
+        if (urlState.viewId) {
+          await this.restoreViewFromUrl(urlState.viewId, entity);
+        } else {
+          // No specific view — clear view selection to use default
+          this.selectedViewEntity = null;
+          this.stateService.selectView(null);
+          this.currentGridState = this.loadUserDefaultGridState();
+        }
+
+        // Filters live in saved views (DB), never in URL query strings.
+        // Clear smart filter on entity change when no specific view is selected.
+        if (entityChanged && !urlState.viewId) {
           this.stateService.setSmartFilterPrompt('');
         }
         // User search text is always cleared when applying URL state
@@ -2583,7 +2708,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       this.selectedEntity = null;
       this.selectedRecord = null;
       this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
+      this.stateService.selectEntity(null);
       this.stateService.closeDetailPanel();
     }
 
@@ -2591,110 +2716,46 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Update the URL query string to reflect current navigation state.
-   * This enables deep linking - users can bookmark or share URLs to specific views.
-   * Called immediately on state changes (not debounced).
-   * Uses NavigationService for proper URL management that respects app-scoped routes.
+   * Restore a saved view from the URL's viewId parameter.
+   * Looks up the view by ID, sets it as selected, and applies its grid state and filters.
+   * Must be async because UserViewEngine's cache may not be populated yet on cold page loads.
    */
-  private updateUrl(): void {
-    const queryParams: Record<string, string | null> = {};
+  private async restoreViewFromUrl(viewId: string, entity: EntityInfo): Promise<void> {
+    // Ensure the view engine cache is populated before querying —
+    // on hard refresh, the cache may be empty and GetAccessibleViewsForEntity returns []
+    await UserViewEngine.Instance.Config(false);
 
-    // Add entity if selected
+    const accessibleViews = UserViewEngine.Instance.GetAccessibleViewsForEntity(entity.ID);
+    const view = accessibleViews.find(v => UUIDsEqual(v.ID, viewId)) || null;
+
+    if (view) {
+      this.selectedViewEntity = view;
+      this.stateService.selectView(viewId);
+      this.currentGridState = this.parseViewGridState(view);
+
+      // Apply the view's smart filter if it has one
+      if (view.SmartFilterEnabled && view.SmartFilterPrompt) {
+        this.stateService.setSmartFilterPrompt(view.SmartFilterPrompt);
+      }
+    } else {
+      console.warn('[DataExplorer] restoreViewFromUrl: view NOT FOUND, falling back to default. viewId=', viewId);
+      this.selectedViewEntity = null;
+      this.stateService.selectView(null);
+      this.currentGridState = this.loadUserDefaultGridState();
+    }
+
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Emit the current display name based on selected entity/record.
+   */
+  private emitDisplayName(): void {
     if (this.state.selectedEntityName) {
-      queryParams['entity'] = this.state.selectedEntityName;
+      this.DisplayNameChanged.emit(this.state.selectedEntityName);
     } else {
-      queryParams['entity'] = null;
+      this.DisplayNameChanged.emit('Data');
     }
-
-    // Add record if selected (only if entity is also selected)
-    if (this.state.selectedRecordId && this.state.selectedEntityName) {
-      queryParams['record'] = this.state.selectedRecordId;
-    } else {
-      queryParams['record'] = null;
-    }
-
-    // Add filter if present (only if entity is also selected)
-    if (this.state.smartFilterPrompt && this.state.selectedEntityName) {
-      queryParams['filter'] = this.state.smartFilterPrompt;
-    } else {
-      queryParams['filter'] = null;
-    }
-
-    // Add view mode if not default (grid is default)
-    if (this.state.viewMode && this.state.viewMode !== 'grid') {
-      queryParams['view'] = this.state.viewMode;
-    } else {
-      queryParams['view'] = null;
-    }
-
-    // Use NavigationService to update query params properly
-    this.navigationService.UpdateActiveTabQueryParams(queryParams);
-  }
-
-  /**
-   * Handle external navigation (back/forward buttons).
-   * Parses the URL and applies the state without triggering a new navigation.
-   */
-  private onExternalNavigation(url: string): void {
-    // Check if this URL is for our component (contains our base path)
-    const currentPath = this.router.url.split('?')[0];
-    const newPath = url.split('?')[0];
-
-    // Only handle if we're still on the same base path (same dashboard instance)
-    if (currentPath !== newPath) {
-      return; // Different route entirely, shell will handle it
-    }
-
-    // Parse the new URL state
-    const urlState = this.parseUrlFromString(url);
-
-    // Apply the state without triggering URL updates
-    this.skipUrlUpdates = true;
-    if (urlState) {
-      this.applyUrlState(urlState);
-    } else {
-      // No params means go to home view
-      this.selectedEntity = null;
-      this.selectedRecord = null;
-      this.detailPanelEntity = null;
-      this.stateService.selectEntity(null as unknown as string);
-      this.stateService.closeDetailPanel();
-    }
-    this.skipUrlUpdates = false;
-
-    // Update the tracked URL
-    this.lastNavigatedUrl = url;
-
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Parse URL state from a URL string (used for external navigation).
-   */
-  private parseUrlFromString(url: string): DataExplorerDeepLink | null {
-    const queryIndex = url.indexOf('?');
-    if (queryIndex === -1) {
-      return null;
-    }
-
-    const queryString = url.substring(queryIndex + 1);
-    const params = new URLSearchParams(queryString);
-    const entity = params.get('entity');
-    const record = params.get('record');
-    const filterParam = params.get('filter');
-    const view = params.get('view') as 'grid' | 'cards' | null;
-
-    // If no params, return null
-    if (!entity && !record && !filterParam && !view) {
-      return null;
-    }
-
-    return {
-      entity: entity || undefined,
-      record: record || undefined,
-      filter: filterParam || undefined,
-      viewMode: view || undefined
-    };
   }
 
   // ========================================
@@ -2779,24 +2840,29 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     }
 
     const applications = this.metadata.Applications;
-    const entityIdToApp = new Map<string, ApplicationInfo>();
+    const entityIdToApps = new Map<string, ApplicationInfo[]>();
     const groupMap = new Map<string, AppEntityGroup>();
 
-    // Build entity -> first application mapping
+    // Build entity -> applications mapping (an entity can belong to multiple apps)
     for (const app of applications) {
       for (const appEntity of app.ApplicationEntities) {
-        if (!entityIdToApp.has(appEntity.EntityID)) {
-          entityIdToApp.set(appEntity.EntityID, app);
+        const apps = entityIdToApps.get(appEntity.EntityID);
+        if (apps) {
+          apps.push(app);
+        } else {
+          entityIdToApps.set(appEntity.EntityID, [app]);
         }
       }
     }
 
-    // Assign each visible entity to its group
+    // Assign each visible entity to all of its application groups
     const ungroupedEntities: EntityInfo[] = [];
     for (const entity of this.entities) {
-      const app = entityIdToApp.get(entity.ID);
-      if (app) {
-        this.addEntityToGroup(groupMap, app, entity);
+      const apps = entityIdToApps.get(entity.ID);
+      if (apps) {
+        for (const app of apps) {
+          this.addEntityToGroup(groupMap, app, entity);
+        }
       } else {
         ungroupedEntities.push(entity);
       }

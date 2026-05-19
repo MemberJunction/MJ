@@ -11,10 +11,10 @@ import { CompositeKey, Metadata } from '@memberjunction/core';
 })
 export class QueryResource extends BaseResourceComponent implements OnInit {
     ngOnInit(): void {
-
+        super.ngOnInit();
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
         const name = await md.GetEntityRecordName('Queries', compositeKey);
         return `${name ? name : 'Query ID: ' + data.ResourceRecordID}`;

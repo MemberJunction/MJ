@@ -1,9 +1,6 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, AfterViewChecked } from '@angular/core';
+import { Component, Output, EventEmitter, Input } from '@angular/core';
 
-import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery, EntityInfo, RunViewParams } from '@memberjunction/core';
-  
-import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
-import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
+import { BaseEntity, EntityInfo, RunViewParams } from '@memberjunction/core';
  
 @Component({
   standalone: false,
@@ -43,7 +40,7 @@ export class EntityCommunicationsPreviewWindowComponent {
   /**
    * Configurable settings for the toolbar
    */
-  @Input() public ToolbarSettings: ListBoxToolbarConfig = {
+  @Input() public ToolbarSettings: { position: string; tools: string[] } = {
     position: "right",
     tools: ["moveUp", "transferFrom", "transferAllFrom", "transferAllTo", "transferTo", "moveDown"],
   };

@@ -156,8 +156,8 @@ export class UpdateUserProgressAction extends LearnWorldsBaseAction {
   private async fetchCurrentEnrollment(userId: string, courseId: string, contextUser: UserInfo): Promise<LWEnrollmentProgress> {
     try {
       return await this.makeLearnWorldsRequest<LWEnrollmentProgress>(`users/${userId}/enrollments/${courseId}`, 'GET', undefined, contextUser);
-    } catch {
-      throw new Error('User is not enrolled in this course');
+    } catch (error) {
+      throw new Error('User is not enrolled in this course: ' + (error instanceof Error ? error.message : String(error)));
     }
   }
 

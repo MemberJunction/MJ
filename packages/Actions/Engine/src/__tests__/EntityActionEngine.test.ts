@@ -17,6 +17,12 @@ vi.mock('@memberjunction/global', () => ({
     SafeJSONParse: vi.fn((str: string) => {
         try { return JSON.parse(str); } catch { return null; }
     }),
+    // Case-insensitive UUID equality used by
+    // EntityActionInvocation*.MapParams to correlate params by ID.
+    UUIDsEqual: (a: unknown, b: unknown): boolean =>
+        typeof a === 'string' && typeof b === 'string' && a.toLowerCase() === b.toLowerCase(),
+    NormalizeUUID: (value: unknown): string =>
+        typeof value === 'string' ? value.toLowerCase() : String(value),
 }));
 
 // Mock @memberjunction/core

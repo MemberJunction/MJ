@@ -26,6 +26,14 @@ export class ExternalChangeDetectionAction extends BaseAction {
         await ExternalChangeDetectorEngine.Instance.Config(false, params.ContextUser);
 
         const entities = this.resolveEntityList(params);
+        if (entities.length === 0) {
+            return {
+                Success: true,
+                Message: 'No entities have DetectExternalChanges enabled. Nothing to scan.',
+                ResultCode: 'SUCCESS'
+            };
+        }
+
         const result = await ExternalChangeDetectorEngine.Instance.DetectAndReplayChanges(
             entities,
             replayBatchSize,
@@ -46,7 +54,7 @@ export class ExternalChangeDetectionAction extends BaseAction {
     private resolveEntityList(params: RunActionParams): EntityInfo[] {
         const entityListParam = params.Params.find(p => p.Name.trim().toLowerCase() === 'entitylist');
         if (entityListParam?.Value && entityListParam.Value.length > 0) {
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             return entityListParam.Value.split(',')
                 .map((name: string) => md.EntityByName(name.trim()))
                 .filter((e: EntityInfo | undefined): e is EntityInfo => !!e);

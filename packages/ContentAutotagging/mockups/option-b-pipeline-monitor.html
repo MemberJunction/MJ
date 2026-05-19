@@ -1,0 +1,348 @@
+<!--
+  Option B: Pipeline Monitor
+  Design Philosophy:
+  An operations-focused dashboard modeled after CI/CD pipeline monitors and real-time
+  data processing dashboards. The top KPI strip gives instant health at a glance.
+  The central stage-based flow visualization shows items progressing through the
+  Ingest > Extract > Chunk > Tag > Vectorize pipeline with animated indicators.
+  The side panel exposes source configuration for quick edits, and the bottom chart
+  provides historical throughput context. Designed for operators who need to know
+  "is the system healthy?" and "where are bottlenecks?" at a glance.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Autotagging - Pipeline Monitor</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-brand-primary: #264FAF;
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: #ffffff;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #475569;
+    --mj-border-default: #e2e8f0;
+    --mj-status-success: #22c55e;
+    --mj-status-warning: #f59e0b;
+    --mj-status-error: #ef4444;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); height: 100vh; display: flex; flex-direction: column; }
+
+  /* Header */
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); }
+  .header .logo { font-weight: 700; font-size: 16px; color: var(--mj-brand-primary); }
+  .header .status-badge { display: flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .status-badge.healthy { background: #dcfce7; color: #166534; }
+  .header-actions { display: flex; gap: 10px; }
+  .btn-sm { padding: 7px 14px; border-radius: 6px; font-size: 13px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); cursor: pointer; color: var(--mj-text-primary); display: flex; align-items: center; gap: 6px; }
+  .btn-sm.primary { background: var(--mj-brand-primary); color: #fff; border-color: var(--mj-brand-primary); }
+
+  /* KPI Strip */
+  .kpi-strip { display: flex; gap: 16px; padding: 16px 24px; }
+  .kpi-card { flex: 1; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 20px; }
+  .kpi-card .kpi-label { font-size: 12px; color: var(--mj-text-secondary); text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .kpi-card .kpi-value { font-size: 28px; font-weight: 700; }
+  .kpi-card .kpi-change { font-size: 12px; margin-top: 4px; }
+  .kpi-change.up { color: var(--mj-status-success); }
+  .kpi-change.down { color: var(--mj-status-error); }
+
+  /* Main content */
+  .main-content { display: flex; flex: 1; overflow: hidden; }
+  .pipeline-area { flex: 1; padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; }
+
+  /* Pipeline Stages */
+  .pipeline-header { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+  .stages { display: flex; gap: 0; margin-bottom: 20px; }
+  .stage { flex: 1; text-align: center; position: relative; }
+  .stage-box { background: var(--mj-bg-surface); border: 2px solid var(--mj-border-default); border-radius: 10px; padding: 14px 8px; margin: 0 4px; }
+  .stage-box.active { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 3px rgba(38,79,175,0.1); }
+  .stage-icon { font-size: 20px; color: var(--mj-brand-primary); margin-bottom: 6px; }
+  .stage-name { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .stage-count { font-size: 22px; font-weight: 700; color: var(--mj-brand-primary); }
+  .stage-sublabel { font-size: 11px; color: var(--mj-text-secondary); }
+  .stage-arrow { position: absolute; right: -12px; top: 50%; transform: translateY(-50%); z-index: 1; color: var(--mj-border-default); font-size: 18px; }
+
+  /* Processing Feed */
+  .feed-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .feed-header h3 { font-size: 15px; font-weight: 600; }
+  .feed-header .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--mj-status-success); margin-right: 6px; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+  .feed-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 8px; margin-bottom: 8px; }
+  .feed-item .feed-icon { width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #fff; flex-shrink: 0; }
+  .feed-item .feed-info { flex: 1; min-width: 0; }
+  .feed-item .feed-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .feed-item .feed-source { font-size: 11px; color: var(--mj-text-secondary); }
+  .feed-item .stage-progress { display: flex; gap: 3px; align-items: center; }
+  .stage-dot { width: 24px; height: 6px; border-radius: 3px; background: var(--mj-border-default); }
+  .stage-dot.done { background: var(--mj-status-success); }
+  .stage-dot.current { background: var(--mj-brand-primary); animation: pulse 1s infinite; }
+  .stage-dot.error { background: var(--mj-status-error); }
+  .feed-item .feed-time { font-size: 11px; color: var(--mj-text-secondary); white-space: nowrap; }
+
+  /* Source Config Panel */
+  .config-panel { width: 300px; background: var(--mj-bg-surface); border-left: 1px solid var(--mj-border-default); overflow-y: auto; padding: 20px; }
+  .config-panel h3 { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+  .source-config { border: 1px solid var(--mj-border-default); border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .source-config .sc-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .source-config .sc-header i { font-size: 14px; }
+  .source-config .sc-name { font-weight: 600; font-size: 13px; flex: 1; }
+  .source-config .sc-status { width: 8px; height: 8px; border-radius: 50%; }
+  .sc-status.active { background: var(--mj-status-success); }
+  .sc-status.paused { background: var(--mj-status-warning); }
+  .sc-status.error { background: var(--mj-status-error); }
+  .sc-detail { font-size: 12px; color: var(--mj-text-secondary); line-height: 1.7; }
+  .sc-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .sc-actions button { padding: 4px 10px; font-size: 11px; border: 1px solid var(--mj-border-default); border-radius: 4px; background: var(--mj-bg-surface); cursor: pointer; color: var(--mj-text-secondary); }
+  .sc-actions button:hover { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+
+  /* History Chart (simplified) */
+  .chart-area { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px; margin-top: auto; }
+  .chart-area h4 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: var(--mj-text-secondary); }
+  .chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+  .chart-bar { flex: 1; background: var(--mj-brand-primary); border-radius: 3px 3px 0 0; opacity: 0.7; position: relative; }
+  .chart-bar:hover { opacity: 1; }
+  .chart-labels { display: flex; gap: 4px; margin-top: 4px; }
+  .chart-labels span { flex: 1; text-align: center; font-size: 9px; color: var(--mj-text-secondary); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo"><i class="fa-solid fa-bolt"></i> Pipeline Monitor</div>
+  <div class="status-badge healthy"><i class="fa-solid fa-circle-check"></i> All Systems Healthy</div>
+  <div class="header-actions">
+    <button class="btn-sm"><i class="fa-solid fa-pause"></i> Pause Pipeline</button>
+    <button class="btn-sm primary"><i class="fa-solid fa-plus"></i> Add Source</button>
+  </div>
+</div>
+
+<!-- KPI Strip -->
+<div class="kpi-strip">
+  <div class="kpi-card">
+    <div class="kpi-label">Sources Configured</div>
+    <div class="kpi-value">8</div>
+    <div class="kpi-change up"><i class="fa-solid fa-arrow-up"></i> 2 added this week</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Items Processed Today</div>
+    <div class="kpi-value">1,247</div>
+    <div class="kpi-change up"><i class="fa-solid fa-arrow-up"></i> 18% vs yesterday</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Tags Generated</div>
+    <div class="kpi-value">4,891</div>
+    <div class="kpi-change up"><i class="fa-solid fa-arrow-up"></i> 3.9 avg per item</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Errors</div>
+    <div class="kpi-value" style="color:var(--mj-status-error);">3</div>
+    <div class="kpi-change down"><i class="fa-solid fa-arrow-down"></i> 2 fewer than yesterday</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main-content">
+  <div class="pipeline-area">
+
+    <!-- Pipeline Stages -->
+    <div class="pipeline-header">Pipeline Stages</div>
+    <div class="stages">
+      <div class="stage">
+        <div class="stage-box"><div class="stage-icon"><i class="fa-solid fa-download"></i></div><div class="stage-name">Ingest</div><div class="stage-count">12</div><div class="stage-sublabel">in queue</div></div>
+        <div class="stage-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+      </div>
+      <div class="stage">
+        <div class="stage-box active"><div class="stage-icon"><i class="fa-solid fa-file-lines"></i></div><div class="stage-name">Extract</div><div class="stage-count">5</div><div class="stage-sublabel">processing</div></div>
+        <div class="stage-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+      </div>
+      <div class="stage">
+        <div class="stage-box"><div class="stage-icon"><i class="fa-solid fa-scissors"></i></div><div class="stage-name">Chunk</div><div class="stage-count">3</div><div class="stage-sublabel">processing</div></div>
+        <div class="stage-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+      </div>
+      <div class="stage">
+        <div class="stage-box"><div class="stage-icon"><i class="fa-solid fa-tags"></i></div><div class="stage-name">Tag</div><div class="stage-count">7</div><div class="stage-sublabel">processing</div></div>
+        <div class="stage-arrow"><i class="fa-solid fa-chevron-right"></i></div>
+      </div>
+      <div class="stage">
+        <div class="stage-box"><div class="stage-icon"><i class="fa-solid fa-cube"></i></div><div class="stage-name">Vectorize</div><div class="stage-count">2</div><div class="stage-sublabel">processing</div></div>
+      </div>
+    </div>
+
+    <!-- Live Feed -->
+    <div class="feed-header">
+      <h3><span class="live-dot"></span> Live Processing Feed</h3>
+      <span style="font-size:12px;color:var(--mj-text-secondary);">Showing last 8 items</span>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#6366f1;"><i class="fa-solid fa-file-pdf"></i></div>
+      <div class="feed-info"><div class="feed-title">Distributed Consensus Algorithms Compared: Raft vs Paxos</div><div class="feed-source">Files / Technical Docs</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot current"></div><div class="stage-dot"></div></div>
+      <div class="feed-time">12s ago</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#f59e0b;"><i class="fa-solid fa-rss"></i></div>
+      <div class="feed-info"><div class="feed-title">OpenAI Announces GPT-5 with Native Tool Use and Reasoning</div><div class="feed-source">RSS / Hacker News</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot current"></div><div class="stage-dot"></div><div class="stage-dot"></div></div>
+      <div class="feed-time">18s ago</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#06b6d4;"><i class="fa-solid fa-globe"></i></div>
+      <div class="feed-info"><div class="feed-title">Zero-Downtime Database Migrations at Scale - Stripe Engineering</div><div class="feed-source">Websites / stripe.com/blog</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot current"></div><div class="stage-dot"></div><div class="stage-dot"></div><div class="stage-dot"></div></div>
+      <div class="feed-time">25s ago</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#f59e0b;"><i class="fa-solid fa-rss"></i></div>
+      <div class="feed-info"><div class="feed-title">Building Type-Safe APIs with tRPC and Zod Validation</div><div class="feed-source">RSS / TechCrunch</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot current"></div></div>
+      <div class="feed-time">34s ago</div>
+    </div>
+
+    <div class="feed-item" style="border-color:var(--mj-status-error);">
+      <div class="feed-icon" style="background:var(--mj-status-error);"><i class="fa-solid fa-triangle-exclamation"></i></div>
+      <div class="feed-info"><div class="feed-title">arxiv-2603.18442-quantum-error-correction.pdf</div><div class="feed-source">Files / Research Papers</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot error"></div><div class="stage-dot"></div><div class="stage-dot"></div><div class="stage-dot"></div></div>
+      <div class="feed-time" style="color:var(--mj-status-error);">Failed</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#8b5cf6;"><i class="fa-solid fa-database"></i></div>
+      <div class="feed-info"><div class="feed-title">Entity Record: AI Model Configuration - claude-opus-4-6</div><div class="feed-source">Entity Records / AI Models</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div></div>
+      <div class="feed-time" style="color:var(--mj-status-success);">Done</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#f59e0b;"><i class="fa-solid fa-rss"></i></div>
+      <div class="feed-info"><div class="feed-title">Why We Moved From Elasticsearch to Meilisearch</div><div class="feed-source">RSS / ArXiv CS</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div></div>
+      <div class="feed-time" style="color:var(--mj-status-success);">Done</div>
+    </div>
+
+    <div class="feed-item">
+      <div class="feed-icon" style="background:#06b6d4;"><i class="fa-solid fa-globe"></i></div>
+      <div class="feed-info"><div class="feed-title">Web Components in 2026: Lit, Stencil, or Vanilla?</div><div class="feed-source">Websites / web.dev</div></div>
+      <div class="stage-progress"><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div><div class="stage-dot done"></div></div>
+      <div class="feed-time" style="color:var(--mj-status-success);">Done</div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-area">
+      <h4><i class="fa-solid fa-chart-bar"></i> Items Processed Per Hour (Last 24h)</h4>
+      <div class="chart-bars">
+        <div class="chart-bar" style="height:30%;"></div>
+        <div class="chart-bar" style="height:22%;"></div>
+        <div class="chart-bar" style="height:15%;"></div>
+        <div class="chart-bar" style="height:10%;"></div>
+        <div class="chart-bar" style="height:8%;"></div>
+        <div class="chart-bar" style="height:12%;"></div>
+        <div class="chart-bar" style="height:25%;"></div>
+        <div class="chart-bar" style="height:45%;"></div>
+        <div class="chart-bar" style="height:62%;"></div>
+        <div class="chart-bar" style="height:78%;"></div>
+        <div class="chart-bar" style="height:85%;"></div>
+        <div class="chart-bar" style="height:90%;"></div>
+        <div class="chart-bar" style="height:95%;"></div>
+        <div class="chart-bar" style="height:88%;"></div>
+        <div class="chart-bar" style="height:82%;"></div>
+        <div class="chart-bar" style="height:75%;"></div>
+        <div class="chart-bar" style="height:70%;"></div>
+        <div class="chart-bar" style="height:60%;"></div>
+        <div class="chart-bar" style="height:50%;"></div>
+        <div class="chart-bar" style="height:55%;"></div>
+        <div class="chart-bar" style="height:58%;"></div>
+        <div class="chart-bar" style="height:65%;"></div>
+        <div class="chart-bar" style="height:72%;"></div>
+        <div class="chart-bar" style="height:80%; opacity:1;" title="Now: 80 items/hr"></div>
+      </div>
+      <div class="chart-labels">
+        <span>12a</span><span></span><span></span><span>3a</span><span></span><span></span><span>6a</span><span></span><span></span><span>9a</span><span></span><span></span><span>12p</span><span></span><span></span><span>3p</span><span></span><span></span><span>6p</span><span></span><span></span><span>9p</span><span></span><span></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Source Config Panel -->
+  <div class="config-panel">
+    <h3><i class="fa-solid fa-gear"></i> Source Configuration</h3>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-rss" style="color:#f59e0b;"></i><span class="sc-name">Hacker News</span><div class="sc-status active"></div></div>
+      <div class="sc-detail">
+        <div>URL: news.ycombinator.com/rss</div>
+        <div>Poll: Every 15 min</div>
+        <div>Last fetch: 3 min ago</div>
+        <div>Items today: 120</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Pause</button><button>Logs</button></div>
+    </div>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-rss" style="color:#f59e0b;"></i><span class="sc-name">TechCrunch</span><div class="sc-status active"></div></div>
+      <div class="sc-detail">
+        <div>URL: techcrunch.com/feed</div>
+        <div>Poll: Every 30 min</div>
+        <div>Last fetch: 12 min ago</div>
+        <div>Items today: 98</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Pause</button><button>Logs</button></div>
+    </div>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-rss" style="color:#f59e0b;"></i><span class="sc-name">ArXiv CS</span><div class="sc-status paused"></div></div>
+      <div class="sc-detail">
+        <div>URL: arxiv.org/rss/cs.AI</div>
+        <div>Poll: Every 1 hour</div>
+        <div>Last fetch: 45 min ago</div>
+        <div style="color:var(--mj-status-warning);">Status: Rate limited</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Resume</button><button>Logs</button></div>
+    </div>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-globe" style="color:#06b6d4;"></i><span class="sc-name">Stripe Blog</span><div class="sc-status active"></div></div>
+      <div class="sc-detail">
+        <div>URL: stripe.com/blog</div>
+        <div>Crawl depth: 2</div>
+        <div>Last crawl: 2 hours ago</div>
+        <div>Pages indexed: 47</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Recrawl</button><button>Logs</button></div>
+    </div>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-folder" style="color:#6366f1;"></i><span class="sc-name">Technical Docs</span><div class="sc-status active"></div></div>
+      <div class="sc-detail">
+        <div>Path: /docs/technical/**/*.pdf</div>
+        <div>Watch: Enabled</div>
+        <div>Files tracked: 58</div>
+        <div>Last change: 1 hour ago</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Rescan</button><button>Logs</button></div>
+    </div>
+
+    <div class="source-config">
+      <div class="sc-header"><i class="fa-solid fa-database" style="color:#8b5cf6;"></i><span class="sc-name">AI Models Entity</span><div class="sc-status active"></div></div>
+      <div class="sc-detail">
+        <div>Entity: AI Models</div>
+        <div>Trigger: On Create/Update</div>
+        <div>Records tracked: 215</div>
+        <div>Last sync: 20 min ago</div>
+      </div>
+      <div class="sc-actions"><button>Edit</button><button>Sync Now</button><button>Logs</button></div>
+    </div>
+
+    <button class="btn-sm primary" style="width:100%;justify-content:center;margin-top:8px;"><i class="fa-solid fa-plus"></i> Add New Source</button>
+  </div>
+</div>
+
+</body>
+</html>

@@ -4,6 +4,7 @@
  */
 
 import { resourceManager } from '../utilities/resource-manager';
+import { RuntimeHook, RootHookContext } from './runtime-hooks';
 
 export interface ManagedReactRoot {
   id: string;
@@ -17,12 +18,41 @@ export interface ManagedReactRoot {
 /**
  * Manages React root instances to prevent memory leaks and ensure proper cleanup.
  * Handles safe rendering and unmounting with protection against concurrent operations.
+ *
+ * Supports a pluggable hook system so host environments (Angular, Vue, etc.) and
+ * library integrations can inject behavior at key lifecycle points without coupling
+ * the generic runtime to specific libraries or frameworks.
  */
 export class ReactRootManager {
   private roots = new Map<string, ManagedReactRoot>();
   private renderingRoots = new Set<string>();
   private unmountQueue = new Map<string, () => void>();
-  
+  private hooks: RuntimeHook[] = [];
+  private firstRootCreated = false;
+
+  /**
+   * Register a runtime hook to be called at lifecycle points.
+   * Hooks execute in registration order.
+   * @param hook - The hook to register
+   */
+  RegisterHook(hook: RuntimeHook): void {
+    this.hooks.push(hook);
+  }
+
+  /**
+   * Remove a previously registered hook by name.
+   * @param hookName - The name of the hook to remove
+   * @returns true if a hook was found and removed
+   */
+  RemoveHook(hookName: string): boolean {
+    const index = this.hooks.findIndex(h => h.name === hookName);
+    if (index >= 0) {
+      this.hooks.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+    
   /**
    * Create a new managed React root
    * @param container - The DOM container element
@@ -56,6 +86,16 @@ export class ReactRootManager {
         () => this.unmountRoot(rootId)
       );
     }
+
+    // Invoke hooks
+    const hookContext: RootHookContext = { rootId, container, componentId };
+
+    if (!this.firstRootCreated) {
+      this.firstRootCreated = true;
+      this.invokeHooks('OnFirstRootCreated', hookContext);
+    }
+
+    this.invokeHooks('OnRootCreated', hookContext);
     
     return rootId;
   }
@@ -142,6 +182,8 @@ export class ReactRootManager {
             managedRoot.container.innerHTML = '';
           }
           
+          this.invokeHooks('OnRootUnmounted', rootId);
+          
           resolve();
         } catch (error) {
           console.error(`Error unmounting React root ${rootId}:`, error);
@@ -203,13 +245,37 @@ export class ReactRootManager {
       pendingUnmounts: this.unmountQueue.size
     };
   }
-  
+
   /**
    * Clean up all roots (for testing or shutdown)
    */
   async cleanup(): Promise<void> {
+    // Invoke cleanup hooks before unmounting roots
+    this.invokeHooks('OnCleanup');
+
     const allRootIds = Array.from(this.roots.keys());
     await Promise.all(allRootIds.map(id => this.unmountRoot(id, true)));
+
+    // Reset state so hooks fire again if runtime is re-initialized
+    this.firstRootCreated = false;
+  }
+
+  /**
+   * Safely invoke a lifecycle method on all registered hooks.
+   * Errors in individual hooks are caught and logged so one
+   * misbehaving hook cannot break the runtime.
+   */
+  private invokeHooks(method: keyof RuntimeHook, arg?: RootHookContext | string): void {
+    for (const hook of this.hooks) {
+      const fn = hook[method];
+      if (typeof fn === 'function') {
+        try {
+          (fn as Function).call(hook, arg);
+        } catch (error) {
+          console.error(`Error in runtime hook "${hook.name}" during ${method}:`, error);
+        }
+      }
+    }
   }
 }
 

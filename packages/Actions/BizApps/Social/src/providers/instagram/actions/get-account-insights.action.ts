@@ -20,7 +20,7 @@ export class InstagramGetAccountInsightsAction extends InstagramBaseAction {
             const includeDemographics = this.getParamValue(params.Params, 'IncludeDemographics') !== false;
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

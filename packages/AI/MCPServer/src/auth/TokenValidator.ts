@@ -18,6 +18,7 @@ import jwt from 'jsonwebtoken';
 import type { JwtPayload, JwtHeader, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
 import type { UserInfo } from '@memberjunction/core';
+import { AuthProviderFactory } from '@memberjunction/auth-providers';
 import type { OAuthValidationResult, OAuthErrorCode, ProxyJWTClaims } from './types.js';
 
 /**
@@ -119,6 +120,8 @@ export async function validateProxyToken(token: string): Promise<OAuthValidation
 const azureAdV1JwksClients: Map<string, jwksClient.JwksClient> = new Map();
 
 // Type definitions for dynamically imported MJServer auth functions
+// Note: These must remain dynamic imports — @memberjunction/server reads process.env at module load
+// time (for DEFAULT_SERVER_CONFIG), and ESM hoists static imports before dotenv can run. See config.ts.
 type GetSigningKeysFn = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => void;
 type ExtractUserInfoFn = (payload: JwtPayload) => {
   email?: string;
@@ -135,26 +138,18 @@ type VerifyUserRecordFn = (
   dataSource?: unknown,
   attemptCacheUpdateIfNeeded?: boolean
 ) => Promise<UserInfo | undefined>;
-interface AuthProviderFactoryType {
-  getInstance(): {
-    getByIssuer(issuer: string): { issuer: string; audience: string } | undefined;
-    getAllByIssuer(issuer: string): Array<{ issuer: string; audience: string }>;
-    hasProviders(): boolean;
-    getAllProviders(): Array<{ name: string; issuer: string; audience: string }>;
-  };
-}
 
 // Dynamic imports to avoid initialization order issues with dotenv
 let getSigningKeys: GetSigningKeysFn;
 let extractUserInfoFromPayload: ExtractUserInfoFn;
 let verifyUserRecord: VerifyUserRecordFn;
-let AuthProviderFactory: AuthProviderFactoryType;
 
 let mjServerImported = false;
 
 /**
  * Ensures MJServer auth functions are imported.
- * Uses dynamic import to ensure proper initialization order.
+ * Uses dynamic import to ensure proper initialization order (dotenv must run before
+ * @memberjunction/server evaluates its module-level process.env reads).
  */
 async function ensureMJServerImported(): Promise<void> {
   if (mjServerImported) return;
@@ -163,7 +158,6 @@ async function ensureMJServerImported(): Promise<void> {
   getSigningKeys = authModule.getSigningKeys as GetSigningKeysFn;
   extractUserInfoFromPayload = authModule.extractUserInfoFromPayload as ExtractUserInfoFn;
   verifyUserRecord = authModule.verifyUserRecord as VerifyUserRecordFn;
-  AuthProviderFactory = authModule.AuthProviderFactory as unknown as AuthProviderFactoryType;
   mjServerImported = true;
 }
 
@@ -347,9 +341,8 @@ export async function validateBearerToken(token: string): Promise<OAuthValidatio
 
   // 3. Verify issuer matches a configured provider and get audience
   // For Azure AD, try both v1 and v2 issuer formats since the token might
-  // use a different format than what the provider is configured with.
-  // Use getAllByIssuer to aggregate audiences when multiple apps share an issuer.
-  const factory = AuthProviderFactory.getInstance();
+  // use a different format than what the provider is configured with
+  const factory = AuthProviderFactory.Instance;
   const issuerVariants = getAzureAdIssuerVariants(issuer);
   let allProviders: Array<{ issuer: string; audience: string }> = [];
 
@@ -597,5 +590,5 @@ export async function resolveOAuthUser(
  */
 export async function hasAuthProviders(): Promise<boolean> {
   await ensureMJServerImported();
-  return AuthProviderFactory.getInstance().hasProviders();
+  return AuthProviderFactory.Instance.hasProviders();
 }

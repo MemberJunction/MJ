@@ -1,9 +1,15 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-  <!-- Dialog container for Kendo dialogs -->
-  <div kendoDialogContainer></div>
-  @if (record) {
+<!-- Dialog container -->
+<div></div>
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
     <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-      <mj-form-toolbar [Form]="this"></mj-form-toolbar>
       <!-- Main Content Area - Template Editor and Configuration -->
       <div class="prompt-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
         <!-- Header Section -->
@@ -14,11 +20,10 @@
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                 <i class="fa-solid fa-robot" style="color: var(--mj-brand-primary); font-size: 1.4em;"></i>
                 @if (EditMode) {
-                  <kendo-textbox [(ngModel)]="record.Name"
+                  <input type="text" class="mj-input" [(ngModel)]="record.Name"
                     name="promptName"
                     placeholder="Enter prompt name..."
-                    style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                  </kendo-textbox>
+                    style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;" />
                 } @else {
                   <h4 style="margin: 0; color: var(--mj-text-secondary); font-weight: 600; flex: 1;">{{ record.Name || 'Untitled AI Prompt' }}</h4>
                   <span class="status-badge" [style.background-color]="getStatusBadgeColor()"
@@ -32,14 +37,14 @@
                 <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap;">
                   <div>
                     <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">Status</label>
-                    <kendo-dropdownlist [(ngModel)]="record.Status"
+                    <mj-dropdown [(ngModel)]="record.Status"
                       name="promptStatus"
-                      [data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
-                      textField="text"
-                      valueField="value"
-                      [valuePrimitive]="true"
+                      [Data]="[{text: 'Active', value: 'Active'}, {text: 'Pending', value: 'Pending'}, {text: 'Disabled', value: 'Disabled'}]"
+                      TextField="text"
+                      ValueField="value"
+                      [ValuePrimitive]="true"
                       style="width: 150px;">
-                    </kendo-dropdownlist>
+                    </mj-dropdown>
                   </div>
                   <div>
                     <label style="display: block; margin-bottom: 4px; font-weight: 600; color: var(--mj-text-secondary); font-size: 0.9em;">
@@ -50,27 +55,26 @@
                         <i class="fa-solid fa-spinner fa-spin"></i> Loading types...
                       </div>
                     } @else {
-                      <kendo-dropdownlist [(ngModel)]="record.TypeID"
+                      <mj-dropdown [(ngModel)]="record.TypeID"
                         name="promptTypeID"
-                        [data]="availablePromptTypes"
-                        textField="Name"
-                        valueField="ID"
-                        [valuePrimitive]="true"
-                        [filterable]="true"
-                        placeholder="Select prompt type..."
+                        [Data]="availablePromptTypes"
+                        TextField="Name"
+                        ValueField="ID"
+                        [ValuePrimitive]="true"
+                        [Filterable]="true"
+                        Placeholder="Select prompt type..."
                         style="width: 200px;">
-                      </kendo-dropdownlist>
+                      </mj-dropdown>
                     }
                   </div>
                 </div>
               }
               @if (EditMode) {
-                <kendo-textarea [(ngModel)]="record.Description"
+                <textarea class="mj-textarea" [(ngModel)]="record.Description"
                   name="promptDescription"
                   [rows]="2"
                   placeholder="Enter prompt description..."
-                  style="width: 100%; max-width: 600px; margin-bottom: 12px;">
-                </kendo-textarea>
+                  style="width: 100%; max-width: 600px; margin-bottom: 12px;"></textarea>
               } @else if (record.Description) {
                 <p style="margin: 0 0 12px 0; color: var(--mj-text-muted); font-size: 0.9em; line-height: 1.4;">{{ record.Description }}</p>
               }
@@ -112,7 +116,7 @@
             <div class="action-buttons" style="display: flex; flex-direction: column; gap: 8px; align-items: flex-end;">
               <div style="display: flex; gap: 8px;">
                 @if (record.ID) {
-                  <button kendoButton [themeColor]="'primary'" [size]="'large'"
+                  <button mjButton variant="primary" size="lg"
                     (click)="openTestHarness()"
                     title="Run AI Prompt Test Harness">
                     <i class="fa-solid fa-play"></i> Run
@@ -138,15 +142,15 @@
         <!-- Configuration Sections with Expansion Panels -->
         <div class="configuration-sections" style="flex: 1; background: var(--mj-bg-surface-card); border-top: 2px solid var(--mj-border-default); padding: 16px; min-height: 0;">
           <!-- Template Editor Section -->
-          <kendo-expansionpanel
-            [expanded]="true"
+          <mj-accordion-panel
+            [Expanded]="true"
             style="margin-bottom: 12px;">
-            <ng-template kendoExpansionPanelTitleDirective>
+            <ng-template mjAccordionTitle>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                 <i class="fa-solid fa-code" style="color: var(--mj-text-muted);"></i>
                 Template Editor
                 @if (template) {
-                  <span style="color: var(--mj-text-muted); font-size: 0.9em; font-weight: normal;">• {{ template.Name }}</span>
+                  <span style="color: var(--mj-text-muted); font-size: 0.9em; font-weight: normal;">&bull; {{ template.Name }}</span>
                 }
               </span>
             </ng-template>
@@ -167,12 +171,12 @@
                   </p>
                   <div style="display: flex; gap: 12px;">
                     @if (UserCanCreateTemplates) {
-                      <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                      <button mjButton variant="primary" (click)="createNewTemplate()">
                         <i class="fa-solid fa-plus"></i> Create New Template
                       </button>
                     }
                     @if (UserCanReadTemplates) {
-                      <button kendoButton [fillMode]="'outline'" (click)="linkExistingTemplate()">
+                      <button mjButton variant="outline" (click)="linkExistingTemplate()">
                         <i class="fa-solid fa-link"></i> Link Existing Template
                       </button>
                     }
@@ -186,11 +190,11 @@
                     The referenced template could not be loaded. It may have been deleted or moved.
                   </p>
                   <div style="display: flex; gap: 12px;">
-                    <button kendoButton [fillMode]="'outline'" (click)="loadTemplate()">
+                    <button mjButton variant="outline" (click)="loadTemplate()">
                       <i class="fa-solid fa-refresh"></i> Retry Loading
                     </button>
                     @if (UserCanCreateTemplates) {
-                      <button kendoButton [themeColor]="'primary'" (click)="createNewTemplate()">
+                      <button mjButton variant="primary" (click)="createNewTemplate()">
                         <i class="fa-solid fa-plus"></i> Create New Template
                       </button>
                     }
@@ -203,18 +207,18 @@
                   @if (template && EditMode) {
                     <div class="template-actions" style="display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-sunken);">
                       @if (UserCanUpdateTemplates) {
-                        <button kendoButton
-                          [fillMode]="'outline'"
-                          [size]="'small'"
+                        <button mjButton
+                          variant="outline"
+                          size="sm"
                           (click)="linkExistingTemplate()"
                           title="Change to a different template">
                           <i class="fa-solid fa-exchange-alt"></i> Change Template
                         </button>
                       }
                       @if (UserCanReadTemplates) {
-                        <button kendoButton
-                          [fillMode]="'outline'"
-                          [size]="'small'"
+                        <button mjButton
+                          variant="outline"
+                          size="sm"
                           (click)="openTemplateInNewWindow()"
                           title="Open template in new window">
                           <i class="fa-solid fa-external-link-alt"></i> Open in New Window
@@ -236,13 +240,13 @@
                 </div>
               }
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
           <!-- Model Configuration Expansion Panel -->
           @if (record.IsSaved) {
-            <kendo-expansionpanel
-              [expanded]="true"
+            <mj-accordion-panel
+              [Expanded]="true"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-microchip" style="color: var(--mj-text-muted);"></i>
                   Models
@@ -271,7 +275,7 @@
                         <i class="fa-solid fa-info-circle"></i> No models configured
                         @if (EditMode && UserCanCreatePromptModels) {
                           <div style="margin-top: 10px;">
-                            <button kendoButton fillMode="outline" themeColor="primary" size="small"
+                            <button mjButton variant="outline" size="sm"
                               (click)="addNewModel()">
                               <i class="fa-solid fa-plus"></i> Add Model
                             </button>
@@ -320,17 +324,17 @@
                           <!-- Model Selection -->
                           <div class="model-select">
                             @if (EditMode) {
-                              <kendo-dropdownlist [(ngModel)]="model.ModelID"
+                              <mj-dropdown [(ngModel)]="model.ModelID"
                                 [name]="'modelId_' + getModelTrackId(model)"
-                                [data]="availableModels"
-                                textField="Name"
-                                valueField="ID"
-                                [valuePrimitive]="true"
-                                [filterable]="true"
-                                placeholder="Select a model..."
-                                (valueChange)="onModelChange($event, i)"
+                                [Data]="availableModels"
+                                TextField="Name"
+                                ValueField="ID"
+                                [ValuePrimitive]="true"
+                                [Filterable]="true"
+                                Placeholder="Select a model..."
+                                (ValueChange)="onModelChange($any($event), i)"
                                 style="width: 100%;">
-                              </kendo-dropdownlist>
+                              </mj-dropdown>
                             } @else {
                               <span style="font-weight: 500;">{{ getModelDisplayName(model.ModelID) }}</span>
                             }
@@ -340,24 +344,16 @@
                             @if (EditMode) {
                               @if (model.ModelID) {
                                 @if (shouldShowVendorDropdown(model.ModelID)) {
-                                  <kendo-dropdownlist [(ngModel)]="model.VendorID"
+                                  <mj-dropdown [(ngModel)]="model.VendorID"
                                     [name]="'vendorId_' + getModelTrackId(model)"
-                                    [data]="getVendorsForModelSync(model.ModelID)"
-                                    textField="Name"
-                                    valueField="ID"
-                                    [valuePrimitive]="true"
-                                    [filterable]="true"
-                                    placeholder="Select vendor..."
+                                    [Data]="getVendorsForModelSync(model.ModelID)"
+                                    TextField="Name"
+                                    ValueField="ID"
+                                    [ValuePrimitive]="true"
+                                    [Filterable]="true"
+                                    Placeholder="Select vendor..."
                                     style="width: 100%;">
-                                    <ng-template kendoDropDownListItemTemplate let-dataItem>
-                                      <span [style.color]="getVendorStatusColor(model.ModelID, dataItem.ID)">
-                                        {{ dataItem.Name }}
-                                        @if (getModelVendorStatus(model.ModelID, dataItem.ID) !== 'Active') {
-                                          <span style="font-size: 0.8em; margin-left: 4px;">({{ getModelVendorStatus(model.ModelID, dataItem.ID) }})</span>
-                                        }
-                                      </span>
-                                    </ng-template>
-                                  </kendo-dropdownlist>
+                                  </mj-dropdown>
                                 } @else {
                                   <!-- Single vendor - just show the name -->
                                   @if (getVendorsForModelSync(model.ModelID).length === 1) {
@@ -395,22 +391,17 @@
                                   <i class="fa-solid fa-spinner fa-spin"></i> Loading...
                                 </div>
                               } @else {
-                                <kendo-dropdownlist [(ngModel)]="model.ConfigurationID"
+                                <mj-dropdown [(ngModel)]="model.ConfigurationID"
                                   [name]="'configurationId_' + getModelTrackId(model)"
-                                  [data]="availableConfigurations"
-                                  textField="Name"
-                                  valueField="ID"
-                                  [valuePrimitive]="true"
-                                  [filterable]="true"
-                                  placeholder="Default"
-                                  (valueChange)="onConfigurationChange($event, i)"
+                                  [Data]="availableConfigurations"
+                                  TextField="Name"
+                                  ValueField="ID"
+                                  [ValuePrimitive]="true"
+                                  [Filterable]="true"
+                                  Placeholder="Default"
+                                  (ValueChange)="onConfigurationChange($any($event), i)"
                                   style="width: 100%;">
-                                  <ng-template kendoDropDownListNoDataTemplate>
-                                    <div style="padding: 8px; text-align: center; color: var(--mj-text-muted);">
-                                      No configurations available
-                                    </div>
-                                  </ng-template>
-                                </kendo-dropdownlist>
+                                </mj-dropdown>
                               }
                             } @else {
                               <span style="font-size: 0.9em;">{{ getConfigurationDisplayName(model.ConfigurationID) }}</span>
@@ -429,13 +420,13 @@
                             @if (EditMode) {
                               <div style="display: flex; gap: 2px; margin-bottom: 4px;">
                                 @if (UserCanUpdatePromptModels) {
-                                  <button kendoButton fillMode="flat" size="small"
+                                  <button mjButton variant="flat" size="sm"
                                     (click)="moveModelUp(i)"
                                     [disabled]="i === 0"
                                     title="Move up">
                                     <i class="fa-solid fa-chevron-up"></i>
                                   </button>
-                                  <button kendoButton fillMode="flat" size="small"
+                                  <button mjButton variant="flat" size="sm"
                                     (click)="moveModelDown(i)"
                                     [disabled]="i === promptModels.length - 1"
                                     title="Move down">
@@ -444,9 +435,10 @@
                                 }
                               </div>
                               @if (UserCanDeletePromptModels) {
-                                <button kendoButton fillMode="flat" themeColor="error" size="small"
+                                <button mjButton variant="flat" size="sm"
                                   (click)="removePromptModel(i)"
-                                  title="Remove model">
+                                  title="Remove model"
+                                  style="color: var(--mj-status-error);">
                                   <i class="fa-solid fa-times"></i>
                                 </button>
                               }
@@ -474,39 +466,38 @@
                                     <!-- Parallel Mode -->
                                     <div>
                                       <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: var(--mj-text-secondary);">Parallel Mode</label>
-                                      <kendo-dropdownlist [(ngModel)]="model.ParallelizationMode"
+                                      <mj-dropdown [(ngModel)]="model.ParallelizationMode"
                                         [name]="'parallelMode_' + i"
-                                        [data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
-                                        textField="text"
-                                        valueField="value"
-                                        [valuePrimitive]="true"
-                                        placeholder="Select mode..."
+                                        [Data]="[{text: 'None', value: 'None'}, {text: 'Static Count', value: 'StaticCount'}, {text: 'Config Param', value: 'ConfigParam'}]"
+                                        TextField="text"
+                                        ValueField="value"
+                                        [ValuePrimitive]="true"
+                                        Placeholder="Select mode..."
                                         style="width: 100%; font-size: 0.85em;">
-                                      </kendo-dropdownlist>
+                                      </mj-dropdown>
                                     </div>
                                     <!-- Parallel Count (when StaticCount) -->
                                     @if (model.ParallelizationMode === 'StaticCount') {
                                       <div>
                                         <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: var(--mj-text-secondary);">Parallel Count</label>
-                                        <kendo-numerictextbox [(ngModel)]="model.ParallelCount"
+                                        <mj-numeric-input [(ngModel)]="model.ParallelCount"
                                           [name]="'parallelCount_' + i"
-                                          [min]="1"
-                                          [step]="1"
-                                          [format]="'n0'"
-                                          placeholder="Count..."
+                                          [Min]="1"
+                                          [Step]="1"
+                                          [Format]="'n0'"
+                                          Placeholder="Count..."
                                           style="width: 100%; font-size: 0.85em;">
-                                        </kendo-numerictextbox>
+                                        </mj-numeric-input>
                                       </div>
                                     }
                                     <!-- Config Param (when ConfigParam) -->
                                     @if (model.ParallelizationMode === 'ConfigParam') {
                                       <div>
                                         <label style="display: block; margin-bottom: 2px; font-size: 0.8em; font-weight: 600; color: var(--mj-text-secondary);">Config Parameter</label>
-                                        <kendo-textbox [(ngModel)]="model.ParallelConfigParam"
+                                        <input type="text" class="mj-input" [(ngModel)]="model.ParallelConfigParam"
                                           [name]="'parallelConfigParam_' + i"
                                           placeholder="Parameter name..."
-                                          style="width: 100%; font-size: 0.85em;">
-                                        </kendo-textbox>
+                                          style="width: 100%; font-size: 0.85em;" />
                                       </div>
                                     }
                                   </div>
@@ -531,8 +522,9 @@
                       }
                       @if (EditMode && UserCanCreatePromptModels) {
                         <div class="add-model-row" style="padding: 12px 16px; text-align: center; background: var(--mj-bg-surface-sunken); border-top: 1px solid var(--mj-border-default);">
-                          <button kendoButton fillMode="outline" themeColor="success" size="small"
-                            (click)="addNewModel()">
+                          <button mjButton variant="outline" size="sm"
+                            (click)="addNewModel()"
+                            style="color: var(--mj-status-success); border-color: var(--mj-status-success);">
                             <i class="fa-solid fa-plus"></i> Add Model
                           </button>
                         </div>
@@ -541,13 +533,13 @@
                   }
                 </div>
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
           <!-- Advanced Configuration Expansion Panel -->
-          <kendo-expansionpanel
-            [expanded]="false"
+          <mj-accordion-panel
+            [Expanded]="false"
             style="margin-bottom: 12px;">
-            <ng-template kendoExpansionPanelTitleDirective>
+            <ng-template mjAccordionTitle>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                 <i class="fa-solid fa-cogs" style="color: var(--mj-text-muted);"></i>
                 Advanced Configuration
@@ -627,18 +619,18 @@
                           <i class="fa-solid fa-spinner fa-spin"></i> Loading prompts...
                         </div>
                       } @else {
-                        <kendo-dropdowntree
+                        <mj-dropdown
                           [(ngModel)]="record.ResultSelectorPromptID"
                           name="resultSelectorPromptID"
-                          [data]="resultSelectorTreeData"
-                          textField="text"
-                          valueField="value"
-                          [valuePrimitive]="true"
-                          [filterable]="true"
-                          placeholder="Select a result selector prompt..."
+                          [Data]="resultSelectorTreeData"
+                          TextField="text"
+                          ValueField="value"
+                          [ValuePrimitive]="true"
+                          [Filterable]="true"
+                          Placeholder="Select a result selector prompt..."
                           style="width: 100%;"
-                          (valueChange)="onResultSelectorChange($event)">
-                        </kendo-dropdowntree>
+                          (ValueChange)="onResultSelectorChange($any($event))">
+                        </mj-dropdown>
                       }
                     } @else {
                       <span style="color: var(--mj-text-secondary);">{{ getPromptDisplayName(record.ResultSelectorPromptID || '') || 'None selected' }}</span>
@@ -647,12 +639,12 @@
                 </div>
               </div>
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
           <!-- Prefill & Output Control Expansion Panel -->
-          <kendo-expansionpanel
-            [expanded]="false"
+          <mj-accordion-panel
+            [Expanded]="false"
             style="margin-bottom: 12px;">
-            <ng-template kendoExpansionPanelTitleDirective>
+            <ng-template mjAccordionTitle>
               <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                 <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--mj-text-muted);"></i>
                 Prefill &amp; Output Control
@@ -692,13 +684,13 @@
                 </div>
               </div>
             </div>
-          </kendo-expansionpanel>
+          </mj-accordion-panel>
           <!-- Template Parameters Expansion Panel -->
           @if (template && templateParams.length > 0) {
-            <kendo-expansionpanel
-              [expanded]="false"
+            <mj-accordion-panel
+              [Expanded]="false"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-sliders" style="color: var(--mj-text-muted);"></i>
                   Template Parameters
@@ -821,18 +813,18 @@
                   </div>
                 }
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
           <!-- Output Example Expansion Panel (when OutputType = object) -->
           @if (showOutputExample) {
-            <kendo-expansionpanel
-              [expanded]="true"
+            <mj-accordion-panel
+              [Expanded]="true"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-code" style="color: var(--mj-text-muted);"></i>
                   Output Example (JSON)
-                  <span style="color: #dc3545; font-size: 0.8em; font-weight: normal;">• Required for object output type</span>
+                  <span style="color: #dc3545; font-size: 0.8em; font-weight: normal;">&bull; Required for object output type</span>
                 </span>
               </ng-template>
               <!-- Direct Content Projection -->
@@ -856,14 +848,14 @@
                   </div>
                 }
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
           <!-- Execution History Expansion Panel -->
           @if (record.IsSaved) {
-            <kendo-expansionpanel
-              [expanded]="false"
+            <mj-accordion-panel
+              [Expanded]="false"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-history" style="color: var(--mj-text-muted);"></i>
                   Execution History
@@ -893,48 +885,48 @@
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center;">
                       <span style="color: var(--mj-text-muted); font-size: 0.85em;">Sort by:</span>
-                      <kendo-buttongroup selection="single">
-                        <button kendoButton
-                          [selected]="historySortField === 'runAt'"
+                      <div class="mj-button-group">
+                        <button mjButton
+                          [class.active]="historySortField === 'runAt'"
                           (click)="changeHistorySort('runAt')"
-                          size="small">
+                          size="sm">
                           Date
                           @if (historySortField === 'runAt') {
                             <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
                             style="margin-left: 4px; font-size: 0.8em;"></i>
                           }
                         </button>
-                        <button kendoButton
-                          [selected]="historySortField === 'executionTime'"
+                        <button mjButton
+                          [class.active]="historySortField === 'executionTime'"
                           (click)="changeHistorySort('executionTime')"
-                          size="small">
+                          size="sm">
                           Duration
                           @if (historySortField === 'executionTime') {
                             <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
                             style="margin-left: 4px; font-size: 0.8em;"></i>
                           }
                         </button>
-                        <button kendoButton
-                          [selected]="historySortField === 'tokens'"
+                        <button mjButton
+                          [class.active]="historySortField === 'tokens'"
                           (click)="changeHistorySort('tokens')"
-                          size="small">
+                          size="sm">
                           Tokens
                           @if (historySortField === 'tokens') {
                             <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
                             style="margin-left: 4px; font-size: 0.8em;"></i>
                           }
                         </button>
-                        <button kendoButton
-                          [selected]="historySortField === 'cost'"
+                        <button mjButton
+                          [class.active]="historySortField === 'cost'"
                           (click)="changeHistorySort('cost')"
-                          size="small">
+                          size="sm">
                           Cost
                           @if (historySortField === 'cost') {
                             <i [class]="'fa-solid fa-sort-' + (historySortDirection === 'asc' ? 'up' : 'down')"
                             style="margin-left: 4px; font-size: 0.8em;"></i>
                           }
                         </button>
-                      </kendo-buttongroup>
+                      </div>
                     </div>
                   </div>
                   <!-- Execution History Table -->
@@ -993,9 +985,9 @@
                               }
                             </td>
                             <td style="padding: 12px; text-align: center;">
-                              <button kendoButton
-                                fillMode="flat"
-                                size="small"
+                              <button mjButton
+                                variant="flat"
+                                size="sm"
                                 (click)="navigateToPromptRun(run.ID)"
                                 title="View details">
                                 <i class="fa-solid fa-external-link"></i>
@@ -1008,14 +1000,14 @@
                   </div>
                 }
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
           <!-- Cache Expansion Panel -->
           @if (record.IsSaved && record.EnableCaching) {
-            <kendo-expansionpanel
-              [expanded]="false"
+            <mj-accordion-panel
+              [Expanded]="false"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-database" style="color: var(--mj-text-muted);"></i>
                   Result Cache
@@ -1030,14 +1022,14 @@
                   [ShowToolbar]="false">
                 </mj-explorer-entity-data-grid>
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
           <!-- Related Items Expansion Panel -->
           @if (record.IsSaved) {
-            <kendo-expansionpanel
-              [expanded]="false"
+            <mj-accordion-panel
+              [Expanded]="false"
               style="margin-bottom: 12px;">
-              <ng-template kendoExpansionPanelTitleDirective>
+              <ng-template mjAccordionTitle>
                 <span style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                   <i class="fa-solid fa-link" style="color: var(--mj-text-muted);"></i>
                   Related Items
@@ -1068,32 +1060,32 @@
                   </div>
                 </div>
               </div>
-            </kendo-expansionpanel>
+            </mj-accordion-panel>
           }
         </div>
       </div>
     </form>
-  }
+</mj-record-form-container>
+}
 
 
-  <!-- AI Prompt Test Harness -->
-  @if (showTestHarness) {
-    <kendo-window
-      [width]="1200"
-      [height]="800"
-      [minWidth]="800"
-      [minHeight]="600"
-      [draggable]="true"
-      [resizable]="true"
-      [state]="'default'"
-      (close)="onTestHarnessVisibilityChanged(false)"
-      title="Run AI Prompt - {{ record.Name || 'Untitled' }}">
-      <mj-ai-test-harness
-        [entity]="record"
-        [mode]="'prompt'"
-        [isVisible]="showTestHarness"
-        (visibilityChange)="onTestHarnessVisibilityChanged($event)">
-      </mj-ai-test-harness>
-    </kendo-window>
-  }
-</div>
+<!-- AI Prompt Test Harness -->
+@if (showTestHarness) {
+  <mj-window
+    [Width]="1200"
+    [Height]="800"
+    [MinWidth]="800"
+    [MinHeight]="600"
+    [Draggable]="true"
+    [Resizable]="true"
+    [Visible]="true"
+    (Close)="onTestHarnessVisibilityChanged(false)"
+    [Title]="'Run AI Prompt - ' + (record.Name || 'Untitled')">
+    <mj-ai-test-harness
+      [entity]="record"
+      [mode]="'prompt'"
+      [isVisible]="showTestHarness"
+      (visibilityChange)="onTestHarnessVisibilityChanged($event)">
+    </mj-ai-test-harness>
+  </mj-window>
+}

@@ -441,7 +441,6 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 | [explorer-app](./packages/Angular/Explorer/explorer-app/README.md) | `@memberjunction/ng-explorer-app` | Complete branded entry point for Explorer-style applications |
 | [explorer-core](./packages/Angular/Explorer/explorer-core/README.md) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./packages/Angular/Explorer/explorer-modules/README.md) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
-| [kendo-modules](./packages/Angular/Explorer/kendo-modules/README.md) | `@memberjunction/ng-kendo-modules` | Consolidated Kendo UI NgModule bundle for shared Kendo component imports |
 | [base-application](./packages/Angular/Explorer/base-application/README.md) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
 | [auth-services](./packages/Angular/Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, and Okta provider support |
 | [shared](./packages/Angular/Explorer/shared/README.md) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
@@ -519,7 +518,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 
 | Package | npm | Description |
 |---------|-----|-------------|
-| [actions](./packages/Angular/Generic/actions/README.md) | `@memberjunction/ng-actions` | Reusable components for testing and running actions with no Kendo dependencies |
+| [actions](./packages/Angular/Generic/actions/README.md) | `@memberjunction/ng-actions` | Reusable components for testing and running actions with MJ UI components |
 | [action-gallery](./packages/Angular/Generic/action-gallery/README.md) | `@memberjunction/ng-action-gallery` | Filterable gallery component for browsing and selecting actions |
 | [flow-editor](./packages/Angular/Generic/flow-editor/README.md) | `@memberjunction/ng-flow-editor` | Generic visual flow editor component powered by Foblex Flow, with an agent-specific Flow Agent Editor |
 | [tasks](./packages/Angular/Generic/tasks/README.md) | `@memberjunction/ng-tasks` | Components for task visualization and management with Gantt chart support |
@@ -554,6 +553,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 
 | Package | npm | Description |
 |---------|-----|-------------|
+| [ui-components](./packages/Angular/Generic/ui-components/README.md) | `@memberjunction/ng-ui-components` | Reusable standalone UI components (buttons, dialogs, windows, dropdowns, inputs, and more) |
 | [generic-dialog](./packages/Angular/Generic/generic-dialog/README.md) | `@memberjunction/ng-generic-dialog` | Component for a generic dialog |
 | [code-editor](./packages/Angular/Generic/code-editor/README.md) | `@memberjunction/ng-code-editor` | Angular code editor component |
 | [file-storage](./packages/Angular/Generic/file-storage/README.md) | `@memberjunction/ng-file-storage` | Components for managing files and related operations |

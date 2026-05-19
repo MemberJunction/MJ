@@ -23,82 +23,23 @@
     font-size: 0.9em;
 }
 
-.param-name {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.required-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background-color: var(--mj-status-error);
-    color: var(--mj-text-inverse);
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 0.75em;
-    font-weight: 500;
-}
-
-.required-badge i {
-    font-size: 0.6em;
-}
-
-.param-type {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--mj-text-secondary);
-}
-
-.param-type i {
-    color: var(--mj-text-muted);
-}
-
-.param-description {
-    color: var(--mj-text-secondary);
-    font-size: 0.9em;
-    line-height: 1.4;
-}
-
-.default-value {
+/* Toolbar */
+.params-toolbar {
+    margin-bottom: 12px;
+    padding: 12px;
     background-color: var(--mj-bg-surface-card);
-    padding: 2px 6px;
-    border-radius: 3px;
-    font-size: 0.85em;
-    color: var(--mj-text-secondary);
-    word-break: break-word;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px 6px 0 0;
 }
 
-.text-muted {
-    color: var(--mj-text-muted);
-    font-style: italic;
-    font-size: 0.9em;
+/* AG Grid wrapper */
+.params-ag-grid {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 0 0 6px 6px;
 }
 
-.text-success {
-    color: var(--mj-status-success);
-}
-
-.text-center {
-    text-align: center;
-}
-
-.no-params-message {
-    text-align: center;
-    padding: 40px 20px;
-    color: var(--mj-text-muted);
-}
-
-.no-params-message i {
-    font-size: 2em;
-    margin-bottom: 10px;
-    color: var(--mj-text-muted);
-}
-
-.no-params-message p {
-    margin: 5px 0;
+.params-toolbar + .params-ag-grid {
+    border-top: none;
 }
 
 /* Help Section */
@@ -156,32 +97,6 @@
     border-radius: 3px;
     font-family: 'Courier New', monospace;
     color: var(--mj-status-error);
-}
-
-/* Grid action buttons */
-.k-grid-content button {
-    margin-right: 4px;
-}
-
-/* Form validation */
-.k-invalid-msg {
-    display: block;
-    color: var(--mj-status-error);
-    font-size: 0.85em;
-    margin-top: 4px;
-}
-
-/* Kendo overrides for consistent styling */
-.k-grid .k-toolbar {
-    background-color: var(--mj-bg-surface-card);
-    border-bottom: 1px solid var(--mj-border-default);
-    padding: 12px;
-}
-
-.k-grid-header th {
-    background-color: var(--mj-bg-surface-card);
-    font-weight: 600;
-    color: var(--mj-text-secondary);
 }
 
 /* Responsive adjustments */

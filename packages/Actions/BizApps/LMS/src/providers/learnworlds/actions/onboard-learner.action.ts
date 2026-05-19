@@ -44,7 +44,7 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
     const { enrollments, errors } = await this.enrollInProducts(params, userId, contextUser);
 
     // Step 3: Generate SSO login URL
-    const loginURL = await this.generateLoginUrl(params, loginUrlFallback, contextUser);
+    const loginURL = await this.generateLoginUrl(params, userId, loginUrlFallback, contextUser);
 
     const hasEnrollmentErrors = errors.length > 0;
     const allEnrollmentsFailed = enrollments.length > 0 && enrollments.every((e) => !e.success);
@@ -178,7 +178,7 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
   /**
    * Generates an SSO login URL, falling back to the user creation login URL on failure.
    */
-  private async generateLoginUrl(params: OnboardLearnerParams, loginUrlFallback: string | undefined, contextUser: UserInfo): Promise<string | undefined> {
+  private async generateLoginUrl(params: OnboardLearnerParams, userId: string, loginUrlFallback: string | undefined, contextUser: UserInfo): Promise<string | undefined> {
     try {
       const ssoAction = new SSOLoginAction();
       ssoAction.SetCompanyContext(params.CompanyID);
@@ -193,8 +193,8 @@ export class OnboardLearnerAction extends LearnWorldsBaseAction {
       );
 
       return ssoResult.LoginURL;
-    } catch {
-      // SSO generation failed; use fallback from user creation if available
+    } catch (error) {
+      console.warn(`SSO URL generation failed for userId ${userId}, using fallback:`, error instanceof Error ? error.message : error);
       return loginUrlFallback;
     }
   }

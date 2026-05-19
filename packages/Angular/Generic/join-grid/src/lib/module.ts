@@ -3,17 +3,11 @@ import { CommonModule } from '@angular/common';
 
 import { FormsModule } from '@angular/forms';
 
-// Kendo UI Angular imports
-import { DialogsModule } from "@progress/kendo-angular-dialog";
-import { ButtonsModule } from '@progress/kendo-angular-buttons'; 
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-
+// MJ UI Components
+import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
 
 // LOCAL
 import { JoinGridComponent } from './join-grid/join-grid.component';
-import { GridModule } from '@progress/kendo-angular-grid';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
@@ -24,15 +18,10 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
   imports: [
     CommonModule,
     FormsModule,
-    DialogsModule,
-    GridModule,
-    InputsModule,
-    ButtonsModule,
-    DropDownsModule,
-    DialogsModule,
-    IndicatorsModule,
     ContainerDirectivesModule,
-    SharedGenericModule
+    SharedGenericModule,
+    MJButtonDirective,
+    MJDropdownComponent
   ],
   exports: [
     JoinGridComponent

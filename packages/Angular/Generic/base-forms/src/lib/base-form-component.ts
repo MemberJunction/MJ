@@ -51,6 +51,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public EditMode: boolean = false;
   public FavoriteInitDone: boolean = false;
   public isHistoryDialogOpen: boolean = false;
+  public IsTagsPanelOpen: boolean = false;
+  public TagCount: number = 0;
   public showDeleteDialog: boolean = false;
   public showCreateDialog: boolean = false;
 
@@ -59,6 +61,18 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
    * Referenced by CodeGen-generated templates for entities with "top area" sections.
    */
   public TopAreaHeight: string = '300px';
+
+  /**
+   * Size of the top area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public TopAreaSize: number = 40;
+
+  /**
+   * Size of the bottom area as a percentage (0-100) for angular-split.
+   * Used by CodeGen-generated templates with as-split.
+   */
+  public BottomAreaSize: number = 60;
 
   /**
    * Called when the splitter layout changes (for entities with "top area" sections).
@@ -101,6 +115,13 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   /** Emitted when validation fails before save */
   @Output() ValidationFailed = new EventEmitter<ValidationFailedEvent>();
 
+  /**
+   * Emitted once after ngOnInit completes and the record is fully initialized
+   * (favorites loaded, form state initialized). This is the safe point for
+   * the container to start loading badge counts and other record-dependent data.
+   */
+  @Output() RecordReady = new EventEmitter<BaseEntity>();
+
   // #endregion
 
   /** Subscription to form state changes */
@@ -113,7 +134,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (!this.record.IsSaved) {
         this.StartEditMode();
       }
-      const md = new Metadata();
+      const md = this.ProviderToUse;
+      // Bind FormStateService to the same provider this form is using.
+      this.formStateService.Provider = md;
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
@@ -126,6 +149,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           this.cdr.markForCheck();
         });
       }
+    }
+
+    // Signal that the record is fully initialized and ready for dependent operations
+    if (this.record) {
+      this.RecordReady.emit(this.record);
     }
 
     // Set up debounced filter subscription
@@ -216,6 +244,10 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
 
   public handleHistoryDialog(): void {
     this.isHistoryDialogOpen = !this.isHistoryDialogOpen;
+  }
+
+  public HandleTagsPanel(): void {
+    this.IsTagsPanelOpen = !this.IsTagsPanelOpen;
   }
 
   // #endregion
@@ -334,7 +366,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   protected async InternalSaveRecord(): Promise<boolean> {
     if (this.record) {
       if (this._pendingRecords.length > 0) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
         this.record.TransactionGroup = tg;
         await this.record.Save();
@@ -429,8 +461,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async SetFavoriteStatus(isFavorite: boolean) {
-    const md = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite);
+    const md = this.ProviderToUse;
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite, md.CurrentUser);
     this._isFavorite = isFavorite;
   }
 
@@ -575,7 +607,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async ShowDependencies() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
@@ -600,8 +632,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return [];
     }
 
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const rvResult: RunViewResult<MJListEntity> = await rv.RunView({
       EntityName: 'MJ: Lists',
@@ -618,7 +650,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     return dependencies;
   }
@@ -793,12 +825,27 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     return this.record?.EntityInfo?.Name || '';
   }
 
+  /**
+   * Component-level default width mode, used when the user has NOT
+   * explicitly chosen a width for this entity yet (first visit, nothing
+   * persisted in User Settings). Subclasses can override this — for
+   * example, custom forms with full-bleed layouts should return
+   * `'full-width'` here and the container will respect it on first open.
+   *
+   * Once the user toggles the width via the toolbar, their choice
+   * persists via `setFormWidthMode()` and takes priority over this
+   * default on subsequent opens.
+   */
+  public getDefaultFormWidthMode(): 'centered' | 'full-width' {
+    return 'centered';
+  }
+
   public getFormWidthMode(): 'centered' | 'full-width' {
     const entityName = this.getEntityName();
-    if (entityName) {
+    if (entityName && this.formStateService.hasExplicitWidthMode(entityName)) {
       return this.formStateService.getWidthMode(entityName);
     }
-    return 'centered';
+    return this.getDefaultFormWidthMode();
   }
 
   public setFormWidthMode(widthMode: 'centered' | 'full-width'): void {

@@ -1,0 +1,137 @@
+@if (!HideToolbar) {
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Pipelines"
+    Icon="fa-solid fa-calendar-check"
+    Subtitle="Scheduled knowledge ingestion, autotagging, and embedding pipelines">
+    <div meta>
+      @if (ActiveCount > 0) {
+        <mj-stat-badge [Count]="ActiveCount" Label="active" Variant="success"></mj-stat-badge>
+      }
+      @if (PausedCount > 0) {
+        <mj-stat-badge [Count]="PausedCount" Label="paused" Variant="warning"></mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
+        <i class="fa-solid fa-plus"></i> New Schedule
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search pipelines..."
+        [Value]="SearchQuery"
+        (ValueChange)="SearchQuery = $event; OnSearchChanged()">
+      </mj-page-search>
+      <select class="mj-input kh-toolbar-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
+        <option value="">All Statuses</option>
+        <option value="Active">Active</option>
+        <option value="Paused">Paused</option>
+        <option value="Disabled">Disabled</option>
+        <option value="Pending">Pending</option>
+      </select>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    <ng-container *ngTemplateOutlet="schedulingBody"></ng-container>
+  </mj-page-body>
+</mj-page-layout>
+}
+@if (HideToolbar) {
+  <div class="embedded-controls">
+    <input
+      type="text"
+      class="mj-input embedded-search"
+      placeholder="Search pipelines..."
+      [(ngModel)]="SearchQuery"
+      (ngModelChange)="OnSearchChanged()" />
+    <select class="mj-input kh-toolbar-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
+      <option value="">All Statuses</option>
+      <option value="Active">Active</option>
+      <option value="Paused">Paused</option>
+      <option value="Disabled">Disabled</option>
+      <option value="Pending">Pending</option>
+    </select>
+    <span class="embedded-spacer"></span>
+    <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
+      <i class="fa-solid fa-plus"></i> New Schedule
+    </button>
+  </div>
+  <ng-container *ngTemplateOutlet="schedulingBody"></ng-container>
+}
+
+<ng-template #schedulingBody>
+@if (IsLoading) {
+    <div class="loading-container">
+        <mj-loading text="Loading scheduled pipelines..."></mj-loading>
+    </div>
+} @else {
+    <!-- Job Cards Grid -->
+    @if (FilteredJobs.length > 0) {
+        <div class="cards-grid">
+            @for (job of FilteredJobs; track job.ID) {
+                <div class="job-card"
+                     [class.paused]="job.Status === 'Paused'"
+                     [class.disabled]="job.Status === 'Disabled'"
+                     (click)="OnEditJob(job)">
+                    <div class="card-top">
+                        <span class="status-dot"
+                              [class.dot-active]="job.Status === 'Active'"
+                              [class.dot-paused]="job.Status === 'Paused'"
+                              [class.dot-disabled]="job.Status === 'Disabled'"></span>
+                        <div class="card-title-area">
+                            <div class="card-name">{{ job.Name }}</div>
+                            <div class="card-cron">
+                                <i class="fa-regular fa-clock"></i>
+                                {{ GetCronDescription(job.CronExpression) }}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="sparkline">
+                        @for (dotClass of GetSparkline(job.ID); track $index) {
+                            <span class="spark-dot" [class]="dotClass"></span>
+                        }
+                        <span class="sparkline-label">last 7 runs</span>
+                    </div>
+                    <div class="card-stats">
+                        <span class="stat">
+                            <i class="fa-regular fa-clock"></i>
+                            Last: <strong>{{ GetTimeAgo(job.LastRunAt) }}</strong>
+                        </span>
+                        <span class="stat">
+                            <i class="fa-solid fa-chart-simple"></i>
+                            <strong>{{ GetSuccessRate(job) }}</strong>
+                        </span>
+                        <span class="stat">
+                            <i class="fa-regular fa-calendar"></i>
+                            Next: <strong>{{ GetTimeUntil(job.NextRunAt) }}</strong>
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+    } @else {
+        <div class="empty-state">
+            <i class="fa-regular fa-calendar-xmark"></i>
+            <p>No Knowledge Hub schedules found</p>
+            <span>Create a new schedule to automate classification and vector sync</span>
+        </div>
+    }
+
+    <!-- Link to full Scheduling App -->
+    <div class="scheduling-app-link">
+        <button class="btn-secondary" (click)="GoToSchedulingApp()">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Scheduling App
+        </button>
+        <span class="link-hint">Manage all scheduled jobs across the system</span>
+    </div>
+
+    <!-- Edit Dialog -->
+    <mj-scheduled-job-dialog
+        [Visible]="ShowEditDialog"
+        [ScheduledJobID]="EditingJobID"
+        (Close)="OnDialogClosed($event)">
+    </mj-scheduled-job-dialog>
+}
+</ng-template>

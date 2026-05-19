@@ -3,20 +3,25 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
-  Metadata,
+  LogStatus,
   RegisterForStartup,
+  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+import { Observable } from 'rxjs';
 
 /**
  * Status indicating why a user can or cannot access an application.
  * - 'installed_active': User has UserApplication record with IsActive=true
  * - 'installed_inactive': User has UserApplication record with IsActive=false
  * - 'not_installed': User has no UserApplication record for this app
+ * - 'not_authorized': User's roles do not grant access to the application
  */
-export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed';
+export type UserApplicationAccessStatus = 'installed_active' | 'installed_inactive' | 'not_installed' | 'not_authorized';
+
 import {
+  MJApplicationRoleEntity,
   MJUserNotificationEntity,
   MJUserNotificationTypeEntity,
   MJWorkspaceEntity,
@@ -70,6 +75,8 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   private _NotificationTypes: MJUserNotificationTypeEntity[] = [];
   // User notification preferences (user-specific)
   private _UserNotificationPreferences: MJUserNotificationPreferenceEntity[] = [];
+  // Application role assignments (global - not user-specific)
+  private _applicationRoles: MJApplicationRoleEntity[] = [];
 
   // Track the user ID we loaded data for
   private _loadedForUserId: string | null = null;
@@ -113,7 +120,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param provider - Optional custom metadata provider
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-    const md = new Metadata();
+    const md = provider ?? this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -126,64 +133,111 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       forceRefresh = true; // Force refresh if user changed
     }
 
-    // Note: We intentionally do NOT use Filter or OrderBy in configs.
-    // This allows BaseEngine to use immediate array mutations for better performance.
-    // Filtering by user and sorting is done in the getter methods instead.
-    // This also makes the engine reusable for server-side admin scenarios where
-    // all users' data might be needed.
+    // On the client (Network/GraphQL provider), filter user-specific entities by UserID
+    // to avoid loading all users' data. On the server (Database provider), load everything
+    // because the server handles multiple users from a single process.
+    const isClientSide = this.ProviderToUse.ProviderType === 'Network';
+    const userFilter = isClientSide && userId ? `UserID='${userId}'` : undefined;
+
     const configs: Partial<BaseEnginePropertyConfig>[] = [
       {
         Type: 'entity',
         EntityName: 'MJ: User Notifications',
         PropertyName: '_UserNotifications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Types',
         PropertyName: '_NotificationTypes',
         CacheLocal: true,
+        // Global reference table — no user filter
       },
       {
         Type: 'entity',
         EntityName: 'MJ: Workspaces',
         PropertyName: '_Workspaces',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Settings',
         PropertyName: '_UserSettings',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Applications',
         PropertyName: '_UserApplications',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Favorites',
         PropertyName: '_UserFavorites',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Record Logs',
         PropertyName: '_UserRecordLogs',
         CacheLocal: true,
+        Filter: userFilter,
       },
       {
         Type: 'entity',
         EntityName: 'MJ: User Notification Preferences',
         PropertyName: '_UserNotificationPreferences',
         CacheLocal: true,
+        Filter: userFilter,
+      },
+      {
+        Type: 'entity',
+        EntityName: 'MJ: Application Roles',
+        PropertyName: '_applicationRoles',
+        CacheLocal: true,
+        // Global reference table — no user filter
       },
     ];
 
     await super.Load(configs, provider, forceRefresh, contextUser);
     this._loadedForUserId = userId;
+  }
+
+  // ========================================================================
+  // OBSERVABLE ACCESSORS
+  // ========================================================================
+
+  /**
+   * Observable stream of the notifications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated (save, delete, remote-invalidate, refresh).
+   *
+   * Emits the raw unfiltered cache (all users). Consumers that need per-user filtering should
+   * `pipe(map(...))` — the public {@link UserNotifications} getter applies the current-user filter.
+   */
+  public get UserNotifications$(): Observable<MJUserNotificationEntity[]> {
+    return this.ObserveProperty<MJUserNotificationEntity>('_UserNotifications');
+  }
+
+  /**
+   * Observable stream of the user favorites cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserFavorites$(): Observable<MJUserFavoriteEntity[]> {
+    return this.ObserveProperty<MJUserFavoriteEntity>('_UserFavorites');
+  }
+
+  /**
+   * Observable stream of the user applications cache array. Emits the current array on subscribe
+   * and re-emits whenever the cache is mutated.
+   */
+  public get UserApplications$(): Observable<MJUserApplicationEntity[]> {
+    return this.ObserveProperty<MJUserApplicationEntity>('_UserApplications');
   }
 
   // ========================================================================
@@ -235,7 +289,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns true if successful, false otherwise
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -611,10 +665,17 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
   /**
    * Check the user's access status for an application.
+   * First checks role-based authorization (ApplicationRole records), then installation status.
    * @param applicationId - The application ID to check
    * @returns The user's access status for this application
    */
   public CheckUserApplicationAccess(applicationId: string): UserApplicationAccessStatus {
+    // Step 1: Check role-based authorization first
+    if (!this.UserHasApplicationAccess(applicationId)) {
+      return 'not_authorized';
+    }
+
+    // Step 2: Then check installation status (existing logic)
     const userApp = this.GetUserApplicationByAppId(applicationId);
 
     if (!userApp) {
@@ -625,11 +686,65 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Read-only view of the ApplicationRole catalog. Used by permission providers
+   * that need to reason about grants for arbitrary users (not just CurrentUser).
+   */
+  public get ApplicationRoles(): readonly MJApplicationRoleEntity[] {
+    return this._applicationRoles;
+  }
+
+  /**
+   * Checks if the current user's roles grant access to the application.
+   * If no ApplicationRole records exist for the app, access is open (backwards compatible).
+   * If records exist, user must have at least one role with CanAccess=1.
+   */
+  public UserHasApplicationAccess(applicationId: string): boolean {
+    const appRoles = this._applicationRoles.filter(
+      ar => UUIDsEqual(ar.ApplicationID, applicationId)
+    );
+
+    // No role records = open access (backwards compatible)
+    if (appRoles.length === 0) return true;
+
+    // Check if any of the user's roles have CanAccess=1
+    const md = this.ProviderToUse;
+    const user = md.CurrentUser;
+    if (!user || !user.UserRoles) return false;
+
+    return user.UserRoles.some(ur =>
+      appRoles.some(ar =>
+        UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAccess
+      )
+    );
+  }
+
+  /**
+   * Checks if the current user can administer a specific application.
+   * Requires an explicit ApplicationRole record with CanAdmin=1.
+   */
+  public UserCanAdminApplication(applicationId: string): boolean {
+    const appRoles = this._applicationRoles.filter(
+      ar => UUIDsEqual(ar.ApplicationID, applicationId)
+    );
+    if (appRoles.length === 0) return false; // No admin without explicit grant
+
+    const md = this.ProviderToUse;
+    const user = md.CurrentUser;
+    if (!user || !user.UserRoles) return false;
+
+    return user.UserRoles.some(ur =>
+      appRoles.some(ar =>
+        UUIDsEqual(ar.RoleID, ur.RoleID) && ar.CanAdmin
+      )
+    );
+  }
+
+  /**
    * Check if an application is inactive in the system metadata.
    * @param applicationId - The application ID to check
    */
   public IsApplicationInactive(applicationId: string): boolean {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const appInfo = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
     return appInfo != null && appInfo.Status !== 'Active';
   }
@@ -639,7 +754,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to find
    */
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
   }
 
@@ -649,7 +764,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public FindApplicationByPathOrName(pathOrName: string): ApplicationInfo | undefined {
     const normalized = pathOrName.trim().toLowerCase();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // First try path match
     const pathMatch = md.Applications.find((a) => a.Path?.toLowerCase() === normalized);
@@ -705,7 +820,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns The newly created MJUserApplicationEntity, or null if failed
    */
   public async InstallApplication(applicationId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity | null> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -898,16 +1013,55 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Checks the database directly for this user's UserApplication records.
+   * If the DB has records but our in-memory cache is empty (load failure),
+   * repairs the cache and emits a property change so subscribers update.
+   * @returns The DB records if repair occurred, empty array otherwise
+   */
+  private async repairUserApplicationsFromDatabase(userId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const dbResult = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+
+      if (dbResult.Success && dbResult.Results.length > 0) {
+        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        this._UserApplications = dbResult.Results;
+        this.emitPropertyChange('_UserApplications');
+        return dbResult.Results;
+      }
+    } catch (error) {
+      console.error('UserInfoEngine.repairUserApplicationsFromDatabase: DB verification failed:', error instanceof Error ? error.message : String(error));
+    }
+    return [];
+  }
+
+  /**
    * Internal implementation of CreateDefaultApplications.
    * Separated to allow the public method to manage the promise state.
    */
   private async doCreateDefaultApplications(contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
       console.error('UserInfoEngine.CreateDefaultApplications: No user context available');
       return [];
+    }
+
+    // Verify against the database before creating — if the in-memory cache is empty
+    // due to a load failure (e.g., cache timestamp bug), we'd otherwise attempt to
+    // create records that already exist, hitting unique constraint violations.
+    const userAppsForUser = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
+    if (userAppsForUser.length === 0) {
+      const repaired = await this.repairUserApplicationsFromDatabase(userId, contextUser);
+      if (repaired.length > 0) {
+        return repaired;
+      }
     }
 
     // Get existing UserApplication records for this user to prevent duplicates

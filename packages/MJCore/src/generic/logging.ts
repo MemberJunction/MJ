@@ -1,6 +1,6 @@
 import debug, { Debugger } from 'debug';
 import { MJGlobal } from '@memberjunction/global';
-import { IFileSystemProvider } from './interfaces';
+import type { IFileSystemProvider } from './interfaces';
 
 // Create the default logger with the "MJGlobal" namespace.
 const __defaultLogger: Debugger = debug('MJGlobal');

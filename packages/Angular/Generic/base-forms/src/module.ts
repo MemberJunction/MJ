@@ -14,6 +14,7 @@ import { MjIsaRelatedPanelComponent } from './lib/isa-related-panel/isa-related-
 import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
+import { RecordTagsModule } from '@memberjunction/ng-record-tags';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -51,7 +52,8 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
     FormsModule,
     RecordChangesModule,
     ListManagementModule,
-    EntityViewerModule
+    EntityViewerModule,
+    RecordTagsModule
   ],
   exports: [
     MjFormToolbarComponent,

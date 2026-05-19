@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
-import { RunView, Metadata } from '@memberjunction/core';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, inject } from '@angular/core';
+import { RunView } from '@memberjunction/core';
 import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
@@ -8,10 +7,10 @@ import {
   MJCollectionArtifactEntity
 } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ArtifactLoadResult {
   spec: ComponentSpec;
@@ -27,7 +26,10 @@ export interface ArtifactLoadResult {
   templateUrl: './artifact-load-dialog.component.html',
   styleUrl: './artifact-load-dialog.component.css'
 })
-export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
+export class ArtifactLoadDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  @Input() Visible = false;
+  @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
+
   // Tab state
   activeTab = 0; // 0 = Artifacts, 1 = Collections
 
@@ -64,11 +66,10 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   previewError: string | null = null;
   showJsonPreview = false;
 
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
-
-  constructor(public dialog: DialogRef) {}
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit() {
     // Setup search debouncing
@@ -93,8 +94,9 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
   async loadArtifacts() {
     this.isLoading = true;
+    this.cdr.detectChanges();
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const startRow = this.currentPage * this.pageSize;
 
       const result = await rv.RunView<MJArtifactEntity>({
@@ -116,11 +118,13 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       console.error('Error loading artifacts:', error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
   async loadCollections() {
     this.isLoadingCollections = true;
+    this.cdr.detectChanges();
     try {
       const currentUserId = this.metadata.CurrentUser?.ID;
       if (!currentUserId) {
@@ -128,7 +132,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `UserID = '${currentUserId}' OR ID IN (
@@ -147,6 +151,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       this.collections = [];
     } finally {
       this.isLoadingCollections = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -155,10 +160,11 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     this.selectedArtifact = null;
     this.selectedVersion = null;
     this.artifactVersions = [];
+    this.cdr.detectChanges();
 
     // Load artifacts in this collection
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `ID IN (
@@ -177,6 +183,8 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     } catch (error) {
       console.error('Error loading collection artifacts:', error);
       this.collectionArtifacts = [];
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 
@@ -198,7 +206,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
     // User email filter
     if (this.userEmail?.trim()) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
     }
@@ -211,14 +219,16 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     this.selectedVersion = null;
     this.previewSpec = null;
     this.previewError = null;
+    this.cdr.detectChanges();
 
     await this.loadVersions(artifact.ID);
   }
 
   async loadVersions(artifactId: string) {
     this.isLoadingVersions = true;
+    this.cdr.detectChanges();
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
@@ -239,6 +249,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       this.artifactVersions = [];
     } finally {
       this.isLoadingVersions = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -251,28 +262,51 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     try {
       this.previewError = null;
 
-      // Try Content field first (new schema)
-      if (version.Content) {
-        this.previewSpec = JSON.parse(version.Content) as ComponentSpec;
-      }
-      // Fallback to Configuration field (legacy)
-      else if (version.Configuration) {
-        const config = JSON.parse(version.Configuration);
-
-        // Extract from SkipAPIAnalysisCompleteResponse if needed
-        if (config.componentOptions && config.componentOptions.length > 0) {
-          this.previewSpec = config.componentOptions[0].option;
-        } else {
-          this.previewSpec = config;
-        }
-      }
-      else {
+      const raw = version.Content ?? version.Configuration;
+      if (!raw) {
+        this.previewSpec = null;
         this.previewError = 'No content found in this version';
+        return;
       }
+
+      const spec = this.unwrapSpec(JSON.parse(raw));
+      if (!spec) {
+        this.previewSpec = null;
+        this.previewError = 'Artifact content is not a recognized component spec';
+        return;
+      }
+
+      const hasCode = typeof spec.code === 'string' && spec.code.trim().length > 0;
+      const hasDeps = Array.isArray(spec.dependencies) && spec.dependencies.length > 0;
+      const isRegistryRef = spec.location === 'registry' && !!spec.registry && !!spec.namespace && !!spec.name;
+      if (!hasCode && !hasDeps && !isRegistryRef) {
+        this.previewSpec = null;
+        this.previewError = 'Artifact contains no component code, dependencies, or registry reference';
+        return;
+      }
+
+      this.previewSpec = spec;
     } catch (error) {
       this.previewError = `Failed to parse: ${error}`;
       this.previewSpec = null;
+    } finally {
+      this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Skip emits artifact content as a `SkipAPIAnalysisCompleteResponse` envelope whose
+   * actual ComponentSpec lives at `componentOptions[0].option`. Older saves may put the
+   * envelope in `Configuration`; newer saves put it in `Content`. Either field can also
+   * contain a raw spec, so this helper handles both shapes.
+   */
+  private unwrapSpec(parsed: unknown): ComponentSpec | null {
+    if (!parsed || typeof parsed !== 'object') return null;
+    const obj = parsed as { componentOptions?: Array<{ option?: ComponentSpec }> };
+    if (Array.isArray(obj.componentOptions) && obj.componentOptions.length > 0 && obj.componentOptions[0]?.option) {
+      return obj.componentOptions[0].option;
+    }
+    return parsed as ComponentSpec;
   }
 
   async filterArtifacts() {
@@ -336,7 +370,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   }
 
   cancel() {
-    this.dialog.close(undefined);
+    this.Close.emit(undefined);
   }
 
   load() {
@@ -350,7 +384,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       artifactName: this.selectedArtifact!.Name
     };
 
-    this.dialog.close(result);
+    this.Close.emit(result);
   }
 
   onTabSelect(index: number) {

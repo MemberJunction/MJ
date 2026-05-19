@@ -46,6 +46,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { EncryptionKeySourceBase } from '../EncryptionKeySourceBase';
+import { KeyValidationResult } from '../interfaces';
 
 /**
  * Encryption key source that retrieves keys from environment variables.
@@ -211,6 +212,86 @@ export class EnvVarKeySource extends EncryptionKeySourceBase {
                 `The value must be a valid base64-encoded string. Error: ${message}. ` +
                 'Generate a valid key with: openssl rand -base64 32'
             );
+        }
+    }
+
+    /**
+     * Validates that the encryption key in the specified environment variable is accessible and usable.
+     *
+     * Checks: env var exists, is non-empty, contains valid base64, and (if specified) has correct length.
+     * Key material is decoded internally for validation only — never returned to the caller.
+     */
+    async ValidateKeyAccessibility(
+        lookupValue: string,
+        keyVersion?: string,
+        expectedKeyLengthBytes?: number
+    ): Promise<KeyValidationResult> {
+        try {
+            if (!lookupValue || !this.isValidEnvVarName(lookupValue)) {
+                return {
+                    IsAccessible: false,
+                    Error: `Invalid environment variable name: "${lookupValue}". ` +
+                        'Names must start with a letter or underscore and contain only letters, numbers, and underscores.'
+                };
+            }
+
+            const envVarName = this.buildEnvVarName(lookupValue, keyVersion);
+            const keyValue = process.env[envVarName];
+
+            if (keyValue === undefined || keyValue === null) {
+                return {
+                    IsAccessible: false,
+                    Error: `Environment variable "${envVarName}" is not set. ` +
+                        `Set it with a base64-encoded key value:\n` +
+                        `  export ${envVarName}=$(openssl rand -base64 ${expectedKeyLengthBytes || 32})`
+                };
+            }
+
+            if (keyValue.trim() === '') {
+                return {
+                    IsAccessible: false,
+                    Error: `Environment variable "${envVarName}" is empty. ` +
+                        `Set it with: export ${envVarName}=$(openssl rand -base64 ${expectedKeyLengthBytes || 32})`
+                };
+            }
+
+            // Decode and validate — key bytes stay local, never returned
+            const keyBytes = Buffer.from(keyValue, 'base64');
+            if (keyBytes.length === 0) {
+                return {
+                    IsAccessible: false,
+                    Error: `Environment variable "${envVarName}" does not contain valid base64 data. ` +
+                        `Generate a key with: openssl rand -base64 ${expectedKeyLengthBytes || 32}`
+                };
+            }
+
+            // Round-trip check: Node's Buffer.from(str,'base64') silently ignores
+            // non-base64 characters, so verify the value actually was valid base64
+            const roundTrip = keyBytes.toString('base64');
+            const normalized = keyValue.replace(/\s+/g, '');
+            if (roundTrip !== normalized && roundTrip + '=' !== normalized && roundTrip + '==' !== normalized) {
+                return {
+                    IsAccessible: false,
+                    Error: `Environment variable "${envVarName}" does not contain valid base64 encoding. ` +
+                        `Generate a key with: openssl rand -base64 ${expectedKeyLengthBytes || 32}`
+                };
+            }
+
+            if (expectedKeyLengthBytes !== undefined && keyBytes.length !== expectedKeyLengthBytes) {
+                return {
+                    IsAccessible: false,
+                    Error: `Key in "${envVarName}" is ${keyBytes.length} bytes but algorithm requires ${expectedKeyLengthBytes} bytes. ` +
+                        `Generate a correctly-sized key with: openssl rand -base64 ${expectedKeyLengthBytes}`
+                };
+            }
+
+            return { IsAccessible: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            return {
+                IsAccessible: false,
+                Error: `Failed to validate key in environment variable "${lookupValue}": ${message}`
+            };
         }
     }
 

@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "S.Georgia & S.Sandwich Islands",
+      "Code": "GS",
+      "ISO3166_2": "GS-GS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "S.Georgia & S.Sandwich Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=GS"
+    },
+    "primaryKey": {
+      "ID": "6ABC2060-6E34-43B5-8B6F-B28EB5182391"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:58.562Z",
+      "checksum": "26b0830d47d39b5bf86658093348c1b60f54827616203fc03993527ee062729d"
+    }
+  }
+]

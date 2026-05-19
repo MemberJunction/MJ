@@ -2,11 +2,14 @@
   {
     "fields": {
       "Name": "CodeGen: Smart Field Identification",
-      "Description": "Analyzes entity structure to intelligently identify name fields and default view fields",
+      "Description": "Analyzes entity structure to intelligently identify name fields, default view fields, search predicates, entity-level search eligibility, and full-text search configuration",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/codegen/smart-field-identification.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "OutputType": "object",
@@ -84,6 +87,21 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9
+          },
+          "primaryKey": {
+            "ID": "4ACF758C-A505-4785-89CA-DC0A7BA6C2C6"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:57.771Z",
+            "checksum": "a08c3ad07525e9d7816e797f52917f4ab7520cb7508936dcaef1d31c89029256"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
@@ -95,6 +113,36 @@
             "lastModified": "2026-02-13T20:48:55.759Z",
             "checksum": "ba1f357031e6231a56ec888c314bd1dc87585c4f2b0cca7ab72168c0f22283e7"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "A5250AAF-6786-451B-8128-3DF15C11D210"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:57.794Z",
+            "checksum": "3cbb3c7087d324e59daa930e998fc01a358b966b00a03e71afeeb333116e1743"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 12
+          },
+          "primaryKey": {
+            "ID": "EDD7BCEB-9E05-4EA6-ACFC-F0E4CE3785CF"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:10:57.812Z",
+            "checksum": "49a2b5a9b8c939050b947281568da42303aa6e836bf5bb619843c881494a9a26"
+          }
         }
       ]
     },
@@ -102,8 +150,8 @@
       "ID": "7FF02D68-02AE-49A1-AA5E-843D52367D57"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.630Z",
-      "checksum": "660c168a263990b5f3a33de425d4b426f8fa9f24666cc0732a09409755cc3526"
+      "lastModified": "2026-04-20T23:53:38.332Z",
+      "checksum": "8096983d4586b0ce0e1c8eeae5248438dfa72545861c07bc16f664bcedfc85c5"
     }
   }
 ]

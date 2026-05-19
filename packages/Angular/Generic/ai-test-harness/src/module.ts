@@ -2,16 +2,17 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-// Kendo UI Modules
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { InputsModule } from '@progress/kendo-angular-inputs';
-import { LayoutModule } from '@progress/kendo-angular-layout';
-import { NotificationModule } from '@progress/kendo-angular-notification';
-import { IndicatorsModule } from '@progress/kendo-angular-indicators';
-import { TooltipsModule } from '@progress/kendo-angular-tooltip';
-import { IconsModule } from '@progress/kendo-angular-icons';
+// MJ UI Components
+import {
+  MJWindowComponent, MJWindowTitlebarComponent,
+  MJButtonDirective,
+  MJDropdownComponent,
+  MJNumericInputComponent,
+  MJSwitchComponent,
+  MJAccordionPanelComponent,
+  MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent
+} from '@memberjunction/ng-ui-components';
+import { AngularSplitModule } from 'angular-split';
 
 // MemberJunction imports
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
@@ -31,7 +32,6 @@ import { WindowDockService } from './lib/window-dock.service';
 
 // Services
 import { AITestHarnessDialogService } from './lib/ai-test-harness-dialog.service';
-import { TestHarnessWindowService } from './lib/test-harness-window.service';
 import { TestHarnessWindowManagerService } from './lib/test-harness-window-manager.service';
 
 @NgModule({
@@ -48,17 +48,18 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    // Kendo UI
-    ButtonsModule,
-    DialogsModule,
-    WindowModule,
-    DropDownsModule,
-    InputsModule,
-    LayoutModule,
-    NotificationModule,
-    IndicatorsModule,
-    TooltipsModule,
-    IconsModule,
+    // MJ UI Components
+    MJWindowComponent,
+    MJWindowTitlebarComponent,
+    MJButtonDirective,
+    MJDropdownComponent,
+    MJNumericInputComponent,
+    MJSwitchComponent,
+    MJAccordionPanelComponent,
+    MJDialogComponent,
+    MJDialogTitlebarComponent,
+    MJDialogActionsComponent,
+    AngularSplitModule,
     // MemberJunction
     ContainerDirectivesModule,
     CodeEditorModule,
@@ -74,7 +75,6 @@ import { TestHarnessWindowManagerService } from './lib/test-harness-window-manag
   ],
   providers: [
     AITestHarnessDialogService,
-    TestHarnessWindowService,
     TestHarnessWindowManagerService,
     WindowDockService
   ]

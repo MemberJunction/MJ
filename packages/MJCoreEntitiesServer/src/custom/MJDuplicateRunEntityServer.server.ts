@@ -1,25 +1,168 @@
-import { BaseEntity, PotentialDuplicateRequest } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { MJDuplicateRunEntity } from "@memberjunction/core-entities";
+import { BaseEntity, DuplicateDetectionOptions, DuplicateDetectionProgress, LogError, LogStatus, PotentialDuplicateRequest, RunView } from "@memberjunction/core";
+import { RegisterClass, GetGlobalObjectStore } from "@memberjunction/global";
+import { MJDuplicateRunEntity, MJEntityDocumentEntity } from "@memberjunction/core-entities";
 import { DuplicateRecordDetector } from "@memberjunction/ai-vector-dupe";
 
+const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
+
+/** Map DuplicateDetectionProgress phases to pipeline stage names */
+const PHASE_TO_STAGE: Record<DuplicateDetectionProgress['Phase'], string> = {
+    'Loading': 'extract',
+    'Vectorizing': 'vectorize',
+    'Embedding': 'autotag',
+    'Querying': 'extract',
+    'Matching': 'autotag',
+    'Merging': 'complete'
+};
+
 @RegisterClass(BaseEntity, 'MJ: Duplicate Runs')
-export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity  {
+export class MJDuplicateRunEntityServer extends MJDuplicateRunEntity {
     public async Save(): Promise<boolean> {
         const saveResult: boolean = await super.Save();
+
         if (saveResult && this.EndedAt === null) {
-            // do something
-            const duplicateRecordDetector: DuplicateRecordDetector = new DuplicateRecordDetector();
-            let request: PotentialDuplicateRequest = new PotentialDuplicateRequest();
-            request.EntityID = this.EntityID;
-            request.ListID = this.SourceListID;
-            request.Options = {
-                DuplicateRunID: this.ID,
-            };
-            
-            const response = await duplicateRecordDetector.getDuplicateRecords(request, this.ContextCurrentUser);
+            // Fire-and-forget: run detection asynchronously so the save returns immediately
+            this.runDetectionAsync().catch((error) => {
+                LogError(`Async duplicate detection failed for run ${this.ID}`, undefined, error);
+            });
         }
 
         return saveResult;
+    }
+
+    /**
+     * Run duplicate detection asynchronously. On failure, updates the run's
+     * ProcessingStatus to 'Error' so the UI can surface the problem.
+     */
+    private async runDetectionAsync(): Promise<void> {
+        const startTime = Date.now();
+        try {
+            const detector = new DuplicateRecordDetector();
+            const request = new PotentialDuplicateRequest();
+            request.EntityID = this.EntityID;
+            request.ListID = this.SourceListID || undefined; // Optional — if not set, scans all entity records
+
+            // Find the first active entity document for this entity to get template/thresholds
+            const rv = new RunView();
+            const edResult = await rv.RunView<MJEntityDocumentEntity>({
+                EntityName: 'MJ: Entity Documents',
+                ExtraFilter: `EntityID='${this.EntityID}' AND Status='Active'`,
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, this.ContextCurrentUser);
+            if (edResult.Success && edResult.Results.length > 0) {
+                request.EntityDocumentID = edResult.Results[0].ID;
+            }
+
+            // Build detection options with threshold normalization.
+            // Entity document defaults are 1.0 (100%) which means nothing ever matches.
+            // Normalize to sensible fallbacks when the stored value is effectively unconfigured.
+            const potentialThreshold = this.normalizeThreshold(
+                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].PotentialMatchThreshold : 1.0,
+                0.70 // fallback: 70% for potential matches
+            );
+            const absoluteThreshold = this.normalizeThreshold(
+                edResult.Success && edResult.Results.length > 0 ? edResult.Results[0].AbsoluteMatchThreshold : 1.0,
+                0.95 // fallback: 95% for absolute matches
+            );
+
+            const detectionOptions: DuplicateDetectionOptions = {
+                DuplicateRunID: this.ID,
+                PotentialMatchThreshold: potentialThreshold,
+                AbsoluteMatchThreshold: absoluteThreshold,
+                OnProgress: (progress: DuplicateDetectionProgress) => {
+                    this.publishProgress(progress, startTime);
+                }
+            };
+            request.Options = detectionOptions;
+
+            // Publish initial progress
+            this.publishPipelineNotification('autotag', 0, 0, 0, startTime, 'Starting duplicate detection...');
+
+            await detector.GetDuplicateRecords(request, this.ContextCurrentUser);
+            LogStatus(`Duplicate detection completed for run ${this.ID}`);
+
+            // Publish completion
+            this.publishPipelineNotification('complete', 100, 100, 100, startTime);
+        } catch (error) {
+            LogError(`Duplicate detection error for run ${this.ID}`, undefined, error);
+
+            // Publish error
+            this.publishPipelineNotification('error', 0, 0, 0, startTime, String(error));
+
+            // Update the run record to reflect the error
+            try {
+                this.ProcessingStatus = 'Failed';
+                this.EndedAt = new Date();
+                await super.Save();
+            } catch (updateError) {
+                LogError(`Failed to update run ${this.ID} after detection error`, undefined, updateError);
+            }
+        }
+    }
+
+    /**
+     * Convert a DuplicateDetectionProgress callback into a PipelineProgress notification.
+     */
+    private publishProgress(progress: DuplicateDetectionProgress, startTime: number): void {
+        const stage = PHASE_TO_STAGE[progress.Phase] ?? 'autotag';
+        const pct = progress.TotalRecords > 0
+            ? Math.round((progress.ProcessedRecords / progress.TotalRecords) * 100)
+            : 0;
+
+        this.publishPipelineNotification(
+            stage,
+            progress.TotalRecords,
+            progress.ProcessedRecords,
+            pct,
+            startTime,
+            progress.CurrentRecordID
+        );
+    }
+
+    /**
+     * Publish a pipeline progress notification via the global PubSubManager.
+     * Uses GetGlobalObjectStore to access PubSubManager without a direct dependency
+     * on @memberjunction/server.
+     */
+    /**
+     * Normalize a threshold value — treat <= 0 or >= 1.0 as "unconfigured" and use the fallback.
+     */
+    private normalizeThreshold(value: number | null | undefined, fallback: number): number {
+        if (value == null || value <= 0 || value >= 1.0) {
+            return fallback;
+        }
+        return value;
+    }
+
+    private publishPipelineNotification(
+        stage: string,
+        totalItems: number,
+        processedItems: number,
+        percentComplete: number,
+        startTime: number,
+        currentItem?: string
+    ): void {
+        try {
+            // Access PubSubManager through the global object store
+            // PubSubManager is a BaseSingleton stored in the global registry
+            const globalStore = GetGlobalObjectStore();
+            const pubSubManager = globalStore['___SINGLETON__PubSubManager'];
+            if (pubSubManager && typeof pubSubManager.Publish === 'function') {
+                const elapsedMs = Date.now() - startTime;
+                pubSubManager.Publish(PIPELINE_PROGRESS_TOPIC, {
+                    PipelineRunID: this.ID,
+                    Stage: stage,
+                    TotalItems: totalItems,
+                    ProcessedItems: processedItems,
+                    CurrentItem: currentItem,
+                    ElapsedMs: elapsedMs,
+                    PercentComplete: percentComplete
+                });
+            }
+        } catch (error) {
+            // Don't let progress publishing errors break detection
+            LogError(`Failed to publish pipeline progress for run ${this.ID}`, undefined, error);
+        }
     }
 }

@@ -1,12 +1,12 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
-import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { RunView, Metadata } from '@memberjunction/core';
 import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface AgentPromptAdvancedSettingsFormData {
   executionOrder: number;
   purpose: string | null;
@@ -26,7 +26,7 @@ export interface AgentPromptAdvancedSettingsFormData {
   templateUrl: './agent-prompt-advanced-settings-dialog.component.html',
   styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css']
 })
-export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
+export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   agentPrompt!: MJAIAgentPromptEntity;
@@ -64,11 +64,13 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   // Execution order validation
   executionOrderError: string | null = null;
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeForm();
@@ -146,7 +148,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Load AI Configurations
       const configurationsResult = await rv.RunView<MJAIConfigurationEntity>({
@@ -209,7 +211,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
   cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   async save() {
@@ -236,7 +238,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
       };
 
       this.result.next(formData);
-      this.dialogRef.close();
+      this.DialogClose.emit();
       
     } catch (error) {
       console.error('Error saving advanced settings:', error);

@@ -58,10 +58,10 @@ type CodeViewMode = 'current' | 'original' | 'diff';
         </button>
         @if (State.IsEditingCode) {
           <div class="action-buttons">
-            <button kendoButton [themeColor]="'primary'" (click)="ApplyChanges()">
+            <button mjButton variant="primary" (click)="ApplyChanges()">
               <i class="fa-solid fa-check"></i> Apply
             </button>
-            <button kendoButton [themeColor]="'base'" (click)="CancelChanges()">
+            <button mjButton (click)="CancelChanges()">
               Cancel
             </button>
           </div>

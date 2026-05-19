@@ -1,5 +1,5 @@
-import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
-import { BaseEntity, EntityInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { RegisterClass, CleanAndParseJSON } from "@memberjunction/global";
+import { BaseEntity, EntityInfo, LogError, IMetadataProvider, Metadata } from "@memberjunction/core";
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities'
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -12,6 +12,20 @@ interface SmartFilterResponse {
     whereClause: string;
     orderByClause?: string;
     userExplanationMessage: string;
+}
+
+/**
+ * Template data passed to the Smart Filter Generation Nunjucks prompt.
+ */
+interface SmartFilterTemplateData extends Record<string, unknown> {
+    entityName: string;
+    entityId: string;
+    baseView: string;
+    fieldsDescription: string;
+    relatedViewsDescription: string;
+    listsSchema: string;
+    listsFields: string;
+    listDetailsFields: string;
 }
 
 @RegisterClass(BaseEntity, 'MJ: User Views')
@@ -68,14 +82,17 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
                 throw new Error(`AI prompt execution failed: ${result.errorMessage}`);
             }
 
-            if (!result.rawResult) {
-                throw new Error('AI returned empty result');
+            // If the prompt runner already parsed into an object, use it directly.
+            // Otherwise parse the string result (OutputType='string' returns raw text
+            // that may be wrapped in markdown fencing).
+            let llmResponse: SmartFilterResponse | null;
+            if (result.result && typeof result.result === 'object' && 'whereClause' in result.result) {
+                llmResponse = result.result;
+            } else {
+                llmResponse = CleanAndParseJSON<SmartFilterResponse>(String(result.result ?? result.rawResult ?? ''), true);
             }
-
-            // Process the response
-            const llmResponse = SafeJSONParse<SmartFilterResponse>(result.rawResult);
             if (!llmResponse) {
-                throw new Error('Failed to parse AI response as JSON');
+                throw new Error(`Invalid response from AI, could not extract whereClause`);
             }
 
             // Handle the whereClause - sometimes LLM prefixes with WHERE
@@ -111,11 +128,11 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      * Builds the template data object for the Smart Filter Generation prompt.
      * This data is used to populate the Nunjucks template variables.
      */
-    protected BuildTemplateData(entityInfo: EntityInfo): Record<string, unknown> {
+    protected BuildTemplateData(entityInfo: EntityInfo): SmartFilterTemplateData {
         const processedViews: string[] = [entityInfo.BaseView];
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        const listsEntity = md.Entities.find(e => e.Name === "MJ: Lists");
-        const listDetailsEntity = md.Entities.find(e => e.Name === "MJ: List Details");
+        const md: IMetadataProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const listsEntity = md.EntityByName("MJ: Lists");
+        const listDetailsEntity = md.EntityByName("MJ: List Details");
 
         // Build fields description
         const fieldsDescription = entityInfo.Fields.map(f => {

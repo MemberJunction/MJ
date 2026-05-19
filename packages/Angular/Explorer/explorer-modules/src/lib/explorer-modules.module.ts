@@ -30,8 +30,6 @@ import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 
-// Import consolidated Kendo modules
-import { MJKendoModule } from '@memberjunction/ng-kendo-modules';
 
 /**
  * MJExplorerModulesBundle - Consolidated bundle of all MJ Explorer and Kendo UI modules
@@ -59,7 +57,6 @@ import { MJKendoModule } from '@memberjunction/ng-kendo-modules';
     ShellModule,
 
     // Kendo UI Modules (consolidated)
-    MJKendoModule
   ]
 })
 export class MJExplorerModulesBundle {}

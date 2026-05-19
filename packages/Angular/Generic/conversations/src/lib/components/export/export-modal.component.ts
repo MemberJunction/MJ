@@ -10,11 +10,12 @@ import { ToastService } from '../../services/toast.service';
   selector: 'mj-export-modal',
   template: `
     @if (isVisible) {
-      <kendo-dialog
-        [title]="exportTitle"
-        [width]="600"
-        [height]="600"
-        (close)="onCancel()">
+      <mj-dialog
+        [Title]="exportTitle"
+        [Width]="600"
+        [Height]="600"
+        [Visible]="true"
+        (Close)="onCancel()">
         <div class="export-modal-content">
           <section class="format-section">
             <h3 class="section-title">
@@ -104,17 +105,17 @@ import { ToastService } from '../../services/toast.service';
             </div>
           }
         </div>
-        <kendo-dialog-actions>
-          <button kendoButton [disabled]="isExporting" (click)="onCancel()">
+        <mj-dialog-actions>
+          <button mjButton [disabled]="isExporting" (click)="onCancel()">
             <i class="fa-solid fa-times"></i>
             Cancel
           </button>
-          <button kendoButton [primary]="true" [disabled]="!canExport" (click)="onExport()">
+          <button mjButton variant="primary" [disabled]="!canExport" (click)="onExport()">
             <i class="fa-solid fa-download"></i>
             Export
           </button>
-        </kendo-dialog-actions>
-      </kendo-dialog>
+        </mj-dialog-actions>
+      </mj-dialog>
     }
     `,
   styles: [`
@@ -288,7 +289,7 @@ import { ToastService } from '../../services/toast.service';
       color: var(--mj-text-muted);
     }
 
-    kendo-dialog-actions {
+    mj-dialog-actions {
       display: flex;
       justify-content: flex-end;
       gap: 10px;
@@ -296,7 +297,7 @@ import { ToastService } from '../../services/toast.service';
       border-top: 1px solid var(--mj-border-default);
     }
 
-    kendo-dialog-actions button i {
+    mj-dialog-actions button i {
       margin-right: 6px;
     }
   `]

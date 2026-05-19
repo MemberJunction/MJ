@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
@@ -33,11 +34,12 @@ import { HighlightUtil } from '../utils/highlight.util';
   styleUrls: ['./entity-cards.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked {
+export class EntityCardsComponent extends BaseAngularComponent implements OnChanges, OnInit, AfterViewChecked  {
   constructor(
     private elementRef: ElementRef,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
   /**
    * The entity metadata for the records being displayed
    */
@@ -176,7 +178,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     this.isLoading = true;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: this.entity.Name,
         ResultType: 'simple',
@@ -213,7 +215,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     if (!fields || fields.length === 0) return null;
 
     return {
-      titleField: this.findTitleField(entity, fields),
+      titleFields: this.findTitleFields(entity, fields),
       subtitleField: this.findSubtitleField(fields),
       descriptionField: this.findDescriptionField(fields),
       displayFields: this.findDisplayFields(fields),
@@ -222,29 +224,42 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     };
   }
 
-  private findTitleField(entity: EntityInfo, fields: EntityFieldInfo[]): string {
-    if (entity.NameField) return entity.NameField.Name;
+  /**
+   * Find all fields that form the record title, in display order.
+   * Supports multiple IsNameField fields (e.g., FirstName + LastName → "Elizabeth Rodriguez").
+   */
+  private findTitleFields(entity: EntityInfo, fields: EntityFieldInfo[]): string[] {
+    // 1. All IsNameField fields, sorted by Sequence
+    const nameFields = fields
+      .filter(f => f.IsNameField)
+      .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
+    if (nameFields.length > 0) return nameFields.map(f => f.Name);
 
-    const nameField = fields.find(f =>
-      f.Name.toLowerCase() === 'name' || f.Name.toLowerCase() === 'title'
+    // 2. Single NameField from entity
+    if (entity.NameField) return [entity.NameField.Name];
+
+    // 3. Heuristic: field named "Name" or "Title"
+    const heuristic = fields.find(f =>
+      (f.Name.toLowerCase() === 'name' || f.Name.toLowerCase() === 'title') &&
+      f.TSType === 'string' && !f.IsPrimaryKey
     );
-    if (nameField) return nameField.Name;
+    if (heuristic) return [heuristic.Name];
 
+    // 4. Field ending with "Name"
     const endsWithName = fields.find(f =>
-      f.Name.toLowerCase().endsWith('name') &&
-      f.TSType === 'string' &&
-      !f.Name.toLowerCase().includes('file') &&
-      !f.IsPrimaryKey
+      f.Name.toLowerCase().endsWith('name') && f.TSType === 'string' &&
+      !f.IsPrimaryKey && !f.Name.toLowerCase().includes('file')
     );
-    if (endsWithName) return endsWithName.Name;
+    if (endsWithName) return [endsWithName.Name];
 
+    // 5. First string field
     const firstString = fields.find(f =>
       f.TSType === 'string' && !f.IsPrimaryKey && !f.Name.toLowerCase().includes('id')
     );
-    if (firstString) return firstString.Name;
+    if (firstString) return [firstString.Name];
 
     const pk = fields.find(f => f.IsPrimaryKey);
-    return pk?.Name || 'ID';
+    return [pk?.Name || 'ID'];
   }
 
   private findSubtitleField(fields: EntityFieldInfo[]): string | null {
@@ -447,15 +462,26 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     });
   }
 
-  getInitials(record: Record<string, unknown>): string {
+  /**
+   * Get the combined title from all title fields for a record.
+   * Joins multiple IsNameField values with spaces (e.g., "Elizabeth Rodriguez").
+   */
+  getCombinedTitle(record: Record<string, unknown>): string {
     const template = this.effectiveTemplate;
-    if (!template?.titleField) return '?';
-    const title = this.getFieldValue(record, template.titleField);
+    if (!template?.titleFields || template.titleFields.length === 0) return '';
+    const parts = template.titleFields
+      .map(f => this.getFieldValue(record, f))
+      .filter(v => v && v.trim().length > 0);
+    return parts.length > 0 ? parts.join(' ') : '';
+  }
+
+  getInitials(record: Record<string, unknown>): string {
+    const title = this.getCombinedTitle(record);
     if (!title) return '?';
 
     const words = title.split(/\s+/).filter(w => w.length > 0);
     if (words.length === 1) return words[0].substring(0, 2).toUpperCase();
-    return (words[0][0] + words[1][0]).toUpperCase();
+    return (words[0][0] + words[words.length - 1][0]).toUpperCase();
   }
 
   /**

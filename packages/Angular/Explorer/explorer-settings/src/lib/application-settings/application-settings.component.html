@@ -101,24 +101,27 @@
                 <span class="app-sequence">Position {{ i + 1 }}</span>
               </div>
               <div class="app-actions">
-                <button
-                  class="action-btn"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   [disabled]="first"
                   (click)="MoveUp(item)"
                   title="Move up"
                 >
                   <i class="fa-solid fa-chevron-up"></i>
                 </button>
-                <button
-                  class="action-btn"
+                <button mjButton
+                  variant="flat"
+                  size="sm"
                   [disabled]="last"
                   (click)="MoveDown(item)"
                   title="Move down"
                 >
                   <i class="fa-solid fa-chevron-down"></i>
                 </button>
-                <button
-                  class="action-btn remove-btn"
+                <button mjButton
+                  variant="danger"
+                  size="sm"
                   (click)="RemoveApp(item)"
                   title="Remove"
                 >

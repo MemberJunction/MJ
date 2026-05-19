@@ -503,6 +503,206 @@ describe('ValidationService - Topological Sort Logic', () => {
   });
 });
 
+describe('ValidationService - Field Value List Validation (comma-delimited multi-value)', () => {
+  let service: ValidationService;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    service = new ValidationService();
+  });
+
+  const phaseAllowedValues = [
+    'Requirements Expert',
+    'Technical Project Manager',
+    'Data Expert',
+    'Software Architect',
+    'Coder',
+  ];
+
+  function makeFieldInfo(valueListType: string, allowedValues: string[]): Partial<EntityFieldInfo> {
+    return {
+      Name: 'Phase',
+      ValueListType: valueListType,
+      EntityFieldValues: allowedValues.map((v) => ({ Value: v })),
+    };
+  }
+
+  function makeEntityInfo(): Partial<EntityInfo> {
+    return { Name: 'Notes' };
+  }
+
+  async function callValidate(
+    svc: ValidationService,
+    value: string | null | undefined,
+    fieldInfo: Partial<EntityFieldInfo>,
+    entityInfo: Partial<EntityInfo>,
+    filePath: string,
+  ): Promise<{ errors: any[]; warnings: any[] }> {
+    // Reset internal state
+    (svc as any).errors = [];
+    (svc as any).warnings = [];
+    await (svc as any).validateFieldValueList(value, fieldInfo, entityInfo, filePath);
+    return {
+      errors: (svc as any).errors,
+      warnings: (svc as any).warnings,
+    };
+  }
+
+  it('should accept a single valid value', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'Data Expert',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should reject a single invalid value', async () => {
+    const { errors } = await callValidate(
+      service,
+      'Nonexistent Phase',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('Nonexistent Phase');
+  });
+
+  it('should accept comma-delimited multi-value where all segments are valid', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'Data Expert,Requirements Expert',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should accept comma-delimited multi-value with spaces after commas', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'Data Expert, Requirements Expert',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should reject comma-delimited value when one segment is invalid', async () => {
+    const { errors } = await callValidate(
+      service,
+      'Data Expert,Bogus Value',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    // All segments not valid, so treated as single value → 1 error for the whole string
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('Data Expert,Bogus Value');
+  });
+
+  it('should accept three comma-delimited valid values', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'Data Expert, Requirements Expert, Coder',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should not split when the whole string is itself an allowed value', async () => {
+    // Edge case: an allowed value that happens to contain a comma
+    const allowedValues = ['Alpha, Beta', 'Gamma'];
+    const { errors, warnings } = await callValidate(
+      service,
+      'Alpha, Beta',
+      makeFieldInfo('List', allowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should not split free text that contains commas when segments do not match allowed values', async () => {
+    const { errors } = await callValidate(
+      service,
+      'Hello, this is a description',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    // "Hello" and "this is a description" don't match allowed values
+    // so it's treated as a single invalid value
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toContain('Hello, this is a description');
+  });
+
+  it('should warn on case mismatch in comma-delimited segments', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'data expert, requirements expert',
+      makeFieldInfo('List', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    // All segments match case-insensitively, so treated as multi-value with warnings
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(2);
+    expect(warnings[0].message).toContain('data expert');
+    expect(warnings[1].message).toContain('requirements expert');
+  });
+
+  it('should skip validation when ValueListType is not List', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'anything goes here, even commas',
+      makeFieldInfo('None', phaseAllowedValues),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+
+  it('should skip validation for null/undefined/empty values', async () => {
+    for (const val of [null, undefined, '']) {
+      const { errors, warnings } = await callValidate(
+        service,
+        val,
+        makeFieldInfo('List', phaseAllowedValues),
+        makeEntityInfo(),
+        '/test/notes.json',
+      );
+      expect(errors).toHaveLength(0);
+      expect(warnings).toHaveLength(0);
+    }
+  });
+
+  it('should skip validation when EntityFieldValues is empty', async () => {
+    const { errors, warnings } = await callValidate(
+      service,
+      'Data Expert',
+      makeFieldInfo('List', []),
+      makeEntityInfo(),
+      '/test/notes.json',
+    );
+    expect(errors).toHaveLength(0);
+    expect(warnings).toHaveLength(0);
+  });
+});
+
 describe('ValidationService - Dependency Order Checking Logic', () => {
   it('should detect order violations', () => {
     const directoryOrder = ['B', 'A']; // B comes first but depends on A

@@ -1,0 +1,206 @@
+<div class="run-viewer">
+  <!-- Loading state -->
+  @if (IsLoading) {
+    <div class="run-viewer-loading">
+      <mj-loading text="Loading archive runs..."></mj-loading>
+    </div>
+  }
+
+  @if (!IsLoading) {
+    <!-- Summary metric cards -->
+    <div class="metrics-row">
+      <div class="metric-card">
+        <div class="metric-icon">
+          <i class="fa-solid fa-play-circle"></i>
+        </div>
+        <div class="metric-content">
+          <span class="metric-value">{{ Metrics.TotalRuns }}</span>
+          <span class="metric-label">Total Runs</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-archive">
+          <i class="fa-solid fa-box-archive"></i>
+        </div>
+        <div class="metric-content">
+          <span class="metric-value">{{ Metrics.TotalRecordsArchived }}</span>
+          <span class="metric-label">Records Archived</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-storage">
+          <i class="fa-solid fa-database"></i>
+        </div>
+        <div class="metric-content">
+          <span class="metric-value">{{ FormatBytes(Metrics.TotalStorageBytes) }}</span>
+          <span class="metric-label">Storage Used</span>
+        </div>
+      </div>
+
+      <div class="metric-card">
+        <div class="metric-icon metric-icon-time">
+          <i class="fa-solid fa-clock"></i>
+        </div>
+        <div class="metric-content">
+          <span class="metric-value">{{ FormatDate(Metrics.LastRunDate) }}</span>
+          <span class="metric-label">Last Run</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Run list -->
+    <div class="run-list">
+      <h3 class="run-list-title">Run History</h3>
+
+      @if (Runs.length === 0) {
+        <div class="run-empty">
+          <i class="fa-solid fa-inbox"></i>
+          <p>No archive runs found.</p>
+        </div>
+      }
+
+      @for (run of Runs; track run.ID) {
+        <div
+          class="run-card"
+          (click)="OpenRunDrawer(run)"
+          (keydown.enter)="OpenRunDrawer(run)"
+          tabindex="0"
+          role="button"
+          [attr.aria-label]="'View details for run on ' + FormatDate(run.StartedAt)">
+          <div class="run-card-header">
+            <span class="run-card-name">{{ run.ConfigurationName }}</span>
+            <span class="status-badge" [ngClass]="GetStatusClass(run.Status)">{{ run.Status }}</span>
+          </div>
+          <div class="run-card-date">
+            <i class="fa-solid fa-calendar"></i>
+            {{ FormatDate(run.StartedAt) }}
+          </div>
+          <div class="run-card-stats">
+            <span class="run-stat">
+              <i class="fa-solid fa-box-archive"></i>
+              {{ run.RecordsArchived }} archived
+            </span>
+            @if (run.RecordsFailed > 0) {
+              <span class="run-stat run-stat-error">
+                <i class="fa-solid fa-circle-xmark"></i>
+                {{ run.RecordsFailed }} failed
+              </span>
+            }
+            @if (run.RecordsSkipped > 0) {
+              <span class="run-stat run-stat-muted">
+                <i class="fa-solid fa-forward"></i>
+                {{ run.RecordsSkipped }} skipped
+              </span>
+            }
+            <span class="run-stat">
+              <i class="fa-solid fa-stopwatch"></i>
+              {{ FormatDuration(run.DurationSeconds) }}
+            </span>
+            <span class="run-stat">
+              <i class="fa-solid fa-hard-drive"></i>
+              {{ FormatBytes(run.TotalBytes) }}
+            </span>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Drawer backdrop -->
+  @if (DrawerOpen) {
+    <div class="archive-drawer-backdrop" (click)="CloseDrawer()"></div>
+  }
+
+  <!-- Slide-in drawer -->
+  <div class="archive-drawer" [class.open]="DrawerOpen">
+    @if (SelectedRun) {
+      <!-- Drawer header -->
+      <div class="drawer-header">
+        <h3>Run Details</h3>
+        <button class="drawer-close-btn" (click)="CloseDrawer()" aria-label="Close drawer">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Run summary -->
+      <div class="drawer-summary">
+        <div class="drawer-summary-row">
+          <span class="drawer-label">Configuration</span>
+          <span class="drawer-value">{{ SelectedRun.ConfigurationName }}</span>
+        </div>
+        <div class="drawer-summary-row">
+          <span class="drawer-label">Status</span>
+          <span class="status-badge" [ngClass]="GetStatusClass(SelectedRun.Status)">{{ SelectedRun.Status }}</span>
+        </div>
+        <div class="drawer-summary-row">
+          <span class="drawer-label">Started</span>
+          <span class="drawer-value">{{ FormatDate(SelectedRun.StartedAt) }}</span>
+        </div>
+        <div class="drawer-summary-row">
+          <span class="drawer-label">Duration</span>
+          <span class="drawer-value">{{ FormatDuration(SelectedRun.DurationSeconds) }}</span>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="drawer-stats">
+        <div class="drawer-stat">
+          <span class="drawer-stat-value">{{ SelectedRun.RecordsArchived }}</span>
+          <span class="drawer-stat-label">Archived</span>
+        </div>
+        <div class="drawer-stat drawer-stat-error">
+          <span class="drawer-stat-value">{{ SelectedRun.RecordsFailed }}</span>
+          <span class="drawer-stat-label">Failed</span>
+        </div>
+        <div class="drawer-stat drawer-stat-muted">
+          <span class="drawer-stat-value">{{ SelectedRun.RecordsSkipped }}</span>
+          <span class="drawer-stat-label">Skipped</span>
+        </div>
+      </div>
+
+      <!-- Detail table -->
+      <div class="drawer-details">
+        <h4>Per-Record Results</h4>
+
+        @if (IsDrawerLoading) {
+          <mj-loading text="Loading details..." size="small"></mj-loading>
+        }
+
+        @if (!IsDrawerLoading && RunDetails.length === 0) {
+          <p class="drawer-details-empty">No detail records found.</p>
+        }
+
+        @if (!IsDrawerLoading && RunDetails.length > 0) {
+          <div class="drawer-table-wrapper">
+            <table class="drawer-table">
+              <thead>
+                <tr>
+                  <th>Entity</th>
+                  <th>Record ID</th>
+                  <th>Status</th>
+                  <th>Bytes</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (detail of RunDetails; track detail.ID) {
+                  <tr>
+                    <td class="cell-entity">{{ detail.EntityName }}</td>
+                    <td class="cell-id" [title]="detail.RecordID">{{ detail.RecordID }}</td>
+                    <td>
+                      <span class="status-badge status-badge-sm" [ngClass]="GetStatusClass(detail.Status)">
+                        {{ detail.Status }}
+                      </span>
+                    </td>
+                    <td class="cell-bytes">{{ FormatBytes(detail.Bytes) }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</div>

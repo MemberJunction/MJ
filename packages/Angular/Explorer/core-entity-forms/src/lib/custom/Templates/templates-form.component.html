@@ -1,7 +1,13 @@
-<div class="record-form-container" style="height: 100%; display: flex; flex-direction: column;">
-    @if (record) {
+@if (record) {
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    [ToolbarConfig]="toolbarConfig"
+    [WidthMode]="'full-width'"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
         <form class="record-form" #form="ngForm" style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
-        <mj-form-toolbar [Form]="this"></mj-form-toolbar>
 
         <!-- Main Content Area -->
         <div class="template-main-area" style="display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto;">
@@ -15,11 +21,11 @@
                         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
                             <i class="fa-solid fa-file-code template-icon"></i>
                             @if (EditMode) {
-                                <kendo-textbox [(ngModel)]="record.Name"
-                                              name="templateName"
-                                              placeholder="Enter template name..."
-                                              style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;">
-                                </kendo-textbox>
+                                <input type="text" class="mj-input"
+                                       [(ngModel)]="record.Name"
+                                       name="templateName"
+                                       placeholder="Enter template name..."
+                                       style="font-size: 1.2em; font-weight: 600; min-width: 300px; flex: 1;" />
                             } @else {
                                 <h4>{{ record.Name || 'Unnamed Template' }}</h4>
                                 @if (record.IsActive) {
@@ -39,32 +45,32 @@
                             <div style="display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
                                 <div>
                                     <label class="field-label">Category</label>
-                                    <kendo-combobox [(ngModel)]="record.CategoryID"
+                                    <mj-combobox [(ngModel)]="record.CategoryID"
                                                    name="categoryId"
-                                                   [data]="categoryOptions"
-                                                   textField="text"
-                                                   valueField="value"
-                                                   [valuePrimitive]="true"
-                                                   [allowCustom]="true"
-                                                   (valueChange)="onCategoryChange($event)"
-                                                   placeholder="Select or enter new category..."
+                                                   [Data]="categoryOptions"
+                                                   TextField="text"
+                                                   ValueField="value"
+                                                   [ValuePrimitive]="true"
+                                                   [AllowCustom]="true"
+                                                   (ValueChange)="onCategoryChange($any($event))"
+                                                   Placeholder="Select or enter new category..."
                                                    style="width: 250px;">
-                                    </kendo-combobox>
+                                    </mj-combobox>
                                 </div>
                                 <div>
                                     <label class="field-label">Active</label>
-                                    <kendo-switch [(ngModel)]="record.IsActive" name="isActive"></kendo-switch>
+                                    <mj-switch [(ngModel)]="record.IsActive" name="isActive"></mj-switch>
                                 </div>
                             </div>
                         }
 
                         @if (EditMode) {
-                            <kendo-textarea [(ngModel)]="record.Description"
-                                           name="description"
-                                           [rows]="2"
-                                           placeholder="Enter template description..."
-                                           style="width: 100%; max-width: 600px; margin-bottom: 12px;">
-                            </kendo-textarea>
+                            <textarea class="mj-textarea"
+                                      [(ngModel)]="record.Description"
+                                      name="description"
+                                      [rows]="2"
+                                      placeholder="Enter template description..."
+                                      style="width: 100%; max-width: 600px; margin-bottom: 12px;"></textarea>
                         } @else if (record.Description) {
                             <p class="description-text">{{ record.Description }}</p>
                         }
@@ -104,17 +110,15 @@
             <div class="configuration-sections">
 
                 <!-- Template Editor Section -->
-                <kendo-expansionpanel
-                    [expanded]="true"
+                <mj-accordion-panel
+                    [Expanded]="true"
                     style="margin-bottom: 12px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
+                    <ng-template mjAccordionTitle>
                         <span class="panel-title">
                             <i class="fa-solid fa-code"></i>
                             Template Editor
                             @if (templateContents.length > 0) {
-                                <span class="count-badge">
-                                    {{ templateContents.length }}
-                                </span>
+                                <span class="count-badge">{{ templateContents.length }}</span>
                             }
                         </span>
                     </ng-template>
@@ -128,13 +132,13 @@
                             style="height: 100%; display: block;">
                         </mj-template-editor>
                     </div>
-                </kendo-expansionpanel>
+                </mj-accordion-panel>
 
                 <!-- Details Section -->
-                <kendo-expansionpanel
-                    [expanded]="false"
+                <mj-accordion-panel
+                    [Expanded]="false"
                     style="margin-bottom: 12px;">
-                    <ng-template kendoExpansionPanelTitleDirective>
+                    <ng-template mjAccordionTitle>
                         <span class="panel-title">
                             <i class="fa-solid fa-cogs"></i>
                             Details
@@ -217,14 +221,14 @@
                             </div>
                         </div>
                     </div>
-                </kendo-expansionpanel>
+                </mj-accordion-panel>
 
                 <!-- Template Parameters Section -->
                 @if (record.IsSaved) {
-                    <kendo-expansionpanel
-                        [expanded]="false"
+                    <mj-accordion-panel
+                        [Expanded]="false"
                         style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-sliders"></i>
                                 Parameters
@@ -237,15 +241,15 @@
                                 [editMode]="EditMode">
                             </mj-template-params-grid>
                         </div>
-                    </kendo-expansionpanel>
+                    </mj-accordion-panel>
                 }
 
                 <!-- AI Prompts Section -->
                 @if (record.IsSaved) {
-                    <kendo-expansionpanel
-                        [expanded]="false"
+                    <mj-accordion-panel
+                        [Expanded]="false"
                         style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-robot"></i>
                                 AI Prompts
@@ -260,15 +264,15 @@
                                 [ShowToolbar]="false">
                             </mj-explorer-entity-data-grid>
                         </div>
-                    </kendo-expansionpanel>
+                    </mj-accordion-panel>
                 }
 
                 <!-- Entity Documents Section -->
                 @if (record.IsSaved) {
-                    <kendo-expansionpanel
-                        [expanded]="false"
+                    <mj-accordion-panel
+                        [Expanded]="false"
                         style="margin-bottom: 12px;">
-                        <ng-template kendoExpansionPanelTitleDirective>
+                        <ng-template mjAccordionTitle>
                             <span class="panel-title">
                                 <i class="fa-solid fa-file-text"></i>
                                 Entity Documents
@@ -283,17 +287,17 @@
                                 [ShowToolbar]="false">
                             </mj-explorer-entity-data-grid>
                         </div>
-                    </kendo-expansionpanel>
+                    </mj-accordion-panel>
                 }
             </div>
         </div>
         </form>
+</mj-record-form-container>
 
-        <!-- Template Parameter Dialog -->
-        <mj-template-param-dialog
-            [template]="record"
-            [(isVisible)]="showParamDialog"
-            (onClose)="onParamDialogClose()">
-        </mj-template-param-dialog>
-    }
-</div>
+<!-- Template Parameter Dialog -->
+<mj-template-param-dialog
+    [template]="record"
+    [(isVisible)]="showParamDialog"
+    (onClose)="onParamDialogClose()">
+</mj-template-param-dialog>
+}

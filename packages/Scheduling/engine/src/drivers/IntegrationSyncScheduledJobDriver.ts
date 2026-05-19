@@ -53,6 +53,7 @@ export class IntegrationSyncScheduledJobDriver extends BaseScheduledJob {
             EntityMapIDs: config.EntityMapIDs,
             FullSync: config.FullSync,
             ScheduledJobRunID: context.Run.ID,
+            SyncDirection: config.SyncDirection,
         };
 
         const result = await IntegrationEngine.Instance.RunSync(

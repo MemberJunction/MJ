@@ -10,7 +10,7 @@
 import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver, Root, InputType, Mutation,
             PubSub, PubSubEngine, ResolverBase, RunViewByIDInput, RunViewByNameInput, RunDynamicViewInput,
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
-            GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
+            GetReadOnlyProvider, GetReadWriteProvider, RestoreContextInput } from '@memberjunction/server';
 import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';

@@ -15,7 +15,23 @@ type ThinkingStreamState = {
 };
 
 /**
- * Base class for all LLM sub-class implementations. Not all sub-classes will support all methods. 
+ * Describes the native file input capabilities of an LLM driver.
+ * Returned by BaseLLM.GetFileCapabilities(). When null, the driver
+ * does not support file input and artifact tools should be used instead.
+ */
+export interface FileCapabilities {
+    /** MIME type patterns this driver can accept natively (e.g. 'application/pdf', 'image/*') */
+    SupportedMimeTypes: string[];
+    /** Maximum size in bytes for a single file attachment */
+    MaxFileSize: number;
+    /** Maximum number of file attachments per API request */
+    MaxFilesPerRequest: number;
+    /** Whether this driver has a separate file upload API (e.g. Gemini Files API) vs inline base64 */
+    HasFileAPI: boolean;
+}
+
+/**
+ * Base class for all LLM sub-class implementations. Not all sub-classes will support all methods.
  * If a method is not supported an exception will be thrown.
  */
 export abstract class BaseLLM extends BaseModel {
@@ -170,13 +186,29 @@ export abstract class BaseLLM extends BaseModel {
     }
 
     /**
+     * Returns the native file input capabilities of this LLM driver, or null if
+     * the driver does not support file attachments. Subclasses that accept files
+     * (PDFs, images, etc.) should override this method.
+     */
+    public GetFileCapabilities(): FileCapabilities | null {
+        return null;
+    }
+
+    /**
      * Template method for handling streaming chat completion
      * This implements the common pattern across providers while delegating
      * provider-specific logic to abstract methods.
      */
     protected async handleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
-        
+        // Always reset streaming state at the START of each request — this is the
+        // primary defense. Provider singletons reuse the same instance across
+        // requests, so any state from a prior request would otherwise bleed
+        // through. We also call resetStreamingState() in `finally` below to
+        // release accumulated buffers (e.g., extended-thinking output that can
+        // grow to 100k+ chars) once the response is finalized. See audit R2-C5.
+        this.resetStreamingState();
+
         return new Promise<ChatResult>((resolve, reject) => {
             (async () => {
                 try {
@@ -252,15 +284,15 @@ export abstract class BaseLLM extends BaseModel {
                     if (params.streamingCallbacks?.OnComplete) {
                         params.streamingCallbacks.OnComplete(result);
                     }
-                    
+
                     resolve(result);
                 } catch (error) {
                     if (params.streamingCallbacks?.OnError) {
                         params.streamingCallbacks.OnError(error);
                     }
-                    
+
                     const endTime = new Date();
-                    
+
                     // Create a proper ChatResult by extending BaseResult
                     const errorResult = new ChatResult(false, startTime, endTime);
                     errorResult.data = {
@@ -275,11 +307,33 @@ export abstract class BaseLLM extends BaseModel {
                     errorResult.errorMessage = error?.message || 'Unknown error';
                     errorResult.exception = {exception: error};
                     errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, this.constructor.name);
-                    
+
                     reject(errorResult);
+                } finally {
+                    // Release any accumulated streaming buffers (thinking-block
+                    // accumulators, pending content, etc.) so they don't pin
+                    // memory on the singleton until the next request arrives.
+                    try {
+                        this.resetStreamingState();
+                    } catch {
+                        // Defensive — must not interfere with the resolved/rejected result.
+                    }
                 }
             })();
         });
+    }
+
+    /**
+     * Hook invoked at the start AND end (in `finally`) of every streaming chat
+     * completion to reset per-request streaming state. Default is a no-op;
+     * providers that maintain instance-level streaming state (e.g., Anthropic /
+     * OpenAI thinking-block accumulators) MUST override this. See audit R2-C5
+     * for context — without this, state from a prior request bleeds into the
+     * next one and accumulated buffers grow unbounded across the singleton's
+     * lifetime.
+     */
+    protected resetStreamingState(): void {
+        // Default no-op. Providers override.
     }
     
     /**
@@ -475,4 +529,89 @@ export abstract class BaseLLM extends BaseModel {
         }
         return message;
     }
+}
+
+/**
+ * Result of ResolveFileInputStrategy — tells the caller whether to attach
+ * a file natively or fall back to artifact-tool exploration.
+ */
+export interface FileInputStrategy {
+    UseNativeFileInput: boolean;
+    UseFileAPI: boolean;
+    Reason: string;
+}
+
+/**
+ * Determines whether to use native file input or artifact tools for a given file,
+ * based on LLM driver capabilities and an optional prompt-level override.
+ *
+ * Resolution order:
+ * 1. Prompt-level forceNativeFileInput override (if non-null, returns immediately)
+ * 2. Driver capabilities null-check (null = no file support)
+ * 3. MIME type, size, and count constraints checked against driver capabilities
+ * 4. Falls back to artifact tools when any constraint is violated
+ */
+export function ResolveFileInputStrategy(
+    mimeType: string,
+    fileSizeBytes: number,
+    capabilities: FileCapabilities | null,
+    forceNativeFileInput: boolean | null,
+    currentFileCount: number,
+): FileInputStrategy {
+    if (forceNativeFileInput !== null) {
+        return {
+            UseNativeFileInput: forceNativeFileInput,
+            UseFileAPI: forceNativeFileInput && capabilities !== null ? capabilities.HasFileAPI : false,
+            Reason: forceNativeFileInput
+                ? 'Prompt override: native file input forced on'
+                : 'Prompt override: native file input forced off',
+        };
+    }
+
+    if (capabilities === null) {
+        return {
+            UseNativeFileInput: false,
+            UseFileAPI: false,
+            Reason: 'Driver does not support file input',
+        };
+    }
+
+    const lower = mimeType.toLowerCase();
+    const matches = capabilities.SupportedMimeTypes.some((pattern) => {
+        const p = pattern.toLowerCase();
+        if (p.endsWith('/*')) {
+            return lower.startsWith(p.slice(0, -1));
+        }
+        return lower === p;
+    });
+
+    if (!matches) {
+        return {
+            UseNativeFileInput: false,
+            UseFileAPI: false,
+            Reason: `MIME type '${mimeType}' not in supported types: ${capabilities.SupportedMimeTypes.join(', ')}`,
+        };
+    }
+
+    if (fileSizeBytes > capabilities.MaxFileSize) {
+        return {
+            UseNativeFileInput: false,
+            UseFileAPI: false,
+            Reason: `File size ${fileSizeBytes} exceeds max file size ${capabilities.MaxFileSize}`,
+        };
+    }
+
+    if (currentFileCount >= capabilities.MaxFilesPerRequest) {
+        return {
+            UseNativeFileInput: false,
+            UseFileAPI: false,
+            Reason: `File count ${currentFileCount} already at or above max ${capabilities.MaxFilesPerRequest}`,
+        };
+    }
+
+    return {
+        UseNativeFileInput: true,
+        UseFileAPI: capabilities.HasFileAPI,
+        Reason: 'All file input constraints satisfied',
+    };
 }

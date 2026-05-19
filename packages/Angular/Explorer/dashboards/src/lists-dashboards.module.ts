@@ -1,10 +1,18 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { ButtonsModule } from '@progress/kendo-angular-buttons';
-import { GridModule } from '@progress/kendo-angular-grid';
-import { DropDownsModule } from '@progress/kendo-angular-dropdowns';
-import { DialogsModule, WindowModule } from '@progress/kendo-angular-dialog';
+import {
+  MJButtonDirective,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterFieldComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
@@ -33,11 +41,16 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
-    ButtonsModule,
-    GridModule,
-    DropDownsModule,
-    DialogsModule,
-    WindowModule,
+    MJButtonDirective,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterFieldComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     ListManagementModule

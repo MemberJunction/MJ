@@ -17,12 +17,20 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="TagID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Weight"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

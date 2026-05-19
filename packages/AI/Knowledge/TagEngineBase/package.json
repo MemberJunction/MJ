@@ -1,0 +1,32 @@
+{
+  "name": "@memberjunction/tag-engine-base",
+  "type": "module",
+  "version": "5.34.1",
+  "description": "MemberJunction: Tag Engine Base - hierarchical tag registry with lookup helpers, usable on client and server",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/global": "5.34.1",
+    "@memberjunction/core-entities": "5.34.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.11",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

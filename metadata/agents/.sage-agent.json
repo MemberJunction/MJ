@@ -17,6 +17,13 @@
       "InjectExamples": true,
       "MaxExamplesToInject": 5,
       "ExampleInjectionStrategy": "Semantic",
+      "AgentTypePromptParams": {
+        "includeForEachDocs": false,
+        "includeWhileDocs": false,
+        "includeVariableRefsDocs": false,
+        "includeScratchpadDocs": true,
+        "includeMessageExpansionDocs": false
+      },
       "RerankerConfiguration": {
         "enabled": true,
         "rerankerModelId": "@lookup:MJ: AI Models.Name=rerank-v3.5",
@@ -165,15 +172,15 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Web Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Google Custom Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
           },
           "sync": {
-            "lastModified": "2026-02-13T21:09:24.566Z",
-            "checksum": "22df2c51a4d29598827bfe1a3bb86ecc1e69eb58a421e7cd173941adc4e17bbc"
+            "lastModified": "2026-03-26T22:05:22.838Z",
+            "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
           }
         },
         {
@@ -371,6 +378,90 @@
             "lastModified": "2026-02-13T21:09:24.831Z",
             "checksum": "4a9447b3f1107b741f1dd561bb10bf06fdccd154626325f10a5dc0f340a43b78"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "67E333E0-0CC2-407B-855C-AD89EECB0CC4"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:04.898Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "59886FB8-05A5-47EE-9452-34A575865A0E"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.855Z",
+            "checksum": "c64953505f5d324047ea3eb3731b54be9905c69566e3b82925b9d43a168a8361"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Add Document Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CB8F04F2-FACA-46CE-B6CB-93231C144D54"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.866Z",
+            "checksum": "7697496d97e02cfc4e6234541546d2f019c2ea99d27c0dba3a4afcc54ce6820b"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Preview Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6266CA2D-800B-494C-9BB2-DBBD38018479"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.876Z",
+            "checksum": "cf16b134d19d904bd54a9445b99452c23f4f268b2f8ca3581fbc6a4e0406718c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Modify Document Section",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FCA667A4-4672-423B-A1B9-8F66CD70D2F3"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.887Z",
+            "checksum": "d5c3106a16f5d325f6bf51e1c3bfac8bc3e871bd52c4fef5eeda964c515c5240"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Finalize Document",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CE794D25-7C2B-4A76-929D-0937F4A7B1AC"
+          },
+          "sync": {
+            "lastModified": "2026-04-09T17:25:00.898Z",
+            "checksum": "f771348487b3ef029c984184fb097591e903ab745616272331914b6fb0d78c22"
+          }
         }
       ],
       "MJ: AI Agent Configurations": [
@@ -412,14 +503,172 @@
             "checksum": "ecf58beba406f24f399133786f3d30eadb871c2f58e545e81f6ef2069758f368"
           }
         }
+      ],
+      "MJ: AI Agent Client Tools": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToApp",
+            "IsRequired": false,
+            "Priority": 0
+          },
+          "primaryKey": {
+            "ID": "4163F9D8-EFA8-4EB4-8930-0640255D3E0E"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:10:01.020Z",
+            "checksum": "faaaa230d507c8abc87148565417c12d779941c9f6db23c21b23655ea00a51b7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=NavigateToRecord",
+            "IsRequired": false,
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "CE24F596-F478-4987-8577-543A9091127E"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:10:01.031Z",
+            "checksum": "42d4921794b1ec9be3caefe697bfd7646b1032d4c39011739df9051e4d02f9d7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=Sleep",
+            "IsRequired": false,
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "8C2E7348-78D3-4CBB-B916-EE625CC3A4AB"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:10:01.042Z",
+            "checksum": "e1b61998442df340611bfb6f2748bc5b608a0978e0207d3b036eca2d556e673d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ClientToolDefinitionID": "@lookup:MJ: AI Client Tool Definitions.Name=OpenBrowserTab",
+            "IsRequired": false,
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "F2431AD1-EE53-4004-AE86-BF263BEB4B2F"
+          },
+          "sync": {
+            "lastModified": "2026-04-04T01:10:00.988Z",
+            "checksum": "42b7f6eb38b3173ecf36e7ef03b7340fff28fa548ae6ceda43791d093a2e390c"
+          }
+        }
+      ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Workflow Planner",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+            "Description": "Specialist sub-agent that designs and orchestrates multi-agent task graphs for complex requests requiring multiple agents working together with dependencies. Handles agent selection via Find Candidate Agents, builds dependency chains, and manages user confirmation before execution.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 0,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "Never",
+            "ExposeAsAction": false,
+            "AgentTypePromptParams": {
+              "includeForEachDocs": false,
+              "includeWhileDocs": false,
+              "includeScratchpadDocs": true,
+              "includeMessageExpansionDocs": false
+            }
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Workflow Planner - System Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "65FC5809-87B8-4F45-91DF-26BCD4E714C0"
+                },
+                "sync": {
+                  "lastModified": "2026-04-11T04:11:16.316Z",
+                  "checksum": "1fa91580e70400a8d2eaa43bc7fbe4c49d5af46e052ceb89c54657c35cc417aa"
+                }
+              }
+            ],
+            "MJ: AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Agents",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EACF900B-1A77-4B57-8496-DCE175CBEDD0"
+                },
+                "sync": {
+                  "lastModified": "2026-04-11T04:11:16.248Z",
+                  "checksum": "8594e4c41f8dafa6b3254ca8ede1a7094801a11ada29a9aa2a8738be0c309067"
+                }
+              }
+            ],
+            "MJ: AI Agent Modalities": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Input",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "3257053F-F35A-41E0-A068-9FA151B4EDBE"
+                },
+                "sync": {
+                  "lastModified": "2026-04-11T04:11:16.272Z",
+                  "checksum": "9562d0790334b74d9ba63dadcb809c9bd0c51eb124e74f111fc70c4c4160ea16"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Output",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "E3828A8A-2B6F-455A-876D-BC0A624C0430"
+                },
+                "sync": {
+                  "lastModified": "2026-04-11T04:11:16.285Z",
+                  "checksum": "088a80dd45831f2b9ee854cd99940fd9c681c5a7b49d8f2f7721bddb455fcc13"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D0F2CF26-32F1-4AE2-B1F8-B27747C962BE"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:16.191Z",
+            "checksum": "2cfdd1fc439e891628490c99ffa1107dd2a176973e347c290ca086205665a23e"
+          }
+        }
       ]
     },
     "primaryKey": {
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:50.549Z",
-      "checksum": "a66219bfe659e82b1d183ae242d5375e0eb184b807f39076631920266344786a"
+      "lastModified": "2026-04-11T04:11:15.679Z",
+      "checksum": "3ab753a812acabe0d216bf517b5ed2d668d606f2c9a9d13271d27e66e896500e"
     }
   }
 ]

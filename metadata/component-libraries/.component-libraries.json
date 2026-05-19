@@ -71,14 +71,15 @@
       "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
       "CDNCssUrl": null,
       "Description": "Simple yet flexible JavaScript charting library",
-      "LintRules": "@file:lint-rules/chart-js/lint.json"
+      "LintRules": "@file:lint-rules/chart-js/lint.json",
+      "UsageInstructions": "@file:usage-instructions/chart-js.md"
     },
     "primaryKey": {
       "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
     },
     "sync": {
-      "lastModified": "2026-01-08T14:57:20.913Z",
-      "checksum": "762a3ac51b17157c684b7ce77c35d87cb9e249747c0ab525c49698398a430366"
+      "lastModified": "2026-05-03T05:51:31.849Z",
+      "checksum": "89a142c568a4dc401b8aae94b232461f86a9473fe3322b97e69fbcae4afe1eaf"
     }
   },
   {
@@ -1196,6 +1197,27 @@
     "sync": {
       "lastModified": "2025-12-30T23:07:36.819Z",
       "checksum": "414ababb8f68e4bde6f4a69ed2ca146f879f81ddaf1f01d9c2ffb8efc2dcde92"
+    }
+  },
+  {
+    "fields": {
+      "Name": "geo-maps",
+      "DisplayName": "MJ Geo Maps",
+      "Version": "5.29.0",
+      "GlobalVariable": "MapCore",
+      "Category": "Utility",
+      "CDNUrl": "https://cdn.jsdelivr.net/npm/@memberjunction/geo-maps@^5/src/map-core.js",
+      "CDNCssUrl": null,
+      "Description": "Framework-agnostic Leaflet map engine for MemberJunction. Provides point markers, heatmap, and choropleth rendering with optional GeoDataEngine integration.",
+      "UsageType": "Dependency",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "BEC9ACBC-1C89-4DB0-BDE3-7F0CB4A55B84"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:51:32.308Z",
+      "checksum": "43016b9dfe1a74eb18ddceea935e886905d8b1e0b59f43d9cf07f943fce9b5e0"
     }
   }
 ]

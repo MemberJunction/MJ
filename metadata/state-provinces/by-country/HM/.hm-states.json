@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Heard & McDonald Islands",
+      "Code": "HM",
+      "ISO3166_2": "HM-HM",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Heard & McDonald Islands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=HM"
+    },
+    "primaryKey": {
+      "ID": "71C1DB6B-187F-464D-8A5C-53B08D18AD4F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:59.510Z",
+      "checksum": "8b78b167387caaba066fbfe8317b6510095149548d302058629e8ef6328a83f7"
+    }
+  }
+]

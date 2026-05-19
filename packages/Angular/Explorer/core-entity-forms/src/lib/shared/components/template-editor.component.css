@@ -38,14 +38,14 @@
     line-height: 1;
 }
 
-/* Kendo UI overrides for better integration */
-.template-editor kendo-textbox,
-.template-editor kendo-textarea,
-.template-editor kendo-dropdownlist {
+/* Form control sizing */
+.template-editor .mj-input,
+.template-editor .mj-textarea,
+.template-editor mj-dropdown {
     width: 100%;
 }
 
-.template-editor kendo-button {
+.template-editor [mjButton] {
     min-width: auto;
 }
 

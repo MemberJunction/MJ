@@ -10,6 +10,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import { TreeBranchConfig, TreeLeafConfig, AfterNodeClickEventArgs, AfterNodeDoubleClickEventArgs } from '@memberjunction/ng-trees';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface AgentFilter {
   searchTerm: string;
@@ -21,21 +23,6 @@ interface AgentFilter {
   categoryId: string;
 }
 
-/** Lightweight category row for tree-view grouping */
-interface CategoryInfo {
-  ID: string;
-  Name: string;
-  ParentID: string | null;
-  Description: string | null;
-}
-
-/** A category node with nested agents and child categories for tree rendering */
-export interface CategoryTreeNode {
-  Category: CategoryInfo;
-  Agents: MJAIAgentEntityExtended[];
-  Children: CategoryTreeNode[];
-  Expanded: boolean;
-}
 
 /**
  * User preferences for the Agent Configuration dashboard
@@ -62,7 +49,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   // Settings persistence
   private readonly USER_SETTINGS_KEY = 'AI.Agents.UserPreferences';
   private settingsPersistSubject = new Subject<void>();
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
   private settingsLoaded = false;
 
   public isLoading = false;
@@ -91,17 +78,162 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     categoryId: 'all'
   };
 
+  /** Static option arrays for the shared mj-filter-panel. */
+  public readonly statusOptions = [
+    { text: 'All Statuses', value: 'all' },
+    { text: 'Active',       value: 'active' },
+    { text: 'Inactive',     value: 'inactive' },
+  ];
+  public readonly executionModeOptions = [
+    { text: 'All Execution Modes', value: 'all' },
+    { text: 'Sequential',          value: 'Sequential' },
+    { text: 'Parallel',            value: 'Parallel' },
+  ];
+  public readonly exposeAsActionOptions = [
+    { text: 'All Agents',       value: 'all' },
+    { text: 'Exposed as Action', value: 'true' },
+    { text: 'Not Exposed',       value: 'false' },
+  ];
+
+  /** Dynamic agent-type options built from AIEngineBase metadata. */
+  public get agentTypeOptions(): { text: string; value: string }[] {
+    const aiEngine = AIEngineBase.Instance;
+    const types = aiEngine?.AgentTypes ?? [];
+    return [
+      { text: 'All Types', value: 'all' },
+      ...types.map(t => ({ text: t.Name, value: t.ID })),
+    ];
+  }
+
+  /** Dynamic parent-agent options built from the loaded agents (top-level only). */
+  public get parentAgentOptions(): { text: string; value: string }[] {
+    return [
+      { text: 'All Agents', value: 'all' },
+      { text: 'No Parent',  value: 'none' },
+      ...this.agents
+        .filter(a => !a.ParentID)
+        .map(a => ({ text: a.Name || 'Unnamed Agent', value: a.ID })),
+    ];
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly agentViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip',        title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list',        title: 'List View' },
+    { key: 'tree', icon: 'fa-solid fa-folder-tree', title: 'Category Tree View' },
+  ];
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get agentFilterFields(): FilterFieldConfig[] {
+    return [
+      { key: 'agentType',      type: 'dropdown', label: 'Type',            icon: 'fa-solid fa-robot',     options: this.agentTypeOptions },
+      { key: 'parentAgent',    type: 'dropdown', label: 'Parent',          icon: 'fa-solid fa-sitemap',   options: this.parentAgentOptions, filterable: this.parentAgentOptions.length > 10 },
+      { key: 'status',         type: 'dropdown', label: 'Status',          icon: 'fa-solid fa-toggle-on', options: this.statusOptions },
+      { key: 'executionMode',  type: 'dropdown', label: 'Execution Mode',  icon: 'fa-solid fa-list-ol',   options: this.executionModeOptions },
+      { key: 'exposeAsAction', type: 'dropdown', label: 'Action Exposure', icon: 'fa-solid fa-share',     options: this.exposeAsActionOptions },
+    ];
+  }
+
+  /** Current category selection for the tree dropdown (Category is projected into mj-filter-panel as a custom widget). */
+  public SelectedCategoryKey: CompositeKey | null = null;
+
+  /**
+   * Timestamp of last real (non-null) category set. Used to swallow spurious
+   * null re-emits from <mj-tree-dropdown> that arrive milliseconds after a
+   * real selection — without the guard, the spurious null resets categoryId
+   * to 'all' before the user sees the filtered list, making the Category
+   * filter appear broken. See onCategoryChange below.
+   */
+  private _lastCategorySetAt = 0;
+
+  /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
+  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+    // Duck-typed extraction — works whether tree-dropdown emits a real
+    // CompositeKey instance or a plain object (it's currently the latter
+    // when projected inside <mj-filter-panel>). Single-PK entities: take
+    // the first KVP's Value; FieldName varies by entity so positional is
+    // safer than name-matching.
+    const single = !value || Array.isArray(value) ? null : value;
+
+    // Swallow the spurious null re-emit that <mj-tree-dropdown> fires within
+    // a few milliseconds of a real selection (confirmed empirically — the
+    // null arrives ~2ms after the real CompositeKey). Without this guard, the
+    // null resets categoryId to 'all' and the filter never narrows. A 100ms
+    // window is short enough to never interfere with a deliberate user clear.
+    const now = Date.now();
+    if (single == null && (now - this._lastCategorySetAt) < 100) {
+      return;
+    }
+
+    const idValue = single?.KeyValuePairs?.[0]?.Value;
+    this.currentFilters = {
+      ...this.currentFilters,
+      categoryId: (idValue != null && idValue !== '') ? String(idValue) : 'all'
+    };
+    if (single != null) {
+      this._lastCategorySetAt = now;
+    }
+    this.SelectedCategoryKey = single;
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    // Preserve fields the panel doesn't own (searchTerm comes from toolbar, categoryId from tree-dropdown handler)
+    this.currentFilters = {
+      ...this.currentFilters,
+      agentType:      (values['agentType']      as string) ?? 'all',
+      parentAgent:    (values['parentAgent']    as string) ?? 'all',
+      status:         (values['status']         as string) ?? 'all',
+      executionMode:  (values['executionMode']  as string) ?? 'all',
+      exposeAsAction: (values['exposeAsAction'] as string) ?? 'all',
+    };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header). */
+  public get ActiveFilterCount(): number {
+    const f = this.currentFilters;
+    let n = 0;
+    if (f.agentType && f.agentType !== 'all') n++;
+    if (f.parentAgent && f.parentAgent !== 'all') n++;
+    if (f.status && f.status !== 'all') n++;
+    if (f.executionMode && f.executionMode !== 'all') n++;
+    if (f.exposeAsAction && f.exposeAsAction !== 'all') n++;
+    if (f.categoryId && f.categoryId !== 'all') n++;
+    return n;
+  }
+
   public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
 
-  // Category tree view data
-  public categoryTree: CategoryTreeNode[] = [];
-  public uncategorizedAgents: MJAIAgentEntityExtended[] = [];
-  private categories: CategoryInfo[] = [];
+  // mj-tree configuration for category tree view
+  public CategoryBranchConfig: TreeBranchConfig = {
+    EntityName: 'MJ: AI Agent Categories',
+    DisplayField: 'Name',
+    ParentIDField: 'ParentID',
+    DefaultIcon: 'fa-solid fa-folder',
+    DescriptionField: 'Description',
+    ExtraFilter: "Status='Active'",
+    OrderBy: 'Name ASC'
+  };
+
+  public AgentLeafConfig: TreeLeafConfig = {
+    EntityName: 'MJ: AI Agents',
+    ParentField: 'CategoryID',
+    DisplayField: 'Name',
+    DefaultIcon: 'fa-solid fa-robot',
+    IconField: 'IconClass',
+    DescriptionField: 'Type',
+    BadgeField: 'Status',
+    OrderBy: 'Name ASC'
+  };
 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
   private _permissionCache = new Map<string, boolean>();
-  private _metadata = new Metadata();
+  private _metadata = this.ProviderToUse;
 
   /** Check if user can create AI Agents */
   public get UserCanCreateAgents(): boolean {
@@ -182,7 +314,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   constructor(
     private testHarnessService: AITestHarnessDialogService,
     private createAgentService: CreateAgentService,
-    private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -204,21 +335,23 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     if (this.Data?.Configuration) {
       this.applyInitialState(this.Data.Configuration);
     }
-    await this.loadAgents();
+
+    // Load agents and categories in parallel
+    await Promise.all([
+      this.loadAgents(),
+      this.loadCategories()
+    ]);
 
     // Apply filters after data is loaded (uses saved preferences)
     this.applyFilters();
-
-    // If tree view mode is active, load categories for the tree
-    if (this.viewMode === 'tree') {
-      this.loadCategoriesAndBuildTree();
-    }
+    this.cdr.detectChanges();
 
     // Notify that the resource has finished loading
     this.NotifyLoadComplete();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -337,8 +470,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       console.error('Error loading AI agents:', error);
     } finally {
       this.isLoading = false;
-      // force change detection to update the view
-      this.cdr.detectChanges();
     }
   }
 
@@ -362,6 +493,13 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     this.applyFilters();
   }
 
+  /** Handler for the inline mj-page-search input in the page-header toolbar. */
+  public onSearchTermChange(value: string): void {
+    this.currentFilters = { ...this.currentFilters, searchTerm: value ?? '' };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
   public onResetFilters(): void {
     this.currentFilters = {
       searchTerm: '',
@@ -372,6 +510,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       exposeAsAction: 'all',
       categoryId: 'all'
     };
+    // Clear the tree-dropdown's bound value too — otherwise the dropdown
+    // visually still shows the previous category after Reset (the value
+    // input drives its internal display state).
+    this.SelectedCategoryKey = null;
+    this._lastCategorySetAt = 0;
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }
@@ -436,11 +579,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     filtered = this.applySorting(filtered);
 
     this.filteredAgents = filtered;
-
-    // Rebuild tree view data when filters change
-    if (this.viewMode === 'tree') {
-      this.buildCategoryTree();
-    }
   }
 
   /**
@@ -501,11 +639,6 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public setViewMode(mode: 'grid' | 'list' | 'tree'): void {
     this.viewMode = mode;
-    if (mode === 'tree' && this.categories.length === 0) {
-      this.loadCategoriesAndBuildTree();
-    } else if (mode === 'tree') {
-      this.buildCategoryTree();
-    }
     this.emitStateChange();
     this.saveUserPreferencesDebounced();
   }
@@ -600,28 +733,32 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     try {
       const agent = result.Agent;
 
-      // Save the agent
-      const saveResult = await agent.Save();
-      if (!saveResult) {
-        throw new Error('Failed to save agent');
-      }
+      // Create agent + linked prompts + linked actions in one atomic transaction.
+      // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
+      const md = this.ProviderToUse;
+      const tg = await md.CreateTransactionGroup();
 
-      // Save linked prompts if any
+      agent.TransactionGroup = tg;
+      await agent.Save();
+
       if (result.AgentPrompts && result.AgentPrompts.length > 0) {
         for (const agentPrompt of result.AgentPrompts) {
-          // Update the AgentID to the saved agent's ID
           agentPrompt.AgentID = agent.ID;
+          agentPrompt.TransactionGroup = tg;
           await agentPrompt.Save();
         }
       }
 
-      // Save linked actions if any
       if (result.AgentActions && result.AgentActions.length > 0) {
         for (const agentAction of result.AgentActions) {
-          // Update the AgentID to the saved agent's ID
           agentAction.AgentID = agent.ID;
+          agentAction.TransactionGroup = tg;
           await agentAction.Save();
         }
+      }
+
+      if (!await tg.Submit()) {
+        throw new Error('Failed to save agent — all changes have been rolled back');
       }
 
       // Refresh the agent list
@@ -706,70 +843,28 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   }
 
   // ========================================
-  // Category Tree View
+  // Category Tree View (mj-tree)
   // ========================================
 
-  /** Load categories from the database and build the tree structure */
-  private async loadCategoriesAndBuildTree(): Promise<void> {
+  /** Lightweight category row for descendant filtering */
+  private categories: { ID: string; ParentID: string | null }[] = [];
+
+  /** Load categories for descendant-based filter matching */
+  private async loadCategories(): Promise<void> {
     try {
-      const rv = new RunView();
-      const result = await rv.RunView<CategoryInfo>({
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<{ ID: string; ParentID: string | null }>({
         EntityName: 'MJ: AI Agent Categories',
-        Fields: ['ID', 'Name', 'ParentID', 'Description'],
+        Fields: ['ID', 'ParentID'],
         ExtraFilter: "Status='Active'",
-        OrderBy: 'Name ASC',
         ResultType: 'simple'
       });
       if (result.Success) {
         this.categories = result.Results;
-        this.buildCategoryTree();
-        this.cdr.detectChanges();
       }
     } catch (error) {
       console.error('[AgentConfiguration] Error loading categories:', error);
     }
-  }
-
-  /** Build tree nodes from flat categories + filtered agents */
-  private buildCategoryTree(): void {
-    const agentsByCategory = new Map<string, MJAIAgentEntityExtended[]>();
-    const uncategorized: MJAIAgentEntityExtended[] = [];
-
-    for (const agent of this.filteredAgents) {
-      const catId = agent.CategoryID;
-      if (catId) {
-        const normalizedId = catId.toUpperCase();
-        if (!agentsByCategory.has(normalizedId)) {
-          agentsByCategory.set(normalizedId, []);
-        }
-        agentsByCategory.get(normalizedId)!.push(agent);
-      } else {
-        uncategorized.push(agent);
-      }
-    }
-
-    // Build tree from root categories (ParentID is null)
-    const rootCategories = this.categories.filter(c => !c.ParentID);
-    this.categoryTree = rootCategories.map(c => this.buildTreeNode(c, agentsByCategory));
-    this.uncategorizedAgents = uncategorized;
-  }
-
-  /** Recursively build a CategoryTreeNode */
-  private buildTreeNode(
-    category: CategoryInfo,
-    agentsByCategory: Map<string, MJAIAgentEntityExtended[]>
-  ): CategoryTreeNode {
-    const children = this.categories
-      .filter(c => c.ParentID && UUIDsEqual(c.ParentID, category.ID))
-      .map(c => this.buildTreeNode(c, agentsByCategory));
-
-    const normalizedId = category.ID.toUpperCase();
-    return {
-      Category: category,
-      Agents: agentsByCategory.get(normalizedId) || [],
-      Children: children,
-      Expanded: true // default expanded
-    };
   }
 
   /** Get a category and all its descendant IDs (for inclusive filtering) */
@@ -782,24 +877,23 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     return ids;
   }
 
-  /** Toggle a category node's expanded state in the tree view */
-  public toggleCategoryNode(node: CategoryTreeNode): void {
-    node.Expanded = !node.Expanded;
-  }
-
-  /** Check if a tree node has any visible content (agents or children with content) */
-  public hasVisibleContent(node: CategoryTreeNode): boolean {
-    if (node.Agents.length > 0) return true;
-    return node.Children.some(child => this.hasVisibleContent(child));
-  }
-
-  /** Get the total agent count for a category including all descendants */
-  public getAgentCount(node: CategoryTreeNode): number {
-    let count = node.Agents.length;
-    for (const child of node.Children) {
-      count += this.getAgentCount(child);
+  /** Handle click on a tree node — open detail panel for agents */
+  public onTreeNodeClick(event: AfterNodeClickEventArgs): void {
+    const node = event.Node;
+    if (node.Type === 'leaf') {
+      const agent = this.agents.find(a => UUIDsEqual(a.ID, node.ID));
+      if (agent) {
+        this.showAgentDetails(agent);
+      }
     }
-    return count;
+  }
+
+  /** Handle double-click on a tree node — open full record for agents */
+  public onTreeNodeDoubleClick(event: AfterNodeDoubleClickEventArgs): void {
+    const node = event.Node;
+    if (node.Type === 'leaf') {
+      this.openAgentRecord(node.ID);
+    }
   }
 
   // === BaseResourceComponent Required Methods ===

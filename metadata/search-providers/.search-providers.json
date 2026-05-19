@@ -1,0 +1,186 @@
+[
+  {
+    "fields": {
+      "Name": "Database",
+      "Description": "LIKE-based search across all database entities with AllowUserSearchAPI=true using RunView + UserSearchString. Always available as it uses the standard MJ provider infrastructure with no external dependencies.",
+      "DriverClass": "EntitySearchProvider",
+      "Status": "Active",
+      "Priority": 0,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Database",
+      "Icon": "fa-solid fa-database",
+      "Comments": "Built-in provider. Searches database entities using field-match relevance scoring with name field boost."
+    },
+    "primaryKey": {
+      "ID": "5D3F92FE-851A-4EB9-8764-0021753D869C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:47.225Z",
+      "checksum": "8bff10d9877ad2bd711e046a5289eb56ec355408228eb67870ff4799874f9fc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Database Full-Text",
+      "Description": "Database-native full-text search using SQL Server FREETEXT or PostgreSQL tsvector. Searches all FTS-enabled entities and enriches results with tags from the knowledge graph.",
+      "DriverClass": "FullTextSearchProvider",
+      "Status": "Active",
+      "Priority": 1,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Full-Text Search",
+      "Icon": "fa-solid fa-magnifying-glass",
+      "Comments": "Built-in provider. Requires FTS indexes to be configured on entities via CodeGen."
+    },
+    "primaryKey": {
+      "ID": "0DD5242D-6852-4E95-9CE2-44BCD5527CC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:47.245Z",
+      "checksum": "8dd3ed57d1aae13fc86b00a80d4527b61da602ce33d74d2390b825726959bd1f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Semantic",
+      "Description": "AI-powered semantic similarity search using vector embeddings. Embeds the search query using AI models, then finds semantically similar content across all configured vector indexes. Groups indexes by embedding model and queries in parallel with an LRU embedding cache for performance.",
+      "DriverClass": "VectorSearchProvider",
+      "Status": "Active",
+      "Priority": 2,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Semantic Search",
+      "Icon": "fa-solid fa-brain",
+      "Comments": "Built-in provider. Requires at least one vector index to be configured. Gracefully returns empty results when no indexes exist."
+    },
+    "primaryKey": {
+      "ID": "538CFEA3-62C0-4205-996A-199759BF2E28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:47.262Z",
+      "checksum": "a7fbe9bba9eb89594bab0b770989c3d0dac67689cbafb25c156c7a42ea4cee58"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage",
+      "Description": "Searches files across MJ File Storage accounts (Box, Google Drive, SharePoint, Dropbox) that have IncludeInGlobalSearch=true, using each provider's native search API. Results are permission-checked against FileStorageAccountPermission.",
+      "DriverClass": "StorageSearchProvider",
+      "Status": "Active",
+      "Priority": 3,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "File Storage",
+      "Icon": "fa-solid fa-folder-open",
+      "Comments": "Built-in provider. Requires at least one storage account with IncludeInGlobalSearch=true and a provider with SupportsSearch=true."
+    },
+    "primaryKey": {
+      "ID": "A3130198-1B7E-40D4-9D0C-0DB818451AFD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:47.277Z",
+      "checksum": "aea546cc28930fe957c55ea603805767e2377d35b6ba8c943e39b98c42ba03cc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Elasticsearch",
+      "Description": "External search provider backed by Elasticsearch. Translates the SearchScope template plus permission predicate into Elasticsearch DSL and queries the configured cluster. The optional @elastic/elasticsearch peer dependency must be installed in the host application.",
+      "DriverClass": "ElasticsearchSearchProvider",
+      "Status": "Active",
+      "Priority": 10,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Elasticsearch",
+      "Icon": "fa-solid fa-magnifying-glass-chart",
+      "Comments": "Phase 5 external provider. Configure cluster URL, index pattern and auth via SearchScopeProvider.ProviderConfigOverride. Peer dep '@elastic/elasticsearch' is loaded on demand."
+    },
+    "primaryKey": {
+      "ID": "C4F0E7B5-7BA2-4108-8405-1E41E0621065"
+    },
+    "sync": {
+      "lastModified": "2026-04-28T19:14:56.342Z",
+      "checksum": "c391d5663e5b4e7d82cf37ed9e71a24dcdb22027d2c336a7d73257ad552a7991"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Typesense",
+      "Description": "External search provider backed by Typesense. Maps SearchScope templates onto Typesense's typed-collection query API and pushes the permission predicate into the filter_by clause.",
+      "DriverClass": "TypesenseSearchProvider",
+      "Status": "Active",
+      "Priority": 11,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Typesense",
+      "Icon": "fa-solid fa-bolt",
+      "Comments": "Phase 5 external provider. Peer dep 'typesense' loaded on demand. Configure host, port, protocol and API key via ProviderConfigOverride."
+    },
+    "primaryKey": {
+      "ID": "471B7C3E-ABDF-430F-B87B-647252DCA046"
+    },
+    "sync": {
+      "lastModified": "2026-04-28T19:14:56.363Z",
+      "checksum": "43ace6db0376d20e7ba7d12a5bbba5248211a8da46232c890971d87c9bdccb1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Azure AI Search",
+      "Description": "External search provider backed by Azure AI Search (formerly Azure Cognitive Search). Supports vector, semantic and hybrid queries against an Azure-managed index.",
+      "DriverClass": "AzureAISearchProvider",
+      "Status": "Active",
+      "Priority": 12,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "Azure AI Search",
+      "Icon": "fa-brands fa-microsoft",
+      "Comments": "Phase 5 external provider. Peer dep '@azure/search-documents' loaded on demand. Configure endpoint, indexName and apiKey via ProviderConfigOverride."
+    },
+    "primaryKey": {
+      "ID": "4ACDB8D2-485B-49D9-B717-BAF5CFD09667"
+    },
+    "sync": {
+      "lastModified": "2026-04-28T19:14:56.380Z",
+      "checksum": "69e719597d1b4c9d24b06789a386a18d19fb7dc177e5280e08a1819b1eb03525"
+    }
+  },
+  {
+    "fields": {
+      "Name": "OpenSearch",
+      "Description": "External search provider backed by OpenSearch (the AWS-supported Elasticsearch fork). Wire-compatible with Elasticsearch 7.10 but uses the @opensearch-project/opensearch client.",
+      "DriverClass": "OpenSearchSearchProvider",
+      "Status": "Active",
+      "Priority": 13,
+      "SupportsPreview": true,
+      "MaxResultsOverride": null,
+      "ProviderConfig": null,
+      "CredentialID": null,
+      "DisplayName": "OpenSearch",
+      "Icon": "fa-solid fa-magnifying-glass-arrow-right",
+      "Comments": "Phase 5 external provider. Peer dep '@opensearch-project/opensearch' loaded on demand. Configure node URL, index pattern and auth via ProviderConfigOverride."
+    },
+    "primaryKey": {
+      "ID": "65F3F0CF-53E4-4415-A8D1-BB9DD724F458"
+    },
+    "sync": {
+      "lastModified": "2026-04-28T19:14:56.395Z",
+      "checksum": "3d0600f250fdd52c6af147191a93eb1f812bdb60c083b9bc01901b0faaf9b4fb"
+    }
+  }
+]

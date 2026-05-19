@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Arima",
+      "Code": "ARI",
+      "ISO3166_2": "TT-ARI",
+      "Latitude": 10.6284,
+      "Longitude": -61.2804,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-ARI.geojson",
+      "CommonAliases": [
+        "Arima"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "D33DE37B-31FF-4403-A4DF-73E2B3A36DBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.974Z",
+      "checksum": "ceddd2a72a6d95ce1ab9d6f996f3ac80a1b41dfede57983d81d85c3a4f6fd923"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chaguanas",
+      "Code": "CHA",
+      "ISO3166_2": "TT-CHA",
+      "Latitude": 10.5359,
+      "Longitude": -61.4134,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-CHA.geojson",
+      "CommonAliases": [
+        "Chaguanas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "BA275B62-A344-4C70-9D51-15D807019C98"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.988Z",
+      "checksum": "b545d950293165154c0e58b0b0da935216f1f5ee634c7e1f50b92bc65ade6cd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Couva-Tabaquite-Talparo",
+      "Code": "CTT",
+      "ISO3166_2": "TT-CTT",
+      "Latitude": 10.4519,
+      "Longitude": -61.3425,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-CTT.geojson",
+      "CommonAliases": [
+        "Couva-Tabaquite-Talparo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "3F3DAA9C-2C1D-4100-8382-C82138588C0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.002Z",
+      "checksum": "45068b3178ccb6acda1e21b962218eef022689cb8cb4b08d46cb1ea30551a605"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diego Martin",
+      "Code": "DMN",
+      "ISO3166_2": "TT-DMN",
+      "Latitude": 10.7128,
+      "Longitude": -61.5778,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-DMN.geojson",
+      "CommonAliases": [
+        "Diego Martin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "ADA49B49-8CCE-4713-9FFD-6E255286385D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.017Z",
+      "checksum": "09cae3c92c4a26122ff1c5f4c387d66fe3218877b5959cbd2b6298b2c9b2f23e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eastern Tobago",
+      "Code": "ETO",
+      "ISO3166_2": "TT-ETO",
+      "Latitude": 11.2899,
+      "Longitude": -60.6001,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-ETO.geojson",
+      "CommonAliases": [
+        "Eastern Tobago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "9E6E23B2-56F7-4E7C-A390-EF28D67746E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.032Z",
+      "checksum": "0e178feae5478a74d662e655d5801f659bffdd2a6dce34a1c190992e2c5fbf41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Penal-Debe",
+      "Code": "PED",
+      "ISO3166_2": "TT-PED",
+      "Latitude": 10.1459,
+      "Longitude": -61.4269,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-PED.geojson",
+      "CommonAliases": [
+        "Penal-Debe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "DAB4AB3D-A060-46F5-81A1-825F6021911B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.047Z",
+      "checksum": "be48972377e5ba200006ce71eb1c459d1633897ab3f6b258d91ea48137eb3868"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Point Fortin",
+      "Code": "PTF",
+      "ISO3166_2": "TT-PTF",
+      "Latitude": 10.1669,
+      "Longitude": -61.6685,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-PTF.geojson",
+      "CommonAliases": [
+        "Point Fortin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "8090AAC0-F570-4BAB-9F8C-A81B401ACB45"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.061Z",
+      "checksum": "16a75b61fe2d233451b2fea0d69c5c718fe98edad9447b7fca9d42db8697a603"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Port of Spain",
+      "Code": "POS",
+      "ISO3166_2": "TT-POS",
+      "Latitude": 10.6647,
+      "Longitude": -61.5204,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-POS.geojson",
+      "CommonAliases": [
+        "Port of Spain"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "CF3C88D2-49E0-4BE3-99B7-5C28C0FCB490"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.074Z",
+      "checksum": "6da1925738d63b05d4f844ffbffe6714a2ff67fd363a986ce77ea4b04d09f116"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Princes Town",
+      "Code": "PRT",
+      "ISO3166_2": "TT-PRT",
+      "Latitude": 10.2039,
+      "Longitude": -61.3096,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-PRT.geojson",
+      "CommonAliases": [
+        "Princes Town"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "34FC0F20-6A10-44BB-A336-C4D11BED6C24"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.088Z",
+      "checksum": "20670ab57ad22d5b961c6dbe04920cf9e8534ef895de657b4de5b58215dfcd3b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rio Claro-Mayaro",
+      "Code": "RCM",
+      "ISO3166_2": "TT-RCM",
+      "Latitude": 10.2814,
+      "Longitude": -61.1024,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-RCM.geojson",
+      "CommonAliases": [
+        "Rio Claro-Mayaro"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "AE5E7636-3421-4E5B-86C2-3B754DA29625"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.102Z",
+      "checksum": "e722fefe6036fca22a938cd5730545a9537d8379055cda35b85c0602c520accf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Fernando",
+      "Code": "SFO",
+      "ISO3166_2": "TT-SFO",
+      "Latitude": 10.2772,
+      "Longitude": -61.4589,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-SFO.geojson",
+      "CommonAliases": [
+        "San Fernando"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "9EDD0AD5-80D1-4E34-A46D-CBBBBA171D28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.140Z",
+      "checksum": "d7e99e2635b87be2b36e22162c44c56970ed54891ec5c33555213154a6059d12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "San Juan-Laventille",
+      "Code": "SJL",
+      "ISO3166_2": "TT-SJL",
+      "Latitude": 10.613,
+      "Longitude": -61.4498,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-SJL.geojson",
+      "CommonAliases": [
+        "San Juan-Laventille"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "F1A33409-BA68-48D3-B16A-2970DC7DCF02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.155Z",
+      "checksum": "97b6e002be79ccb1e80f8ed281d8f890eb3086377070cf3fcdc99cf5f1fdd5c3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sangre Grande",
+      "Code": "SGE",
+      "ISO3166_2": "TT-SGE",
+      "Latitude": 10.6838,
+      "Longitude": -61.1277,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-SGE.geojson",
+      "CommonAliases": [
+        "Sangre Grande"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "47D259C6-F5EC-48E8-981F-7052D760018E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.171Z",
+      "checksum": "e81e8721a85fe94f0f616d72b0224bdc7d35f94b2a2c9bea93a342bcbe1ca876"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siparia",
+      "Code": "SIP",
+      "ISO3166_2": "TT-SIP",
+      "Latitude": 10.118,
+      "Longitude": -61.6987,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-SIP.geojson",
+      "CommonAliases": [
+        "Siparia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "C0EACBBB-76C7-405D-99B0-9CC1B81DAAEE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.188Z",
+      "checksum": "026fd8a2d0cbd253239afae97453ed874eedc69ad4e93a080dbf5d226b3b57da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tunapuna-Piarco",
+      "Code": "TUP",
+      "ISO3166_2": "TT-TUP",
+      "Latitude": 10.6903,
+      "Longitude": -61.3254,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-TUP.geojson",
+      "CommonAliases": [
+        "Tunapuna-Piarco"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "7520525A-76B7-48AE-B4FA-17B4A5DE64F1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.204Z",
+      "checksum": "390ba3cc663926ecbb551d9a607ca64019e7fc481b655abd28ab62bd509a3364"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Tobago",
+      "Code": "WTO",
+      "ISO3166_2": "TT-WTO",
+      "Latitude": 11.1959,
+      "Longitude": -60.7709,
+      "BoundaryGeoJSON": "@file:by-country/TT/boundaries/TT-WTO.geojson",
+      "CommonAliases": [
+        "Western Tobago"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TT"
+    },
+    "primaryKey": {
+      "ID": "7F6B5C12-3AD6-42E7-9E09-B4DE8C0BFA03"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:38.217Z",
+      "checksum": "9e4c1ba16af91604cabef3ccab0f28276568e24f61ef7f9356c52f3d7260f6af"
+    }
+  }
+]

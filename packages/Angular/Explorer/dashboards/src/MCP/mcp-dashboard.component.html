@@ -1,151 +1,93 @@
-<div class="mcp-dashboard">
+<mj-page-layout>
     <!-- Header -->
-    <div class="dashboard-header">
-        <div class="header-info">
-            <h2 class="dashboard-title">
-                <i class="fa-solid fa-plug-circle-bolt"></i>
-                MCP Dashboard
-            </h2>
-            <button
-                type="button"
-                class="filter-toggle-btn"
-                (click)="toggleFilterPanel()"
-                title="Toggle Filters">
-                <i class="fa-solid fa-filter"></i>
-                @if (FilterPanelVisible) {
-                    Hide Filters
-                } @else {
-                    Show Filters
-                }
-            </button>
-            <span class="item-count">{{ CurrentFilteredCount }} of {{ CurrentTotalCount }} items</span>
+    <mj-page-header
+        Title="MCP Dashboard"
+        Icon="fa-solid fa-plug-circle-bolt">
+        <div meta>
+            <mj-stat-badge [Count]="CurrentFilteredCount" [Total]="CurrentTotalCount" Label="items"></mj-stat-badge>
         </div>
+        <div actions>
+            <mj-filter-popover
+                [ActiveCount]="ActiveFilterCount"
+                [ShowClearAll]="ActiveFilterCount > 0"
+                (ClearAllRequested)="resetPopoverFilters()">
+                <mj-filter-panel
+                    [Fields]="mcpFilterFields"
+                    [Values]="mcpFilterValues"
+                    (ValuesChange)="onFilterValuesChange($event)"
+                    (Reset)="resetPopoverFilters()">
+                </mj-filter-panel>
+            </mj-filter-popover>
 
-        <div class="header-controls">
             <!-- Tab Navigation -->
-            <div class="tab-nav">
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'servers'"
-                    (click)="setActiveTab('servers')">
-                    <i class="fa-solid fa-server"></i>
-                    <span class="tab-label">Servers</span>
-                    <span class="tab-badge">{{ servers.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'connections'"
-                    (click)="setActiveTab('connections')">
-                    <i class="fa-solid fa-link"></i>
-                    <span class="tab-label">Connections</span>
-                    <span class="tab-badge">{{ connections.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'tools'"
-                    (click)="setActiveTab('tools')">
-                    <i class="fa-solid fa-wrench"></i>
-                    <span class="tab-label">Tools</span>
-                    <span class="tab-badge">{{ tools.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'logs'"
-                    (click)="setActiveTab('logs')">
-                    <i class="fa-solid fa-list-check"></i>
-                    <span class="tab-label">Logs</span>
-                    <span class="tab-badge" [class.has-errors]="stats.failedExecutions > 0">{{ executionLogs.length }}</span>
-                </button>
-            </div>
+            <mj-tab-nav
+                [Tabs]="mcpTabs"
+                [ActiveKey]="ActiveTab"
+                (TabChange)="setActiveTab($any($event))">
+            </mj-tab-nav>
 
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
-                    <button kendoButton themeColor="primary" (click)="createServer()">
+                    <button mjButton variant="primary" size="sm" (click)="createServer()">
                         <i class="fa-solid fa-plus"></i>
                         Add Server
                     </button>
                 }
                 @case ('connections') {
-                    <button kendoButton themeColor="primary" (click)="createConnection()">
+                    <button mjButton variant="primary" size="sm" (click)="createConnection()">
                         <i class="fa-solid fa-plus"></i>
                         Add Connection
                     </button>
                 }
                 @case ('tools') {
-                    <!-- View Mode Toggle -->
-                    <div class="view-toggle">
-                        <button
-                            type="button"
-                            class="view-btn"
-                            [class.active]="ToolsViewMode === 'card'"
-                            (click)="setToolsViewMode('card')"
-                            title="Card View">
-                            <i class="fa-solid fa-grip"></i>
-                        </button>
-                        <button
-                            type="button"
-                            class="view-btn"
-                            [class.active]="ToolsViewMode === 'list'"
-                            (click)="setToolsViewMode('list')"
-                            title="List View">
-                            <i class="fa-solid fa-list"></i>
-                        </button>
-                    </div>
-                    <button kendoButton themeColor="primary" (click)="openTestToolDialog()">
+                    <mj-view-toggle
+                        [Options]="toolsViewOptions"
+                        [ActiveKey]="ToolsViewMode"
+                        (KeyChange)="setToolsViewMode($any($event))">
+                    </mj-view-toggle>
+                    <button mjButton variant="secondary" size="sm"
+                        (click)="toggleScalableMode(!useScalablePagination)"
+                        [title]="useScalablePagination ? 'Scale mode on: virtual scroll, paginated' : 'Enable scale mode for large tool sets'">
+                        <i class="fa-solid" [class.fa-bolt]="useScalablePagination" [class.fa-bolt-lightning]="!useScalablePagination"></i>
+                        Scale: {{ useScalablePagination ? 'ON' : 'OFF' }}
+                    </button>
+                    <button mjButton variant="primary" size="sm" (click)="openTestToolDialog()">
                         <i class="fa-solid fa-play"></i>
                         Test Tool
                     </button>
                 }
                 @case ('logs') {
-                    <button kendoButton fillMode="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
-                        <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
-                        Refresh
-                    </button>
+                    <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadAllData()"></mj-refresh-button>
                 }
             }
         </div>
-    </div>
-
-    <!-- Main Content with Filter Panel -->
-    <div class="main-content">
-        <!-- Filter Panel (Left) -->
-        <div class="filter-panel-container" [class.hidden]="!FilterPanelVisible">
-            <mj-mcp-filter-panel
-                [filters]="CurrentFilters"
-                [activeTab]="ActiveTab"
-                [totalCount]="CurrentTotalCount"
-                [filteredCount]="CurrentFilteredCount"
-                (filtersChange)="onFiltersChange($event)"
-                (closePanel)="toggleFilterPanel()">
-            </mj-mcp-filter-panel>
-            <!-- Resize Handle -->
-            <div class="resize-handle"></div>
+        <div toolbar>
+            <mj-page-search
+                Placeholder="Search…"
+                [Value]="CurrentFilters.searchTerm"
+                (ValueChange)="onSearchTermChange($event)">
+            </mj-page-search>
         </div>
+    </mj-page-header>
 
-        <!-- Content Area -->
-        <div class="content-area">
-            <!-- Error Message -->
-            @if (ErrorMessage) {
-                <div class="error-banner">
-                    <i class="fa-solid fa-exclamation-triangle"></i>
-                    {{ ErrorMessage }}
-                    <button class="close-btn" (click)="ErrorMessage = null">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
-                </div>
-            }
+    <!-- Main Content -->
+    <mj-page-body [Flex]="true">
+        <!-- Error Message -->
+        @if (ErrorMessage) {
+            <div class="error-banner">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                {{ ErrorMessage }}
+                <button class="close-btn" (click)="ErrorMessage = null">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+        }
 
-            <!-- Content Body -->
-            <div class="content-body">
-                @if (IsLoading) {
-                    <mj-loading text="Loading MCP data..."></mj-loading>
-                } @else {
-                    @switch (ActiveTab) {
+        @if (IsLoading) {
+            <mj-loading text="Loading MCP data..."></mj-loading>
+        } @else {
+            @switch (ActiveTab) {
                         <!-- Servers Tab -->
                         @case ('servers') {
                             <div class="data-grid servers-grid">
@@ -153,7 +95,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-server"></i>
                                         <p>No MCP servers configured</p>
-                                        <button kendoButton themeColor="primary" (click)="createServer()">
+                                        <button mjButton variant="primary" size="sm" (click)="createServer()">
                                             Add Your First Server
                                         </button>
                                     </div>
@@ -164,23 +106,23 @@
                                                 <div class="card-title">
                                                     <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isServerExpanded(server)"></i>
                                                     <i [class]="getTransportIcon(server.TransportType)"></i>
-                                                    <span class="name" [innerHTML]="server.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                    <span class="name">{{ server.Name }}</span>
                                                     <span class="status-badge" [ngClass]="getStatusClass(server.Status)">
                                                         {{ server.Status }}
                                                     </span>
                                                 </div>
                                                 <div class="card-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton fillMode="flat" (click)="editServer(server)" title="Edit">
+                                                    <button mjButton variant="flat" (click)="editServer(server)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="deleteServer(server)" title="Delete">
+                                                    <button mjButton variant="flat" (click)="deleteServer(server)" title="Delete">
                                                         <i class="fa-solid fa-trash"></i>
                                                     </button>
                                                 </div>
                                             </div>
                                             <div class="card-body">
                                                 @if (server.Description) {
-                                                    <p class="description" [innerHTML]="server.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
+                                                    <p class="description">{{ server.Description }}</p>
                                                 }
                                                 <div class="details-grid">
                                                     <div class="detail">
@@ -240,9 +182,9 @@
                                                                             {{ getParamCount(tool) }} params
                                                                         </span>
                                                                     </div>
-                                                                    <button kendoButton
-                                                                            fillMode="flat"
-                                                                            size="small"
+                                                                    <button mjButton
+                                                                            variant="flat"
+                                                                            size="sm"
                                                                             (click)="runToolFromCard(tool); $event.stopPropagation()"
                                                                             title="Test this tool">
                                                                         <i class="fa-solid fa-play"></i>
@@ -266,7 +208,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-link"></i>
                                         <p>No connections configured</p>
-                                        <button kendoButton themeColor="primary" (click)="createConnection()">
+                                        <button mjButton variant="primary" size="sm" (click)="createConnection()">
                                             Add Your First Connection
                                         </button>
                                     </div>
@@ -277,14 +219,14 @@
                                                 <div class="card-title">
                                                     <i class="fa-solid fa-chevron-right expand-arrow" [class.rotated]="isConnectionExpanded(conn)"></i>
                                                     <i class="fa-solid fa-link"></i>
-                                                    <span class="name" [innerHTML]="conn.Name | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                    <span class="name">{{ conn.Name }}</span>
                                                     <span class="status-badge" [ngClass]="getStatusClass(conn.Status)">
                                                         {{ conn.Status }}
                                                     </span>
                                                 </div>
                                                 <div class="card-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton
-                                                            fillMode="flat"
+                                                    <button mjButton
+                                                            variant="flat"
                                                             (click)="syncConnectionTools(conn)"
                                                             [disabled]="isSyncing(conn.ID)"
                                                             title="Sync Tools">
@@ -294,10 +236,10 @@
                                                             <i class="fa-solid fa-sync"></i>
                                                         }
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="editConnection(conn)" title="Edit">
+                                                    <button mjButton variant="flat" (click)="editConnection(conn)" title="Edit">
                                                         <i class="fa-solid fa-pen"></i>
                                                     </button>
-                                                    <button kendoButton fillMode="flat" (click)="deleteConnection(conn)" title="Delete">
+                                                    <button mjButton variant="flat" (click)="deleteConnection(conn)" title="Delete">
                                                         <i class="fa-solid fa-trash"></i>
                                                     </button>
                                                 </div>
@@ -328,7 +270,7 @@
                                             }
                                             <div class="card-body">
                                                 @if (conn.Description) {
-                                                    <p class="description" [innerHTML]="conn.Description | highlightSearch:(filters$ | async)?.searchTerm"></p>
+                                                    <p class="description">{{ conn.Description }}</p>
                                                 }
                                                 <div class="details-grid">
                                                     <div class="detail">
@@ -378,9 +320,9 @@
                                                                             {{ getParamCount(tool) }} params
                                                                         </span>
                                                                     </div>
-                                                                    <button kendoButton
-                                                                            fillMode="flat"
-                                                                            size="small"
+                                                                    <button mjButton
+                                                                            variant="flat"
+                                                                            size="sm"
                                                                             (click)="runToolFromCard(tool, conn); $event.stopPropagation()"
                                                                             title="Test this tool with this connection">
                                                                         <i class="fa-solid fa-play"></i>
@@ -399,7 +341,29 @@
 
                         <!-- Tools Tab -->
                         @case ('tools') {
-                            @if (ServerGroups.length === 0) {
+                            @if (useScalablePagination) {
+                                <div style="padding:8px 12px;font-size:0.8rem;color:var(--mj-text-secondary,#475569);background:var(--mj-bg-surface-card,#f8f9fa);border-radius:4px;margin-bottom:6px">
+                                    Showing <strong>{{ visiblePagedTools.length }}</strong> of <strong>{{ scaleDenominator() }}</strong> tools
+                                </div>
+                                <div style="height:calc(100vh - 260px);width:100%;overflow-y:auto;border:1px solid var(--mj-border-subtle,#eee);border-radius:4px" (scroll)="onToolsScrollNative($event)">
+                                    @for (tool of visiblePagedTools; track tool.ID) {
+                                    <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--mj-border-subtle,#eee);height:72px;box-sizing:border-box">
+                                        <i class="fa-solid fa-wrench" style="color:var(--mj-brand-primary,#264FAF)"></i>
+                                        <div style="flex:1;min-width:0">
+                                            <div style="font-weight:500;font-size:0.875rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tool.ToolTitle || tool.ToolName }}</div>
+                                            <div style="font-size:0.75rem;color:var(--mj-text-muted,#888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ tool.ServerName }} · {{ tool.ToolName }}</div>
+                                        </div>
+                                        <button type="button" (click)="toggleFavorite(tool.ID, $event)" [title]="isFavorited(tool.ID) ? 'Unfavorite' : 'Favorite'" style="background:transparent;border:none;cursor:pointer;padding:4px;font-size:1rem" [style.color]="isFavorited(tool.ID) ? 'var(--mj-status-warning, #f59e0b)' : 'var(--mj-text-muted, #bbb)'">
+                                            <i [class]="isFavorited(tool.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                        </button>
+                                        <span class="status-badge small" [ngClass]="getStatusClass(tool.Status)">{{ tool.Status }}</span>
+                                    </div>
+                                    }
+                                    @if (toolsLoading) {
+                                        <div style="padding:12px;text-align:center;font-size:0.8rem;color:var(--mj-text-muted,#888)">Loading more…</div>
+                                    }
+                                </div>
+                            } @else if (ServerGroups.length === 0) {
                                 <div class="empty-state">
                                     <i class="fa-solid fa-wrench"></i>
                                     <p>No tools discovered yet</p>
@@ -416,13 +380,13 @@
                                                     <i class="fa-solid fa-chevron-right expand-icon" [class.expanded]="group.expanded"></i>
                                                     <i [class]="getTransportIcon(group.server.TransportType)"></i>
                                                     <span class="server-name">{{ group.server.Name }}</span>
-                                                    <span class="tool-count">{{ group.tools.length }} tools</span>
+                                                    <span class="tool-count">{{ getServerToolCount(group.server.ID) }} tools</span>
                                                     <span class="status-badge small" [ngClass]="getStatusClass(group.server.Status)">
                                                         {{ group.server.Status }}
                                                     </span>
                                                 </div>
                                                 <div class="server-actions" (click)="$event.stopPropagation()">
-                                                    <button kendoButton fillMode="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
+                                                    <button mjButton variant="flat" (click)="openTestToolDialog(undefined, undefined)" title="Test a tool">
                                                         <i class="fa-solid fa-play"></i>
                                                     </button>
                                                 </div>
@@ -438,7 +402,7 @@
                                                                 <div class="tool-card-header" (click)="toggleToolExpand(tool)">
                                                                     <div class="tool-title">
                                                                         <i class="fa-solid fa-wrench"></i>
-                                                                        <span class="name" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                                        <span class="name">{{ tool.ToolTitle || tool.ToolName }}</span>
                                                                     </div>
                                                                     <div class="tool-meta">
                                                                         <span class="param-badge" title="Parameters">
@@ -451,14 +415,17 @@
                                                                     </div>
                                                                 </div>
                                                                 @if (tool.ToolDescription) {
-                                                                    <p class="tool-description" [innerHTML]="tool.ToolDescription | highlightSearch:(filters$ | async)?.searchTerm"></p>
+                                                                    <p class="tool-description">{{ tool.ToolDescription }}</p>
                                                                 }
                                                                 <div class="tool-card-actions">
-                                                                    <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test this tool">
+                                                                    <button type="button" (click)="toggleFavorite(tool.ID, $event)" [title]="isFavorited(tool.ID) ? 'Unfavorite' : 'Favorite'" style="background:transparent;border:none;cursor:pointer;padding:4px;font-size:1rem" [style.color]="isFavorited(tool.ID) ? 'var(--mj-status-warning, #f59e0b)' : 'var(--mj-text-muted, #bbb)'">
+                                                                        <i [class]="isFavorited(tool.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                                                    </button>
+                                                                    <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test this tool">
                                                                         <i class="fa-solid fa-play"></i>
                                                                         Test
                                                                     </button>
-                                                                    <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="View details">
+                                                                    <button mjButton variant="flat" size="sm" (click)="toggleToolExpand(tool)" title="View details">
                                                                         <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
                                                                         {{ isToolExpanded(tool) ? 'Less' : 'More' }}
                                                                     </button>
@@ -515,14 +482,13 @@
                                                                         <td class="tool-name-cell">
                                                                             <i class="fa-solid fa-wrench"></i>
                                                                             <div class="tool-name-info">
-                                                                                <span class="tool-title" [innerHTML]="(tool.ToolTitle || tool.ToolName) | highlightSearch:(filters$ | async)?.searchTerm"></span>
+                                                                                <span class="tool-title">{{ tool.ToolTitle || tool.ToolName }}</span>
                                                                                 @if (tool.ToolTitle) {
                                                                                     <span class="tool-code">{{ tool.ToolName }}</span>
                                                                                 }
                                                                             </div>
                                                                         </td>
-                                                                        <td class="description-cell" [innerHTML]="(tool.ToolDescription || '-') | highlightSearch:(filters$ | async)?.searchTerm">
-                                                                        </td>
+                                                                        <td class="description-cell">{{ tool.ToolDescription || '-' }}</td>
                                                                         <td>
                                                                             <span class="param-count">{{ getParamCount(tool) }}</span>
                                                                         </td>
@@ -533,10 +499,13 @@
                                                                         </td>
                                                                         <td>{{ formatDate(tool.LastSeenAt) }}</td>
                                                                         <td class="actions-cell">
-                                                                            <button kendoButton fillMode="flat" size="small" (click)="openTestToolDialog(tool)" title="Test">
+                                                                            <button type="button" (click)="toggleFavorite(tool.ID, $event)" [title]="isFavorited(tool.ID) ? 'Unfavorite' : 'Favorite'" style="background:transparent;border:none;cursor:pointer;padding:4px;font-size:0.95rem;margin-right:4px" [style.color]="isFavorited(tool.ID) ? 'var(--mj-status-warning, #f59e0b)' : 'var(--mj-text-muted, #bbb)'">
+                                                                                <i [class]="isFavorited(tool.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                                                            </button>
+                                                                            <button mjButton variant="flat" size="sm" (click)="openTestToolDialog(tool)" title="Test">
                                                                                 <i class="fa-solid fa-play"></i>
                                                                             </button>
-                                                                            <button kendoButton fillMode="flat" size="small" (click)="toggleToolExpand(tool)" title="Details">
+                                                                            <button mjButton variant="flat" size="sm" (click)="toggleToolExpand(tool)" title="Details">
                                                                                 <i class="fa-solid" [class.fa-chevron-down]="!isToolExpanded(tool)" [class.fa-chevron-up]="isToolExpanded(tool)"></i>
                                                                             </button>
                                                                         </td>
@@ -668,50 +637,344 @@
                         }
                     }
                 }
+    </mj-page-body>
+</mj-page-layout>
+
+<!-- Server Dialog (inline — avoids sub-component DI issues) -->
+@if (ShowServerDialog) {
+    <div style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center" (click)="cancelServerForm()">
+        <div style="display:flex;flex-direction:column;background:var(--mj-bg-surface,#fff);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;width:600px;max-width:90vw;max-height:90vh" (click)="$event.stopPropagation()">
+            <!-- Title bar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <h2 style="margin:0;font-size:1.125rem;font-weight:600;color:var(--mj-text-primary,#333)">{{ EditingServer ? 'Edit MCP Server' : 'Add MCP Server' }}</h2>
+                <button style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;background:none;cursor:pointer;color:var(--mj-text-muted,#888);border-radius:4px" (click)="cancelServerForm()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <!-- Body -->
+            <div style="flex:1;overflow-y:auto;padding:20px;color:var(--mj-text-primary,#333)">
+                @if (ServerFormError) {
+                    <div style="background:var(--mj-status-error-bg,#fff5f5);border:1px solid var(--mj-status-error-border,#feb2b2);border-radius:6px;padding:10px 14px;margin-bottom:16px;color:var(--mj-status-error-text,#c53030);font-size:0.875rem">
+                        <i class="fa-solid fa-exclamation-triangle"></i> {{ ServerFormError }}
+                    </div>
+                }
+                <!-- Name -->
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Name <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                    <input #sfName class="mj-input" placeholder="e.g., GitHub MCP Server" [value]="ServerForm.Name" (input)="ServerForm.Name = sfName.value" style="width:100%;box-sizing:border-box" />
+                </div>
+                <!-- Description -->
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Description</label>
+                    <textarea #sfDesc class="mj-textarea" placeholder="Optional description" [value]="ServerForm.Description" (input)="ServerForm.Description = sfDesc.value" rows="3" style="width:100%;box-sizing:border-box"></textarea>
+                </div>
+                <!-- Transport Type -->
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Transport Type <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                    <select #sfTransport class="mj-input" [value]="ServerForm.TransportType" (change)="ServerForm.TransportType = sfTransport.value" style="width:100%;box-sizing:border-box">
+                        @for (t of TransportTypes; track t.value) {
+                            <option [value]="t.value">{{ t.label }}</option>
+                        }
+                    </select>
+                </div>
+                <!-- Server URL (for HTTP-based transports) -->
+                @if (ServerForm.TransportType === 'StreamableHTTP' || ServerForm.TransportType === 'SSE' || ServerForm.TransportType === 'WebSocket') {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Server URL <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                        <input #sfUrl class="mj-input" placeholder="https://api.example.com/mcp" [value]="ServerForm.ServerURL" (input)="ServerForm.ServerURL = sfUrl.value" style="width:100%;box-sizing:border-box" />
+                    </div>
+                }
+                <!-- Command (for Stdio) -->
+                @if (ServerForm.TransportType === 'Stdio') {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Command <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                        <input #sfCmd class="mj-input" placeholder="e.g., npx" [value]="ServerForm.Command" (input)="ServerForm.Command = sfCmd.value" style="width:100%;box-sizing:border-box" />
+                    </div>
+                }
+                <!-- Auth Type -->
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Default Auth Type</label>
+                    <select #sfAuth class="mj-input" [value]="ServerForm.DefaultAuthType" (change)="ServerForm.DefaultAuthType = sfAuth.value" style="width:100%;box-sizing:border-box">
+                        @for (a of AuthTypes; track a.value) {
+                            <option [value]="a.value">{{ a.label }}</option>
+                        }
+                    </select>
+                </div>
+                <!-- Status -->
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Status</label>
+                    <select #sfStatus class="mj-input" [value]="ServerForm.Status" (change)="ServerForm.Status = sfStatus.value" style="width:100%;box-sizing:border-box">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <!-- Actions -->
+            <div style="display:flex;align-items:center;gap:8px;padding:16px 20px;border-top:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <button mjButton variant="primary" (click)="saveServerForm()" [disabled]="ServerFormSaving">
+                    @if (ServerFormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> }
+                    {{ EditingServer ? 'Update' : 'Create' }}
+                </button>
+                <button mjButton (click)="cancelServerForm()">Cancel</button>
             </div>
         </div>
     </div>
-</div>
-
-<!-- Server Dialog -->
-@if (ShowServerDialog) {
-    <mj-mcp-server-dialog
-        [server]="EditingServer"
-        [visible]="ShowServerDialog"
-        (close)="onServerDialogClose($event)">
-    </mj-mcp-server-dialog>
 }
 
-<!-- Connection Dialog -->
+<!-- Connection Dialog (inline) -->
 @if (ShowConnectionDialog) {
-    <mj-mcp-connection-dialog
-        [connection]="EditingConnection"
-        [servers]="servers"
-        [visible]="ShowConnectionDialog"
-        (close)="onConnectionDialogClose($event)">
-    </mj-mcp-connection-dialog>
+    <div style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center" (click)="cancelConnectionForm()">
+        <div style="display:flex;flex-direction:column;background:var(--mj-bg-surface,#fff);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;width:560px;max-width:90vw;max-height:90vh" (click)="$event.stopPropagation()">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <h2 style="margin:0;font-size:1.125rem;font-weight:600;color:var(--mj-text-primary,#333)">Add Connection</h2>
+                <button style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;background:none;cursor:pointer;color:var(--mj-text-muted,#888);border-radius:4px" (click)="cancelConnectionForm()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:20px;color:var(--mj-text-primary,#333)">
+                @if (ConnectionFormError) {
+                    <div style="background:var(--mj-status-error-bg,#fff5f5);border:1px solid var(--mj-status-error-border,#feb2b2);border-radius:6px;padding:10px 14px;margin-bottom:16px;color:var(--mj-status-error-text,#c53030);font-size:0.875rem">
+                        <i class="fa-solid fa-exclamation-triangle"></i> {{ ConnectionFormError }}
+                    </div>
+                }
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Server <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                    <select #cfServer class="mj-input" [value]="ConnectionForm.MCPServerID" (change)="ConnectionForm.MCPServerID = cfServer.value" style="width:100%;box-sizing:border-box">
+                        <option value="">— select server —</option>
+                        @for (s of servers; track s.ID) {
+                            <option [value]="s.ID">{{ s.Name }}</option>
+                        }
+                    </select>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Name <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                    <input #cfName class="mj-input" placeholder="e.g., Zapier Connection" [value]="ConnectionForm.Name" (input)="ConnectionForm.Name = cfName.value" style="width:100%;box-sizing:border-box" />
+                </div>
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Bearer Token</label>
+                    <input #cfToken class="mj-input" placeholder="Paste bearer token here" [value]="ConnectionForm.BearerToken" (input)="ConnectionForm.BearerToken = cfToken.value" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.8rem" />
+                    <span style="font-size:0.75rem;color:var(--mj-text-muted,#888)">Will be stored as a Credential and linked to this connection</span>
+                </div>
+                <div style="margin-bottom:16px">
+                    <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Status</label>
+                    <select #cfStatus class="mj-input" [value]="ConnectionForm.Status" (change)="ConnectionForm.Status = cfStatus.value" style="width:100%;box-sizing:border-box">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:16px 20px;border-top:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <button mjButton variant="primary" (click)="saveConnectionForm()" [disabled]="ConnectionFormSaving">
+                    @if (ConnectionFormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> }
+                    Create
+                </button>
+                <button mjButton (click)="cancelConnectionForm()">Cancel</button>
+            </div>
+        </div>
+    </div>
 }
 
-<!-- Test Tool Dialog -->
+<!-- Test Tool Dialog (inline) -->
 @if (ShowTestToolDialog) {
-    <mj-mcp-test-tool-dialog
-        [Visible]="ShowTestToolDialog"
-        [Servers]="servers"
-        [Connections]="connections"
-        [Tools]="tools"
-        [SelectedServerID]="TestToolServerID"
-        [SelectedConnectionID]="TestToolConnectionID"
-        [SelectedToolID]="TestToolID"
-        (Close)="onTestToolDialogClose()">
-    </mj-mcp-test-tool-dialog>
+    <div style="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center" (click)="testCloseDialog()">
+        <div style="display:flex;flex-direction:column;background:var(--mj-bg-surface,#fff);border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,0.3);overflow:hidden;width:640px;max-width:90vw;max-height:90vh" (click)="$event.stopPropagation()">
+            <!-- Title bar -->
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <h2 style="margin:0;font-size:1.125rem;font-weight:600;color:var(--mj-text-primary,#333)">
+                    Test MCP Tool
+                    @if (TestStep !== 'select') {
+                        <span style="font-size:0.875rem;font-weight:400;color:var(--mj-text-muted,#888);margin-left:8px">— {{ TestSelectedTool?.ToolTitle || TestSelectedTool?.ToolName }}</span>
+                    }
+                </h2>
+                <button style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border:none;background:none;cursor:pointer;color:var(--mj-text-muted,#888);border-radius:4px" (click)="testCloseDialog()">
+                    <i class="fa-solid fa-times"></i>
+                </button>
+            </div>
+            <!-- Step indicator -->
+            <div style="display:flex;gap:0;padding:10px 20px;background:var(--mj-bg-surface-card,#f9f9f9);border-bottom:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                <span style="font-size:0.8rem;font-weight:500;" [style.color]="TestStep==='select' ? 'var(--mj-brand-primary,#264FAF)' : 'var(--mj-text-muted,#888)'">1. Select</span>
+                <span style="margin:0 8px;color:var(--mj-text-muted,#888)">›</span>
+                <span style="font-size:0.8rem;font-weight:500;" [style.color]="TestStep==='configure' ? 'var(--mj-brand-primary,#264FAF)' : 'var(--mj-text-muted,#888)'">2. Configure</span>
+                <span style="margin:0 8px;color:var(--mj-text-muted,#888)">›</span>
+                <span style="font-size:0.8rem;font-weight:500;" [style.color]="TestStep==='results' ? 'var(--mj-brand-primary,#264FAF)' : 'var(--mj-text-muted,#888)'">3. Results</span>
+            </div>
+            <!-- Body -->
+            <div style="flex:1;overflow-y:auto;padding:20px;color:var(--mj-text-primary,#333)">
+                @if (TestStep === 'select') {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Server <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                        <select #tSrv class="mj-input" style="width:100%;box-sizing:border-box" (change)="onTestServerChange(tSrv.value)">
+                            <option value="">— select server —</option>
+                            @for (s of servers; track s.ID) {
+                                <option [value]="s.ID" [selected]="TestToolServerID === s.ID">{{ s.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Connection <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                        <select #tConn class="mj-input" style="width:100%;box-sizing:border-box" [attr.disabled]="!TestToolServerID ? true : null" (change)="onTestConnectionChange(tConn.value)">
+                            <option value="">— select connection —</option>
+                            @for (c of TestFilteredConnections; track c.ID) {
+                                <option [value]="c.ID" [selected]="TestToolConnectionID === c.ID">{{ c.Name }}</option>
+                            }
+                        </select>
+                    </div>
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">Tool <span style="color:var(--mj-status-error,#e53e3e)">*</span></label>
+                        <input #tSearch type="text" class="mj-input" style="width:100%;box-sizing:border-box;margin-bottom:6px" placeholder="Search tools… (Recently used appear first)" [value]="TestToolSearch" (input)="onTestToolSearchChange(tSearch.value)" [attr.disabled]="!TestToolServerID ? true : null" />
+                        <div style="max-height:220px;overflow-y:auto;border:1px solid var(--mj-border-default,#e0e0e0);border-radius:4px;background:var(--mj-bg-surface,#fff)">
+                            @if (TestComboboxTools.length === 0) {
+                                <div style="padding:12px;text-align:center;font-size:0.8rem;color:var(--mj-text-muted,#888)">No tools match.</div>
+                            }
+                            @for (t of TestComboboxTools; track t.ID) {
+                                <div (click)="pickTestTool(t.ID)" style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--mj-border-subtle,#eee)" [style.background]="TestToolID === t.ID ? 'color-mix(in srgb, var(--mj-brand-primary,#264FAF) 12%, var(--mj-bg-surface,#fff))' : null">
+                                    @if (isRecentTestTool(t.ID)) {
+                                        <span style="font-size:0.65rem;background:var(--mj-brand-primary,#264FAF);color:#fff;padding:1px 6px;border-radius:8px;font-weight:600">Recent</span>
+                                    }
+                                    <div style="flex:1;min-width:0">
+                                        <div style="font-size:0.85rem;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.ToolTitle || t.ToolName }}</div>
+                                        @if (t.ToolTitle && t.ToolName !== t.ToolTitle) {
+                                            <div style="font-size:0.7rem;color:var(--mj-text-muted,#888);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ t.ToolName }}</div>
+                                        }
+                                    </div>
+                                    @if (TestToolID === t.ID) {
+                                        <i class="fa-solid fa-check" style="color:var(--mj-brand-primary,#264FAF)"></i>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                } @else if (TestStep === 'configure') {
+                    @if (TestParamConfigs.length === 0) {
+                        <div style="text-align:center;padding:24px;color:var(--mj-text-muted,#888)">
+                            <i class="fa-solid fa-check-circle" style="font-size:2rem;margin-bottom:8px;display:block"></i>
+                            <p>This tool requires no parameters.</p>
+                        </div>
+                    } @else {
+                        @for (p of TestParamConfigs; track p.name) {
+                            <div style="margin-bottom:16px">
+                                <label style="display:block;font-size:0.875rem;font-weight:500;color:var(--mj-text-primary,#333);margin-bottom:4px">
+                                    {{ p.name }} @if (p.required) { <span style="color:var(--mj-status-error,#e53e3e)">*</span> }
+                                </label>
+                                @if (p.description) {
+                                    <p style="font-size:0.75rem;color:var(--mj-text-muted,#888);margin:0 0 4px 0">{{ p.description }}</p>
+                                }
+                                @if (p.enumValues.length > 0) {
+                                    <select #enumEl class="mj-input" style="width:100%;box-sizing:border-box" (change)="testSetParam(p.name, enumEl.value)">
+                                        <option value="">— select —</option>
+                                        @for (v of p.enumValues; track $index) { <option [value]="$any(v)">{{ $any(v) }}</option> }
+                                    </select>
+                                } @else if (p.type === 'boolean') {
+                                    <select #boolEl class="mj-input" style="width:100%;box-sizing:border-box" (change)="testSetParam(p.name, boolEl.value)">
+                                        <option value="false">false</option>
+                                        <option value="true">true</option>
+                                    </select>
+                                } @else if (p.type === 'array' || p.type === 'object') {
+                                    <textarea #jsonEl class="mj-textarea" rows="3" style="width:100%;box-sizing:border-box;font-family:monospace;font-size:0.8rem" (input)="testSetParam(p.name, jsonEl.value)" [placeholder]="'Enter JSON ' + p.type + '...'"></textarea>
+                                } @else {
+                                    <input #strEl class="mj-input" style="width:100%;box-sizing:border-box" (input)="testSetParam(p.name, strEl.value)" [placeholder]="p.description || 'Enter value...'" />
+                                }
+                            </div>
+                        }
+                    }
+                } @else {
+                    @if (TestExecutionResult?.Success) {
+                        <div style="background:var(--mj-status-success-bg,#f0fff4);border:1px solid var(--mj-status-success-border,#9ae6b4);border-radius:6px;padding:12px 16px;margin-bottom:16px;color:var(--mj-status-success-text,#276749)">
+                            <i class="fa-solid fa-check-circle"></i> Execution Successful
+                            @if (TestExecutionResult?.DurationMs) { <span style="float:right;font-size:0.75rem">{{ TestExecutionResult?.DurationMs }}ms</span> }
+                        </div>
+                    } @else {
+                        <div style="background:var(--mj-status-error-bg,#fff5f5);border:1px solid var(--mj-status-error-border,#feb2b2);border-radius:6px;padding:12px 16px;margin-bottom:16px;color:var(--mj-status-error-text,#c53030)">
+                            <i class="fa-solid fa-times-circle"></i> Execution Failed
+                        </div>
+                    }
+                    @if (TestExecutionResult?.ErrorMessage) {
+                        <div style="margin-bottom:16px">
+                            <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:4px">Error</label>
+                            <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin:0">{{ TestExecutionResult?.ErrorMessage }}</pre>
+                        </div>
+                    }
+                    @if (TestExecutionResult?.Result) {
+                        <div>
+                            <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:4px">Result</label>
+                            <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:300px;margin:0">{{ formatTestResult(TestExecutionResult?.Result) }}</pre>
+                        </div>
+                    }
+                }
+            </div>
+            <!-- Actions -->
+            <div style="display:flex;align-items:center;gap:8px;padding:16px 20px;border-top:1px solid var(--mj-border-default,#e0e0e0);flex-shrink:0">
+                @if (TestStep === 'select') {
+                    <button mjButton variant="primary" (click)="testProceedToConfig()" [disabled]="!TestCanProceed">Next <i class="fa-solid fa-arrow-right"></i></button>
+                    <button mjButton (click)="testCloseDialog()">Cancel</button>
+                } @else if (TestStep === 'configure') {
+                    <button mjButton variant="primary" (click)="testExecuteTool()" [disabled]="!TestIsValid || TestIsExecuting">
+                        @if (TestIsExecuting) { <i class="fa-solid fa-spinner fa-spin"></i> Executing... } @else { <i class="fa-solid fa-play"></i> Execute }
+                    </button>
+                    <button mjButton (click)="testGoBack()"><i class="fa-solid fa-arrow-left"></i> Back</button>
+                } @else {
+                    <button mjButton variant="primary" (click)="testRunAgain()"><i class="fa-solid fa-redo"></i> Run Again</button>
+                    <button mjButton (click)="testGoBack()">Edit Params</button>
+                    <button mjButton (click)="testCloseDialog()">Close</button>
+                }
+            </div>
+        </div>
+    </div>
 }
 
-<!-- Log Detail Panel -->
+<!-- Log Detail Panel (inlined) -->
 @if (ShowLogDetailPanel && SelectedLog) {
-    <mj-mcp-log-detail-panel
-        [Visible]="ShowLogDetailPanel"
-        [Log]="SelectedLog"
-        (Close)="onLogDetailClose()"
-        (RunAgain)="onRunAgainFromLog($event)">
-    </mj-mcp-log-detail-panel>
+    <div style="position:fixed;inset:0;z-index:10000;pointer-events:none">
+        <div style="position:absolute;inset:0;background:rgba(0,0,0,0.35);pointer-events:auto" (click)="onLogDetailClose()"></div>
+        <div style="position:absolute;top:0;right:0;height:100%;width:560px;max-width:95vw;background:var(--mj-bg-surface,#fff);box-shadow:-4px 0 20px rgba(0,0,0,0.15);display:flex;flex-direction:column;pointer-events:auto">
+            <div style="padding:16px 20px;border-bottom:1px solid var(--mj-border-default,#e0e0e0);display:flex;align-items:center;justify-content:space-between">
+                <div>
+                    <h3 style="margin:0;font-size:1rem;font-weight:600">{{ SelectedLog.ToolName }}</h3>
+                    <div style="font-size:0.75rem;color:var(--mj-text-muted,#888);margin-top:4px">
+                        <span [class]="SelectedLog.Status === 'Success' ? 'status-success' : SelectedLog.Status === 'Error' ? 'status-error' : 'status-running'" style="font-weight:600">{{ SelectedLog.Status }}</span>
+                        <span style="margin:0 8px">·</span>
+                        <span>{{ formatDate(SelectedLog.StartedAt) }}</span>
+                        @if (SelectedLog.DurationMs != null) {
+                            <span style="margin:0 8px">·</span>
+                            <span>{{ formatDuration(SelectedLog.DurationMs) }}</span>
+                        }
+                    </div>
+                </div>
+                <button mjButton (click)="onLogDetailClose()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="flex:1;overflow-y:auto;padding:16px 20px">
+                <div style="margin-bottom:16px">
+                    <div style="font-size:0.75rem;color:var(--mj-text-muted,#888);margin-bottom:4px">Connection</div>
+                    <div style="font-size:0.875rem">{{ SelectedLog.ConnectionName || SelectedLog.ConnectionID }}</div>
+                    @if (SelectedLog.ServerName) {
+                        <div style="font-size:0.75rem;color:var(--mj-text-muted,#888);margin-top:2px">{{ SelectedLog.ServerName }}</div>
+                    }
+                </div>
+                @if (SelectedLog.InputArgs) {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px">Input Arguments</label>
+                        <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:240px;margin:0">{{ formatLogJson(SelectedLog.InputArgs) }}</pre>
+                    </div>
+                }
+                @if (SelectedLog.Result) {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px">Result</label>
+                        <pre style="background:var(--mj-bg-surface-sunken,#f0f0f0);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;overflow-y:auto;max-height:360px;margin:0">{{ formatLogJson(SelectedLog.Result) }}</pre>
+                    </div>
+                }
+                @if (SelectedLog.ErrorMessage) {
+                    <div style="margin-bottom:16px">
+                        <label style="display:block;font-size:0.875rem;font-weight:500;margin-bottom:6px;color:var(--mj-status-error-text,#c53030)">Error</label>
+                        <pre style="background:var(--mj-status-error-bg,#fff5f5);border:1px solid var(--mj-status-error-border,#feb2b2);border-radius:4px;padding:12px;font-size:0.75rem;white-space:pre-wrap;word-break:break-all;margin:0;color:var(--mj-status-error-text,#c53030)">{{ SelectedLog.ErrorMessage }}</pre>
+                    </div>
+                }
+            </div>
+            <div style="padding:12px 20px;border-top:1px solid var(--mj-border-default,#e0e0e0);display:flex;gap:8px;justify-content:flex-start">
+                @if (SelectedLog.ToolID) {
+                    <button mjButton variant="primary" (click)="onRunAgainFromLog({ toolId: SelectedLog.ToolID!, connectionId: SelectedLog.ConnectionID })"><i class="fa-solid fa-redo"></i> Run Again</button>
+                }
+                <button mjButton (click)="onLogDetailClose()">Close</button>
+            </div>
+        </div>
+    </div>
 }

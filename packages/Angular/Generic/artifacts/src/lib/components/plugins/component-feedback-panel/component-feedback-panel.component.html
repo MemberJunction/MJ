@@ -3,8 +3,8 @@
     <!-- Header -->
     <div class="panel-header">
       <div class="panel-title">
-        <i class="fa-solid fa-comment-dots"></i>
-        <span>Component Feedback</span>
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <span>Inspect & Rate</span>
       </div>
       <button class="close-button" (click)="ClosePanel()">
         <i class="fa-solid fa-times"></i>
@@ -71,28 +71,39 @@
             </div>
 
             @if (SelectedSpec.description) {
-              <p class="component-description">{{ SelectedSpec.description }}</p>
+              <mj-markdown [data]="SelectedSpec.description" class="component-description"></mj-markdown>
             }
 
-            <!-- Star Rating -->
+            <!-- Star Rating (half-star support) -->
             <div class="star-rating-container">
               <label class="rating-label">Your Rating</label>
-              <div class="star-rating">
+              <div class="star-rating" (mouseleave)="ClearHoverRating()">
                 @for (star of [1, 2, 3, 4, 5]; track star) {
-                  <i
-                    class="star"
-                    [class.fa-solid]="IsStarFilled(star)"
-                    [class.fa-regular]="!IsStarFilled(star)"
-                    [class.fa-star]="true"
-                    (click)="SetRating(star)"
-                    (mouseenter)="SetHoverRating(star)"
-                    (mouseleave)="ClearHoverRating()">
-                  </i>
+                  <span class="star-wrapper">
+                    <!-- Left half (sets X.5 for previous half) -->
+                    <span class="star-zone star-zone-left"
+                          (click)="SetRating(star - 0.5)"
+                          (mouseenter)="SetHoverRating(star - 0.5)"></span>
+                    <!-- Right half (sets full star) -->
+                    <span class="star-zone star-zone-right"
+                          (click)="SetRating(star)"
+                          (mouseenter)="SetHoverRating(star)"></span>
+                    <!-- Star icon -->
+                    @switch (GetStarState(star)) {
+                      @case ('full') {
+                        <i class="star fa-solid fa-star"></i>
+                      }
+                      @case ('half') {
+                        <i class="star fa-solid fa-star-half-stroke"></i>
+                      }
+                      @default {
+                        <i class="star fa-regular fa-star"></i>
+                      }
+                    }
+                  </span>
                 }
               </div>
-              @if (StarRating > 0) {
-                <span class="rating-text">{{ StarRating }} out of 5 stars</span>
-              } @else {
+              @if (StarRating === 0) {
                 <span class="rating-text placeholder">Click to rate</span>
               }
             </div>

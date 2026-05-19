@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "Greater Poland",
+      "Code": "30",
+      "ISO3166_2": "PL-30",
+      "Latitude": 52.1459,
+      "Longitude": 17.3977,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Greater Poland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "32B15F16-FCFF-4777-83E6-D711F94276F2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.496Z",
+      "checksum": "027862632dea9e2b0a449d676398c606499666f8834d731607cbff61259dbbd9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Holy Cross",
+      "Code": "26",
+      "ISO3166_2": "PL-26",
+      "Latitude": 50.7505,
+      "Longitude": 20.7829,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Holy Cross"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "F02E01C0-EC2F-405C-867F-99A4C074DABB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.513Z",
+      "checksum": "220eb9d9574a62cd4b0c26234c1f5e5e6dfda8dd471f71bcc703d72c0b8f01e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kuyavia-Pomerania",
+      "Code": "04",
+      "ISO3166_2": "PL-04",
+      "Latitude": 53.1648,
+      "Longitude": 18.4834,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Kuyavia-Pomerania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "9F2452E9-A251-4A9A-8D9C-45C9D64655ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.533Z",
+      "checksum": "2d09d363f7651fe62e067c9bd7c7e16ca248e45d436dcbf468426d3085c9d75e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lesser Poland",
+      "Code": "12",
+      "ISO3166_2": "PL-12",
+      "Latitude": 49.791,
+      "Longitude": 20.3794,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lesser Poland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "BB3F3742-92B5-454A-9781-315111D0E67C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.550Z",
+      "checksum": "bcc5b391e1ce1a566a0d50955c7649ce900d89ff27e5222f7c89db02249e4e06"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lower Silesia",
+      "Code": "02",
+      "ISO3166_2": "PL-02",
+      "Latitude": 50.9206,
+      "Longitude": 16.4946,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lower Silesia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "9C8D4872-5D40-4060-9F09-0218091A88B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.567Z",
+      "checksum": "fee5056ccb122ea29cbe13a46c184c4b79737603214d133bc5d159660d3ef5c2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lublin",
+      "Code": "06",
+      "ISO3166_2": "PL-06",
+      "Latitude": 51.2506,
+      "Longitude": 22.5701,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lublin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "0C8DCCF3-DEFD-453F-B338-8D6A24151B32"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.583Z",
+      "checksum": "6fafcbf4690e6f9575e38273b8a3df8367607c7e2b250e4cec9a4877e434db2d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lubusz",
+      "Code": "08",
+      "ISO3166_2": "PL-08",
+      "Latitude": 52.1002,
+      "Longitude": 15.3605,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Lubusz"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "31CBC570-A53F-4367-A6BF-7BEC7CC7E567"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.600Z",
+      "checksum": "b60147b3a6f564b073016ef5154040f131e75c94058bd7400cff9f02b48242a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mazovia",
+      "Code": "14",
+      "ISO3166_2": "PL-14",
+      "Latitude": 52.5462,
+      "Longitude": 21.2073,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Mazovia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "82074219-7C4A-4141-9511-FEAD585407EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.616Z",
+      "checksum": "c85b0eed5807e25d89f532c45bb7daff4eae0134b1afca8083bffddfd26b6101"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Podlaskie",
+      "Code": "20",
+      "ISO3166_2": "PL-20",
+      "Latitude": 53.2668,
+      "Longitude": 22.8526,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Podlaskie"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "ADF79C33-2DC8-4508-A59B-28EA38AA89B4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.632Z",
+      "checksum": "dddf05df023f0d3e5ed3823fe6e2acd5e390d84949c6072279a947e79bb4be3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pomerania",
+      "Code": "22",
+      "ISO3166_2": "PL-22",
+      "Latitude": 54.2456,
+      "Longitude": 18.1099,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Pomerania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "5A99D1D8-69A0-428F-A78F-A8F2FCA2FA59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.646Z",
+      "checksum": "99599dccfd468faba389b8fba7126fb52bcadf091e21a988772509c8a24555df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Silesia",
+      "Code": "24",
+      "ISO3166_2": "PL-24",
+      "Latitude": 50.5687,
+      "Longitude": 19.2344,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Silesia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "58F5E157-2376-4854-8456-A3ECFB0DF427"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.688Z",
+      "checksum": "1273b613519eba74c5048c42ca97ce69709ac2bb138dcb1121918cdd2153dca0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Subcarpathia",
+      "Code": "18",
+      "ISO3166_2": "PL-18",
+      "Latitude": 49.3113,
+      "Longitude": 22.4326,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Subcarpathia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "DABB0A42-872E-45B2-BA3A-6B4FA966CE7C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.704Z",
+      "checksum": "b01d1f9f1b18d115addadbe0341ecf392c01575fbba5c2dee8b40cf3146617e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Upper Silesia",
+      "Code": "16",
+      "ISO3166_2": "PL-16",
+      "Latitude": 50.2467,
+      "Longitude": 18.6454,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Upper Silesia"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "8456AF3C-6BEF-4C18-8D05-0C16CCCD5F1E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.720Z",
+      "checksum": "b618d05550a474475856239a3d081ed7ba3dd42992fb2ef65bf61381af5a1396"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Warmia-Masuria",
+      "Code": "28",
+      "ISO3166_2": "PL-28",
+      "Latitude": 53.9312,
+      "Longitude": 21.1261,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Warmia-Masuria"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "E8EC7CCB-FFCC-42B1-A8F7-E76E2DB54C84"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.736Z",
+      "checksum": "fd994ac3765a7114da5f6da23bdab3c3144247cf02fc517e1578816a0cd25fc5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West Pomerania",
+      "Code": "32",
+      "ISO3166_2": "PL-32",
+      "Latitude": 53.5451,
+      "Longitude": 15.5662,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "West Pomerania"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "E291B9A3-505B-4557-A9EE-B2CBC45F90C0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.754Z",
+      "checksum": "545a598b28a5b343ee4aca9ed04b44595ea0ef8145a3783d3e46a064fa13e9ca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Łódź",
+      "Code": "10",
+      "ISO3166_2": "PL-10",
+      "Latitude": 51.7687,
+      "Longitude": 19.457,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Łódź"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PL"
+    },
+    "primaryKey": {
+      "ID": "DDA438A5-A2FD-4AA5-B9F8-B91A44F3E46D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.768Z",
+      "checksum": "5cfa150e19fa216465f60e54f5b190947e23c41dee78f9c7205c3d645706fd3a"
+    }
+  }
+]

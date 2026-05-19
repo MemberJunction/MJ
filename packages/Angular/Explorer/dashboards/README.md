@@ -24,8 +24,20 @@ graph TD
     BRC --> DB["Dashboard Browser"]
     BRC --> HD["Home Dashboard"]
     BRC --> LST["Lists Dashboard"]
+    BRC --> KH["Knowledge Hub"]
+    KH --> VS["Vector Search"]
+    KH --> DD["Duplicate Detection"]
+    KH --> CL["Clustering"]
+    KH --> AT["Content Autotagging"]
+    KH --> KC["Knowledge Config"]
 
     style BRC fill:#7c5295,stroke:#563a6b,color:#fff
+    style KH fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style VS fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style DD fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style CL fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style AT fill:#2d8659,stroke:#1a5c3a,color:#fff
+    style KC fill:#2d8659,stroke:#1a5c3a,color:#fff
     style AID fill:#2d6a9f,stroke:#1a4971,color:#fff
     style EAD fill:#2d6a9f,stroke:#1a4971,color:#fff
     style ACT fill:#2d6a9f,stroke:#1a4971,color:#fff
@@ -77,6 +89,45 @@ graph TD
 
 ### Component Studio
 - Visual component builder with AI assistant, code editing, specs, and versioning
+
+### Knowledge Hub Dashboards
+
+The Knowledge Hub application provides a suite of dashboards for managing vector infrastructure, content processing, and AI-powered data exploration.
+
+#### Vector Search Dashboard
+- **Unified search**: Combines vector similarity (Pinecone) with full-text search using Reciprocal Rank Fusion (RRF)
+- **Entity document selection**: Pick which entity document to search against
+- **Result cards**: Display matched records with relevance scores and metadata
+
+#### Duplicate Detection Dashboard
+- **Kanban board**: Organizes potential duplicates by status (Pending, Reviewed, Merged, Rejected)
+- **Comparison slide-in**: Side-by-side field diff showing which fields match, differ, or are empty
+- **Merge confirmation**: Dialog showing dependency counts and affected records before executing a merge
+- **Drag-and-drop**: Move duplicate pairs between kanban columns for triage
+- **Threshold controls**: Adjust potential and absolute match thresholds for the run
+- **Progress tracking**: Real-time progress reporting during detection runs
+
+#### Clustering Dashboard
+- **Scatter plot visualization**: Interactive SVG scatter plot powered by `@memberjunction/ng-clustering`
+- **Detail panel**: Click a point to see entity metadata, cluster members, and navigate to the record
+- **Cluster member list**: Browse all records in the selected point's cluster
+- **LLM cluster naming**: Generate descriptive cluster labels using the "Cluster Naming" AI prompt
+- **Entity document selector**: Choose which entity document (and embedding model) to use when the entity has multiple documents
+- **Save/restore**: Save visualizations with viewport state and cluster labels for later review
+- **Config panel**: Positioned at top-left with algorithm, metric, and entity selection controls
+- **FetchEntityVectors**: Uses the `FetchEntityVectors` GraphQL query to retrieve vectors from Pinecone with entity metadata filtering
+
+#### Content Autotagging Dashboard
+Five-tab left navigation layout:
+- **Pipeline**: Real-time pipeline monitor showing stage counts (Sources, Items, Tags, Attributes), KPI cards, and run controls with progress reporting
+- **Sources**: Full CRUD management of content sources with source type parameter configuration
+- **Content Types**: Manage content type definitions with default embedding model and vector index selection (tree-dropdown for AI model picker)
+- **Tag Library**: Browse and manage the tag taxonomy with tag weight visualization (0.0--1.0 relevance scores)
+- **Run History**: Historical process run logs with timing, item counts, and error details
+
+#### Knowledge Config Dashboard
+- **Central configuration**: Manage entity documents, vector indexes, vector databases, and content infrastructure
+- **Uses KnowledgeHubMetadataEngine**: Singleton cache for all Knowledge Hub metadata with auto-refresh
 
 ### Additional Dashboards
 - **API Keys**: API key management with scopes, applications, and usage tracking

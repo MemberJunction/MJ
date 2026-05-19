@@ -1,7 +1,8 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad } from "@memberjunction/ai-core-plus";
+import { ArtifactToolCall } from "../ArtifactToolManager";
 
 // Re-export universal types for backward compatibility
-export type { ForEachOperation, WhileOperation };
+export type { ForEachOperation, WhileOperation, ArtifactToolCall };
 
 /**
  * Response structure for Loop Agent Type
@@ -44,6 +45,22 @@ export interface LoopAgentResponse<P = any> {
     payloadChangeRequest?: AgentPayloadChangeRequest<P>;
     
     /**
+     * Private working memory — not shared with parent or sub-agents.
+     * Processed inline on the same turn as other response fields (zero turn cost).
+     * Use for internal reasoning notes and structured task tracking.
+     * @since 2.46.0
+     */
+    scratchpad?: AgentScratchpad;
+
+    /**
+     * Artifact tool invocations — explore input artifacts without
+     * dumping full content into context. Processed inline on the same
+     * turn as other response fields (zero turn cost). Results are
+     * injected into the next turn's prompt via _ARTIFACT_TOOL_RESULTS.
+     */
+    artifactToolCalls?: ArtifactToolCall[];
+
+    /**
      * Internal reasoning for debugging
      */
     reasoning?: string;
@@ -58,9 +75,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While'
          */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While';
 
         /**
          * Actions to execute (when type='Actions')
@@ -69,6 +86,17 @@ export interface LoopAgentResponse<P = any> {
             name: string;
             params: Record<string, unknown>;
         }>;
+
+        /**
+         * Index of a compacted message to expand (when type='Retry').
+         * The message is restored to full content and the prompt re-runs.
+         */
+        messageIndex?: number;
+
+        /**
+         * Reason for expanding the message (when type='Retry')
+         */
+        reason?: string;
 
         /**
          * Sub-agent details (when type='Sub-Agent')
@@ -93,6 +121,21 @@ export interface LoopAgentResponse<P = any> {
              */
             terminateAfter: boolean;
         };
+
+        /**
+         * Client tools to invoke (when type='ClientTools').
+         * Supports both PascalCase (spec) and camelCase (LLM convenience).
+         */
+        clientTools?: Array<{
+            Name?: string;
+            name?: string;
+            Params?: Record<string, unknown>;
+            params?: Record<string, unknown>;
+            TimeoutMs?: number;
+            timeoutMs?: number;
+            Description?: string;
+            description?: string;
+        }>;
 
         /**
          * ForEach operation details (when type='ForEach')

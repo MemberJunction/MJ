@@ -112,78 +112,10 @@
   padding: 15px;
 }
 
-/* Kendo PanelBar Styling - Copied from AI Agent Form */
-::ng-deep .analytics-content .k-panelbar {
-  border: none;
-  background: transparent;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item {
-  border: none;
-  border-radius: 12px;
+/* Accordion Panel Styling */
+.analytics-content mj-accordion-panel {
+  display: block;
   margin-bottom: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  background: var(--mj-bg-surface-card);
-  overflow: hidden;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item > .k-header {
-  background: var(--mj-bg-surface-card);
-  border: none;
-  padding: 16px 20px;
-  border-radius: 12px 12px 0 0;
-  color: var(--mj-text-primary);
-  font-weight: 600;
-  font-size: 16px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item > .k-header:hover {
-  background: var(--mj-bg-surface-sunken);
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item.k-panelbar-expanded > .k-header {
-  background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse);
-  border-radius: 12px 12px 0 0;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item > .k-header .k-panelbar-toggle {
-  position: absolute;
-  right: 24px;
-  color: inherit;
-  font-size: 14px;
-  transition: transform 0.2s ease;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item.k-panelbar-expanded > .k-header .k-panelbar-toggle {
-  transform: rotate(180deg);
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item > .k-header .k-panelbar-toggle::before {
-  content: '\f107';
-  font-family: 'Font Awesome 6 Free';
-  font-weight: 900;
-}
-
-::ng-deep .analytics-content .k-panelbar > .k-panelbar-item > .k-content {
-  padding: 0;
-  border: none;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: 0 0 12px 12px;
-}
-
-::ng-deep .analytics-content .k-panelbar .k-header .k-panelbar-icon {
-  font-size: 18px;
-  color: var(--mj-brand-primary);
-  margin-right: 8px;
-}
-
-::ng-deep .analytics-content .k-panelbar .k-panelbar-expanded .k-header .k-panelbar-icon {
-  color: var(--mj-text-inverse);
 }
 
 /* Charts */

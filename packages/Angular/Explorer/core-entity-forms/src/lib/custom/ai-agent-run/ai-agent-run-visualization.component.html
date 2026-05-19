@@ -5,9 +5,9 @@
       <span>{{ error }}</span>
     </div>
   } @else {
-    <kendo-splitter orientation="horizontal" style="height: 100%;">
+    <as-split direction="horizontal" style="height: 100%;">
       <!-- Diagram Pane -->
-      <kendo-splitter-pane [collapsible]="false">
+      <as-split-area [size]="selectedItem ? 70 : 100">
         <div class="diagram-container" #svgContainer>
           <div class="diagram-toolbar">
             <div class="toolbar-title">
@@ -34,19 +34,19 @@
             </div>
           }
         </div>
-      </kendo-splitter-pane>
-      
+      </as-split-area>
+
       <!-- Detail Pane -->
       @if (selectedItem) {
-        <kendo-splitter-pane [size]="'400px'" [min]="'300px'" [max]="'600px'" [collapsible]="true">
+        <as-split-area [size]="30" [minSize]="20" [maxSize]="50">
           <mj-ai-agent-run-step-detail
             [selectedTimelineItem]="selectedItem"
             (closePanel)="closeDetailPane()"
             (navigateToActionLog)="navigateToActionLog($event)"
             (copyToClipboard)="copyToClipboard($event)">
           </mj-ai-agent-run-step-detail>
-        </kendo-splitter-pane>
+        </as-split-area>
       }
-    </kendo-splitter>
+    </as-split>
   }
 </div>

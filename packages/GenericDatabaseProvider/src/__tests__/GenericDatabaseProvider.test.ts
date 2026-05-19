@@ -1,10 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
+import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
 vi.mock('sql-formatter', () => ({
     format: (sql: string) => sql, // passthrough for tests
+}));
+
+// Mock encryption engine for EncryptFieldValuesForSave tests
+const mockEncryptionEngine = {
+    Config: vi.fn(),
+    Encrypt: vi.fn(),
+    IsEncrypted: vi.fn().mockReturnValue(false),
+    GetKeyByID: vi.fn().mockReturnValue({ Marker: '$ENC$' }),
+};
+
+vi.mock('@memberjunction/encryption', () => ({
+    EncryptionEngine: {
+        get Instance() { return mockEncryptionEngine; }
+    }
 }));
 import {
     DatabaseProviderBase,
@@ -57,6 +72,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testBuildPaginationSQL(maxRows: number, startRow: number): string { return this.BuildPaginationSQL(maxRows, startRow); }
     public testBuildNonPaginatedLimitSQL(maxRows: number): string { return this.BuildNonPaginatedLimitSQL(maxRows); }
     public testTransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string { return this.TransformExternalSQLClause(clause, entityInfo); }
+    public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
+        return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+    }
 
     // Expose protected methods for testing
     public testEnqueueAfterSaveAIAction(params: { entityAIActionId: string; entityRecord: BaseEntity; actionId: string; modelId: string }, user: UserInfo): void {
@@ -105,6 +123,15 @@ class TestGenericProvider extends GenericDatabaseProvider {
             get: () => this._testQueryCategories ?? [],
             configurable: true,
         });
+    }
+
+    // Expose EncryptFieldValuesForSave for security testing
+    public async testEncryptFieldValuesForSave(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        contextUser?: UserInfo
+    ): Promise<void> {
+        return this.EncryptFieldValuesForSave(entity, fieldValues, contextUser);
     }
 
     // Track ExecuteSQL calls for Load testing
@@ -211,6 +238,51 @@ describe('GenericDatabaseProvider', () => {
         it('TransformExternalSQLClause passes empty string through', () => {
             const entityInfo = { Fields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
+        });
+    });
+
+    describe('BuildTotalRowCountSQL', () => {
+        // Minimal EntityInfo for SQL-shape assertions. Real methods on EntityInfo aren't needed here —
+        // BuildTotalRowCountSQL only reads SchemaName + BaseView and passes them through QuoteSchemaAndView.
+        const entityInfo = {
+            SchemaName: '__mj',
+            BaseView: 'vwEntities',
+        } as unknown as EntityInfo;
+
+        it('returns null when rows are NOT limited (no pagination, no MaxRows)', () => {
+            // When the caller isn't limiting rows, there's no need for a count query —
+            // retData.length IS the full row count. Returning null signals "don't run a count."
+            expect(provider.testBuildTotalRowCountSQL(entityInfo, false, 0)).toBeNull();
+        });
+
+        it('returns count SQL when pagination IS being used', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, true, 100);
+            expect(sql).not.toBeNull();
+            expect(sql).toContain('SELECT COUNT(*)');
+            expect(sql).toContain('FROM "__mj"."vwEntities"');
+        });
+
+        // Regression for the "Explorer shows 100 of 100 on PG" bug:
+        // Before this fix, countSQL was only emitted when `topSQL.length > 0`. PG's BuildTopClause
+        // returns empty (PG uses LIMIT, not TOP), so non-paginated MaxRows queries never produced
+        // a count — Explorer fell back to retData.length (the page size) and hid pagination controls.
+        it('returns count SQL even WITHOUT pagination when MaxRows is set (PG fallback case)', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, false, 100);
+            expect(sql).not.toBeNull();
+            expect(sql).toContain('SELECT COUNT(*)');
+        });
+
+        // Regression for the "PG case-folds the alias" bug:
+        // PG folds unquoted identifiers to lowercase, so `AS TotalRowCount` returns a row keyed
+        // `totalrowcount`. The consumer reads `countResult[0].TotalRowCount` and gets undefined.
+        // Using `QuoteIdentifier` yields `"TotalRowCount"` on PG and `[TotalRowCount]` on SQL Server
+        // — both preserve case.
+        it('aliases the count via QuoteIdentifier (preserves case on PG)', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, true, 100);
+            // Test subclass's QuoteIdentifier uses double-quotes — verifies we're NOT emitting the
+            // raw unquoted `AS TotalRowCount` that caused the PG bug.
+            expect(sql).toContain('AS "TotalRowCount"');
+            expect(sql).not.toMatch(/AS\s+TotalRowCount\s/);
         });
     });
 
@@ -555,6 +627,124 @@ describe('GenericDatabaseProvider', () => {
             expect(results[0]).toEqual([{ ID: '1', Name: 'Only' }]);
         });
     });
+
+    describe('EncryptFieldValuesForSave - error sanitization (security)', () => {
+        it('should NOT leak detailed encryption error messages to caller', async () => {
+            // Simulate an encryption failure with infrastructure details
+            const detailedError = new Error(
+                'Encryption key not found in environment variable: "MJ_ENCRYPTION_KEY_PII". ' +
+                'Ensure the environment variable is set with a base64-encoded key value.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'SSN',
+                Encrypt: true,
+                EncryptionKeyID: 'some-key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'Employees' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'sensitive-ssn-value');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // The thrown error should NOT contain infrastructure details
+                expect(message).not.toContain('MJ_ENCRYPTION_KEY_PII');
+                expect(message).not.toContain('environment variable');
+                expect(message).not.toContain('base64-encoded');
+
+                // It SHOULD contain a generic message pointing to server logs
+                expect(message).toContain('Check server logs for details');
+                expect(message).toContain('SSN');
+                expect(message).toContain('Employees');
+            }
+        });
+
+        it('should NOT leak config file paths in encryption error messages', async () => {
+            const detailedError = new Error(
+                'Configuration file not loaded. Ensure /opt/app/mj.config.cjs exists with an "encryptionKeys" section.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'APIKey',
+                Encrypt: true,
+                EncryptionKeyID: 'key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'API Keys' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'sk-live-abc123');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // Should NOT contain file paths or config structure details
+                expect(message).not.toContain('mj.config.cjs');
+                expect(message).not.toContain('encryptionKeys');
+                expect(message).not.toContain('/opt/app');
+
+                // Should contain generic guidance
+                expect(message).toContain('Check server logs');
+            }
+        });
+
+        it('should NOT leak vault URLs in encryption error messages', async () => {
+            const detailedError = new Error(
+                'Azure Key Vault access denied for: https://prod-vault.vault.azure.net/secrets/master-key. ' +
+                'Ensure the application has Secret Get permission.'
+            );
+            mockEncryptionEngine.Encrypt.mockRejectedValue(detailedError);
+            mockEncryptionEngine.IsEncrypted.mockReturnValue(false);
+            mockEncryptionEngine.GetKeyByID.mockReturnValue({ Marker: '$ENC$' });
+
+            const encryptedField = {
+                Name: 'Token',
+                Encrypt: true,
+                EncryptionKeyID: 'key-id',
+            } as unknown as EntityFieldInfo;
+
+            const entity = {
+                EntityInfo: { Name: 'Tokens' },
+            } as unknown as BaseEntity;
+
+            const fieldValues = new Map<EntityFieldInfo, unknown>();
+            fieldValues.set(encryptedField, 'token-value');
+
+            try {
+                await provider.testEncryptFieldValuesForSave(entity, fieldValues, mockUser);
+                expect.fail('Expected an error to be thrown');
+            } catch (err) {
+                const message = (err as Error).message;
+
+                // Should NOT contain vault URLs or permission details
+                expect(message).not.toContain('vault.azure.net');
+                expect(message).not.toContain('Secret Get permission');
+                expect(message).not.toContain('prod-vault');
+
+                // Should contain generic guidance
+                expect(message).toContain('Check server logs');
+            }
+        });
+    });
 });
 
 // =====================================================================
@@ -575,9 +765,16 @@ describe('SqlLoggingSessionImpl', () => {
     });
 
     describe('_escapeFlywaySyntaxInStrings', () => {
-        // Access private method for testing via prototype
-        const escapeFlyway = (sql: string) => {
-            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
+        // Access private method for testing via prototype.
+        // The escape form is delegated to the configured SQLDialect; the helper
+        // accepts a dialect so each test can pin its platform explicitly.
+        // Defaults to SQLServerDialect to match the historical (and most-used)
+        // call site.
+        const escapeFlyway = (
+            sql: string,
+            dialect: SQLServerDialect | PostgreSQLDialect = new SQLServerDialect()
+        ) => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {}, dialect);
             return (session as Record<string, CallableFunction>)._escapeFlywaySyntaxInStrings(sql);
         };
 
@@ -585,20 +782,76 @@ describe('SqlLoggingSessionImpl', () => {
             const input = "INSERT INTO T VALUES (N'${someVar}')";
             const result = escapeFlyway(input);
             expect(result).not.toContain('${someVar}');
-            expect(result).toContain("$'+'{someVar}");
+            // The escape interleaves an NVARCHAR(MAX) cast between the split halves to force
+            // NVARCHAR(MAX) precedence on the running T-SQL concat — without it, the chain
+            // caps at NVARCHAR(4000) and silently truncates large literals.
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{someVar}");
         });
 
         it('should handle multiple ${...} occurrences', () => {
             const input = "N'${a} and ${b}'";
             const result = escapeFlyway(input);
-            expect(result).toContain("$'+'{a}");
-            expect(result).toContain("$'+'{b}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{a}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{b}");
         });
 
         it('should return unchanged SQL when no ${...} patterns exist', () => {
             const input = "SELECT * FROM Users WHERE Name = 'John'";
             const result = escapeFlyway(input);
             expect(result).toBe(input);
+        });
+
+        // Regression test for silent NVARCHAR(4000) truncation. The escape
+        // splits each ${...} via N'…$' + N'{…}', but T-SQL string concatenation
+        // of NVARCHAR(N) literals caps the running result at NVARCHAR(4000)
+        // and silently drops content past that boundary unless one operand
+        // is explicitly NVARCHAR(MAX). Each split must therefore interleave
+        // a CAST(N'' AS NVARCHAR(MAX)) so the concat chain inherits MAX
+        // precedence — otherwise large Specifications (e.g. components with
+        // 20+ ${...} expressions, ~65 KB encoded) get truncated to ~57 KB on
+        // Flyway apply with no error.
+        it('forces NVARCHAR(MAX) precedence at every split so multi-chunk concat does not silently truncate at 4000 chars', () => {
+            const input = "SET @x = N'`Hello ${name}, you have ${count} items`'";
+            const result = escapeFlyway(input);
+
+            // Each ${ in the source must produce a corresponding NVARCHAR(MAX)
+            // cast in the escape. Without it, NVARCHAR + NVARCHAR concat caps
+            // at NVARCHAR(4000) and silently truncates.
+            const castMatches = result.match(/CAST\(N'' AS NVARCHAR\(MAX\)\)/g) || [];
+            expect(castMatches.length).toBe(2);
+
+            // The cast must appear between the closing $' and the opening N'{
+            // — otherwise it doesn't actually break the NVARCHAR-only chain.
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{name}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{count}");
+
+            // And the original ${...} must still be defeated for Flyway —
+            // i.e. no adjacent `${` should remain in the output.
+            expect(result).not.toMatch(/\$\{/);
+        });
+
+        // Cross-dialect coverage. Proves the escape is plumbed through the
+        // SQLDialect abstraction and that swapping dialects yields the
+        // platform-correct form (no NVARCHAR/CAST/N-prefix bleed-through into
+        // the PostgreSQL output). This guards against future regressions
+        // where someone hard-codes SQL Server syntax in the shared session
+        // implementation.
+        it('uses PostgreSQL-specific concat (||) and no NVARCHAR(MAX) cast when the dialect is PostgreSQL', () => {
+            const result = escapeFlyway(
+                "INSERT INTO t VALUES ('${someVar}')",
+                new PostgreSQLDialect()
+            );
+
+            // PostgreSQL TEXT concat has no length cap — the split uses ||
+            // and no cast is needed.
+            expect(result).toContain("$'||'{someVar}");
+
+            // No SQL Server-only constructs should appear in PG output.
+            expect(result).not.toContain("CAST(N'' AS NVARCHAR(MAX))");
+            expect(result).not.toContain("+N'{");
+
+            // And the original ${...} must still be defeated for Flyway.
+            expect(result).not.toMatch(/\$\{/);
         });
     });
 

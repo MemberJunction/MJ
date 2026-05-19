@@ -3,10 +3,10 @@
     <div><mj-loading [showText]="false" size="medium"></mj-loading></div>
   }
   @if (ShowSaveButton) {
-    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="Save()">Save</button>
+    <button [disabled]="NumDirtyRecords === 0" mjButton (click)="Save()">Save</button>
   }
   @if (ShowCancelButton) {
-    <button [disabled]="NumDirtyRecords === 0" kendoButton (click)="CancelEdit()">Cancel</button>
+    <button [disabled]="NumDirtyRecords === 0" mjButton (click)="CancelEdit()">Cancel</button>
   }
   @if (!_IsLoading) {
     <table class="grid">
@@ -34,10 +34,10 @@
             <span>{{row.FirstColValue}}</span>
             @if (EditMode !== 'None'){
               @if (!row.JoinExists) {
-                <button kendoButton class="cellButton" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
+                <button mjButton class="cellButton" aria-label="Add join record" title="Add join record" (click)="AddJoinEntityRecord(row)"><span class="fa-solid fa-plus"></span></button>
               }
               @else {
-              <button kendoButton class="cellButton" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
+              <button mjButton class="cellButton" aria-label="Remove join record" title="Remove join record" (click)="RemoveJoinEntityRecord(row)"><span class="fa-solid fa-minus"></span></button>
             }
           }
         </td>
@@ -51,16 +51,15 @@
                       <input type="checkbox" [checked]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" />
                     }
                     @else {
-                    <kendo-textbox [value]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" />
+                    <input class="mj-input" [value]="row.GetColumnValue(i)" (change)="UpdateCellValue(row, i, $event)" />
                   }
                 }
                 @else {
-                <kendo-dropdownlist
-                  [data]="GetJoinEntityFieldValues(colName)"
-                  [value]="row.GetColumnValue(i)"
-                  (selectionChange)="UpdateCellValueDirect(row, i, $event)"
-                  >
-                </kendo-dropdownlist>
+                <mj-dropdown
+                  [Data]="GetJoinEntityFieldValues(colName)"
+                  [ngModel]="row.GetColumnValue(i)"
+                  (ValueChange)="OnDropdownValueChange(row, i, $event)">
+                </mj-dropdown>
               }
             }
           }
@@ -77,7 +76,7 @@
       [ngClass]="IsCellReallyDirty(cell) ? 'dirty-cell' : ''">
       @if (EditMode !== 'None') {
         <input   type="checkbox"
-          kendoCheckBox
+          class="mj-checkbox"
           [checked]="_IsColumnChecked(cell)"
           (click)="_FlipRecord($event, row, cell, true)">
       }

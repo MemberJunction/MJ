@@ -186,37 +186,63 @@ If the user wants to update an existing saved query, use the **Update Record** a
 
 The Strategist's `payloadChangeRequest` renders data via the artifact viewer. When the Strategist returns results, they are automatically displayed — you do NOT need to emit a separate artifact.
 
-The DataArtifactSpec JSON format used by the viewer **MUST** follow this exact structure — no other format is accepted:
+Two formats are supported — **single-table** (one query) and **multi-table** (dashboard-style, multiple queries rendered as tabs).
 
+**Single-table** (simple queries):
 ```json
 {
   "source": "query",
   "title": "AI Agent Performance Summary",
-  "plan": "## Approach\n\n```mermaid\nerDiagram\n    AIAgents ||--o{ AIAgentRuns : \"has runs\"\n```\n\nQueried AI Agent Runs, grouped by agent name...",
+  "plan": "## Approach\n\nQueried AI Agent Runs, grouped by agent name...",
   "columns": [
-    { "field": "AgentName", "headerName": "Agent" },
-    { "field": "TotalRuns", "headerName": "Total Runs" },
-    { "field": "SuccessRate", "headerName": "Success Rate" }
+    { "field": "AgentName", "displayName": "Agent", "sourceEntity": "AI Agents", "sourceFieldName": "Name", "sqlBaseType": "nvarchar" },
+    { "field": "TotalRuns", "displayName": "Total Runs", "isSummary": true, "sqlBaseType": "int" }
   ],
   "rows": [
-    { "AgentName": "Query Builder", "TotalRuns": 22, "SuccessRate": 100 },
-    { "AgentName": "Memory Manager", "TotalRuns": 8, "SuccessRate": 100 }
+    { "AgentName": "Query Builder", "TotalRuns": 22 },
+    { "AgentName": "Memory Manager", "TotalRuns": 8 }
   ],
-  "metadata": {
-    "sql": "SELECT a.Name AS AgentName, COUNT(r.ID) AS TotalRuns ...",
-    "rowCount": 2,
-    "executionTimeMs": 30
-  }
+  "metadata": { "sql": "SELECT ...", "rowCount": 2, "executionTimeMs": 30 }
+}
+```
+
+**Multi-table** (dashboards, comparisons, breakdowns — use when the request needs 2+ perspectives):
+```json
+{
+  "title": "Sales Dashboard Q4",
+  "plan": "## Approach\n\n1. Customer revenue\n2. Monthly trends\n3. Product mix",
+  "interpretation": "Q4 total revenue is $263K. West region leads. SaaS grew 28% YoY.",
+  "computations": [
+    { "name": "Total Revenue", "type": "sum", "field": "Revenue", "table": "customers", "value": 263500, "formattedValue": "$263,500" }
+  ],
+  "tables": [
+    {
+      "name": "customers",
+      "description": "Top customers by revenue",
+      "source": "query",
+      "columns": [{ "field": "Name", "displayName": "Customer", "sqlBaseType": "nvarchar" }],
+      "rows": [{ "Name": "Acme Corp" }],
+      "metadata": { "sql": "SELECT ...", "rowCount": 1, "executionTimeMs": 25 }
+    },
+    {
+      "name": "monthly_revenue",
+      "description": "Revenue by month",
+      "source": "query",
+      "columns": [{ "field": "Month", "displayName": "Month", "sqlBaseType": "nvarchar" }],
+      "rows": [{ "Month": "October" }],
+      "metadata": { "sql": "SELECT ...", "rowCount": 1, "executionTimeMs": 20 }
+    }
+  ]
 }
 ```
 
 **Field details:**
-- `source`: MUST be `"query"`
 - `title`: Business-friendly title for the results
-- `plan`: Markdown describing the query approach — include mermaid ER diagrams, logic flow diagrams, and a plain text summary. The viewer shows this in a dedicated "Plan" tab. Include it whenever the Strategist provided a plan.
-- `columns`: Array listing every column — `field` is the SQL alias, `headerName` is the display label
-- `rows`: The actual data rows
-- `metadata.sql`: The saved query's SQL
+- `plan`: Markdown describing the query approach — include mermaid ER diagrams, logic flow diagrams, and a plain text summary. The viewer shows this in a dedicated "Plan" tab.
+- `columns[].displayName`: Human-readable display label for the column
+- `interpretation`: (multi-table) Narrative summary of key insights. Rendered in a dedicated "Interpretation" tab.
+- `computations`: (multi-table) Aggregation chips shown above the grid. Include `name`, `type`, `value`, `formattedValue`.
+- `tables[].name`: Short snake_case identifier used as tab label.
 
 **Any other JSON structure (summaries, entity lists, aggregated objects) is WRONG and will break the viewer.**
 

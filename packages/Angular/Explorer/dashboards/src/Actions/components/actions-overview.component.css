@@ -2,29 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1.5rem;
-  height: 100%;
-  overflow-y: auto;
   position: relative; /* Required for scoped loading overlay */
-}
-.actions-overview .overview-header .filters-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.actions-overview .overview-header .filters-row .search-container {
-  flex: 1;
-  min-width: 200px;
-}
-.actions-overview .overview-header .filters-row .search-container kendo-textbox {
-  width: 100%;
-}
-.actions-overview .overview-header .filters-row .filter-container {
-  min-width: 150px;
-}
-.actions-overview .overview-header .filters-row .filter-container kendo-dropdownlist {
-  width: 100%;
 }
 .actions-overview .metrics-grid {
   display: grid;

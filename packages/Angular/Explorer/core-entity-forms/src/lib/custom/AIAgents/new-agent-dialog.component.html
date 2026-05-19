@@ -20,12 +20,10 @@
       <!-- Agent Name -->
       <div class="form-group">
         <label class="required">Agent Name</label>
-        <kendo-textbox 
-          formControlName="name" 
-          placeholder="Enter a descriptive name for your agent"
-          [clearButton]="true"
-          class="full-width">
-        </kendo-textbox>
+        <input
+          class="mj-input full-width"
+          formControlName="name"
+          placeholder="Enter a descriptive name for your agent">
         @if (form.get('name')?.invalid && form.get('name')?.touched) {
           <div class="error-message">
             <i class="fa-solid fa-exclamation-circle"></i>
@@ -37,36 +35,24 @@
       <!-- Description -->
       <div class="form-group">
         <label>Description</label>
-        <kendo-textarea 
-          formControlName="description" 
+        <textarea
+          class="mj-textarea full-width"
+          formControlName="description"
           placeholder="Describe what this agent does..."
-          [rows]="3"
-          class="full-width">
-        </kendo-textarea>
+          rows="3"></textarea>
       </div>
       
       <!-- AI Model Selection -->
       <div class="form-group">
         <label class="required">AI Model</label>
-        <kendo-dropdownlist 
+        <mj-dropdown
           formControlName="modelId"
-          [data]="models$ | async"
-          textField="Name"
-          valueField="ID"
-          placeholder="Select an AI model..."
+          [Data]="models$ | async"
+          TextField="Name"
+          ValueField="ID"
+          Placeholder="Select an AI model..."
           class="full-width">
-          <ng-template kendoDropDownListItemTemplate let-dataItem>
-            <div class="model-item">
-              <div class="model-icon">
-                <i class="fa-solid fa-microchip"></i>
-              </div>
-              <div class="model-details">
-                <span class="model-name">{{ dataItem.Name }}</span>
-                <span class="model-vendor">{{ dataItem.Vendor }}</span>
-              </div>
-            </div>
-          </ng-template>
-        </kendo-dropdownlist>
+        </mj-dropdown>
         @if (form.get('modelId')?.invalid && form.get('modelId')?.touched) {
           <div class="error-message">
             <i class="fa-solid fa-exclamation-circle"></i>
@@ -78,12 +64,11 @@
       <!-- System Prompt -->
       <div class="form-group">
         <label>System Prompt</label>
-        <kendo-textarea 
-          formControlName="systemPrompt" 
+        <textarea
+          class="mj-textarea full-width"
+          formControlName="systemPrompt"
           placeholder="Define the agent's behavior and personality..."
-          [rows]="4"
-          class="full-width">
-        </kendo-textarea>
+          rows="4"></textarea>
         <div class="field-hint">
           <i class="fa-solid fa-info-circle"></i>
           This sets the agent's context and behavior
@@ -102,14 +87,13 @@
           <div class="setting-group">
             <label>Temperature</label>
             <div class="slider-container">
-              <kendo-slider 
+              <input
+                type="range"
+                class="mj-input temperature-slider"
                 formControlName="temperature"
-                [min]="0"
-                [max]="2"
-                [smallStep]="0.1"
-                [showButtons]="true"
-                class="temperature-slider">
-              </kendo-slider>
+                min="0"
+                max="2"
+                step="0.1">
               <span class="slider-value">{{ form.get('temperature')?.value }}</span>
             </div>
             <div class="field-hint">Higher values make output more creative</div>
@@ -118,21 +102,21 @@
           <!-- Max Tokens -->
           <div class="setting-group">
             <label>Max Tokens</label>
-            <kendo-numerictextbox 
+            <mj-numeric-input
               formControlName="maxTokens"
-              [min]="1"
-              [max]="8000"
-              [step]="100"
-              [format]="'n0'"
+              [Min]="1"
+              [Max]="8000"
+              [Step]="100"
+              Format="n0"
               class="full-width">
-            </kendo-numerictextbox>
+            </mj-numeric-input>
             <div class="field-hint">Maximum response length</div>
           </div>
           
           <!-- Enable Streaming -->
           <div class="setting-group checkbox-group">
             <label>
-              <input type="checkbox" formControlName="enableStreaming" kendoCheckBox />
+              <input type="checkbox" formControlName="enableStreaming" class="mj-checkbox" />
               <span>Enable Response Streaming</span>
             </label>
             <div class="field-hint">Stream responses in real-time</div>
@@ -143,17 +127,17 @@
     
     <!-- Dialog Actions -->
     <div class="dialog-actions">
-      <button 
-        type="button" 
-        kendoButton 
+      <button
+        type="button"
+        mjButton
         (click)="onCancel()"
         [disabled]="isSubmitting">
         Cancel
       </button>
-      <button 
-        type="submit" 
-        kendoButton 
-        themeColor="primary"
+      <button
+        type="submit"
+        mjButton
+        variant="primary"
         [disabled]="form.invalid || isSubmitting">
         @if (isSubmitting) {
           <span class="spinner-small"></span>

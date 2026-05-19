@@ -149,10 +149,10 @@ describe('PostgreSQL Integration: Composition + Paging + Cache', () => {
             expect(paged.DataSQL).toMatch(/"__cte_Revenue_By_Region_[a-z0-9]+"/);
             // Should use PG paging syntax
             expect(paged.DataSQL).toContain('LIMIT 25 OFFSET 0');
-            // Paging CTE should use PG quoting
-            expect(paged.DataSQL).toContain('"__paged"');
-            // Count query should also use PG quoting
-            expect(paged.CountSQL).toContain('"__paged"');
+            // Data SQL should NOT wrap in a paging CTE — paging is appended directly
+            expect(paged.DataSQL).not.toContain('"__paged"');
+            // Count query should use __count CTE with PG quoting
+            expect(paged.CountSQL).toContain('"__count"');
             expect(paged.CountSQL).toContain('TotalRowCount');
         });
 
@@ -302,13 +302,13 @@ ORDER BY o.Total DESC`;
             const pgPaged = QueryPagingEngine.WrapWithPaging(pgResult.ResolvedSQL, 0, 10, pgPlatform);
             const ssPaged = QueryPagingEngine.WrapWithPaging(ssResult.ResolvedSQL, 0, 10, ssPlatform);
 
-            // PG uses LIMIT/OFFSET
+            // PG uses LIMIT/OFFSET, appended directly (no __paged CTE)
             expect(pgPaged.DataSQL).toContain('LIMIT 10 OFFSET 0');
-            expect(pgPaged.DataSQL).toContain('"__paged"');
+            expect(pgPaged.DataSQL).not.toContain('"__paged"');
 
-            // SS uses OFFSET/FETCH
+            // SS uses OFFSET/FETCH, appended directly (no __paged CTE)
             expect(ssPaged.DataSQL).toContain('OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY');
-            expect(ssPaged.DataSQL).toContain('[__paged]');
+            expect(ssPaged.DataSQL).not.toContain('[__paged]');
         });
     });
 });

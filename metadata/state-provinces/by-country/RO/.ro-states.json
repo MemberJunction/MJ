@@ -1,0 +1,863 @@
+[
+  {
+    "fields": {
+      "Name": "Alba",
+      "Code": "AB",
+      "ISO3166_2": "RO-AB",
+      "Latitude": 46.1478,
+      "Longitude": 23.5651,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-AB.geojson",
+      "CommonAliases": [
+        "Alba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "3D0D5C53-6399-4F5E-B046-3C1A91F33A90"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.960Z",
+      "checksum": "4d112a0750c77f57350326f55812216279ac2b832773d21cb2a99e6b53fe636b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Arad",
+      "Code": "AR",
+      "ISO3166_2": "RO-AR",
+      "Latitude": 46.3019,
+      "Longitude": 21.7296,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-AR.geojson",
+      "CommonAliases": [
+        "Arad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "3087E9AE-4C62-474D-A68A-99EF54629033"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.976Z",
+      "checksum": "4a61298c10a1ac20815d9bdb1883e325c3a1432106ae5a6d710e85768a76f145"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Argeş",
+      "Code": "AG",
+      "ISO3166_2": "RO-AG",
+      "Latitude": 44.9867,
+      "Longitude": 24.8859,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-AG.geojson",
+      "CommonAliases": [
+        "Argeş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "1259D2A8-0225-4056-AF8B-803A93C3F58A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.991Z",
+      "checksum": "25ebf93871e5e35c9f2df69b0c60eb8f8d77c3240f69fd04d2eb3d1ec23ab506"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bacău",
+      "Code": "BC",
+      "ISO3166_2": "RO-BC",
+      "Latitude": 46.4067,
+      "Longitude": 26.7643,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BC.geojson",
+      "CommonAliases": [
+        "Bacău"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "C1D32618-FBCA-4536-82AA-12850F1876CF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.008Z",
+      "checksum": "6db8061211b65dd57c394885eb39a930ddcffd24887bd097220684254530d424"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bihor",
+      "Code": "BH",
+      "ISO3166_2": "RO-BH",
+      "Latitude": 47.0865,
+      "Longitude": 22.1155,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BH.geojson",
+      "CommonAliases": [
+        "Bihor"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "D19061A8-EE24-442D-9EEE-F6147C862BE0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.024Z",
+      "checksum": "a1a8cf4d3af1d14f33b4e5a8bcdabaef6e774f4164ba63adc29ab681692204d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bistriţa-Năsăud",
+      "Code": "BN",
+      "ISO3166_2": "RO-BN",
+      "Latitude": 47.1789,
+      "Longitude": 24.5132,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BN.geojson",
+      "CommonAliases": [
+        "Bistriţa-Năsăud"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "9A270D1E-210D-4B1F-BE45-880B10CC6B96"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.040Z",
+      "checksum": "e672ef8a9cb96785e5b713eaa02206081e745550db8098e6ba9da58092886633"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Botoşani",
+      "Code": "BT",
+      "ISO3166_2": "RO-BT",
+      "Latitude": 47.868,
+      "Longitude": 26.7668,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BT.geojson",
+      "CommonAliases": [
+        "Botoşani"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "A5CD9A2C-6D22-4354-AFBF-8DCE112500C7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.056Z",
+      "checksum": "6a154fabc850c4319cdc56745dc73aeeb35781da878ee66020758e2cc16799ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Brăila",
+      "Code": "BR",
+      "ISO3166_2": "RO-BR",
+      "Latitude": 45.1346,
+      "Longitude": 27.6204,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BR.geojson",
+      "CommonAliases": [
+        "Brăila"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "DD974268-D2D9-4B1F-8FFD-CE88AE874B4B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.072Z",
+      "checksum": "6000853f6f20f92c147ecb178405c54c3dfb0521c158ab8196f08baf4ec4cfd0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Braşov",
+      "Code": "BV",
+      "ISO3166_2": "RO-BV",
+      "Latitude": 45.7729,
+      "Longitude": 25.3749,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BV.geojson",
+      "CommonAliases": [
+        "Braşov"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "19AEAC6A-8A78-4EB6-AA30-9053DCAE4059"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.090Z",
+      "checksum": "4b7e09110eda528a80cba2a51a7c15a515a221ada94cc4c4c3ddaf181d5607e5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bucureşti",
+      "Code": "B",
+      "ISO3166_2": "RO-B",
+      "Latitude": 44.467,
+      "Longitude": 26.0999,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-B.geojson",
+      "CommonAliases": [
+        "Bucureşti"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "AADDDF9E-E7A6-47BA-930D-CB86170B28D9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.104Z",
+      "checksum": "e1c690ace639c9bf56a491d9711c0a0f208b50f68985ba6c6851ecf3ed31a11d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Buzău",
+      "Code": "BZ",
+      "ISO3166_2": "RO-BZ",
+      "Latitude": 45.2071,
+      "Longitude": 26.7347,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-BZ.geojson",
+      "CommonAliases": [
+        "Buzău"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "79DFD522-10DC-404B-A8BD-505A0E82EA93"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.160Z",
+      "checksum": "40b917e94f0e197c1848afc3974cdf7867d4037bb2555702fdefca9761c0d887"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Călăraşi",
+      "Code": "CL",
+      "ISO3166_2": "RO-CL",
+      "Latitude": 44.3144,
+      "Longitude": 27.1514,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-CL.geojson",
+      "CommonAliases": [
+        "Călăraşi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "BCDC7C6D-EE85-4A37-9AB9-DC0AF61715C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.178Z",
+      "checksum": "1f19d74de88feefaedcb6b4aefa2ffd4508da8eaec20bceb0b824e986446a388"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Caraş-Severin",
+      "Code": "CS",
+      "ISO3166_2": "RO-CS",
+      "Latitude": 45.0625,
+      "Longitude": 22.0247,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-CS.geojson",
+      "CommonAliases": [
+        "Caraş-Severin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "4AC88846-903C-46E5-A5ED-07CDED446622"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.197Z",
+      "checksum": "47ebfb385afc7889b070714b4eba98042ce6abf95541f77aabbec7ad9ec11fff"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cluj",
+      "Code": "CJ",
+      "ISO3166_2": "RO-CJ",
+      "Latitude": 46.7479,
+      "Longitude": 23.5307,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-CJ.geojson",
+      "CommonAliases": [
+        "Cluj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "31259CDA-CF3F-44F5-B649-92E4A4182622"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.213Z",
+      "checksum": "c7ce6779e2e66531a57f9b49b467200a68659e171816b433dd59ec258ad409b7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Constanţa",
+      "Code": "CT",
+      "ISO3166_2": "RO-CT",
+      "Latitude": 44.5099,
+      "Longitude": 28.4763,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-CT.geojson",
+      "CommonAliases": [
+        "Constanţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "4FC7F873-0F08-4E84-B067-BA1758B2F003"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.229Z",
+      "checksum": "887984d3bfed4752599e9b36d8d7a7b2188c1151de99399f8db9e0d5c324c7e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Covasna",
+      "Code": "CV",
+      "ISO3166_2": "RO-CV",
+      "Latitude": 45.8885,
+      "Longitude": 25.9665,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-CV.geojson",
+      "CommonAliases": [
+        "Covasna"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "85CCE07B-1F17-473D-AD4F-7ED78450ACF9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.245Z",
+      "checksum": "abd09592305b1c4f5c0dbf3eb57bdad4d8606c7e76dcabc95e2fceceba934f99"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dâmboviţa",
+      "Code": "DB",
+      "ISO3166_2": "RO-DB",
+      "Latitude": 44.8486,
+      "Longitude": 25.596,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-DB.geojson",
+      "CommonAliases": [
+        "Dâmboviţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "AADBAFE2-33CC-4418-AC47-6CEAA0B61BCE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.262Z",
+      "checksum": "2917d0b43dac9af63015a5c759e48398f9458b800f86571a4d78e2eea5fe7f51"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Dolj",
+      "Code": "DJ",
+      "ISO3166_2": "RO-DJ",
+      "Latitude": 44.219,
+      "Longitude": 23.5718,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-DJ.geojson",
+      "CommonAliases": [
+        "Dolj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "51104655-D9E5-4D3D-B053-9201162BBA95"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.278Z",
+      "checksum": "6a4120a9105ff7d118a675e9a66eee24a301c66d69930f29fb8526a95adadd8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Galaţi",
+      "Code": "GL",
+      "ISO3166_2": "RO-GL",
+      "Latitude": 45.7861,
+      "Longitude": 27.7329,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-GL.geojson",
+      "CommonAliases": [
+        "Galaţi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "3A042833-CDE0-4C41-A8F0-E0937AACC9C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.301Z",
+      "checksum": "0edb4844c7c99db7c84957e62f028c14922bd360f0f628daf3e8d4ef6581c3a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Giurgiu",
+      "Code": "GR",
+      "ISO3166_2": "RO-GR",
+      "Latitude": 44.1133,
+      "Longitude": 25.978,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-GR.geojson",
+      "CommonAliases": [
+        "Giurgiu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "4C828E80-A124-4367-856F-39AD7D6BCEE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.318Z",
+      "checksum": "bebf3d2a9c3b69fe0493cefea3e3d10de887dfa07664d0e41d345ebca2f84097"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gorj",
+      "Code": "GJ",
+      "ISO3166_2": "RO-GJ",
+      "Latitude": 44.9827,
+      "Longitude": 23.2029,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-GJ.geojson",
+      "CommonAliases": [
+        "Gorj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "F15E65B2-DECB-4774-B9DA-C891C67FCBBF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.380Z",
+      "checksum": "73fe07a93ad19a1c57696931bce518aebf05473fd6f04878387c03eaeaff5424"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Harghita",
+      "Code": "HR",
+      "ISO3166_2": "RO-HR",
+      "Latitude": 46.6393,
+      "Longitude": 25.5853,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-HR.geojson",
+      "CommonAliases": [
+        "Harghita"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "BBC1CA27-CF45-4A65-B91D-564E3107C225"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.398Z",
+      "checksum": "acf0b102fca09eeb2f74976225cd481646136c084febcc9fd6ac99880c69a586"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hunedoara",
+      "Code": "HD",
+      "ISO3166_2": "RO-HD",
+      "Latitude": 45.7435,
+      "Longitude": 22.9774,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-HD.geojson",
+      "CommonAliases": [
+        "Hunedoara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "9F851DED-76A6-49F4-8E9E-D1240910829F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.415Z",
+      "checksum": "c74bc57a8c9b975d18b866a482ca1b0c9bbcb40dc310eb9e142b818e4976d97e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ialomiţa",
+      "Code": "IL",
+      "ISO3166_2": "RO-IL",
+      "Latitude": 44.6345,
+      "Longitude": 27.1899,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-IL.geojson",
+      "CommonAliases": [
+        "Ialomiţa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "82A69DAC-4101-4995-8536-C5BF654AE09F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.434Z",
+      "checksum": "d459eb53aadddfddd02aed564fe24a5533133bc196ba557622df02ccd3c974fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iaşi",
+      "Code": "IS",
+      "ISO3166_2": "RO-IS",
+      "Latitude": 47.2053,
+      "Longitude": 27.3031,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-IS.geojson",
+      "CommonAliases": [
+        "Iaşi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "9DD5A0EE-4478-48BD-86A1-4C90465B0C2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.451Z",
+      "checksum": "aee61a86d419392bd6058775f18354f185dcb87d5b6e4ad21862c332f0bcdc3b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maramureş",
+      "Code": "MM",
+      "ISO3166_2": "RO-MM",
+      "Latitude": 47.6435,
+      "Longitude": 23.9992,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-MM.geojson",
+      "CommonAliases": [
+        "Maramureş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "37F326EC-FE8D-47FF-A28F-6F3BFF7E61F6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.468Z",
+      "checksum": "fe9d6c46a4309c8ff94bb3048e2f8679877290c8f5acbcd17500b4caba35a8e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mehedinţi",
+      "Code": "MH",
+      "ISO3166_2": "RO-MH",
+      "Latitude": 44.5837,
+      "Longitude": 22.9252,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-MH.geojson",
+      "CommonAliases": [
+        "Mehedinţi"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "53CD8999-F941-4440-A6DC-446CE675E4D3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.485Z",
+      "checksum": "3d37ff6d21c037e0756b975ade40568d3720fdd2d455ea31275b57c37091add5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mureş",
+      "Code": "MS",
+      "ISO3166_2": "RO-MS",
+      "Latitude": 46.5856,
+      "Longitude": 24.6284,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-MS.geojson",
+      "CommonAliases": [
+        "Mureş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "DD54B94E-07BC-4E2C-A310-F79548F9233A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.502Z",
+      "checksum": "82af1568a4d55636d80ff7a590ab2375b4a8af30e23469149642f9c8b2e2c5a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Neamţ",
+      "Code": "NT",
+      "ISO3166_2": "RO-NT",
+      "Latitude": 46.9704,
+      "Longitude": 26.4554,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-NT.geojson",
+      "CommonAliases": [
+        "Neamţ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "8748B380-3653-4229-B9A4-253C13F225DD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.518Z",
+      "checksum": "fa0084a02e96e735377facb7b752ddddfb02813351e2a084c451cd86cc2f7ed7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Olt",
+      "Code": "OT",
+      "ISO3166_2": "RO-OT",
+      "Latitude": 44.3288,
+      "Longitude": 24.3781,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-OT.geojson",
+      "CommonAliases": [
+        "Olt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "6D645C36-95D9-46B6-BD52-409D15879062"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.532Z",
+      "checksum": "456d11177609e3e25596a000bf7ab2bfedd6ad174b6f914078028feedb0b1268"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prahova",
+      "Code": "PH",
+      "ISO3166_2": "RO-PH",
+      "Latitude": 45.1133,
+      "Longitude": 26.0168,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-PH.geojson",
+      "CommonAliases": [
+        "Prahova"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "DABB8B8C-0127-48AF-A981-DF780527A6C1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.590Z",
+      "checksum": "64fa4d1ff99c49b017934b611f43108b14a1ba2178b6ce92222ea8adb8ebf475"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sălaj",
+      "Code": "SJ",
+      "ISO3166_2": "RO-SJ",
+      "Latitude": 47.1483,
+      "Longitude": 23.1615,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-SJ.geojson",
+      "CommonAliases": [
+        "Sălaj"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "E9926C5D-6928-4508-B815-1E210F19757F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.606Z",
+      "checksum": "5a665b79c724d290dbbf48e97cb901d7571434adbfdcc6076f3860e831c9e384"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Satu Mare",
+      "Code": "SM",
+      "ISO3166_2": "RO-SM",
+      "Latitude": 47.6632,
+      "Longitude": 22.8986,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-SM.geojson",
+      "CommonAliases": [
+        "Satu Mare"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "C4EE315B-CE41-43DA-ABB0-C4E48C6527FE"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.622Z",
+      "checksum": "bc799cd74ba34d275e910d00c1aace013a58118682b99f6fc70d0ae3337d1e66"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sibiu",
+      "Code": "SB",
+      "ISO3166_2": "RO-SB",
+      "Latitude": 45.9038,
+      "Longitude": 24.2957,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-SB.geojson",
+      "CommonAliases": [
+        "Sibiu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "7321C7B4-3EA2-43BE-9F4A-743EC3480C59"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.638Z",
+      "checksum": "57b21bfe32882a325b447d7e7bc752f7fa4ad5d710987a44651dc8166f22121f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Suceava",
+      "Code": "SV",
+      "ISO3166_2": "RO-SV",
+      "Latitude": 47.2144,
+      "Longitude": 25.8089,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-SV.geojson",
+      "CommonAliases": [
+        "Suceava"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "A3D9B7F1-E327-4F53-9019-5845828929BF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.657Z",
+      "checksum": "394d9ca25171a8b4c23c1bc31ede0a5d387ecadadeeedfca7d0e401d87dea386"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Teleorman",
+      "Code": "TR",
+      "ISO3166_2": "RO-TR",
+      "Latitude": 44.0831,
+      "Longitude": 25.1818,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-TR.geojson",
+      "CommonAliases": [
+        "Teleorman"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "D8081A62-8535-4E77-8496-CB43114325A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.674Z",
+      "checksum": "8d4919cde43240b5d14ba3856db78684f9e1f64fc1a82be2ab7ea7784f3ad7a8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Timiş",
+      "Code": "TM",
+      "ISO3166_2": "RO-TM",
+      "Latitude": 45.5963,
+      "Longitude": 21.393,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-TM.geojson",
+      "CommonAliases": [
+        "Timiş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "3B175B62-72AB-41D1-823F-987C7F749B0B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.690Z",
+      "checksum": "aa83300f8d809e24e65df96bc896b26fc53245d79900fe9bac268e57689fe5f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tulcea",
+      "Code": "TL",
+      "ISO3166_2": "RO-TL",
+      "Latitude": 45.0257,
+      "Longitude": 28.6227,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-TL.geojson",
+      "CommonAliases": [
+        "Tulcea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "E92F6909-91A7-4C68-996E-FE551169442A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.705Z",
+      "checksum": "3dfe59b1bb3d19f12d17f5b96f68e7a5dcf44ef2b0540f77a7a7e2d72ece170b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vâlcea",
+      "Code": "VL",
+      "ISO3166_2": "RO-VL",
+      "Latitude": 45.0142,
+      "Longitude": 24.0601,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-VL.geojson",
+      "CommonAliases": [
+        "Vâlcea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "0598C6FC-DF49-4DE1-B6AD-3AB46D6F7003"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.721Z",
+      "checksum": "cd87d5e4f9386cc91ae5305d32fc3cf61a1b052d8bb35cf2fe78cfa16e672725"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vaslui",
+      "Code": "VS",
+      "ISO3166_2": "RO-VS",
+      "Latitude": 46.5225,
+      "Longitude": 27.7259,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-VS.geojson",
+      "CommonAliases": [
+        "Vaslui"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "2C2FF6EB-A7FD-4F8C-B5C7-B39E7DF0F223"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.734Z",
+      "checksum": "88606f6d45b4df234a59565a5bb11bcf59a3139f690ef5d5c60e7de874ea7441"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vrancea",
+      "Code": "VN",
+      "ISO3166_2": "RO-VN",
+      "Latitude": 45.7963,
+      "Longitude": 26.9802,
+      "BoundaryGeoJSON": "@file:by-country/RO/boundaries/RO-VN.geojson",
+      "CommonAliases": [
+        "Vrancea"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=RO"
+    },
+    "primaryKey": {
+      "ID": "82EF8D51-07D1-420D-B2C4-B6469F7A676B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:27.757Z",
+      "checksum": "de0c9f2e61552c703e88bd75465d075fca0426338c57e734065318b5af264aca"
+    }
+  }
+]

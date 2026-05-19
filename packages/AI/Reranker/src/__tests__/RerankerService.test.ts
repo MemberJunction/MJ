@@ -35,7 +35,13 @@ vi.mock('@memberjunction/aiengine', () => ({
     }
 }));
 
-vi.mock('@memberjunction/ai', () => ({ BaseReranker: class {} }));
+vi.mock('@memberjunction/ai', () => ({
+    BaseReranker: class {},
+    GetAIAPIKey: vi.fn().mockImplementation((driverClass: string) => {
+        // Mirror the real GetAIAPIKey logic: read from env var
+        return process.env[`AI_VENDOR_API_KEY__${driverClass}`] || null;
+    })
+}));
 vi.mock('@memberjunction/ai-core-plus', () => ({ MJAIModelEntityExtended: class {} }));
 vi.mock('@memberjunction/core-entities', () => ({
     MJAIAgentNoteEntity: class { ID = ''; Note = ''; Type = ''; Get(_f: string) { return ''; } },
@@ -43,9 +49,17 @@ vi.mock('@memberjunction/core-entities', () => ({
 }));
 
 import { RerankerService, RerankObservabilityOptions } from '../RerankerService';
-import { RerankerConfiguration, parseRerankerConfiguration } from '../config.types';
+import { RerankerConfiguration } from '../config.types';
+import { GetGlobalObjectStore } from '@memberjunction/global';
 
 const mockUser = { ID: 'user-1', Name: 'Test' } as never;
+
+function resetSingleton(): void {
+    const g = GetGlobalObjectStore();
+    if (g) {
+        delete g['___SINGLETON__RerankerService'];
+    }
+}
 
 function makeConfig(overrides?: Partial<RerankerConfiguration>): RerankerConfiguration {
     return { enabled: true, rerankerModelId: 'model-1', retrievalMultiplier: 3, minRelevanceThreshold: 0.5, fallbackOnError: true, ...overrides };
@@ -57,8 +71,7 @@ describe('RerankerService', () => {
         mockCreateInstance.mockReturnValue(null);
         mockModels.length = 0;
         mockModelVendors.length = 0;
-        // Reset singleton
-        (RerankerService as Record<string, unknown>)['_instance'] = null;
+        resetSingleton();
     });
 
     describe('Instance (singleton)', () => {

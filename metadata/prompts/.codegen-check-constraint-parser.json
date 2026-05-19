@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/check-constraint-parser.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "OutputType": "object",
       "OutputExample": "",
@@ -102,8 +105,8 @@
       "ID": "8B635038-60E9-4591-8B2C-7F33338D58DC"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:54.900Z",
-      "checksum": "c83453de34b1b04dc7027eb3805e3e679d695116d01582db41f34b4705e6b4a5"
+      "lastModified": "2026-04-20T23:53:33.776Z",
+      "checksum": "8d4786e86a22ce64d87abd0910a1638fa6fa902c5255351105ff79bef169c777"
     }
   }
 ]

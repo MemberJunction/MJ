@@ -7,6 +7,9 @@
       "TemplateText": "@file:templates/codegen/virtual-entity-field-decoration.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Balanced",
       "OutputType": "object",
@@ -102,8 +105,8 @@
       "ID": "BAB684EB-11B1-4DE1-9C27-55EFB239B478"
     },
     "sync": {
-      "lastModified": "2026-02-13T20:48:55.965Z",
-      "checksum": "82fd36a04d0d500e0cf6083030454da70785f7f8fe293c63e6f43995981104e4"
+      "lastModified": "2026-04-20T23:53:40.783Z",
+      "checksum": "34ebe477d46ae28264c95eb7341930d71288552a11587df85b6deba056b20cd4"
     }
   }
 ]

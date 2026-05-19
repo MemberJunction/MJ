@@ -23,6 +23,7 @@ export type {
     SyncErrorCode,
     ErrorSeverity,
     SyncProgress,
+    SyncProgressSnapshot,
     OnProgressCallback,
     SyncNotificationEvent,
     SyncNotificationSeverity,
@@ -34,6 +35,7 @@ export type {
     SourceObjectInfo,
     SourceFieldInfo,
     SourceRelationshipInfo,
+    IntrospectSchemaOptions,
     CRUDContext,
     CreateRecordContext,
     UpdateRecordContext,
@@ -118,3 +120,7 @@ export type {
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';
+
+// Schema persistence — upserts dynamically discovered objects/fields to IntegrationObject/Field tables
+export { IntegrationSchemaSync } from './IntegrationSchemaSync.js';
+export type { PersistSchemaOptions, PersistSchemaResult } from './IntegrationSchemaSync.js';

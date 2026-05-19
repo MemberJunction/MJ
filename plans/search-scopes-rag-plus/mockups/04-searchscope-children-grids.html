@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: Search Scope — Children Grids</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .child-section { margin-bottom: 24px; }
+        .child-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .child-header h3 { margin: 0; font-size: 1rem; }
+        .child-header .count { color: var(--mj-text-muted); font-size: 0.8125rem; }
+        .grid-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 0.8125rem;
+        }
+        .grid-table th, .grid-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--mj-border-subtle);
+            vertical-align: top;
+        }
+        .grid-table tr:last-child td { border-bottom: none; }
+        .grid-table th {
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+        }
+        .code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.75rem;
+            color: var(--mj-text-primary);
+            background: var(--mj-bg-surface-sunken);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+        .add-row {
+            text-align: center;
+            padding: 12px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-link);
+            cursor: pointer;
+            font-size: 0.8125rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>Search Scope — Child Collections</h1>
+            <span class="mock-breadcrumb">Mockup 4/10 · Providers / External Indexes / Entities / Storage Accounts</span>
+        </div>
+
+        <div class="child-section">
+            <div class="child-header">
+                <i class="fa-solid fa-plug" style="color:var(--mj-brand-primary);"></i>
+                <h3>Providers</h3>
+                <span class="count">3 providers · 1 with custom query transform</span>
+            </div>
+            <table class="grid-table">
+                <thead><tr><th>Provider</th><th>Enabled</th><th>Max Results</th><th>Query Transform</th><th>Provider Config Override</th><th></th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><i class="fa-solid fa-brain" style="color:#6d28d9;"></i> Semantic</td>
+                        <td><input type="checkbox" checked /></td>
+                        <td>50</td>
+                        <td><span class="code">tmpl_hr_vector_rewrite</span></td>
+                        <td class="muted">—</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><i class="fa-solid fa-magnifying-glass" style="color:#059669;"></i> Full-text</td>
+                        <td><input type="checkbox" checked /></td>
+                        <td>30</td>
+                        <td class="muted">— use scope default —</td>
+                        <td class="muted">—</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><i class="fa-solid fa-database" style="color:#0284c7;"></i> Database</td>
+                        <td><input type="checkbox" checked /></td>
+                        <td>20</td>
+                        <td class="muted">— use raw query —</td>
+                        <td class="muted">—</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="add-row">+ Add provider</div>
+        </div>
+
+        <div class="child-section">
+            <div class="child-header">
+                <i class="fa-solid fa-layer-group" style="color:var(--mj-brand-primary);"></i>
+                <h3>External Indexes</h3>
+                <span class="count">1 vector index · 1 Elasticsearch alias</span>
+            </div>
+            <table class="grid-table">
+                <thead><tr><th>Index Type</th><th>Vector Index / Name</th><th>Metadata Filter (Nunjucks)</th><th>External Index Config</th><th></th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><span class="badge info">Vector</span></td>
+                        <td>hr-policies-v2</td>
+                        <td><span class="code">{ "tenantId": "{{ context.PrimaryScopeRecordID }}", "status": "published" }</span></td>
+                        <td class="muted">—</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><span class="badge neutral">Elasticsearch</span></td>
+                        <td>kb_docs_v3</td>
+                        <td><span class="code">{ "term": { "department": "{{ context.SecondaryScopes.dept }}" } }</span></td>
+                        <td><span class="code">{ "routing": "{{ context.PrimaryScopeRecordID }}" }</span></td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="add-row">+ Add external index</div>
+        </div>
+
+        <div class="child-section">
+            <div class="child-header">
+                <i class="fa-solid fa-table" style="color:var(--mj-brand-primary);"></i>
+                <h3>Entities</h3>
+                <span class="count">2 entities · 1 with extra filter · 0 with user-search-string override</span>
+            </div>
+            <table class="grid-table">
+                <thead><tr><th>Entity</th><th>Extra Filter</th><th>User Search String</th><th></th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td><i class="fa-solid fa-file-lines" style="color:var(--mj-text-muted);"></i> Knowledge Articles</td>
+                        <td><span class="code">CategoryID = '&lt;hr-category-uuid&gt;' AND OrganizationID = '{{ context.PrimaryScopeRecordID }}'</span></td>
+                        <td class="muted">— use raw query —</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><i class="fa-solid fa-folder-tree" style="color:var(--mj-text-muted);"></i> Documents</td>
+                        <td class="muted">—</td>
+                        <td class="muted">—</td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="add-row">+ Add entity</div>
+        </div>
+
+        <div class="child-section">
+            <div class="child-header">
+                <i class="fa-solid fa-folder-open" style="color:var(--mj-brand-primary);"></i>
+                <h3>Storage Accounts</h3>
+                <span class="count">1 account, folder-scoped</span>
+            </div>
+            <table class="grid-table">
+                <thead><tr><th>Storage Account</th><th>Folder Path (Nunjucks)</th><th></th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>Azure Blob — Corporate Docs</td>
+                        <td><span class="code">/tenants/{{ context.PrimaryScopeRecordID }}/hr/policies/</span></td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <div class="add-row">+ Add storage account</div>
+        </div>
+    </div>
+</body>
+</html>

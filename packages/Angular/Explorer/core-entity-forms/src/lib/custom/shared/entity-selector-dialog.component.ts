@@ -1,9 +1,9 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
-import { DialogRef } from '@progress/kendo-angular-dialog';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface EntitySelectorConfig {
     entityName: string;
     title: string;
@@ -28,15 +28,10 @@ export interface EntitySelectorConfig {
           <div class="dialog-content">
             <!-- Search Bar -->
             <div class="search-bar">
-              <kendo-textbox
-                [(ngModel)]="searchText"
-                placeholder="Search..."
-                (valueChange)="onSearchChange()"
-                class="search-input">
-                <ng-template kendoTextBoxPrefixTemplate>
-                  <i class="fa-solid fa-search"></i>
-                </ng-template>
-              </kendo-textbox>
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input class="mj-input search-input" [(ngModel)]="searchText" placeholder="Search..." (ngModelChange)="onSearchChange()" />
+              </div>
             </div>
         
             <!-- Loading State -->
@@ -85,11 +80,11 @@ export interface EntitySelectorConfig {
             }
           </div>
           <div class="dialog-actions">
-            <button kendoButton themeColor="primary" (click)="createNew()">
+            <button mjButton variant="primary" (click)="createNew()">
               <i class="fa-solid fa-plus"></i> Create New
             </button>
-            <button kendoButton (click)="onCancel()">Cancel</button>
-            <button kendoButton themeColor="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
+            <button mjButton (click)="onCancel()">Cancel</button>
+            <button mjButton variant="primary" [disabled]="!selectedEntity" (click)="onSelect()">Select</button>
           </div>
         </div>
         `,
@@ -135,8 +130,23 @@ export interface EntitySelectorConfig {
             gap: 12px;
         }
 
+        .search-input-wrapper {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 10px;
+            color: var(--mj-text-muted);
+            pointer-events: none;
+        }
+
         .search-input {
             flex: 1;
+            padding-left: 32px;
         }
 
         .loading-state,
@@ -183,7 +193,7 @@ export interface EntitySelectorConfig {
 
         .entity-item:hover {
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: var(--mj-shadow-md);
         }
 
         .entity-item.selected {
@@ -242,12 +252,12 @@ export interface EntitySelectorConfig {
         }
 
         .status-badge.active {
-            background: #d4edda;
-            color: #28a745;
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
     `]
 })
-export class EntitySelectorDialogComponent implements OnInit {
+export class EntitySelectorDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() config!: EntitySelectorConfig;
 
     public entities: any[] = [];
@@ -256,10 +266,12 @@ export class EntitySelectorDialogComponent implements OnInit {
     public searchText: string = '';
     public isLoading: boolean = true;
 
+    @Output() DialogClosed = new EventEmitter<Record<string, unknown> | null>();
+
     constructor(
-        private sharedService: SharedService,
-        public dialogRef: DialogRef
-    ) {}
+        private sharedService: SharedService
+    ) {
+    super();}
 
     async ngOnInit() {
         await this.loadEntities();
@@ -268,7 +280,7 @@ export class EntitySelectorDialogComponent implements OnInit {
     async loadEntities() {
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: this.config.entityName,
                 ExtraFilter: this.config.filters,
@@ -306,12 +318,12 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     onSelect() {
         if (this.selectedEntity) {
-            this.dialogRef.close({ entity: this.selectedEntity });
+            this.DialogClosed.emit({ entity: this.selectedEntity });
         }
     }
 
     createNew() {
-        this.dialogRef.close({ createNew: true });
+        this.DialogClosed.emit({ createNew: true });
     }
 
     IsEntitySelected(entity: Record<string, unknown>): boolean {
@@ -319,6 +331,6 @@ export class EntitySelectorDialogComponent implements OnInit {
     }
 
     onCancel() {
-        this.dialogRef.close(null);
+        this.DialogClosed.emit(null);
     }
 }

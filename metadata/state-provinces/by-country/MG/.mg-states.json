@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Antananarivo",
+      "Code": "T",
+      "ISO3166_2": "MG-T",
+      "Latitude": -18.9938,
+      "Longitude": 46.7662,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-T.geojson",
+      "CommonAliases": [
+        "Antananarivo"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "003F8C77-0B3B-41E6-984C-2339D3A42AE6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.763Z",
+      "checksum": "7da4ce3647fd227626d8ce62b6f649eaced91f0f89e79a4919e2cb7128ff7541"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antsiranana",
+      "Code": "D",
+      "ISO3166_2": "MG-D",
+      "Latitude": -14.3074,
+      "Longitude": 49.8621,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-D.geojson",
+      "CommonAliases": [
+        "Antsiranana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "EC0B04F2-912F-4682-83A1-84205558A36D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.779Z",
+      "checksum": "b6f51695ba5beb347d97927b2bf594d7c288dae2703cdef1587c5b6a5b83f7ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fianarantsoa",
+      "Code": "F",
+      "ISO3166_2": "MG-F",
+      "Latitude": -21.4423,
+      "Longitude": 46.5733,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-F.geojson",
+      "CommonAliases": [
+        "Fianarantsoa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "3ECE917B-E70C-47A0-B707-981B2461D5A0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.797Z",
+      "checksum": "cdc5f4ad4bc26c4fc1c7ea80973a12d51a780824690ba3b13674999e70c12f0a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mahajanga",
+      "Code": "M",
+      "ISO3166_2": "MG-M",
+      "Latitude": -17.232,
+      "Longitude": 47.1963,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-M.geojson",
+      "CommonAliases": [
+        "Mahajanga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "D9BBF547-9E34-4AA8-8D15-9711BBDC5CF8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.815Z",
+      "checksum": "7e8a5d5cad4c05e20602bcbfdf3f19ef20df5e5c71067c2866eada2ca880d9c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Toamasina",
+      "Code": "A",
+      "ISO3166_2": "MG-A",
+      "Latitude": -17.8014,
+      "Longitude": 48.3868,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-A.geojson",
+      "CommonAliases": [
+        "Toamasina"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "7E8582A0-A1CC-40E0-8C51-DE7D6AFDEFAC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.831Z",
+      "checksum": "590b6c0f91282031bb6b5b6ec5a4cc56c93c3aca4cd586b3b14ff868adcf19c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Toliara",
+      "Code": "U",
+      "ISO3166_2": "MG-U",
+      "Latitude": -20.3119,
+      "Longitude": 45.0481,
+      "BoundaryGeoJSON": "@file:by-country/MG/boundaries/MG-U.geojson",
+      "CommonAliases": [
+        "Toliara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=MG"
+    },
+    "primaryKey": {
+      "ID": "0B43A461-A1D0-49C4-BA25-9DF14E499B09"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:16.845Z",
+      "checksum": "a51066f6e96060a6cc11964da9a92a6a88321ab5f76d39a0e637103adf7e3f79"
+    }
+  }
+]

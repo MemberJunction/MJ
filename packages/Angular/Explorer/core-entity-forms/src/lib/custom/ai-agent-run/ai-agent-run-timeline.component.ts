@@ -7,6 +7,7 @@ import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TimelineItem {
   id: string;
   type: 'step' | 'subrun' | 'action' | 'prompt';
@@ -35,7 +36,7 @@ export interface TimelineItem {
   styleUrls: ['./ai-agent-run-timeline.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
+export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
   @Input() autoRefresh = false;
   @Input() refreshInterval = 30000; // Minimum 30 seconds
@@ -54,7 +55,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   timelineItems$!: Observable<TimelineItem[]>;
   
-  loading = false;
+  loading = true;
   error: string | null = null;
   selectedItem: TimelineItem | null = null;
   
@@ -63,23 +64,37 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
   
-  ngOnInit() {
+  async ngOnInit() {
+    // AIEngineBase is deferred at startup; ensure it's loaded before timeline
+    // items render — getStepIconInfo / sub-agent lookups read .Agents synchronously.
+    await AIEngineBase.Instance.EnsureLoaded();
+
     // Initialize observables from the data helper
     this.steps$ = this.dataHelper.steps$;
     this.subRuns$ = this.dataHelper.subRuns$;
     this.actionLogs$ = this.dataHelper.actionLogs$;
     this.promptRuns$ = this.dataHelper.promptRuns$;
     
-    // Combine all data sources to build timeline
+    // Combine all data sources to build timeline.
+    // Skip emissions where steps are empty but data is still loading —
+    // the BehaviorSubjects initialise with [] so combineLatest fires
+    // immediately with an empty array before the real data arrives.
     this.timelineItems$ = combineLatest([
       this.steps$,
       this.subRuns$,
       this.actionLogs$,
-      this.promptRuns$
+      this.promptRuns$,
+      this.dataHelper.loading$
     ]).pipe(
-      map(([steps, subRuns, actionLogs, promptRuns]) => 
+      filter(([steps, _subRuns, _actionLogs, _promptRuns, isLoading]) => {
+        // While loading, suppress the empty-array emission so the
+        // template keeps showing the mj-loading indicator.
+        return !(isLoading && steps.length === 0);
+      }),
+      map(([steps, subRuns, actionLogs, promptRuns]) =>
         this.buildTimelineItems(steps, subRuns, actionLogs, promptRuns)
       ),
       shareReplay(1)
@@ -89,10 +104,12 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     // Subscribe to loading state from helper
     this.dataHelper.loading$.pipe(takeUntil(this.destroy$)).subscribe(loading => {
       this.loading = loading;
+      this.cdr.markForCheck();
     });
-    
+
     this.dataHelper.error$.pipe(takeUntil(this.destroy$)).subscribe(error => {
       this.error = error;
+      this.cdr.markForCheck();
     });
     
     // Auto-refresh logic
@@ -121,7 +138,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
         switchMap(() => {
           if (!this.aiAgentRunId) return of(null);
           
-          const rv = new RunView();
+          const rv = RunView.FromMetadataProvider(this.ProviderToUse);
           return from(rv.RunView({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ID = '${this.aiAgentRunId}'`,

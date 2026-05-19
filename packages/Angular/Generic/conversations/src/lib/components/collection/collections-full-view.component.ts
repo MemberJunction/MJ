@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -18,7 +19,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-collections-full-view',
   template: `
-    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)" kendoDialogContainer>
+    <div class="collections-view" (keydown)="handleKeyboardShortcut($event)">
       <!-- Mac Finder-style Header -->
       <div class="collections-header">
         <!-- Breadcrumb navigation -->
@@ -232,7 +233,7 @@ import { UUIDsEqual } from '@memberjunction/global';
           <div
             class="unified-grid"
             [class.select-mode]="isSelectMode">
-            @for (item of unifiedItems; track item) {
+            @for (item of PagedItems; track item) {
               <div
                 class="grid-item"
                 [class.selected]="item.selected"
@@ -315,6 +316,45 @@ import { UUIDsEqual } from '@memberjunction/global';
               </div>
             }
           </div>
+
+          <!-- Pagination controls (grid mode, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
         }
     
         <!-- List view -->
@@ -366,7 +406,7 @@ import { UUIDsEqual } from '@memberjunction/global';
                 </tr>
               </thead>
               <tbody>
-                @for (item of unifiedItems; track item) {
+                @for (item of PagedItems; track item) {
                   <tr
                     class="list-item"
                     [class.selected]="item.selected"
@@ -419,6 +459,45 @@ import { UUIDsEqual } from '@memberjunction/global';
               </tbody>
             </table>
           </div>
+
+          <!-- Pagination controls (list mode only, when more than one page) -->
+          @if (TotalPages > 1) {
+            <div class="pagination-bar">
+              <span class="pagination-info">
+                {{ (CurrentPage - 1) * PageSize + 1 }}–{{ CurrentPage * PageSize < unifiedItems.length ? CurrentPage * PageSize : unifiedItems.length }}
+                of {{ unifiedItems.length }} items
+              </span>
+              <div class="pagination-controls">
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(1)"
+                  title="First page">
+                  <i class="fas fa-angles-left"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === 1"
+                  (click)="GoToPage(CurrentPage - 1)"
+                  title="Previous page">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="pagination-page-info">
+                  Page {{ CurrentPage }} of {{ TotalPages }}
+                </span>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(CurrentPage + 1)"
+                  title="Next page">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="pagination-btn"
+                  [disabled]="CurrentPage === TotalPages"
+                  (click)="GoToPage(TotalPages)"
+                  title="Last page">
+                  <i class="fas fa-angles-right"></i>
+                </button>
+              </div>
+            </div>
+          }
         }
       </div>
     </div>
@@ -475,7 +554,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     <mj-collection-form-modal
       [isOpen]="isFormModalOpen"
       [collection]="editingCollection"
-      [parentCollection]="currentCollection || undefined"
+      [parentCollection]="editingCollection ? undefined : (currentCollection || undefined)"
       [environmentId]="environmentId"
       [currentUser]="currentUser"
       (saved)="onCollectionSaved($event)"
@@ -501,6 +580,13 @@ import { UUIDsEqual } from '@memberjunction/global';
     </mj-collection-share-modal>
     `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
     /* Main container */
     .collections-view {
       display: flex;
@@ -868,6 +954,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       gap: 16px;
       padding: 4px;
+      flex-shrink: 0;
     }
 
     .grid-item {
@@ -1069,6 +1156,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       overflow: hidden;
+      flex-shrink: 0;
     }
 
     .list-table {
@@ -1205,6 +1293,63 @@ import { UUIDsEqual } from '@memberjunction/global';
       width: 150px;
     }
 
+    /* Pagination */
+    .pagination-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      margin-top: 8px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--mj-text-secondary);
+      flex-shrink: 0;
+    }
+
+    .pagination-info {
+      white-space: nowrap;
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .pagination-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      background: var(--mj-bg-surface);
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+      transition: all 150ms ease;
+      font-size: 12px;
+    }
+
+    .pagination-btn:hover:not(:disabled) {
+      background: var(--mj-bg-surface-hover);
+      border-color: var(--mj-border-strong);
+      color: var(--mj-text-primary);
+    }
+
+    .pagination-btn:disabled {
+      opacity: 0.35;
+      cursor: default;
+    }
+
+    .pagination-page-info {
+      padding: 0 8px;
+      white-space: nowrap;
+      font-weight: 500;
+    }
+
     /* Toolbar separator and action group */
     .toolbar-separator {
       width: 1px;
@@ -1297,7 +1442,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class CollectionsFullViewComponent implements OnInit, OnDestroy {
+export class CollectionsFullViewComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Output() collectionNavigated = new EventEmitter<{
@@ -1332,7 +1477,28 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   public showNewDropdown: boolean = false;
   public showSortDropdown: boolean = false;
   public activeArtifactId: string | null = null; // Track which artifact is currently being viewed
+  private itemCountMap: Map<string, number> = new Map();
   public isSelectMode: boolean = false; // Toggle for selection mode
+
+  // Pagination state
+  public PageSize: number = 50;
+  public CurrentPage: number = 1;
+
+  /** Total number of pages based on current items and page size */
+  get TotalPages(): number {
+    return Math.max(1, Math.ceil(this.unifiedItems.length / this.PageSize));
+  }
+
+  /** Items for the current page */
+  get PagedItems(): CollectionViewItem[] {
+    const start = (this.CurrentPage - 1) * this.PageSize;
+    return this.unifiedItems.slice(start, start + this.PageSize);
+  }
+
+  /** Navigate to a specific page */
+  GoToPage(page: number): void {
+    this.CurrentPage = Math.max(1, Math.min(page, this.TotalPages));
+  }
 
   IsArtifactActive(item: CollectionViewItem): boolean {
     return UUIDsEqual(item.artifact?.ID, this.activeArtifactId);
@@ -1353,9 +1519,15 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private permissionService: CollectionPermissionService,
     private artifactIconService: ArtifactIconService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
+    // Bind provider-aware services to this component's provider.
+    const p = this.ProviderToUse;
+    this.artifactState.Provider = p;
+    this.permissionService.Provider = p;
+
     // Subscribe to collection state changes for deep linking FIRST
     // This ensures that if there's a URL with collectionId, we set it before loading data
     this.subscribeToCollectionState();
@@ -1460,7 +1632,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   private async loadCollections(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load collections where user is owner OR has permissions
       const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
@@ -1488,11 +1660,60 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
       if (result.Success) {
         this.collections = result.Results || [];
-        await this.loadUserPermissions();
+        await Promise.all([
+          this.loadUserPermissions(),
+          this.loadItemCounts()
+        ]);
         this.filteredCollections = [...this.collections];
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
+    }
+  }
+
+  /**
+   * Load item counts (child collections + artifacts) for all visible collections
+   */
+  private async loadItemCounts(): Promise<void> {
+    this.itemCountMap.clear();
+    if (this.collections.length === 0) return;
+
+    const collectionIds = this.collections.map(c => c.ID);
+    const inClause = collectionIds.map(id => `'${id}'`).join(',');
+
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const [childResult, artifactResult] = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `ParentID IN (${inClause})`,
+          Fields: ['ID', 'ParentID'],
+          ResultType: 'simple'
+        },
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID IN (${inClause})`,
+          Fields: ['ID', 'CollectionID'],
+          ResultType: 'simple'
+        }
+      ],
+      this.currentUser
+    );
+
+    // Count children per parent
+    if (childResult.Success && childResult.Results) {
+      for (const child of childResult.Results) {
+        const parentId = (child as Record<string, string>).ParentID;
+        this.itemCountMap.set(parentId, (this.itemCountMap.get(parentId) || 0) + 1);
+      }
+    }
+
+    // Count artifacts per collection
+    if (artifactResult.Success && artifactResult.Results) {
+      for (const ca of artifactResult.Results) {
+        const collId = (ca as Record<string, string>).CollectionID;
+        this.itemCountMap.set(collId, (this.itemCountMap.get(collId) || 0) + 1);
+      }
     }
   }
 
@@ -1577,7 +1798,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         this.currentCollectionId = crumb.id;
 
         // Load the collection entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
@@ -1619,6 +1840,16 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Update a breadcrumb entry's name in place (e.g., after rename)
+   */
+  private updateBreadcrumbName(collectionId: string, newName: string): void {
+    const crumb = this.breadcrumbs.find(b => UUIDsEqual(b.id, collectionId));
+    if (crumb) {
+      crumb.name = newName;
+    }
+  }
+
+  /**
    * Navigate to a collection by ID, building the breadcrumb trail
    * Used for deep linking from search results or URL parameters
    */
@@ -1628,7 +1859,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       console.log('📁 Navigating to collection by ID:', collectionId);
 
       // Load the target collection
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
@@ -1744,7 +1975,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   private async deleteCollectionRecursive(collectionId: string): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Step 1: Find and delete all child collections recursively
     const childrenResult = await rv.RunView<MJCollectionEntity>(
@@ -1784,7 +2015,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
 
     // Step 4: Delete the collection itself
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
@@ -1800,6 +2031,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     await this.loadCollections();
     // Reload current collection permission (it was cleared by loadUserPermissions)
     await this.loadCurrentCollectionPermission();
+
+    // Update breadcrumb and currentCollection if the saved collection is in the trail
+    this.updateBreadcrumbName(collection.ID, collection.Name);
+    if (this.currentCollection && UUIDsEqual(this.currentCollection.ID, collection.ID)) {
+      this.currentCollection = collection;
+    }
+
     // Rebuild unified list to show new collection
     this.buildUnifiedItemList();
     this.cdr.detectChanges();
@@ -1851,7 +2089,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     if (confirmed) {
       try {
         // Delete THIS SPECIFIC VERSION from the collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
@@ -2036,7 +2274,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         name: collection.Name,
         description: collection.Description || undefined,
         icon: 'fa-folder',
-        itemCount: 0, // TODO: calculate actual count
+        itemCount: this.itemCountMap.get(collection.ID) || 0,
         owner: collection.Owner || undefined,
         isShared: this.isShared(collection),
         selected: this.selectedItems.has(collection.ID),
@@ -2061,8 +2299,9 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Apply sorting
+    // Apply sorting and reset pagination
     this.unifiedItems = this.sortItems(items);
+    this.CurrentPage = 1;
     this.cdr.detectChanges();
   }
 
@@ -2249,7 +2488,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       }
 
       if (artifactItems.length > 0 && this.currentCollectionId) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         for (const item of artifactItems) {
           const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
@@ -2281,8 +2520,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    * Get count of items in folder (Phase 1)
    */
   private async getCollectionItemCount(collectionId: string): Promise<number> {
-    // TODO: Query for actual count
-    return 0;
+    return this.itemCountMap.get(collectionId) || 0;
   }
 
   /**

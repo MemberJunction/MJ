@@ -16,6 +16,7 @@ import { MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity } from '@memberjunct
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AgentRequestPanelResult } from '@memberjunction/ng-agent-requests';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface RequestFilter {
     SearchTerm: string;
@@ -43,7 +44,7 @@ interface AgentRequestsUserPreferences {
 export class AgentRequestsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     private readonly USER_SETTINGS_KEY = 'AI.AgentRequests.UserPreferences';
     private settingsPersistSubject = new Subject<void>();
-    private destroy$ = new Subject<void>();
+    protected override destroy$ = new Subject<void>();
     private settingsLoaded = false;
 
     public IsLoading = false;
@@ -87,6 +88,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     }
 
     ngOnDestroy(): void {
+        super.ngOnDestroy();
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -137,6 +139,80 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
     /** Clear all filters */
     public ClearFilters(): void {
         this.Filters = { SearchTerm: '', Status: '', RequestType: '', Priority: '' };
+        this.applyFilters();
+        this.saveUserSettings();
+    }
+
+    /** Reset only the popover filters (Status/Type/Priority) — leave SearchTerm alone. */
+    public resetPopoverFilters(): void {
+        this.Filters = { ...this.Filters, Status: '', RequestType: '', Priority: '' };
+        this.applyFilters();
+        this.saveUserSettings();
+    }
+
+    /** Number of currently-applied filter criteria inside the popover (excludes SearchTerm — surfaced separately). */
+    public get ActiveFilterCount(): number {
+        let n = 0;
+        if (this.Filters.Status)      n++;
+        if (this.Filters.RequestType) n++;
+        if (this.Filters.Priority)    n++;
+        return n;
+    }
+
+    /** Values record consumed by the centralized <mj-filter-panel>. */
+    public get requestFilterValues(): Record<string, unknown> {
+        return {
+            Status:      this.Filters.Status,
+            RequestType: this.Filters.RequestType,
+            Priority:    this.Filters.Priority,
+        };
+    }
+
+    /** Field config consumed by the centralized <mj-filter-panel>. */
+    public get requestFilterFields(): FilterFieldConfig[] {
+        return [
+            {
+                key: 'Status',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: '' },
+                    ...this.StatusOptions.map(s => ({ text: s, value: s })),
+                ],
+            },
+            {
+                key: 'RequestType',
+                type: 'dropdown',
+                label: 'Type',
+                icon: 'fa-solid fa-tag',
+                filterable: this.RequestTypes.length > 10,
+                options: [
+                    { text: 'All Types', value: '' },
+                    ...this.RequestTypes.map(t => ({ text: t.Name, value: t.ID })),
+                ],
+            },
+            {
+                key: 'Priority',
+                type: 'dropdown',
+                label: 'Priority',
+                icon: 'fa-solid fa-flag',
+                options: [
+                    { text: 'All Priorities', value: '' },
+                    ...this.PriorityOptions.map(p => ({ text: p.Label, value: p.Value })),
+                ],
+            },
+        ];
+    }
+
+    /** Receive the updated values record from <mj-filter-panel> and apply it. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        this.Filters = {
+            ...this.Filters,
+            Status:      (values['Status']      as string) ?? '',
+            RequestType: (values['RequestType'] as string) ?? '',
+            Priority:    (values['Priority']    as string) ?? '',
+        };
         this.applyFilters();
         this.saveUserSettings();
     }
@@ -199,7 +275,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [requestsResult, typesResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Agent Requests',

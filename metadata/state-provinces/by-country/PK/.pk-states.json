@@ -1,0 +1,170 @@
+[
+  {
+    "fields": {
+      "Name": "Azad Kashmir",
+      "Code": "JK",
+      "ISO3166_2": "PK-JK",
+      "Latitude": 33.868,
+      "Longitude": 73.8036,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-JK.geojson",
+      "CommonAliases": [
+        "Azad Kashmir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "A0ADF708-D9F0-4DA6-A53F-A3D6F8EA26FB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.260Z",
+      "checksum": "3373e49ea3d7b3388d2e55fa0226b724632af2bdafd0708e36f4112de803f050"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Baluchistan (Balochistān)",
+      "Code": "BA",
+      "ISO3166_2": "PK-BA",
+      "Latitude": 27.5194,
+      "Longitude": 65.5512,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-BA.geojson",
+      "CommonAliases": [
+        "Baluchistan (Balochistān)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "56D2145B-A00E-4FDA-9016-2D725E06D6B9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.278Z",
+      "checksum": "b71db28c0352a89b9cddfa306706dc2b9b4e6b3271a2e7b1b196e06bf5eb5da1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Federally Administered Tribal Areas",
+      "Code": "TA",
+      "ISO3166_2": "PK-TA",
+      "Latitude": 32.6148,
+      "Longitude": 69.8985,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-TA.geojson",
+      "CommonAliases": [
+        "Federally Administered Tribal Areas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "706D8C80-0441-4BCC-8688-17671130A16C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.299Z",
+      "checksum": "35149e61981dfb471909092694f1715da8d1dce95183754a5d22f08be6d8a785"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Islamabad",
+      "Code": "IS",
+      "ISO3166_2": "PK-IS",
+      "Latitude": 33.7011,
+      "Longitude": 73.0628,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-IS.geojson",
+      "CommonAliases": [
+        "Islamabad"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "C38A7145-DFFC-4541-8054-464B41B1AC28"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.320Z",
+      "checksum": "e21df3f00936b46a5049bc3be32d2fb0f74e7bb9f254d1f879f2d8c2cbe3c9fd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North-West Frontier",
+      "Code": "NW",
+      "ISO3166_2": "PK-NW",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "North-West Frontier"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "B03945E5-1906-44AA-A093-7805EE2FFC42"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.339Z",
+      "checksum": "85ac20eb99aad05b05c9047ab912e49b0adaf9db75bb899e4671996a954777bd"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern Areas",
+      "Code": "NA",
+      "ISO3166_2": "PK-NA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Northern Areas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "34D154E2-F7D3-45D3-B94A-900869CDA641"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.356Z",
+      "checksum": "2884e14c6ce4713d8fe7b7a0afe4557d03715185484ae4f7bedad19feea6e4e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Punjab",
+      "Code": "PB",
+      "ISO3166_2": "PK-PB",
+      "Latitude": 31.3589,
+      "Longitude": 72.3449,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-PB.geojson",
+      "CommonAliases": [
+        "Punjab"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "E3C65003-56F3-48EB-ACE6-030FA2170F4D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.375Z",
+      "checksum": "28785c6da2d2a8f49efb61e88ef885b3d5b57f3fc374132a4fadbd8ed12157e8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sind (Sindh)",
+      "Code": "SD",
+      "ISO3166_2": "PK-SD",
+      "Latitude": 26.3734,
+      "Longitude": 68.8685,
+      "BoundaryGeoJSON": "@file:by-country/PK/boundaries/PK-SD.geojson",
+      "CommonAliases": [
+        "Sind (Sindh)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PK"
+    },
+    "primaryKey": {
+      "ID": "ECF0D76A-1D04-4C86-8FE5-561B1028E5F4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.391Z",
+      "checksum": "d0feeba0be9d3223ff20ec7d458a9b34eb2fe5dd9d00e3a1abbc3ee9d99b6474"
+    }
+  }
+]

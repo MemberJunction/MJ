@@ -1,0 +1,338 @@
+[
+  {
+    "fields": {
+      "Name": "18 Montagnes (Région des)",
+      "Code": "06",
+      "ISO3166_2": "CI-06",
+      "Latitude": 7.3628,
+      "Longitude": -7.7342,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-06.geojson",
+      "CommonAliases": [
+        "18 Montagnes (Région des)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "A81149E8-3448-4DD4-B4E9-97F48965E5D5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.815Z",
+      "checksum": "07e39aa4a5091e702a6738da83702b3229d791f3cc505ce471646f47fa78772b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Agnébi (Région de l')",
+      "Code": "16",
+      "ISO3166_2": "CI-16",
+      "Latitude": 6.0622,
+      "Longitude": -4.0219,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-16.geojson",
+      "CommonAliases": [
+        "Agnébi (Région de l')"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "D7350FC2-74D8-432F-B734-BB00517A0A2E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.830Z",
+      "checksum": "7b898bd3c3782be6ab849ff97aed90c4d4b5cd5fd28ade3aeb3a458f5d8770cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bas-Sassandra (Région du)",
+      "Code": "09",
+      "ISO3166_2": "CI-09",
+      "Latitude": 5.48,
+      "Longitude": -6.6752,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-09.geojson",
+      "CommonAliases": [
+        "Bas-Sassandra (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "0B1D3109-C7BF-43F8-B257-BA890D52E36F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.844Z",
+      "checksum": "8912254ece9514714fcc6b773cd41835baa53024cb79fe426188f43cfeeec9b6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Denguélé (Région du)",
+      "Code": "10",
+      "ISO3166_2": "CI-10",
+      "Latitude": 9.5289,
+      "Longitude": -7.3778,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-10.geojson",
+      "CommonAliases": [
+        "Denguélé (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "88A3FB15-7EF7-4F14-80DF-69E7C3645BE8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.859Z",
+      "checksum": "5bd82f237ae730c22c8fc88d9d608c7dfd8884363d722433e98f989ffc77add9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Haut-Sassandra (Région du)",
+      "Code": "02",
+      "ISO3166_2": "CI-02",
+      "Latitude": 7.0139,
+      "Longitude": -6.5086,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-02.geojson",
+      "CommonAliases": [
+        "Haut-Sassandra (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "E80CB403-C0F2-4CA2-B26C-0953D278EC88"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.874Z",
+      "checksum": "e64d0b016ff7a1b036ff42f0f4dc95b149833f010ccee37ed6cd4973ef362507"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lacs (Région des)",
+      "Code": "07",
+      "ISO3166_2": "CI-07",
+      "Latitude": 6.8518,
+      "Longitude": -5.1541,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-07.geojson",
+      "CommonAliases": [
+        "Lacs (Région des)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "7766B1A4-639C-4D9E-85BC-4C521DD746B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.888Z",
+      "checksum": "ef1bbad8d6202fbd43fd3446a69f02bde16e1ecf3ae02a2868f2384522d80137"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Lagunes (Région des)",
+      "Code": "01",
+      "ISO3166_2": "CI-01",
+      "Latitude": 5.4607,
+      "Longitude": -4.4285,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-01.geojson",
+      "CommonAliases": [
+        "Lagunes (Région des)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "77B282B0-8949-4EB8-AEC6-ED1CB727C904"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.903Z",
+      "checksum": "73082e7a6ca1d2aa88ad765a002a54f02466b8de3acab12c73c21d4c85cdfcb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marahoué (Région de la)",
+      "Code": "12",
+      "ISO3166_2": "CI-12",
+      "Latitude": 6.9473,
+      "Longitude": -5.832,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-12.geojson",
+      "CommonAliases": [
+        "Marahoué (Région de la)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "5D680D74-F30B-4E7A-92A3-67F1638DFC77"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.917Z",
+      "checksum": "e4180a6d6b8f107cff2f639995206c1bf6456ea401c6a9c30db4ff5424c9e4c1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Moyen-Comoé (Région du)",
+      "Code": "05",
+      "ISO3166_2": "CI-05",
+      "Latitude": 6.763,
+      "Longitude": -3.4772,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-05.geojson",
+      "CommonAliases": [
+        "Moyen-Comoé (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "E293A286-68CF-4DA3-AA58-BE9C7DCF3E62"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.932Z",
+      "checksum": "b8f7522ef7782501131d0cee4c55e0520d3ee3520f342c5a7d8af12a076fc373"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nzi-Comoé (Région)",
+      "Code": "11",
+      "ISO3166_2": "CI-11",
+      "Latitude": 7.0553,
+      "Longitude": -4.2372,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-11.geojson",
+      "CommonAliases": [
+        "Nzi-Comoé (Région)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "DB6BD4F1-0CB6-4984-93AE-904C15617C9D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.946Z",
+      "checksum": "e2051a6084f231d4fe83e9e8f503a39beac8194b352053a26f7efa240c30685b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Savanes (Région des)",
+      "Code": "03",
+      "ISO3166_2": "CI-03",
+      "Latitude": 9.8224,
+      "Longitude": -5.3682,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-03.geojson",
+      "CommonAliases": [
+        "Savanes (Région des)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "4452C403-2179-42B6-BAE4-11B17F414B3B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.985Z",
+      "checksum": "310bb76cbc1baff0d879dea1b5eaf0306f8fed2e5721590aa760f05ad533f1ad"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud-Bandama (Région du)",
+      "Code": "15",
+      "ISO3166_2": "CI-15",
+      "Latitude": 5.6329,
+      "Longitude": -5.4947,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-15.geojson",
+      "CommonAliases": [
+        "Sud-Bandama (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "17922576-6E79-40C6-B9EF-6DC57C78052E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:37.999Z",
+      "checksum": "2868e58a5cb6c2388fbbdb203e1205db04ff477d00757b0d272239a9ed67a409"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sud-Comoé (Région du)",
+      "Code": "13",
+      "ISO3166_2": "CI-13",
+      "Latitude": 5.52,
+      "Longitude": -3.1275,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-13.geojson",
+      "CommonAliases": [
+        "Sud-Comoé (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "EF285F13-DBBE-40F1-B83D-6F0D5C88A28D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.015Z",
+      "checksum": "c02b9000b894a10a9f64a59b5e1bdd3e0afdb80fcba2bbb8ff9d9e67849c1d69"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Vallée du Bandama (Région de la)",
+      "Code": "04",
+      "ISO3166_2": "CI-04",
+      "Latitude": 8.2267,
+      "Longitude": -4.8584,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-04.geojson",
+      "CommonAliases": [
+        "Vallée du Bandama (Région de la)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "DB6520B4-13D5-4FB2-BE2C-A36955B32122"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.032Z",
+      "checksum": "ebaeffa4e7385fa3b888d818c70ed997945ccca6be3b9ca2eea29ddc91c21526"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Worodougou (Région du)",
+      "Code": "14",
+      "ISO3166_2": "CI-14",
+      "Latitude": 8.4907,
+      "Longitude": -6.2896,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-14.geojson",
+      "CommonAliases": [
+        "Worodougou (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "A44D9752-0C0F-427D-8CFA-5E9452554C67"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.049Z",
+      "checksum": "eb7f3cd5239eb153cedb306838acae26e6fde2d91f5f1eb60dea1ba8ab8dd9e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zanzan (Région du)",
+      "Code": "08",
+      "ISO3166_2": "CI-08",
+      "Latitude": 8.6076,
+      "Longitude": -3.4148,
+      "BoundaryGeoJSON": "@file:by-country/CI/boundaries/CI-08.geojson",
+      "CommonAliases": [
+        "Zanzan (Région du)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=CI"
+    },
+    "primaryKey": {
+      "ID": "915A14B3-B190-4145-B9FA-7DCD8634A657"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:38.062Z",
+      "checksum": "e4b71b02cb27252eb82807e985d640dbdca2a8940122b18ce9d2afc1710e8201"
+    }
+  }
+]

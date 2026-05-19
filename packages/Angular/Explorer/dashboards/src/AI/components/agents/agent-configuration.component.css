@@ -3,121 +3,16 @@
    Clean white header with brand blue accents
    ============================================ */
 
-/* Container */
-.agent-configuration-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
+/* Container is now provided by <mj-page-layout> */
+
+/* Tinted card background on the body — matches the original .agents-content
+   surface treatment so cards/lists sit on a lightly-tinted surface rather
+   than the page background. */
+:host mj-page-body {
   background: var(--mj-bg-surface-card);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
 }
 
-/* Dashboard Header - Clean White Style */
-.dashboard-header {
-  background: var(--mj-bg-surface);
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--mj-border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
-  z-index: 10;
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.dashboard-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dashboard-title i {
-  color: var(--mj-brand-primary);
-  font-size: 22px;
-}
-
-.filter-toggle-btn {
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.filter-toggle-btn:hover {
-  background: var(--mj-border-default);
-  border-color: var(--mj-border-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.filter-toggle-btn i {
-  color: var(--mj-brand-primary);
-  font-size: 14px;
-}
-
-.item-count {
-  color: var(--mj-text-muted);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 6px 12px;
-  background: var(--mj-bg-surface-card);
-  border-radius: 20px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* View Toggle */
-.view-toggle {
-  display: flex;
-  background: var(--mj-bg-surface-card);
-  border-radius: 8px;
-  padding: 3px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.view-btn {
-  background: transparent;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 6px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 15px;
-}
-
-.view-btn:hover {
-  color: var(--mj-text-secondary);
-}
-
-.view-btn.active {
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
+/* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {
   background: var(--mj-bg-surface);
@@ -156,13 +51,6 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Main Content */
-.main-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 
 .main-splitter {
   flex: 1;
@@ -170,37 +58,13 @@
 }
 
 /* Splitter Styling */
-kendo-splitter {
+as-split {
   background: transparent;
-}
-
-:host ::ng-deep .k-splitter {
-  border: none;
-  background: transparent;
-}
-
-:host ::ng-deep .k-splitbar {
-  background: var(--mj-border-default);
-  width: 6px;
-}
-
-:host ::ng-deep .k-splitbar:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-bg-surface));
-}
-
-:host ::ng-deep .k-pane {
-  overflow: hidden;
 }
 
 /* Filter Panel Styles - used by child component */
 
 /* Agents Content */
-.agents-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 28px;
-  background: var(--mj-bg-surface-card);
-}
 
 /* Grid View */
 .agents-grid {
@@ -810,10 +674,6 @@ kendo-splitter {
     justify-content: center;
   }
 
-  .agents-content {
-    padding: 16px;
-  }
-
   .agents-grid {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -1138,138 +998,6 @@ kendo-splitter {
 
 .agents-tree {
   padding: 8px 16px;
-}
-
-.tree-category-group {
-  margin-bottom: 2px;
-}
-
-.tree-category-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  user-select: none;
-  transition: background 0.15s ease;
-}
-
-.tree-category-header:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
-.tree-chevron {
-  font-size: 10px;
-  color: var(--mj-text-muted);
-  width: 12px;
-  text-align: center;
-  transition: transform 0.15s ease;
-}
-
-.tree-folder-icon {
-  font-size: 14px;
-  color: var(--mj-brand-primary);
-}
-
-.tree-category-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  flex: 1;
-}
-
-.tree-category-count {
-  font-size: 12px;
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface-sunken);
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-weight: 500;
-}
-
-/* Agent rows within tree */
-.tree-agent-list {
-  padding-left: 24px;
-}
-
-.tree-agent-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.tree-agent-row:hover {
-  background: var(--mj-bg-surface-hover);
-}
-
-.tree-agent-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.tree-agent-icon i {
-  font-size: 12px;
-  color: var(--mj-text-inverse);
-}
-
-.tree-agent-logo {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  object-fit: cover;
-}
-
-.tree-agent-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.tree-agent-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.tree-agent-type {
-  font-size: 11px;
-  color: var(--mj-text-muted);
-}
-
-.tree-agent-status {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.tree-agent-status.status-active {
-  color: var(--mj-status-success-text);
-  background: var(--mj-status-success-bg);
-}
-
-.tree-agent-status.status-disabled,
-.tree-agent-status.status-inactive {
-  color: var(--mj-text-muted);
-  background: var(--mj-bg-surface-sunken);
-}
-
-.tree-agent-status.status-pending {
-  color: var(--mj-status-warning-text);
-  background: var(--mj-status-warning-bg);
+  height: 100%;
+  overflow: auto;
 }

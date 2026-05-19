@@ -1,0 +1,25 @@
+{
+  "name": "DataGridQueryFieldNonexistentBroken",
+  "type": "generic",
+  "title": "DataGrid Query Field Nonexistent - Broken Pattern",
+  "description": "Tests linter detection of non-existent field in DataGrid with query results",
+  "code": "function DataGridQueryFieldNonexistentBroken({ utilities, components }) {\n  const [modelData, setModelData] = useState([]);\n  const { DataGrid } = components;\n\n  useEffect(() => {\n    async function loadData() {\n      const result = await utilities.rq.RunQuery({\n        QueryName: 'AI Model Summary',\n        CategoryPath: 'AI/Reports'\n      });\n      if (result?.Success) {\n        setModelData(result.Results);\n      }\n    }\n    loadData();\n  }, []);\n\n  return (\n    <div>\n      <h3>Model Data</h3>\n      {/* ❌ TokenCost field doesn't exist in query */}\n      <DataGrid \n        data={modelData} \n        columns={[\n          {field: 'Name', title: 'Model'},\n          {field: 'TokenCost', title: 'Cost'},\n          {field: 'PowerRank', title: 'Power'}\n        ]} \n      />\n    </div>\n  );\n}",
+  "location": "embedded",
+  "namespace": "test/fixtures/type-rules",
+  "version": "1.0.0",
+  "registry": "MJ",
+  "status": "Active",
+  "dataRequirements": {
+    "queries": [{
+      "name": "AI Model Summary",
+      "categoryPath": "AI/Reports",
+      "fields": [
+        {"name": "ID", "type": "uniqueidentifier"},
+        {"name": "Name", "type": "nvarchar"},
+        {"name": "Vendor", "type": "nvarchar"},
+        {"name": "PowerRank", "type": "int"},
+        {"name": "SpeedRank", "type": "int"}
+      ]
+    }]
+  }
+}

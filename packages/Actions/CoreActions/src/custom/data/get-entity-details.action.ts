@@ -62,10 +62,8 @@ export class GetEntityDetailsAction extends BaseAction {
             const includeRelatedEntityInfo = this.getBooleanParam(params, "includerelatedentityinfo", true);
 
             // Get entity metadata
-            const md = new Metadata();
-            const entity = md.Entities.find(e =>
-                e.Name.toLowerCase() === entityName.toLowerCase()
-            );
+            const md = params.Provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
 
             if (!entity) {
                 return {
@@ -132,6 +130,12 @@ export class GetEntityDetailsAction extends BaseAction {
                         .map(f => f.RelatedEntity!)
                 );
                 relatedEntities = Array.from(relatedEntityNames).map(name => ({
+                    // Look up the related entity's ID from metadata so callers
+                    // get `{ ID, Name }` pairs ready to drop into
+                    // `permissions.allowedEntities` for Runtime actions. Null
+                    // only if the FK references an entity the metadata cache
+                    // hasn't indexed — shouldn't happen in practice.
+                    ID: md.Entities.find(e => e.Name === name)?.ID ?? null,
                     Name: name,
                     FieldsReferencingThis: fields
                         .filter(f => f.RelatedEntity === name)
@@ -155,6 +159,11 @@ export class GetEntityDetailsAction extends BaseAction {
                 Success: true,
                 ResultCode: "SUCCESS",
                 Message: message,
+                // Named `ID` (not `EntityID`) to match the actual column on
+                // the Entity record. Callers that need to build Runtime
+                // action permission blocks (`{ id, name }` pairs for every
+                // referenced entity) read this directly — no second lookup.
+                ID: entity.ID,
                 EntityName: entity.Name,
                 SchemaName: entity.SchemaName,
                 Description: entity.Description,
@@ -194,7 +203,8 @@ export class GetEntityDetailsAction extends BaseAction {
 
         // Header
         lines.push(`# Entity Details: ${entity.Name}`);
-        lines.push(`\n**Schema:** ${entity.SchemaName}`);
+        lines.push(`\n**ID:** \`${entity.ID}\``);
+        lines.push(`**Schema:** ${entity.SchemaName}`);
         lines.push(`**Base View:** ${entity.BaseView}`);
         if (entity.Description) {
             lines.push(`**Description:** ${entity.Description}`);
@@ -252,7 +262,8 @@ export class GetEntityDetailsAction extends BaseAction {
         if (relatedEntities.length > 0) {
             lines.push(`## Related Entities (${relatedEntities.length})\n`);
             for (const rel of relatedEntities) {
-                lines.push(`- **${rel.Name}** (via ${rel.FieldsReferencingThis.join(', ')})`);
+                const idSuffix = rel.ID ? ` — \`${rel.ID}\`` : '';
+                lines.push(`- **${rel.Name}**${idSuffix} (via ${rel.FieldsReferencingThis.join(', ')})`);
             }
             lines.push('');
         }

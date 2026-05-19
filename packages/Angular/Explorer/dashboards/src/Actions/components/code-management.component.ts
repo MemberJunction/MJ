@@ -27,7 +27,7 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
 
       .placeholder-content {
         text-align: center;
-        color: var(--kendo-color-subtle);
+        color: var(--mj-text-muted);
 
         i {
           font-size: 3rem;
@@ -50,11 +50,12 @@ import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-sha
   `]
 })
 export class CodeManagementComponent extends BaseResourceComponent implements OnInit {
-  constructor(private navigationService: NavigationService) {
+  constructor() {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.NotifyLoadComplete();
   }
 

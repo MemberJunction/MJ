@@ -5,7 +5,7 @@
  * including tool synchronization with progress streaming and OAuth management.
  */
 
-import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, Field, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
+import { Resolver, Mutation, Query, Subscription, Arg, Ctx, Root, Field, Int, ObjectType, InputType, PubSub, registerEnumType } from 'type-graphql';
 import { PubSubEngine } from 'type-graphql';
 import { LogError, LogStatus, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import {
@@ -453,6 +453,96 @@ export class MCPOAuthEventNotification {
 
     @Field({ nullable: true })
     RequiresReauthorization?: boolean;
+}
+
+/**
+ * Summary of an MCP Server Tool record — only the fields needed for
+ * paginated card/list display. Heavy fields (InputSchema, OutputSchema,
+ * Annotations) are intentionally excluded to keep responses small.
+ */
+@ObjectType()
+export class MCPToolSummary {
+    @Field()
+    ID: string;
+
+    @Field()
+    MCPServerID: string;
+
+    @Field()
+    ToolName: string;
+
+    @Field({ nullable: true })
+    ToolTitle?: string;
+
+    @Field({ nullable: true })
+    ToolDescription?: string;
+
+    @Field()
+    Status: string;
+
+    /**
+     * MCP Server display name (from the vwMCPServerTools view — column name is "MCPServer").
+     */
+    @Field({ nullable: true })
+    ServerName?: string;
+}
+
+/**
+ * Paginated result for MCPToolSummary listings.
+ */
+@ObjectType()
+export class MCPToolPageResult {
+    @Field(() => [MCPToolSummary])
+    items: MCPToolSummary[];
+
+    @Field(() => Int)
+    totalCount: number;
+
+    @Field()
+    hasMore: boolean;
+}
+
+/**
+ * Count-per-server aggregate.
+ */
+@ObjectType()
+export class MCPToolServerCount {
+    @Field()
+    serverID: string;
+
+    @Field()
+    serverName: string;
+
+    @Field(() => Int)
+    count: number;
+}
+
+/**
+ * Count-per-category aggregate. Category is derived from the ToolName
+ * prefix (substring before first underscore).
+ */
+@ObjectType()
+export class MCPToolCategoryCount {
+    @Field()
+    category: string;
+
+    @Field(() => Int)
+    count: number;
+}
+
+/**
+ * Top-level counts payload for MCP tool group/badge displays.
+ */
+@ObjectType()
+export class MCPToolCountsResult {
+    @Field(() => Int)
+    totalCount: number;
+
+    @Field(() => [MCPToolServerCount])
+    countByServer: MCPToolServerCount[];
+
+    @Field(() => [MCPToolCategoryCount])
+    countByCategory: MCPToolCategoryCount[];
 }
 
 /**
@@ -1323,6 +1413,212 @@ export class MCPResolver extends ResolverBase {
             AuthorizationUrl: authorizationUrl,
             StateParameter: stateParameter
         };
+    }
+
+    /**
+     * Returns a paginated list of MCP tool summaries filtered by optional
+     * server, category, and free-text search. Uses narrow Fields + simple
+     * ResultType to keep payload sizes manageable at thousands of tools.
+     *
+     * @param skip Number of rows to skip (for pagination)
+     * @param take Page size
+     * @param searchText Free-text filter against ToolName, ToolTitle, ToolDescription
+     * @param serverID Optional MCPServerID filter
+     * @param category Optional category filter (ToolName prefix before first underscore)
+     * @param ctx GraphQL context
+     */
+    @Query(() => MCPToolPageResult)
+    async GetMCPToolsPage(
+        @Arg('skip', () => Int) skip: number,
+        @Arg('take', () => Int) take: number,
+        @Arg('searchText', { nullable: true }) searchText: string | null,
+        @Arg('serverID', { nullable: true }) serverID: string | null,
+        @Arg('category', { nullable: true }) category: string | null,
+        @Ctx() ctx: AppContext
+    ): Promise<MCPToolPageResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return { items: [], totalCount: 0, hasMore: false };
+        }
+
+        try {
+            const extraFilter = this.buildMCPToolsFilter(searchText, serverID, category);
+            const rv = new RunView();
+
+            const result = await rv.RunView<{
+                ID: string;
+                MCPServerID: string;
+                ToolName: string;
+                ToolTitle: string | null;
+                ToolDescription: string | null;
+                Status: string;
+                MCPServer: string | null;
+            }>({
+                EntityName: 'MJ: MCP Server Tools',
+                ExtraFilter: extraFilter,
+                OrderBy: 'ToolName ASC',
+                Fields: ['ID', 'MCPServerID', 'ToolName', 'ToolTitle', 'ToolDescription', 'Status', 'MCPServer'],
+                StartRow: skip,
+                MaxRows: take,
+                IgnoreMaxRows: false,
+                ResultType: 'simple'
+            }, user);
+
+            if (!result.Success) {
+                LogError(`MCPResolver: GetMCPToolsPage failed: ${result.ErrorMessage}`);
+                return { items: [], totalCount: 0, hasMore: false };
+            }
+
+            const rows = result.Results || [];
+            // RunView's TotalRowCount can be capped when MaxRows is applied. Do an explicit
+            // count query (ignoring MaxRows) so the client sees the true filtered match total.
+            let totalCount = result.TotalRowCount ?? rows.length;
+            try {
+                const countResult = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: MCP Server Tools',
+                    ExtraFilter: extraFilter,
+                    Fields: ['ID'],
+                    IgnoreMaxRows: true,
+                    ResultType: 'simple'
+                }, user);
+                if (countResult.Success) {
+                    totalCount = countResult.Results.length;
+                }
+            } catch {
+                // fall back to the initial totalCount on any error
+            }
+            const items: MCPToolSummary[] = rows.map(r => ({
+                ID: r.ID,
+                MCPServerID: r.MCPServerID,
+                ToolName: r.ToolName,
+                ToolTitle: r.ToolTitle ?? undefined,
+                ToolDescription: r.ToolDescription ?? undefined,
+                Status: r.Status,
+                ServerName: r.MCPServer ?? undefined
+            }));
+
+            return {
+                items,
+                totalCount,
+                hasMore: skip + items.length < totalCount
+            };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: GetMCPToolsPage exception: ${errorMsg}`);
+            return { items: [], totalCount: 0, hasMore: false };
+        }
+    }
+
+    /**
+     * Returns aggregate counts for MCP tools — total, per-server, and per-category
+     * (category = ToolName prefix before the first underscore). Used to render
+     * group headers with badges like "Zapier (1,247 tools)".
+     *
+     * @param serverID Optional MCPServerID filter (counts scoped to that server)
+     * @param searchText Optional free-text filter (same semantics as GetMCPToolsPage)
+     * @param ctx GraphQL context
+     */
+    @Query(() => MCPToolCountsResult)
+    async GetMCPToolCounts(
+        @Arg('serverID', { nullable: true }) serverID: string | null,
+        @Arg('searchText', { nullable: true }) searchText: string | null,
+        @Ctx() ctx: AppContext
+    ): Promise<MCPToolCountsResult> {
+        const user = ctx.userPayload.userRecord;
+        if (!user) {
+            return { totalCount: 0, countByServer: [], countByCategory: [] };
+        }
+
+        try {
+            // Build filter WITHOUT the category constraint — counts need the full
+            // matching set so we can bucket by server and by category ourselves.
+            const extraFilter = this.buildMCPToolsFilter(searchText, serverID, null);
+            const rv = new RunView();
+
+            // Fetch minimal fields for ALL matching rows. IgnoreMaxRows so we
+            // don't silently truncate at entity caps when counting.
+            const result = await rv.RunView<{
+                MCPServerID: string;
+                ToolName: string;
+                MCPServer: string | null;
+            }>({
+                EntityName: 'MJ: MCP Server Tools',
+                ExtraFilter: extraFilter,
+                Fields: ['MCPServerID', 'ToolName', 'MCPServer'],
+                IgnoreMaxRows: true,
+                ResultType: 'simple'
+            }, user);
+
+            if (!result.Success) {
+                LogError(`MCPResolver: GetMCPToolCounts failed: ${result.ErrorMessage}`);
+                return { totalCount: 0, countByServer: [], countByCategory: [] };
+            }
+
+            const rows = result.Results || [];
+            const totalCount = rows.length;
+
+            // Bucket by server
+            const serverMap = new Map<string, { serverID: string; serverName: string; count: number }>();
+            // Bucket by category (ToolName prefix before first underscore)
+            const categoryMap = new Map<string, number>();
+
+            for (const r of rows) {
+                const sid = r.MCPServerID;
+                const sname = r.MCPServer ?? '';
+                const existing = serverMap.get(sid);
+                if (existing) {
+                    existing.count++;
+                } else {
+                    serverMap.set(sid, { serverID: sid, serverName: sname, count: 1 });
+                }
+
+                const underscore = r.ToolName.indexOf('_');
+                const cat = underscore > 0 ? r.ToolName.substring(0, underscore) : r.ToolName;
+                categoryMap.set(cat, (categoryMap.get(cat) ?? 0) + 1);
+            }
+
+            const countByServer = Array.from(serverMap.values()).sort((a, b) => b.count - a.count);
+            const countByCategory = Array.from(categoryMap.entries())
+                .map(([category, count]) => ({ category, count }))
+                .sort((a, b) => b.count - a.count);
+
+            return { totalCount, countByServer, countByCategory };
+        } catch (error) {
+            const errorMsg = error instanceof Error ? error.message : String(error);
+            LogError(`MCPResolver: GetMCPToolCounts exception: ${errorMsg}`);
+            return { totalCount: 0, countByServer: [], countByCategory: [] };
+        }
+    }
+
+    /**
+     * Builds the ExtraFilter string for MCP Server Tools queries. All user
+     * inputs are single-quote-escaped to prevent SQL injection.
+     */
+    private buildMCPToolsFilter(
+        searchText: string | null | undefined,
+        serverID: string | null | undefined,
+        category: string | null | undefined
+    ): string {
+        const clauses: string[] = [];
+
+        if (serverID && serverID.trim().length > 0) {
+            const safe = serverID.replace(/'/g, "''");
+            clauses.push(`MCPServerID='${safe}'`);
+        }
+
+        if (category && category.trim().length > 0) {
+            const safe = category.replace(/'/g, "''");
+            clauses.push(`ToolName LIKE '${safe}\\_%' ESCAPE '\\'`);
+        }
+
+        if (searchText && searchText.trim().length > 0) {
+            const safe = searchText.replace(/'/g, "''");
+            clauses.push(
+                `(ToolName LIKE '%${safe}%' OR ToolTitle LIKE '%${safe}%' OR ToolDescription LIKE '%${safe}%')`
+            );
+        }
+
+        return clauses.join(' AND ');
     }
 
     /**

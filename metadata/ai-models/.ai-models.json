@@ -4434,7 +4434,7 @@
       "Description": "Claude 3.7 Sonnet",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 9,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -4511,8 +4511,8 @@
       "ID": "5066433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.888Z",
-      "checksum": "9b78fd1edfdd7c41dc1c8f6d87d3fd27dd22f123d281dc0ac3fa0f3a5ff75c46"
+      "lastModified": "2026-04-20T23:52:26.455Z",
+      "checksum": "6e3d893652b0828d4fd55c77a2b469848a6ad4921817e40265162da546aa68d5"
     }
   },
   {
@@ -4738,7 +4738,7 @@
       "Description": "Largest Claude 3 Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -4814,8 +4814,8 @@
       "ID": "E1A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:24.894Z",
-      "checksum": "49fac27118b2e50323c1044634186b9467496d49781527a49b17c25892ee854f"
+      "lastModified": "2026-04-20T23:52:26.471Z",
+      "checksum": "ad22cf6d1ff6e13e30612dc05642a3f985d7903471ef5b054ef2c472855db61f"
     }
   },
   {
@@ -6974,7 +6974,7 @@
       "Description": "Claude Medium Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 10,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -7096,8 +7096,8 @@
       "ID": "89C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.163Z",
-      "checksum": "27742541fbba0dc64be51cdba1311e5407271a3aad3f3cf5f36304e6d9b5479c"
+      "lastModified": "2026-04-20T23:52:26.859Z",
+      "checksum": "baae589d09ec53d4f67a3f683f1fc6dadf2c51def54244d81b34399bde2276a4"
     }
   },
   {
@@ -7106,7 +7106,7 @@
       "Description": "Claude Largest Model",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 12,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -7228,8 +7228,8 @@
       "ID": "83C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:25.284Z",
-      "checksum": "4620955c0b42137e6e97f50d326b5cca4a941df53b2419786514de444d4d4954"
+      "lastModified": "2026-04-20T23:52:27.064Z",
+      "checksum": "0e861c55cd947336e0382e6310f7258e136f587ef84f0802faadd1f53e739745"
     }
   },
   {
@@ -11608,6 +11608,2381 @@
     "sync": {
       "lastModified": "2026-03-17T01:57:33.714Z",
       "checksum": "a41c2b101e9565ea597222242b095036ac8e36e64141b26d711c869cba06b2d4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claude Opus 4.7",
+      "PowerRank": 23,
+      "Description": "Anthropic's flagship frontier model (April 2026). Features full 1M token context window at standard pricing, 128K output tokens, adaptive thinking, xhigh effort level, task budgets (beta), and high-resolution image support (up to 2576px). Best-in-class agentic coding, memory, and vision performance. Note: new tokenizer may use up to 1.35x more tokens for the same text, so effective cost per request can increase vs Opus 4.6.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Claude Opus 4.6"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "83BDF8D4-6C4A-493E-844D-7750050B3BC7"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.911Z",
+            "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "AnthropicLLM",
+            "APIName": "claude-opus-4-7",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D03FF541-1052-4F08-80D1-B6E2A76AAD98"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.927Z",
+            "checksum": "0f9c3fa7e17502b5b59df2220d0fee7b64854af823a4d736056f39939d734949"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "anthropic.claude-opus-4-7-v1",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "815D7F5F-06D3-4B06-BADC-00A2F473D30C"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.945Z",
+            "checksum": "62ebfb82717b632fe6f0b563c5754cc431f63d74b02d3c2a68630afa87b3d404"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "StartedAt": "2026-04-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.7 pricing on Anthropic as of April 2026. Same per-token rates as Opus 4.6 ($5/$25 per 1M tokens). Full 1M context at standard pricing. Note: new tokenizer may use up to 1.35x more tokens per text, increasing effective cost per request."
+          },
+          "primaryKey": {
+            "ID": "9A677E59-84B4-4933-9DB0-FCDA92DB3855"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.960Z",
+            "checksum": "84f1183f0ea1aa5a718ba2db85613842b836129b87d0baf404b434adb1794d24"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-04-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Claude Opus 4.7 pricing on Amazon Bedrock as of April 2026"
+          },
+          "primaryKey": {
+            "ID": "5965C2B3-098A-4FD1-84F2-2B8467A17BFC"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.979Z",
+            "checksum": "217697c02121a9e3b4bc648da7d66cac9f19fd9f73f42c1b657036e5322250d3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1FD3D5CD-E771-4B66-AD09-01F61FEF6B20"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:33.311Z",
+      "checksum": "67155d34b619e6bbc84053b06644331fbdb7689e79ff555e13467beb0a8e0e8e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.4-mini",
+      "PowerRank": 13,
+      "Description": "OpenAI's cost-efficient mid-tier variant of the GPT 5.4 family, released March 17, 2026. Features 400K token context window and 128K output tokens. Full GPT 5.4 family capability at ~70% cheaper input than full GPT 5.4. Supports reasoning/effort level control. Knowledge cutoff August 2025.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5-mini"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0CE51431-B27F-4836-81FC-49F5A6273E0B"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.327Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.4-mini",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "17BE09F8-EEB3-4046-9C4B-7D1340D39562"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.342Z",
+            "checksum": "07d18db4674e11580e90ac5f1faec17ec6cba1462bf73df1b59a27949c157ecc"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.4-mini",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "7FD21D71-8153-45DE-97F3-352D1774DB16"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.357Z",
+            "checksum": "e8b1ba846835f647bef2da479257a47931882dbc61b0b1ff052a5672c7fce9b4"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-03-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.4-mini pricing on OpenAI as of March 2026. $0.75/$4.50 per 1M tokens — ~70% cheaper input than full GPT 5.4."
+          },
+          "primaryKey": {
+            "ID": "852C0799-1BF7-4F19-9AC9-58D2FEA4504C"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.371Z",
+            "checksum": "a0139eba2929d829d4e5e5624443f4f9aac06e15315b4b24d4f4efd534c7a87f"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.75,
+            "OutputPricePerUnit": 4.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.4-mini pricing on Azure OpenAI as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "90333D30-A33E-41D8-9620-2A5742140107"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.474Z",
+            "checksum": "f338b438893fb62d84f24eda6a27394799a48ec1123a832f9f44afda854ab8cd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "281C0713-90DF-4E62-9791-C4702E4D9BFE"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:32.398Z",
+      "checksum": "ba58543f20ea0ed2d0c780c09a61604cb3272b9f770a105d424c0f1c1f7fc459"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.4-nano",
+      "PowerRank": 11,
+      "Description": "OpenAI's smallest, cheapest member of the GPT 5.4 family, released March 17, 2026. Designed for classification, extraction, ranking, and sub-agent workloads. Features 400K token context window and 128K output tokens. Industry-leading low input price point. Supports reasoning/effort level control. Knowledge cutoff August 2025.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5-nano"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "885B6084-125D-45C0-9715-64E676025EB5"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.491Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.4-nano",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6C9C87B2-DAED-4907-8C73-34E3506243B4"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.506Z",
+            "checksum": "9247488d6aa763ed4d13e1e86c008c48be16b8f260d99e36c9726026c822c942"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.4-nano",
+            "MaxInputTokens": 400000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "42EC2A8A-FE75-49BD-B0CF-CB980F398A98"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.520Z",
+            "checksum": "48bb245664922488c433f2d70686ed387c3292478d10cfdfc4ee9782d2988c3b"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-03-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.2,
+            "OutputPricePerUnit": 1.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.4-nano pricing on OpenAI as of March 2026. $0.20/$1.25 per 1M tokens — undercuts most alternatives on input price. Suited for classification, extraction, ranking, and sub-agent workloads."
+          },
+          "primaryKey": {
+            "ID": "F0766275-0DD3-4536-953E-620D04F0FE0C"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.536Z",
+            "checksum": "bd4972362c310a4bfcd6f4c9e76162be131677cceb7863de5ae8cca43ba9b535"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-03-17T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.2,
+            "OutputPricePerUnit": 1.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.4-nano pricing on Azure OpenAI as of March 2026"
+          },
+          "primaryKey": {
+            "ID": "5B9068C9-915D-4AB2-B8D2-A0CCB4552EA6"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.558Z",
+            "checksum": "dc04dec6aba5d38e5d9fc63cdb8b2079299fd3c8fda3ea0ebee516c730d438c8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "77DC2681-7617-48FE-9898-1F7669914409"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:32.413Z",
+      "checksum": "66a32838064ce0f56c11993b245ed8f566fc91b6109f0eee1bfa72d4a875cb24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok 4.20",
+      "PowerRank": 22,
+      "Description": "xAI's flagship frontier model (March 31, 2026). Features a 2M token context window and 128K output tokens. Aggressively priced at $2/$6 per 1M tokens vs Claude/GPT 5.4 flagships. Ships in reasoning and non-reasoning variants under the same pricing. Supersedes Grok 4 as xAI's top model.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok 4"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "2B19D82C-1255-44F2-8112-A9C91CE77BC5"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.574Z",
+            "checksum": "aa7970023d655e03c422bfdbc8910b106fa41da0a3f93d2d51e598108e8a37bf"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-4.20-0309-reasoning",
+            "MaxInputTokens": 2000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3FB819E0-67BF-410A-8DAB-86B62C4AB7D1"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.591Z",
+            "checksum": "e11fd8d6618fde73ee7ae8eb66f431de0c83e334f616635891240708bef3db91"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-03-31T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2,
+            "OutputPricePerUnit": 6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok 4.20 pricing on x.ai as of March 2026. $2/$6 per 1M tokens. Reasoning and non-reasoning variants (grok-4.20-0309-reasoning, grok-4.20-0309-non-reasoning) ship under same pricing. Multi-agent variant (grok-4.20-multi-agent-0309) also available at identical pricing."
+          },
+          "primaryKey": {
+            "ID": "5916320B-185C-4A30-B643-08AD1E2BCDB3"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.605Z",
+            "checksum": "67fe309919b10474190fe86dede017b03795ff14d23a7c1fe1026016ea15461d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "839968F1-9520-4C69-BE84-5F901D0123A6"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:32.553Z",
+      "checksum": "6866e7e9e50f0bbd571c2a579b2de794ada24162f4a483b7818e447d94c0a66f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral Small 4",
+      "PowerRank": 10,
+      "Description": "Mistral AI's unified multi-capability model (March 16, 2026), merging Magistral (reasoning), Pixtral (vision), and Devstral (agentic coding) into a single 119B-param MoE (6B active) under Apache 2.0. Features 262K token context window and 128K output tokens. Open-weights and significantly cheaper than Mistral Medium 3.1. Strong multimodal + coding capability at low cost.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 1,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Small 3.2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C6C7FE31-BAD8-464F-ACC9-B86CE16B9FC0"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.619Z",
+            "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "mistral-small-2603",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "13E94620-550F-4678-8FCE-48BA3A08A8C1"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.695Z",
+            "checksum": "6087a837f59488e7b1a1ea6e77cd8a1c0bdd13f1c9f59d5665e250a4fc774e27"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-03-16T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mistral Small 4 pricing on Mistral AI as of March 2026. $0.15/$0.60 per 1M tokens. 119B-param MoE (6B active), Apache 2.0. Unifies Magistral (reasoning), Pixtral (vision), and Devstral (agentic coding). Open-weights; cheaper than Mistral Medium 3.1."
+          },
+          "primaryKey": {
+            "ID": "94E71422-1AA5-4ECB-9E00-DF0DC71A29D1"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.711Z",
+            "checksum": "7a789a3fe92febf9af82645ca6968ad0facea99e4a974ffc2d57e25b516f94c6"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5BE7C3BD-62CE-4186-8171-DDEC8536FD3E"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:32.569Z",
+      "checksum": "f1b8d7d2220169e1f1f6d1a97911132b8c3b5ce7a350a443faeff7a6c20a5cbf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.1 Flash TTS",
+      "PowerRank": 10,
+      "Description": "Google's expressive text-to-speech model (Preview, April 15, 2026). Supports 70+ languages, 200+ expressive audio tags for vocal style/pace/delivery control, native multi-speaker dialogue, and scene direction. 8,192 input tokens text, 16,384 output tokens audio. All audio watermarked with SynthID. Elo score 1,211 on Artificial Analysis TTS leaderboard. Knowledge cutoff January 2025.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 5,
+      "ModelSelectionInsights": "Expressive TTS with granular audio-tag control, multi-speaker dialogue, and 70+ language support. Strong for narration, dialogue generation, and multilingual voice workflows.",
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7F4F14C3-5D33-4FF2-A0A1-536B762DA87F"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.599Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiAudioGenerator",
+            "APIName": "gemini-3.1-flash-tts-preview",
+            "MaxInputTokens": 8192,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "4369D1CC-A0F1-4226-9A1F-C0A4543B6084"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.615Z",
+            "checksum": "ab9e2775dbc0c1bbad0fd354ce07b57d8774c1953454ffb13f7f9dc0160762cf"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "VertexAudioGenerator",
+            "APIName": "gemini-3.1-flash-tts-preview",
+            "MaxInputTokens": 8192,
+            "MaxOutputTokens": 16384,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "0FD9DB30-7C70-4200-8565-A34522F52599"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.630Z",
+            "checksum": "aa6a23e350d86b3c9d866bf3d331a081f399c26e50fbf7d556f7c2c6a7ede310"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-04-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.1 Flash TTS pricing on Google AI Studio as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens. Batch mode 50% discount ($0.50/$10.00). Preview model."
+          },
+          "primaryKey": {
+            "ID": "390D12A1-6FEE-4A96-8D05-3128413BC3D9"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.667Z",
+            "checksum": "7f92939048718c1b765ede324e639fe298ffb871f253898bb0d02fd43fe02c46"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-04-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1,
+            "OutputPricePerUnit": 20,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.1 Flash TTS pricing on Vertex AI as of April 2026. $1.00/M input text tokens, $20.00/M audio output tokens."
+          },
+          "primaryKey": {
+            "ID": "0EB80DE1-DF09-42E4-B76A-4CDC150D71A8"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.683Z",
+            "checksum": "fe1a1df3963343122752b2447b2be6faaa27b1aaf4399d14a151d1aac1b26236"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B7CF86E7-F3AF-4A15-9A7D-D038D7D36EFB"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:27.407Z",
+      "checksum": "d605a079a0d76bd88ca766b8c5a2a65cfe2cac6fc4d728df7f0421ff1e1bea9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.6 35B A3B",
+      "PowerRank": 14,
+      "Description": "Alibaba's open-weights Qwen 3.6 MoE model (April 15, 2026): 35B total parameters / 3B active. Reasoning/chain-of-thought model targeting agentic coding and multimodal (text + image input, text output). 262K native context, extensible to ~1M. Apache 2.0 license. Artificial Analysis Intelligence Index of 43 — top-tier for open-weights; some multimodal metrics reach Claude Sonnet 4.5 level. RefCOCO 92.0 for visual grounding.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "7FCEAE81-B36F-452E-B09C-5EC7683ECF64"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.698Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.6-35b-a3b",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "EC34D422-74FC-486A-A913-F97557E9B521"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.714Z",
+            "checksum": "34747fd96d6208514f181ab77e2dce8def9b7d0468e95eac0e5b152374e83f1b"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-04-15T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.38,
+            "OutputPricePerUnit": 2.25,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 35B A3B pricing on Alibaba Cloud Bailian as of April 2026. $0.38/$2.25 per 1M tokens. Open-weights Apache 2.0 — also available for local deployment via Hugging Face / ModelScope. ~211 tokens/second output speed."
+          },
+          "primaryKey": {
+            "ID": "37DF5C6A-4DAE-4401-8AC0-2C0506959EFF"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:32.727Z",
+            "checksum": "770112b8a6df4adf6f4672e0a6c74581e78141b7f05cc44a19c80827f17d22c2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2DA42870-6763-4C8A-BD69-D4807DD0698C"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:27.420Z",
+      "checksum": "a20ba2d519fd3965edd9ec396fa7c85d907daf81463024bdc3954546d21daef5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MiniMax-M2.7",
+      "PowerRank": 21,
+      "Description": "MiniMax's frontier self-evolving MoE model (March 18, 2026). 228B total parameters in a Mixture-of-Experts architecture with native chain-of-thought reasoning (no separate thinking variant). 196K token context, 128K output capacity. Supports image input and function calling. Ranks #1 on Artificial Analysis Intelligence Index (score 50). Benchmarks: 56.2% SWE-Pro, 57.0% Terminal Bench 2, 1495 ELO on GDPval-AA. Open-weights released April 12, 2026. Direct successor to M2.5.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=MiniMax-M2.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "888C43EA-2991-461C-BCC1-C8D368D87303"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.726Z",
+            "checksum": "59d7ff617908fec6cabae3bc50c34922cef5229894fee808c9abfb5795b8e526"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "MiniMaxLLM",
+            "APIName": "MiniMax-M2.7",
+            "MaxInputTokens": 196608,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "6F2BA169-046D-40D3-BFAF-F5446CD331A0"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.740Z",
+            "checksum": "fd625e19b381f72ecb439aafb0d4e1f04aa4cc7b6dc4f0b069f55d7c1a0785d9"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "minimax/minimax-m2.7",
+            "MaxInputTokens": 196608,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "475E68EA-766C-4FA9-AC65-9660B111450D"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.757Z",
+            "checksum": "3c9d5c3d476d49cfcded58f0cc8932a706f41037bca4cfb50ed1c3ffee5ca584"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FireworksLLM",
+            "APIName": "accounts/fireworks/models/minimax-m2p7",
+            "MaxInputTokens": 196608,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "877CC8B3-6ED6-4C9A-996E-C6F746675F17"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.773Z",
+            "checksum": "4f30c92723ee601d0fd1e9c3112eddf73dabc734c5efb948bf5af3b310d480d9"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=MiniMax",
+            "StartedAt": "2026-03-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.3,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.7 pricing on MiniMax direct API as of March 2026. 228B MoE with native chain-of-thought reasoning. Cached input available at $0.06/1M tokens."
+          },
+          "primaryKey": {
+            "ID": "E74896EB-C363-4AD1-8E2C-D561D0174FC3"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.789Z",
+            "checksum": "1da959143a4324b9e35a799fe19a9cc1f83ad3de56491927963ba74d474b6e51"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-03-18T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.3,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.7 pricing on OpenRouter as of March 2026. Routed inference — provider may vary."
+          },
+          "primaryKey": {
+            "ID": "025334E5-D504-4A06-89D0-943254237796"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.805Z",
+            "checksum": "b3ed99e5922c5d42525335451948759d060153d956e894e106125f1c8dfd02e8"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "StartedAt": "2026-04-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.3,
+            "OutputPricePerUnit": 1.2,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "MiniMax-M2.7 pricing on Fireworks.ai as of April 2026 (hosted from open-weights release April 12). Cached input at $0.06/1M tokens. LoRA fine-tuning supported."
+          },
+          "primaryKey": {
+            "ID": "9FA1FE98-458A-4A2F-9028-B5BF020520D7"
+          },
+          "sync": {
+            "lastModified": "2026-04-20T23:52:33.817Z",
+            "checksum": "efd07b51233c9068a913c9660ceda359ef249d1a895bd4ecfbc4e6a35e8d5d05"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "35091064-5CD4-41D8-A7E7-1F160F4AE540"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T23:52:32.862Z",
+      "checksum": "7a655cf3f0a4f80b8beebaa28d3afd62f83700084820ddd36162a1f298caf263"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5.1",
+      "PowerRank": 21,
+      "Description": "Z.AI's (Zhipu AI) incremental refresh of the GLM 5 frontier model released April 7, 2026. 744B total / 40B active Mixture-of-Experts architecture with 203K input context and 66K output tokens. Open-sourced under MIT license. Notable gains over GLM 5 on SWE-bench Verified and AIME 2026 II; retains the Deep Thinking self-critique mode. Available via Z.AI direct API and OpenRouter.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "881D94C8-83AD-4FAD-8D5B-927D6E4BBD1F"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:01.892Z",
+            "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "ZhipuLLM",
+            "APIName": "glm-5.1",
+            "MaxInputTokens": 203776,
+            "MaxOutputTokens": 67584,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "D9BA098C-5D41-4226-8A98-9037851C1EFC"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:01.909Z",
+            "checksum": "8dccacb2b28638fc10dd015d3ebff53264dd38727240780c5c38d9c1ad0159b5"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-04-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.95,
+            "OutputPricePerUnit": 3.15,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license."
+          },
+          "primaryKey": {
+            "ID": "7550E9EF-3333-4EDD-8382-DFACF4C3B716"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:01.924Z",
+            "checksum": "ae6ab97ad1e01c99132cf9f76b8e624acf2d9a345fb4a7dcb430f39c72f0761d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "669B84EE-0749-44DF-BE4F-C0390E25E484"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:50:01.816Z",
+      "checksum": "f5434ef41056a6356ff52093bc6ab1172c766bee41555f6b0ff288203b818718"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemma 4 31B Instruct",
+      "PowerRank": 8,
+      "Description": "Google's open-weights Gemma 4 31B instruction-tuned model released April 2, 2026. Dense 31B parameter architecture with 256K context window, multilingual support for 140+ languages, and multimodal vision-input/text-output capability. Available under the Gemma Terms of Use on Vertex AI and third-party hosts.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "8531C06F-F407-4419-AF1B-962E5FE1E28F"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.822Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemma-4-31b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "50116063-42A7-48F6-9B5A-6ACF21FF22DF"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.843Z",
+            "checksum": "37b2b59a598edf9dfdfc3e8d5699aded7e97964957da489ec4162d71af98735d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.13,
+            "OutputPricePerUnit": 0.38,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out."
+          },
+          "primaryKey": {
+            "ID": "9856C369-1129-4AC2-ADF9-61F067964D1D"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.860Z",
+            "checksum": "c75c767b6155f602e72ebca4640d28db03e3cdd5c82a34358e5f74884e290484"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D4D993DA-764C-4037-B311-07BDE89056C6"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:55.304Z",
+      "checksum": "581e521e2f53dd404428eccf2d1046f25ecdac61c81daafe42ae50ccc9ea747c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemma 4 26B A4B Instruct",
+      "PowerRank": 7,
+      "Description": "Google's open-weights Gemma 4 26B A4B (Active-4B MoE) instruction-tuned model released April 2, 2026. 26B total parameters with only 4B active per inference, optimized for fast and cost-efficient inference. 256K context window with multilingual support for 140+ languages. Available under the Gemma Terms of Use on Vertex AI and third-party hosts.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3EE1D387-E3BF-4774-A503-DF9EBB287B00"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.877Z",
+            "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemma-4-26b-a4b-it",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FAE42244-18DB-43E1-81FB-74AE3D74939F"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.895Z",
+            "checksum": "731d6de4f7c2e52e41fdad55bae093ce8e8cc4fa0329aa60b604478e9fdbd477"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.08,
+            "OutputPricePerUnit": 0.35,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use."
+          },
+          "primaryKey": {
+            "ID": "17725E8D-B7A0-48CA-8D31-9A38FA3EE8C5"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.910Z",
+            "checksum": "517c422391eb9f86dcc05780d61cf4104154c1d1dfff292b77934c2d7052506a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4E826B27-5A88-4320-8440-D15BB112A367"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:55.320Z",
+      "checksum": "f17b8c46d3836739905ad42b6e5fdc706dfaaae84fd8a033e54e1ace2c43e18b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mercury 2",
+      "PowerRank": 15,
+      "Description": "Inception Labs' most powerful model, positioned as the fastest reasoning LLM. Uses a diffusion-based architecture to achieve 1000+ tokens per second on commercial NVIDIA GPUs while supporting reasoning, tool use, and structured output. Features a 128K token context window and is well-suited for rapid coding iteration, workflow subagents, customer support, realtime voice, and enterprise search. Released April 23, 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C049B48D-5F0E-4271-A8CF-2CB298F924BE"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.949Z",
+            "checksum": "8e73f8253b30485054f7c298776ef475fff76b69d310c82491b59d0e9ca90b16"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "InceptionLLM",
+            "APIName": "mercury-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 50000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1C773E2B-47AC-410D-B889-198535CCE923"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.965Z",
+            "checksum": "7badc87656cc011a7d6d4ffb9c819cad5b390eccd4ce063ead8b7f0c6b223286"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-04-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 0.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits)."
+          },
+          "primaryKey": {
+            "ID": "B396DAC0-5974-4FAB-A845-A11EF6D927FC"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.979Z",
+            "checksum": "35e1b843c9f09f7f70d4c165439ca101465bf8b7f8237b1fef10559c61b4951b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2FB388D2-B5DD-4A0A-986C-F7F0152CFF3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:55.335Z",
+      "checksum": "d1e6c49b7e3d401672126b704909bc62d0d3c0991e2d193998ddfaadd039029c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5",
+      "PowerRank": 12,
+      "Description": "OpenAI's flagship reasoning model, released April 24, 2026 (ChatGPT/Codex April 23, API April 24). Successor to GPT 5.4. Built for professional scenarios where precision, reliability, and persistence matter. 1,050,000 token context window (~1M) with 128K output capacity (Codex deployment uses a 400K context). Supports adjustable reasoning via reasoning_effort parameter (none, low, medium, high, xhigh). Available through Responses API and Chat Completions, also surfaced on Microsoft Foundry / Azure.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.4"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B25B6B52-78F3-4F78-A225-87273EC811EF"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.578Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "47E05857-30C7-40B1-8A02-323A3DC6BA4F"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.713Z",
+            "checksum": "2d64466c727365f44ada09fb4540e5d4f5e904c74bbc778a6b3c0a2f921bf6b0"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.5",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3E9F33FF-32DC-48BE-B4B2-1A34557ED77C"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.730Z",
+            "checksum": "8da71d284ecdc7f1488e86f27f80fe63730ef112f2c2b26cb2b1137be3db40a7"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 standard pricing on OpenAI as of April 24, 2026 launch. $5.00/$30.00 per 1M tokens. Prompts >272K input tokens billed at 2x input and 1.5x output for the full session (standard, batch, and flex tiers). Batch and Flex APIs at 50% off; Priority at 2.5x standard. Regional data-residency endpoints carry a 10% uplift. Source: https://openai.com/index/introducing-gpt-5-5/"
+          },
+          "primaryKey": {
+            "ID": "E049A222-E24B-4C5E-AB27-7DA7FEDCC44A"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.746Z",
+            "checksum": "8a213692b538409d4bb2a9c0f61e0eb46d82899797fd10dd3026f08559049a02"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 pricing on Azure OpenAI / Microsoft Foundry (Global Standard) as of April 24, 2026 launch. Source: https://azure.microsoft.com/en-us/blog/openais-gpt-5-5-in-microsoft-foundry-frontier-intelligence-on-an-enterprise-ready-platform/"
+          },
+          "primaryKey": {
+            "ID": "60686413-8D43-47BE-8C7A-401381B81CAC"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.761Z",
+            "checksum": "05f3886755eb2fdb92316531bf08752f5e9216419d73f7b8fbbfedda5c40e311"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "87C9417E-45E6-4C97-95B1-EC0482C7FE4D"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.334Z",
+      "checksum": "a4200fe870f1601382573616b2c192aeb489f4bbe7175fa079287a3ab1e63aee"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5 Pro",
+      "PowerRank": 8,
+      "Description": "OpenAI's premium variant of GPT 5.5, released April 24, 2026. Extends reasoning depth and task complexity for the most demanding enterprise workloads. Same 1M input / 128K output token window as GPT 5.5. Available through the Responses API and Batch API. Pricing reflects deeper reasoning compute: 6x the input and 6x the output cost of standard GPT 5.5.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0384DD43-314C-4DD1-81E6-FB1647D6F9F2"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.873Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5-pro",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "9117FA4A-ED22-4934-BE56-5A81A9F7EB23"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.890Z",
+            "checksum": "78efdb747abc9b08a66d887876d7ac361a5c16cee23c87a3b1751ebe08019435"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 30,
+            "OutputPricePerUnit": 180,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 Pro pricing on OpenAI as of April 24, 2026 launch. $30.00/$180.00 per 1M tokens. Available via Responses API and Batch API. Batch and Flex at 50% off. Source: https://openai.com/index/introducing-gpt-5-5/"
+          },
+          "primaryKey": {
+            "ID": "3F248960-FDCF-4DDB-BF04-E187D5DC6CE6"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.904Z",
+            "checksum": "2181e292987374129053f79f6d73998eea3826c310e5fb34bb748a0adf684b4d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A19488EB-5168-4D47-BBCB-F94054E0B6A7"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.776Z",
+      "checksum": "772945f38fe02d7fd74541577a6380ce44e5744196c95abc86fa9f88e3fb53ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok 4.3",
+      "PowerRank": 16,
+      "Description": "xAI's new flagship reasoning model, released April 30, 2026 (beta to SuperGrok Heavy on April 17). Always-on reasoning - 'thinks' before responding for every query. 1M token context window. Built-in code execution environment, video upload support, and native generation of downloadable PDFs, fully populated spreadsheets, and PowerPoint decks. Scores 53 on the Artificial Analysis Intelligence Index at 207 t/s output speed. Aggressively priced at 40% lower than Grok 4.20.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok 4.20"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9ED2B6DF-53B7-48D7-B528-F33431B65970"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.794Z",
+            "checksum": "aa7970023d655e03c422bfdbc8910b106fa41da0a3f93d2d51e598108e8a37bf"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-4.3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "42DBADF5-E1E6-4D27-8CEF-E20771C0B48D"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.811Z",
+            "checksum": "2e775e4295f9ffe47f4a698a4d932b8a97eefda427fd0f7732bcaf725cc7107a"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-04-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 2.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok 4.3 pricing on xAI direct API as of April 30, 2026 launch. $1.25/$2.50 per 1M tokens for requests up to 200,000 tokens; requests above 200K input billed at higher rates per xAI doc. Sources: https://docs.x.ai/developers/models/grok-4.3 ; https://venturebeat.com/technology/xai-launches-grok-4-3-at-an-aggressively-low-price-and-a-new-fast-powerful-voice-cloning-suite"
+          },
+          "primaryKey": {
+            "ID": "B0BC5332-1DFC-4164-AF29-7FA1057968E3"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.825Z",
+            "checksum": "e1ca3385fa1813ba220d6f0570912803e15fe0157f7128234cd5b3d51297fe22"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0D5B7AC2-1130-4611-95D4-9A6FAE129569"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.452Z",
+      "checksum": "55c543981ba3879e013b4fe022abdd705773be6465d2ce1dff32e5fa837f4108"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.6",
+      "PowerRank": 18,
+      "Description": "Moonshot AI's open-weight flagship coding and agent model, released April 20, 2026. 1-trillion-parameter Mixture-of-Experts with 32B active parameters per token, native INT4 quantization, Modified MIT License (open weights on Hugging Face). 256K (262,144) token context window with output ceiling matching the context. Multimodal (text/image/video in, text out). Top open-weights performer on the Artificial Analysis Intelligence Index (54). Provides OpenAI/Anthropic-compatible API at platform.moonshot.ai. Strong long-horizon coding and multi-agent orchestration with agent swarm scaling to hundreds of parallel sub-agents.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K2.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "73A9CF79-08E2-4182-941D-47F3473F2980"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.469Z",
+            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k2.6",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 262144,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "68FC8051-B204-4960-A113-33F448A68E66"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.487Z",
+            "checksum": "007d11e0639993894011ce33e2996e3937f90314067f6a3f92a6426f6844e824"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
+            "StartedAt": "2026-04-20T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Kimi K2.6 launch pricing on Moonshot direct API as of April 20, 2026: $0.60/$2.50 per 1M tokens. Some aggregator pages quote $0.74/$3.49 (likely a different SKU/tier or post-launch adjustment) - the official launch announcement quoted $0.60/$2.50. Verify on platform.moonshot.ai before relying on this price for billing. Sources: https://www.kimi.com/blog/kimi-k2-6 ; https://huggingface.co/moonshotai/Kimi-K2.6"
+          },
+          "primaryKey": {
+            "ID": "4AFC2907-E94D-40D9-9784-9ABD4604E0D7"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.501Z",
+            "checksum": "fb41bf54d89b76b6c0f3dff46fae173cb2f06d863fd6d75525fae6ecf48f9d2f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "90456F5D-3603-4A93-ACB6-86F06A657AAA"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:58.300Z",
+      "checksum": "bab5ea77e8e833c8aed50a67fcaedbef53a771532a68112648e1ce3b6524b9e3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepSeek V4 Pro",
+      "PowerRank": 15,
+      "Description": "DeepSeek's flagship reasoning model, released as preview April 24, 2026. Mixture-of-Experts with 1.6T total / 49B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. OpenAI-compatible and Anthropic-compatible API formats. Recorded cost row uses list pricing; a 75% promotional discount runs through 2026-05-31 15:59 UTC (effective $0.435/$0.87 per 1M tokens during the promo).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "CCA4E253-2B87-4BFE-84F0-AE5013E3F2E2"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.355Z",
+            "checksum": "b8f38a4bc5d3a391015a854ecb25f51b689cc95c790da90694692a2eff7d9ae4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DeepSeekLLM",
+            "APIName": "deepseek-v4-pro",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "567E9DE2-008F-424C-887F-55DA04873338"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.396Z",
+            "checksum": "b80893cc92f15ccce8434632fc04ce2703d6625a5aa88e364c8c90c7c1e27e2a"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.74,
+            "OutputPricePerUnit": 3.48,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Pro list pricing on DeepSeek direct API as of April 24, 2026 launch: $1.74/$3.48 per 1M tokens. A 75% promotional discount is in effect through 2026-05-31 15:59 UTC, bringing effective price to $0.435/$0.87 per 1M tokens. Cache-hit input pricing is 1/10 of launch price (effective from 2026-04-26). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          },
+          "primaryKey": {
+            "ID": "702B44C3-0806-49EE-98DD-A457B5F0FF31"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.444Z",
+            "checksum": "1a23fc2a5167107300907202e6eb0c0e9cb508ac1b7fc8755bf343593b7cde5b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "DCDD6683-779F-4B03-89B5-746F95BB5293"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:51.530Z",
+      "checksum": "faadd61144eeeb90518a3a22f71003678fb806df7095d6ef807a5e3cfc1f0c27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepSeek V4 Flash",
+      "PowerRank": 30,
+      "Description": "DeepSeek's cost-efficient counterpart to V4 Pro, released as preview April 24, 2026. Mixture-of-Experts with 284B total / 13B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. Same OpenAI-compatible and Anthropic-compatible API surface as V4 Pro. Designed for high-throughput, latency-sensitive workloads where V4 Pro's reasoning depth is unnecessary.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "D71D9609-4DD5-442D-BBFF-76963132E5B8"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.378Z",
+            "checksum": "b8f38a4bc5d3a391015a854ecb25f51b689cc95c790da90694692a2eff7d9ae4"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DeepSeekLLM",
+            "APIName": "deepseek-v4-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F874BA7C-C6DD-4281-9300-9B71F4C11416"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.411Z",
+            "checksum": "1ce544dd7134def09ed51420424bd85b5fb5064fa2424d351c725b4848c6be2e"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.14,
+            "OutputPricePerUnit": 0.28,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Flash pricing on DeepSeek direct API as of April 24, 2026 launch: $0.14/$0.28 per 1M tokens. Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          },
+          "primaryKey": {
+            "ID": "738963AB-9706-4DD5-87F0-B424BB87CBB0"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.461Z",
+            "checksum": "ea5d8c681c5b62cf4a7e4e5b50e186f2cc2f1747ca121c4e01a6b4e7b4e25a68"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F69FA7A1-B8EF-463F-956D-54A9388BB70F"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:51.673Z",
+      "checksum": "b87c76fc92e1cdd3523dc1337e88a1de3c5d0c33b0c63c51eefe0321bfe39208"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2",
+      "PowerRank": 19,
+      "Description": "OpenAI's state-of-the-art image generation and editing model (April 2026). Generates at 1K, 2K, and 4K resolution, accepts up to 16 reference images, and renders multilingual text (including Chinese, Japanese, Korean) inside images with near-perfect accuracy. Pricing is token-based: $5/M text input, $8/M image input, $30/M image output tokens. Claimed #1 on Image Arena leaderboard at launch by a +242 point margin.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.o Image 1.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "54805631-265A-46C7-B97E-BCFFA7C25E38"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.033Z",
+            "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "BEAC44C0-808C-4D59-B9B3-0A2AFB4E2C52"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.044Z",
+            "checksum": "b5daaed97eecf5a10ea7e602117da2c1b6472dafd60eb42eccfc31b435a00cd3"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-21T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.053,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator — low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026."
+          },
+          "primaryKey": {
+            "ID": "71148A7B-E3AA-47B9-80B9-833CAF56CDE9"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.133Z",
+            "checksum": "a75571c26e588759b6a6ad862c707a31b6e6882942a64f705277306275804cd7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F2A7D6BE-C96B-453E-B330-1D56E5E05AAD"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:53.193Z",
+      "checksum": "1884c33a57e0b1210b1794b49df6387428e6475facfa23bc9fe29c4ac6fa9059"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5 Instant",
+      "PowerRank": 13,
+      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT and is exposed in the API as `chat-latest`. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "00C49B3A-1A78-439D-A7CE-FCFF755C3FA2"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.412Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5-instant",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.426Z",
+            "checksum": "21a78384321764121fd637d32e377d84731a92d0965f7f4bbd61975fb3bca6bb"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-05-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) — OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`."
+          },
+          "primaryKey": {
+            "ID": "FEAA70BB-8BAA-49D2-9300-B5E3CE93DECC"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.439Z",
+            "checksum": "b41af3e950917d7555864653a4103b3524f6ab0800c9bb79402e73b206dd55a2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7E91F18E-52CC-48C9-8457-74C810899B41"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:54.305Z",
+      "checksum": "91bdd5baea5c7ef5700ed1299ec53cc2449b8b0c3f964e9d26f9a86d7d0cff1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Realtime 2",
+      "PowerRank": 11,
+      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 8,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "16F82723-121F-4CFD-92BA-1AD0BFA45A93"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.113Z",
+            "checksum": "ea8f34ad4c34626c4bb458998247991df9a5a086a71b8fe7b20b50f13cc54701"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIRealtime",
+            "APIName": "gpt-realtime-2",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3393668B-A813-437E-A753-2C01BFC39C01"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.127Z",
+            "checksum": "67e746c14b122f8b3af5ca311ed501b062f5a219b274f8c1bd4538199d81f7f8"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-05-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 24,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Realtime-2 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema)."
+          },
+          "primaryKey": {
+            "ID": "B98BE63A-4F29-449E-97FF-36B4E1B342B1"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.253Z",
+            "checksum": "5afff6cb32d3edd88afd2b9a139bd5a7cba2271d2faad6da51f6636a1c1f24e3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:47.961Z",
+      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5V Turbo",
+      "PowerRank": 12,
+      "Description": "Z.AI's first native multimodal agent foundation model (April 1, 2026). Built for vision-based coding and agent-driven tasks: turns screenshots and designs into code, debugs visually, operates GUIs autonomously. Natively handles image, video, and text inputs. Excels at long-horizon planning, complex coding, and task execution. Context window: 202,752 input tokens, up to 131,072 output tokens.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "92007811-328A-44B2-9033-169856FC59F7"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.513Z",
+            "checksum": "56fd5202288494b1a84a21b434eae9b56306635efe0a6718d7502e729588d2e3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5v-turbo",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "92C44C56-B93B-4A55-BB99-56604C0DA939"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.527Z",
+            "checksum": "f927c72f1c71f98d0acc16c3cde9c82ee510182d9aa828b2fc9e854fae10c443"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-04-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.2,
+            "OutputPricePerUnit": 4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 — Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement."
+          },
+          "primaryKey": {
+            "ID": "5DB866B6-5F56-4C5E-90F0-CEAA3708259F"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.539Z",
+            "checksum": "ae8cc9cd20af059aef11f6747870a6b221419c62fcd7b932e2f100ca81079fa5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D44ACC64-291F-483C-B870-3C1D0698F335"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:54.450Z",
+      "checksum": "31b55350d4a99a2198318af6af0ff4ad314fe200f028a52ef521747a1a9a84d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral Medium 3.5",
+      "PowerRank": 13,
+      "Description": "Mistral AI's mid-tier model (May 1, 2026, public preview). 128B dense, open-weights under modified MIT license. 256K context. Unified instruction-following, reasoning, and coding capability. Vision input. Function calling, agents, conversation, structured outputs. Configurable reasoning effort. Powers Mistral remote coding agents and Work mode features. Available through Mistral API, NVIDIA endpoints, and self-hosting.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Medium 3.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "38F1D214-79CB-49AF-8445-4860B9227846"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.060Z",
+            "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "mistral-medium-3.5",
+            "MaxInputTokens": 256000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "15A40998-1969-4F21-B4C0-A720CCD7CE41"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.075Z",
+            "checksum": "cd6fff95f3609953ce31dc290ea11c5b121b035ff4e53ae469e8df2060dc0add"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-05-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) — this is the new release, not a replacement."
+          },
+          "primaryKey": {
+            "ID": "501719EA-06AC-42AA-9090-BADA50495140"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.086Z",
+            "checksum": "a8c2e337668d4617d135ee6bd875927a167269369a099fa8f01ba8a98851b182"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C2FA8AA2-126A-4A0E-88D8-64B938EC815A"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:53.266Z",
+      "checksum": "87be1e78925cbdf5376feee6623e0caf74983efeab8d030f5225f73680aae050"
     }
   }
 ]

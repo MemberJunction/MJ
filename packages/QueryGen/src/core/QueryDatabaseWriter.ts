@@ -6,7 +6,7 @@
  * of the SQL template during the Save() operation.
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
   MJQueryEntity,
   MJQueryCategoryEntity
@@ -25,13 +25,15 @@ export class QueryDatabaseWriter {
     // No config needed - category info comes from ValidatedQuery
   }
   /**
-   * Write validated queries to the database
+   * Write validated queries to the database atomically.
    *
    * Creates Query entities. QueryFields and QueryParameters are automatically
    * extracted by MJQueryEntity.server.ts using AI analysis of the SQL template.
-   * This happens asynchronously during the Save() operation.
+   * That extraction happens asynchronously during the Save() operation.
    *
-   * Errors for individual queries are logged but don't stop the batch process.
+   * Wraps the whole batch in a single DB transaction — any save failure
+   * rolls back every query previously queued in this call, so callers
+   * see either all queries persisted or none.
    *
    * @param validatedQueries - Array of validated queries to write
    * @param contextUser - User context for entity operations
@@ -41,22 +43,19 @@ export class QueryDatabaseWriter {
     validatedQueries: ValidatedQuery[],
     contextUser: UserInfo
   ): Promise<WriteResult> {
-    const md = new Metadata();
-    const results: string[] = [];
+    if (validatedQueries.length === 0) {
+      return { success: true, results: [] };
+    }
 
-    // Process each query
-    for (const vq of validatedQueries) {
-      try {
-        // Get or create the category for this query (with caching)
+    const md = new Metadata(); // global-provider-ok: query generation reads schema globally
+    const results: string[] = [];
+    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: query generation reads schema globally
+
+    await provider.BeginTransaction();
+    try {
+      for (const vq of validatedQueries) {
         const categoryId = await this.getCategoryId(vq.category, contextUser);
 
-        // Create Query entity ONLY (NO manual fields/params creation)
-        // MJQueryEntity.server.ts will automatically:
-        // - Detect Nunjucks syntax
-        // - Extract parameters using AI
-        // - Create QueryParameter records
-        // - Create QueryField records
-        // - Set UsesTemplate flag
         const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', contextUser);
         query.NewRecord();
         query.Name = vq.query.queryName;
@@ -68,22 +67,23 @@ export class QueryDatabaseWriter {
         query.OriginalSQL = vq.query.sql;
         query.Status = 'Pending';
 
-        const saved = await query.Save();
-        if (!saved) {
-          throw new Error(`Failed to save query: ${query.LatestResult?.Message}`);
+        if (!await query.Save()) {
+          throw new Error(`Failed to save query '${vq.query.queryName}': ${query.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
 
         results.push(`✓ ${query.Name} (ID: ${query.ID}) - AI extraction queued`);
-
-      } catch (error: unknown) {
-        results.push(`✗ ${vq.businessQuestion.userQuestion}: ${extractErrorMessage(error, 'Database Write')}`);
       }
-    }
 
-    return {
-      success: true,
-      results
-    };
+      await provider.CommitTransaction();
+      return { success: true, results };
+    } catch (error: unknown) {
+      await provider.RollbackTransaction();
+      const message = extractErrorMessage(error, 'Database Write');
+      return {
+        success: false,
+        results: [`✗ Batch rolled back: ${message}`, ...results.map(r => r.replace('✓', '~'))]
+      };
+    }
   }
 
   /**
@@ -169,7 +169,7 @@ export class QueryDatabaseWriter {
     }
 
     // Category doesn't exist, create it
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: query generation reads schema globally
     const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', contextUser);
     category.NewRecord();
     category.Name = categoryName;

@@ -1,13 +1,12 @@
 // Design tokens (must be first - provides CSS custom properties)
 @import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 
+// Global reset — previously provided by Kendo theme
+[hidden] { display: none !important; }
+
 // Core style imports
 @import './variables';
 @import './typography';
-
-// Import Kendo theme BEFORE our overrides
-// Using package resolution - works regardless of repository structure
-@import '@progress/kendo-theme-default/scss/all';
 
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
@@ -15,9 +14,6 @@
 // Import Golden Layout CSS for tab management
 @import 'golden-layout/dist/css/goldenlayout-base.css';
 @import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
-
-// Apply our theme overrides to Kendo components
-@import './kendo-theme-override';
 
 // Shared UI patterns (selector lists for consistent styling)
 @import './shared-patterns';
@@ -27,16 +23,18 @@
 @import './badges';
 @import './utilities';
 
-// Ensure button groups have correct colors (override any conflicting styles)
-kendo-buttongroup button,
-kendo-buttongroup .k-button {
-    color: var(--mj-brand-secondary) !important;
-    
-    &[aria-pressed="true"],
-    &.k-selected {
-        color: var(--mj-text-inverse) !important;
-    }
-}
+// MJ UI Components styles
+@import '@memberjunction/ng-ui-components/dist/lib/button/button';
+@import '@memberjunction/ng-ui-components/dist/lib/dialog/dialog';
+@import '@memberjunction/ng-ui-components/dist/lib/dropdown/dropdown';
+@import '@memberjunction/ng-ui-components/dist/lib/combobox/combobox';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input';
+@import '@memberjunction/ng-ui-components/dist/lib/input/input-switch-progress';
+@import '@memberjunction/ng-ui-components/dist/lib/datepicker/datepicker';
+@import '@memberjunction/ng-ui-components/dist/lib/splitter/splitter';
+@import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
+@import '@memberjunction/ng-ui-components/dist/lib/window/window';
+@import '@memberjunction/ng-ui-components/dist/lib/input/chip';
 
 .link-text {
     cursor: pointer;
@@ -54,7 +52,7 @@ kendo-buttongroup .k-button {
     background-position: center center;
     vertical-align: middle;
     line-height: 32px;
-    box-shadow: inset 0 0 1px #999, inset 0 0 10px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 0 1px var(--mj-text-disabled), var(--mj-shadow-inner);
     margin-left: 5px;
 }
 
@@ -66,7 +64,7 @@ kendo-buttongroup .k-button {
 }
 
 .red {
-    color: #d9534f;
+    color: var(--mj-status-error);
 }
 
 // Chart
@@ -90,52 +88,6 @@ kendo-buttongroup .k-button {
     opacity: 0.5;
 }
 
-// Scheduler
-kendo-recurrence-frequency-editor .k-edit-label {
-    width: unset;
-    margin-right: 10px;
-}
-
-kendo-recurrence-frequency-editor .k-edit-field {
-    width: unset;
-    float: none;
-}
-
-.k-team-mark {
-    width: 1em;
-    height: 1em;
-    display: inline-block;
-    vertical-align: middle;
-    margin-right: 8px;
-}
-
-// Header
-.material-bg .k-input,
-.material-bg .k-dropdown-wrap .k-i-arrow-s {
-    color: white;
-}
-
-.material-bg .k-dropdown-wrap {
-    border-color: white;
-}
-
-.material-bg .k-dropdown-wrap.k-state-focused {
-    border-color: #697bcf;
-    border-bottom-width: 2px;
-}
-
-.material-bg .k-dropdown-wrap:hover {
-    border-color: #2942bb;
-    border-bottom-width: 2px;
-}
-
-.ddl-theme {
-    width: 75px;
-}
-
-.k-dropdownlist {
-    margin: 5px;
-}
 
 .ddl-locale {
     width: 120px;
@@ -156,7 +108,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
     #txtSearch {
         width: 300px;
         height: 30px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--mj-border-strong);
         border-radius: 5px;
         margin-right: 5px;
         margin-left: 10px;
@@ -164,7 +116,7 @@ kendo-recurrence-frequency-editor .k-edit-field {
 }
 
 .item {
-    border: 1px solid #e1e0e1;
+    border: 1px solid var(--mj-border-default);
     border-radius: 5px;
     padding: 12px 10px;
     font-size: 16px;
@@ -180,9 +132,9 @@ kendo-recurrence-frequency-editor .k-edit-field {
 
 .item.active,
 .employee.active {
-    background-color: #f55f54;
-    color: #fff;
-    border-color: #f55f54;
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-status-error);
     z-index: 10;
 }
 
@@ -200,17 +152,3 @@ kendo-recurrence-frequency-editor .k-edit-field {
     opacity: 0.4;
 }
  
-// Tab-specific styling - should not affect button groups
-.k-tabstrip .k-tabstrip-items-wrapper .k-item {
-    color: black;
-    font-weight: normal;
-    border: solid 1px transparent;
-}
-
-.k-tabstrip-top .k-tabstrip-items-wrapper .k-item.k-active {
-    border-bottom: solid 1px white;
-    font-weight: bold;
-    color: blue;
-    background-color: white;
-    z-index: 1;
-}

@@ -3,7 +3,7 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './component-feedback-panel/component-feedback-panel.component';
 
@@ -86,6 +86,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Synchronously load the component spec from artifact content.
    * This is intentionally synchronous so that tabs are available immediately
    * when the parent queries GetAdditionalTabs() after pluginLoaded fires.
+   *
+   * The bridge purges the runtime registry + manager fetch cache itself when
+   * it (re)initializes for the new spec, so we don't need to clear caches
+   * from here — the bridge instance may not even exist yet when ngOnChanges
+   * fires for the first time.
    */
   private loadComponentSpec(): void {
     try {
@@ -251,7 +256,47 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     });
   }
 
-  ToggleFeedbackPanel(): void {
+  public override GetCurrentStateSnapshot(): DataSnapshot | null {
+    // First try the component's explicit or auto-captured data state.
+    // MJReactComponent.getCurrentDataState() already includes the fallback
+    // to intercepted RunView/RunQuery results when the React component
+    // doesn't register getCurrentDataState() via callbacks.RegisterMethod.
+    const dataState = this.reactComponent?.getCurrentDataState?.();
+    if (dataState && typeof dataState === 'object') {
+      return dataState as DataSnapshot;
+    }
+
+    // Fallback for components with no captured data — static mockups,
+    // pure-display components, or components whose data hooks haven't fired.
+    // Rather than short-circuit Analyze with "No data available", emit a
+    // minimal snapshot so the user can still open an agent conversation about
+    // the component. The artifact itself is attached to the conversation as an
+    // Input junction, so the agent can reason from the spec + any static data
+    // baked into the component code.
+    const spec = this.resolvedComponentSpec;
+    if (!spec) return null;
+
+    const snap = new DataSnapshot();
+    snap.title = spec.title || spec.name || this.getDisplayTitle() || undefined;
+    snap.interpretation =
+      `Interactive component artifact${spec.name ? ` "${spec.name}"` : ''}. ` +
+      `No live data was captured — the component either has no data-fetching ` +
+      `hooks or has not yet run its queries. The component specification is ` +
+      `attached to this conversation; the agent should inspect it directly.`;
+    return snap;
+  }
+
+  /**
+   * Component artifacts support feedback when a resolved spec is available.
+   */
+  public override get SupportsFeedback(): boolean {
+    return !!this.resolvedComponentSpec;
+  }
+
+  /**
+   * Toggle the feedback panel open. Called from the artifact viewer header button.
+   */
+  public override AskUserForFeedback(): void {
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
   }
 }

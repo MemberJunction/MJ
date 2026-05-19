@@ -58,7 +58,21 @@
               <i class="fa-solid fa-timeline"></i>
             </button>
           }
+          <button
+            class="toggle-btn"
+            [class.active]="effectiveViewMode === 'map'"
+            [class.geo-hidden]="!HasGeoCoding"
+            (click)="setViewMode('map')"
+            title="Map View">
+            <i class="fa-solid fa-map-location-dot"></i>
+          </button>
         </div>
+      }
+
+      <!-- Recycle Bin chip (auto-hides when entity has no deleted records, no tracking,
+           or user lacks Delete permission) -->
+      @if (ShowRecycleBin) {
+        <mj-recycle-bin-chip [EntityName]="effectiveEntity?.Name ?? null"></mj-recycle-bin-chip>
       }
 
       <!-- Timeline Controls (only shown when timeline is active) -->
@@ -184,6 +198,21 @@
       [selectedEventId]="timelineSelectedEventId"
       (afterEventClick)="onTimelineEventClick($event)">
     </mj-timeline>
+
+    <!-- Map View - rendered when geocoding supported, visibility controlled by hidden -->
+    @if (HasGeoCoding) {
+      <mj-map-view
+        [hidden]="effectiveViewMode !== 'map'"
+        [Entity]="effectiveEntity!"
+        [Records]="filteredRecords"
+        [TotalRecordCount]="totalRecordCount"
+        [RenderMode]="mapRenderMode"
+        [DisplayState]="mapDisplayState"
+        (MarkerClick)="onMapMarkerClick($event)"
+        (RenderModeChange)="onMapRenderModeChange($event)"
+        (DisplayStateChange)="onMapDisplayStateChange($event)">
+      </mj-map-view>
+    }
   </div>
 
 </div>

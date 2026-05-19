@@ -6,175 +6,28 @@
     </p>
   </div>
 
-  <kendo-grid
-    [data]="templateParams"
-    [loading]="isLoading"
-    [height]="400"
-    [pageable]="false"
-    [sortable]="true"
-    [resizable]="true"
-    (add)="addHandler($event)"
-    (edit)="editHandler($event)"
-    (cancel)="cancelHandler($event)"
-    (save)="saveHandler($event)"
-    (remove)="removeHandler($event)">
+  @if (editMode) {
+    <div class="params-toolbar">
+      <button mjButton variant="primary" (click)="addNewParam()">
+        <i class="fa-solid fa-plus"></i> Add Parameter
+      </button>
+    </div>
+  }
 
-    @if (editMode) {
-      <kendo-grid-toolbar>
-        <button kendoGridAddCommand type="button" class="k-button k-button-md k-rounded-md k-button-solid k-button-solid-primary">
-          <i class="fa-solid fa-plus"></i> Add Parameter
-        </button>
-      </kendo-grid-toolbar>
-    }
-
-    <kendo-grid-column field="Name" title="Parameter Name" [width]="200">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        <div class="param-name">
-          <strong>{{ dataItem.Name }}</strong>
-          @if (dataItem.IsRequired) {
-            <span class="required-badge">
-              <i class="fa-solid fa-asterisk"></i> Required
-            </span>
-          }
-        </div>
-      </ng-template>
-      <ng-template kendoGridEditTemplate let-dataItem="dataItem" let-formGroup="formGroup">
-        <kendo-textbox
-          [formControl]="formGroup.get('name')"
-          placeholder="Enter parameter name..."
-          [style.width.%]="100">
-        </kendo-textbox>
-        @if (formGroup.get('name')?.touched && formGroup.get('name')?.errors?.['required']) {
-          <span class="k-invalid-msg">
-            Parameter name is required
-          </span>
-        }
-      </ng-template>
-    </kendo-grid-column>
-
-    <kendo-grid-column field="Type" title="Type" [width]="140">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        <div class="param-type">
-          <i class="fa-solid {{ getTypeIcon(dataItem.Type) }}"></i>
-          {{ dataItem.Type }}
-        </div>
-      </ng-template>
-      <ng-template kendoGridEditTemplate let-dataItem="dataItem" let-formGroup="formGroup">
-        <kendo-dropdownlist
-          [formControl]="formGroup.get('type')"
-          [data]="typeOptions"
-          textField="text"
-          valueField="value"
-          [valuePrimitive]="true"
-          [style.width.%]="100">
-        </kendo-dropdownlist>
-      </ng-template>
-    </kendo-grid-column>
-
-    <kendo-grid-column field="IsRequired" title="Required" [width]="100">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        <div class="text-center">
-          @if (dataItem.IsRequired) {
-            <i class="fa-solid fa-check text-success"></i>
-          }
-          @if (!dataItem.IsRequired) {
-            <i class="fa-solid fa-times text-muted"></i>
-          }
-        </div>
-      </ng-template>
-      <ng-template kendoGridEditTemplate let-dataItem="dataItem" let-formGroup="formGroup">
-        <kendo-switch [formControl]="formGroup.get('isRequired')"></kendo-switch>
-      </ng-template>
-    </kendo-grid-column>
-
-    <kendo-grid-column field="Description" title="Description" [width]="300">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        <div class="param-description">
-          {{ dataItem.Description || '(No description)' }}
-        </div>
-      </ng-template>
-      <ng-template kendoGridEditTemplate let-dataItem="dataItem" let-formGroup="formGroup">
-        <kendo-textarea
-          [formControl]="formGroup.get('description')"
-          placeholder="Enter parameter description..."
-          [rows]="2"
-          [style.width.%]="100">
-        </kendo-textarea>
-      </ng-template>
-    </kendo-grid-column>
-
-    <kendo-grid-column field="DefaultValue" title="Default Value" [width]="200">
-      <ng-template kendoGridCellTemplate let-dataItem>
-        @if (dataItem.DefaultValue) {
-          <code class="default-value">{{ dataItem.DefaultValue }}</code>
-        }
-        @if (!dataItem.DefaultValue) {
-          <span class="text-muted">(No default)</span>
-        }
-      </ng-template>
-      <ng-template kendoGridEditTemplate let-dataItem="dataItem" let-formGroup="formGroup">
-        <kendo-textarea
-          [formControl]="formGroup.get('defaultValue')"
-          placeholder="Enter default value..."
-          [rows]="2"
-          [style.width.%]="100">
-        </kendo-textarea>
-      </ng-template>
-    </kendo-grid-column>
-
-    @if (editMode) {
-      <kendo-grid-column title="Actions" [width]="120">
-        <ng-template kendoGridCellTemplate let-dataItem let-rowIndex="rowIndex">
-          @if (!isInEditMode(rowIndex)) {
-            <button
-              kendoGridEditCommand
-              type="button"
-              class="k-button k-button-md k-rounded-md k-button-solid k-button-solid-base"
-              title="Edit parameter">
-              <i class="fa-solid fa-edit"></i>
-            </button>
-          }
-          @if (!isInEditMode(rowIndex)) {
-            <button
-              kendoGridRemoveCommand
-              type="button"
-              class="k-button k-button-md k-rounded-md k-button-solid k-button-solid-base"
-              title="Delete parameter">
-              <i class="fa-solid fa-trash"></i>
-            </button>
-          }
-          @if (isInEditMode(rowIndex)) {
-            <button
-              kendoGridSaveCommand
-              type="button"
-              class="k-button k-button-md k-rounded-md k-button-solid k-button-solid-primary"
-              title="Save changes">
-              <i class="fa-solid fa-check"></i>
-            </button>
-          }
-          @if (isInEditMode(rowIndex)) {
-            <button
-              kendoGridCancelCommand
-              type="button"
-              class="k-button k-button-md k-rounded-md k-button-solid k-button-solid-base"
-              title="Cancel changes">
-              <i class="fa-solid fa-times"></i>
-            </button>
-          }
-        </ng-template>
-      </kendo-grid-column>
-    }
-
-    <ng-template kendoGridNoRecordsTemplate>
-      <div class="no-params-message">
-        <i class="fa-solid fa-info-circle"></i>
-        <p>No parameters defined for this template.</p>
-        @if (editMode) {
-          <p>Click "Add Parameter" to create your first parameter.</p>
-        }
-      </div>
-    </ng-template>
-  </kendo-grid>
+  <ag-grid-angular
+    class="params-ag-grid"
+    [theme]="GridTheme"
+    [rowData]="templateParams"
+    [columnDefs]="ColumnDefs"
+    [defaultColDef]="DefaultColDef"
+    [editType]="'fullRow'"
+    [getRowId]="getRowId"
+    [suppressClickEdit]="true"
+    [overlayNoRowsTemplate]="noRowsTemplate"
+    (gridReady)="onGridReady($event)"
+    (rowEditingStopped)="onRowEditingStopped($event)"
+    style="width: 100%; height: 400px;">
+  </ag-grid-angular>
 
   <!-- Help Section -->
   @if (editMode) {

@@ -4,7 +4,7 @@
     <!-- Action Buttons -->
     <div class="action-buttons" role="toolbar" aria-label="Role management actions">
       <button
-        class="mj-btn mj-btn-secondary mj-btn-icon-mobile"
+        mjButton variant="secondary" class="mj-btn-icon-mobile"
         (click)="refreshData()"
         [disabled]="isLoading"
         aria-label="Refresh role list"
@@ -13,7 +13,7 @@
         <span class="btn-text">Refresh</span>
       </button>
       <button
-        class="mj-btn mj-btn-primary mj-btn-icon-mobile"
+        mjButton variant="primary" class="mj-btn-icon-mobile"
         (click)="createNewRole()"
         aria-label="Add new role"
       >
@@ -98,25 +98,22 @@
         <div class="mj-filter-group">
           <label class="mj-filter-label" id="type-filter-label">Type</label>
           <div class="mj-filter-buttons" role="group" aria-labelledby="type-filter-label">
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.type === 'all'"
+            <button mjButton
+              [variant]="filters$.value.type === 'all' ? 'primary' : 'flat'"
               (click)="onTypeFilterChange('all')"
               [attr.aria-pressed]="filters$.value.type === 'all'"
             >
               All
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.type === 'system'"
+            <button mjButton
+              [variant]="filters$.value.type === 'system' ? 'primary' : 'flat'"
               (click)="onTypeFilterChange('system')"
               [attr.aria-pressed]="filters$.value.type === 'system'"
             >
               System
             </button>
-            <button
-              class="mj-btn mj-btn-ghost"
-              [class.mj-btn-primary]="filters$.value.type === 'custom'"
+            <button mjButton
+              [variant]="filters$.value.type === 'custom' ? 'primary' : 'flat'"
               (click)="onTypeFilterChange('custom')"
               [attr.aria-pressed]="filters$.value.type === 'custom'"
             >
@@ -143,7 +140,7 @@
         <div class="error-content">
           <i class="fa-solid fa-exclamation-triangle error-icon" aria-hidden="true"></i>
           <p class="error-message">{{ error }}</p>
-          <button class="mj-btn mj-btn-primary" (click)="loadInitialData()" aria-label="Retry loading roles">
+          <button mjButton variant="primary" (click)="loadInitialData()" aria-label="Retry loading roles">
             <i class="fa-solid fa-refresh" aria-hidden="true"></i>
             Try Again
           </button>
@@ -187,7 +184,7 @@
                   </span>
                   <div class="role-actions" (click)="$event.stopPropagation()">
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm"
+                      mjButton variant="flat" size="sm"
                       (click)="editRole(role)"
                       title="Edit"
                       [attr.aria-label]="'Edit ' + role.Name"
@@ -196,7 +193,7 @@
                       <i class="fa-solid fa-edit" aria-hidden="true"></i>
                     </button>
                     <button
-                      class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                      mjButton variant="danger" size="sm"
                       (click)="confirmDeleteRole(role)"
                       title="Delete"
                       [attr.aria-label]="'Delete ' + role.Name"
@@ -220,7 +217,7 @@
                     </span>
                     <div class="mobile-action-buttons">
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm"
+                        mjButton variant="flat" size="sm"
                         (click)="editRole(role)"
                         title="Edit"
                         [attr.aria-label]="'Edit ' + role.Name"
@@ -230,7 +227,7 @@
                         <span class="btn-label">Edit</span>
                       </button>
                       <button
-                        class="mj-btn mj-btn-ghost mj-btn-sm mj-btn-danger"
+                        mjButton variant="danger" size="sm"
                         (click)="confirmDeleteRole(role)"
                         title="Delete"
                         [attr.aria-label]="'Delete ' + role.Name"
@@ -328,7 +325,7 @@
         </div>
         <div class="modal-footer">
           <!-- Primary action (Delete) on LEFT per MD3 design guide -->
-          <button class="mj-btn mj-btn-danger" (click)="deleteRole()" [disabled]="isLoading">
+          <button mjButton variant="danger" (click)="deleteRole()" [disabled]="isLoading">
             @if (isLoading) {
               <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Deleting...
@@ -337,7 +334,7 @@
               Delete Role
             }
           </button>
-          <button class="mj-btn mj-btn-secondary" (click)="showDeleteConfirm = false">
+          <button mjButton (click)="showDeleteConfirm = false">
             Cancel
           </button>
         </div>
@@ -425,13 +422,13 @@
 
         <div class="filter-modal-footer">
           <button
-            class="mj-btn mj-btn-primary"
+            mjButton variant="primary"
             (click)="showMobileFilters = false"
           >
             Apply Filters
           </button>
           <button
-            class="mj-btn mj-btn-secondary"
+            mjButton
             (click)="showMobileFilters = false"
           >
             Cancel

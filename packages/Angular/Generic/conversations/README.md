@@ -97,6 +97,26 @@ The chat area handles message display, input, and agent interactions:
 </mj-conversation-chat-area>
 ```
 
+### Chat Overlay
+
+A floating chat panel (bottom-right corner) that wraps the chat area for persistent agent access across the application. Collapses to a bubble icon, expands to a full chat panel.
+
+```html
+<mj-chat-agents-overlay
+  [IsVisible]="!isChatRoute"
+  (ToolExecuted)="onToolExecuted($event)"
+  (OpenEntityRecord)="onOpenRecord($event)"
+  (OpenFullWorkspace)="onExpandToWorkspace($event)">
+</mj-chat-agents-overlay>
+```
+
+The overlay is generic — it raises events for navigation and tool execution. The consuming application (e.g., MJExplorer) handles those events with app-specific logic like `NavigationService.OpenEntityRecord()`.
+
+**Related packages:**
+- [`@memberjunction/ai-agent-client`](../../AI/AgentsClient/README.md) — Core agent SDK (framework-agnostic, GraphQL transport, tool registry)
+- [`@memberjunction/ng-agent-client`](../agent-client/README.md) — Angular wrapper for the agent SDK
+- [`@memberjunction/core-entities`](../../../MJCoreEntities/README.md) — ConversationEngine for centralized conversation data
+
 ### Message Components
 
 #### Message List

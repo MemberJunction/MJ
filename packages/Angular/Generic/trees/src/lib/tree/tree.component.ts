@@ -16,6 +16,7 @@ import {
     HostListener
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import {
     TreeNode,
     TreeBranchConfig,
@@ -1095,8 +1096,19 @@ export class TreeComponent implements OnInit, OnDestroy {
         for (const node of allBranches) {
             if (node.ParentID && nodeMap.has(node.ParentID)) {
                 const parent = nodeMap.get(node.ParentID)!;
-                parent.Children.push(node);
-                node.Level = this.calculateLevel(node, nodeMap);
+                if (this.wouldCreateCycle(node, parent, nodeMap)) {
+                    // Bad data (e.g. A.ParentID=B, B.ParentID=A). Promoting to root
+                    // keeps every downstream recursive tree walker from blowing the stack.
+                    console.warn(
+                        `[TreeComponent] Cycle detected in ${config.EntityName} for node ${node.ID} (${node.Label}); promoting to root to break the cycle`
+                    );
+                    rootNodes.push(node);
+                    node.Level = 0;
+                    node.ParentID = null;
+                } else {
+                    parent.Children.push(node);
+                    node.Level = this.calculateLevel(node, nodeMap);
+                }
             } else {
                 rootNodes.push(node);
                 node.Level = 0;
@@ -1240,6 +1252,29 @@ export class TreeComponent implements OnInit, OnDestroy {
     }
 
     /**
+     * Returns true if attaching `node` as a child of `parent` would create a cycle.
+     * Walks the parent's ParentID chain looking for node.ID. A visited Set guards
+     * against pre-existing cycles in the chain.
+     */
+    private wouldCreateCycle(
+        node: TreeNode,
+        parent: TreeNode,
+        nodeMap: Map<string, TreeNode>
+    ): boolean {
+        if (UUIDsEqual(node.ID, parent.ID)) return true;
+        const visited = new Set<string>([NormalizeUUID(node.ID)]);
+        let cursor: TreeNode | undefined = parent;
+        while (cursor) {
+            const cursorKey = NormalizeUUID(cursor.ID);
+            if (visited.has(cursorKey)) return true;
+            visited.add(cursorKey);
+            if (!cursor.ParentID) return false;
+            cursor = nodeMap.get(cursor.ParentID);
+        }
+        return false;
+    }
+
+    /**
      * Calculate node level in hierarchy
      */
     private calculateLevel(node: TreeNode, nodeMap: Map<string, TreeNode>): number {
@@ -1289,7 +1324,13 @@ export class TreeComponent implements OnInit, OnDestroy {
         defaultIcon: string = 'fa-solid fa-folder'
     ): string {
         if (iconField && data[iconField]) {
-            return String(data[iconField]);
+            const icon = String(data[iconField]);
+            // Only use the icon if it's a Font Awesome class (fa-*) which is
+            // guaranteed to be globally available. Custom icon classes (e.g.
+            // mj-icon-*) may not have CSS loaded in the tree's context.
+            if (icon.startsWith('fa-') || icon.startsWith('fa ')) {
+                return icon;
+            }
         }
         return defaultIcon;
     }
@@ -1318,18 +1359,28 @@ export class TreeComponent implements OnInit, OnDestroy {
     }
 
     /**
-     * Deep clone tree nodes
+     * Deep clone tree nodes. Uses a per-path ancestor Set to guard against
+     * cycles in the Children graph; sibling duplicates (same ID under different
+     * branches, as produced by attachLeavesToBranches for M2M leaves) are preserved.
      */
     private cloneNodes(nodes: TreeNode[]): TreeNode[] {
-        return nodes.map(node => this.cloneNode(node));
+        return nodes.map(node => this.cloneNode(node, new Set<string>()));
     }
 
-    private cloneNode(node: TreeNode): TreeNode {
-        return {
+    private cloneNode(node: TreeNode, ancestors: Set<string>): TreeNode {
+        const key = NormalizeUUID(node.ID);
+        if (ancestors.has(key)) {
+            console.warn(`[TreeComponent] cloneNode: cycle detected at ${node.ID} (${node.Label}); truncating`);
+            return { ...node, Data: { ...node.Data }, Children: [] };
+        }
+        ancestors.add(key);
+        const cloned: TreeNode = {
             ...node,
             Data: { ...node.Data },
-            Children: this.cloneNodes(node.Children)
+            Children: node.Children.map(c => this.cloneNode(c, ancestors))
         };
+        ancestors.delete(key);
+        return cloned;
     }
 
     /**

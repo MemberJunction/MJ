@@ -4,40 +4,34 @@
     <div class="navigation-bar">
       <!-- Back/Forward buttons -->
       <div class="nav-buttons">
-        <button
-          kendoButton
-          fillMode="flat"
-          size="small"
+        <button mjButton
+          variant="flat"
+          size="sm"
           [disabled]="!canGoBack()"
           (click)="navigateBack()"
           title="Go back"
-          class="nav-button"
-          >
+          class="nav-button">
           <i class="fa-solid fa-chevron-left"></i>
         </button>
-        <button
-          kendoButton
-          fillMode="flat"
-          size="small"
+        <button mjButton
+          variant="flat"
+          size="sm"
           [disabled]="!canGoForward()"
           (click)="navigateForward()"
           title="Go forward"
-          class="nav-button"
-          >
+          class="nav-button">
           <i class="fa-solid fa-chevron-right"></i>
         </button>
       </div>
       <!-- Breadcrumb path -->
       <div class="breadcrumbs">
         @for (item of breadcrumbs; track item; let last = $last) {
-          <button
-            kendoButton
-            fillMode="flat"
-            size="small"
+          <button mjButton
+            variant="flat"
+            size="sm"
             (click)="onBreadcrumbClick(item)"
             [class.current]="last"
-            class="breadcrumb-item"
-            >
+            class="breadcrumb-item">
             {{ item.label }}
           </button>
           @if (!last) {

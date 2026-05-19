@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Palau",
+      "Code": "PW",
+      "ISO3166_2": "PW-PW",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Palau"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PW"
+    },
+    "primaryKey": {
+      "ID": "0CEBFFBE-2DFD-4954-9410-07ED30012E15"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:26.262Z",
+      "checksum": "8911f8e533db402987fbe426b1c89e6e579f34b663eeaaa83e8866c11ebeaf1d"
+    }
+  }
+]

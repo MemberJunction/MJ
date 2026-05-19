@@ -1,190 +1,73 @@
 import { RegisterClass } from '@memberjunction/global';
-import { BufferBaseAction } from '../buffer-base.action';
+import { BufferBaseAction, BufferPostStatus } from '../buffer-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
- * Action to get sent (published) posts from Buffer
+ * Retrieves sent (published) posts from Buffer.
+ * Uses the posts query filtered by status "sent".
  */
 @RegisterClass(BaseAction, 'BufferGetSentPostsAction')
 export class BufferGetSentPostsAction extends BufferBaseAction {
-    /**
-     * Get sent posts from Buffer
-     */
-    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        const { Params, ContextUser } = params;
-        
-        try {
-            // Get parameters
-            const companyIntegrationId = this.getParamValue(Params, 'CompanyIntegrationID');
-            const profileId = this.getParamValue(Params, 'ProfileID');
-            const page = this.getParamValue(Params, 'Page') || 1;
-            const count = this.getParamValue(Params, 'Count') || 10;
-            const since = this.getParamValue(Params, 'Since');
-            const useUTC = this.getParamValue(Params, 'UseUTC') !== false;
+  protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+    const { Params } = params;
 
-            // Validate required parameters
-            if (!companyIntegrationId) {
-                throw new Error('CompanyIntegrationID is required');
-            }
+    try {
+      const authError = await this.ensureAuthenticated(params);
+      if (authError) return authError;
 
-            if (!profileId) {
-                throw new Error('ProfileID is required');
-            }
+      const channelId = this.getParamValue(Params, 'ChannelID') as string | null;
+      const limit = (this.getParamValue(Params, 'Limit') as number | null) || 20;
+      const cursor = this.getParamValue(Params, 'After') as string | null;
+      const startDate = this.getParamValue(Params, 'StartDate') as string | null;
+      const endDate = this.getParamValue(Params, 'EndDate') as string | null;
 
-            // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
-                return {
-                    Success: false,
-                    ResultCode: 'INVALID_TOKEN',
-                    Message: 'Failed to initialize Buffer OAuth connection',
-                    Params
-                };
-            }
+      const organizationId = await this.resolveOrganizationId(Params);
+      const status: BufferPostStatus = 'sent';
+      const filters: { status: BufferPostStatus; channelIds?: string[]; startDate?: string; endDate?: string } = { status };
+      if (channelId) filters.channelIds = [channelId];
+      if (startDate) filters.startDate = new Date(startDate).toISOString();
+      if (endDate) filters.endDate = new Date(endDate).toISOString();
 
-            // Get sent posts
-            const result = await this.getUpdates(profileId, 'sent', {
-                page,
-                count,
-                since: since ? new Date(since) : undefined,
-                utc: useUTC
-            });
+      const connection = await this.fetchPosts(organizationId, filters, limit, cursor || undefined);
+      const posts = connection.edges.map((edge) => this.normalizePost(edge.node));
 
-            // Format posts
-            const posts = result.updates || [];
-            const formattedPosts = posts.map((update: any) => this.normalizePost(update));
+      const summary = {
+        totalPosts: posts.length,
+        totalCount: connection.totalCount,
+        hasMore: connection.pageInfo.hasNextPage,
+        endCursor: connection.pageInfo.endCursor,
+        channelId: channelId || 'all',
+        dateRange: {
+          earliest: posts.length > 0 ? posts[posts.length - 1].publishedAt : null,
+          latest: posts.length > 0 ? posts[0].publishedAt : null,
+        },
+        postsByDay: this.groupPostsByDay(posts, 'publishedAt'),
+      };
 
-            // Create summary
-            const summary = {
-                totalPosts: formattedPosts.length,
-                page: page,
-                hasMore: posts.length === count,
-                profileId: profileId,
-                dateRange: {
-                    earliest: formattedPosts.length > 0 ? 
-                        formattedPosts[formattedPosts.length - 1].publishedAt : null,
-                    latest: formattedPosts.length > 0 ? 
-                        formattedPosts[0].publishedAt : null
-                },
-                postsByDay: this.groupPostsByDay(formattedPosts),
-                totalEngagements: this.calculateTotalEngagements(formattedPosts),
-                topPerformingPost: this.findTopPerformingPost(formattedPosts)
-            };
+      this.setOutputParam(Params, 'Posts', posts);
+      this.setOutputParam(Params, 'Summary', summary);
 
-            // Update output parameters
-            const outputParams = [...Params];
-            const postsParam = outputParams.find(p => p.Name === 'Posts');
-            if (postsParam) postsParam.Value = formattedPosts;
-            const summaryParam = outputParams.find(p => p.Name === 'Summary');
-            if (summaryParam) summaryParam.Value = summary;
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: `Retrieved ${formattedPosts.length} sent posts from Buffer`,
-                Params: outputParams
-            };
-
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            const resultCode = this.mapBufferError(error);
-            
-            return {
-                Success: false,
-                ResultCode: resultCode,
-                Message: `Failed to get sent posts: ${errorMessage}`,
-                Params
-            };
-        }
+      return { Success: true, ResultCode: 'SUCCESS', Message: `Retrieved ${posts.length} sent posts from Buffer`, Params };
+    } catch (error) {
+      return this.buildErrorResult(error, 'get sent posts', Params);
     }
+  }
 
-    /**
-     * Group posts by published day
-     */
-    private groupPostsByDay(posts: any[]): Record<string, number> {
-        return posts.reduce((acc, post) => {
-            if (post.publishedAt) {
-                const day = post.publishedAt.toISOString().split('T')[0];
-                acc[day] = (acc[day] || 0) + 1;
-            }
-            return acc;
-        }, {} as Record<string, number>);
-    }
+  public get Params(): ActionParam[] {
+    return [
+      ...this.bufferCommonParams,
+      { Name: 'ChannelID', Type: 'Input', Value: null },
+      { Name: 'Limit', Type: 'Input', Value: 20 },
+      { Name: 'After', Type: 'Input', Value: null },
+      { Name: 'StartDate', Type: 'Input', Value: null },
+      { Name: 'EndDate', Type: 'Input', Value: null },
+      { Name: 'Posts', Type: 'Output', Value: null },
+      { Name: 'Summary', Type: 'Output', Value: null },
+    ];
+  }
 
-    /**
-     * Calculate total engagements across all posts
-     */
-    private calculateTotalEngagements(posts: any[]): number {
-        return posts.reduce((total, post) => {
-            if (post.analytics) {
-                return total + post.analytics.engagements;
-            }
-            return total;
-        }, 0);
-    }
-
-    /**
-     * Find the top performing post by engagements
-     */
-    private findTopPerformingPost(posts: any[]): any {
-        if (posts.length === 0) return null;
-
-        return posts.reduce((top, post) => {
-            if (!top || (post.analytics?.engagements || 0) > (top.analytics?.engagements || 0)) {
-                return post;
-            }
-            return top;
-        }, posts[0]);
-    }
-
-    /**
-     * Define the parameters this action expects
-     */
-    public get Params(): ActionParam[] {
-        return [
-            ...this.commonSocialParams,
-            {
-                Name: 'ProfileID',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'Page',
-                Type: 'Input',
-                Value: 1
-            },
-            {
-                Name: 'Count',
-                Type: 'Input',
-                Value: 10
-            },
-            {
-                Name: 'Since',
-                Type: 'Input',
-                Value: null
-            },
-            {
-                Name: 'UseUTC',
-                Type: 'Input',
-                Value: true
-            },
-            {
-                Name: 'Posts',
-                Type: 'Output',
-                Value: null
-            },
-            {
-                Name: 'Summary',
-                Type: 'Output',
-                Value: null
-            }
-        ];
-    }
-
-    /**
-     * Metadata about this action
-     */
-    public get Description(): string {
-        return 'Retrieves sent (published) posts from Buffer for a specific social media profile with analytics data';
-    }
+  public get Description(): string {
+    return 'Retrieves sent (published) posts from Buffer with optional date range filtering';
+  }
 }

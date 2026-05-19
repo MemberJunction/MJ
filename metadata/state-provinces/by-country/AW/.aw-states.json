@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Aruba",
+      "Code": "AW",
+      "ISO3166_2": "AW-AW",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Aruba"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=AW"
+    },
+    "primaryKey": {
+      "ID": "B021178B-F1B9-45FA-95EA-BB73C2AF52F9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:08:29.005Z",
+      "checksum": "9f0d392bc75778a9dfeb8dd95ed4a74a2dade75dd17aef8c6d531ecaf3cf00e8"
+    }
+  }
+]

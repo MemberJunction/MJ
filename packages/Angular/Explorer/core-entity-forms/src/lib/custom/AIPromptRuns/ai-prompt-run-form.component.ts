@@ -1,13 +1,13 @@
 import { Component, AfterViewInit, ViewContainerRef, OnDestroy, ChangeDetectionStrategy, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { MJAIPromptRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJAIModelEntity } from "@memberjunction/core-entities";
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { MJAIPromptRunFormComponent } from '../../generated/Entities/MJAIPromptRun/mjaipromptrun.form.component';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ChatMessage } from '@memberjunction/ai';
-import { TestHarnessWindowService } from '@memberjunction/ng-ai-test-harness';
+import { TestHarnessWindowManagerService } from '@memberjunction/ng-ai-test-harness';
 import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Prompt Runs')
@@ -20,7 +20,11 @@ import { ParseJSONOptions, ParseJSONRecursive } from '@memberjunction/global';
 })
 export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormComponent implements AfterViewInit, OnDestroy {
     public record!: MJAIPromptRunEntityExtended;
-    
+    public readonly toolbarConfig = CUSTOM_LAYOUT_TOOLBAR_CONFIG;
+
+    /** Custom-layout AI Prompt Run form looks best full-width on first open. */
+    public override getDefaultFormWidthMode(): 'centered' | 'full-width' { return 'full-width'; }
+
     // Related entities
     public prompt: MJAIPromptEntityExtended | null = null;
     public model: MJAIModelEntity | null = null;
@@ -65,8 +69,13 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     public validationAttempts: any[] = [];
     public validationSummary: any = null;
 
+    // Full-screen overlay state
+    public FullScreenContent: string | null = null;
+    public FullScreenLanguage = 'json';
+    public FullScreenTitle = '';
+
     // Field injections
-    private testHarnessWindowService = inject(TestHarnessWindowService);
+    private testHarnessWindowService = inject(TestHarnessWindowManagerService);
     private viewContainerRef = inject(ViewContainerRef);
     
     async ngOnInit() {
@@ -148,7 +157,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadRelatedData() {
         this.isLoadingRelatedData = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             
             // Load prompt
             if (this.record.PromptID) {
@@ -186,7 +195,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadChildRuns() {
         if (!this.record.ID) return;
         
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,
@@ -485,6 +494,18 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
         }
     }
     
+    public openFullScreen(content: string, language: string, title: string): void {
+        this.FullScreenContent = content;
+        this.FullScreenLanguage = language;
+        this.FullScreenTitle = title;
+        this.cdr.detectChanges();
+    }
+
+    public closeFullScreen(): void {
+        this.FullScreenContent = null;
+        this.cdr.detectChanges();
+    }
+
     private loadValidationData() {
         const parseOptions: ParseJSONOptions = {
             extractInlineJson: true,

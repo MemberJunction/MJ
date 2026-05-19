@@ -14,7 +14,7 @@ function ProductRevenueMatrix({ utilities, styles, components, callbacks, savedU
   const [aiInsights, setAiInsights] = useState(null);
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
-  const [insightsCollapsed, setInsightsCollapsed] = useState(false);
+
 
   // Load sub-components from registry
   const {
@@ -507,8 +507,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
           title="AI-Powered Product Portfolio Insights"
           icon="fa-wand-magic-sparkles"
           iconColor="#10B981"
-          defaultCollapsed={insightsCollapsed}
-          onToggleCollapse={() => setInsightsCollapsed(!insightsCollapsed)}
+
         />
       )}
       

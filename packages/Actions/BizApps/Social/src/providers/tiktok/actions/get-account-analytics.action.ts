@@ -22,7 +22,7 @@ export class GetAccountAnalyticsAction extends TikTokBaseAction {
                 throw new Error('CompanyIntegrationID is required');
             }
             
-            await this.initializeOAuth(companyIntegrationId);
+            await this.initializeOAuth(companyIntegrationId, params);
             
             // Extract parameters
             const dateRange = this.getParamValue(Params, 'DateRange') || '30d';

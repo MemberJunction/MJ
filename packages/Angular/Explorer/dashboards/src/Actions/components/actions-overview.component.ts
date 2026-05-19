@@ -3,6 +3,7 @@ import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity, MJActionExecutionLogEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 interface ActionMetrics {
@@ -64,19 +65,20 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   public selectedStatus$ = new BehaviorSubject<string>('all');
   public selectedType$ = new BehaviorSubject<string>('all');
 
-  private destroy$ = new Subject<void>();
+  protected override destroy$ = new Subject<void>();
 
-  constructor(private navigationService: NavigationService, 
-              private cdr: ChangeDetectorRef ) {
+  constructor(private cdr: ChangeDetectorRef ) {
     super();
   }
 
   ngOnInit(): void {
+    super.ngOnInit();
     this.setupFilters();
     this.loadData();
   }
 
   ngOnDestroy(): void {
+    super.ngOnDestroy();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -99,7 +101,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       this.cdr.detectChanges();
 
       // Load all data in a single batch using RunViews
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
@@ -219,7 +221,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: Actions',
         ExtraFilter: extraFilter,
@@ -245,6 +247,60 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
 
   public onTypeFilterChange(type: string): void {
     this.selectedType$.next(type);
+  }
+
+  // ───── Filter-popover plumbing for the [actions] slot ─────
+
+  public get FilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-circle-info',
+        placeholder: 'All Statuses',
+        options: [
+          { text: 'All Statuses', value: 'all' },
+          { text: 'Active', value: 'Active' },
+          { text: 'Pending', value: 'Pending' },
+          { text: 'Disabled', value: 'Disabled' }
+        ]
+      },
+      {
+        key: 'type',
+        type: 'dropdown',
+        label: 'Type',
+        icon: 'fa-solid fa-shapes',
+        placeholder: 'All Types',
+        options: [
+          { text: 'All Types', value: 'all' },
+          { text: 'AI Generated', value: 'Generated' },
+          { text: 'Custom', value: 'Custom' }
+        ]
+      }
+    ];
+  }
+  public get FilterValues(): Record<string, unknown> {
+    return { status: this.selectedStatus$.value, type: this.selectedType$.value };
+  }
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedStatus$.value !== 'all') n++;
+    if (this.selectedType$.value !== 'all') n++;
+    return n;
+  }
+  public onFilterValuesChange(v: Record<string, unknown>): void {
+    const next = (v ?? {}) as { status?: string; type?: string };
+    if ((next.status ?? 'all') !== this.selectedStatus$.value) {
+      this.onStatusFilterChange(next.status ?? 'all');
+    }
+    if ((next.type ?? 'all') !== this.selectedType$.value) {
+      this.onTypeFilterChange(next.type ?? 'all');
+    }
+  }
+  public resetFilters(): void {
+    if (this.selectedStatus$.value !== 'all') this.onStatusFilterChange('all');
+    if (this.selectedType$.value !== 'all') this.onTypeFilterChange('all');
   }
 
   public openAction(action: MJActionEntity): void {

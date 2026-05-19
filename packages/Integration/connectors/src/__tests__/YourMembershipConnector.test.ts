@@ -9,8 +9,10 @@ import type { FetchContext, RESTResponse } from '@memberjunction/integration-eng
 function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
     const configJson = JSON.stringify(config);
     return {
-        Get: (field: string) => field === 'Configuration' ? configJson : null,
+        Configuration: configJson,
+        CredentialID: null,
         IntegrationID: 'test-integration-id',
+        Get: (field: string) => field === 'Configuration' ? configJson : null,
     } as unknown as MJCompanyIntegrationEntity;
 }
 
@@ -332,8 +334,9 @@ describe('YourMembershipConnector (watermark filtering)', () => {
             ],
             '2026-02-01T00:00:00Z',
             {
-                '2': { id: 2, firstName: 'Changed', ResponseStatus: { ErrorCode: 'None' } },
-                '3': { id: 3, firstName: 'AlsoChanged', ResponseStatus: { ErrorCode: 'None' } },
+                '1': { id: 1, firstName: 'Old', LastUpdated: '2026-01-15T10:00:00Z', ResponseStatus: { ErrorCode: 'None' } },
+                '2': { id: 2, firstName: 'Changed', LastUpdated: '2026-03-01T10:00:00Z', ResponseStatus: { ErrorCode: 'None' } },
+                '3': { id: 3, firstName: 'AlsoChanged', LastUpdated: '2026-03-05T10:00:00Z', ResponseStatus: { ErrorCode: 'None' } },
             }
         );
 
@@ -343,11 +346,12 @@ describe('YourMembershipConnector (watermark filtering)', () => {
             expect(result.Records.length).toBe(2);
             expect(result.Records.map(r => r.ExternalID).sort()).toEqual(['2', '3']);
 
-            // Detail endpoint only called for the 2 changed records
+            // Detail endpoint called for ALL 3 records — enrichment happens before
+            // watermark filtering because the detail API provides the LastUpdated field
             const detailCalls = makeRequest.mock.calls.filter(
                 (c: unknown[]) => (c[1] as string).includes('Members/')
             );
-            expect(detailCalls.length).toBe(2);
+            expect(detailCalls.length).toBe(3);
         } finally {
             Object.getPrototypeOf(Object.getPrototypeOf(connector)).FetchChanges = originalFetchChanges;
         }

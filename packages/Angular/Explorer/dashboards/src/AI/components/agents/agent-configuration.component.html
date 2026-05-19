@@ -1,96 +1,59 @@
-<div class="agent-configuration-container">
+<mj-page-layout>
   <!-- Header -->
-  <div class="dashboard-header">
-    <div class="header-info">
-      <h2 class="dashboard-title">
-        <i class="fa-solid fa-robot"></i>
-        Agent Configuration
-      </h2>
-      <button 
-        type="button" 
-        class="filter-toggle-btn"
-        (click)="toggleFilterPanel()"
-        title="Toggle Filters">
-        <i class="fa-solid fa-filter"></i>
-        @if (filterPanelVisible) {
-          Hide Filters
-        } @else {
-          Show Filters
-        }
-      </button>
-      <span class="item-count">{{ filteredAgents.length }} agents</span>
+  <mj-page-header
+    Title="Agents"
+    Icon="fa-solid fa-robot">
+    <div meta>
+      <mj-stat-badge [Count]="filteredAgents.length" Label="agents"></mj-stat-badge>
     </div>
-    
-    <div class="header-controls">
-      <div class="view-toggle">
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'grid'"
-          (click)="setViewMode('grid')"
-          title="Grid View">
-          <i class="fa-solid fa-grip"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'list'"
-          (click)="setViewMode('list')"
-          title="List View">
-          <i class="fa-solid fa-list"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'tree'"
-          (click)="setViewMode('tree')"
-          title="Category Tree View">
-          <i class="fa-solid fa-folder-tree"></i>
-        </button>
-      </div>
-      
-      <button 
-        type="button" 
-        class="control-btn primary"
-        (click)="createNewAgent()"
-        title="Create New Agent">
+    <div actions>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="onResetFilters()">
+        <mj-filter-panel
+          [Fields]="agentFilterFields"
+          [Values]="$any(currentFilters)"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="onResetFilters()">
+          <!-- Custom widget: Category uses a tree-dropdown, projected via mj-filter-field -->
+          <mj-filter-field Label="Category" Icon="fa-solid fa-folder-tree">
+            <mj-tree-dropdown
+              [BranchConfig]="CategoryBranchConfig"
+              [Value]="SelectedCategoryKey"
+              SelectionMode="single"
+              SelectableTypes="branch"
+              Placeholder="All Categories"
+              [Clearable]="true"
+              [EnableSearch]="true"
+              (ValueChange)="onCategoryChange($event)">
+            </mj-tree-dropdown>
+          </mj-filter-field>
+        </mj-filter-panel>
+      </mj-filter-popover>
+
+      <mj-view-toggle
+        [Options]="agentViewOptions"
+        [ActiveKey]="viewMode"
+        (KeyChange)="setViewMode($any($event))">
+      </mj-view-toggle>
+
+      <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
         <i class="fa-solid fa-plus"></i>
         New Agent
       </button>
     </div>
-  </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search agents..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
 
-  <!-- Main Content with Splitter -->
-  <div class="main-content" >
-    <kendo-splitter 
-      class="main-splitter"
-      orientation="horizontal"
-      (layoutChange)="onMainSplitterChange($event)"
-      >
-      
-      <!-- Filter Panel (Left) -->
-      <kendo-splitter-pane 
-        [size]="filterPanelVisible ? '320px' : '0px'"
-        [collapsible]="false"
-        [resizable]="filterPanelVisible"
-        [scrollable]="false"
-        [hidden]="!filterPanelVisible">
-        <mj-agent-filter-panel
-          [agents]="agents"
-          [filteredAgents]="filteredAgents"
-          [filters]="currentFilters"
-          (filtersChange)="onFiltersChange($event)"
-          (filterChange)="onFilterChange()"
-          (resetFilters)="onResetFilters()"
-          (closePanel)="toggleFilterPanel()">
-        </mj-agent-filter-panel>
-      </kendo-splitter-pane>
-      
-      <!-- Agents List Panel -->
-      <kendo-splitter-pane
-        [resizable]="true"
-        [scrollable]="true">
-        <div class="agents-content">
+  <!-- Main Content (no sidebar — filters live in the popover above) -->
+  <mj-page-body [Flex]="true">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">
@@ -212,116 +175,24 @@
                 </div>
               }
               
-              <!-- Tree View (Mac Finder style) -->
+              <!-- Tree View (mj-tree component) -->
               @if (viewMode === 'tree') {
                 <div class="agents-tree">
-                  @for (node of categoryTree; track node.Category.ID) {
-                    @if (hasVisibleContent(node)) {
-                      <ng-container *ngTemplateOutlet="categoryNodeTpl; context: { $implicit: node, depth: 0 }"></ng-container>
-                    }
-                  }
-
-                  <!-- Uncategorized agents -->
-                  @if (uncategorizedAgents.length > 0) {
-                    <div class="tree-category-group">
-                      <div class="tree-category-header depth-0">
-                        <i class="fa-solid fa-folder-open tree-folder-icon"></i>
-                        <span class="tree-category-name">Uncategorized</span>
-                        <span class="tree-category-count">{{ uncategorizedAgents.length }}</span>
-                      </div>
-                      <div class="tree-agent-list">
-                        @for (agent of uncategorizedAgents; track agent.ID) {
-                          <div class="tree-agent-row" (click)="showAgentDetails(agent)">
-                            <div class="tree-agent-icon" [style.background-color]="getAgentIconColor(agent)">
-                              @if (hasLogoURL(agent)) {
-                                <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="tree-agent-logo">
-                              } @else {
-                                <i [class]="getAgentIcon(agent)"></i>
-                              }
-                            </div>
-                            <div class="tree-agent-info">
-                              <span class="tree-agent-name">{{ agent.Name }}</span>
-                              <span class="tree-agent-type">{{ getAgentTypeName(agent) }}</span>
-                            </div>
-                            <span class="tree-agent-status" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status }}
-                            </span>
-                            @if (agent.Status === 'Active' && UserCanReadAgents) {
-                              <button
-                                type="button"
-                                class="action-btn-small primary"
-                                (click)="runAgent(agent); $event.stopPropagation()"
-                                title="Run Agent">
-                                <i class="fa-solid fa-play"></i>
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
-                    </div>
-                  }
+                  <mj-tree
+                    [BranchConfig]="CategoryBranchConfig"
+                    [LeafConfig]="AgentLeafConfig"
+                    [SelectionMode]="'single'"
+                    [SelectableTypes]="'leaf'"
+                    [ShowDescriptions]="true"
+                    [ShowBadges]="true"
+                    [ShowExpandCollapseAll]="true"
+                    [EmptyMessage]="'No agents found'"
+                    [EmptyIcon]="'fa-solid fa-robot'"
+                    (AfterNodeClick)="onTreeNodeClick($event)"
+                    (AfterNodeDoubleClick)="onTreeNodeDoubleClick($event)">
+                  </mj-tree>
                 </div>
               }
-
-              <!-- Recursive category node template -->
-              <ng-template #categoryNodeTpl let-node let-depth="depth">
-                <div class="tree-category-group">
-                  <div class="tree-category-header" [class]="'depth-' + depth" (click)="toggleCategoryNode(node)">
-                    <i class="fa-solid tree-chevron"
-                       [class.fa-chevron-right]="!node.Expanded"
-                       [class.fa-chevron-down]="node.Expanded"></i>
-                    <i class="fa-solid tree-folder-icon"
-                       [class.fa-folder]="!node.Expanded"
-                       [class.fa-folder-open]="node.Expanded"></i>
-                    <span class="tree-category-name">{{ node.Category.Name }}</span>
-                    <span class="tree-category-count">{{ getAgentCount(node) }}</span>
-                  </div>
-
-                  @if (node.Expanded) {
-                    <!-- Agents directly in this category -->
-                    @if (node.Agents.length > 0) {
-                      <div class="tree-agent-list" [style.padding-left.px]="(depth + 1) * 24">
-                        @for (agent of node.Agents; track agent.ID) {
-                          <div class="tree-agent-row" (click)="showAgentDetails(agent)">
-                            <div class="tree-agent-icon" [style.background-color]="getAgentIconColor(agent)">
-                              @if (hasLogoURL(agent)) {
-                                <img [src]="agent.LogoURL" [alt]="agent.Name + ' logo'" class="tree-agent-logo">
-                              } @else {
-                                <i [class]="getAgentIcon(agent)"></i>
-                              }
-                            </div>
-                            <div class="tree-agent-info">
-                              <span class="tree-agent-name">{{ agent.Name }}</span>
-                              <span class="tree-agent-type">{{ getAgentTypeName(agent) }}</span>
-                            </div>
-                            <span class="tree-agent-status" [class]="'status-' + (agent.Status || 'unknown').toLowerCase()">
-                              {{ agent.Status }}
-                            </span>
-                            @if (agent.Status === 'Active' && UserCanReadAgents) {
-                              <button
-                                type="button"
-                                class="action-btn-small primary"
-                                (click)="runAgent(agent); $event.stopPropagation()"
-                                title="Run Agent">
-                                <i class="fa-solid fa-play"></i>
-                              </button>
-                            }
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    <!-- Child categories -->
-                    @for (child of node.Children; track child.Category.ID) {
-                      @if (hasVisibleContent(child)) {
-                        <div [style.padding-left.px]="(depth + 1) * 24">
-                          <ng-container *ngTemplateOutlet="categoryNodeTpl; context: { $implicit: child, depth: depth + 1 }"></ng-container>
-                        </div>
-                      }
-                    }
-                  }
-                </div>
-              </ng-template>
 
               <!-- List View -->
               @if (viewMode === 'list') {
@@ -409,10 +280,7 @@
               }
             }
           }
-        </div>
-      </kendo-splitter-pane>
-    </kendo-splitter>
-  </div>
+  </mj-page-body>
 
   <!-- Detail Panel Overlay -->
   @if (detailPanelVisible) {
@@ -558,6 +426,6 @@
       </div>
     }
   </div>
-</div>
+</mj-page-layout>
 
 <!-- AI Agent Test Harness - Now handled by service with minimize support -->

@@ -117,8 +117,25 @@ describe('MigratePhase', () => {
       expect(args).toContain('--verbose');
     });
 
-    it('should fall back to npx with version-pinned CLI when local binary is missing', async () => {
+    it('should try second candidate path when first local binary is missing', async () => {
+      // First candidate (node_modules root) missing, second candidate (apps/MJAPI) exists
       mockFs.FileExists.mockResolvedValueOnce(false);
+      mockFs.FileExists.mockResolvedValueOnce(true);
+      const ctx = makeContext({ Dir: '/some/dir', VersionTag: 'v5.9.0' });
+
+      await phase.Run(ctx);
+
+      expect(mockRunner.Run).toHaveBeenCalledTimes(1);
+      const [cmd, args] = mockRunner.Run.mock.calls[0];
+      expect(cmd).toBe('node');
+      expect(args[0]).toContain('cli');
+      expect(args[0]).toContain('run.js');
+      expect(args).toContain('migrate');
+      expect(args).toContain('--verbose');
+    });
+
+    it('should fall back to npx with version-pinned CLI when no local binary exists', async () => {
+      mockFs.FileExists.mockResolvedValue(false);
       const ctx = makeContext({ Dir: '/some/dir', VersionTag: 'v5.9.0' });
 
       await phase.Run(ctx);
@@ -146,7 +163,7 @@ describe('MigratePhase', () => {
       await phase.Run(ctx);
 
       const options = mockRunner.Run.mock.calls[0][2];
-      expect(options.TimeoutMs).toBe(300_000);
+      expect(options.TimeoutMs).toBe(600_000);
     });
   });
 

@@ -1,6 +1,5 @@
-import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, Output, EventEmitter } from '@angular/core';
 import { FormControl, FormGroup, Validators } from '@angular/forms';
-import { WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJTemplateEntity, MJAIPromptTypeEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
@@ -10,6 +9,7 @@ import { TemplateEditorConfig } from '../../shared/components/template-editor.co
 import { AIPromptManagementService } from '../AIPrompts/ai-prompt-management.service';
 import { TemplateSelectorConfig } from '../AIPrompts/template-selector-dialog.component';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface CreatePromptConfig {
   /** Title for the dialog */
   title?: string;
@@ -39,7 +39,7 @@ export interface CreatePromptResult {
   templateUrl: './create-prompt-dialog.component.html',
   styleUrls: ['./create-prompt-dialog.component.css']
 })
-export class CreatePromptDialogComponent implements OnInit, OnDestroy {
+export class CreatePromptDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Configuration
   config: CreatePromptConfig = {};
@@ -73,11 +73,13 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
   // Template state
   templateMode: 'new' | 'existing' = 'new';
 
+  @Output() DialogClose = new EventEmitter<void>();
+
   constructor(
-    private dialogRef: WindowRef,
     private cdr: ChangeDetectorRef,
     private aiPromptManagementService: AIPromptManagementService
   ) {
+    super();
     this.promptForm = this.createForm();
   }
 
@@ -117,7 +119,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
     
     try {
       // Load prompt types
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const typesResult = await rv.RunView<MJAIPromptTypeEntity>({
         EntityName: 'MJ: AI Prompt Types',
         OrderBy: 'Name ASC',
@@ -134,7 +136,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       }
 
       // Create the prompt entity
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.promptEntity = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
       this.promptEntity.NewRecord();
       
@@ -175,7 +177,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
     if (!this.promptEntity) return;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       
       // Create template entity
       this.templateEntity = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
@@ -247,7 +249,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       };
 
       this.result.next(result);
-      this.dialogRef.close();
+      this.DialogClose.emit();
 
     } catch (error) {
       console.error('Error preparing prompt for creation:', error);
@@ -263,7 +265,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
   public cancel() {
     this.result.next(null);
-    this.dialogRef.close();
+    this.DialogClose.emit();
   }
 
   /**

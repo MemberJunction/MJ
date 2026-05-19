@@ -68,11 +68,11 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       }
 
       <div class="card-footer">
-        <button kendoButton [look]="'flat'" [themeColor]="'primary'"
+        <button mjButton variant="primary" size="sm"
                 (click)="OnRunNowClick()" [disabled]="!Summary.Integration.IsActive">
           <i class="fa-solid fa-play"></i> Run Now
         </button>
-        <button kendoButton [look]="'flat'" (click)="OnExpandToggle()">
+        <button mjButton variant="flat" size="sm" (click)="OnExpandToggle()">
           <i class="fa-solid" [class.fa-chevron-down]="!Expanded" [class.fa-chevron-up]="Expanded"></i>
           History
         </button>
@@ -81,13 +81,13 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
   `,
   styles: [`
     .integration-card {
-      background: var(--card-bg, #fff);
-      border: 1px solid var(--border-color, #e0e0e0);
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
       border-radius: 8px;
       padding: 16px;
       transition: box-shadow 0.2s;
     }
-    .integration-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .integration-card:hover { box-shadow: var(--mj-shadow-md); }
     .integration-card.inactive { opacity: 0.6; }
 
     .card-header {
@@ -99,16 +99,16 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
     .source-icon {
       width: 40px; height: 40px;
       border-radius: 8px;
-      background: var(--icon-bg, #f0f4ff);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
       display: flex; align-items: center; justify-content: center;
-      font-size: 18px; color: var(--primary-color, #4a6cf7);
+      font-size: 18px; color: var(--mj-brand-primary);
     }
     .card-title-area { flex: 1; min-width: 0; }
     .card-title {
       margin: 0; font-size: 14px; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .source-type-label { font-size: 12px; color: #888; }
+    .source-type-label { font-size: 12px; color: var(--mj-text-muted); }
 
     .status-area {
       display: flex;
@@ -123,10 +123,10 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       border-radius: 50%;
       display: inline-block;
     }
-    .indicator-green { background: #1b7a3d; }
-    .indicator-amber { background: #b5850a; }
-    .indicator-red { background: #c62828; }
-    .indicator-gray { background: #999; }
+    .indicator-green { background: var(--mj-status-success); }
+    .indicator-amber { background: var(--mj-status-warning); }
+    .indicator-red { background: var(--mj-status-error); }
+    .indicator-gray { background: var(--mj-text-disabled); }
 
     .status-indicator.pulsing {
       animation: pulse 1.5s ease-in-out infinite;
@@ -140,22 +140,22 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       font-size: 11px; font-weight: 600; padding: 3px 8px;
       border-radius: 12px; text-transform: uppercase; white-space: nowrap;
     }
-    .status-green { background: #e6f9ed; color: #1b7a3d; }
-    .status-amber { background: #fff7e0; color: #b5850a; }
-    .status-red   { background: #fde8e8; color: #c62828; }
-    .status-gray  { background: #f0f0f0; color: #757575; }
+    .status-green { background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+    .status-amber { background: var(--mj-status-warning-bg); color: var(--mj-status-warning-text); }
+    .status-red   { background: var(--mj-status-error-bg); color: var(--mj-status-error-text); }
+    .status-gray  { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); }
 
     .card-body { margin-bottom: 12px; }
     .stat-row {
       display: flex; justify-content: space-between;
       padding: 4px 0; font-size: 13px;
     }
-    .stat-label { color: #666; }
+    .stat-label { color: var(--mj-text-secondary); }
     .stat-value { font-weight: 500; }
-    .error-value { color: #c62828; }
+    .error-value { color: var(--mj-status-error-text); }
     .error-badge {
-      background: #fde8e8;
-      color: #c62828;
+      background: var(--mj-status-error-bg);
+      color: var(--mj-status-error-text);
       padding: 1px 8px;
       border-radius: 10px;
       font-size: 12px;
@@ -168,12 +168,12 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       align-items: flex-end;
       gap: 8px;
       padding: 8px 0;
-      border-top: 1px solid #f0f0f0;
+      border-top: 1px solid var(--mj-border-subtle);
       margin-bottom: 4px;
     }
     .sparkline-label {
       font-size: 11px;
-      color: #999;
+      color: var(--mj-text-disabled);
       white-space: nowrap;
     }
     .sparkline {
@@ -189,13 +189,13 @@ import { IntegrationSummary, ResolveIntegrationIcon } from '../../services/integ
       border-radius: 2px 2px 0 0;
       transition: height 0.3s ease;
     }
-    .spark-success { background: #4a6cf7; }
-    .spark-failed { background: #c62828; }
-    .spark-pending { background: #b5850a; }
+    .spark-success { background: var(--mj-brand-primary); }
+    .spark-failed { background: var(--mj-status-error); }
+    .spark-pending { background: var(--mj-status-warning); }
 
     .card-footer {
       display: flex; justify-content: space-between;
-      border-top: 1px solid #eee; padding-top: 8px;
+      border-top: 1px solid var(--mj-border-subtle); padding-top: 8px;
     }
   `]
 })

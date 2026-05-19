@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub Phase 4 — Design Reference</title>
+<style>
+  :root {
+    --bg: #f8f9fa;
+    --surface: white;
+    --text: #334155;
+    --text2: #64748b;
+    --text3: #94a3b8;
+    --brand: #264FAF;
+    --brand-light: #e8eef8;
+    --border: #e2e8f0;
+    --success: #16a34a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); }
+
+  .header {
+    background: var(--brand);
+    color: white;
+    padding: 48px 0 40px;
+    text-align: center;
+  }
+  .header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 8px; }
+  .header p { font-size: 1.05rem; opacity: 0.85; max-width: 640px; margin: 0 auto; line-height: 1.5; }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 24px 60px; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    text-decoration: none; color: inherit;
+    display: flex;
+    margin-bottom: 20px;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  }
+
+  .card-icon {
+    width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    color: white;
+    flex-shrink: 0;
+  }
+  .icon-taxonomy { background: #7c3aed; }
+  .icon-scheduling { background: #0891b2; }
+  .icon-analytics { background: #16a34a; }
+
+  .card-body { padding: 20px 24px; flex: 1; }
+  .card-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 6px; }
+  .card-desc { font-size: 0.9rem; color: var(--text2); line-height: 1.55; margin-bottom: 10px; }
+  .card-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tab-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: var(--brand-light);
+    color: var(--brand);
+  }
+
+  .card-arrow {
+    width: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    color: var(--text3);
+  }
+  .card:hover .card-arrow { color: var(--brand); }
+
+  .note {
+    background: var(--brand-light);
+    border: 1px solid color-mix(in srgb, var(--brand) 20%, var(--border));
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 32px;
+    font-size: 0.88rem;
+    color: var(--text2);
+    line-height: 1.5;
+  }
+  .note strong { color: var(--text); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Knowledge Hub Phase 4</h1>
+  <p>Final design reference mockups. Each file renders ALL tabs and sub-views for implementation guidance. Click to open.</p>
+</div>
+
+<div class="container">
+
+  <a class="card" href="taxonomy-governance.html">
+    <div class="card-icon icon-taxonomy">T</div>
+    <div class="card-body">
+      <div class="card-title">Taxonomy Governance</div>
+      <div class="card-desc">Tag hierarchy curation with tree editing, duplicate detection, orphan management, treemap visualization, and audit trail. New tab in the autotagging dashboard.</div>
+      <div class="card-tabs">
+        <span class="tab-chip">Tree View</span>
+        <span class="tab-chip">Duplicates (8)</span>
+        <span class="tab-chip">Orphans (12)</span>
+        <span class="tab-chip">Treemap</span>
+        <span class="tab-chip">Audit Log</span>
+      </div>
+    </div>
+    <div class="card-arrow">&rarr;</div>
+  </a>
+
+  <a class="card" href="scheduled-pipelines.html">
+    <div class="card-icon icon-scheduling">S</div>
+    <div class="card-body">
+      <div class="card-title">Scheduled Pipelines</div>
+      <div class="card-desc">Compact job cards with visual cron builder in a modal dialog. Reuses mj-scheduled-job-summary cards and mj-scheduled-job-editor form. New top-level nav item in Knowledge Hub.</div>
+      <div class="card-tabs">
+        <span class="tab-chip">Job Cards Grid</span>
+        <span class="tab-chip">Edit Dialog</span>
+        <span class="tab-chip">Cron Builder</span>
+        <span class="tab-chip">Recent Activity</span>
+      </div>
+    </div>
+    <div class="card-arrow">&rarr;</div>
+  </a>
+
+  <a class="card" href="analytics-insights.html">
+    <div class="card-icon icon-analytics">A</div>
+    <div class="card-body">
+      <div class="card-title">Analytics &amp; Insights</div>
+      <div class="card-desc">Multi-tab deep dive with interactive cards overview (SVG gauges, progress rings, sparklines). Left sidebar with trending tags. New top-level nav item in Knowledge Hub.</div>
+      <div class="card-tabs">
+        <span class="tab-chip">Overview</span>
+        <span class="tab-chip">Tags</span>
+        <span class="tab-chip">Sources</span>
+        <span class="tab-chip">Pipeline</span>
+        <span class="tab-chip">Quality</span>
+      </div>
+    </div>
+    <div class="card-arrow">&rarr;</div>
+  </a>
+
+  <div class="note">
+    <strong>Implementation notes:</strong> Each mockup renders all tabs/views stacked vertically so every sub-component is visible. The plan document at <code>plans/knowledge-hub-phase4/PLAN.md</code> covers the full task breakdown, execution order, reusable component mapping, and research findings.
+  </div>
+
+</div>
+</body>
+</html>

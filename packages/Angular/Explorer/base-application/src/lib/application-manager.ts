@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -26,12 +26,25 @@ export interface UserAppConfig {
   providedIn: 'root'
 })
 export class ApplicationManager {
+  private static _recoveryAttempted = false;
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
   private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
   private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
   private activeApp$ = new BehaviorSubject<BaseApplication | null>(null);
   private loading$ = new BehaviorSubject<boolean>(false);
   private initialized = false;
+
+  /** Resolves when loadApplications() has completed successfully */
+  private _readyResolve!: () => void;
+  private _readyPromise = new Promise<void>(resolve => { this._readyResolve = resolve; });
+
+  /**
+   * Returns a promise that resolves when applications have been loaded and the manager is ready.
+   * Safe to call multiple times — returns the same promise.
+   */
+  WhenReady(): Promise<void> {
+    return this._readyPromise;
+  }
 
   /**
    * Observable of user's active applications (filtered and ordered by UserApplication)
@@ -83,6 +96,15 @@ export class ApplicationManager {
   }
 
   /**
+   * Get all applications the current user's roles grant access to.
+   * Filters out apps where ApplicationRole records exist but the user's roles lack CanAccess.
+   */
+  GetAuthorizedSystemApps(): BaseApplication[] {
+    const engine = UserInfoEngine.Instance;
+    return this.allApplications$.value.filter(app => engine.UserHasApplicationAccess(app.ID));
+  }
+
+  /**
    * Get user's application configurations synchronously
    */
   GetUserAppConfigs(): UserAppConfig[] {
@@ -94,6 +116,22 @@ export class ApplicationManager {
    */
   GetActiveApp(): BaseApplication | null {
     return this.activeApp$.value;
+  }
+
+  /**
+   * Optional explicit metadata provider. When set, all provider lookups
+   * use this instead of falling back to `Metadata.Provider`. This is the
+   * threading point for multi-provider Angular apps — the shell calls
+   * `setProvider(this.ProviderToUse)` after the manager is acquired from DI.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
   }
 
   constructor() {
@@ -123,12 +161,18 @@ export class ApplicationManager {
   /**
    * Subscribe to UserInfoEngine data changes to automatically sync our observables
    * when UserApplication records are modified.
+   *
+   * Match on EntityName (the stable public identifier) rather than PropertyName —
+   * PropertyName is the engine's internal backing-field name (e.g. `_UserApplications`
+   * with an underscore prefix), which is an implementation detail that has bitten
+   * consumers before. EntityName is the documented contract on every config and
+   * never changes shape.
    */
   private subscribeToEngineChanges(): void {
     const engine = UserInfoEngine.Instance;
     engine.DataChange$.subscribe(event => {
       // When UserApplications data changes in the engine, sync our observables
-      if (event.config.PropertyName === 'UserApplications') {
+      if (event.config.EntityName?.trim().toLowerCase() === 'mj: user applications') {
         this.syncFromEngine();
       }
     });
@@ -155,7 +199,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -173,6 +217,12 @@ export class ApplicationManager {
   /**
    * Reload the user's application configuration.
    * Call this after changes to UserApplication records to refresh the app list.
+   *
+   * Reads engine.UserApplications and rebuilds our derived observables. The engine's
+   * own event-driven refresh (via subscribeToEngineChanges + the UserApplications
+   * config's short DebounceTime) keeps the underlying data fresh — we no longer need
+   * a synchronous force-refresh here, which previously triggered NG0100 in callers
+   * with `@if`/`@for` bindings whose values mutate during their save loop.
    */
   async ReloadUserApplications(): Promise<void> {
     this.loading$.next(true);
@@ -196,7 +246,7 @@ export class ApplicationManager {
     this.loading$.next(true);
 
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const appInfoList: ApplicationInfo[] = md.Applications;
 
       // First, create BaseApplication instances for ALL apps
@@ -227,10 +277,10 @@ export class ApplicationManager {
 
         let app: BaseApplication | null;
         if (appInfo.ClassName && appInfo.ClassName.trim().length > 0) {
-          app = MJGlobal.Instance.ClassFactory.CreateInstance<BaseApplication>(
+          app = await MJGlobal.Instance.ClassFactory.CreateInstanceAsync<BaseApplication>(
             BaseApplication,
             appInfo.ClassName,
-            args          
+            args
           );
         }
         else {
@@ -240,7 +290,10 @@ export class ApplicationManager {
 
         if (app) {
           // should always get here unless failure to load registered sub-class but CreateInstance has
-          // fallback to base class anyway so should always get here 
+          // fallback to base class anyway so should always get here
+          if (this._provider) {
+            app.Provider = this._provider;
+          }
           allApps.push(app);
         }
       }
@@ -250,9 +303,30 @@ export class ApplicationManager {
       // Load and apply user's app configuration
       await this.loadUserApplicationConfig();
 
+      // Recovery check: if no active apps but metadata has Active applications,
+      // the engine may have failed to load UserApplications (e.g., cache corruption).
+      // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
+      const activeApps = this.applications$.value;
+      const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+        ApplicationManager._recoveryAttempted = true;
+        const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
+        const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;
+        const userAppCount = UserInfoEngine.Instance.UserApplications?.length ?? 0;
+        LogStatus(
+          `ApplicationManager: Recovery triggered — ` +
+          `activeApps=0, metadataActiveApps=${activeAppCount}, ` +
+          `engineHealthy=${engineHealthy}, userAppRecords=${userAppCount}`
+        );
+        await this.attemptRecovery();
+      }
+
       this.initialized = true;
+      this._readyResolve();
 
     } catch (error) {
+      // Resolve even on failure so waiters don't hang forever — they'll see initialized=false
+      this._readyResolve();
       LogError('Failed to load applications:', undefined, error instanceof Error ? error.message : String(error));
       throw error;
     } finally {
@@ -265,7 +339,7 @@ export class ApplicationManager {
    * This can be called to refresh after configuration changes.
    */
   private async loadUserApplicationConfig(): Promise<void> {
-    const md = new Metadata();
+    const md = this.Provider;
     const allApps = this.allApplications$.value;
 
     // Build a map for quick lookup
@@ -291,7 +365,7 @@ export class ApplicationManager {
 
     for (const userApp of userApps) {
       const app = appMap.get(userApp.ApplicationID);
-      if (app && userApp.IsActive) {
+      if (app && userApp.IsActive && engine.UserHasApplicationAccess(userApp.ApplicationID)) {
         userAppConfigs.push({
           app,
           userAppId: userApp.ID,
@@ -314,6 +388,30 @@ export class ApplicationManager {
   private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
+  }
+
+  /**
+   * One-shot recovery attempt when the initial load produces zero apps despite
+   * Active applications existing in metadata. Force-refreshes UserInfoEngine
+   * to bypass any corrupted cache, then re-runs the user app configuration
+   * (which includes the self-healing path for new users).
+   */
+  private async attemptRecovery(): Promise<void> {
+    try {
+      const engine = UserInfoEngine.Instance;
+      await engine.Config(true);
+      await this.loadUserApplicationConfig();
+
+      const recoveredCount = this.applications$.value.length;
+      const engineHealthy = engine.AllPropertiesLoadedSuccessfully;
+      if (recoveredCount > 0) {
+        LogStatus(`ApplicationManager: Recovery succeeded — ${recoveredCount} apps loaded, engineHealthy=${engineHealthy}`);
+      } else {
+        LogError(`ApplicationManager: Recovery completed but still 0 apps — engineHealthy=${engineHealthy}`);
+      }
+    } catch (error) {
+      LogError('ApplicationManager: Recovery attempt failed:', undefined, error instanceof Error ? error.message : String(error));
+    }
   }
 
   /**
@@ -475,6 +573,15 @@ export class ApplicationManager {
         };
       }
 
+      case 'not_authorized':
+        return {
+          status: 'not_authorized',
+          message: `You do not have the required role to access "${appInfo.Name}".`,
+          appName: appInfo.Name,
+          appId: appInfo.ID,
+          canInstall: false
+        };
+
       case 'installed_inactive':
         return {
           status: 'disabled',
@@ -547,7 +654,7 @@ export class ApplicationManager {
  */
 export interface AppAccessResult {
   /** Status of the access check */
-  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled';
+  status: 'accessible' | 'not_found' | 'inactive' | 'not_installed' | 'disabled' | 'not_authorized';
   /** Human-readable message describing the access status */
   message: string;
   /** Name of the application (if found) */

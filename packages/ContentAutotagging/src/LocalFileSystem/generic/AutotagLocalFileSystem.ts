@@ -1,8 +1,8 @@
 import { RegisterClass } from "@memberjunction/global";
 import fs from 'fs';
-import { AutotagBase } from "../../Core";
+import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { UserInfo, Metadata, RunView } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView } from "@memberjunction/core";
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import { OpenAI } from "openai";
 import path from 'path';
@@ -30,12 +30,14 @@ export class AutotagLocalFileSystem extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag(contextUser: UserInfo): Promise<void> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
-        this.contentSourceTypeID = await this.engine.setSubclassContentSourceType('Local File System', this.contextUser);
+        this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Local File System');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];
         const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources)
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
+        return contentItemsToProcess.length;
     }
 
     /**
@@ -139,13 +141,13 @@ export class AutotagLocalFileSystem extends AutotagBase {
     }
 
     public async setAddedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> { 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const text = await this.engine.parseFileFromPath(filePath);
         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         contentItem.NewRecord();
         contentItem.ContentSourceID = contentSourceParams.contentSourceID
         contentItem.Name = contentSourceParams.name
-        contentItem.Description = await this.engine.getContentItemDescription(contentSourceParams, this.contextUser)
+        contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams)
         contentItem.ContentTypeID = contentSourceParams.ContentTypeID
         contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
         contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
@@ -162,7 +164,7 @@ export class AutotagLocalFileSystem extends AutotagBase {
     }
 
     public async setModifiedContentItem(filePath: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
         const contentItemID: string = await this.engine.getContentItemIDFromURL(contentSourceParams, this.contextUser);
         await contentItem.Load(contentItemID);

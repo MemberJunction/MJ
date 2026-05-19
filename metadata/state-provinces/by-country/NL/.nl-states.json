@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Drenthe",
+      "Code": "DR",
+      "ISO3166_2": "NL-DR",
+      "Latitude": 52.9068,
+      "Longitude": 6.6368,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-DR.geojson",
+      "CommonAliases": [
+        "Drenthe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "E0455CD8-C3F8-4373-B44E-86349B2A686A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.416Z",
+      "checksum": "06eb387198b8cc3e7074a5c3c1433652665b660d501db623477f3e5f027f4d7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Flevoland",
+      "Code": "FL",
+      "ISO3166_2": "NL-FL",
+      "Latitude": 52.4484,
+      "Longitude": 5.4235,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-FL.geojson",
+      "CommonAliases": [
+        "Flevoland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "B75F809A-C063-4715-ADFA-F451CB4A2332"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.433Z",
+      "checksum": "e0eb4ddfef2144d2f31d709f5229272c8b58dd29c8a289bc98f41cec5aa25445"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Friesland",
+      "Code": "FR",
+      "ISO3166_2": "NL-FR",
+      "Latitude": 53.0924,
+      "Longitude": 5.777,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-FR.geojson",
+      "CommonAliases": [
+        "Friesland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "3CB00E79-4AA5-4B06-9B08-06729D986888"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.451Z",
+      "checksum": "1140f047d56f2dc390cff17f127fac7b522ce4f6b35bfc1a707af77bc74f32e6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gelderland",
+      "Code": "GE",
+      "ISO3166_2": "NL-GE",
+      "Latitude": 52.1014,
+      "Longitude": 5.9516,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-GE.geojson",
+      "CommonAliases": [
+        "Gelderland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "BA49BF54-EE0B-4B57-9398-1F338B5ADA6D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.468Z",
+      "checksum": "201fde13a6f6f25813b6f9727d243c2eb179a1037f5a66847590eb3059b16e3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Groningen",
+      "Code": "GR",
+      "ISO3166_2": "NL-GR",
+      "Latitude": 53.2194,
+      "Longitude": 6.5665,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-GR.geojson",
+      "CommonAliases": [
+        "Groningen"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "FC592742-66F7-43EE-B24A-4AAC9CA0A409"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.485Z",
+      "checksum": "1831502413db773f4811d5e4643ce670e0eb22529d75bfc5cc2c62f2e54ce3bf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Limburg",
+      "Code": "LI",
+      "ISO3166_2": "NL-LI",
+      "Latitude": 51.2015,
+      "Longitude": 5.9046,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-LI.geojson",
+      "CommonAliases": [
+        "Limburg"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "73B8E350-270D-4AEB-BE5D-08236E35A13A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.501Z",
+      "checksum": "80c743227bdcf142f64216f648bd8553416c3c38e7f9c7bf61fc9fac60dcd86e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Brabant",
+      "Code": "NB",
+      "ISO3166_2": "NL-NB",
+      "Latitude": 51.6018,
+      "Longitude": 5.4441,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-NB.geojson",
+      "CommonAliases": [
+        "North Brabant"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "5B4ACC6F-29C8-47E1-8012-5D8C7558D516"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.517Z",
+      "checksum": "3f2044c4f272e1b535e57c0acf186d13a6338bb2044d19ff57d45a96ee658777"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Holland",
+      "Code": "NH",
+      "ISO3166_2": "NL-NH",
+      "Latitude": 52.7213,
+      "Longitude": 4.8207,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-NH.geojson",
+      "CommonAliases": [
+        "North Holland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "DF82D955-927F-4BED-9B6D-3DB70257284C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.534Z",
+      "checksum": "4746e9cc6164aa8f44e8535ae970b25cb2c1bbe3d29074d2284fec7d8d1fc1e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Overijssel",
+      "Code": "OV",
+      "ISO3166_2": "NL-OV",
+      "Latitude": 52.4254,
+      "Longitude": 6.4611,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-OV.geojson",
+      "CommonAliases": [
+        "Overijssel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "8C05854C-42FD-4C13-8316-0450E3D3AD08"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.550Z",
+      "checksum": "7df4a66a99a27bdaa8eb7d0405860407a2dbc800ca9b574b25b3699e6506e8ab"
+    }
+  },
+  {
+    "fields": {
+      "Name": "South Holland",
+      "Code": "ZH",
+      "ISO3166_2": "NL-ZH",
+      "Latitude": 51.9967,
+      "Longitude": 4.5597,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-ZH.geojson",
+      "CommonAliases": [
+        "South Holland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "DFFC573D-F310-44ED-B9BC-8E5C1878D8B3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.564Z",
+      "checksum": "5d0dcdb6cb17e73819a4dd438e997bfb8b6e718c2e8355d53e619a9aef37472c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Utrecht",
+      "Code": "UT",
+      "ISO3166_2": "NL-UT",
+      "Latitude": 52.0907,
+      "Longitude": 5.1214,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-UT.geojson",
+      "CommonAliases": [
+        "Utrecht"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "CE6E20CA-8CA7-4DEF-91A9-FD90002E316A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.594Z",
+      "checksum": "b50f7abcc809381d7c364742396dd645b5231987c568dcf3223d0440ba49fb3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zeeland",
+      "Code": "ZE",
+      "ISO3166_2": "NL-ZE",
+      "Latitude": 51.4163,
+      "Longitude": 3.7028,
+      "BoundaryGeoJSON": "@file:by-country/NL/boundaries/NL-ZE.geojson",
+      "CommonAliases": [
+        "Zeeland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=NL"
+    },
+    "primaryKey": {
+      "ID": "B638EFD6-3107-4278-93EE-433C7D19B4D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:22.608Z",
+      "checksum": "8d8f636996eb67a54020fb2e0b6b9025f75a1273b218b5fcab81da2b02383d24"
+    }
+  }
+]

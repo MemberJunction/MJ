@@ -1,12 +1,12 @@
 import { Component, ViewChild, ElementRef, AfterViewInit, OnInit } from '@angular/core';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { MJConversationDetailEntity, MJConversationEntity, MJUserNotificationEntity, MJUserNotificationTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { Metadata, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
-import { Router } from '@angular/router';
+import { Metadata, TransactionGroupBase, TransactionVariable, CompositeKey } from '@memberjunction/core';
 import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Radio button filter options for notification read status
  */
@@ -53,7 +53,7 @@ interface NotificationUrlInfo {
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
-export class UserNotificationsComponent implements OnInit, AfterViewInit {
+export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
   @ViewChild('allRadio') allRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('unreadRadio') unreadRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('readRadio') readRadio!: ElementRef<HTMLInputElement>;
@@ -66,10 +66,10 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   constructor (
     public sharedService: SharedService,
-    private router: Router,
     private navigationService: NavigationService,
     private appManager: ApplicationManager
-  ) {}
+  ) {
+    super();}
 
   async ngOnInit() {
     this.loadNotificationTypes();
@@ -254,7 +254,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       }
       else {
         // the passed in param is just a plain object, so we need to load the entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
         await notificationEntity.Load(notificationId);  
         notificationEntity.Unread = !bRead;  
@@ -287,7 +287,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public async TestTransactionGroupVariables() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
@@ -326,7 +326,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public async markAll(bRead: boolean) {
     // Use transaction group for batching - all saves are queued and sent in one round-trip
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     // Queue all saves - no need to await individual saves since transaction group queues them
@@ -357,14 +357,46 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
         return;
       }
 
-      const info = this.notificationUrl(notification);
-      if (info.queryString && info.queryString.trim().length > 0) {
-        const fullUrl = `${info.urlParts.join('/')}${info.queryString ? '?' + info.queryString : ''}`;
-        this.router.navigateByUrl(fullUrl);
+      this.navigateToResource(notification);
+    }
+  }
+
+  /**
+   * Navigate to a resource-based notification using NavigationService methods.
+   * Routes to the correct resource based on the notification's ResourceType.
+   */
+  private navigateToResource(notification: MJUserNotificationEntity): void {
+    if (!notification.ResourceRecordID || !notification.ResourceTypeID) return;
+
+    const rt = this.sharedService.ResourceTypeByID(notification.ResourceTypeID);
+    if (!rt) return;
+
+    const recordId = notification.ResourceRecordID.toString();
+    const rtName = rt.Name.trim().toLowerCase();
+
+    switch (rtName) {
+      case 'records': {
+        const config = SafeJSONParse<RecordResourceConfig>(notification.ResourceConfiguration || '');
+        if (config?.Entity) {
+          const key = new CompositeKey();
+          key.SimpleLoadFromURLSegment(recordId);
+          this.navigationService.OpenEntityRecord(config.Entity, key);
+        }
+        break;
       }
-      else {
-        this.router.navigate(info.urlParts);
-      }
+      case 'user views':
+      case 'mj: user views':
+        this.navigationService.OpenView(recordId, 'View');
+        break;
+      case 'dashboards':
+        this.navigationService.OpenDashboard(recordId, 'Dashboard');
+        break;
+      case 'reports':
+        this.navigationService.OpenReport(recordId, 'Report');
+        break;
+      default:
+        console.warn(`[UserNotifications] Unhandled resource type for navigation: ${rt.Name}`);
+        break;
     }
   }
 
@@ -382,17 +414,29 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       return false;
     }
 
+    // Try the AI app first (has dedicated Agent Requests nav item)
     const aiApp = this.appManager.GetAppByName('AI');
-    if (!aiApp) {
-      return false;
+    if (aiApp) {
+      this.navigationService.OpenNavItemByName(
+        'Agent Requests',
+        { requestId: config.requestId },
+        aiApp.ID
+      );
+      return true;
     }
 
-    this.navigationService.OpenNavItemByName(
-      'Agent Requests',
-      { requestId: config.requestId },
-      aiApp.ID
-    );
-    return true;
+    // Fallback: navigate to Chat app's Conversations with the request context
+    const chatApp = this.appManager.GetAppByName('Chat');
+    if (chatApp) {
+      this.navigationService.OpenNavItemByName(
+        'Conversations',
+        { requestId: config.requestId },
+        chatApp.ID
+      );
+      return true;
+    }
+
+    return false;
   }
 
   /**

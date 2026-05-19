@@ -15,7 +15,7 @@ import { MJTestRunFeedbackFormComponent } from '../../generated/Entities/MJTestR
       <div class="feedback-header">
         <h2><i class="fas fa-comment-dots"></i> Test Run Feedback</h2>
         @if (record.TestRunID) {
-          <button kendoButton (click)="openTestRun()">
+          <button mjButton (click)="openTestRun()">
             <i class="fas fa-external-link"></i> View Test Run
           </button>
         }

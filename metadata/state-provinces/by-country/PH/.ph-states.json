@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Philippines",
+      "Code": "PH",
+      "ISO3166_2": "PH-PH",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Philippines"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PH"
+    },
+    "primaryKey": {
+      "ID": "93CF416E-CA41-4518-91F4-99CA940CAA80"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.198Z",
+      "checksum": "f2f95e907a689bc6253243fa5c544daf3d7f4230258dea9e1d42fab982c59773"
+    }
+  }
+]

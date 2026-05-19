@@ -185,61 +185,61 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
         .depth-0::after {
             display: none;
         }
-        .depth-0 .node-header { 
-            background: #f8f9fa;
-            border: 2px solid #e0e0e0;
+        .depth-0 .node-header {
+            background: var(--mj-bg-surface-card);
+            border: 2px solid var(--mj-border-default);
             font-weight: 600;
             position: relative;
             z-index: 10;
         }
-        
+
         /* Sub-level nodes with increasing indentation */
         .depth-1 {
             margin-left: 24px;
         }
         .depth-1 .node-header {
-            background: #fafafa;
-            border-color: #d0d0d0;
+            background: var(--mj-bg-surface-card);
+            border-color: var(--mj-border-default);
         }
-        
+
         .depth-2 {
             margin-left: 48px;
         }
         .depth-2 .node-header {
-            background: #fcfcfc;
-            border-color: #c0c0c0;
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-default);
         }
-        
+
         .depth-3 {
             margin-left: 72px;
         }
         .depth-3 .node-header {
-            background: #fdfdfd;
-            border-color: #b0b0b0;
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-strong);
         }
-        
+
         .depth-4 {
             margin-left: 96px;
         }
         .depth-4 .node-header {
-            background: #fefefe;
-            border-color: #a0a0a0;
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-strong);
         }
-        
+
         .depth-5 {
             margin-left: 120px;
         }
         .depth-5 .node-header {
-            background: #fefefe;
-            border-color: #a0a0a0;
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-strong);
         }
-        
+
         .depth-6 {
             margin-left: 144px;
         }
         .depth-6 .node-header {
-            background: #fefefe;
-            border-color: #a0a0a0;
+            background: var(--mj-bg-surface);
+            border-color: var(--mj-border-strong);
         }
 
         /* Root level - higher z-index to hide lines behind it */
@@ -248,12 +248,12 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             overflow: hidden;
             z-index: 2;
         }
-        .depth-0 .node-header { 
-            background: #f8f9fa;
+        .depth-0 .node-header {
+            background: var(--mj-bg-surface-card);
             position: relative;
             z-index: 2;
         }
-        
+
         /* Only add left padding for nodes with children (that show chevrons) */
         .depth-0.has-children::before {
             content: '';
@@ -262,23 +262,23 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             top: 0;
             width: 2px;
             height: 100%;
-            border-left: 2px dotted #c0c7d0;
+            border-left: 2px dotted var(--mj-border-strong);
             z-index: 0; /* Behind everything */
         }
-        
+
         /* Child level - only for nodes that actually have parent chevrons */
-        .depth-1 { 
+        .depth-1 {
             margin-left: 30px;
             padding-left: 12px;
             position: relative;
             z-index: 1;
         }
-        .depth-1 .node-header { 
-            background: #fafbfc;
+        .depth-1 .node-header {
+            background: var(--mj-bg-surface-card);
             position: relative;
             z-index: 1;
         }
-        
+
         /* Horizontal line connecting to each child node - only when parent has children */
         .depth-1::after {
             content: '';
@@ -287,44 +287,44 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             top: 12px;
             width: 25px;
             height: 2px;
-            border-bottom: 2px dotted #c0c7d0;
+            border-bottom: 2px dotted var(--mj-border-strong);
             z-index: 1;
         }
-        
+
         /* Visual indicator when details are expanded */
         .tree-node.details-expanded > .node-header {
             border-bottom-left-radius: 0;
             border-bottom-right-radius: 0;
-            border-bottom: 1px solid #2196f3;
+            border-bottom: 1px solid var(--mj-brand-primary);
         }
-        
+
         .node-header {
             display: flex;
             align-items: center;
             gap: 8px;
             padding: 8px 12px;
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--mj-border-default);
             border-radius: 6px;
             transition: all 0.2s ease;
             user-select: none;
             position: relative;
             z-index: 5;
-            background: white;
+            background: var(--mj-bg-surface);
         }
-        
+
         .node-header:hover {
-            background: var(--gray-700);
-            border-color: var(--mj-blue) !important;
+            background: var(--mj-bg-surface-hover);
+            border-color: var(--mj-brand-primary) !important;
         }
-        
+
         /* Sub-agent specific styling */
         .tree-node.type-sub-agent > .node-header {
-            border-left: 4px solid var(--mj-blue);
+            border-left: 4px solid var(--mj-brand-primary);
         }
-        
+
         /* Action specific styling */
         .tree-node.type-action > .node-header {
-            border-left: 4px solid #4caf50;
+            border-left: 4px solid var(--mj-status-success);
         }
         
         .expand-icon {
@@ -334,7 +334,7 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             align-items: center;
             justify-content: center;
             text-align: center;
-            color: #666;
+            color: var(--mj-text-secondary);
             font-size: 10px;
             cursor: pointer;
             border-radius: 3px;
@@ -342,23 +342,23 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             z-index: 10; /* Ensure expand icon is clickable */
             position: relative;
         }
-        
+
         .expand-icon:hover {
-            background: #e0e0e0;
-            color: #333;
+            background: var(--mj-bg-surface-hover);
+            color: var(--mj-text-primary);
         }
-        
+
         .status-icon {
             width: 20px;
             text-align: center;
             font-size: 14px;
         }
-        
-        .status-pending { color: #999; }
-        .status-running { color: #2196f3; }
-        .status-completed { color: #4caf50; }
-        .status-failed { color: #f44336; }
-        
+
+        .status-pending { color: var(--mj-text-muted); }
+        .status-running { color: var(--mj-brand-primary); }
+        .status-completed { color: var(--mj-status-success); }
+        .status-failed { color: var(--mj-status-error); }
+
         .type-icon {
             width: 20px;
             text-align: center;
@@ -366,7 +366,7 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             align-items: center;
             justify-content: center;
             font-size: 14px;
-            color: #666;
+            color: var(--mj-text-secondary);
         }
         
         .agent-logo-icon {
@@ -380,31 +380,31 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             flex: 1;
             font-size: 13px;
             font-weight: 500;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
         }
-        
-        
+
+
         .node-duration {
             font-size: 12px;
-            color: #666;
+            color: var(--mj-text-secondary);
             font-weight: 500;
         }
-        
+
         .node-metrics {
             display: flex;
             gap: 12px;
             font-size: 12px;
         }
-        
+
         .tokens {
-            color: #666;
+            color: var(--mj-text-secondary);
         }
-        
+
         .cost {
-            color: #2196f3;
+            color: var(--mj-brand-primary);
             font-weight: 500;
         }
-        
+
         /* Details Toggle Button */
         .details-toggle-btn {
             width: 28px;
@@ -413,42 +413,42 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
             align-items: center;
             justify-content: center;
             background: transparent;
-            border: 1px solid #e0e0e0;
+            border: 1px solid var(--mj-border-default);
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.2s ease;
             font-size: 12px;
-            color: #666;
+            color: var(--mj-text-secondary);
             margin-left: 4px;
         }
-        
+
         .details-toggle-btn:hover {
-            background: #f0f0f0;
-            border-color: #2196f3;
-            color: #2196f3;
+            background: var(--mj-bg-surface-hover);
+            border-color: var(--mj-brand-primary);
+            color: var(--mj-brand-primary);
         }
-        
+
         .details-toggle-btn:active {
-            background: #e3f2fd;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
         }
-        
+
         /* When details are expanded, style the button differently */
         .tree-node.details-expanded .details-toggle-btn {
-            background: #2196f3;
-            border-color: #2196f3;
-            color: white;
+            background: var(--mj-brand-primary);
+            border-color: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
         }
-        
+
         .tree-node.details-expanded .details-toggle-btn:hover {
-            background: #1976d2;
-            border-color: #1976d2;
+            background: var(--mj-brand-primary-hover);
+            border-color: var(--mj-brand-primary-hover);
         }
-        
+
         .node-details {
             margin: 0 5px;
             padding: 16px;
-            background: var(--gray-600);
-            border: 1px solid var(--gray-700);
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
             border-top: none;
             border-radius: 0 0 6px 6px;
             font-size: 12px;
@@ -465,37 +465,37 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
         }
         
         .detail-section.error {
-            color: #d32f2f;
+            color: var(--mj-status-error-text);
         }
-        
+
         .detail-label {
             display: flex;
             align-items: center;
             gap: 6px;
             font-weight: 600;
             margin-bottom: 4px;
-            color: #555;
+            color: var(--mj-text-secondary);
         }
-        
+
         .detail-content {
             white-space: pre-wrap;
             word-break: break-word;
-            color: #333;
+            color: var(--mj-text-primary);
             line-height: 1.4;
         }
-        
+
         .markdown-details {
             padding: 16px 16px 0 16px;
-            background: var(--gray-600);
-            border: 1px solid var(--gray-700);
+            background: var(--mj-bg-surface-sunken);
+            border: 1px solid var(--mj-border-default);
             border-bottom: none;
             border-top: none;
             margin: 0 5px;
         }
-        
+
         .markdown h3, .markdown h4 {
             margin: 8px 0 4px 0;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
         }
         
         .markdown h3 {
@@ -516,40 +516,40 @@ import { MJAIAgentRunStepEntityExtended } from '@memberjunction/ai-core-plus';
         }
         
         .markdown code {
-            background: #e8e8e8;
+            background: var(--mj-bg-surface-sunken);
             padding: 1px 4px;
             border-radius: 3px;
             font-size: 12px;
         }
-        
+
         .markdown pre {
-            background: #f5f5f5;
+            background: var(--mj-bg-surface-sunken);
             padding: 8px;
             border-radius: 4px;
             overflow-x: auto;
             margin: 4px 0;
         }
-        
+
         .markdown pre code {
             background: none;
             padding: 0;
         }
-        
+
         .markdown strong {
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
         }
-        
+
         .markdown em {
             font-style: italic;
-            color: #555;
+            color: var(--mj-text-secondary);
         }
-        
+
         .full-name {
             font-weight: 600;
-            color: #1a1a1a;
+            color: var(--mj-text-primary);
             padding-bottom: 8px;
-            border-bottom: 1px solid #e0e0e0;
+            border-bottom: 1px solid var(--mj-border-default);
             word-wrap: break-word;
         }
     `]

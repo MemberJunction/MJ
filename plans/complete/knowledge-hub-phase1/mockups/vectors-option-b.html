@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vector Management — Option B: Pipeline View</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg-page: #0f172a;
+    --bg-card: #1e293b;
+    --bg-card-hover: #253449;
+    --border: #334155;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #3b82f6;
+    --success: #22c55e;
+    --warning: #f59e0b;
+    --error: #ef4444;
+    --purple: #a855f7;
+    --cyan: #06b6d4;
+    --pink: #ec4899;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
+    padding: 2rem;
+  }
+  .back-link {
+    position: fixed; top: 1rem; left: 1rem;
+    color: var(--text-muted); font-size: 0.85rem; z-index: 100;
+    display: flex; align-items: center; gap: 0.5rem; text-decoration: none; transition: color 0.2s;
+  }
+  .back-link:hover { color: var(--text-primary); }
+
+  .layout { max-width: 1400px; margin: 2rem auto 0; }
+
+  .page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 2rem;
+  }
+  .page-header h1 {
+    font-size: 1.5rem; font-weight: 700;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .page-header h1 i { color: var(--accent); }
+
+  /* Pipeline Flow */
+  .pipeline {
+    display: flex;
+    gap: 0;
+    margin-bottom: 2.5rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+  .pipeline-stage {
+    flex: 1;
+    min-width: 220px;
+    position: relative;
+  }
+  .stage-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+    transition: all 0.2s;
+  }
+  .stage-header:hover { border-color: var(--accent); }
+  .stage-icon {
+    width: 44px; height: 44px;
+    border-radius: 12px;
+    margin: 0 auto 0.75rem;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.1rem;
+  }
+  .stage-header h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 0.2rem; }
+  .stage-header .count {
+    font-size: 1.5rem; font-weight: 700; line-height: 1; margin-bottom: 0.2rem;
+  }
+  .stage-header .sub { font-size: 0.75rem; color: var(--text-muted); }
+
+  /* Arrow connectors */
+  .pipeline-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 60px;
+    min-width: 60px;
+    position: relative;
+  }
+  .arrow-line {
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    position: relative;
+  }
+  .arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -1px; top: 50%;
+    transform: translateY(-50%);
+    border: 6px solid transparent;
+    border-left: 8px solid var(--border);
+  }
+  .arrow-line.active { background: var(--accent); }
+  .arrow-line.active::after { border-left-color: var(--accent); }
+  .arrow-label {
+    position: absolute;
+    top: -16px;
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+  }
+
+  /* Entity Detail Table */
+  .detail-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 2rem;
+  }
+  .detail-header {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .detail-header h3 {
+    font-size: 1rem; font-weight: 600;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .detail-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+  }
+  .detail-tab {
+    padding: 0.7rem 1rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+  .detail-tab:hover { color: var(--text-secondary); }
+  .detail-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  th {
+    text-align: left;
+    padding: 0.65rem 1.5rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    background: rgba(15,23,42,0.5);
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 0.75rem 1.5rem;
+    font-size: 0.85rem;
+    border-bottom: 1px solid rgba(51,65,85,0.5);
+    color: var(--text-secondary);
+  }
+  tr:hover td { background: var(--bg-card-hover); }
+  .ent-name {
+    display: flex; align-items: center; gap: 0.5rem;
+    font-weight: 600; color: var(--text-primary);
+  }
+  .ent-dot {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 600;
+  }
+  .status-pill.ok { background: rgba(34,197,94,0.12); color: var(--success); }
+  .status-pill.run { background: rgba(59,130,246,0.12); color: var(--accent); }
+  .status-pill.wait { background: rgba(245,158,11,0.12); color: var(--warning); }
+  .status-pill.err { background: rgba(239,68,68,0.12); color: var(--error); }
+  .progress-mini {
+    width: 80px; height: 4px;
+    background: var(--bg-page);
+    border-radius: 2px;
+    overflow: hidden;
+    display: inline-block;
+    vertical-align: middle;
+  }
+  .progress-mini .fill {
+    height: 100%; border-radius: 2px;
+  }
+  .template-chips {
+    display: flex; gap: 0.3rem; flex-wrap: wrap;
+  }
+  .template-chip {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.1rem 0.4rem;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+  }
+
+  /* Flow diagram (visual) */
+  .flow-diagram {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .flow-diagram h3 {
+    font-size: 1rem; font-weight: 600; margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.5rem;
+  }
+  .flow-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.83rem;
+  }
+  .flow-node {
+    background: var(--bg-page);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem 0.85rem;
+    display: flex; align-items: center; gap: 0.4rem;
+    white-space: nowrap;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+  }
+  .flow-node i { font-size: 0.75rem; }
+  .flow-arrow {
+    color: var(--text-muted); font-size: 0.8rem;
+  }
+  .flow-node.highlight {
+    border-color: var(--accent);
+    background: rgba(59,130,246,0.08);
+    color: var(--accent);
+  }
+
+  @media (max-width: 900px) {
+    .pipeline { flex-direction: column; gap: 0.5rem; }
+    .pipeline-arrow { width: auto; height: 30px; min-width: auto; }
+    .arrow-line { width: 2px; height: 100%; }
+  }
+</style>
+</head>
+<body>
+<a href="index.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<div class="layout">
+  <div class="page-header">
+    <h1><i class="fa-solid fa-diagram-project"></i> Vector Pipeline</h1>
+  </div>
+
+  <!-- Pipeline Stages -->
+  <div class="pipeline">
+    <div class="pipeline-stage">
+      <div class="stage-header">
+        <div class="stage-icon" style="background: rgba(59,130,246,0.15); color: var(--accent);"><i class="fa-solid fa-table"></i></div>
+        <h3>Source Entities</h3>
+        <div class="count" style="color: var(--accent);">12</div>
+        <div class="sub">Entity types configured</div>
+      </div>
+    </div>
+    <div class="pipeline-arrow">
+      <div class="arrow-line active"></div>
+      <span class="arrow-label">Templates</span>
+    </div>
+    <div class="pipeline-stage">
+      <div class="stage-header">
+        <div class="stage-icon" style="background: rgba(168,85,247,0.15); color: var(--purple);"><i class="fa-solid fa-file-code"></i></div>
+        <h3>Document Templates</h3>
+        <div class="count" style="color: var(--purple);">28</div>
+        <div class="sub">Active templates</div>
+      </div>
+    </div>
+    <div class="pipeline-arrow">
+      <div class="arrow-line active"></div>
+      <span class="arrow-label">Embed</span>
+    </div>
+    <div class="pipeline-stage">
+      <div class="stage-header">
+        <div class="stage-icon" style="background: rgba(6,182,212,0.15); color: var(--cyan);"><i class="fa-solid fa-microchip"></i></div>
+        <h3>Embeddings</h3>
+        <div class="count" style="color: var(--cyan);">246K</div>
+        <div class="sub">Vectors generated</div>
+      </div>
+    </div>
+    <div class="pipeline-arrow">
+      <div class="arrow-line active"></div>
+      <span class="arrow-label">Index</span>
+    </div>
+    <div class="pipeline-stage">
+      <div class="stage-header">
+        <div class="stage-icon" style="background: rgba(34,197,94,0.15); color: var(--success);"><i class="fa-solid fa-layer-group"></i></div>
+        <h3>Shared Index</h3>
+        <div class="count" style="color: var(--success);">1</div>
+        <div class="sub">Pinecone index (3072d)</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Flow Diagram for single entity -->
+  <div class="flow-diagram">
+    <h3><i class="fa-solid fa-route"></i> Example Flow: Accounts Entity</h3>
+    <div class="flow-row">
+      <div class="flow-node highlight"><i class="fa-solid fa-building"></i> Accounts (42,847)</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-file-code"></i> Summary Template</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-microchip"></i> text-embedding-3-large</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node highlight"><i class="fa-solid fa-layer-group"></i> knowledge-hub-index</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-node highlight"><i class="fa-solid fa-building"></i> Accounts (42,847)</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-file-code"></i> Detail Template</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-microchip"></i> text-embedding-3-large</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node highlight"><i class="fa-solid fa-layer-group"></i> knowledge-hub-index</div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-node highlight"><i class="fa-solid fa-building"></i> Accounts (42,847)</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-file-code"></i> Relationship Template</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node"><i class="fa-solid fa-microchip"></i> text-embedding-3-large</div>
+      <span class="flow-arrow"><i class="fa-solid fa-arrow-right"></i></span>
+      <div class="flow-node highlight"><i class="fa-solid fa-layer-group"></i> knowledge-hub-index</div>
+    </div>
+  </div>
+
+  <!-- Detail Table -->
+  <div class="detail-section">
+    <div class="detail-header">
+      <h3><i class="fa-solid fa-list"></i> Pipeline Status by Entity</h3>
+    </div>
+    <div class="detail-tabs">
+      <div class="detail-tab active">All Entities</div>
+      <div class="detail-tab">Syncing</div>
+      <div class="detail-tab">Errors</div>
+      <div class="detail-tab">Queued</div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Entity</th>
+          <th>Records</th>
+          <th>Templates</th>
+          <th>Vectors</th>
+          <th>Coverage</th>
+          <th>Status</th>
+          <th>Last Sync</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--accent);"></span> Accounts</div></td>
+          <td>42,847</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Summary</span>
+              <span class="template-chip">Detail</span>
+              <span class="template-chip">Relations</span>
+            </div>
+          </td>
+          <td>128,541</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 100%; background: var(--success);"></div></div>
+            100%
+          </td>
+          <td><span class="status-pill ok"><i class="fa-solid fa-check"></i> Synced</span></td>
+          <td style="color: var(--text-muted);">2h ago</td>
+        </tr>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--purple);"></span> Contacts</div></td>
+          <td>89,234</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Summary</span>
+              <span class="template-chip">Detail</span>
+            </div>
+          </td>
+          <td>172,240</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 96%; background: var(--accent);"></div></div>
+            96%
+          </td>
+          <td><span class="status-pill run"><i class="fa-solid fa-spinner fa-spin"></i> Syncing</span></td>
+          <td style="color: var(--text-muted);">In progress</td>
+        </tr>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--success);"></span> Reports</div></td>
+          <td>15,432</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Summary</span>
+              <span class="template-chip">Detail</span>
+              <span class="template-chip">Insights</span>
+              <span class="template-chip">Data</span>
+            </div>
+          </td>
+          <td>61,728</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 100%; background: var(--success);"></div></div>
+            100%
+          </td>
+          <td><span class="status-pill ok"><i class="fa-solid fa-check"></i> Synced</span></td>
+          <td style="color: var(--text-muted);">1h ago</td>
+        </tr>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--pink);"></span> Opportunities</div></td>
+          <td>28,910</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Summary</span>
+              <span class="template-chip">Detail</span>
+            </div>
+          </td>
+          <td>57,820</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 100%; background: var(--success);"></div></div>
+            100%
+          </td>
+          <td><span class="status-pill ok"><i class="fa-solid fa-check"></i> Synced</span></td>
+          <td style="color: var(--text-muted);">3h ago</td>
+        </tr>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--warning);"></span> Activities</div></td>
+          <td>67,340</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Summary</span>
+            </div>
+          </td>
+          <td>64,200</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 95%; background: var(--warning);"></div></div>
+            95%
+          </td>
+          <td><span class="status-pill wait"><i class="fa-solid fa-clock"></i> Queued</span></td>
+          <td style="color: var(--text-muted);">Scheduled</td>
+        </tr>
+        <tr>
+          <td><div class="ent-name"><span class="ent-dot" style="background: var(--error);"></span> Documents</div></td>
+          <td>3,069</td>
+          <td>
+            <div class="template-chips">
+              <span class="template-chip">Content</span>
+            </div>
+          </td>
+          <td>2,812</td>
+          <td>
+            <div class="progress-mini"><div class="fill" style="width: 92%; background: var(--error);"></div></div>
+            92%
+          </td>
+          <td><span class="status-pill err"><i class="fa-solid fa-exclamation"></i> Error</span></td>
+          <td style="color: var(--text-muted);">4h ago</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

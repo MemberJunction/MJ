@@ -1,9 +1,9 @@
 @if (visible) {
-  <kendo-dialog
-    [title]="dialogTitle"
-    [width]="500"
-    [minWidth]="400"
-    (close)="onCancel()">
+  <mj-dialog
+    [Visible]="true"
+    [Title]="dialogTitle"
+    [Width]="500"
+    (Close)="onCancel()">
     <div class="share-dialog-content">
       <!-- Loading state -->
       @if (loading) {
@@ -18,31 +18,28 @@
             <h4 class="section-title">Add people or roles</h4>
             <!-- Search type toggle -->
             <div class="search-type-toggle">
-              <button kendoButton
-                [fillMode]="searchType === 'User' ? 'solid' : 'outline'"
-                [themeColor]="searchType === 'User' ? 'primary' : 'base'"
+              <button mjButton
+                [variant]="searchType === 'User' ? 'primary' : 'outline'"
                 (click)="setSearchType('User')">
                 <i class="fa-solid fa-user"></i> Users
               </button>
-              <button kendoButton
-                [fillMode]="searchType === 'Role' ? 'solid' : 'outline'"
-                [themeColor]="searchType === 'Role' ? 'primary' : 'base'"
+              <button mjButton
+                [variant]="searchType === 'Role' ? 'primary' : 'outline'"
                 (click)="setSearchType('Role')">
                 <i class="fa-solid fa-users"></i> Roles
               </button>
             </div>
             <!-- Search input -->
             <div class="search-container">
-              <kendo-textbox
-                [value]="searchText"
-                (valueChange)="onSearchInput($event)"
-                [placeholder]="'Search for ' + (searchType === 'User' ? 'users' : 'roles') + '...'"
-                [clearButton]="true"
-                (blur)="showSearchResults = false">
-                <ng-template kendoTextBoxPrefixTemplate>
-                  <i class="fa-solid fa-search search-icon"></i>
-                </ng-template>
-              </kendo-textbox>
+              <div class="search-input-wrapper">
+                <i class="fa-solid fa-search search-icon"></i>
+                <input type="text"
+                  class="mj-input"
+                  [value]="searchText"
+                  (input)="onSearchInput($any($event.target).value)"
+                  [placeholder]="'Search for ' + (searchType === 'User' ? 'users' : 'roles') + '...'"
+                  (blur)="showSearchResults = false" />
+              </div>
               <!-- Search results dropdown -->
               @if (showSearchResults && searchResults.length > 0) {
                 <div class="search-results">
@@ -67,24 +64,26 @@
                 <div class="recipient-chip">
                   <i [class]="getShareTypeIcon(selectedRecipient.type)"></i>
                   <span>{{ selectedRecipient.name }}</span>
-                  <button kendoButton [look]="'flat'" [icon]="'close'" (click)="clearSearch()"></button>
+                  <button mjButton variant="flat" size="sm" (click)="clearSearch()">
+                    <i class="fa-solid fa-times"></i>
+                  </button>
                 </div>
-                <kendo-dropdownlist
-                  [data]="permissionOptions"
-                  [textField]="'label'"
-                  [valueField]="'value'"
+                <mj-dropdown
+                  [Data]="permissionOptions"
+                  TextField="label"
+                  ValueField="value"
                   [(ngModel)]="selectedPermission"
-                  [valuePrimitive]="true"
+                  [ValuePrimitive]="true"
                   class="permission-dropdown">
-                  <ng-template kendoDropDownListItemTemplate let-dataItem>
+                  <ng-template #mjDropdownItem let-dataItem>
                     <div class="permission-option">
                       <span class="permission-label">{{ dataItem.label }}</span>
                       <span class="permission-desc">{{ dataItem.description }}</span>
                     </div>
                   </ng-template>
-                </kendo-dropdownlist>
-                <button kendoButton
-                  themeColor="primary"
+                </mj-dropdown>
+                <button mjButton
+                  variant="primary"
                   [disabled]="saving"
                   (click)="addShare()">
                   <i class="fa-solid fa-plus"></i> Add
@@ -118,16 +117,16 @@
                   </div>
                   <div class="share-actions">
                     @if (canModifyShares) {
-                      <kendo-dropdownlist
-                        [data]="permissionOptions"
-                        [textField]="'label'"
-                        [valueField]="'value'"
-                        [value]="share.permissionLevel"
-                        [valuePrimitive]="true"
-                        (valueChange)="updateSharePermission(share, $event)"
-                        [disabled]="saving"
+                      <mj-dropdown
+                        [Data]="permissionOptions"
+                        TextField="label"
+                        ValueField="value"
+                        [ngModel]="share.permissionLevel"
+                        [ValuePrimitive]="true"
+                        (ValueChange)="updateSharePermission(share, $any($event))"
+                        [Disabled]="saving"
                         class="permission-dropdown-small">
-                      </kendo-dropdownlist>
+                      </mj-dropdown>
                     }
                     @if (!canModifyShares) {
                       <span class="permission-badge">
@@ -135,12 +134,13 @@
                       </span>
                     }
                     @if (canModifyShares) {
-                      <button kendoButton
-                        [look]="'flat'"
-                        [icon]="'trash'"
+                      <button mjButton
+                        variant="danger"
+                        size="sm"
                         title="Remove access"
                         [disabled]="saving"
                         (click)="removeShare(share)">
+                        <i class="fa-solid fa-trash"></i>
                       </button>
                     }
                   </div>
@@ -170,9 +170,9 @@
         }
       }
     </div>
-    <kendo-dialog-actions>
-      <button kendoButton themeColor="primary" (click)="onDone()">Done</button>
-      <button kendoButton (click)="onCancel()">Cancel</button>
-    </kendo-dialog-actions>
-  </kendo-dialog>
+    <mj-dialog-actions>
+      <button mjButton variant="primary" (click)="onDone()">Done</button>
+      <button mjButton (click)="onCancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
 }

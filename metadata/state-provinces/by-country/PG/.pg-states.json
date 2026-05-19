@@ -1,0 +1,422 @@
+[
+  {
+    "fields": {
+      "Name": "Central",
+      "Code": "CPM",
+      "ISO3166_2": "PG-CPM",
+      "Latitude": -9.8412,
+      "Longitude": 148.034,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-CPM.geojson",
+      "CommonAliases": [
+        "Central"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "B700A254-810C-461E-87C5-0E6F7980D595"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.845Z",
+      "checksum": "3cffcbaca9114ee3ee83322299ab76b2178e8c94a392121afb2837d486c2b8c5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chimbu",
+      "Code": "CPK",
+      "ISO3166_2": "PG-CPK",
+      "Latitude": -6.2737,
+      "Longitude": 144.894,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-CPK.geojson",
+      "CommonAliases": [
+        "Chimbu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "F4187325-3B70-4DCF-A3F5-27D3841FB9F5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.859Z",
+      "checksum": "2a9ec61c4859efc7f200670c704995124a48aa0a02e3a2a69e858276dc8828f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "East New Britain",
+      "Code": "EBR",
+      "ISO3166_2": "PG-EBR",
+      "Latitude": -5.6544,
+      "Longitude": 151.507,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-EBR.geojson",
+      "CommonAliases": [
+        "East New Britain"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "2A78190D-FB15-44D8-919F-C1905E71E1ED"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.874Z",
+      "checksum": "6ba22590ef8783f94df600d4ab00b53faca1f0ddd82f47a90178085dd55c51a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "East Sepik",
+      "Code": "ESW",
+      "ISO3166_2": "PG-ESW",
+      "Latitude": -4.2508,
+      "Longitude": 143.391,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-ESW.geojson",
+      "CommonAliases": [
+        "East Sepik"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "EFA1F839-C03E-42F0-A2DC-CFA49AD1B130"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.888Z",
+      "checksum": "26ff8044d9a35b00c6f906efaa857f393f7b9fabec57de3565d2b91f9923759a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eastern Highlands",
+      "Code": "EHG",
+      "ISO3166_2": "PG-EHG",
+      "Latitude": -6.4841,
+      "Longitude": 145.557,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-EHG.geojson",
+      "CommonAliases": [
+        "Eastern Highlands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "C06A27B9-34DC-4BD8-8DC6-FD504D22D5C4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.903Z",
+      "checksum": "9f6be48e06dbda2605d0a65834d6eeeb342692d30b72d7675e7bc6316e68d176"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Enga",
+      "Code": "EPW",
+      "ISO3166_2": "PG-EPW",
+      "Latitude": -5.4888,
+      "Longitude": 143.505,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-EPW.geojson",
+      "CommonAliases": [
+        "Enga"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "D9F000DA-5E88-4C97-9973-E7FCD9481FB7"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.918Z",
+      "checksum": "5484848ca5aa18b28c87bede544fa392464ca38e9a262d21ae311a8855de15ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gulf",
+      "Code": "GPK",
+      "ISO3166_2": "PG-GPK",
+      "Latitude": -7.2191,
+      "Longitude": 144.812,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-GPK.geojson",
+      "CommonAliases": [
+        "Gulf"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "0540440E-EE89-464D-9DD5-B787F7691ECC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.932Z",
+      "checksum": "f5969b3503cfbeeb1fddb159aae36c2929e8fd6862ea48d4fb19452d2ef2573f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Madang",
+      "Code": "MPM",
+      "ISO3166_2": "PG-MPM",
+      "Latitude": -5.0897,
+      "Longitude": 145.086,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-MPM.geojson",
+      "CommonAliases": [
+        "Madang"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "7162F6A2-1E8A-4DC7-84EC-E1154A4B96C3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.947Z",
+      "checksum": "a01e52daed43f76601514b5094e7ad9a4979dd8ce9d604f71efb0d44b9b30c7c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manus",
+      "Code": "MRL",
+      "ISO3166_2": "PG-MRL",
+      "Latitude": -2.3017,
+      "Longitude": 147.806,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-MRL.geojson",
+      "CommonAliases": [
+        "Manus"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "90FFAD14-C80B-463F-BE81-515230443187"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.961Z",
+      "checksum": "b3aeef53f47f33669f3cfdedfae7e5f3919e3c7e6a37f2cc2258d2b13fe7a4ef"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Milne Bay",
+      "Code": "MBA",
+      "ISO3166_2": "PG-MBA",
+      "Latitude": -11.581,
+      "Longitude": 153.487,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-MBA.geojson",
+      "CommonAliases": [
+        "Milne Bay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "EAB546BD-23CE-4533-96BD-C1FC174444EF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:24.975Z",
+      "checksum": "f5b0537654b211d7a6b49dd7634625338e864a1705e9dcecb0a0228f4d8f3430"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Morobe",
+      "Code": "MPL",
+      "ISO3166_2": "PG-MPL",
+      "Latitude": -6.3992,
+      "Longitude": 146.83,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-MPL.geojson",
+      "CommonAliases": [
+        "Morobe"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "267E64A0-478A-4155-8671-BACC06930C7F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.028Z",
+      "checksum": "82a66f57afff086df670e5cd6eb3f5044b28ce20f81440e016f4975d79c169c9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "National Capital District (Port Moresby)",
+      "Code": "NCD",
+      "ISO3166_2": "PG-NCD",
+      "Latitude": -9.4476,
+      "Longitude": 147.174,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-NCD.geojson",
+      "CommonAliases": [
+        "National Capital District (Port Moresby)"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "7E9D45BF-5F6E-4CC4-99C7-E6724CEA2A37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.043Z",
+      "checksum": "e9f6b536e0e7b5c74702ee4963a7aee1673159e87bfcb04bb73cc777d0908cc3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "New Ireland",
+      "Code": "NIK",
+      "ISO3166_2": "PG-NIK",
+      "Latitude": -2.5182,
+      "Longitude": 150.25,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-NIK.geojson",
+      "CommonAliases": [
+        "New Ireland"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "81E38E0A-47B0-433C-9BEC-DD12CFBFC98C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.059Z",
+      "checksum": "d4c75fba20cda98abd718195ba6a98e464d4d2e3f7c82c26f508150c8d9331e9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "North Solomons",
+      "Code": "NSA",
+      "ISO3166_2": "PG-NSA",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "North Solomons"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "47B8897D-009F-4F76-B41B-C78848636071"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.074Z",
+      "checksum": "bcc01e46baddfa174d3aea391fda1f2d95e2c1fe92fe556eaff6651fbdc842f7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Northern",
+      "Code": "NPP",
+      "ISO3166_2": "PG-NPP",
+      "Latitude": -9.1143,
+      "Longitude": 148.227,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-NPP.geojson",
+      "CommonAliases": [
+        "Northern"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "727D9101-64EE-40B1-9125-F11A4DA87BCF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.090Z",
+      "checksum": "aae17a85e5899409a3002c68849becb0a69c812d76b490bba53b0af11df7596d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sandaun [West Sepik]",
+      "Code": "SAN",
+      "ISO3166_2": "PG-SAN",
+      "Latitude": -3.4578,
+      "Longitude": 141.741,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-SAN.geojson",
+      "CommonAliases": [
+        "Sandaun [West Sepik]"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "8CC743C3-1DBE-489B-B3DF-E88901D95A95"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.106Z",
+      "checksum": "dea2dfbb51b0dadaa39c602113416cf6832b935c69df2335e620b204bf5eb60d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Southern Highlands",
+      "Code": "SHM",
+      "ISO3166_2": "PG-SHM",
+      "Latitude": -6.3863,
+      "Longitude": 143.446,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-SHM.geojson",
+      "CommonAliases": [
+        "Southern Highlands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "534328F9-2DCF-4204-B84B-DDC32CFB725D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.122Z",
+      "checksum": "cf10948a3f11f531f004c1ea41846f05e57f1b593205a8336eb931e0215b8e4a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "West New Britain",
+      "Code": "WBK",
+      "ISO3166_2": "PG-WBK",
+      "Latitude": -5.91,
+      "Longitude": 149.813,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-WBK.geojson",
+      "CommonAliases": [
+        "West New Britain"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "D00AFFFD-08BA-45DF-A250-0A5962C7664E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.139Z",
+      "checksum": "1076f5d3acc16cee76165a0be6db4712201eca33093c5ce1b9261748cbf44b5d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western",
+      "Code": "WPD",
+      "ISO3166_2": "PG-WPD",
+      "Latitude": -7.4892,
+      "Longitude": 142.01,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-WPD.geojson",
+      "CommonAliases": [
+        "Western"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "22834FDB-5083-446B-B1B8-5A44856D6DC3"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.156Z",
+      "checksum": "9d361d92a66cbfbb7a0fcf96bd62a67132bd17e6cb8394e43768464d4e6b954d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Western Highlands",
+      "Code": "WHM",
+      "ISO3166_2": "PG-WHM",
+      "Latitude": -5.7703,
+      "Longitude": 144.404,
+      "BoundaryGeoJSON": "@file:by-country/PG/boundaries/PG-WHM.geojson",
+      "CommonAliases": [
+        "Western Highlands"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=PG"
+    },
+    "primaryKey": {
+      "ID": "4730062D-BF99-475C-B6F2-E25EE0E43605"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:25.170Z",
+      "checksum": "c37bc8eff94dfe533ae9273303d5335f7783061f5e618099605fb6a98ff9cabb"
+    }
+  }
+]

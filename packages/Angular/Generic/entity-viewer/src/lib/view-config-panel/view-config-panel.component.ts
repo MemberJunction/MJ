@@ -1,15 +1,16 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
   ViewColumnInfo,
   ViewGridState,
-  ViewGridColumnSetting,
-  ColumnFormat,
-  ColumnTextStyle,
-  ColumnConditionalRule,
-  ViewGridAggregatesConfig,
-  ViewGridAggregate,
+  MJUserViewEntity_IGridColumnSetting as ViewGridColumnSetting,
+  MJUserViewEntity_IColumnFormat as ColumnFormat,
+  MJUserViewEntity_IColumnTextStyle as ColumnTextStyle,
+  MJUserViewEntity_IColumnConditionalRule as ColumnConditionalRule,
+  MJUserViewEntity_IGridAggregatesConfig as ViewGridAggregatesConfig,
+  MJUserViewEntity_IGridAggregate as ViewGridAggregate,
   DEFAULT_AGGREGATE_DISPLAY,
   UserInfoEngine
 } from '@memberjunction/core-entities';
@@ -87,7 +88,7 @@ export interface ViewSaveEvent {
   templateUrl: './view-config-panel.component.html',
   styleUrls: ['./view-config-panel.component.css']
 })
-export class ViewConfigPanelComponent implements OnInit, OnChanges {
+export class ViewConfigPanelComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   /**
    * The entity being viewed
    */
@@ -257,9 +258,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     return this.panelWidth < this.ICON_ONLY_THRESHOLD;
   }
 
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   /**
    * Handle keyboard shortcuts

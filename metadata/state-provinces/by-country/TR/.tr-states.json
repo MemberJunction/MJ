@@ -1,0 +1,1661 @@
+[
+  {
+    "fields": {
+      "Name": "Adana",
+      "Code": "01",
+      "ISO3166_2": "TR-01",
+      "Latitude": 37.4006,
+      "Longitude": 35.7555,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-01.geojson",
+      "CommonAliases": [
+        "Adana"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "792C0E0A-7799-4DE7-B0E8-3F07C34B63EC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.377Z",
+      "checksum": "e064ab16910909b2d366ba0fd402dba7195173af4791a51bf66dfa2c09d1c98b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Adiyaman",
+      "Code": "02",
+      "ISO3166_2": "TR-02",
+      "Latitude": 37.8102,
+      "Longitude": 38.339,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-02.geojson",
+      "CommonAliases": [
+        "Adiyaman"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "6C1664CF-BBC3-4E14-BCE1-0FACCB5D82BC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.396Z",
+      "checksum": "54927e8593f9c9214be7359d5deddb2a58e12043a5c17c1fcb6778d092e063fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Afyon",
+      "Code": "03",
+      "ISO3166_2": "TR-03",
+      "Latitude": 38.6784,
+      "Longitude": 30.6938,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-03.geojson",
+      "CommonAliases": [
+        "Afyon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "28AB254A-C64A-40B1-8FB8-CC04B1B720B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.414Z",
+      "checksum": "e517ab3a7a04444d4a5491cda3aa8b8d38ddd62f9e471c090e42a91142f335e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ağrı",
+      "Code": "04",
+      "ISO3166_2": "TR-04",
+      "Latitude": 39.5925,
+      "Longitude": 43.3647,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-04.geojson",
+      "CommonAliases": [
+        "Ağrı"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "DC30F64B-6F17-4D1C-8DC0-CE3D577352F8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.432Z",
+      "checksum": "68031bd19897c9a3561064b22964f2a8389ecfbf38466f490f8dfb3fcb1dda82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aksaray",
+      "Code": "68",
+      "ISO3166_2": "TR-68",
+      "Latitude": 38.3566,
+      "Longitude": 33.8772,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-68.geojson",
+      "CommonAliases": [
+        "Aksaray"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "3918D0C5-EECB-480B-835D-70A9C1BEFE50"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.448Z",
+      "checksum": "329097bcae895d84ae183111f172e17b55e52a79ddd7fe3c53586492c7c06203"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Amasya",
+      "Code": "05",
+      "ISO3166_2": "TR-05",
+      "Latitude": 40.6379,
+      "Longitude": 35.7627,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-05.geojson",
+      "CommonAliases": [
+        "Amasya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "ACFC193A-9C6F-4315-BF56-105A86725A44"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.465Z",
+      "checksum": "26bdd9baaad505615bf21742094097f0d67410c73ce432ebc14ba1dcbfe07589"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ankara",
+      "Code": "06",
+      "ISO3166_2": "TR-06",
+      "Latitude": 39.829,
+      "Longitude": 32.578,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-06.geojson",
+      "CommonAliases": [
+        "Ankara"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A7F04C29-E78D-410F-8163-F447CDBD2EBC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.482Z",
+      "checksum": "598f058804c08770adcfa43e81e57ed22c40131ef263e651e636bce20a5ce23c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Antalya",
+      "Code": "07",
+      "ISO3166_2": "TR-07",
+      "Latitude": 37.1141,
+      "Longitude": 30.9564,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-07.geojson",
+      "CommonAliases": [
+        "Antalya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "3EAB9432-C0D9-4179-9EBD-D013F99CC44A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.499Z",
+      "checksum": "0ad9549bbaf9b70d28380e1272e39df7899382a532824844464d314eb97ecb56"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ardahan",
+      "Code": "75",
+      "ISO3166_2": "TR-75",
+      "Latitude": 41.1809,
+      "Longitude": 42.8342,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-75.geojson",
+      "CommonAliases": [
+        "Ardahan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "2C6440A1-6FC7-4541-8E1A-3220F07A4BC0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.516Z",
+      "checksum": "491a0790f85ecf888965d7537dcd01099b7a62c15833ba7bafc09f260944de6f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Artvin",
+      "Code": "08",
+      "ISO3166_2": "TR-08",
+      "Latitude": 41.0175,
+      "Longitude": 41.8331,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-08.geojson",
+      "CommonAliases": [
+        "Artvin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "C29F975A-C395-47BE-BBD3-C178ABFFFCCD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.529Z",
+      "checksum": "1a27aefd08f20a681553834ef5a1cc2bf9931f043020d3c7869d0c0a841dbd8c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aydin",
+      "Code": "09",
+      "ISO3166_2": "TR-09",
+      "Latitude": 37.7292,
+      "Longitude": 27.9573,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-09.geojson",
+      "CommonAliases": [
+        "Aydin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "F7F61300-3C3C-4C88-90D5-273D61F16195"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.586Z",
+      "checksum": "83ec434720fc735ab4ca5e8b71020ff664ad28f9ad1ae63f02039b40a87e4f24"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Balıkesir",
+      "Code": "10",
+      "ISO3166_2": "TR-10",
+      "Latitude": 39.7193,
+      "Longitude": 27.8355,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-10.geojson",
+      "CommonAliases": [
+        "Balıkesir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "4810016D-5AE5-4D8D-A7B1-6011C59AF650"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.601Z",
+      "checksum": "167d20458a9d700014b53b439c8836ab172b77c1de91a0859370aca5c445d528"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bartın",
+      "Code": "74",
+      "ISO3166_2": "TR-74",
+      "Latitude": 41.5857,
+      "Longitude": 32.4688,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-74.geojson",
+      "CommonAliases": [
+        "Bartın"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "C3BE61F0-4C8D-410A-A20E-18D7158C38C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.616Z",
+      "checksum": "24fed23fa2864a9a99e323978ba76fe3a2170a69b9772e3d8e60ff6d76671159"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Batman",
+      "Code": "72",
+      "ISO3166_2": "TR-72",
+      "Latitude": 37.7343,
+      "Longitude": 41.4262,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-72.geojson",
+      "CommonAliases": [
+        "Batman"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "97F9BB61-6A6A-46AA-892D-B41083BBA796"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.631Z",
+      "checksum": "526051cc3266a5a0ce91dd38e077a518aa025c36f2b823b860664a1886435f82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bayburt",
+      "Code": "69",
+      "ISO3166_2": "TR-69",
+      "Latitude": 40.2859,
+      "Longitude": 40.3056,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-69.geojson",
+      "CommonAliases": [
+        "Bayburt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D4A74B9B-4CB1-4AAF-B424-DB2C7429AE0A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.648Z",
+      "checksum": "6351d942f749916fbcd76f133ee151f4467a0d7e62c62ea50e83c352e8b22650"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bilecik",
+      "Code": "11",
+      "ISO3166_2": "TR-11",
+      "Latitude": 40.0387,
+      "Longitude": 30.2002,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-11.geojson",
+      "CommonAliases": [
+        "Bilecik"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D97AEDE8-3586-410E-BBC8-D56751E4AC37"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.664Z",
+      "checksum": "5de6ce2cfce9dace9ed9a4c93ee52d4be60774541d135cb89eb3377d1dd9ceb7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bingöl",
+      "Code": "12",
+      "ISO3166_2": "TR-12",
+      "Latitude": 39.0743,
+      "Longitude": 40.646,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-12.geojson",
+      "CommonAliases": [
+        "Bingöl"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "41607E10-AB9D-4C93-9484-5B117441D39A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.680Z",
+      "checksum": "050c36c01bdf5c108dd4cd3b42ecb1c2ca347d8da37ae0512e41b17d00624225"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bitlis",
+      "Code": "13",
+      "ISO3166_2": "TR-13",
+      "Latitude": 38.5155,
+      "Longitude": 42.3462,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-13.geojson",
+      "CommonAliases": [
+        "Bitlis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "1CEC072A-33C8-40A4-830F-AFB8B2333B30"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.696Z",
+      "checksum": "76a3fe0bf315cb0779a3397dbdabd4615c732cd27404878872e6dd411411640a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bolu",
+      "Code": "14",
+      "ISO3166_2": "TR-14",
+      "Latitude": 40.5854,
+      "Longitude": 31.6806,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-14.geojson",
+      "CommonAliases": [
+        "Bolu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "51450683-D987-4BA3-9FC9-30CA3F88E7E4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.712Z",
+      "checksum": "b981b4f64941c5a0ca5c4f6fb149c93c9830f6a12089fdf0dab4c7aded35e98a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Burdur",
+      "Code": "15",
+      "ISO3166_2": "TR-15",
+      "Latitude": 37.5001,
+      "Longitude": 30.1627,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-15.geojson",
+      "CommonAliases": [
+        "Burdur"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "8C4F2BF8-4609-476E-8202-982D71C03915"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.726Z",
+      "checksum": "45db19d03fce12f60a0f5b1ba12969792e8045bf7845c0d2daf28e5284e6e619"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bursa",
+      "Code": "16",
+      "ISO3166_2": "TR-16",
+      "Latitude": 40.1314,
+      "Longitude": 29.0593,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-16.geojson",
+      "CommonAliases": [
+        "Bursa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "2748E9D3-5286-48E7-9DDD-18C5FDCA5FD2"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.779Z",
+      "checksum": "18390ed44398e39da2f763d13a4f9d8a847917bbb8e184342ef705c41d7dc0a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Çanakkale",
+      "Code": "17",
+      "ISO3166_2": "TR-17",
+      "Latitude": 40.0553,
+      "Longitude": 26.8233,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-17.geojson",
+      "CommonAliases": [
+        "Çanakkale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "85CEFD0E-E5A0-42E4-ACAF-21516F822B12"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.795Z",
+      "checksum": "666480bdbbdfb6668339c6d9dc4d31dd9aede7443a3d518de0bd2f61b2e38845"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Çankırı",
+      "Code": "18",
+      "ISO3166_2": "TR-18",
+      "Latitude": 40.7087,
+      "Longitude": 33.2142,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-18.geojson",
+      "CommonAliases": [
+        "Çankırı"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "48CFC38D-ADC8-4029-987D-AD0629AF1BBD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.813Z",
+      "checksum": "d28d39e4764ede91249096a1f23bb37d4282f8467b641e9868db8ae9f3fadd41"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Çorum",
+      "Code": "19",
+      "ISO3166_2": "TR-19",
+      "Latitude": 40.6149,
+      "Longitude": 34.711,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-19.geojson",
+      "CommonAliases": [
+        "Çorum"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "F5344BCB-C03D-4E63-A1BD-9C0066CC5F27"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.829Z",
+      "checksum": "18549fe10bd6941eb3b74df180f851e33c27192c994ca2e45d6d645ae4077950"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Denizli",
+      "Code": "20",
+      "ISO3166_2": "TR-20",
+      "Latitude": 37.7539,
+      "Longitude": 29.2821,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-20.geojson",
+      "CommonAliases": [
+        "Denizli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "9D8E5090-40B4-466E-9C47-82B12B821B02"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.845Z",
+      "checksum": "5f36fc3798b119e1ec1489bd2d6092efdd9900acddf6b3375f9e29c66c22e917"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Diyarbakır",
+      "Code": "21",
+      "ISO3166_2": "TR-21",
+      "Latitude": 38.0261,
+      "Longitude": 40.2706,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-21.geojson",
+      "CommonAliases": [
+        "Diyarbakır"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "E92CC017-9FA7-47A7-99A8-7BE98291071C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.861Z",
+      "checksum": "c18d69a1bf8b896e62432c8c4acc980fd986184f918a9e56a282454834e652df"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Edirne",
+      "Code": "22",
+      "ISO3166_2": "TR-22",
+      "Latitude": 40.9579,
+      "Longitude": 26.4697,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-22.geojson",
+      "CommonAliases": [
+        "Edirne"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "8ED17D87-D1FB-4F7F-9067-4A7720E6B359"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.877Z",
+      "checksum": "24e961007a0ccd3df7785145780e1b1ad2089613167e2c72dfb61c138b4eb3ea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Elaziğ",
+      "Code": "23",
+      "ISO3166_2": "TR-23",
+      "Latitude": 38.5718,
+      "Longitude": 39.3702,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-23.geojson",
+      "CommonAliases": [
+        "Elaziğ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A3A9696B-16EA-4280-AA7E-8B9A1E49FC03"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.894Z",
+      "checksum": "1d3a4051a0c055a5f25eda9a01b5170de04e09891c01c31c0187de4180274fe8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Erzincan",
+      "Code": "24",
+      "ISO3166_2": "TR-24",
+      "Latitude": 39.6874,
+      "Longitude": 39.5121,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-24.geojson",
+      "CommonAliases": [
+        "Erzincan"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D03192BB-AFD8-4B0A-9E79-F25FA6B7D348"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.909Z",
+      "checksum": "eca30adf8a06f3edaeb086ccbf0ea25d9c6e53994d195f9bda1b170f83f32a1c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Erzurum",
+      "Code": "25",
+      "ISO3166_2": "TR-25",
+      "Latitude": 39.9678,
+      "Longitude": 41.403,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-25.geojson",
+      "CommonAliases": [
+        "Erzurum"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "5FB6B81A-885A-4596-9967-84C9AFAD7AEC"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.923Z",
+      "checksum": "d724639dd2518abce480f5988fe1a8a88b9fb51ed644642b9ccb6136f23f256d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Eskişehir",
+      "Code": "26",
+      "ISO3166_2": "TR-26",
+      "Latitude": 39.6297,
+      "Longitude": 31.0894,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-26.geojson",
+      "CommonAliases": [
+        "Eskişehir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "7D4E4189-1D00-482A-BBF6-AE406519381C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.977Z",
+      "checksum": "b2ae18f5281ddafd3af45cc883f203bdfb7f3547ea7ce75bfe29561104c14a70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gaziantep",
+      "Code": "27",
+      "ISO3166_2": "TR-27",
+      "Latitude": 36.9988,
+      "Longitude": 37.2462,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-27.geojson",
+      "CommonAliases": [
+        "Gaziantep"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "ED6BA151-7746-4C62-8C8A-92D507A42999"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:36.994Z",
+      "checksum": "6f0fed629160c08979fc4dd8bd044430548e9c45ab46f3aedb460d8f9f7ccc03"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Giresun",
+      "Code": "28",
+      "ISO3166_2": "TR-28",
+      "Latitude": 40.5379,
+      "Longitude": 38.6055,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-28.geojson",
+      "CommonAliases": [
+        "Giresun"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D78D046A-6E86-45FA-85EB-21A27F7BD04A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.009Z",
+      "checksum": "95f9986be49f793754f4bbbb32652fc841a0ae8aabfee6396e4f003607d49608"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gümüşhane",
+      "Code": "29",
+      "ISO3166_2": "TR-29",
+      "Latitude": 40.2812,
+      "Longitude": 39.3544,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-29.geojson",
+      "CommonAliases": [
+        "Gümüşhane"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "95452F56-D5B0-4F07-B597-63C1E8AAF2FF"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.025Z",
+      "checksum": "c7488fec934e28410ea7c74333f2a6744b5657eb61d61f257e33e7bd85a0bbca"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hakkari",
+      "Code": "30",
+      "ISO3166_2": "TR-30",
+      "Latitude": 37.6097,
+      "Longitude": 44.0804,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-30.geojson",
+      "CommonAliases": [
+        "Hakkari"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "E5DB6EA0-CCD0-4D04-9245-14199DB2BDE4"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.042Z",
+      "checksum": "27fa4e5607348c07af7f6fd921f0959389365fdf1971baab7b089362afb826dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Hatay",
+      "Code": "31",
+      "ISO3166_2": "TR-31",
+      "Latitude": 36.4876,
+      "Longitude": 36.2284,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-31.geojson",
+      "CommonAliases": [
+        "Hatay"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "0F9EF121-661B-4BFB-B74A-334D63B5E930"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.059Z",
+      "checksum": "6ef6d1154da4785e9b31242c424915be581a460024eda1e8c262529e41b95566"
+    }
+  },
+  {
+    "fields": {
+      "Name": "İçel",
+      "Code": "33",
+      "ISO3166_2": "TR-33",
+      "Latitude": 36.6614,
+      "Longitude": 33.8268,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-33.geojson",
+      "CommonAliases": [
+        "İçel"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "35EC6EF3-1F2A-4FE5-9681-0D337582862C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.075Z",
+      "checksum": "e1cb9af1079bd348bda8ce1cb77378ad0033e14e2aaee825a764824263cc0b22"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Iğdir",
+      "Code": "76",
+      "ISO3166_2": "TR-76",
+      "Latitude": 39.811,
+      "Longitude": 44.0317,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-76.geojson",
+      "CommonAliases": [
+        "Iğdir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "FABD5A5A-A486-4E66-8525-4233C3020B68"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.090Z",
+      "checksum": "3cd303e8e017c10ec535aa75a10643458bb0ee0fd58fe3d5809b1e5f99327579"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isparta",
+      "Code": "32",
+      "ISO3166_2": "TR-32",
+      "Latitude": 37.8923,
+      "Longitude": 30.818,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-32.geojson",
+      "CommonAliases": [
+        "Isparta"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "CD805DB0-2295-42C8-B162-2A3B53A2612A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.107Z",
+      "checksum": "9ef52d22a422f77b5c3a3192cef67e853d7f12e8b294829f2d1573c2de14a8f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "İstanbul",
+      "Code": "34",
+      "ISO3166_2": "TR-34",
+      "Latitude": 41.1285,
+      "Longitude": 28.8463,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-34.geojson",
+      "CommonAliases": [
+        "İstanbul"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "E74EBB61-FDA5-4874-8ADF-08046B92E557"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.120Z",
+      "checksum": "5db918404719994bb68032729b6647caf6fb3f538974424c9a65f52ac23276b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "İzmir",
+      "Code": "35",
+      "ISO3166_2": "TR-35",
+      "Latitude": 38.2426,
+      "Longitude": 27.3977,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-35.geojson",
+      "CommonAliases": [
+        "İzmir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "916A2DC9-DDAA-4864-BEEA-EDC6E1BDEA53"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.176Z",
+      "checksum": "6cea9b81a256a5cdffa52d927f52a4049f3c37b62eef9d1aa25d08e1cd74666f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kahramanmaraş",
+      "Code": "46",
+      "ISO3166_2": "TR-46",
+      "Latitude": 37.9278,
+      "Longitude": 37.0013,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-46.geojson",
+      "CommonAliases": [
+        "Kahramanmaraş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "1C0AC615-39D6-4557-903E-BCC4D19F9237"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.191Z",
+      "checksum": "7623d6142aeccf6b8df2c5888de863e6dc2678794b39c20011d8d11b6660c1c6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karabük",
+      "Code": "78",
+      "ISO3166_2": "TR-78",
+      "Latitude": 41.2347,
+      "Longitude": 32.5067,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-78.geojson",
+      "CommonAliases": [
+        "Karabük"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "3B9DAEDD-2820-4ED6-9882-8725C20D3DB1"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.209Z",
+      "checksum": "312d74e49794c113367e86b8e7b3b719cee4aafdba9c42f1081bce5a48163f31"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Karaman",
+      "Code": "70",
+      "ISO3166_2": "TR-70",
+      "Latitude": 37.2262,
+      "Longitude": 33.3026,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-70.geojson",
+      "CommonAliases": [
+        "Karaman"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "38F2EB2B-5466-4062-BB5D-605F3976CFB6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.223Z",
+      "checksum": "e445a8d95962f7a6a14c76cc5fcb32206dc82ae6d8704529798cdd74d8059717"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kars",
+      "Code": "36",
+      "ISO3166_2": "TR-36",
+      "Latitude": 40.3671,
+      "Longitude": 43.074,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-36.geojson",
+      "CommonAliases": [
+        "Kars"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "93E700B7-8693-4409-9313-67CD87B458B8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.240Z",
+      "checksum": "eec51ca08677779383009d231d9183ac61b79464fe79a793e6e3b23ede9284ae"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kastamonu",
+      "Code": "37",
+      "ISO3166_2": "TR-37",
+      "Latitude": 41.5114,
+      "Longitude": 33.6356,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-37.geojson",
+      "CommonAliases": [
+        "Kastamonu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "BF55C272-695B-4E4D-88C1-83F6FBDD7E5E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.255Z",
+      "checksum": "8b8806fe8e949e5dd1a8dd77852c9b5b17cc8cc6de4add4a61b6a6b1453d6d65"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kayseri",
+      "Code": "38",
+      "ISO3166_2": "TR-38",
+      "Latitude": 38.7168,
+      "Longitude": 35.9256,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-38.geojson",
+      "CommonAliases": [
+        "Kayseri"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A1B44AAA-7243-41F6-A1EC-40B248D0B09C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.270Z",
+      "checksum": "6fc8a39041e5169a1b5ee4026ce19c9342b1a9cb83caf0a21e0e9897c6baec85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kilis",
+      "Code": "79",
+      "ISO3166_2": "TR-79",
+      "Latitude": 36.8329,
+      "Longitude": 37.0035,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-79.geojson",
+      "CommonAliases": [
+        "Kilis"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "FA171EF0-F474-4C1A-952B-135E133E3975"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.287Z",
+      "checksum": "277d2b3373f1d8a422d4590ecb71a137a4a7d5f42d02dc16d182bf11f3663ac0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kırıkkale",
+      "Code": "71",
+      "ISO3166_2": "TR-71",
+      "Latitude": 39.9011,
+      "Longitude": 33.778,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-71.geojson",
+      "CommonAliases": [
+        "Kırıkkale"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "F2193BF1-A2FB-47F1-9108-C06DB02B93B6"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.304Z",
+      "checksum": "b797ff1c768aa7880bdf65eee20dac4a555afd46d7dc6d8b064c07f93403ad9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kırklareli",
+      "Code": "39",
+      "ISO3166_2": "TR-39",
+      "Latitude": 41.6201,
+      "Longitude": 27.4916,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-39.geojson",
+      "CommonAliases": [
+        "Kırklareli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "50FD6C37-6A72-4A24-9382-F876902B06AA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.321Z",
+      "checksum": "14dc115aa7345112c3d04caef56a66fc3ca706acc3b8d8ba7c61a90b631edfb2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kırşehir",
+      "Code": "40",
+      "ISO3166_2": "TR-40",
+      "Latitude": 39.3548,
+      "Longitude": 34.1308,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-40.geojson",
+      "CommonAliases": [
+        "Kırşehir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A48E3DE7-4036-4D32-BA7B-C1A51034EBF0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.387Z",
+      "checksum": "577e932950a363f6d3d17504eaa87e1529ca6c39202501bff9a29ff5383b57a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kocaeli",
+      "Code": "41",
+      "ISO3166_2": "TR-41",
+      "Latitude": 40.9008,
+      "Longitude": 29.9396,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-41.geojson",
+      "CommonAliases": [
+        "Kocaeli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A28B26A0-5D36-4003-A267-267CF86DA329"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.404Z",
+      "checksum": "9a279ab7ed8fc2e7058514c33cf6a4bc9b4e6784cc401936fdb38e4319a219bb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Konya",
+      "Code": "42",
+      "ISO3166_2": "TR-42",
+      "Latitude": 38.04,
+      "Longitude": 32.469,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-42.geojson",
+      "CommonAliases": [
+        "Konya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "91C8EED0-0D00-4AF0-92DD-9149C1574044"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.421Z",
+      "checksum": "32a06b17ef5eeb15a48925c946ed8ba63b01079c470f559506b85aa0c94a4538"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kütahya",
+      "Code": "43",
+      "ISO3166_2": "TR-43",
+      "Latitude": 39.3471,
+      "Longitude": 29.5498,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-43.geojson",
+      "CommonAliases": [
+        "Kütahya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "3E600FD2-4C76-49DF-86F2-A7E37956F314"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.439Z",
+      "checksum": "460adc0030ddfb37ea66c51ef054825c92e3925bcf1c2deda80cae7c7d74a476"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Malatya",
+      "Code": "44",
+      "ISO3166_2": "TR-44",
+      "Latitude": 38.5144,
+      "Longitude": 38.1872,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-44.geojson",
+      "CommonAliases": [
+        "Malatya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "7FBF9199-9278-45F4-BE68-9F97EDD24B2A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.456Z",
+      "checksum": "6e36670a6bad8800b38bede7ce18dd592b4e59c4923be92fcd4f74de55987161"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Manisa",
+      "Code": "4S",
+      "ISO3166_2": "TR-4S",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Manisa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "37F7DDF9-4516-4BCD-8ABC-E3CDD9510C73"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.472Z",
+      "checksum": "653462f41683e106d82bebd1ad215a7b1bdcccc13f9bdef6d7467ca1145210bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mardin",
+      "Code": "47",
+      "ISO3166_2": "TR-47",
+      "Latitude": 37.4282,
+      "Longitude": 40.9525,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-47.geojson",
+      "CommonAliases": [
+        "Mardin"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "92E02285-AD11-4FD2-B5DC-53538D97C154"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.488Z",
+      "checksum": "336a99106a365cecad86b56f2deb3d311805af083a4bebcd5ea81952d22207ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muğla",
+      "Code": "48",
+      "ISO3166_2": "TR-48",
+      "Latitude": 37.0501,
+      "Longitude": 28.6482,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-48.geojson",
+      "CommonAliases": [
+        "Muğla"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D11A2F6E-7FF2-4516-BF3F-E84EF87DB2B0"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.505Z",
+      "checksum": "9fb7b2a79dc7c54293041711e7017de6e24933b8b2863bd04b5b00587f32fb3c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Muş",
+      "Code": "49",
+      "ISO3166_2": "TR-49",
+      "Latitude": 38.9124,
+      "Longitude": 41.9034,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-49.geojson",
+      "CommonAliases": [
+        "Muş"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "2F781B53-5C46-4DD6-BA9C-22DD7F63FF56"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.521Z",
+      "checksum": "5764f8b3bb45d0f05769fb0cc3f022bca08cf0e1fd3cec64a8293890598c7f39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nevşehir",
+      "Code": "SO",
+      "ISO3166_2": "TR-SO",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Nevşehir"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "A37802D7-E481-4F84-8B17-84B49CDD1DEA"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.535Z",
+      "checksum": "e29b77e38d8ca656274e2cbf2fe21747c8bbba338f338d6aa19b217d445269fa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Niğde",
+      "Code": "51",
+      "ISO3166_2": "TR-51",
+      "Latitude": 37.8966,
+      "Longitude": 34.7093,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-51.geojson",
+      "CommonAliases": [
+        "Niğde"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "3269A791-8A72-4353-8035-C96635802C52"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.590Z",
+      "checksum": "60fc0bde76eb227304a5f90e3ea13045148dc84543aaf1b50de249d0a1ce1a21"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ordu",
+      "Code": "52",
+      "ISO3166_2": "TR-52",
+      "Latitude": 40.8376,
+      "Longitude": 37.4229,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-52.geojson",
+      "CommonAliases": [
+        "Ordu"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "C8DED925-F00B-454B-8EC1-4D0CD2FF2663"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.607Z",
+      "checksum": "41443d1f570cfe95de9d4607c693f494c1cdb3cd8f155d87f22271eb54eb5b1a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rize",
+      "Code": "53",
+      "ISO3166_2": "TR-53",
+      "Latitude": 40.9466,
+      "Longitude": 40.8691,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-53.geojson",
+      "CommonAliases": [
+        "Rize"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "97B53546-00F5-4367-B28F-3830BACC3B2B"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.624Z",
+      "checksum": "63503c18a3b2e5064115325952664aed72f3a2ff698cf734d352ca465eab51d9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sakarya",
+      "Code": "54",
+      "ISO3166_2": "TR-54",
+      "Latitude": 40.6596,
+      "Longitude": 30.4439,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-54.geojson",
+      "CommonAliases": [
+        "Sakarya"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "72267EAB-C155-43C7-9EC4-C8C33FCB5C63"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.639Z",
+      "checksum": "759910abef7e2c90f8c7db08ee690f8c0d447b86814e15a509ce014eff4846bc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Samsun",
+      "Code": "SS",
+      "ISO3166_2": "TR-SS",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Samsun"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "138112E2-BCB7-4771-80C8-3F2523B57C72"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.655Z",
+      "checksum": "07415ce73cada196df24fe0bcf7c6f6d67c1b9f0e7ae0d1c892cf3587372e7fc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şanlıurfa",
+      "Code": "63",
+      "ISO3166_2": "TR-63",
+      "Latitude": 37.3189,
+      "Longitude": 39.0508,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-63.geojson",
+      "CommonAliases": [
+        "Şanlıurfa"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "4879306C-91C9-4350-8260-16CF9F1E6EBB"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.673Z",
+      "checksum": "566edf8040018d1aae239ad7e58277611d457a7ae6131626e4827fc4a6f1af17"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Siirt",
+      "Code": "56",
+      "ISO3166_2": "TR-56",
+      "Latitude": 37.9159,
+      "Longitude": 42.2212,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-56.geojson",
+      "CommonAliases": [
+        "Siirt"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "97DFFBD9-7626-4729-934D-C87E0522D998"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.689Z",
+      "checksum": "b43444bb92c2cfbed5939078d4c42a8836a8135548cee8743cd9f3da208c6622"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sinop",
+      "Code": "57",
+      "ISO3166_2": "TR-57",
+      "Latitude": 41.5894,
+      "Longitude": 34.8226,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-57.geojson",
+      "CommonAliases": [
+        "Sinop"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "1A735296-AB0A-4A51-9BAE-C82FB16CAFD8"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.706Z",
+      "checksum": "a5a9c3f8131c74f6728b86ff9ee442c4b6f5464eca94e834fe456afdacda2dfe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Şirnak",
+      "Code": "73",
+      "ISO3166_2": "TR-73",
+      "Latitude": 37.4047,
+      "Longitude": 42.5455,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-73.geojson",
+      "CommonAliases": [
+        "Şirnak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "510860CF-6CFD-47D9-9967-C809D336534E"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.722Z",
+      "checksum": "8df8d24f59d2da8b1e933e1d061455e936131b698296e35519c29ec8e1979dc6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sivas",
+      "Code": "S8",
+      "ISO3166_2": "TR-S8",
+      "Latitude": null,
+      "Longitude": null,
+      "BoundaryGeoJSON": null,
+      "CommonAliases": [
+        "Sivas"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "D5A6C0AE-37F1-41C5-B207-083F7299A7CD"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.735Z",
+      "checksum": "2f7d7e922e2cf993823e6d49bd354961085cba8fe110001025a23392b27d28b4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tekirdağ",
+      "Code": "59",
+      "ISO3166_2": "TR-59",
+      "Latitude": 41.0824,
+      "Longitude": 27.4547,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-59.geojson",
+      "CommonAliases": [
+        "Tekirdağ"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "16F12A42-429D-4DB3-835E-8E599D936576"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.791Z",
+      "checksum": "e0522252e7e1796ffa335e6239dcbbf7a9c8d57cd9c5aa9cfe396ce8fd3c06d3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tokat",
+      "Code": "60",
+      "ISO3166_2": "TR-60",
+      "Latitude": 40.4442,
+      "Longitude": 36.5724,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-60.geojson",
+      "CommonAliases": [
+        "Tokat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "524180E1-BA1F-4C85-95CE-042FEFF9A19A"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.807Z",
+      "checksum": "4af3f63d9c667a171daaa80dc5e5bf9c21935190ab252f760e02a6c4a0e66d11"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Trabzon",
+      "Code": "61",
+      "ISO3166_2": "TR-61",
+      "Latitude": 40.7988,
+      "Longitude": 39.8034,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-61.geojson",
+      "CommonAliases": [
+        "Trabzon"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "6596CE96-F86C-46B7-BBA2-6E5C7D4F950D"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.823Z",
+      "checksum": "0dc5420b47851456c0650dff1bcd28dd3ba7571e04ed6e1f15454bc40d6ed028"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tunceli",
+      "Code": "62",
+      "ISO3166_2": "TR-62",
+      "Latitude": 39.1519,
+      "Longitude": 39.6357,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-62.geojson",
+      "CommonAliases": [
+        "Tunceli"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "2F5E3068-E118-4A67-8D6C-2D962429196F"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.839Z",
+      "checksum": "1534952ffe2401d5b3a27096cb22ed9dd525f570ebc8d8b8d44431afac963888"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Uşak",
+      "Code": "64",
+      "ISO3166_2": "TR-64",
+      "Latitude": 38.4942,
+      "Longitude": 29.3636,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-64.geojson",
+      "CommonAliases": [
+        "Uşak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "081E2682-66F8-4FFD-AA66-CDEAF6E06599"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.854Z",
+      "checksum": "8447ecd02985000ffbd38102d2546a9550b3648b3aef0c03fee904a77353a32f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Van",
+      "Code": "65",
+      "ISO3166_2": "TR-65",
+      "Latitude": 38.5212,
+      "Longitude": 43.5684,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-65.geojson",
+      "CommonAliases": [
+        "Van"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "899FE6BA-3382-4F5E-9602-E2E0F4664786"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.869Z",
+      "checksum": "f958a3cb6c59f7c177b2dfc167b5fb7d3c38087d0815fa687ecfe0cdb2172ff0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yalova",
+      "Code": "77",
+      "ISO3166_2": "TR-77",
+      "Latitude": 40.6154,
+      "Longitude": 29.2036,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-77.geojson",
+      "CommonAliases": [
+        "Yalova"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "1B455820-53B9-4F23-BBC7-00CC194D8E9C"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.883Z",
+      "checksum": "170f0952ad15c5496791d982f4b28a4acb791fb45db72544d6ef7a422010475d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Yozgat",
+      "Code": "66",
+      "ISO3166_2": "TR-66",
+      "Latitude": 39.5476,
+      "Longitude": 35.1328,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-66.geojson",
+      "CommonAliases": [
+        "Yozgat"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "9B11A14F-AF5A-48B6-A926-63AAC4649EE9"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.897Z",
+      "checksum": "9fc62d3df274bb86f505eb64602454dd686ff49f7f24804f0e19e749ba8d8c3d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Zonguldak",
+      "Code": "67",
+      "ISO3166_2": "TR-67",
+      "Latitude": 41.2481,
+      "Longitude": 31.8206,
+      "BoundaryGeoJSON": "@file:by-country/TR/boundaries/TR-67.geojson",
+      "CommonAliases": [
+        "Zonguldak"
+      ],
+      "CountryID": "@lookup:MJ: Countries.ISO2=TR"
+    },
+    "primaryKey": {
+      "ID": "44181346-5226-423F-BC8F-470C41F151C5"
+    },
+    "sync": {
+      "lastModified": "2026-04-11T04:09:37.910Z",
+      "checksum": "09e1c21eb4b823b7c2a7792686116720e0edd83bd81d64e3ad7a9dabab4ea7e9"
+    }
+  }
+]

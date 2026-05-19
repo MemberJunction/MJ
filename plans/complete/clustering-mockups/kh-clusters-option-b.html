@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Knowledge Hub Clusters - Option B: Side-by-Side</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0d0d1a;
+    color: #e2e8f0;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+  }
+
+  /* Collapsible saved drawer */
+  .drawer {
+    width: 48px;
+    background: #0f0f24;
+    border-right: 1px solid #2a2a4a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-top: 14px;
+    transition: width 0.25s;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+  .drawer.expanded { width: 220px; align-items: stretch; }
+  .drawer-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    color: #94a3b8;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .drawer.expanded .drawer-toggle { margin: 0 12px 12px; width: auto; }
+  .drawer-toggle:hover { border-color: #264FAF; color: #5b8def; }
+  .drawer-items { display: none; padding: 0 10px; flex: 1; overflow-y: auto; }
+  .drawer.expanded .drawer-items { display: block; }
+  .drawer-item {
+    padding: 10px 12px;
+    border-radius: 7px;
+    cursor: pointer;
+    margin-bottom: 3px;
+    transition: background 0.15s;
+  }
+  .drawer-item:hover { background: #1a1a36; }
+  .drawer-item.active { background: rgba(38,79,175,0.15); }
+  .drawer-item .di-name { font-size: 0.8rem; font-weight: 500; margin-bottom: 2px; }
+  .drawer-item .di-meta { font-size: 0.65rem; color: #64748b; }
+  .drawer-icons { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .drawer.expanded .drawer-icons { display: none; }
+  .drawer-icon-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #3a3a5a; cursor: pointer;
+  }
+  .drawer-icon-dot.active { background: #264FAF; }
+
+  /* Config panel (left) */
+  .config {
+    width: 320px;
+    background: #12122a;
+    border-right: 1px solid #2a2a4a;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+  }
+  .config-header {
+    padding: 18px 20px;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .config-header i { color: #264FAF; font-size: 1.1rem; }
+  .config-header h2 { font-size: 0.95rem; font-weight: 600; }
+  .config-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 20px;
+  }
+  .form-group { margin-bottom: 16px; }
+  .form-group label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: #94a3b8;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .form-group select, .form-group input[type="text"], .form-group input[type="number"] {
+    width: 100%;
+    padding: 9px 12px;
+    background: #1a1a36;
+    border: 1px solid #2a2a4a;
+    border-radius: 7px;
+    color: #e2e8f0;
+    font-size: 0.82rem;
+    outline: none;
+  }
+  .form-group select:focus, .form-group input:focus { border-color: #264FAF; }
+  .form-row { display: flex; gap: 10px; }
+  .form-row .form-group { flex: 1; }
+  .form-group .hint { font-size: 0.65rem; color: #475569; margin-top: 4px; }
+  .algo-pills {
+    display: flex;
+    gap: 6px;
+  }
+  .algo-pill {
+    flex: 1;
+    padding: 8px;
+    border-radius: 7px;
+    border: 1px solid #2a2a4a;
+    background: #1a1a36;
+    color: #94a3b8;
+    font-size: 0.78rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .algo-pill.active { border-color: #264FAF; color: #5b8def; background: rgba(38,79,175,0.1); }
+  .algo-pill:hover { border-color: #3a3a6a; }
+  .section-divider {
+    height: 1px;
+    background: #2a2a4a;
+    margin: 18px 0;
+  }
+  .section-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+  }
+  .config-footer {
+    padding: 16px 20px;
+    border-top: 1px solid #2a2a4a;
+    display: flex;
+    gap: 8px;
+  }
+  .btn-primary {
+    flex: 1;
+    padding: 10px;
+    background: #264FAF;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+  .btn-primary:hover { background: #3060cf; }
+  .btn-secondary {
+    padding: 10px 14px;
+    background: transparent;
+    border: 1px solid #2a2a4a;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 0.82rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .btn-secondary:hover { border-color: #3a3a6a; color: #e2e8f0; }
+
+  /* Main scatter */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+  .main-header {
+    height: 52px;
+    background: #12122a;
+    border-bottom: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  .main-title { font-size: 0.95rem; font-weight: 600; }
+  .main-title i { color: #264FAF; margin-right: 8px; }
+  .spacer { flex: 1; }
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: #1a1a36;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    color: #94a3b8;
+  }
+  .stat-pill .val { color: #e2e8f0; font-weight: 600; }
+  .stat-pill .val.green { color: #34d399; }
+
+  .scatter-wrap {
+    flex: 1;
+    position: relative;
+    padding: 20px;
+  }
+  .scatter-wrap svg {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
+    background: #0f0f24;
+    border: 1px solid #1a1a36;
+  }
+
+  /* Legend bar */
+  .legend-bar {
+    height: 44px;
+    background: #12122a;
+    border-top: 1px solid #2a2a4a;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+  .legend-bar .lb-label { font-size: 0.68rem; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+  .legend-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+  }
+  .legend-chip .lc-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .legend-chip .lc-count { color: #64748b; font-size: 0.7rem; }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    top: 160px;
+    left: 280px;
+    background: rgba(18,18,42,0.96);
+    backdrop-filter: blur(16px);
+    border: 1px solid #3a3a5a;
+    border-radius: 10px;
+    padding: 14px 16px;
+    width: 200px;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.4);
+    pointer-events: none;
+  }
+  .tooltip .tt-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 3px; }
+  .tooltip .tt-cluster { font-size: 0.7rem; color: #34d399; margin-bottom: 5px; }
+  .tooltip .tt-fields { font-size: 0.7rem; color: #94a3b8; line-height: 1.6; }
+  .tooltip .tt-action { margin-top: 7px; padding-top: 7px; border-top: 1px solid #2a2a4a; font-size: 0.68rem; color: #64748b; }
+
+  .back-link {
+    position: fixed; top: 12px; right: 16px; z-index: 100;
+    font-size: 0.72rem; color: #64748b; text-decoration: none;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .back-link:hover { color: #94a3b8; }
+</style>
+</head>
+<body>
+<a class="back-link" href="index.html"><i class="fa-solid fa-arrow-left"></i> All Mockups</a>
+
+<!-- Collapsible saved drawer -->
+<div class="drawer expanded">
+  <button class="drawer-toggle"><i class="fa-solid fa-bookmark"></i>&nbsp; Saved</button>
+  <div class="drawer-items">
+    <div class="drawer-item active">
+      <div class="di-name">Member Segments Q1</div>
+      <div class="di-meta">Members - 487 records</div>
+    </div>
+    <div class="drawer-item">
+      <div class="di-name">Org Revenue Tiers</div>
+      <div class="di-meta">Organizations - 312 records</div>
+    </div>
+    <div class="drawer-item">
+      <div class="di-name">Event Attendance</div>
+      <div class="di-meta">Registrations - 1,204 records</div>
+    </div>
+    <div class="drawer-item">
+      <div class="di-name">Product Groups</div>
+      <div class="di-meta">Products - 89 records</div>
+    </div>
+  </div>
+  <div class="drawer-icons">
+    <div class="drawer-icon-dot active"></div>
+    <div class="drawer-icon-dot"></div>
+    <div class="drawer-icon-dot"></div>
+    <div class="drawer-icon-dot"></div>
+  </div>
+</div>
+
+<!-- Config Panel -->
+<div class="config">
+  <div class="config-header">
+    <i class="fa-solid fa-circle-nodes"></i>
+    <h2>Cluster Analysis</h2>
+  </div>
+  <div class="config-body">
+    <div class="section-label">Data Source</div>
+    <div class="form-group">
+      <label>Entity</label>
+      <select><option>Members</option><option>Organizations</option><option>Event Registrations</option></select>
+    </div>
+    <div class="form-group">
+      <label>Filter</label>
+      <input type="text" placeholder="Optional filter expression" value="MemberType != 'Inactive'">
+      <div class="hint">SQL-style filter applied before clustering</div>
+    </div>
+    <div class="form-group">
+      <label>Max Records</label>
+      <input type="number" value="500">
+      <div class="hint">Recommended: 500 or fewer for fast results</div>
+    </div>
+
+    <div class="section-divider"></div>
+    <div class="section-label">Algorithm</div>
+    <div class="form-group">
+      <label>Method</label>
+      <div class="algo-pills">
+        <div class="algo-pill active">K-Means</div>
+        <div class="algo-pill">DBSCAN</div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Number of Clusters (K)</label>
+      <input type="number" value="4" min="2" max="20">
+    </div>
+    <div class="form-group">
+      <label>Distance Metric</label>
+      <select><option>Cosine Similarity</option><option>Euclidean Distance</option><option>Manhattan Distance</option></select>
+    </div>
+
+    <div class="section-divider"></div>
+    <div class="section-label">Display</div>
+    <div class="form-group">
+      <label>Dimension Reduction</label>
+      <select><option>t-SNE</option><option>UMAP</option><option>PCA</option></select>
+    </div>
+  </div>
+  <div class="config-footer">
+    <button class="btn-primary"><i class="fa-solid fa-play"></i> Run</button>
+    <button class="btn-secondary"><i class="fa-solid fa-bookmark"></i></button>
+  </div>
+</div>
+
+<!-- Main scatter area -->
+<div class="main">
+  <div class="main-header">
+    <div class="main-title"><i class="fa-solid fa-circle-nodes"></i>Member Segments Q1</div>
+    <div class="spacer"></div>
+    <div class="stat-pill"><i class="fa-solid fa-circle-dot"></i> <span class="val">487</span> records</div>
+    <div class="stat-pill"><i class="fa-solid fa-layer-group"></i> <span class="val">4</span> clusters</div>
+    <div class="stat-pill"><i class="fa-solid fa-chart-line"></i> Silhouette <span class="val green">0.72</span></div>
+    <div class="stat-pill"><i class="fa-solid fa-clock"></i> <span class="val">1.8s</span></div>
+  </div>
+
+  <div class="scatter-wrap">
+    <svg viewBox="0 0 900 550" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <radialGradient id="g1" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#5b8def" stop-opacity="0.1"/><stop offset="100%" stop-color="#5b8def" stop-opacity="0"/></radialGradient>
+        <radialGradient id="g2" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#34d399" stop-opacity="0.1"/><stop offset="100%" stop-color="#34d399" stop-opacity="0"/></radialGradient>
+        <radialGradient id="g3" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#fbbf24" stop-opacity="0.1"/><stop offset="100%" stop-color="#fbbf24" stop-opacity="0"/></radialGradient>
+        <radialGradient id="g4" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#f472b6" stop-opacity="0.1"/><stop offset="100%" stop-color="#f472b6" stop-opacity="0"/></radialGradient>
+      </defs>
+      <g stroke="#1a1a36" stroke-width="0.5">
+        <line x1="0" y1="137" x2="900" y2="137"/><line x1="0" y1="275" x2="900" y2="275"/>
+        <line x1="0" y1="412" x2="900" y2="412"/><line x1="225" y1="0" x2="225" y2="550"/>
+        <line x1="450" y1="0" x2="450" y2="550"/><line x1="675" y1="0" x2="675" y2="550"/>
+      </g>
+      <circle cx="200" cy="180" r="100" fill="url(#g1)"/>
+      <circle cx="650" cy="140" r="90" fill="url(#g2)"/>
+      <circle cx="400" cy="400" r="95" fill="url(#g3)"/>
+      <circle cx="720" cy="400" r="80" fill="url(#g4)"/>
+      <!-- Cluster 1: blue -->
+      <circle cx="165" cy="155" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="190" cy="170" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="210" cy="195" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="180" cy="200" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="225" cy="180" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="200" cy="160" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="170" cy="185" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="235" cy="170" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="195" cy="210" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="155" cy="175" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="220" cy="150" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="185" cy="220" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="245" cy="190" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="175" cy="145" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="205" cy="230" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="150" cy="195" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="240" cy="165" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="160" cy="210" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="230" cy="205" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="190" cy="140" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="215" cy="215" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="145" cy="165" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <circle cx="250" cy="178" r="4.5" fill="#5b8def" opacity="0.8"/><circle cx="168" cy="225" r="4.5" fill="#5b8def" opacity="0.8"/>
+      <!-- Cluster 2: green -->
+      <circle cx="630" cy="125" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="655" cy="140" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="670" cy="155" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="645" cy="160" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="685" cy="135" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="660" cy="120" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="640" cy="150" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="695" cy="145" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="650" cy="170" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="620" cy="140" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="680" cy="115" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="665" cy="175" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="635" cy="130" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="700" cy="160" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="625" cy="165" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="690" cy="125" r="4.5" fill="#34d399" opacity="0.8"/>
+      <circle cx="675" cy="180" r="4.5" fill="#34d399" opacity="0.8"/><circle cx="710" cy="140" r="4.5" fill="#34d399" opacity="0.8"/>
+      <!-- Cluster 3: yellow -->
+      <circle cx="380" cy="380" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="405" cy="400" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="420" cy="385" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="390" cy="415" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="435" cy="395" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="370" cy="405" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="400" cy="370" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="425" cy="420" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="360" cy="390" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="440" cy="410" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="385" cy="430" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="410" cy="365" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="395" cy="440" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="445" cy="380" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <circle cx="355" cy="400" r="4.5" fill="#fbbf24" opacity="0.8"/><circle cx="430" cy="360" r="4.5" fill="#fbbf24" opacity="0.8"/>
+      <!-- Cluster 4: pink -->
+      <circle cx="700" cy="385" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="725" cy="400" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <circle cx="740" cy="390" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="715" cy="410" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <circle cx="750" cy="395" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="710" cy="375" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <circle cx="730" cy="415" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="695" cy="395" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <circle cx="745" cy="380" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="720" cy="425" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <circle cx="735" cy="370" r="4.5" fill="#f472b6" opacity="0.8"/><circle cx="705" cy="420" r="4.5" fill="#f472b6" opacity="0.8"/>
+      <!-- Highlighted dot -->
+      <circle cx="655" cy="140" r="8" fill="none" stroke="#34d399" stroke-width="2" opacity="0.8"/>
+    </svg>
+
+    <!-- Tooltip -->
+    <div class="tooltip">
+      <div class="tt-name">Bright Future LLC</div>
+      <div class="tt-cluster"><i class="fa-solid fa-circle" style="font-size:7px;vertical-align:middle"></i> Small Businesses</div>
+      <div class="tt-fields">Revenue: $480K<br>Employees: 22<br>Industry: Tech</div>
+      <div class="tt-action"><i class="fa-solid fa-arrow-up-right-from-square"></i> Click to open record</div>
+    </div>
+  </div>
+
+  <div class="legend-bar">
+    <div class="lb-label">Clusters</div>
+    <div class="legend-chip"><div class="lc-dot" style="background:#5b8def"></div> Enterprise Clients <span class="lc-count">(156)</span></div>
+    <div class="legend-chip"><div class="lc-dot" style="background:#34d399"></div> Small Businesses <span class="lc-count">(132)</span></div>
+    <div class="legend-chip"><div class="lc-dot" style="background:#fbbf24"></div> Non-Profits <span class="lc-count">(118)</span></div>
+    <div class="legend-chip"><div class="lc-dot" style="background:#f472b6"></div> Government <span class="lc-count">(81)</span></div>
+  </div>
+</div>
+</body>
+</html>

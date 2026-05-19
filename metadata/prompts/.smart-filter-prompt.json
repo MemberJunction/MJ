@@ -8,8 +8,8 @@
       "Status": "Active",
       "ResponseFormat": "JSON",
       "AssistantPrefill": "```json",
-      "PrefillFallbackMode": "SystemInstruction",
-      "StopSequences": "```",
+      "PrefillFallbackMode": "Ignore",
+      "StopSequences": "\n```",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
       "ParallelizationMode": "None",
@@ -22,6 +22,36 @@
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "19AB0665-5362-43B1-B44B-411BB7E2A070"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:11.555Z",
+            "checksum": "c72bdf9826654a0dc6ef3c5a7b0b7d70b0e08820e1b171dff2718fb43f49de65"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 4
+          },
+          "primaryKey": {
+            "ID": "1A11B0F7-E3D3-415B-B452-446F26A7B71A"
+          },
+          "sync": {
+            "lastModified": "2026-04-11T04:11:11.570Z",
+            "checksum": "456546ff62e16fa5bac477bd90c97c59a34b7e3f16aede23d4cfc9985d3ff0fd"
+          }
+        },
         {
           "fields": {
             "PromptID": "@parent:ID",
@@ -73,8 +103,8 @@
       "ID": "1F4C8B38-8419-40E2-A96F-3A6DC1243D42"
     },
     "sync": {
-      "lastModified": "2026-03-21T22:27:47.914Z",
-      "checksum": "07c32f2cd2a3044eb1f496af6fbd05c31e9e71c9f8208710f786b1b43463fef9"
+      "lastModified": "2026-04-20T23:56:03.957Z",
+      "checksum": "c8e172062c6e5e4d8666a1d0ed5866d1020976ed3d5805439df69b5fb6bc31a8"
     }
   }
 ]

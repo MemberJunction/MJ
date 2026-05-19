@@ -26,33 +26,30 @@
           <!-- Logo URL -->
           <div class="form-field full-width">
             <label for="logoURL">Logo URL</label>
-            <kendo-textbox 
+            <input
+              class="mj-input form-control"
               formControlName="logoURL"
-              placeholder="https://example.com/logo.png or data:image/png;base64,..."
-              class="form-control">
-            </kendo-textbox>
+              placeholder="https://example.com/logo.png or data:image/png;base64,...">
             <small class="field-hint">URL to image file or base64 data URI. Takes precedence over Icon Class.</small>
           </div>
           
           <!-- Icon Class -->
           <div class="form-field">
             <label for="iconClass">Icon Class</label>
-            <kendo-textbox 
+            <input
+              class="mj-input form-control"
               formControlName="iconClass"
-              placeholder="fa-robot"
-              class="form-control">
-            </kendo-textbox>
+              placeholder="fa-robot">
             <small class="field-hint">Font Awesome icon class (fallback when Logo URL is not set)</small>
           </div>
           
           <!-- Driver Class -->
           <div class="form-field">
             <label for="driverClass">Driver Class</label>
-            <kendo-textbox 
+            <input
+              class="mj-input form-control"
               formControlName="driverClass"
-              placeholder="CustomAgentDriver"
-              class="form-control">
-            </kendo-textbox>
+              placeholder="CustomAgentDriver">
             <small class="field-hint">Optional override for custom agent implementation class</small>
           </div>
         </div>
@@ -69,35 +66,35 @@
           <!-- Agent Type -->
           <div class="form-field">
             <label for="typeID">Agent Type</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="typeID"
-              [data]="agentTypes$ | async"
-              textField="Name"
-              valueField="ID"
-              [valuePrimitive]="true"
+              [Data]="agentTypes$ | async"
+              TextField="Name"
+              ValueField="ID"
+              [ValuePrimitive]="true"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             <small class="field-hint">Defines category and system-level behavior</small>
           </div>
           
           <!-- Status -->
           <div class="form-field">
             <label for="status">Status</label>
-            <kendo-dropdownlist 
+            <mj-dropdown
               formControlName="status"
-              [data]="statusOptions"
-              textField="text"
-              valueField="value"
-              [valuePrimitive]="true"
+              [Data]="statusOptions"
+              TextField="text"
+              ValueField="value"
+              [ValuePrimitive]="true"
               class="form-control">
-            </kendo-dropdownlist>
+            </mj-dropdown>
             <small class="field-hint">Current agent status (Active agents can be executed)</small>
           </div>
           
           <!-- Expose As Action -->
           <div class="form-field">
             <label class="checkbox-label">
-              <kendo-checkbox formControlName="exposeAsAction"></kendo-checkbox>
+              <input type="checkbox" class="mj-checkbox" formControlName="exposeAsAction">
               Expose As Action
             </label>
             <small class="field-hint">Allow this agent to be used as an action by other agents (only for root agents)</small>
@@ -116,7 +113,7 @@
           <!-- Enable Context Compression -->
           <div class="form-field full-width">
             <label class="checkbox-label">
-              <kendo-checkbox formControlName="enableContextCompression"></kendo-checkbox>
+              <input type="checkbox" class="mj-checkbox" formControlName="enableContextCompression">
               Enable Context Compression
             </label>
             <small class="field-hint">Automatically compress conversation context when message threshold is reached</small>
@@ -126,12 +123,12 @@
             <!-- Message Threshold -->
             <div class="form-field">
               <label for="contextCompressionMessageThreshold">Message Threshold *</label>
-              <kendo-numerictextbox 
+              <mj-numeric-input
                 formControlName="contextCompressionMessageThreshold"
-                [min]="1"
-                [format]="'0'"
+                [Min]="1"
+                Format="0"
                 class="form-control">
-              </kendo-numerictextbox>
+              </mj-numeric-input>
               @if (isFieldInvalid('contextCompressionMessageThreshold')) {
                 <div class="field-error">{{ getFieldError('contextCompressionMessageThreshold') }}</div>
               }
@@ -155,19 +152,19 @@
                   }
                 </div>
                 <div class="prompt-actions">
-                  <button type="button" kendoButton size="small" fillMode="solid"
+                  <button type="button" mjButton variant="primary"
                           (click)="selectCompressionPrompt()"
                           title="Select compression prompt">
                     <i class="fa-solid fa-search"></i>
                     {{ selectedCompressionPrompt ? 'Change' : 'Select' }}
                   </button>
                   @if (selectedCompressionPrompt) {
-                    <button type="button" kendoButton size="small" fillMode="flat"
+                    <button type="button" mjButton variant="flat"
                             (click)="viewContextCompressionPrompt()"
                             title="View selected prompt">
                       <i class="fa-solid fa-external-link"></i>
                     </button>
-                    <button type="button" kendoButton size="small" fillMode="flat"
+                    <button type="button" mjButton variant="flat"
                             (click)="clearCompressionPrompt()"
                             title="Clear selection">
                       <i class="fa-solid fa-times"></i>
@@ -184,12 +181,12 @@
             <!-- Message Retention Count -->
             <div class="form-field">
               <label for="contextCompressionMessageRetentionCount">Message Retention Count *</label>
-              <kendo-numerictextbox 
+              <mj-numeric-input
                 formControlName="contextCompressionMessageRetentionCount"
-                [min]="1"
-                [format]="'0'"
+                [Min]="1"
+                Format="0"
                 class="form-control">
-              </kendo-numerictextbox>
+              </mj-numeric-input>
               @if (isFieldInvalid('contextCompressionMessageRetentionCount')) {
                 <div class="field-error">{{ getFieldError('contextCompressionMessageRetentionCount') }}</div>
               }
@@ -211,18 +208,17 @@
           <div class="form-field full-width">
             <label for="payloadDownstreamPaths">Downstream Paths *</label>
             <div class="json-field">
-              <kendo-textarea 
+              <textarea
+                class="mj-textarea form-control"
                 formControlName="payloadDownstreamPaths"
-                [rows]="3"
-                class="form-control"
-                [class.json-invalid]="!isValidJSON(advancedForm.get('payloadDownstreamPaths')?.value)">
-              </kendo-textarea>
+                rows="3"
+                [class.json-invalid]="!isValidJSON(advancedForm.get('payloadDownstreamPaths')?.value)"></textarea>
               <div class="json-actions">
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="formatJSON('payloadDownstreamPaths')">
                   <i class="fa-solid fa-code"></i> Format
                 </button>
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="resetToDefault('payloadDownstreamPaths')">
                   <i class="fa-solid fa-undo"></i> Reset
                 </button>
@@ -235,18 +231,17 @@
           <div class="form-field full-width">
             <label for="payloadUpstreamPaths">Upstream Paths *</label>
             <div class="json-field">
-              <kendo-textarea 
+              <textarea
+                class="mj-textarea form-control"
                 formControlName="payloadUpstreamPaths"
-                [rows]="3"
-                class="form-control"
-                [class.json-invalid]="!isValidJSON(advancedForm.get('payloadUpstreamPaths')?.value)">
-              </kendo-textarea>
+                rows="3"
+                [class.json-invalid]="!isValidJSON(advancedForm.get('payloadUpstreamPaths')?.value)"></textarea>
               <div class="json-actions">
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="formatJSON('payloadUpstreamPaths')">
                   <i class="fa-solid fa-code"></i> Format
                 </button>
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="resetToDefault('payloadUpstreamPaths')">
                   <i class="fa-solid fa-undo"></i> Reset
                 </button>
@@ -259,18 +254,17 @@
           <div class="form-field full-width">
             <label for="payloadSelfReadPaths">Self Read Paths</label>
             <div class="json-field">
-              <kendo-textarea 
+              <textarea
+                class="mj-textarea form-control"
                 formControlName="payloadSelfReadPaths"
-                [rows]="3"
-                class="form-control"
-                [class.json-invalid]="advancedForm.get('payloadSelfReadPaths')?.value && !isValidJSON(advancedForm.get('payloadSelfReadPaths')?.value)">
-              </kendo-textarea>
+                rows="3"
+                [class.json-invalid]="advancedForm.get('payloadSelfReadPaths')?.value && !isValidJSON(advancedForm.get('payloadSelfReadPaths')?.value)"></textarea>
               <div class="json-actions">
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="formatJSON('payloadSelfReadPaths')">
                   <i class="fa-solid fa-code"></i> Format
                 </button>
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="resetToDefault('payloadSelfReadPaths')">
                   <i class="fa-solid fa-undo"></i> Reset
                 </button>
@@ -283,18 +277,17 @@
           <div class="form-field full-width">
             <label for="payloadSelfWritePaths">Self Write Paths</label>
             <div class="json-field">
-              <kendo-textarea 
+              <textarea
+                class="mj-textarea form-control"
                 formControlName="payloadSelfWritePaths"
-                [rows]="3"
-                class="form-control"
-                [class.json-invalid]="advancedForm.get('payloadSelfWritePaths')?.value && !isValidJSON(advancedForm.get('payloadSelfWritePaths')?.value)">
-              </kendo-textarea>
+                rows="3"
+                [class.json-invalid]="advancedForm.get('payloadSelfWritePaths')?.value && !isValidJSON(advancedForm.get('payloadSelfWritePaths')?.value)"></textarea>
               <div class="json-actions">
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="formatJSON('payloadSelfWritePaths')">
                   <i class="fa-solid fa-code"></i> Format
                 </button>
-                <button type="button" kendoButton size="small" fillMode="flat" 
+                <button type="button" mjButton variant="flat" 
                         (click)="resetToDefault('payloadSelfWritePaths')">
                   <i class="fa-solid fa-undo"></i> Reset
                 </button>
@@ -309,15 +302,15 @@
 
   <!-- Dialog Footer -->
   <div class="dialog-footer">
-    <button kendoButton 
-            look="flat" 
+    <button mjButton
+            variant="flat"
             (click)="cancel()"
             [disabled]="(isSaving$ | async) || false">
       Cancel
     </button>
-    
-    <button kendoButton 
-            themeColor="primary" 
+
+    <button mjButton
+            variant="primary"
             (click)="save()"
             [disabled]="((isSaving$ | async) || false) || ((isLoading$ | async) || false)">
       @if (isSaving$ | async) {

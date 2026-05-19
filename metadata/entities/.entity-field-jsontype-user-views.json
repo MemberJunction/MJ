@@ -1,0 +1,104 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on five JSON blob fields in the User Views entity to enable",
+      "CodeGen to emit strongly-typed *Object accessors: GridStateObject, FilterStateObject,",
+      "SortStateObject (array), CardStateObject, and DisplayStateObject."
+    ],
+    "fields": {
+      "Name": "MJ: User Views"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IGridState",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IGridState.ts"
+          },
+          "_comments": [
+            "GridState — column layout, sort settings, filter state, and aggregate configuration"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=GridState"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:40.175Z",
+            "checksum": "870db656f3efff5f7324028e47d806fcd5180e262d9362bc02bed76d043e9f5a"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IFilterState",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IFilterState.ts"
+          },
+          "_comments": [
+            "FilterState — composite filter tree with logic operators and leaf conditions"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=FilterState"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:40.200Z",
+            "checksum": "9fe6989f5c9e3b976724cf127d7577a2c30d2ddf357d71251bf2369e98ce17b8"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ISortStateItem",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ISortState.ts"
+          },
+          "_comments": [
+            "SortState — JSON array of sort field/direction pairs"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=SortState"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:40.222Z",
+            "checksum": "d5736dae77a63eb9355354b411c87706b567fed95628c283248a2ac2c6d1fe86"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ICardState",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ICardState.ts"
+          },
+          "_comments": [
+            "CardState — card display mode preferences (size, layout)"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=CardState"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:40.244Z",
+            "checksum": "e9c4a9fb6e85f55da4881fbd2a498ec63e87ff0c7ded4c71815d7b2296b23d54"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "IDisplayState",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IDisplayState.ts"
+          },
+          "_comments": [
+            "DisplayState — view mode selection (grid/cards/timeline) and mode-specific settings"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: User Views&Name=DisplayState"
+          },
+          "sync": {
+            "lastModified": "2026-04-06T11:01:40.261Z",
+            "checksum": "c7993523d65840bf27e9c3605770c15e6d27c3688afca3e72ebec8fbc17183a7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: User Views"
+    }
+  }
+]

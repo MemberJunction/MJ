@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '../sql-parser.js';
-const mjAstify = SQLParser.Astify.bind(SQLParser);
+import { SQLServerDialect } from '@memberjunction/sql-dialect';
+const tsqlDialect = new SQLServerDialect();
+const mjAstify = (sql: string) => SQLParser.Astify(sql, tsqlDialect);
 const mjSqlify = SQLParser.Sqlify.bind(SQLParser);
 const extractTemplateExpressions = SQLParser.ExtractTemplateExpressions.bind(SQLParser);
 const extractCompositionRefs = SQLParser.ExtractCompositionRefs.bind(SQLParser);
@@ -379,5 +381,323 @@ describe('extractParameterInfo', () => {
         expect(typeMap['f']).toBe('string');
         expect(typeMap['g']).toBe('string');
         expect(typeMap['h']).toBe('unknown');
+    });
+
+    describe('default values from {% else %} branches', () => {
+        it('should extract string default from else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Status and Status.length > 0 %}
+  AND t.Status IN {{ Status | sqlIn }}
+{% else %}
+  AND t.Status = 'Attended'
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const status = params.find(p => p.name === 'Status');
+            expect(status).toBeDefined();
+            expect(status!.type).toBe('array');
+            expect(status!.defaultValue).toBe('Attended');
+        });
+
+        it('should extract numeric default from else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Limit %}
+  AND t.Limit = {{ Limit | sqlNumber }}
+{% else %}
+  AND t.Limit = 100
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const limit = params.find(p => p.name === 'Limit');
+            expect(limit).toBeDefined();
+            expect(limit!.defaultValue).toBe(100);
+        });
+
+        it('should not override default from | default() filter', () => {
+            const sql = `SELECT * FROM t
+{% if Limit %}
+  WHERE t.Limit = {{ Limit | default(50) | sqlNumber }}
+{% else %}
+  WHERE t.Limit = 100
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const limit = params.find(p => p.name === 'Limit');
+            expect(limit).toBeDefined();
+            expect(limit!.defaultValue).toBe(50); // filter default takes precedence
+        });
+
+        it('should skip else branch with multiple literals (ambiguous)', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Region %}
+  AND t.Region = {{ Region | sqlString }}
+{% else %}
+  AND t.Region = 'US' AND t.SubRegion = 'West'
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const region = params.find(p => p.name === 'Region');
+            expect(region).toBeDefined();
+            expect(region!.defaultValue).toBeNull(); // ambiguous — two literals
+        });
+
+        it('should handle if/elif/else with default on else', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Priority %}
+  AND t.Priority = {{ Priority | sqlNumber }}
+{% elif Category %}
+  AND t.Category = {{ Category | sqlString }}
+{% else %}
+  AND t.Priority = 1
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const priority = params.find(p => p.name === 'Priority');
+            expect(priority).toBeDefined();
+            expect(priority!.defaultValue).toBe(1);
+        });
+
+        it('should not set default when there is no else branch', () => {
+            const sql = `SELECT * FROM t WHERE 1=1
+{% if Region %}
+  AND t.Region = {{ Region | sqlString }}
+{% endif %}`;
+            const params = extractParameterInfo(sql);
+            const region = params.find(p => p.name === 'Region');
+            expect(region).toBeDefined();
+            expect(region!.defaultValue).toBeNull();
+        });
+
+        it('should handle the Member Event Attendance History pattern', () => {
+            const sql = `SELECT er.ID, er.MemberID, e.Name
+FROM vwEventRegistrations er
+INNER JOIN vwEvents e ON er.EventID = e.ID
+WHERE 1=1
+{% if MemberID and MemberID.length > 0 %}
+  AND CAST(er.MemberID AS NVARCHAR(36)) IN {{ MemberID | sqlIn }}
+{% endif %}
+{% if Status and Status.length > 0 %}
+  AND er.Status IN {{ Status | sqlIn }}
+{% else %}
+  AND er.Status = 'Attended'
+{% endif %}
+{% if StartDate and StartDate.length > 0 %}
+  AND e.StartDate >= {{ StartDate | sqlDate }}
+{% endif %}
+ORDER BY e.StartDate DESC`;
+            const params = extractParameterInfo(sql);
+
+            const memberID = params.find(p => p.name === 'MemberID');
+            expect(memberID).toBeDefined();
+            expect(memberID!.type).toBe('array');
+            expect(memberID!.defaultValue).toBeNull(); // no else branch
+
+            const status = params.find(p => p.name === 'Status');
+            expect(status).toBeDefined();
+            expect(status!.type).toBe('array');
+            expect(status!.defaultValue).toBe('Attended');
+
+            const startDate = params.find(p => p.name === 'StartDate');
+            expect(startDate).toBeDefined();
+            expect(startDate!.defaultValue).toBeNull(); // no else branch
+        });
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// ExtractSelectColumns, RenameTemplateVariable, SubstituteTemplateVariable
+// ═══════════════════════════════════════════════════
+
+const extractSelectColumns = (sql: string) => SQLParser.ExtractSelectColumns(sql, tsqlDialect);
+const renameTemplateVariable = SQLParser.RenameTemplateVariable.bind(SQLParser);
+const substituteTemplateVariable = SQLParser.SubstituteTemplateVariable.bind(SQLParser);
+
+describe('extractSelectColumns', () => {
+    it('should extract simple columns with table qualifiers', () => {
+        const cols = extractSelectColumns('SELECT u.Name, u.Email FROM Users u');
+        expect(cols).toHaveLength(2);
+
+        const name = cols.find(c => c.OutputName === 'Name')!;
+        expect(name).toBeDefined();
+        expect(name.SourceColumn).toBe('Name');
+        expect(name.TableQualifier).toBe('u');
+        expect(name.IsExpression).toBe(false);
+
+        const email = cols.find(c => c.OutputName === 'Email')!;
+        expect(email).toBeDefined();
+        expect(email.SourceColumn).toBe('Email');
+        expect(email.TableQualifier).toBe('u');
+        expect(email.IsExpression).toBe(false);
+    });
+
+    it('should extract AS aliases with correct OutputName and SourceColumn', () => {
+        const cols = extractSelectColumns('SELECT e.Name AS EntityName, e.ID FROM Entities e');
+        expect(cols).toHaveLength(2);
+
+        const aliased = cols.find(c => c.OutputName === 'EntityName')!;
+        expect(aliased).toBeDefined();
+        expect(aliased.SourceColumn).toBe('Name');
+        expect(aliased.TableQualifier).toBe('e');
+        expect(aliased.IsExpression).toBe(false);
+
+        const id = cols.find(c => c.OutputName === 'ID')!;
+        expect(id).toBeDefined();
+        expect(id.SourceColumn).toBe('ID');
+        expect(id.TableQualifier).toBe('e');
+    });
+
+    it('should mark expressions/aggregates with IsExpression=true', () => {
+        const cols = extractSelectColumns('SELECT COUNT(*) AS UserCount, MAX(u.CreatedAt) AS Newest FROM Users u');
+        expect(cols).toHaveLength(2);
+
+        const countCol = cols.find(c => c.OutputName === 'UserCount')!;
+        expect(countCol).toBeDefined();
+        expect(countCol.IsExpression).toBe(true);
+
+        const maxCol = cols.find(c => c.OutputName === 'Newest')!;
+        expect(maxCol).toBeDefined();
+        expect(maxCol.IsExpression).toBe(true);
+    });
+
+    it('should handle mixed simple columns, aliases, and aggregates', () => {
+        const cols = extractSelectColumns(
+            'SELECT u.Name, e.Name AS EntityName, COUNT(*) AS Total FROM Users u CROSS JOIN Entities e GROUP BY u.Name, e.Name'
+        );
+        expect(cols).toHaveLength(3);
+
+        const uName = cols.find(c => c.OutputName === 'Name' && c.TableQualifier === 'u')!;
+        expect(uName).toBeDefined();
+        expect(uName.IsExpression).toBe(false);
+
+        const entityName = cols.find(c => c.OutputName === 'EntityName')!;
+        expect(entityName).toBeDefined();
+        expect(entityName.SourceColumn).toBe('Name');
+        expect(entityName.TableQualifier).toBe('e');
+        expect(entityName.IsExpression).toBe(false);
+
+        const total = cols.find(c => c.OutputName === 'Total')!;
+        expect(total).toBeDefined();
+        expect(total.IsExpression).toBe(true);
+    });
+
+    it('should handle SELECT *', () => {
+        const cols = extractSelectColumns('SELECT * FROM Users');
+        expect(cols).toHaveLength(1);
+        expect(cols[0].OutputName).toBe('*');
+        expect(cols[0].SourceColumn).toBe('*');
+        expect(cols[0].TableQualifier).toBeNull();
+        expect(cols[0].IsExpression).toBe(false);
+    });
+
+    it('should handle MJ composition tokens after placeholder substitution', () => {
+        // Composition refs are replaced with __mj_tpl_placeholder before AST parsing
+        // Verify that a query with composition syntax still extracts columns
+        const sql = `SELECT u.Name, changes.ChangeCount FROM {{query:"Test/Q"}} u LEFT JOIN {{query:"Other/Q"}} changes ON 1=1`;
+        const cols = extractSelectColumns(sql);
+        expect(cols).toHaveLength(2);
+
+        const name = cols.find(c => c.OutputName === 'Name')!;
+        expect(name).toBeDefined();
+        expect(name.TableQualifier).toBe('u');
+
+        const changeCount = cols.find(c => c.OutputName === 'ChangeCount')!;
+        expect(changeCount).toBeDefined();
+        expect(changeCount.TableQualifier).toBe('changes');
+    });
+
+    it('should return empty array for empty/invalid SQL', () => {
+        expect(extractSelectColumns('')).toHaveLength(0);
+        expect(extractSelectColumns('   ')).toHaveLength(0);
+        expect(extractSelectColumns('NOT VALID SQL AT ALL %%%')).toHaveLength(0);
+    });
+});
+
+describe('renameTemplateVariable', () => {
+    it('should rename a simple variable with no filters', () => {
+        const result = renameTemplateVariable('WHERE x = {{ region }}', 'region', 'userRegion');
+        expect(result).toContain('userRegion');
+        expect(result).not.toContain('{{ region');
+    });
+
+    it('should rename a variable with a filter', () => {
+        const sql = "WHERE days > {{ lookbackDays | sqlNumber }}";
+        const result = renameTemplateVariable(sql, 'lookbackDays', 'numDays');
+        expect(result).toContain('numDays');
+        expect(result).toContain('sqlNumber');
+        expect(result).not.toContain('lookbackDays');
+    });
+
+    it('should rename a variable with a default filter and additional filters', () => {
+        const sql = "WHERE x = {{ limit | default(25) | sqlNumber }}";
+        const result = renameTemplateVariable(sql, 'limit', 'maxRows');
+        expect(result).toContain('maxRows');
+        expect(result).toContain('default(25)');
+        expect(result).toContain('sqlNumber');
+        expect(result).not.toContain('limit');
+    });
+
+    it('should rename all occurrences of the variable', () => {
+        const sql = "WHERE Year = {{ Year | sqlNumber }} AND PriorYear = {{ Year | sqlNumber }} - 1";
+        const result = renameTemplateVariable(sql, 'Year', 'FiscalYear');
+        // Both occurrences should be renamed
+        const matches = result.match(/FiscalYear/g);
+        expect(matches).toHaveLength(2);
+        expect(result).not.toContain('{{ Year');
+    });
+
+    it('should match variable names case-insensitively', () => {
+        const sql = "WHERE x = {{ Region | sqlString }}";
+        const result = renameTemplateVariable(sql, 'region', 'userRegion');
+        expect(result).toContain('userRegion');
+        expect(result).not.toMatch(/\{\{\s*Region\s/);
+    });
+
+    it('should return SQL unchanged if variable is not found', () => {
+        const sql = "WHERE x = {{ region | sqlString }}";
+        const result = renameTemplateVariable(sql, 'country', 'nation');
+        expect(result).toBe(sql);
+    });
+
+    it('should not affect other variables with similar names', () => {
+        const sql = "WHERE x = {{ region | sqlString }} AND y = {{ regionCode | sqlString }}";
+        const result = renameTemplateVariable(sql, 'region', 'userRegion');
+        expect(result).toContain('userRegion');
+        expect(result).toContain('regionCode');
+        // regionCode should NOT be renamed
+        expect(result).not.toContain('userRegionCode');
+    });
+});
+
+describe('substituteTemplateVariable', () => {
+    it('should substitute a simple variable with a literal value', () => {
+        const sql = "WHERE x = {{ region }}";
+        const result = substituteTemplateVariable(sql, 'region', "'West'");
+        expect(result).toBe("WHERE x = 'West'");
+    });
+
+    it('should substitute a variable with filters (entire expression replaced)', () => {
+        const sql = "WHERE x = {{ region | sqlString }}";
+        const result = substituteTemplateVariable(sql, 'region', "'West'");
+        expect(result).toBe("WHERE x = 'West'");
+    });
+
+    it('should substitute a numeric value', () => {
+        const sql = "WHERE days > {{ lookbackDays | sqlNumber }}";
+        const result = substituteTemplateVariable(sql, 'lookbackDays', '30');
+        expect(result).toBe("WHERE days > 30");
+    });
+
+    it('should substitute all occurrences', () => {
+        const sql = "WHERE Year = {{ Year | sqlNumber }} AND PriorYear = {{ Year | sqlNumber }} - 1";
+        const result = substituteTemplateVariable(sql, 'Year', '2025');
+        expect(result).toBe("WHERE Year = 2025 AND PriorYear = 2025 - 1");
+    });
+
+    it('should return SQL unchanged if variable is not found', () => {
+        const sql = "WHERE x = {{ region | sqlString }}";
+        const result = substituteTemplateVariable(sql, 'country', "'West'");
+        expect(result).toBe(sql);
+    });
+
+    it('should not affect other variables', () => {
+        const sql = "WHERE x = {{ region | sqlString }} AND y = {{ regionCode | sqlString }}";
+        const result = substituteTemplateVariable(sql, 'region', "'West'");
+        expect(result).toContain("'West'");
+        expect(result).toContain('{{ regionCode | sqlString }}');
     });
 });
