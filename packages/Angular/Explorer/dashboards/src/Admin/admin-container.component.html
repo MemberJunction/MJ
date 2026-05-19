@@ -5,41 +5,39 @@
         [Subtitle]="ContainerSubtitle">
     </mj-page-header>
 
-    <mj-page-body [Flex]="true" [Padding]="false">
-        <div class="admin-container__body">
-            <aside class="admin-container__nav">
-                @for (section of Sections; track section.id) {
-                    <button type="button"
-                            class="admin-container__nav-item"
-                            [class.admin-container__nav-item--active]="ActiveSection === section.id"
-                            (click)="OnSectionClick(section)">
-                        <i class="admin-container__nav-icon" [class]="section.icon"></i>
-                        <div class="admin-container__nav-text">
-                            <div class="admin-container__nav-label">{{ section.label }}</div>
-                            @if (section.description) {
-                                <div class="admin-container__nav-desc">{{ section.description }}</div>
-                            }
-                        </div>
-                    </button>
-                }
-            </aside>
+    <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+        <aside class="admin-container__nav">
+            @for (section of Sections; track section.id) {
+                <button type="button"
+                        class="admin-container__nav-item"
+                        [class.admin-container__nav-item--active]="ActiveSection === section.id"
+                        (click)="OnSectionClick(section)">
+                    <i class="admin-container__nav-icon" [class]="section.icon"></i>
+                    <div class="admin-container__nav-text">
+                        <div class="admin-container__nav-label">{{ section.label }}</div>
+                        @if (section.description) {
+                            <div class="admin-container__nav-desc">{{ section.description }}</div>
+                        }
+                    </div>
+                </button>
+            }
+        </aside>
 
-            <main class="admin-container__content">
-                @if (LoadError) {
-                    <div class="admin-container__error">
-                        <i class="fa-solid fa-triangle-exclamation"></i>
-                        <span>{{ LoadError }}</span>
-                    </div>
-                } @else if (IsLoading) {
-                    <div class="admin-container__loading">
-                        <i class="fa-solid fa-spinner fa-spin"></i>
-                        <span>Loading…</span>
-                    </div>
-                }
-                <div class="admin-container__host" [class.admin-container__host--hidden]="LoadError || IsLoading">
-                    <ng-container #contentHost></ng-container>
+        <main class="admin-container__content">
+            @if (LoadError) {
+                <div class="admin-container__error">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ LoadError }}</span>
                 </div>
-            </main>
-        </div>
+            } @else if (IsLoading) {
+                <div class="admin-container__loading">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>Loading…</span>
+                </div>
+            }
+            <div class="admin-container__host" [class.admin-container__host--hidden]="LoadError || IsLoading">
+                <ng-container #contentHost></ng-container>
+            </div>
+        </main>
     </mj-page-body>
 </mj-page-layout>

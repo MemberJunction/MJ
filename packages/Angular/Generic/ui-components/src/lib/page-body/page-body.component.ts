@@ -53,6 +53,13 @@ import { Component, HostBinding, Input } from '@angular/core';
       flex-direction: column;
       position: relative;
     }
+    /* Direction="row" — switch flex direction when [Flex]="true". Used by
+       shells whose body is a left-rail + content layout (Admin shells, KH
+       Config, AI Analytics). Replaces the bespoke per-shell-container body
+       grid/flex wrapper that every shell used to declare. */
+    :host(.mj-page-body--flex.mj-page-body--row) {
+      flex-direction: row;
+    }
   `]
 })
 export class MJPageBodyComponent {
@@ -60,11 +67,21 @@ export class MJPageBodyComponent {
   @Input() Padding: boolean = true;
 
   /**
-   * When `true`, switches the body to flex-column layout (with `position: relative`)
+   * When `true`, switches the body to flex layout (with `position: relative`)
    * so a child marked `flex: 1` can fill the remaining vertical space — e.g., a main
    * content area sitting under a banner row. Defaults to `false` (block flow).
+   *
+   * Combine with `Direction="row"` to lay out children left-to-right (rail + content).
    */
   @Input() Flex: boolean = false;
+
+  /**
+   * When `Flex=true`, controls the flex direction. `'column'` (default) stacks
+   * children vertically. `'row'` lays them out left-to-right, useful for
+   * left-rail + content shells (Admin's `admin-container`, KH Config, etc.).
+   * Ignored when `Flex=false`.
+   */
+  @Input() Direction: 'row' | 'column' = 'column';
 
   @HostBinding('class.mj-page-body--no-padding')
   get NoPaddingClass(): boolean {
@@ -74,5 +91,10 @@ export class MJPageBodyComponent {
   @HostBinding('class.mj-page-body--flex')
   get FlexClass(): boolean {
     return this.Flex;
+  }
+
+  @HostBinding('class.mj-page-body--row')
+  get RowClass(): boolean {
+    return this.Flex && this.Direction === 'row';
   }
 }

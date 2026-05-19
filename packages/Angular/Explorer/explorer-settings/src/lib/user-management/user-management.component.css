@@ -65,18 +65,9 @@
   line-height: 1;
 }
 
-/* -----------------------------------------------------------------------------
-   Container
-   ----------------------------------------------------------------------------- */
-.user-management-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  position: relative;
-  width: 100%;
-  background: var(--mj-bg-page);
-}
+/* :host already provides flex column / 100% height / overflow hidden via
+   _admin-patterns.css. No bespoke container wrapper here — see Section 10 of
+   explorer-chrome-conventions for the standardized sub-page layout contract. */
 
 /* -----------------------------------------------------------------------------
    Stats Grid Override - Hidden until 768px (unlike other admin components)
@@ -581,10 +572,6 @@
    Large Desktop (1440px+)
    ----------------------------------------------------------------------------- */
 @media (min-width: 1440px) {
-  .user-management-container {
-    margin: 0 auto;
-  }
-
   .bulk-action-toolbar {
     padding: 1.25rem 2rem;
   }

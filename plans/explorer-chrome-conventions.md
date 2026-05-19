@@ -390,6 +390,10 @@ containing its own search / filters / action buttons.
   and does NOT change when the user clicks rail items.
 - **Sub-page does NOT render its own `<mj-page-header>`.** No nested chrome
   trio. The doubled-header problem is eliminated structurally.
+- **Sub-page does NOT wrap itself in a bespoke container `<div>`.** The host
+  element already has `display: flex; flex-direction: column; height: 100%;
+  overflow: hidden` from `_admin-patterns.css`'s `:host` rule (or equivalent).
+  Children of the sub-page render directly on the host — no `<div class="{name}-container">` wrapper.
 - **Sub-page renders a `.filter-card` at the top of its body** — one white
   surface holding the sub-page's interior chrome (search, filters, actions).
 - **No on-page section title.** The rail's active-item highlight IS the
@@ -576,6 +580,7 @@ Entity Permissions Management). Tracked as a separate cleanup.
 
 - **`.mj-btn--secondary` background** tinted from `--mj-bg-surface` (white) to `--mj-bg-surface-sunken` (light gray) globally in `button.scss`. Secondary buttons sitting on white surfaces (cards, headers, dialogs) were near-invisible; the tint gives just enough contrast to read as a button on both white and sunken backgrounds. Affects every secondary button in MJ Explorer.
 - **`.mj-filter-popover-trigger`** dimensions and typography aligned with `mjButton size="sm"` (32px min-height, 6px 12px padding, 0.8125rem semibold, `--mj-bg-surface-sunken` background) in `filter-popover.component.ts` so the popover trigger sits cleanly inline with adjacent action buttons. Affects every popover trigger in MJ Explorer.
+- **`<mj-page-body>` gained a `Direction` input** (`'row' | 'column'`, defaults `'column'`). When `[Flex]="true" Direction="row"`, the body becomes a flex row — replacing the bespoke per-shell `.{shell}-container__body` flex wrapper that every left-rail shell used to declare. The Admin shells use this now; KH Config / AI Analytics shells can adopt it in subsequent passes.
 
 ---
 

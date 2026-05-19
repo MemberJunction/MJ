@@ -1,11 +1,7 @@
 :host { display: block; height: 100%; }
 
-/* Layout: sidebar + content (inside <mj-page-body>) */
-.admin-container__body {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
+/* Layout: rail + content lives directly on <mj-page-body Flex Direction="row">.
+   No bespoke per-shell wrapper — see Section 10 of explorer-chrome-conventions. */
 .admin-container__nav {
     width: 240px;
     border-right: 1px solid var(--mj-border-default);
@@ -111,7 +107,12 @@
 .admin-container__loading i { font-size: 16px; color: var(--mj-brand-primary); }
 
 @media (max-width: 700px) {
-    .admin-container__body { flex-direction: column; }
+    /* Collapse rail+content from row → column on narrow viewports. mj-page-body
+       host has the .mj-page-body--row class when Direction="row"; override it
+       with ::ng-deep so the responsive collapse stays component-scoped. */
+    :host ::ng-deep mj-page-body.mj-page-body--row {
+        flex-direction: column;
+    }
     .admin-container__nav {
         width: 100%;
         height: auto;
