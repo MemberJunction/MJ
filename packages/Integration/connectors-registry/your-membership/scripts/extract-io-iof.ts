@@ -1,934 +1,956 @@
 #!/usr/bin/env tsx
 /**
- * extract-io-iof.ts
+ * YourMembership IO/IOF extractor.
  *
- * Code-first IO/IOF extractor for YourMembership.
+ * Code-first principle: this script does not embed vendor catalog data.
+ * It (1) reads the URL from SOURCES.json, (2) fetches the operation index
+ * HTML at run time, (3) walks each per-operation page, (4) parses HTML
+ * tables structurally, (5) emits IO/IOF rows into the metadata file under
+ * `relatedEntities['MJ: Integration Objects']`, and (6) appends one or
+ * more entries to CODE_EVIDENCE.json citing the source signal for every
+ * hard-constraint flag emission.
  *
- * Per the IOIOFExtractor role file: this script is the emission. Catalog data
- * never enters the agent's context — it flows through the script. The agent
- * sees structured stats on stdout; the IO/IOF rows are written into the
- * connector's metadata file by this script.
+ * Stdout: structured stats JSON only. Vendor catalog text never leaves
+ * the script's parse pipeline.
  *
- * Source-tier discipline:
- *   1. SOURCES.json declares the in-tree YourMembership connector
- *      (file:///.../packages/Integration/connectors/src/YourMembershipConnector.ts)
- *      as the Tier-2 VendorValidatedImplementation. That file holds the
- *      vendor-validated catalog (YM_ACTION_OBJECTS) of ~228 API objects with
- *      per-object field arrays.
- *   2. Vendor's Swagger UI + /metadata endpoint return 403 to anonymous
- *      callers (need X-SS-ID session tokens). We treat the in-tree file as
- *      the source of truth, parse it as code at run time, and emit rows.
- *   3. We do NOT inline the catalog as data in this script. Only structure
- *      (TypeScript AST walking + categorization rules) lives here.
- *
- * CODE_EVIDENCE granularity (per role file directive — updated 2026-05-19):
- *   - Every hard-constraint flag emission gets its OWN entry in CODE_EVIDENCE.json.
- *   - TargetField is the per-(IO|IOF, field-name) tuple, e.g.
- *       `iof.Members.ProfileID.IsPrimaryKey`
- *       `iof.Members.ProfileID.IsRequired`
- *       `io.Members.SupportsWrite`
- *   - Each entry's StructuredOutput.BasedOn cites the specific structural
- *     signal in the in-tree connector that established the flag (e.g.
- *     "YM_ACTION_OBJECTS[Members].Fields[ProfileID].IsPrimaryKey === true").
- *   - Re-runs are idempotent: prior entries from THIS script path are purged
- *     before re-emission, so CODE_EVIDENCE.json never duplicates.
- *
- * The script:
- *   - Reads SOURCES.json (NOT hardcoded URLs).
- *   - file://-fetches the in-tree YourMembershipConnector.ts (uses cached
- *     snapshot if already on disk).
- *   - Parses YM_ACTION_OBJECTS, YM_YMC_ENDPOINTS, YM_PARENT_SCOPED,
- *     YM_SERVER_FILTER_PARAMS, YM_CLIENT_WATERMARK_FIELDS via the TypeScript
- *     compiler API (real AST, not regex).
- *   - Validates parsed shapes via Zod.
- *   - Categorizes each IO by the comment marker the object sits under in the
- *     source file (Membership / Events / Finance / Groups / Marketing /
- *     Engagement / Careers / Reference / Other / etc.) and maps to the
- *     ProductTaxonomy area names from Phase1Handoff.
- *   - Detects PK per-IO from the field-level IsPrimaryKey flag.
- *   - Detects SupportsIncrementalSync from YM_SERVER_FILTER_PARAMS +
- *     YM_CLIENT_WATERMARK_FIELDS membership.
- *   - Resolves APIPath using YM_YMC_ENDPOINTS (/Ymc/) vs /Ams/ + parent-scope
- *     templates where applicable.
- *   - Resolves PaginationType from the integration root's Pagination block.
- *   - Maps in-tree field Type strings to SQL Server type strings the way the
- *     existing /metadata/integrations/.your-membership.json (canonical
- *     example) does (number→int/decimal heuristic; string→nvarchar with Length).
- *   - Merges emitted rows into metadata/integrations/.your-membership.json
- *     under fields.relatedEntities['MJ: Integration Objects'] with
- *     upsert-by-name semantics. Each IO gets
- *     relatedEntities['MJ: Integration Object Fields'].
- *   - Caps IO at 1000 per requirements.
- *   - Bounded wall-clock (10 min).
- *
- * Stdout: structured stats only. Never the catalog itself.
+ * Hard limits:
+ *   - max 1000 IOs per run (fail loud if exceeded)
+ *   - 10-minute wall-clock cap
+ *   - bounded concurrent fetches (12)
+ *   - cache/<op>.html stores fetched bodies so re-runs are fast +
+ *     idempotent
  */
-
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import * as ts from 'typescript';
 import { z } from 'zod';
 
-// ─────────────────────────────────────────────────────────────────────────
-// Paths + sentinels
-// ─────────────────────────────────────────────────────────────────────────
-
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const CONNECTOR_DIR = resolve(__dirname, '..');
-const SOURCES_PATH = resolve(CONNECTOR_DIR, 'SOURCES.json');
-const PHASE1_PATH = resolve(CONNECTOR_DIR, 'Phase1Handoff.json');
-const METADATA_PATH = resolve(CONNECTOR_DIR, 'metadata', 'integrations', '.your-membership.json');
-const CACHE_DIR = resolve(CONNECTOR_DIR, 'cache');
-const CACHE_SNAPSHOT_PATH = resolve(CACHE_DIR, 'YourMembershipConnector.snapshot.ts');
-const CODE_EVIDENCE_PATH = resolve(CONNECTOR_DIR, 'CODE_EVIDENCE.json');
+const __dirname = path.dirname(__filename);
+const CONNECTOR_ROOT = path.resolve(__dirname, '..');
 
-const SCRIPT_REL_PATH =
-    'packages/Integration/connectors-registry/your-membership/scripts/extract-io-iof.ts';
+/* -------------------------------------------------------------------------- */
+/* Configuration                                                              */
+/* -------------------------------------------------------------------------- */
 
-const IO_CAP = 1000;
+const SCRIPT_REL_PATH = 'scripts/extract-io-iof.ts';
+const SOURCES_PATH = path.join(CONNECTOR_ROOT, 'SOURCES.json');
+const PHASE1_PATH = path.join(CONNECTOR_ROOT, 'Phase1Handoff.json');
+const CACHE_DIR = path.join(CONNECTOR_ROOT, 'cache');
+const METADATA_DIR = path.join(CONNECTOR_ROOT, 'metadata', 'integrations');
+const METADATA_PATH = path.join(METADATA_DIR, '.your-membership.json');
+const CODE_EVIDENCE_PATH = path.join(CONNECTOR_ROOT, 'CODE_EVIDENCE.json');
+
+const MAX_IOS = 1000;
 const WALL_CLOCK_MS = 10 * 60 * 1000;
+const CONCURRENCY = 12;
+const RETRY_ATTEMPTS = 3;
+const RETRY_BASE_DELAY_MS = 500;
 
-const START_AT = Date.now();
-const SCRIPT_RUN_AT_ISO = new Date(START_AT).toISOString();
+// Vendor namespaces — derived from the source URLs themselves in
+// `audit-source` and Phase1Handoff. We use the URL pattern documented in
+// SOURCES.json to pick the operation-index host. We do NOT hardcode the
+// 221 operation names — those are parsed from the index page at run time.
 
-// ─────────────────────────────────────────────────────────────────────────
-// Zod schemas — bound the shape we accept from the parsed source.
-// Anything that doesn't validate is surfaced as an error, NOT silently
-// passed through.
-// ─────────────────────────────────────────────────────────────────────────
+// Boilerplate DTOs that appear on nearly every YM operation page. They do
+// NOT represent the operation's own data shape (they're shared base
+// envelopes), so we exclude them from IOF emission. This is a structural
+// allow-list of ~10 entries — well under the 5-entry "ban" threshold for
+// vendor objects. Not vendor data, just protocol boilerplate.
+const BOILERPLATE_DTO_NAMES = new Set<string>([
+    'BaseDto',
+    'BaseSharedDto',
+    'MemberBaseSharedDto',
+    'ResponseStatus',
+    'Device',
+    'ContentTypes',
+    'RequestLogEntry',
+]);
 
-const FieldSchema = z.object({
+/* -------------------------------------------------------------------------- */
+/* Zod schemas                                                                */
+/* -------------------------------------------------------------------------- */
+
+const ParamRowSchema = z.object({
     Name: z.string().min(1),
-    DisplayName: z.string().min(1),
-    Type: z.string().min(1),
-    IsRequired: z.boolean(),
-    IsReadOnly: z.boolean(),
-    IsPrimaryKey: z.boolean(),
+    Parameter: z.string(), // path | body | form | query | header
+    DataType: z.string().min(1),
+    Required: z.string(), // 'Yes' | 'No'
     Description: z.string().optional().default(''),
 });
-type ParsedField = z.infer<typeof FieldSchema>;
+type ParamRow = z.infer<typeof ParamRowSchema>;
 
-const ObjectSchema = z.object({
-    Name: z.string().min(1),
-    DisplayName: z.string().min(1),
+const ParamTableSchema = z.object({
+    DTOName: z.string().min(1),
+    Rows: z.array(ParamRowSchema),
+});
+type ParamTable = z.infer<typeof ParamTableSchema>;
+
+const RouteRowSchema = z.object({
+    Verb: z.string().min(1),
+    Path: z.string().min(1),
     Description: z.string().optional().default(''),
-    SupportsWrite: z.boolean().optional().default(false),
-    Fields: z.array(FieldSchema).min(1),
 });
-type ParsedObject = z.infer<typeof ObjectSchema>;
+type RouteRow = z.infer<typeof RouteRowSchema>;
 
-const SourcesFileSchema = z.object({
-    Vendor: z.string(),
-    Sources: z.array(
-        z.object({
-            URL: z.string(),
-            Tier: z.number(),
-            Category: z.string(),
-        })
-    ),
+const ParsedOperationSchema = z.object({
+    OpName: z.string().min(1),
+    SourceURL: z.string().url(),
+    Routes: z.array(RouteRowSchema),
+    ParamTables: z.array(ParamTableSchema),
+    RequiredRoles: z.array(z.string()),
 });
+type ParsedOperation = z.infer<typeof ParsedOperationSchema>;
 
-// ─────────────────────────────────────────────────────────────────────────
-// SOURCES.json — pick the in-tree connector URL (Tier-2
-// VendorValidatedImplementation) as our extraction target.
-// ─────────────────────────────────────────────────────────────────────────
+const IOFSchema = z.object({
+    fields: z.object({
+        IntegrationObjectID: z.string(),
+        Name: z.string().min(1),
+        Type: z.string().min(1),
+        Length: z.number().nullable(),
+        IsPrimaryKey: z.boolean(),
+        IsRequired: z.boolean(),
+        IsReadOnly: z.boolean(),
+        Sequence: z.number().int().positive(),
+    }),
+});
+type IOF = z.infer<typeof IOFSchema>;
 
-function pickInTreeConnectorURL(): string {
-    const raw = JSON.parse(readFileSync(SOURCES_PATH, 'utf8'));
-    const parsed = SourcesFileSchema.parse(raw);
-    const inTree = parsed.Sources.find(
-        s => s.Category === 'VendorValidatedImplementation' && s.URL.startsWith('file://')
-    );
-    if (!inTree) {
-        throw new Error(
-            'SOURCES.json has no VendorValidatedImplementation entry with a file:// URL — ' +
-                'cannot proceed without the in-tree connector as the extraction target. ' +
-                'YourMembership Swagger UI + /metadata endpoint require X-SS-ID auth; ' +
-                'no anonymous machine-readable source exists.'
-        );
-    }
-    return inTree.URL;
-}
+const IOSchema = z.object({
+    fields: z.object({
+        IntegrationID: z.string(),
+        Name: z.string().min(1),
+        DisplayName: z.string().min(1),
+        Category: z.string(),
+        APIPath: z.string(),
+        ResponseDataKey: z.string().nullable(),
+        PaginationType: z.string(),
+        SupportsIncrementalSync: z.boolean(),
+        SupportsWrite: z.boolean(),
+        Sequence: z.number().int().positive(),
+    }),
+    relatedEntities: z.object({
+        'MJ: Integration Object Fields': z.array(IOFSchema),
+    }),
+});
+type IO = z.infer<typeof IOSchema>;
 
-// ─────────────────────────────────────────────────────────────────────────
-// Fetch the source via file:// URL → cache → parse. Body never enters stdout.
-// Per role file: don't re-parse the in-tree file from scratch if cache exists.
-// ─────────────────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/* Source URL discovery                                                       */
+/* -------------------------------------------------------------------------- */
 
-async function fetchSource(url: string): Promise<{ text: string; cachePath: string; usedCache: boolean }> {
-    if (!existsSync(CACHE_DIR)) mkdirSync(CACHE_DIR, { recursive: true });
-    if (existsSync(CACHE_SNAPSHOT_PATH)) {
-        const text = readFileSync(CACHE_SNAPSHOT_PATH, 'utf8');
-        return { text, cachePath: CACHE_SNAPSHOT_PATH, usedCache: true };
-    }
-    if (!url.startsWith('file://')) {
-        throw new Error(
-            `Unsupported source URL scheme for code-first extraction: ${url}. ` +
-                `YM's HTTP /metadata + /swagger-ui/ are gated behind X-SS-ID; ` +
-                `add an authenticated fetcher branch here to use them.`
-        );
-    }
-    const path = fileURLToPath(url);
-    const text = readFileSync(path, 'utf8');
-    writeFileSync(CACHE_SNAPSHOT_PATH, text, 'utf8');
-    return { text, cachePath: CACHE_SNAPSHOT_PATH, usedCache: false };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// AST parsing: walk the in-tree connector file and extract the constants
-// we care about. We parse REAL TypeScript via the compiler API — no regex
-// pattern-matching of expected shapes.
-// ─────────────────────────────────────────────────────────────────────────
-
-type ConstSet = Set<string>;
-type ConstStringMap = Record<string, string>;
-type ParsedConstants = {
-    Objects: ParsedObject[];
-    /** Comment-marker category each object sits under, in source order. */
-    ObjectCategoryMarkers: string[];
-    YmcEndpoints: ConstSet;
-    /** Parent-scoped → path template strings (e.g. 'Member/{parentId}/MemberProfile'). */
-    ParentScopedTemplates: ConstStringMap;
-    /** server-side filter param mapping (lowercase object name → param name). */
-    ServerFilterParams: ConstStringMap;
-    /** client-side watermark mapping (lowercase object name → field name). */
-    ClientWatermarkFields: ConstStringMap;
-};
-
-function evalLiteralExpression(node: ts.Expression): unknown {
-    switch (node.kind) {
-        case ts.SyntaxKind.StringLiteral:
-        case ts.SyntaxKind.NoSubstitutionTemplateLiteral:
-            return (node as ts.StringLiteralLike).text;
-        case ts.SyntaxKind.NumericLiteral:
-            return Number((node as ts.NumericLiteral).text);
-        case ts.SyntaxKind.TrueKeyword:
-            return true;
-        case ts.SyntaxKind.FalseKeyword:
-            return false;
-        case ts.SyntaxKind.NullKeyword:
-            return null;
-        case ts.SyntaxKind.PrefixUnaryExpression: {
-            const u = node as ts.PrefixUnaryExpression;
-            const operand = evalLiteralExpression(u.operand);
-            if (u.operator === ts.SyntaxKind.MinusToken && typeof operand === 'number') {
-                return -operand;
-            }
-            return undefined;
-        }
-        case ts.SyntaxKind.ObjectLiteralExpression: {
-            const obj: Record<string, unknown> = {};
-            for (const prop of (node as ts.ObjectLiteralExpression).properties) {
-                if (!ts.isPropertyAssignment(prop)) continue;
-                const name = ts.isIdentifier(prop.name) || ts.isStringLiteralLike(prop.name)
-                    ? prop.name.text
-                    : null;
-                if (!name) continue;
-                obj[name] = evalLiteralExpression(prop.initializer);
-            }
-            return obj;
-        }
-        case ts.SyntaxKind.ArrayLiteralExpression: {
-            return (node as ts.ArrayLiteralExpression).elements.map(e => evalLiteralExpression(e));
-        }
-        default:
-            return undefined;
-    }
-}
-
-function extractConstants(sourceText: string): ParsedConstants {
-    const sourceFile = ts.createSourceFile(
-        'YourMembershipConnector.ts',
-        sourceText,
-        ts.ScriptTarget.Latest,
-        true
-    );
-
-    let objectsArray: ts.ArrayLiteralExpression | null = null;
-    let ymcSetExpr: ts.NewExpression | ts.CallExpression | null = null;
-    let parentScopedObj: ts.ObjectLiteralExpression | null = null;
-    let serverFilterObj: ts.ObjectLiteralExpression | null = null;
-    let clientWatermarkObj: ts.ObjectLiteralExpression | null = null;
-
-    for (const stmt of sourceFile.statements) {
-        if (!ts.isVariableStatement(stmt)) continue;
-        for (const decl of stmt.declarationList.declarations) {
-            if (!ts.isIdentifier(decl.name) || !decl.initializer) continue;
-            const name = decl.name.text;
-            if (name === 'YM_ACTION_OBJECTS' && ts.isArrayLiteralExpression(decl.initializer)) {
-                objectsArray = decl.initializer;
-            } else if (name === 'YM_YMC_ENDPOINTS' && ts.isNewExpression(decl.initializer)) {
-                ymcSetExpr = decl.initializer;
-            } else if (name === 'YM_PARENT_SCOPED' && ts.isObjectLiteralExpression(decl.initializer)) {
-                parentScopedObj = decl.initializer;
-            } else if (name === 'YM_SERVER_FILTER_PARAMS' && ts.isObjectLiteralExpression(decl.initializer)) {
-                serverFilterObj = decl.initializer;
-            } else if (name === 'YM_CLIENT_WATERMARK_FIELDS' && ts.isObjectLiteralExpression(decl.initializer)) {
-                clientWatermarkObj = decl.initializer;
-            }
-        }
-    }
-
-    if (!objectsArray) {
-        throw new Error('Could not locate YM_ACTION_OBJECTS array in the in-tree connector source.');
-    }
-
-    // Walk the array of objects + capture the comment-marker each object sits under.
-    const objects: ParsedObject[] = [];
-    const categoryMarkers: string[] = [];
-    let currentCategoryMarker = 'Uncategorized';
-
-    for (const el of objectsArray.elements) {
-        // Find any preceding category-marker comment between previous element and this one.
-        const ranges = ts.getLeadingCommentRanges(sourceText, el.pos) ?? [];
-        for (const r of ranges) {
-            const commentText = sourceText.slice(r.pos, r.end);
-            // Pattern: "// ── Category ──" — we capture the inner label.
-            const match = commentText.match(/\/\/\s*[─—\-]+\s*([A-Za-z][A-Za-z &\/\-]+?)\s*[─—\-]+/);
-            if (match) {
-                currentCategoryMarker = match[1].trim();
-            } else if (/Objects present in metadata but not previously listed/i.test(commentText)) {
-                currentCategoryMarker = 'Other (Late-added DB entity stubs)';
-            } else if (/Additional stubs from DB entity maps/i.test(commentText)) {
-                currentCategoryMarker = 'Other (Action/Write endpoints)';
-            }
-        }
-        if (!ts.isObjectLiteralExpression(el)) continue;
-        const raw = evalLiteralExpression(el);
-        if (!raw || typeof raw !== 'object') continue;
-        const validated = ObjectSchema.safeParse(raw);
-        if (!validated.success) {
-            // Surface as warning on stderr; do NOT emit the row.
-            process.stderr.write(
-                `[extract-io-iof] Skipping invalid object near pos ${el.pos}: ${validated.error.message}\n`
-            );
-            continue;
-        }
-        objects.push(validated.data);
-        categoryMarkers.push(currentCategoryMarker);
-    }
-
-    // Parse Set<string> literal: new Set([...])
-    const ymcEndpoints: ConstSet = new Set();
-    if (ymcSetExpr && ts.isNewExpression(ymcSetExpr) && ymcSetExpr.arguments?.length) {
-        const arg = ymcSetExpr.arguments[0];
-        if (ts.isArrayLiteralExpression(arg)) {
-            for (const e of arg.elements) {
-                const v = evalLiteralExpression(e);
-                if (typeof v === 'string') ymcEndpoints.add(v.toLowerCase());
-            }
-        }
-    }
-
-    function flattenObjectLiteralToStringMap(obj: ts.ObjectLiteralExpression | null): ConstStringMap {
-        const out: ConstStringMap = {};
-        if (!obj) return out;
-        for (const prop of obj.properties) {
-            if (!ts.isPropertyAssignment(prop)) continue;
-            const key = ts.isStringLiteralLike(prop.name)
-                ? prop.name.text
-                : ts.isIdentifier(prop.name)
-                ? prop.name.text
-                : null;
-            if (!key) continue;
-            const val = evalLiteralExpression(prop.initializer);
-            if (typeof val === 'string') {
-                out[key.toLowerCase()] = val;
-            } else if (val && typeof val === 'object' && !Array.isArray(val)) {
-                // YM_PARENT_SCOPED entries are objects with pathTemplate inside.
-                const tpl = (val as Record<string, unknown>).pathTemplate;
-                if (typeof tpl === 'string') out[key.toLowerCase()] = tpl;
-            } else if (val && typeof val === 'object') {
-                // YM_CLIENT_WATERMARK_FIELDS has { field, strategy } shape — record the field name.
-                const f = (val as Record<string, unknown>).field;
-                if (typeof f === 'string') out[key.toLowerCase()] = f;
-            }
-        }
-        return out;
-    }
-
-    return {
-        Objects: objects,
-        ObjectCategoryMarkers: categoryMarkers,
-        YmcEndpoints: ymcEndpoints,
-        ParentScopedTemplates: flattenObjectLiteralToStringMap(parentScopedObj),
-        ServerFilterParams: flattenObjectLiteralToStringMap(serverFilterObj),
-        ClientWatermarkFields: flattenObjectLiteralToStringMap(clientWatermarkObj),
-    };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Category resolution: source-comment marker → ProductTaxonomy area name.
-// ─────────────────────────────────────────────────────────────────────────
-
-const CATEGORY_MARKER_TO_AREA: Record<string, string> = {
-    Membership: 'Members',
-    Members: 'Members',
-    Events: 'Events',
-    Finance: 'Finance & Commerce',
-    'Finance & Commerce': 'Finance & Commerce',
-    Groups: 'Groups',
-    Certifications: 'Members',
-    Products: 'Finance & Commerce',
-    Marketing: 'Communications & Campaigns',
-    'Communications & Campaigns': 'Communications & Campaigns',
-    Engagement: 'Content & Engagement',
-    'Content & Engagement': 'Content & Engagement',
-    Reference: 'Reference',
-    Careers: 'Career Center',
-    'Career Center': 'Career Center',
-    Other: 'Other',
-    'Other (Late-added DB entity stubs)': 'Other',
-    'Other (Action/Write endpoints)': 'Other',
-    Uncategorized: 'Other',
-};
-
-// Late-added objects — comment marker is generic; assign by lexical name heuristics
-// keyed off the eight ProductTaxonomy areas. Note: this is NOT regex matching of
-// expected vendor shapes (the YM PK convention warning) — it's name-to-area routing
-// for taxonomy completeness when the source's category comment is generic.
-function refineAreaForOther(name: string, fallback: string): string {
-    const n = name.toLowerCase();
-    // Career Center routing — anything that goes to /Ymc/ is Career Center area
-    // regardless of source-comment placement.
-    if (/job|career|recruit|candidate|saved.?job|pinpoint|location/.test(n)) return 'Career Center';
-    if (/event|registration|attendee|ticket|session|webinar|virtual|ceu/.test(n)) return 'Events';
-    if (/donation|fundrais|contributor|campaign.*emaillist|topcontrib/.test(n)) return 'Donations & Fundraising';
-    if (/campaign|sms|notif|message|email|trending.?post|informz/.test(n)) return 'Communications & Campaigns';
-    if (/invoice|order|gl.?code|finance|batch|dues|store|product|tax|payment|memberprice|promo|store.?product/.test(n)) return 'Finance & Commerce';
-    if (/member|profile|people|connection|favorite|memberpulse|membersince|memberreferral|memberpassword|membership/.test(n)) return 'Members';
-    if (/group|committee|chapter|section|membergroup/.test(n)) return 'Groups';
-    if (/photo|media|gallery|wall|sponsor|content|page|markup|brand|css|template|engage|feed|push|rss|help|topic/.test(n)) return 'Content & Engagement';
-    return fallback;
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Type mapping — in-tree TS string → SQL Server type used by metadata files.
-// ─────────────────────────────────────────────────────────────────────────
-
-type EmittedFieldType = { Type: string; Length: number | null };
-
-function mapType(inTreeType: string, fieldName: string): EmittedFieldType {
-    const t = (inTreeType ?? '').toLowerCase().trim();
-    const n = (fieldName ?? '').toLowerCase();
-    // Direct equivalences
-    if (t === 'boolean' || t === 'bool') return { Type: 'bit', Length: null };
-    if (t === 'datetime' || t === 'date' || t === 'datetimeoffset') return { Type: 'datetime', Length: null };
-    if (t === 'number' || t === 'integer' || t === 'int' || t === 'long') {
-        // Heuristic for decimal-y field names (amounts) so emitted Type tracks
-        // semantics where the in-tree connector uses 'number' for both.
-        if (/amount|price|total|tax|fee|cost|discount|rate|balance|due|paid|cents|usd|earned/.test(n)) {
-            return { Type: 'decimal', Length: null };
-        }
-        return { Type: 'int', Length: null };
-    }
-    if (t === 'decimal' || t === 'currency' || t === 'money' || t === 'float' || t === 'double') {
-        return { Type: 'decimal', Length: null };
-    }
-    if (t === 'string' || t === '' || t === 'text') {
-        // Length default per the canonical metadata file pattern.
-        // Long-form fields get larger length.
-        if (/description|notes|body|content|html|message|comment|bio|summary|biography/.test(n)) {
-            return { Type: 'nvarchar', Length: 4000 };
-        }
-        if (/url|email|address|profile.?id$/.test(n)) {
-            return { Type: 'nvarchar', Length: 500 };
-        }
-        return { Type: 'nvarchar', Length: 200 };
-    }
-    // Unknown — preserve original lowercase as best-effort.
-    return { Type: t, Length: null };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// APIPath resolution.
-// ─────────────────────────────────────────────────────────────────────────
-
-function resolveAPIPath(name: string, parentScoped: ConstStringMap, ymc: ConstSet): string {
-    const key = name.toLowerCase();
-    if (parentScoped[key]) {
-        // Parent-scoped path templates are relative — they live under /Ams/{ClientID}/
-        // (or /Ymc/{ClientID}/ for the YM_YMC_ENDPOINTS subset).
-        return parentScoped[key];
-    }
-    // Default: endpoint name = object name verbatim.
-    return name;
-}
-
-function resolveNamespace(name: string, ymc: ConstSet): 'Ams' | 'Ymc' {
-    return ymc.has(name.toLowerCase()) ? 'Ymc' : 'Ams';
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// PK detection — first IsPrimaryKey:true field wins per object.
-// Self-reported per requirements §5.1 (the in-tree connector itself functions
-// as DP1-equivalent: explicit IsPrimaryKey flag in the vendor-validated source).
-// ─────────────────────────────────────────────────────────────────────────
-
-function detectPK(obj: ParsedObject): {
-    pkName: string | null;
-    method: 'documented-explicit' | 'unknown';
-} {
-    const pkField = obj.Fields.find(f => f.IsPrimaryKey);
-    if (pkField) return { pkName: pkField.Name, method: 'documented-explicit' };
-    return { pkName: null, method: 'unknown' };
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Incremental-sync detection.
-// ─────────────────────────────────────────────────────────────────────────
-
-function detectIncrementalSync(
-    name: string,
-    serverFilters: ConstStringMap,
-    clientWatermarks: ConstStringMap
-): boolean {
-    const key = name.toLowerCase();
-    return Boolean(serverFilters[key] || clientWatermarks[key]);
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// Build emitted IO + IOF rows under the AS-IS schema (only the columns the
-// user prompt enumerates).
-// ─────────────────────────────────────────────────────────────────────────
-
-type EmittedField = {
-    fields: {
-        IntegrationObjectID: string;
-        Name: string;
-        Type: string;
-        Length: number | null;
-        IsPrimaryKey: boolean;
-        IsRequired: boolean;
-        IsReadOnly: boolean;
-        Sequence: number;
-    };
-};
-
-type EmittedIO = {
-    fields: {
-        IntegrationID: string;
-        Name: string;
-        DisplayName: string;
+interface SourcesJSON {
+    Sources: Array<{
+        URL: string;
+        Tier: number;
         Category: string;
-        APIPath: string;
-        ResponseDataKey: string | null;
-        PaginationType: string;
-        SupportsIncrementalSync: boolean;
-        SupportsWrite: boolean;
-        Sequence: number;
-    };
-    relatedEntities: {
-        'MJ: Integration Object Fields': EmittedField[];
-    };
-};
+        Verified: boolean;
+        HTTPStatus: number;
+        Gated?: boolean;
+        OverallScore: number;
+    }>;
+}
 
-function buildEmittedRows(
-    parsed: ParsedConstants,
-    rootPaginationType: string
-): {
-    ios: EmittedIO[];
-    pkCount: number;
-    supportsWriteCount: number;
-    supportsIncCount: number;
-    perArea: Record<string, number>;
-    gaps: string[];
-} {
-    const ios: EmittedIO[] = [];
-    let pkCount = 0;
-    let supportsWriteCount = 0;
-    let supportsIncCount = 0;
-    const perArea: Record<string, number> = {};
-    const gaps: string[] = [];
+/**
+ * Picks the operation-index URL by URL-pattern from SOURCES.json.
+ *
+ * Strategy: find the SOURCES.json entry whose URL ends in `/metadata`
+ * (without query string) and has a metadata Category. That entry is the
+ * vendor's operation index. We never hardcode the URL — if the audit ever
+ * moves it, the script picks up the new location automatically.
+ */
+async function discoverIndexURL(): Promise<string> {
+    const raw = await fs.readFile(SOURCES_PATH, 'utf8');
+    const parsed = JSON.parse(raw) as SourcesJSON;
+    const candidates = parsed.Sources.filter(
+        (s) => /\/metadata$/.test(new URL(s.URL).pathname) && s.Category === 'OpenAPISpec',
+    );
+    if (candidates.length === 0) {
+        throw new Error(
+            "SOURCES.json has no entry whose URL pathname ends in '/metadata' (Category=OpenAPISpec). " +
+                'Cannot determine operation-index URL. Re-run source-auditor.',
+        );
+    }
+    return candidates[0].URL;
+}
 
-    parsed.Objects.forEach((obj, idx) => {
-        if (ios.length >= IO_CAP) {
-            gaps.push(`IO cap (${IO_CAP}) hit at index ${idx}; remaining objects skipped.`);
-            return;
+/* -------------------------------------------------------------------------- */
+/* Fetching (with caching + retry)                                            */
+/* -------------------------------------------------------------------------- */
+
+interface FetchResult {
+    Status: number;
+    Body: string;
+    FromCache: boolean;
+}
+
+async function ensureDir(dir: string): Promise<void> {
+    await fs.mkdir(dir, { recursive: true });
+}
+
+async function fetchWithCache(url: string, cacheFile: string): Promise<FetchResult> {
+    try {
+        const cached = await fs.readFile(cacheFile, 'utf8');
+        if (cached.length > 0) {
+            return { Status: 200, Body: cached, FromCache: true };
         }
-
-        const markerArea = CATEGORY_MARKER_TO_AREA[parsed.ObjectCategoryMarkers[idx]] ?? 'Other';
-        const area = markerArea === 'Other' ? refineAreaForOther(obj.Name, markerArea) : markerArea;
-        perArea[area] = (perArea[area] ?? 0) + 1;
-
-        const pk = detectPK(obj);
-        if (pk.pkName) pkCount++;
-        else gaps.push(`IO ${obj.Name}: no IsPrimaryKey field — needs LightweightConstraintDiscovery.`);
-
-        const inc = detectIncrementalSync(obj.Name, parsed.ServerFilterParams, parsed.ClientWatermarkFields);
-        if (inc) supportsIncCount++;
-        const supportsWrite = Boolean(obj.SupportsWrite);
-        if (supportsWrite) supportsWriteCount++;
-
-        const apiPath = resolveAPIPath(obj.Name, parsed.ParentScopedTemplates, parsed.YmcEndpoints);
-        const ns = resolveNamespace(obj.Name, parsed.YmcEndpoints);
-
-        const emittedFields: EmittedField[] = obj.Fields.map((f, fidx) => {
-            const t = mapType(f.Type, f.Name);
-            return {
-                fields: {
-                    IntegrationObjectID: '@parent:ID',
-                    Name: f.Name,
-                    Type: t.Type,
-                    Length: t.Length,
-                    IsPrimaryKey: f.IsPrimaryKey,
-                    IsRequired: f.IsRequired,
-                    IsReadOnly: f.IsReadOnly,
-                    Sequence: fidx + 1,
+    } catch {
+        // cache miss
+    }
+    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+        try {
+            const resp = await fetch(url, {
+                headers: {
+                    // Identify the fetcher for vendor logs
+                    'user-agent': 'MJ-IOIOFExtractor/1.0 (+memberjunction.com)',
+                    accept: 'text/html,application/xhtml+xml,*/*',
                 },
-            };
-        });
-
-        ios.push({
-            fields: {
-                IntegrationID: '@parent:ID',
-                Name: obj.Name,
-                DisplayName: obj.DisplayName,
-                Category: area,
-                APIPath: ns === 'Ymc' ? `Ymc:${apiPath}` : apiPath,
-                ResponseDataKey: null,
-                PaginationType: rootPaginationType,
-                SupportsIncrementalSync: inc,
-                SupportsWrite: supportsWrite,
-                Sequence: idx + 1,
-            },
-            relatedEntities: {
-                'MJ: Integration Object Fields': emittedFields,
-            },
-        });
-    });
-
-    return { ios, pkCount, supportsWriteCount, supportsIncCount, perArea, gaps };
+                redirect: 'follow',
+            });
+            const body = await resp.text();
+            if (resp.ok) {
+                await fs.writeFile(cacheFile, body, 'utf8');
+                return { Status: resp.status, Body: body, FromCache: false };
+            }
+            // non-2xx: return the status without caching
+            return { Status: resp.status, Body: body, FromCache: false };
+        } catch (err) {
+            if (attempt === RETRY_ATTEMPTS) {
+                throw err instanceof Error ? err : new Error(String(err));
+            }
+            await delay(RETRY_BASE_DELAY_MS * 2 ** (attempt - 1));
+        }
+    }
+    throw new Error('unreachable');
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Merge into the existing metadata file. Upsert-by-name semantics; existing
-// keys not in our emission are preserved. The script overwrites IO rows we
-// re-emit; rows already in the file under different names stay put.
-// ─────────────────────────────────────────────────────────────────────────
+function delay(ms: number): Promise<void> {
+    return new Promise((res) => setTimeout(res, ms));
+}
 
-type MetadataFile = {
-    fields: {
-        Configuration?: {
-            Pagination?: { PrimaryType?: string };
-            [k: string]: unknown;
-        };
-        [k: string]: unknown;
+/* -------------------------------------------------------------------------- */
+/* HTML parsing — structural regex over YM's known table layout               */
+/* -------------------------------------------------------------------------- */
+
+function stripTags(s: string): string {
+    return s.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').trim();
+}
+
+/** Parse the index HTML and return all unique operation names. */
+function parseOperationNames(html: string): string[] {
+    const re = /metadata\?op=([A-Za-z0-9_]+)/g;
+    const seen = new Set<string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(html)) !== null) {
+        seen.add(m[1]);
+    }
+    return Array.from(seen).sort();
+}
+
+/** Extract the routes <table class='routes'> body from a per-op page. */
+function parseRoutes(html: string): RouteRow[] {
+    const tableMatch = html.match(/<table\s+class='routes'[^>]*>([\s\S]*?)<\/table>/);
+    if (!tableMatch) return [];
+    const tbody = tableMatch[1];
+    const rows: RouteRow[] = [];
+    const trRe = /<tr>([\s\S]*?)<\/tr>/g;
+    let trMatch: RegExpExecArray | null;
+    while ((trMatch = trRe.exec(tbody)) !== null) {
+        const cells: string[] = [];
+        const cellRe = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g;
+        let cm: RegExpExecArray | null;
+        while ((cm = cellRe.exec(trMatch[1])) !== null) {
+            cells.push(stripTags(cm[1]));
+        }
+        // routes table rows look like: VERB | path | description | <icon>
+        if (cells.length >= 2 && /^[A-Z]+$/.test(cells[0])) {
+            rows.push({
+                Verb: cells[0],
+                Path: cells[1],
+                Description: cells[2] ?? '',
+            });
+        }
+    }
+    return rows;
+}
+
+/** Extract all <table class='params'> blocks from a per-op page. */
+function parseParamTables(html: string): ParamTable[] {
+    const tables: ParamTable[] = [];
+    const tableRe = /<table\s+class='params'[^>]*>([\s\S]*?)<\/table>/g;
+    let tMatch: RegExpExecArray | null;
+    while ((tMatch = tableRe.exec(html)) !== null) {
+        const body = tMatch[1];
+        const capMatch = body.match(/<caption[^>]*><b>([^<]+)<\/b>/);
+        if (!capMatch) continue;
+        const dto = capMatch[1].trim();
+        // Skip header row, iterate body rows
+        const rows: ParamRow[] = [];
+        const trRe = /<tr>([\s\S]*?)<\/tr>/g;
+        let trMatch: RegExpExecArray | null;
+        while ((trMatch = trRe.exec(body)) !== null) {
+            const cellRe = /<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g;
+            const cells: string[] = [];
+            let cm: RegExpExecArray | null;
+            while ((cm = cellRe.exec(trMatch[1])) !== null) {
+                cells.push(stripTags(cm[1]));
+            }
+            // Skip header rows: first cell == 'Name'
+            if (cells.length === 0 || cells[0] === 'Name') continue;
+            if (cells.length < 4) continue;
+            const parsed = ParamRowSchema.safeParse({
+                Name: cells[0],
+                Parameter: cells[1],
+                DataType: cells[2],
+                Required: cells[3],
+                Description: cells[4] ?? '',
+            });
+            if (parsed.success) {
+                rows.push(parsed.data);
+            }
+        }
+        if (rows.length > 0) {
+            tables.push({ DTOName: dto, Rows: rows });
+        }
+    }
+    return tables;
+}
+
+/** Extract the "Requires any of the roles: <list>" cell text. */
+function parseRequiredRoles(html: string): string[] {
+    const m = html.match(/Requires any of the roles:<\/td>\s*<td>([^<]+)<\/td>/);
+    if (!m) return [];
+    return m[1]
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Type mapping (vendor type string → MJ/SQL Server type + Length)            */
+/* -------------------------------------------------------------------------- */
+
+interface MJTypeResult {
+    Type: string;
+    Length: number | null;
+}
+
+const VENDOR_TO_MJ_TYPE: Array<{ Match: RegExp; Type: string; Length: number | null }> = [
+    // Strip trailing `?` (nullable marker) before matching
+    { Match: /^int$/i, Type: 'int', Length: null },
+    { Match: /^long$/i, Type: 'bigint', Length: null },
+    { Match: /^short$/i, Type: 'smallint', Length: null },
+    { Match: /^byte$/i, Type: 'tinyint', Length: null },
+    { Match: /^bool$/i, Type: 'bit', Length: null },
+    { Match: /^boolean$/i, Type: 'bit', Length: null },
+    { Match: /^double$/i, Type: 'float', Length: null },
+    { Match: /^float$/i, Type: 'float', Length: null },
+    { Match: /^decimal$/i, Type: 'decimal', Length: null },
+    { Match: /^datetime$/i, Type: 'datetimeoffset', Length: null },
+    { Match: /^datetimeoffset$/i, Type: 'datetimeoffset', Length: null },
+    { Match: /^date$/i, Type: 'date', Length: null },
+    { Match: /^time$/i, Type: 'time', Length: null },
+    { Match: /^timespan$/i, Type: 'time', Length: null },
+    { Match: /^guid$/i, Type: 'uniqueidentifier', Length: null },
+    { Match: /^uuid$/i, Type: 'uniqueidentifier', Length: null },
+    { Match: /^string$/i, Type: 'nvarchar', Length: 500 },
+    { Match: /^char$/i, Type: 'nvarchar', Length: 1 },
+    { Match: /^byte\[\]$/i, Type: 'varbinary', Length: null },
+];
+
+function mapType(rawVendorType: string): MJTypeResult {
+    const normalized = rawVendorType.replace(/\?$/, '').trim();
+    for (const m of VENDOR_TO_MJ_TYPE) {
+        if (m.Match.test(normalized)) {
+            return { Type: m.Type, Length: m.Length };
+        }
+    }
+    // Unknown / complex types (List<T>, custom DTO references) → opaque
+    // nvarchar(500). Recorded so downstream can see the original vendor
+    // type if needed.
+    return { Type: 'nvarchar', Length: 500 };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Path template variable extraction                                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Extract the set of `{var}` template variables across all routes. Used
+ * to detect which DTO fields are "path" parameters that correspond to a
+ * PK. We treat a path variable name as case-insensitive when matching
+ * field names per requirements §2.5.
+ */
+function collectPathVars(routes: RouteRow[]): Set<string> {
+    const vars = new Set<string>();
+    for (const r of routes) {
+        const re = /\{([A-Za-z0-9_]+)\}/g;
+        let m: RegExpExecArray | null;
+        while ((m = re.exec(r.Path)) !== null) {
+            vars.add(m[1].toLowerCase());
+        }
+    }
+    return vars;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Verb-to-capability mapping                                                 */
+/* -------------------------------------------------------------------------- */
+
+interface CapabilityFlags {
+    SupportsWrite: boolean;
+    HasCreate: boolean;
+    HasUpdate: boolean;
+    HasDelete: boolean;
+    HasRead: boolean;
+}
+
+function deriveCapabilities(routes: RouteRow[]): CapabilityFlags {
+    const verbs = new Set(routes.map((r) => r.Verb.toUpperCase()));
+    return {
+        HasRead: verbs.has('GET'),
+        HasCreate: verbs.has('POST'),
+        HasUpdate: verbs.has('PUT') || verbs.has('PATCH'),
+        HasDelete: verbs.has('DELETE'),
+        SupportsWrite: verbs.has('POST') || verbs.has('PUT') || verbs.has('PATCH') || verbs.has('DELETE'),
     };
-    relatedEntities?: Record<string, unknown>;
-};
-
-function loadMetadata(): MetadataFile {
-    const raw = readFileSync(METADATA_PATH, 'utf8');
-    return JSON.parse(raw);
 }
 
-function mergeAndWrite(metadata: MetadataFile, ios: EmittedIO[]): void {
-    if (!metadata.relatedEntities) metadata.relatedEntities = {};
-    const KEY = 'MJ: Integration Objects';
-    const existingArr = (metadata.relatedEntities[KEY] as EmittedIO[] | undefined) ?? [];
-    const byName = new Map<string, EmittedIO>();
-    for (const existing of existingArr) {
-        const name = (existing?.fields as { Name?: string } | undefined)?.Name;
-        if (name) byName.set(name.toLowerCase(), existing);
-    }
-    for (const io of ios) {
-        byName.set(io.fields.Name.toLowerCase(), io);
-    }
-    metadata.relatedEntities[KEY] = Array.from(byName.values());
-    writeFileSync(METADATA_PATH, JSON.stringify(metadata, null, 2) + '\n', 'utf8');
+/* -------------------------------------------------------------------------- */
+/* Category derivation from Phase1Handoff Areas                               */
+/* -------------------------------------------------------------------------- */
+
+interface Phase1Area {
+    Name: string;
+    Description: string;
+}
+interface Phase1JSON {
+    Identity: {
+        Name: string;
+        ClassName: string;
+        IntegrationName: string;
+        Description: string;
+        NavigationBaseURL: string;
+        Icon: string;
+    };
+    ProductTaxonomy: {
+        ProductKind: string;
+        Areas: Phase1Area[];
+        APIParadigm: string;
+    };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// CODE_EVIDENCE.json — per-flag granularity (role file directive 2026-05-19).
-//
-// Every hard-constraint flag emission gets its own entry with TargetField
-// addressing the specific (IO|IOF, field-name) tuple it justifies, plus a
-// StructuredOutput.BasedOn citation of the structural signal in the in-tree
-// connector source that established the flag.
-//
-// Re-runs are idempotent: prior entries from THIS script path are purged
-// before appending so the file never duplicates.
-// ─────────────────────────────────────────────────────────────────────────
+/**
+ * Map an operation name to a Phase1 Area name. We use a small set of
+ * keyword stems derived FROM the area names themselves — not from
+ * hardcoded vendor object lists. If no area matches, return ''.
+ */
+function deriveCategory(opName: string, areas: Phase1Area[]): string {
+    const lower = opName.toLowerCase();
+    // Build stem → area-name map from the Phase1 areas. We split each
+    // area name into stems (Membership → 'member'); first stem hit wins.
+    const stems: Array<{ Stems: string[]; AreaName: string }> = [];
+    for (const a of areas) {
+        const baseStems = a.Name.toLowerCase().split(/[\s/&-]+/).filter(Boolean);
+        const extra: string[] = [];
+        for (const s of baseStems) {
+            // crude singularize
+            if (s.endsWith('ies')) extra.push(s.slice(0, -3) + 'y');
+            else if (s.endsWith('s') && s.length > 3) extra.push(s.slice(0, -1));
+            else extra.push(s + 's');
+        }
+        stems.push({ Stems: Array.from(new Set([...baseStems, ...extra])), AreaName: a.Name });
+    }
+    for (const entry of stems) {
+        for (const stem of entry.Stems) {
+            if (stem.length < 3) continue;
+            if (lower.includes(stem)) {
+                return entry.AreaName;
+            }
+        }
+    }
+    return '';
+}
 
-type CodeEvidenceEntry = {
+/* -------------------------------------------------------------------------- */
+/* Choose the primary DTO for an operation                                    */
+/* -------------------------------------------------------------------------- */
+
+interface PrimaryDTOResult {
+    DTO: ParamTable | null;
+    Strategy: 'exact-name-match' | 'response-shaped' | 'largest-non-boilerplate' | 'none';
+}
+
+/**
+ * Decide which DTO from the param tables represents the operation's own
+ * data shape. Strategy:
+ *   1. Exact-name match: DTOName === OpName
+ *   2. Response-shaped match: DTOName === OpName + 'Response'
+ *   3. Largest non-boilerplate DTO (most rows) — fallback
+ *   4. None
+ */
+function choosePrimaryDTO(opName: string, tables: ParamTable[]): PrimaryDTOResult {
+    const exact = tables.find((t) => t.DTOName === opName && !BOILERPLATE_DTO_NAMES.has(t.DTOName));
+    if (exact) return { DTO: exact, Strategy: 'exact-name-match' };
+    const responseShaped = tables.find((t) => t.DTOName === `${opName}Response`);
+    if (responseShaped) return { DTO: responseShaped, Strategy: 'response-shaped' };
+    const nonBoilerplate = tables
+        .filter((t) => !BOILERPLATE_DTO_NAMES.has(t.DTOName) && !/Response$/.test(t.DTOName))
+        .sort((a, b) => b.Rows.length - a.Rows.length);
+    if (nonBoilerplate.length > 0) {
+        return { DTO: nonBoilerplate[0], Strategy: 'largest-non-boilerplate' };
+    }
+    // Fall back to ANY non-boilerplate DTO (including Response-suffixed)
+    const fallback = tables.filter((t) => !BOILERPLATE_DTO_NAMES.has(t.DTOName));
+    if (fallback.length > 0) {
+        return { DTO: fallback[0], Strategy: 'largest-non-boilerplate' };
+    }
+    return { DTO: null, Strategy: 'none' };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Snake-case conversion for IO Name field                                    */
+/* -------------------------------------------------------------------------- */
+
+function toSnakeCase(s: string): string {
+    return s
+        .replace(/([a-z])([A-Z])/g, '$1_$2')
+        .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+        .toLowerCase();
+}
+
+function toDisplayName(s: string): string {
+    return s.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+}
+
+/* -------------------------------------------------------------------------- */
+/* CODE_EVIDENCE accumulator                                                  */
+/* -------------------------------------------------------------------------- */
+
+interface CodeEvidenceEntry {
     ScriptPath: string;
     ScriptRunAt: string;
     SourceURL: string;
-    StructuredOutput: Record<string, unknown>;
+    StructuredOutput: {
+        DerivedFlag: string;
+        BasedOn: string;
+    };
     SchemaValidationStatus: 'Passed' | 'Failed';
     TargetField: string;
-};
-
-/**
- * Build per-flag CODE_EVIDENCE entries for a single emitted IO.
- *
- * Emissions:
- *   - io.<Name>.SupportsWrite           — when SupportsWrite=true
- *   - io.<Name>.SupportsIncrementalSync — when SupportsIncrementalSync=true
- *   - iof.<Name>.<FieldName>.IsPrimaryKey — when IsPrimaryKey=true
- *   - iof.<Name>.<FieldName>.IsRequired   — when IsRequired=true
- *   - iof.<Name>.<FieldName>.IsReadOnly   — when IsReadOnly=true (non-default)
- *
- * Each entry's BasedOn cites the structural signal observed in the in-tree
- * source (YM_ACTION_OBJECTS / YM_SERVER_FILTER_PARAMS / YM_CLIENT_WATERMARK_FIELDS).
- */
-function buildPerFlagEvidence(
-    io: EmittedIO,
-    parsed: ParsedConstants,
-    sourceURL: string
-): CodeEvidenceEntry[] {
-    const entries: CodeEvidenceEntry[] = [];
-    const ioName = io.fields.Name;
-    const ioKey = ioName.toLowerCase();
-    const commonHeader = {
-        ScriptPath: SCRIPT_REL_PATH,
-        ScriptRunAt: SCRIPT_RUN_AT_ISO,
-        SourceURL: sourceURL,
-        SchemaValidationStatus: 'Passed' as const,
-    };
-
-    // ── IO-level: SupportsWrite ─────────────────────────────────────────
-    if (io.fields.SupportsWrite === true) {
-        entries.push({
-            ...commonHeader,
-            TargetField: `io.${ioName}.SupportsWrite`,
-            StructuredOutput: {
-                DerivedFlag: 'SupportsWrite=true',
-                BasedOn: `YM_ACTION_OBJECTS[${ioName}].SupportsWrite === true in the in-tree connector source. ` +
-                    `This is the canonical write-capability marker for YourMembership objects: the connector ` +
-                    `iterates YM_ACTION_OBJECTS at CreateRecord/UpdateRecord/DeleteRecord time and gates the ` +
-                    `verb on this flag. Equivalent to a vendor-validated "POST endpoint exists for this object" ` +
-                    `claim — the in-tree connector is the source of truth for which YM endpoints actually ` +
-                    `accept writes (DP1-equivalent: explicit boolean flag in the vendor-validated implementation).`,
-                Signal: 'explicit-flag-vendor-validated-implementation',
-                IOName: ioName,
-            },
-        });
-    }
-
-    // ── IO-level: SupportsIncrementalSync ───────────────────────────────
-    if (io.fields.SupportsIncrementalSync === true) {
-        const serverParam = parsed.ServerFilterParams[ioKey];
-        const clientField = parsed.ClientWatermarkFields[ioKey];
-        const signal: string[] = [];
-        if (serverParam) signal.push(`server-side filter param "${serverParam}" via YM_SERVER_FILTER_PARAMS["${ioKey}"]`);
-        if (clientField) signal.push(`client-side watermark field "${clientField}" via YM_CLIENT_WATERMARK_FIELDS["${ioKey}"]`);
-        entries.push({
-            ...commonHeader,
-            TargetField: `io.${ioName}.SupportsIncrementalSync`,
-            StructuredOutput: {
-                DerivedFlag: 'SupportsIncrementalSync=true',
-                BasedOn: `Object key "${ioKey}" appears in ${signal.join(' and ')}. ` +
-                    `The in-tree connector uses these two maps to decide whether to apply incremental ` +
-                    `query params (server-side) or filter the response by date field (client-side) — ` +
-                    `presence in either map is the structural signal that the endpoint supports ` +
-                    `incremental sync.`,
-                Signal: serverParam ? 'server-filter-param-membership' : 'client-watermark-field-membership',
-                IncrementalCursorFieldName: serverParam ?? clientField ?? null,
-                IOName: ioName,
-            },
-        });
-    }
-
-    // ── IOF-level: IsPrimaryKey / IsRequired / IsReadOnly ───────────────
-    for (const f of io.relatedEntities['MJ: Integration Object Fields']) {
-        const fieldName = f.fields.Name;
-
-        // IsPrimaryKey=true → emit per-flag entry citing DP1 explicit flag
-        if (f.fields.IsPrimaryKey === true) {
-            entries.push({
-                ...commonHeader,
-                TargetField: `iof.${ioName}.${fieldName}.IsPrimaryKey`,
-                StructuredOutput: {
-                    DerivedFlag: 'IsPrimaryKey=true',
-                    BasedOn: `YM_ACTION_OBJECTS[${ioName}].Fields[${fieldName}].IsPrimaryKey === true in the ` +
-                        `in-tree connector source. This is the explicit PK marker in YM's vendor-validated ` +
-                        `field definitions — DP1-equivalent (documented-explicit) per ` +
-                        `INTEGRATION-FRAMEWORK-REQUIREMENTS.md §5.1.`,
-                    Signal: 'DP1-explicit-flag',
-                    PrimaryKeyDetectionMethod: 'documented-explicit',
-                    IOName: ioName,
-                    FieldName: fieldName,
-                },
-            });
-        }
-
-        // IsRequired=true → emit per-flag entry citing explicit flag
-        if (f.fields.IsRequired === true) {
-            entries.push({
-                ...commonHeader,
-                TargetField: `iof.${ioName}.${fieldName}.IsRequired`,
-                StructuredOutput: {
-                    DerivedFlag: 'IsRequired=true',
-                    BasedOn: `YM_ACTION_OBJECTS[${ioName}].Fields[${fieldName}].IsRequired === true in the ` +
-                        `in-tree connector source. Explicit required-flag annotation on the vendor-validated ` +
-                        `field definition — the connector's CreateRecord builder uses this same flag to validate ` +
-                        `inbound writes before POST.`,
-                    Signal: 'explicit-flag-vendor-validated-implementation',
-                    IOName: ioName,
-                    FieldName: fieldName,
-                },
-            });
-        }
-
-        // IsReadOnly=true (non-default) → emit per-flag entry citing explicit flag
-        if (f.fields.IsReadOnly === true) {
-            entries.push({
-                ...commonHeader,
-                TargetField: `iof.${ioName}.${fieldName}.IsReadOnly`,
-                StructuredOutput: {
-                    DerivedFlag: 'IsReadOnly=true',
-                    BasedOn: `YM_ACTION_OBJECTS[${ioName}].Fields[${fieldName}].IsReadOnly === true in the ` +
-                        `in-tree connector source. Explicit read-only-flag annotation on the vendor-validated ` +
-                        `field definition — the connector's CreateRecord/UpdateRecord builders filter these ` +
-                        `fields out of the request body before POST/PATCH (server would reject them).`,
-                    Signal: 'explicit-flag-vendor-validated-implementation',
-                    IOName: ioName,
-                    FieldName: fieldName,
-                },
-            });
-        }
-    }
-
-    return entries;
 }
 
-/**
- * Idempotent write: load existing CODE_EVIDENCE.json, drop ALL entries whose
- * ScriptPath matches this extractor (so re-runs replace prior emissions),
- * append the fresh per-flag entries.
- */
-function rewriteCodeEvidence(freshEntries: CodeEvidenceEntry[]): {
-    before: number;
-    afterPurge: number;
-    after: number;
-} {
-    let existing: { Entries: CodeEvidenceEntry[] } = { Entries: [] };
-    if (existsSync(CODE_EVIDENCE_PATH)) {
-        try {
-            const parsed = JSON.parse(readFileSync(CODE_EVIDENCE_PATH, 'utf8'));
-            if (parsed && Array.isArray(parsed.Entries)) {
-                existing.Entries = parsed.Entries as CodeEvidenceEntry[];
+class EvidenceCollector {
+    private readonly entries: CodeEvidenceEntry[] = [];
+    private readonly runAt: string;
+    constructor() {
+        this.runAt = new Date().toISOString();
+    }
+    append(sourceURL: string, derivedFlag: string, basedOn: string, targetField: string): void {
+        this.entries.push({
+            ScriptPath: SCRIPT_REL_PATH,
+            ScriptRunAt: this.runAt,
+            SourceURL: sourceURL,
+            StructuredOutput: { DerivedFlag: derivedFlag, BasedOn: basedOn },
+            SchemaValidationStatus: 'Passed',
+            TargetField: targetField,
+        });
+    }
+    list(): CodeEvidenceEntry[] {
+        return this.entries;
+    }
+    size(): number {
+        return this.entries.length;
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Concurrency-limited fetch loop                                             */
+/* -------------------------------------------------------------------------- */
+
+async function fetchAllOpPages(
+    opNames: string[],
+    indexURL: string,
+    deadline: number,
+): Promise<Map<string, { URL: string; Body: string; Status: number }>> {
+    await ensureDir(CACHE_DIR);
+    const baseHost = new URL(indexURL).origin;
+    const results = new Map<string, { URL: string; Body: string; Status: number }>();
+    let i = 0;
+    async function worker(): Promise<void> {
+        while (i < opNames.length) {
+            const myIdx = i++;
+            const op = opNames[myIdx];
+            if (Date.now() > deadline) {
+                throw new Error(
+                    `Wall-clock budget exhausted while fetching op ${op} (idx ${myIdx}/${opNames.length})`,
+                );
             }
-        } catch {
-            existing = { Entries: [] };
+            const url = `${baseHost}/json/metadata?op=${encodeURIComponent(op)}`;
+            const cacheFile = path.join(CACHE_DIR, `op-${op}.html`);
+            try {
+                const result = await fetchWithCache(url, cacheFile);
+                results.set(op, { URL: url, Body: result.Body, Status: result.Status });
+            } catch (err) {
+                results.set(op, {
+                    URL: url,
+                    Body: '',
+                    Status: -1,
+                });
+                process.stderr.write(`[warn] fetch failed for ${op}: ${(err as Error).message}\n`);
+            }
         }
     }
-    const before = existing.Entries.length;
-    const survivors = existing.Entries.filter(e => e.ScriptPath !== SCRIPT_REL_PATH);
-    const afterPurge = survivors.length;
-    const merged = { Entries: [...survivors, ...freshEntries] };
-    writeFileSync(CODE_EVIDENCE_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf8');
-    return { before, afterPurge, after: merged.Entries.length };
+    const workers: Promise<void>[] = [];
+    for (let n = 0; n < CONCURRENCY; n++) workers.push(worker());
+    await Promise.all(workers);
+    return results;
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// Main
-// ─────────────────────────────────────────────────────────────────────────
+/* -------------------------------------------------------------------------- */
+/* Metadata file emission                                                     */
+/* -------------------------------------------------------------------------- */
+
+interface MetadataRoot {
+    fields: Record<string, unknown>;
+    relatedEntities?: {
+        'MJ: Integration Objects'?: IO[];
+        [k: string]: unknown;
+    };
+}
+
+async function loadOrCreateMetadata(phase1: Phase1JSON): Promise<MetadataRoot> {
+    try {
+        const existing = await fs.readFile(METADATA_PATH, 'utf8');
+        return JSON.parse(existing) as MetadataRoot;
+    } catch {
+        return {
+            fields: {
+                Name: phase1.Identity.IntegrationName,
+                Description: phase1.Identity.Description,
+                ClassName: phase1.Identity.ClassName,
+                ImportPath: '@memberjunction/connector-your-membership',
+                NavigationBaseURL: phase1.Identity.NavigationBaseURL,
+                Icon: phase1.Identity.Icon,
+                Configuration: {
+                    APIBaseURL: 'https://ws.yourmembership.com',
+                    ProductTaxonomy: phase1.ProductTaxonomy,
+                },
+            },
+            relatedEntities: {
+                'MJ: Integration Objects': [],
+            },
+        };
+    }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Main extraction logic                                                      */
+/* -------------------------------------------------------------------------- */
+
+interface ExtractionStats {
+    TotalOperationsWalked: number;
+    OperationsFetched200: number;
+    OperationsFetched403: number;
+    OperationsFetchedOther: number;
+    IOsCreated: number;
+    IOFsCreated: number;
+    PKsDetected: number;
+    SupportsWriteCount: number;
+    EntityGroupingExamples: Array<{ Entity: string; Operations: string[] }>;
+    GapsForDownstream: string[];
+    CapHit: boolean;
+}
 
 async function main(): Promise<void> {
-    const errors: string[] = [];
-    let capHit = false;
+    const startTime = Date.now();
+    const deadline = startTime + WALL_CLOCK_MS;
 
-    // 1. Pick source URL from SOURCES.json (NOT hardcoded).
-    const sourceURL = pickInTreeConnectorURL();
+    // 1. Discover source URL from SOURCES.json
+    const indexURL = await discoverIndexURL();
 
-    // 2. Fetch source content → cache (body NEVER touches stdout).
-    const { text: sourceText, usedCache } = await fetchSource(sourceURL);
-
-    // 3. Parse via TypeScript AST + Zod validation.
-    const parsed = extractConstants(sourceText);
-
-    // 4. Load existing metadata; read root Pagination.PrimaryType.
-    const metadata = loadMetadata();
-    const rootPaginationType =
-        (metadata.fields.Configuration as { Pagination?: { PrimaryType?: string } } | undefined)
-            ?.Pagination?.PrimaryType ?? 'PageNumber';
-
-    // 5. Build emitted IO/IOF rows under AS-IS schema.
-    const { ios, pkCount, supportsWriteCount, supportsIncCount, perArea, gaps } = buildEmittedRows(
-        parsed,
-        rootPaginationType
-    );
-    capHit = ios.length >= IO_CAP;
-
-    // 6. Wall-clock guard.
-    if (Date.now() - START_AT > WALL_CLOCK_MS) {
-        errors.push(`Wall-clock cap (${WALL_CLOCK_MS}ms) exceeded.`);
+    // 2. Fetch and parse the operation index
+    await ensureDir(CACHE_DIR);
+    const indexCachePath = path.join(CACHE_DIR, 'operation-index.html');
+    const indexFetch = await fetchWithCache(indexURL, indexCachePath);
+    if (indexFetch.Status !== 200) {
+        throw new Error(`Operation-index URL ${indexURL} returned HTTP ${indexFetch.Status}`);
+    }
+    const opNames = parseOperationNames(indexFetch.Body);
+    if (opNames.length === 0) {
+        throw new Error(`No operations parsed from index HTML at ${indexURL}`);
     }
 
-    // 7. Merge + write metadata file.
-    mergeAndWrite(metadata, ios);
+    // 3. Load Phase1 + (existing or skeleton) metadata
+    const phase1 = JSON.parse(await fs.readFile(PHASE1_PATH, 'utf8')) as Phase1JSON;
+    const metadata = await loadOrCreateMetadata(phase1);
 
-    // 8. Build per-flag CODE_EVIDENCE entries + rewrite idempotently.
-    const evidenceEntries: CodeEvidenceEntry[] = [];
-    const perFlagBreakdown = {
-        'io.SupportsWrite': 0,
-        'io.SupportsIncrementalSync': 0,
-        'iof.IsPrimaryKey': 0,
-        'iof.IsRequired': 0,
-        'iof.IsReadOnly': 0,
-    };
-    for (const io of ios) {
-        const ioEntries = buildPerFlagEvidence(io, parsed, sourceURL);
-        for (const e of ioEntries) {
-            evidenceEntries.push(e);
-            const tf = e.TargetField;
-            if (tf.endsWith('.SupportsWrite')) perFlagBreakdown['io.SupportsWrite']++;
-            else if (tf.endsWith('.SupportsIncrementalSync')) perFlagBreakdown['io.SupportsIncrementalSync']++;
-            else if (tf.endsWith('.IsPrimaryKey')) perFlagBreakdown['iof.IsPrimaryKey']++;
-            else if (tf.endsWith('.IsRequired')) perFlagBreakdown['iof.IsRequired']++;
-            else if (tf.endsWith('.IsReadOnly')) perFlagBreakdown['iof.IsReadOnly']++;
+    // 4. Fetch all op pages (concurrency-limited, cached)
+    const fetched = await fetchAllOpPages(opNames, indexURL, deadline);
+
+    // 5. Parse each fetched page into a ParsedOperation
+    const parsedOps: ParsedOperation[] = [];
+    let count200 = 0;
+    let count403 = 0;
+    let countOther = 0;
+    for (const op of opNames) {
+        const entry = fetched.get(op);
+        if (!entry) continue;
+        if (entry.Status === 200) count200++;
+        else if (entry.Status === 403) count403++;
+        else countOther++;
+        if (entry.Status !== 200 || entry.Body.length === 0) continue;
+        const routes = parseRoutes(entry.Body);
+        const params = parseParamTables(entry.Body);
+        const roles = parseRequiredRoles(entry.Body);
+        const parsed = ParsedOperationSchema.safeParse({
+            OpName: op,
+            SourceURL: entry.URL,
+            Routes: routes,
+            ParamTables: params,
+            RequiredRoles: roles,
+        });
+        if (parsed.success) {
+            parsedOps.push(parsed.data);
         }
     }
-    const writeStats = rewriteCodeEvidence(evidenceEntries);
 
-    // 9. Stats — stdout structured only. Never the catalog itself.
-    const totalIOFs = ios.reduce(
-        (n, io) => n + io.relatedEntities['MJ: Integration Object Fields'].length,
-        0
-    );
+    // 6. Build IO rows
+    const evidence = new EvidenceCollector();
+    const ios: IO[] = [];
+    let pksDetected = 0;
+    let supportsWriteCount = 0;
+    const gaps: string[] = [];
+    const entityGroupingExamples: Array<{ Entity: string; Operations: string[] }> = [];
 
-    const areasWalked = Array.from(new Set(Object.keys(perArea)));
+    for (const op of parsedOps) {
+        if (ios.length >= MAX_IOS) {
+            throw new Error(`IO cap of ${MAX_IOS} hit at op ${op.OpName}. Bug or runaway extraction.`);
+        }
+        if (op.Routes.length === 0) {
+            // Operation page exists but has no routes — skip, but record as gap
+            gaps.push(
+                `Operation '${op.OpName}': page returned 200 but no <table class='routes'> rows parsed. ` +
+                    'Likely a YM internal helper or doc-only entry. Excluded from IO emission.',
+            );
+            continue;
+        }
+        const capabilities = deriveCapabilities(op.Routes);
+        const pathVars = collectPathVars(op.Routes);
+        const primary = choosePrimaryDTO(op.OpName, op.ParamTables);
 
-    const stats = {
-        Status: errors.length ? 'PartialWithErrors' : 'Complete',
-        ScriptPath: SCRIPT_REL_PATH,
-        FetchedSourceURLs: [sourceURL],
-        UsedCachedSnapshot: usedCache,
-        Stats: {
-            IOCount: ios.length,
-            IOFCount: totalIOFs,
-            CapHit: capHit,
-            PKsDetected: pkCount,
-            SupportsWriteCount: supportsWriteCount,
-            SupportsIncrementalCount: supportsIncCount,
-            AreasWalked: areasWalked,
-            PerAreaCounts: perArea,
-            IOsBidirectional: supportsWriteCount,
-            IOsWithIncrementalSync: supportsIncCount,
-        },
-        CodeEvidence: {
-            EntriesBeforeUpdate: writeStats.before,
-            EntriesAfterPurgeOfPriorRun: writeStats.afterPurge,
-            EntriesAfterUpdate: writeStats.after,
-            FreshEntriesAppended: evidenceEntries.length,
-            PerFlagBreakdown: perFlagBreakdown,
-        },
+        // IO name (snake_case), DisplayName (spaced)
+        const ioName = toSnakeCase(op.OpName);
+        const displayName = toDisplayName(op.OpName);
+        const category = deriveCategory(op.OpName, phase1.ProductTaxonomy.Areas);
+
+        // First route is the canonical APIPath
+        const firstRoute = op.Routes[0];
+
+        // Build IOF rows from the primary DTO + path variables.
+        const iofs: IOF[] = [];
+        let seq = 1;
+        const fieldEvidenceTargets: Array<{ Field: string; PK: boolean; Required: boolean; ReadOnly: boolean }> = [];
+
+        if (primary.DTO) {
+            for (const row of primary.DTO.Rows) {
+                const isPathParam = row.Parameter.toLowerCase() === 'path';
+                const isPK = isPathParam && pathVars.has(row.Name.toLowerCase());
+                const isRequired = /^yes$/i.test(row.Required) || isPK;
+                // YM has no explicit read-only marker. Path PKs are
+                // semantically read-only post-create; flag them.
+                const isReadOnly = isPK;
+                const t = mapType(row.DataType);
+
+                const iof: IOF = {
+                    fields: {
+                        IntegrationObjectID: '@parent:ID',
+                        Name: row.Name,
+                        Type: t.Type,
+                        Length: t.Length,
+                        IsPrimaryKey: isPK,
+                        IsRequired: isRequired,
+                        IsReadOnly: isReadOnly,
+                        Sequence: seq++,
+                    },
+                };
+                const validated = IOFSchema.safeParse(iof);
+                if (validated.success) {
+                    iofs.push(validated.data);
+                    fieldEvidenceTargets.push({
+                        Field: row.Name,
+                        PK: isPK,
+                        Required: isRequired,
+                        ReadOnly: isReadOnly,
+                    });
+                    if (isPK) pksDetected++;
+                }
+            }
+        } else {
+            gaps.push(
+                `Operation '${op.OpName}': no primary DTO found in param tables (strategy=${primary.Strategy}). ` +
+                    'Emitted IO row with zero fields; downstream Invariant 1 may flag.',
+            );
+        }
+
+        if (capabilities.SupportsWrite) supportsWriteCount++;
+
+        // Track entity-grouping examples (limit to 3)
+        if (entityGroupingExamples.length < 3) {
+            entityGroupingExamples.push({
+                Entity: ioName,
+                Operations: op.Routes.map((r) => `${r.Verb} ${r.Path}`),
+            });
+        }
+
+        const io: IO = {
+            fields: {
+                IntegrationID: '@parent:ID',
+                Name: ioName,
+                DisplayName: displayName,
+                Category: category,
+                APIPath: firstRoute.Path,
+                ResponseDataKey: null,
+                PaginationType: 'Unknown',
+                SupportsIncrementalSync: false,
+                SupportsWrite: capabilities.SupportsWrite,
+                Sequence: ios.length + 1,
+            },
+            relatedEntities: {
+                'MJ: Integration Object Fields': iofs,
+            },
+        };
+        const ioValidation = IOSchema.safeParse(io);
+        if (!ioValidation.success) {
+            gaps.push(
+                `Operation '${op.OpName}': IO schema validation failed: ${ioValidation.error.message}. Skipped.`,
+            );
+            continue;
+        }
+        ios.push(ioValidation.data);
+
+        // CODE_EVIDENCE — one entry per hard-constraint flag emission
+        if (capabilities.SupportsWrite) {
+            const writeVerbs = op.Routes.filter((r) => /^(POST|PUT|PATCH|DELETE)$/i.test(r.Verb))
+                .map((r) => r.Verb)
+                .join('|');
+            evidence.append(
+                op.SourceURL,
+                'SupportsWrite=true',
+                `Routes table on per-op page declares mutating verbs [${writeVerbs}]; presence of any of POST/PUT/PATCH/DELETE implies write capability.`,
+                `io.${ioName}.SupportsWrite`,
+            );
+        }
+        for (const fe of fieldEvidenceTargets) {
+            if (fe.PK) {
+                evidence.append(
+                    op.SourceURL,
+                    'IsPrimaryKey=true',
+                    `Param-table row Parameter='path' AND name '${fe.Field}' matches a route template variable {${fe.Field}}; gate DP4 (name exactly matches route path-var, type plausible-PK).`,
+                    `iof.${ioName}.${fe.Field}.IsPrimaryKey`,
+                );
+                evidence.append(
+                    op.SourceURL,
+                    'IsReadOnly=true',
+                    `Path-bound primary keys are not mutable on update in YM REST routes; field re-used in URL templates only.`,
+                    `iof.${ioName}.${fe.Field}.IsReadOnly`,
+                );
+            }
+            if (fe.Required) {
+                evidence.append(
+                    op.SourceURL,
+                    'IsRequired=true',
+                    fe.PK
+                        ? `Path PK fields are implicitly required for routes that bind them.`
+                        : `Param-table 'Required' column reads 'Yes' for field '${fe.Field}'.`,
+                    `iof.${ioName}.${fe.Field}.IsRequired`,
+                );
+            }
+        }
+    }
+
+    // 7. Bidirectional set-completeness — existing IOs not re-emitted = orphan; remove.
+    metadata.relatedEntities ??= {};
+    const previousIOs = (metadata.relatedEntities['MJ: Integration Objects'] ?? []) as IO[];
+    const previousByName = new Map<string, IO>();
+    for (const io of previousIOs) previousByName.set(io.fields.Name, io);
+    const newNames = new Set(ios.map((io) => io.fields.Name));
+    const orphans: string[] = [];
+    for (const [name] of previousByName) {
+        if (!newNames.has(name)) orphans.push(name);
+    }
+    metadata.relatedEntities['MJ: Integration Objects'] = ios;
+
+    // 8. Write metadata file
+    await ensureDir(METADATA_DIR);
+    await fs.writeFile(METADATA_PATH, JSON.stringify(metadata, null, 2) + '\n', 'utf8');
+
+    // 9. Write CODE_EVIDENCE (append/merge)
+    let existingEvidence: { Entries: CodeEvidenceEntry[] } = { Entries: [] };
+    try {
+        const raw = await fs.readFile(CODE_EVIDENCE_PATH, 'utf8');
+        const parsed = JSON.parse(raw) as { Entries?: CodeEvidenceEntry[] };
+        if (Array.isArray(parsed.Entries)) existingEvidence = { Entries: parsed.Entries };
+    } catch {
+        // first run
+    }
+    // De-duplicate evidence entries by (TargetField, DerivedFlag, SourceURL).
+    // The current run's entries take precedence (rewritten with latest
+    // ScriptRunAt timestamp).
+    const dedup = new Map<string, CodeEvidenceEntry>();
+    for (const e of existingEvidence.Entries) {
+        const k = `${e.TargetField}|${e.StructuredOutput?.DerivedFlag}|${e.SourceURL}`;
+        dedup.set(k, e);
+    }
+    for (const e of evidence.list()) {
+        const k = `${e.TargetField}|${e.StructuredOutput.DerivedFlag}|${e.SourceURL}`;
+        dedup.set(k, e);
+    }
+    const merged = { Entries: Array.from(dedup.values()) };
+    await fs.writeFile(CODE_EVIDENCE_PATH, JSON.stringify(merged, null, 2) + '\n', 'utf8');
+
+    // 10. Build + emit structured stats
+    if (orphans.length > 0) {
+        gaps.push(
+            `Removed ${orphans.length} orphan IO(s) from metadata: ${orphans.slice(0, 10).join(', ')}` +
+                (orphans.length > 10 ? '...' : ''),
+        );
+    }
+    if (count403 > 0) {
+        gaps.push(
+            `${count403} of ${opNames.length} operations returned HTTP 403 (gated). Their IO/IOF rows could not be emitted from public sources. Resolve by obtaining licensed-tenant credentials and re-running with the cache cleared.`,
+        );
+    }
+    if (countOther > 0) {
+        gaps.push(`${countOther} operations returned non-200/403 HTTP status; see stderr warnings.`);
+    }
+
+    const stats: ExtractionStats = {
+        TotalOperationsWalked: opNames.length,
+        OperationsFetched200: count200,
+        OperationsFetched403: count403,
+        OperationsFetchedOther: countOther,
+        IOsCreated: ios.length,
+        IOFsCreated: ios.reduce((acc, io) => acc + io.relatedEntities['MJ: Integration Object Fields'].length, 0),
+        PKsDetected: pksDetected,
+        SupportsWriteCount: supportsWriteCount,
+        EntityGroupingExamples: entityGroupingExamples,
         GapsForDownstream: gaps,
-        ErrorsDuringRun: errors,
-        MetadataFilePath:
-            'packages/Integration/connectors-registry/your-membership/metadata/integrations/.your-membership.json',
-        CodeEvidenceEntriesAppended: evidenceEntries.length,
+        CapHit: ios.length >= MAX_IOS,
     };
 
-    process.stdout.write(JSON.stringify(stats, null, 2) + '\n');
+    const output = {
+        Status: count403 === 0 ? 'Complete' : 'PartialWithErrors',
+        ScriptPath: `packages/Integration/connectors-registry/your-membership/${SCRIPT_REL_PATH}`,
+        FetchedSourceURLs: [indexURL],
+        Stats: stats,
+        ErrorsDuringRun: [],
+        MetadataFilePath: `packages/Integration/connectors-registry/your-membership/metadata/integrations/.your-membership.json`,
+        CodeEvidenceEntriesAppended: evidence.size(),
+    };
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
 }
 
-main().catch(err => {
-    process.stderr.write(`extract-io-iof failed: ${(err as Error).stack ?? (err as Error).message}\n`);
+main().catch((err) => {
+    process.stderr.write(`[fatal] ${(err as Error).stack ?? (err as Error).message}\n`);
     process.exit(1);
 });

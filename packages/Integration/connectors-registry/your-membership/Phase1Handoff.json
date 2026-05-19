@@ -1,0 +1,90 @@
+{
+  "Status": "Complete",
+  "Identity": {
+    "Name": "YourMembership",
+    "ClassName": "YourMembershipConnector",
+    "IntegrationName": "YourMembership",
+    "Description": "YourMembership is an association management system (AMS) by Personify for small-staff associations and member-based organizations, providing membership, events, community, e-commerce, fundraising, email marketing, and career-center functionality on a single platform.",
+    "NavigationBaseURL": "https://www.yourmembership.com/",
+    "Icon": "fa-solid fa-users"
+  },
+  "ProductTaxonomy": {
+    "ProductKind": "Association Management System (AMS)",
+    "Areas": [
+      {
+        "Name": "Membership",
+        "Description": "Member profiles, member types, membership plans, dues, renewals, and member directories.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/membership/"
+      },
+      {
+        "Name": "Events",
+        "Description": "Event creation, registration, attendee types, sessions, tickets, CEU awards, and virtual meetings/webinars.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/events/"
+      },
+      {
+        "Name": "Community",
+        "Description": "Member-to-member networking: groups, connections, wall posts, messages, photos, feeds, and notifications.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/community/"
+      },
+      {
+        "Name": "E-Commerce / Store",
+        "Description": "Online store with products, orders, order details, and store-order workflows.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/ecommerce/"
+      },
+      {
+        "Name": "Donations / Fundraising",
+        "Description": "Donation transactions, donation history, top contributors, and fundraising campaigns.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/fundraising/"
+      },
+      {
+        "Name": "Email Marketing / Campaigns",
+        "Description": "Email campaigns, campaign reports, campaign email lists, and campaign list duplicates.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/email-marketing/"
+      },
+      {
+        "Name": "Career Center",
+        "Description": "Career center (Ymc API surface): job postings, job alerts, job search, saved jobs, career openings, and job templates.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/career-center/"
+      },
+      {
+        "Name": "Finance",
+        "Description": "Finance batches and batch details, invoices, invoice items, and dues transactions.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/financial-management/"
+      },
+      {
+        "Name": "Content / Pages",
+        "Description": "Custom pages, custom page versions, custom forms and custom form fields, markup rendering.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/content-management/"
+      },
+      {
+        "Name": "Education / Certification",
+        "Description": "CEU awards at event and session level for continuing-education tracking.",
+        "VendorReferenceURL": "https://www.yourmembership.com/features/education/"
+      }
+    ],
+    "APIParadigm": "REST"
+  },
+  "Provenance": [
+    {
+      "URL": "https://www.yourmembership.com/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Vendor home page — canonical brand 'YourMembership' (single-word PascalCase) and product positioning as an association management system."
+    },
+    {
+      "URL": "https://www.personifycorp.com/products/yourmembership/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Parent company (Personify) product page confirming YourMembership product identity, ProductKind=AMS, and target market (small-staff associations / member-based orgs)."
+    },
+    {
+      "URL": "https://ws.yourmembership.com/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Production REST API base URL — confirms APIParadigm=REST and the /Ams/ (Association Management) + /Ymc/ (Career Center / Your Membership Career) namespace split."
+    },
+    {
+      "URL": "https://www.yourmembership.com/features/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Vendor's own product feature index — source for the Areas list (Membership, Events, Community, E-Commerce, Fundraising, Email Marketing, Career Center, Financial Management, Content Management, Education)."
+    }
+  ],
+  "Disambiguation": []
+}

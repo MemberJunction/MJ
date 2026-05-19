@@ -1,0 +1,356 @@
+{
+  "Vendor": "YourMembership",
+  "VendorOwnership": {
+    "CurrentOwner": "Momentive Software",
+    "OwnershipChain": "YourMembership -> Community Brands (April 2017 merger with Aptify + Abila) -> rebranded Momentive Software (July 2024, post TA Associates acquisition)",
+    "Phase1HandoffCorrection": "Phase1Handoff.json lists Owner as 'Personify (formerly Community Brands)'. This is INCORRECT. Personify Corp (personifycorp.com) is a SEPARATE, competing AMS vendor that owns WildApricot + MemberClicks + A2Z Events + ThreeSixty. YourMembership is NOT a Personify product. Source: communitybrands.com -> Momentive rebrand announcement; personifycorp.com product matrix does not include YourMembership.",
+    "ImplicationForSourceAudit": "GitHub org github.com/PersonifyInc is unrelated to YourMembership (AI/avatar tech). Postman workspace postman.com/personifycorp is Personify Corp (A2Z product), NOT YourMembership. No official YourMembership Postman workspace or GitHub org located."
+  },
+  "Sources": [
+    {
+      "URL": "https://www.yourmembership.com/api/",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "Documents": ["object-catalog", "auth"],
+      "DocumentsScore": {
+        "object-catalog": 1,
+        "field-schemas": 0,
+        "auth": 2,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 3, "Coverage": 1, "Authority": 5, "FormatQuality": 2 },
+      "OverallScore": 2.75,
+      "Notes": "Vendor-owned landing hub. Itself thin: links to two getting-started PDFs and to gated Swagger UI + metadata endpoints. Coverage value is the URLs it points to, not the page itself."
+    },
+    {
+      "URL": "https://ws.yourmembership.com/swagger-ui/",
+      "Tier": 2,
+      "Category": "OpenAPISpec",
+      "Verified": true,
+      "HTTPStatus": 403,
+      "Gated": true,
+      "GatingNotes": "403 Forbidden without API license. YourMembership requires customers to license the REST API before access is granted. Linked from vendor docs page as the official Swagger UI. The structured spec almost certainly exists behind this gate and would be the canonical IO/IOF source.",
+      "Documents": ["object-catalog", "field-schemas", "auth", "pagination", "error-codes"],
+      "DocumentsScore": {
+        "object-catalog": 5,
+        "field-schemas": 5,
+        "auth": 4,
+        "rate-limits": 2,
+        "pagination": 3,
+        "incremental-sync": 2,
+        "webhooks": 1,
+        "bulk-endpoints": 1,
+        "error-codes": 3,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 5, "Authority": 5, "FormatQuality": 5 },
+      "OverallScore": 4.75,
+      "NotesScoreCaveat": "DocumentsScore values are PROJECTED based on what a Swagger UI for this API class typically contains; cannot be empirically verified without credentials. Treat as 'best available IF accessible' rather than confirmed coverage."
+    },
+    {
+      "URL": "https://ws.yourmembership.com/metadata",
+      "Tier": 2,
+      "Category": "OpenAPISpec",
+      "Verified": true,
+      "HTTPStatus": 403,
+      "Gated": true,
+      "GatingNotes": "403 Forbidden. Per search results, this is the formal service metadata endpoint (likely WSDL-style or OpenAPI). Companion to swagger-ui.",
+      "Documents": ["object-catalog", "field-schemas"],
+      "DocumentsScore": {
+        "object-catalog": 5,
+        "field-schemas": 5,
+        "auth": 2,
+        "rate-limits": 0,
+        "pagination": 1,
+        "incremental-sync": 1,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 1,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 5, "Authority": 5, "FormatQuality": 4 },
+      "OverallScore": 4.5,
+      "NotesScoreCaveat": "Projected. Same caveat as swagger-ui — cannot empirically confirm coverage without credentials."
+    },
+    {
+      "URL": "https://ws.yourmembership.com/metadata?xsd=1",
+      "Tier": 2,
+      "Category": "OpenAPISpec",
+      "Verified": true,
+      "HTTPStatus": 403,
+      "Gated": true,
+      "GatingNotes": "XSD schema variant of the metadata endpoint. Also gated.",
+      "Documents": ["field-schemas"],
+      "DocumentsScore": {
+        "object-catalog": 4,
+        "field-schemas": 5,
+        "auth": 0,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 4, "Authority": 5, "FormatQuality": 5 },
+      "OverallScore": 4.5,
+      "NotesScoreCaveat": "Projected. XSD format would give precise type definitions if accessible."
+    },
+    {
+      "URL": "https://ws.yourmembership.com/json/metadata?op=OAuthScopes",
+      "Tier": 2,
+      "Category": "OpenAPISpec",
+      "Verified": true,
+      "HTTPStatus": 403,
+      "Gated": true,
+      "GatingNotes": "Specific operation endpoint to enumerate OAuth scopes. Gated. Would be the canonical auth/scope source if accessible.",
+      "Documents": ["auth"],
+      "DocumentsScore": {
+        "object-catalog": 0,
+        "field-schemas": 0,
+        "auth": 5,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 2, "Authority": 5, "FormatQuality": 5 },
+      "OverallScore": 4.0,
+      "NotesScoreCaveat": "Projected. Single-concern endpoint specifically for OAuth scope enumeration."
+    },
+    {
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "FetchCaveat": "Binary PDF — WebFetch could not extract text. Confirmed present (879.5KB content downloaded). Content not introspected in this audit; downstream tooling will need a PDF text extractor.",
+      "Documents": ["auth", "object-catalog"],
+      "DocumentsScore": {
+        "object-catalog": 3,
+        "field-schemas": 1,
+        "auth": 4,
+        "rate-limits": 1,
+        "pagination": 2,
+        "incremental-sync": 2,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 1,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 3, "Coverage": 3, "Authority": 5, "FormatQuality": 2 },
+      "OverallScore": 3.25,
+      "NotesScoreCaveat": "Projected from title + cross-references in third-party docs (Higher Logic Worksheet cites base URL https://ws.yourmembership.com/Ams/, /Ams/Authenticate endpoint, ClientID auth). PDF dated 2021 — modest age. Format requires text extraction."
+    },
+    {
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "FetchCaveat": "Binary PDF — WebFetch could not extract text. Confirmed present (426.3KB downloaded). Downstream tooling needs a PDF text extractor.",
+      "Documents": ["auth"],
+      "DocumentsScore": {
+        "object-catalog": 0,
+        "field-schemas": 0,
+        "auth": 5,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 1,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 3, "Coverage": 3, "Authority": 5, "FormatQuality": 2 },
+      "OverallScore": 3.25,
+      "NotesScoreCaveat": "Projected from title + Rasa/Higher-Logic cross-references (OAuth client app creation via Content & Settings > General Settings > API Configuration > OAuth Management; authorization-code flow with /authorize -> /token; redirect URI required). Strongest auth source available."
+    },
+    {
+      "URL": "https://www.yourmembership.com/wp-content/uploads/2020/05/YM-AMS-APIOverview.pdf",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "FetchCaveat": "Binary PDF — WebFetch could not extract text. Confirmed present (154.1KB downloaded). Older (2020) than the Getting Started PDFs.",
+      "Documents": ["object-catalog"],
+      "DocumentsScore": {
+        "object-catalog": 3,
+        "field-schemas": 1,
+        "auth": 2,
+        "rate-limits": 1,
+        "pagination": 1,
+        "incremental-sync": 2,
+        "webhooks": 1,
+        "bulk-endpoints": 0,
+        "error-codes": 1,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 2, "Coverage": 2, "Authority": 5, "FormatQuality": 2 },
+      "OverallScore": 2.75,
+      "NotesScoreCaveat": "Projected. 2020 overview PDF — likely high-level product overview rather than reference."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/4410238657172-YourMembership-REST-API-Integration-Guide",
+      "Tier": 2,
+      "Category": "CommunityFixture",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "Documents": ["field-schemas", "object-catalog"],
+      "DocumentsScore": {
+        "object-catalog": 2,
+        "field-schemas": 5,
+        "auth": 0,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 3, "Authority": 3, "FormatQuality": 3 },
+      "OverallScore": 3.25,
+      "Notes": "Higher Logic (third-party integration partner) document. Confirmed to contain EXTENSIVE field-level mappings across contacts, addresses, emails, phones, groups, meetings — actually the strongest practical field-schema source we have for the two named endpoints (MemberProfile, People). Explicitly states 'YourMembership requires its customers to license the REST API.' Tier 2 because not vendor-authored, but high evidence value for fields."
+    },
+    {
+      "URL": "https://support.higherlogic.com/hc/en-us/articles/6046327963540-YourMembership-Integration-Technical-Worksheet",
+      "Tier": 2,
+      "Category": "CommunityFixture",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "Documents": ["auth"],
+      "DocumentsScore": {
+        "object-catalog": 1,
+        "field-schemas": 0,
+        "auth": 3,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 4, "Coverage": 1, "Authority": 3, "FormatQuality": 3 },
+      "OverallScore": 2.75,
+      "Notes": "Higher Logic worksheet. Confirms base URL https://ws.yourmembership.com/Ams/, three-credential auth model (Username + Password + ClientID), OAuth client-app setup pattern, base-domain pattern {ymbasedomain}.site-ym.com, SSO redirect URI format. Useful corroboration for auth specifics. No rate limits, scopes, or endpoint catalog."
+    },
+    {
+      "URL": "https://help.rasa.io/yourmembership-integration-documentation",
+      "Tier": 3,
+      "Category": "CommunityFixture",
+      "Verified": true,
+      "HTTPStatus": 200,
+      "Documents": ["auth"],
+      "DocumentsScore": {
+        "object-catalog": 0,
+        "field-schemas": 0,
+        "auth": 2,
+        "rate-limits": 0,
+        "pagination": 0,
+        "incremental-sync": 0,
+        "webhooks": 0,
+        "bulk-endpoints": 0,
+        "error-codes": 0,
+        "custom-objects": 0
+      },
+      "AuditScores": { "Freshness": 3, "Coverage": 1, "Authority": 2, "FormatQuality": 2 },
+      "OverallScore": 2.0,
+      "Notes": "Rasa.io setup doc. Only describes where to find ClientID/APIKey/APIPassword in YM admin UI. No endpoint mechanics."
+    }
+  ],
+  "PerAreaCoverageMatrix": {
+    "object-catalog": {
+      "BestTier1Source": "https://ws.yourmembership.com/swagger-ui/ (GATED)",
+      "BestUngatedSource": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_REST_API_2021.pdf (PDF, needs text extraction)",
+      "Confidence": "Low without gated access; Medium with PDF extraction + Higher Logic field-mapping cross-reference",
+      "KnownEndpointsFromSearchEvidence": ["/Ams/Authenticate", "MemberProfile", "People"],
+      "GapSeverity": "HIGH"
+    },
+    "field-schemas": {
+      "BestTier1Source": "https://ws.yourmembership.com/metadata?xsd=1 (GATED)",
+      "BestUngatedSource": "https://support.higherlogic.com/hc/en-us/articles/4410238657172 (Tier 2, contacts/addresses/emails/phones/groups/meetings)",
+      "Confidence": "Medium for the handful of objects HigherLogic documents; Low for the rest of the API surface",
+      "GapSeverity": "HIGH"
+    },
+    "auth": {
+      "BestTier1Source": "https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf",
+      "BestStructuredSource": "https://ws.yourmembership.com/json/metadata?op=OAuthScopes (GATED)",
+      "Confidence": "Medium-High after PDF text extraction + cross-reference with Higher Logic worksheet (three-cred + OAuth-client-app pattern confirmed by both)",
+      "GapSeverity": "LOW"
+    },
+    "rate-limits": {
+      "BestSource": "NONE FOUND",
+      "Confidence": "ZERO",
+      "GapSeverity": "CRITICAL",
+      "Notes": "No public Tier-1/2 source documents rate limits or throttling behavior. Must be discovered empirically during T10 live testing, or obtained from vendor via support ticket. Hard-constraint fields BatchMaxRequestCount + BatchRequestWaitTime cannot be populated from public sources."
+    },
+    "pagination": {
+      "BestSource": "https://ws.yourmembership.com/swagger-ui/ (GATED)",
+      "Confidence": "Zero from public sources",
+      "GapSeverity": "HIGH"
+    },
+    "incremental-sync": {
+      "BestSource": "Search-result excerpt mentions 'retrieve members modified since a specific date' — implies modified-since support, but no canonical doc",
+      "Confidence": "Very Low",
+      "GapSeverity": "HIGH",
+      "Notes": "Need PDF extraction or gated swagger to confirm parameter name, format, and per-object support."
+    },
+    "webhooks": {
+      "BestSource": "NONE FOUND",
+      "Confidence": "ZERO",
+      "GapSeverity": "MEDIUM-HIGH",
+      "Notes": "No evidence YourMembership exposes webhooks. Likely poll-only model. Field WebhooksAvailable should remain at safe default (false) per provable-only rule unless gated sources contradict."
+    },
+    "bulk-endpoints": {
+      "BestSource": "NONE FOUND",
+      "Confidence": "ZERO",
+      "GapSeverity": "MEDIUM",
+      "Notes": "BulkOperationsAvailable defaults to false."
+    },
+    "error-codes": {
+      "BestSource": "https://ws.yourmembership.com/swagger-ui/ (GATED)",
+      "Confidence": "Zero from public sources",
+      "GapSeverity": "MEDIUM"
+    },
+    "custom-objects": {
+      "BestSource": "NONE FOUND",
+      "Confidence": "ZERO",
+      "GapSeverity": "LOW",
+      "Notes": "AMS products often lack a true custom-object/custom-field framework at the API surface; field stays at safe default."
+    }
+  },
+  "GapsIdentified": [
+    "OWNERSHIP MISIDENTIFIED IN PHASE1HANDOFF: Owner is Momentive Software (formerly Community Brands), NOT Personify. Personify is a competing AMS vendor. This impacts any downstream agent that searches Personify channels for YourMembership artifacts.",
+    "PRIMARY STRUCTURED SOURCES ARE GATED: swagger-ui, metadata, metadata?xsd=1, and OAuthScopes endpoints all return 403. Vendor explicitly states API license required before access. Cannot empirically verify object/field/scope catalog without a licensed-tenant API key.",
+    "PDFs are binary and could not be text-extracted by WebFetch in this audit. Downstream extractor needs a real PDF parser (e.g., pdf-parse, pdfjs-dist).",
+    "No public rate-limit documentation found anywhere. BatchMaxRequestCount + BatchRequestWaitTime are unprovable from public sources; must come from gated swagger or vendor support.",
+    "No public Postman collection. The postman.com/personifycorp workspace is unrelated (Personify Corp's A2Z product).",
+    "No official YourMembership GitHub org located. PersonifyInc on GitHub is an unrelated AI/avatar tech company. github.com/QuorumUS/ym-api and similar are third-party PHP wrappers — Tier 3 community fixtures, NOT acceptable for hard constraints.",
+    "Endpoint catalog evidence is sparse: only /Ams/Authenticate, MemberProfile, and People are surfaced in public sources. The full /Ams/* surface area is opaque without gated access.",
+    "Webhook support: no evidence either way. Safer default is WebhooksAvailable=false until proven otherwise."
+  ],
+  "AuthClassification": "OAuth2AuthCode (with client-app registration via YM admin UI) + legacy three-credential model (Username + Password + ClientID) coexists. Evidence: Higher Logic Worksheet confirms three-cred model on /Ams/* endpoints; OAuth PDF + Rasa.io doc + Higher Logic Worksheet all reference OAuth Management screen for client-app creation with redirect URI. Both auth modes appear supported.",
+  "PaginationClassification": "Unknown — cannot determine from public sources. Gated swagger required.",
+  "ObservedSchemaFormats": ["HTML reference (vendor landing only)", "PDF (binary, unparseable by WebFetch)", "XSD (gated)", "OpenAPI/Swagger (gated)", "Third-party field-mapping HTML (Higher Logic)"],
+  "TopSourceOverall": {
+    "IfGatedAccessAvailable": "https://ws.yourmembership.com/swagger-ui/ (OverallScore 4.75)",
+    "IfPublicOnly": "https://support.higherlogic.com/hc/en-us/articles/4410238657172-YourMembership-REST-API-Integration-Guide (OverallScore 3.25 — best field-level evidence) + https://www.yourmembership.com/wp-content/uploads/2021/02/YM_Getting_Started_OAuth_2021.pdf (OverallScore 3.25 — best auth evidence, pending PDF extraction)"
+  },
+  "GatingNotes": "Four of the strongest projected sources (swagger-ui, metadata, metadata?xsd=1, OAuthScopes) all return HTTP 403. This is consistent with vendor policy — YourMembership requires API license per Higher Logic guide. The gate is documented as real and intentional; sources are NOT broken or fabricated. To unlock: licensed-tenant credentials must be obtained from a YM-customer organization, then downstream extractor can fetch the swagger JSON behind the gate.",
+  "RecommendedAction": "EscalateToHuman",
+  "EscalationReason": "Three concurrent blockers prevent confident provable-only extraction: (1) Phase1Handoff misidentifies the owner (Personify vs Momentive Software) — needs correction before any vendor-channel research downstream; (2) the four highest-value structured sources are gated behind an API license that this agent does not possess, and there is no public OpenAPI/Postman alternative; (3) rate-limit and pagination evidence is entirely absent from public sources. Possible paths forward, ranked: (a) obtain licensed-tenant credentials and refetch the gated swagger + metadata endpoints — this single action would resolve gaps 2 + 3 simultaneously and produce a Tier-1 OpenAPI source the extractor can consume directly; (b) PDF text extraction on the three vendor PDFs to confirm what the Getting Started + OAuth + AMS Overview docs actually contain — cheap and may resolve part of gap 2 even without licensed access; (c) proceed with Higher Logic + PDF-extracted content as the only sources, accepting that ~6 of 10 documents categories will have Confidence=Low/Zero and that downstream Invariant 1 will fail for any hard-constraint field that depends on rate limits or pagination."
+}
