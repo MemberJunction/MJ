@@ -27,8 +27,13 @@
  *   7. Merges into metadata/integrations/.hubspot.json under
  *      relatedEntities["MJ: Integration Objects"]. Upsert by Name.
  *   8. Emits per-flag CODE_EVIDENCE.json entries for every hard-constraint
- *      flag set (IsPrimaryKey, IsRequired, IsReadOnly[non-default], SupportsWrite,
- *      RelatedIntegrationObjectID). Idempotent — re-run dedupes by composite key.
+ *      flag set (IsPrimaryKey, IsRequired, IsReadOnly[non-default],
+ *      SupportsWrite, SupportsIncrementalSync, RelatedIntegrationObjectID).
+ *      The covered set is verified against the validator's
+ *      Invariant1_ProvableOnly hard-constraint list — every flag the
+ *      extractor populates in metadata gets a per-(field, signal) entry
+ *      when set to true / non-default. Idempotent — re-run dedupes by
+ *      composite key.
  *   9. Stdout is JSON stats only.
  *
  * Bounds: 1000 IO cap, 10 min wall-clock.
@@ -505,17 +510,53 @@ function detectSupportsWrite(ops: OpInfo[]): SupportsWriteResult {
     };
 }
 
-function detectSupportsIncremental(ops: OpInfo[], iofs: IOFRow[], rootPath: string): boolean {
+interface SupportsIncrementalResult {
+    SupportsIncrementalSync: boolean;
+    Signal: string | null;
+}
+
+// Returns both the flag and the source-side signal that justified the decision.
+// HubSpot has two distinct incremental patterns:
+//   (a) /search subpath — POST-based incremental queries with filters on
+//       updatedAt / hs_lastmodifieddate (Search API);
+//   (b) item-schema watermark — a top-level updatedAt-shaped property that
+//       can be used as a watermark for /list pagination.
+// Either signal is sufficient. Signal-string captures which one fired and
+// which exact path / field name was observed, so CODE_EVIDENCE entries are
+// traceable back to the OpenAPI spec.
+function detectSupportsIncremental(ops: OpInfo[], iofs: IOFRow[], rootPath: string): SupportsIncrementalResult {
     for (const o of ops) {
-        if (o.path === `${rootPath}/search`) return true;
-        if (o.path.endsWith('/search')) return true;
+        if (o.path === `${rootPath}/search`) {
+            return {
+                SupportsIncrementalSync: true,
+                Signal: `OpenAPI spec defines '${o.verb.toUpperCase()} ${o.path}' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate`
+            };
+        }
+        if (o.path.endsWith('/search')) {
+            return {
+                SupportsIncrementalSync: true,
+                Signal: `OpenAPI spec defines '${o.verb.toUpperCase()} ${o.path}' subpath — Search-style incremental endpoint reachable from this resource`
+            };
+        }
     }
-    const lcNames = iofs.map(r => r.Name.toLowerCase());
     const watermarkSignals = ['updatedat', 'lastmodifieddate', 'hs_lastmodifieddate', 'modifiedat',
         'updated_at', 'last_modified'];
-    if (lcNames.some(n => watermarkSignals.includes(n))) return true;
-    if (iofs.some(r => r.Name === 'properties') && iofs.some(r => r.Name === 'updatedAt')) return true;
-    return false;
+    const matchedField = iofs.find(r => watermarkSignals.includes(r.Name.toLowerCase()));
+    if (matchedField) {
+        return {
+            SupportsIncrementalSync: true,
+            Signal: `Item schema has watermark-shaped field '${matchedField.Name}' (type ${matchedField.Type}) — usable as incremental cursor for list pagination`
+        };
+    }
+    const hasProperties = iofs.some(r => r.Name === 'properties');
+    const hasUpdatedAt = iofs.some(r => r.Name === 'updatedAt');
+    if (hasProperties && hasUpdatedAt) {
+        return {
+            SupportsIncrementalSync: true,
+            Signal: `Item schema follows HubSpot dynamic-properties pattern (top-level 'properties' bag + 'updatedAt') — updatedAt is canonical incremental cursor for CRM objects`
+        };
+    }
+    return { SupportsIncrementalSync: false, Signal: null };
 }
 
 function detectPagination(spec: Spec, listSchema: Schema | null, listRefName: string | null, listGet: OpInfo): string {
@@ -543,9 +584,11 @@ interface IORow {
     Sequence: number;
     IOFs: IOFRow[];
     // Non-persisted: source URL of the OpenAPI spec this IO was derived from,
-    // and signal that justified SupportsWrite when true.
+    // and signal strings that justified each IO-level hard-constraint flag
+    // when true. One signal per flag — drives CODE_EVIDENCE emission.
     _sourceURL: string;
     _supportsWriteSignal: string | null;
+    _supportsIncrementalSignal: string | null;
 }
 
 function humanize(s: string): string {
@@ -605,7 +648,8 @@ function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: 
         if (objectKey.length < 2) continue;
         const pagination = detectPagination(spec, root.listSchema, root.listRefName, root.listGet);
         const { SupportsWrite: supportsWrite, Signal: supportsWriteSignal } = detectSupportsWrite(allOps);
-        const supportsIncremental = detectSupportsIncremental(allOps, iofs, root.rootPath);
+        const { SupportsIncrementalSync: supportsIncremental, Signal: supportsIncrementalSignal } =
+            detectSupportsIncremental(allOps, iofs, root.rootPath);
         const category = deriveCategory(family, objectKey);
         ios.push({
             Name: objectKey,
@@ -619,7 +663,8 @@ function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: 
             Sequence: seq++,
             IOFs: iofs,
             _sourceURL: sourceURL,
-            _supportsWriteSignal: supportsWriteSignal
+            _supportsWriteSignal: supportsWriteSignal,
+            _supportsIncrementalSignal: supportsIncrementalSignal
         });
     }
     return ios;
@@ -731,11 +776,18 @@ function readExistingEvidence(): CodeEvidenceFile {
     }
 }
 
+// Per-flag breakdown counters, indexed by the same flag identifiers used in
+// CODE_EVIDENCE.json's `StructuredOutput.Flag` strings. The covered set here
+// is derived from the validator's Invariant1_ProvableOnly hard-constraint
+// list intersected with the fields this extractor actually populates in
+// metadata. Adding a new populated flag requires adding it here AND in
+// buildEvidenceEntries below AND in the sanity-check at end of main().
 interface PerFlagBreakdown {
     'IsPrimaryKey': number;
     'IsRequired': number;
     'IsReadOnly': number;
     'SupportsWrite': number;
+    'SupportsIncrementalSync': number;
     'RelatedIntegrationObjectID': number;
 }
 
@@ -746,6 +798,7 @@ function buildEvidenceEntries(ios: IORow[], scriptRunAt: string): { entries: Cod
         'IsRequired': 0,
         'IsReadOnly': 0,
         'SupportsWrite': 0,
+        'SupportsIncrementalSync': 0,
         'RelatedIntegrationObjectID': 0
     };
     for (const io of ios) {
@@ -764,6 +817,26 @@ function buildEvidenceEntries(ios: IORow[], scriptRunAt: string): { entries: Cod
                 TargetField: `io.${io.Name}.SupportsWrite`
             });
             breakdown.SupportsWrite++;
+        }
+        // IO-level: SupportsIncrementalSync=true → one entry citing the
+        // matched signal (Search subpath OR watermark-shaped field OR
+        // properties+updatedAt pattern). Validator's Invariant1 check at
+        // io.<name>.SupportsIncrementalSync requires this for every IO
+        // where the flag is true.
+        if (io.SupportsIncrementalSync && io._supportsIncrementalSignal) {
+            entries.push({
+                ScriptPath: SCRIPT_PATH_REL,
+                ScriptRunAt: scriptRunAt,
+                SourceURL: io._sourceURL,
+                StructuredOutput: {
+                    Signal: io._supportsIncrementalSignal,
+                    Flag: 'SupportsIncrementalSync=true',
+                    Target: `io.${io.Name}`
+                },
+                SchemaValidationStatus: 'Passed',
+                TargetField: `io.${io.Name}.SupportsIncrementalSync`
+            });
+            breakdown.SupportsIncrementalSync++;
         }
         // IOF-level: per-flag entries for each hard constraint set.
         for (const iof of io.IOFs) {
@@ -1002,16 +1075,20 @@ async function main(): Promise<void> {
 
     // Sanity: surface mismatch between in-memory hard-constraint counts and
     // emitted evidence counts. If a flag is set in metadata but no signal
-    // captured, that's a bug — fail loudly.
+    // captured, that's a bug — fail loudly. Covered flag set is the
+    // intersection of (validator's Invariant1 hard-constraint list) and
+    // (fields this extractor actually populates in metadata).
     const expectedPK = allIOs.reduce((n, io) => n + io.IOFs.filter(f => f.IsPrimaryKey).length, 0);
     const expectedReq = allIOs.reduce((n, io) => n + io.IOFs.filter(f => f.IsRequired).length, 0);
     const expectedRO = allIOs.reduce((n, io) => n + io.IOFs.filter(f => f.IsReadOnly).length, 0);
     const expectedSW = allIOs.filter(io => io.SupportsWrite).length;
+    const expectedSI = allIOs.filter(io => io.SupportsIncrementalSync).length;
     const mismatches: string[] = [];
     if (breakdown.IsPrimaryKey !== expectedPK) mismatches.push(`IsPrimaryKey evidence=${breakdown.IsPrimaryKey} vs flags=${expectedPK}`);
     if (breakdown.IsRequired !== expectedReq) mismatches.push(`IsRequired evidence=${breakdown.IsRequired} vs flags=${expectedReq}`);
     if (breakdown.IsReadOnly !== expectedRO) mismatches.push(`IsReadOnly evidence=${breakdown.IsReadOnly} vs flags=${expectedRO}`);
     if (breakdown.SupportsWrite !== expectedSW) mismatches.push(`SupportsWrite evidence=${breakdown.SupportsWrite} vs flags=${expectedSW}`);
+    if (breakdown.SupportsIncrementalSync !== expectedSI) mismatches.push(`SupportsIncrementalSync evidence=${breakdown.SupportsIncrementalSync} vs flags=${expectedSI}`);
     if (mismatches.length > 0) {
         process.stderr.write(`WARN: evidence/flag count mismatch — ${mismatches.join('; ')}\n`);
     }

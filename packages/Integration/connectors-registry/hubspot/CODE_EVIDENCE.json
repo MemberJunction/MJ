@@ -16127,6 +16127,846 @@
       },
       "SchemaValidationStatus": "Passed",
       "TargetField": "iof.appId_subscriptions.updatedAt.IsReadOnly"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Automation/Automation%20V4/Rollouts/144908/2026-09-beta/automationV4.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.flows"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.flows.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Automation/Sequences/Rollouts/177891/2026-09/sequences.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.sequences"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.sequences.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Blog%20Settings/Rollouts/635/2026-09/blogSettings.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.blog_settings_settings_blogId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blog_settings_settings_blogId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Hubdb/Rollouts/243927/2026-03/hubdb.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.hubdb_tables"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_tables.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Hubdb/Rollouts/243927/2026-03/hubdb.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.hubdb_tables_draft"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.hubdb_tables_draft.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Media%20Bridge/Rollouts/787/2026-09/mediaBridge.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.media_bridge_appId_schemas"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.media_bridge_appId_schemas.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Media%20Bridge/Rollouts/787/2026-09/mediaBridge.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type bigint) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.media_bridge_appId_settings_oembed_domains"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.media_bridge_appId_settings_oembed_domains.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Pages/Rollouts/59888/2026-03/pages.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.pages_landing_pages_folders_objectId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pages_landing_pages_folders_objectId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Pages/Rollouts/59888/2026-03/pages.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.pages_landing_pages_objectId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pages_landing_pages_objectId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Pages/Rollouts/59888/2026-03/pages.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.pages_site_pages_objectId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pages_site_pages_objectId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Posts/Rollouts/635/v3/posts.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.blogs_posts_objectId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.blogs_posts_objectId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CMS/Site%20Search/Rollouts/144890/2026-09/siteSearch.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'GET /cms/site-search/2026-09/search' subpath — Search-style incremental endpoint reachable from this resource",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.site_search_search"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.site_search_search.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Calls/Rollouts/424/2026-03/calls.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/calls/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.calls"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.calls.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Carts/Rollouts/424/2026-03/carts.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/carts/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.carts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.carts.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Commerce%20Payments/Rollouts/424/2026-03/commercePayments.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/commerce_payments/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.commerce_payments"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.commerce_payments.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Commerce%20Subscriptions/Rollouts/206901/2026-03/commerceSubscriptions.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/subscriptions/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.subscriptions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.subscriptions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Communications/Rollouts/424/2026-03/communications.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/communications/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.communications"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.communications.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Companies/Rollouts/424/2026-03/companies.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/companies/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.companies"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.companies.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Contacts/Rollouts/424/2026-03/contacts.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/contacts/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.contacts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contacts.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Contracts/Rollouts/424/2026-03/contracts.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.contracts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.contracts.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Courses/Rollouts/424/2026-03/courses.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/0-410/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.courses"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.courses.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Crm%20Owners/Rollouts/146888/2026-09/crmOwners.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.owners"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.owners.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Deals/Rollouts/424/2026-03/deals.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/0-3/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.deals"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.deals.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Discounts/Rollouts/424/2026-03/discounts.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/discounts/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.discounts"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.discounts.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Emails/Rollouts/424/2026-03/emails.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/emails/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.emails"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Feedback%20Submissions/Rollouts/424/2026-03/feedbackSubmissions.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/feedback_submissions/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.feedback_submissions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.feedback_submissions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Fees/Rollouts/424/2026-03/fees.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/fees/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.fees"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.fees.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Goal%20Targets/Rollouts/424/2026-03/goalTargets.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/goal_targets/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.goal_targets"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.goal_targets.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Imports/Rollouts/144903/2026-09/imports.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.imports"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.imports.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Invoices/Rollouts/424/2026-03/invoices.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/invoices/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.invoices"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.invoices.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Leads/Rollouts/424/2026-03/leads.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/leads/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.leads"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.leads.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Line%20Items/Rollouts/424/2026-03/lineItems.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/line_items/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.line_items"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.line_items.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Listings/Rollouts/424/2026-03/listings.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/0-420/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.listings"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.listings.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Meetings/Rollouts/424/2026-03/meetings.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/meetings/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.meetings"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.meetings.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Notes/Rollouts/424/2026-03/notes.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/notes/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.notes"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.notes.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Orders/Rollouts/424/2026-03/orders.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/orders/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.orders"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.orders.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Partner%20Clients/Rollouts/424/2026-03/partnerClients.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/partner_clients/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.partner_clients"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.partner_clients.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Partner%20Services/Rollouts/424/2026-03/partnerServices.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/partner_services/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.partner_services"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.partner_services.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Payments/Rollouts/424/v3/payments.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/v3/objects/payments/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.payments"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.payments.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Pipelines/Rollouts/145896/2026-09/pipelines.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.pipelines_objectType_pipelineId_stages"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.pipelines_objectType_pipelineId_stages.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Postal%20Mail/Rollouts/424/2026-03/postalMail.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/postal_mail/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.postal_mail"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.postal_mail.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Products/Rollouts/424/2026-03/products.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/products/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.products"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.products.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Projects/Rollouts/260890/2026-03/projects.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/projects/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.projects"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.projects.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Quotes/Rollouts/424/2026-03/quotes.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/quotes/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.quotes"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.quotes.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Schemas/Rollouts/145900/2026-09/schemas.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.crm_object_schemas_schemas"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.crm_object_schemas_schemas.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Services/Rollouts/424/2026-03/services.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/0-162/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.services"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.services.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Tasks/Rollouts/424/2026-03/tasks.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/tasks/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.tasks"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tasks.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Taxes/Rollouts/424/2026-03/taxes.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/taxes/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.taxes"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.taxes.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Tickets/Rollouts/424/2026-03/tickets.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/tickets/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.tickets"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tickets.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Timeline/Rollouts/147898/v3/timeline.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.integrators_timeline_appId_event_templates"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.integrators_timeline_appId_event_templates.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/CRM/Users/Rollouts/424/2026-03/users.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'POST /crm/objects/2026-03/users/search' subpath under this resource — HubSpot Search API supports incremental filtering by updatedAt/hs_lastmodifieddate",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.users"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.users.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Communication%20Preferences/Subscriptions/Rollouts/176901/2026-09/subscriptions.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.definitions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.definitions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Conversations/Conversations%20Inbox%20%26%20Messages/Rollouts/54902/v3/conversationsInboxMessages.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.conversations_inboxes"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.conversations_inboxes.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Events/Manage%20Event%20Definitions/Rollouts/138888/2026-09/manageEventDefinitions.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.custom_event_definitions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.custom_event_definitions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Events/Manage%20Event%20Definitions/Rollouts/138888/2026-03/manageEventDefinitions.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.event_definitions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.event_definitions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Files/Files/Rollouts/140950/2026-09/files.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'GET /files/2026-09/files/search' subpath — Search-style incremental endpoint reachable from this resource",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.files_search"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.files_search.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Files/Files/Rollouts/140950/2026-09/files.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'GET /files/2026-09/folders/search' subpath — Search-style incremental endpoint reachable from this resource",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.folders_search"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.folders_search.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Campaigns%20Public%20Api/Rollouts/177944/2026-09/campaignsPublicApi.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.campaigns"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.campaigns.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Marketing%20Emails%20V3/Rollouts/155892/v3/marketingEmailsV3.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.emails_emailId_revisions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.emails_emailId_revisions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Marketing%20Events/Rollouts/129888/2026-09/marketingEvents.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'GET /marketing/marketing-events/2026-09/events/search' subpath — Search-style incremental endpoint reachable from this resource",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.marketing_events"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Marketing%20Events/Rollouts/129888/2026-09/marketingEvents.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.marketing_events_associations_externalAccountId_externalEventId_lists"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events_associations_externalAccountId_externalEventId_lists.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Marketing%20Events/Rollouts/129888/2026-09/marketingEvents.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.marketing_events_associations_marketingEventId_lists"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events_associations_marketingEventId_lists.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Marketing/Marketing%20Events/Rollouts/129888/2026-09/marketingEvents.json",
+      "StructuredOutput": {
+        "Signal": "OpenAPI spec defines 'GET /marketing/marketing-events/2026-09/events/search' subpath — Search-style incremental endpoint reachable from this resource",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.marketing_events_events_search"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.marketing_events_events_search.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Scheduler/Meetings/Rollouts/177892/2026-09/meetings.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.meetings_meeting_links"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.meetings_meeting_links.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Settings/Multicurrency/Rollouts/145897/2026-09/multicurrency.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.currencies_exchange_rates"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.currencies_exchange_rates.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Settings/Multicurrency/Rollouts/145897/2026-09/multicurrency.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.currencies_exchange_rates_current"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.currencies_exchange_rates_current.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Settings/Tax%20Rates/Rollouts/207908/2026-09/taxRates.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.tax_rates_tax_rates"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.tax_rates_tax_rates.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Webhooks/Webhooks/Rollouts/147891/2026-09/webhooks.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.app_webhooks_appId_subscriptions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.app_webhooks_appId_subscriptions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Webhooks/Webhooks/Rollouts/147891/2026-03/webhooks.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.webhooks_journal_subscriptions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.webhooks_journal_subscriptions.SupportsIncrementalSync"
+    },
+    {
+      "ScriptPath": "scripts/extract-io-iof.ts",
+      "ScriptRunAt": "2026-05-19T14:45:19.134Z",
+      "SourceURL": "https://raw.githubusercontent.com/HubSpot/HubSpot-public-api-spec-collection/main/PublicApiSpecs/Webhooks/Webhooks/Rollouts/147891/2026-03/webhooks.json",
+      "StructuredOutput": {
+        "Signal": "Item schema has watermark-shaped field 'updatedAt' (type datetimeoffset) — usable as incremental cursor for list pagination",
+        "Flag": "SupportsIncrementalSync=true",
+        "Target": "io.appId_subscriptions"
+      },
+      "SchemaValidationStatus": "Passed",
+      "TargetField": "io.appId_subscriptions.SupportsIncrementalSync"
     }
   ]
 }
