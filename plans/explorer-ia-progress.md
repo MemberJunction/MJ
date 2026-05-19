@@ -1,23 +1,50 @@
 # MJ Explorer · IA Standardization Progress
 
-> **Branch:** `explorer-header-consolidation` (active) · **Status:** Phase 2.3 mostly complete · **Last update:** 2026-05-15
+> **Branch:** `explorer-shell-subpage-chrome` (active) · **Status:** Phase 2.3 complete; Section 10 RESOLVED — interior chrome pattern landed · **Last update:** 2026-05-19
 
 > Companion doc to [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the rules) and [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) (the parent plan).
 
 ## TL;DR
 
-We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
+Standardizing MJ Explorer's chrome — both the page-level header band (every dashboard) and the body-level chrome for sub-pages inside a left-nav shell (Admin / KH Config / AI Analytics / etc.). Per-page bespoke CSS is deleted as we go; styles live in exactly one place.
 
-So far: **14 shared chrome components** built (page-layout, page-header, page-body, page-search, tab-nav, view-toggle, filter-popover, filter-panel, filter-field, filter-chip, filter-toggle, result-count, stat-badge, refresh-button) — all in `@memberjunction/ng-ui-components`. **~65 dashboards** fully migrated. **Remaining unmigrated pages are documented exceptions** — see Section 9 of [chrome-conventions.md](explorer-chrome-conventions.md) for the canonical list (single-page exceptions like Home / Component Studio / Data Explorer / Query Browser / AI Overview, plus shell-with-left-nav sub-pages — the 5 explorer-settings components, `ApplicationRolesResource`, `SystemDiagnosticsResource`, and APIKeys' internal tabs — which are deferred pending the Section 10 decision).
+**Page-level chrome** (the original Phase 2.3 work): every standalone dashboard uses `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>`. ~65 dashboards migrated. Remaining unmigrated pages are documented Section 9 exceptions (Home / Component Studio / Data Explorer / Query Browser / AI Overview / Model Performance).
+
+**Interior chrome** (Section 10, landed 2026-05-19): sub-pages dynamically loaded into a parent left-nav shell use a body-level `<mj-page-header-interior>` card instead of their own page-level header. The parent shell owns the page identity; the rail's active-item is the section indicator. Same slot conventions (`[meta]` / `[actions]` / `[toolbar]`) as `<mj-page-header>`, different visual shape (single-row card on a surface background).
+
+Five of the six previously-deferred shell sub-pages are now migrated (Users / Roles / Apps / App Roles / Permissions). Two complex sub-pages remain (APIKeys — nested internal nav; SystemDiagnostics — pending a quick pass). Three additional Admin shells (Monitoring, Data & Schema, Dev Tools) plus AI Analytics' inline tab-sections are next.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
+
+### Page-level chrome (top-level dashboards)
 
 | Component | Selector | Purpose |
 |---|---|---|
 | `MJPageLayoutComponent` | `mj-page-layout` | Outer flex-column shell. `--mj-bg-page` background, `overflow: hidden`, full-height. Replaces every dashboard's bespoke `.{name}-container` wrapper. |
 | `MJPageHeaderComponent` | `mj-page-header` | Canonical title row. Typed inputs `Title`, `Icon`, `Subtitle`. Three projection slots: `[meta]` (next to title), `[actions]` (right side), `[toolbar]` (secondary row inside same card). Icon uses `--mj-brand-primary` (NOT `--mj-app-accent`) so color is unified across apps. |
+| `MJPageBodyComponent` | `mj-page-body` | Body region with optional padding + flex mode. **`Direction` input** (added 2026-05-19) — `'row'` switches the flex direction when `[Flex]="true"`, replacing the bespoke `.{name}-container__body` wrapper that left-rail shells used to declare. |
+
+### Interior chrome (sub-pages inside a left-nav shell)
+
+| Component | Selector | Purpose |
+|---|---|---|
+| `MJLeftNavComponent` | `mj-left-nav` | Canonical left rail. `[Sections]: MJLeftNavSection[]` + `[ActiveId]`; emits `(ItemClicked)`. Supports items with description / badge, section labels, optional `[header]` / `[footer]` slots. Responsive collapse-to-row at <700px. |
+| `MJLeftNavContentComponent` | `mj-left-nav-content` | Content pane paired with `<mj-left-nav>`. Built-in `[Loading]` / `[Error]` states; projected content auto-hides when busy (cached components stay attached). Replaces the `applyHostSizing()` inline-style hack. |
+| `MJPageHeaderInteriorComponent` | `mj-page-header-interior` | Body-level sibling of `<mj-page-header>` for sub-page interior chrome. Same `[meta]` / `[actions]` / `[toolbar]` slot conventions; renders as a single-row card with surface background + radius + shadow. `[AriaLabel]` + `[Role]` inputs (default `Role="search"`). |
+
+### Shared chrome primitives (used in both page-level and interior chrome)
+
+| Component | Selector | Purpose |
+|---|---|---|
 | `MJStatBadgeComponent` | `mj-stat-badge` | Pill: "Count Label" or "Count of Total Label" or "Icon Label" (variants for status). Inputs `Count`, `Total`, `Label`, `Icon`, `Variant`. **Absorbed `mj-result-count`** in the organizational refactor. |
-| `MJFilterPopoverComponent` | `mj-filter-popover` | Trigger button (filter icon + label + active count badge) that opens a CDK Overlay popover. Inputs `Label`, `Icon`, `ActiveCount`, `ShowClearAll`. Output `ClearAllRequested`. Content projected via `<ng-content>`. **Prototype** for the unified-filter-placement direction. |
+| `MJPageSearchComponent` | `mj-page-search` | Search input for `[toolbar]` slot. `[Placeholder]` + `[Value]`, emits `(ValueChange)`. |
+| `MJFilterPopoverComponent` | `mj-filter-popover` | Trigger button (filter icon + label + active count badge) that opens a CDK Overlay popover. Inputs `Label`, `Icon`, `ActiveCount`, `ShowClearAll`. Output `ClearAllRequested`. |
+| `MJFilterPanelComponent` | `mj-filter-panel` | Config-driven panel inside the popover. `[Fields]: FilterFieldConfig[]` + `[Values]: Record<string, unknown>`. Field types: `'text'`, `'dropdown'`, `'chips'`. Field icons supported. |
+| `MJFilterFieldComponent` | `mj-filter-field` | Labeled wrapper for a custom widget inside `<mj-filter-panel>`. Used as an escape hatch when the built-in field types don't fit. |
+| `MJFilterChipComponent` | `mj-filter-chip` | Toggle chip for quick-filter groups (status, time range). `[Label]` + `[Active]`, emits `(Clicked)`. |
+| `MJTabNavComponent` | `mj-tab-nav` | Tab navigation for parent dashboards with sub-sections (Scheduling / MCP / Testing). |
+| `MJViewToggleComponent` | `mj-view-toggle` | Compact icon-only segmented control for view modes (list / grid / tree). Icon-only convention: `title` for tooltip + aria-label; `label` for the rare visible-text case. |
+| `MJRefreshButtonComponent` | `mj-refresh-button` | Refresh button. `[Loading]` drives both spinner and disabled state. |
 
 All standalone, design-token-only, PascalCase API. `MJFilterToggleComponent` (was `mj-filter-toggle`) was deleted in the organizational refactor — zero template usages, fully replaced by the popover pattern.
 
@@ -84,14 +111,54 @@ All standalone, design-token-only, PascalCase API. `MJFilterToggleComponent` (wa
 | Archive — Configuration | ✅ | ✅ | n/a | n/a | n/a | Resource wrapper migration only — wrapped `<mj-archive-config-admin>` (generic component from `@memberjunction/ng-archive-manager`) in shared chrome. Title="Archive Configuration", Icon="fa-sliders". Generic component left untouched so it stays reusable outside MJ Explorer. |
 | Archive — Run History | ✅ | ✅ | n/a | n/a | n/a | Resource wrapper migration only — wrapped `<mj-archive-run-viewer>` (generic component) in shared chrome. Title="Archive Run History", Icon="fa-clock-rotate-left". Generic component left untouched. |
 
-## Pages NOT yet migrated
+## Interior chrome migrations (left-nav shell sub-pages)
+
+Section 10 of chrome-conventions resolved 2026-05-19 with the **interior filter card** pattern: sub-pages dynamically loaded into a parent shell render `<mj-page-header-interior>` at the top of their body (no page-level `<mj-page-header>`). Parent shell owns the page identity. See [chrome-conventions.md Section 10](explorer-chrome-conventions.md) for the full contract.
+
+### Admin → Identity & Access sub-pages
+
+| Sub-page | Component (package) | Chrome | Notes |
+|---|---|---|---|
+| Users | `UserManagementComponent` (explorer-settings) | ✅ | Reference implementation. Toolbar: search + Status chips. Actions: filter-popover (Role dropdown) + refresh + Export + + Add User. |
+| Roles | `RoleManagementComponent` (explorer-settings) | ✅ | Toolbar: search + Type chips (All / System / Custom). Actions: refresh + + Add Role. No popover (Type only). |
+| Apps | `ApplicationManagementComponent` (explorer-settings) | ✅ | Twin of Users structurally. Status chips + search + refresh + + Add Application. |
+| App Roles | `ApplicationRolesResource` (dashboards) | ✅ | Action-band shape (no search/filter). `Role="toolbar"` instead of default `"search"`. Meta: HasUnsavedChanges badge. Actions: Discard / Save (conditional) + refresh. |
+| Permissions | `EntityPermissionsComponent` (explorer-settings) | ✅ | Toolbar: search + Access Level chips. Actions: filter-popover (Role) + `<mj-view-toggle>` (list/grid) + refresh. Replaced bespoke 2-button toggle with shared component. |
+| API Keys | `APIKeysResource` (dashboards) | ⏸️ | Has its own internal nav (Keys / Apps / Scopes / Usage). Pattern Y nested in Pattern X — needs separate design pass. |
+
+All 5 migrated sub-pages also dropped their bespoke `.{name}-container` and `.content-area` wrappers, removed `onSearchChange()` methods (mj-page-search handles it directly), and apply filter changes immediately (chip clicks + popover dropdowns bypass the 300ms search-text debounce for snappy UX).
+
+### Other shell sub-pages
+
+| Sub-page | Component (package) | Chrome | Notes |
+|---|---|---|---|
+| SystemDiagnosticsResource | `dashboards` | ⏸️ | Still on the older `.sticky-header` pattern. Quick migration — similar shape to UserManagement. |
+| Admin → Monitoring → Diagnostics | (shared SystemDiagnosticsResource) | ⏸️ | Migrates when SystemDiagnostics does. |
+| Admin → Monitoring → SQL Logging | `SqlLoggingComponent` (explorer-settings) | ⏸️ | Two-pane working area (sessions list + log viewer). The chrome is just the action band; needs migration. |
+| Admin → Data & Schema → ERD | `EntityRelationshipDiagramDashboard` (dashboards) | ⏸️ | Complex two-pane (filter panel + diagram canvas). Needs design thought on where chrome lives. |
+| Admin → Data & Schema → Query Browser | `QueryBrowserResource` (dashboards) | ⏸️ | Two-pane (category tree + query detail). Same. |
+| Admin → Data & Schema → Database Designer | `DatabaseDesignerDashboard` (dashboards) | ⏸️ | Complex multi-pane workspace. Probably its own Section 9a exception. |
+| Admin → Dev Tools sub-pages (7) | Various inspectors (dashboards) | ⏸️ | GraphQL Console, Event Monitor, Class Registry, Lazy Loading, Settings Explorer, App State, Layout Inspector. Mostly simple inspector pages — should be quick to migrate. |
+
+### Inline-tab shells (Pattern Y — parent owns chrome)
+
+These shells render sub-sections inline via `@switch` instead of dynamic component loading. The parent's `<mj-page-header>` already owns the chrome and shared filter bar is fine where it is — no `<mj-page-header-interior>` needed.
+
+| Shell | Current state |
+|---|---|
+| AI Analytics | ✅ Already uses shell-owns-filter-bar pattern (`FilterBarConfig` switches per section). |
+| Knowledge Hub Config | ✅ Single component with `@if`-switched sections; parent header owns chrome. |
+| Knowledge Hub Analytics | ✅ Parent header owns chrome. |
+| Communication | ⏸️ Sidebar with sub-sections; could adopt `<mj-left-nav>` + `<mj-left-nav-content>` to share more primitives. Lower priority — chrome already works. |
+| Credentials | ⏸️ Same as Communication. |
+
+## Pages NOT yet migrated (page-level chrome)
 
 See **[chrome-conventions.md Section 9](explorer-chrome-conventions.md#9-documented-exceptions)** for the canonical exception list. In summary:
 
 - **Single-page exceptions** (deliberately different chrome — will NOT be migrated as-is): AI Overview (hero-landing layout), Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel), AI Analytics' Model Performance section (custom leaderboard filter, not shared).
-- **Shell-with-left-nav sub-pages** (deferred pending Section 10 decision): the 5 explorer-settings components (Users / Roles / Apps / Permissions / SQL Logging), `ApplicationRolesResource`, `SystemDiagnosticsResource`, and the APIKeys app's internal tabs (Keys / Applications / Scopes / Usage Analytics). All use the bespoke `.sticky-header` pattern. Migrating these piecemeal would produce doubled headers; they will be migrated together once Section 10 picks a pattern.
 
-Everything else with a `BaseResourceComponent` registration is migrated.
+Everything else with a `BaseResourceComponent` registration is migrated at the page level.
 
 ## Architecture decisions
 
@@ -186,57 +253,60 @@ Run this against every page you migrate. Items 1–4 are the structural swap; 5�
 
 ## Next steps (priority order)
 
-### A. Roll out popover to high-filter pages
-Currently Agents / Prompts / Models / Configuration use a left-sidebar filter panel via `as-split`. The popover prototype proves the alternative pattern works. **Decision needed**: do we replace those sidebars, or keep sidebars for those pages and use popover only where it fits naturally? If replacing:
-1. Build a generic filter-form component or use the existing `mj-{x}-filter-panel` components inside `mj-filter-popover`
-2. Remove the `as-split` sidebar layout from each page
-3. Wire active count + clear-all
+### A. Finish the remaining left-nav shell sub-pages
+The Section 10 pattern is proven on 5 pages and the migration recipe is mechanical. Remaining:
 
-### B. Remaining Template A/B dashboards
-6 Template A + 5 Template B dashboards still use bespoke headers. Mechanical migration:
-1. Wrap outer container in `<mj-page-layout>`
-2. Replace bespoke header with `<mj-page-header>`
-3. Replace any filter-toggle / item-count usages
-4. Delete orphaned per-page CSS
+**Quick wins** (similar shape to Users / Roles, ~1-2 hours each):
+1. **SystemDiagnosticsResource** — migrate to `<mj-page-header-interior>`. Used by both Admin → Monitoring → Diagnostics and as a standalone resource.
+2. **SqlLoggingComponent** — action band only, two-pane working area in body. Should be a quick chrome swap.
+3. **Admin → Dev Tools inspectors (7)** — GraphQL Console / Event Monitor / Class Registry / Lazy Loading / Settings Explorer / App State / Layout Inspector. Simple inspector pages.
 
-### C. Resolve Overview + Model Performance exceptions
-- **Overview**: hero-section → `<mj-page-header>` is a redesign, not a swap. Confirm with user before doing it.
-- **Model Performance**: its custom sort/leaderboard filter is fundamentally different from the shared analytics-filter-bar. Probably leave alone or build a separate "leaderboard-filter" component.
+**Needs design thought** (complex two-pane workspaces, ~design pass each):
+4. **Admin → Data & Schema → ERD** — filter panel + diagram canvas. Where does the chrome go when the body is already split-pane?
+5. **Admin → Data & Schema → Query Browser** — category tree + query detail. Same problem.
+6. **Admin → Data & Schema → Database Designer** — multi-pane workspace. Probably its own Section 9a exception.
 
-### D. Phase 2.2 carry-overs (from `plans/phase-2-kendo-removal.md`)
+**Different architecture** (nested IA, ~separate design pass):
+7. **APIKeys** — has internal Keys / Applications / Scopes / Usage tabs. Pattern Y nested in Pattern X. Needs a design pass to decide whether to use `<mj-left-nav>` + `<mj-left-nav-content>` for the inner nav or keep the existing tab pattern.
+
+### B. Roll the inline-tab shells onto shared primitives (optional)
+Communication and Credentials use sidebar+content layouts with bespoke nav CSS. They work, but could adopt `<mj-left-nav>` + `<mj-left-nav-content>` to share more primitives and delete more bespoke CSS. Lower priority.
+
+### C. Resolve Section 9a exceptions
+- **AI Overview**: hero-section → page-header is a redesign, not a swap. Needs user confirmation.
+- **Model Performance**: its custom sort/leaderboard filter is fundamentally different from the shared analytics-filter-bar. Leave alone or build a separate leaderboard-filter component.
+
+### D. Push branch + open PR for what's done
+
+Current branch `explorer-shell-subpage-chrome` has 8 commits of chrome work — ready for review. PR scope: the interior-chrome pattern + 5 sub-page migrations + the legacy `.mj-btn` removal.
+
+### E. Phase 2.2 carry-overs (from `plans/phase-2-kendo-removal.md`)
 Not part of header chrome, but adjacent:
 - `<mj-empty-state>` component (61 ad-hoc empty-state implementations)
 - `<mj-confirm-dialog>` consolidation
 - `SelectorDialog<T>` base class
 - Card CSS consolidation (61 → `.mj-card`)
 
-### E. Verification
+### F. Verification
 - Visual / UAT pass on every migrated page (after MJExplorer restart so Vite picks up the new bundles)
 - Make sure dark mode still works for all the new components
 - Test responsive behavior at 768px and below (page-header has a media query that switches title row to column)
 
-## File map (this session's changes)
+## Commit history
 
-### New
-- `packages/Angular/Generic/ui-components/src/lib/page-header/` — `page-header.component.ts`, `page-header.scss`
-- `packages/Angular/Generic/ui-components/src/lib/page-layout/page-layout.component.ts`
-- `packages/Angular/Generic/ui-components/src/lib/filter-toggle/filter-toggle.component.ts`
-- `packages/Angular/Generic/ui-components/src/lib/result-count/result-count.component.ts`
-- `packages/Angular/Generic/ui-components/src/lib/filter-popover/filter-popover.component.ts`
+This doc tracks ongoing work; commits are the canonical record. Notable branches and their phases:
 
-### Modified
-- `packages/Angular/Generic/ui-components/src/public-api.ts` — exports added
-- `packages/Angular/Generic/ui-components/package.json` — copy-assets includes `page-header.scss`
-- `packages/Angular/Explorer/dashboards/src/MCP/` — `mcp.module.ts`, `mcp-dashboard.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/ai-dashboards.module.ts` — added 5 new component imports
-- `packages/Angular/Explorer/dashboards/src/AI/components/agents/agent-configuration.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/AI/components/requests/agent-requests-resource.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/AI/components/prompts/prompt-management.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/AI/components/models/model-management.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/AI/components/system/system-configuration.component.{html,css}`
-- `packages/Angular/Explorer/dashboards/src/AI/components/analytics/ai-analytics-resource.component.ts` — page-layout/header migration + shell-owns-filter-bar
-- `packages/Angular/Explorer/dashboards/src/AI/components/analytics/analytics-filter-bar.component.ts` — popover refactor
-- 6 Analytics sub-section components (executive-summary / prompt-runs / agent-runs / cost-budget / error-analysis / usage-patterns) — removed inline `<app-analytics-filter-bar>` block
+### `explorer-header-consolidation` (Phase 2.3, original)
+Built the page-level chrome (`<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>`) and migrated ~65 standalone dashboards. Original "Pages migrated" table above.
+
+### `explorer-shell-subpage-chrome` (Section 10, this branch — 2026-05-19)
+Resolved Section 10 with the interior chrome pattern. 8 commits to date — `git log explorer-shell-subpage-chrome` shows the full sequence. Key milestones:
+
+- `02a12462d9` — `<mj-page-body>` Direction prop; drop bespoke `.{shell}-container__body` wrappers
+- `77b4bc073c` — new `<mj-left-nav>` + `<mj-left-nav-content>` shell primitives; Admin shells migrated to use them
+- `dea2fed0ba` — new `<mj-page-header-interior>` component; UserManagement migrated as reference
+- `edee123e05` — RoleManagement migrated; legacy MJ Button System rules deleted from `_admin-patterns.css`
+- `3964656b10` — ApplicationManagement + ApplicationRolesResource + EntityPermissions migrated; filter debounce lag fix
 
 ## References
 
