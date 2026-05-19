@@ -72,11 +72,53 @@ Your extractor at `connectors-registry/<vendor>/scripts/extract-io-iof.ts`:
 
 ## Script standards
 
-- TypeScript, ESM, runnable via `npx tsx scripts/extract-io-iof.ts` from the connector dir.
+- TypeScript, ESM, runnable via `npx tsx scripts/extract-io-iof.ts` from the connector dir. **Use `.ts` extension by default**; `.mts` is also accepted by the validator (Invariant 1b) when subpath-exports from `@memberjunction/connector-extractor-strategies` require it for tsx resolution.
 - Idempotent — re-running upserts the same rows, doesn't duplicate.
 - Bounded — caps IO at 1500 per run; if cap hit, fail loudly and surface in stdout.
 - Schema-validated — every row passes a Zod schema before being written.
 - **No data in your script's source code.** Only structure (loops, regexes, type maps).
+
+## IO Name format — canonical convention (PIN this; do NOT improvise)
+
+The IO Name field is the technical identifier used by metadata FK references (`@lookup:MJ: Integration Objects.Name=...`), connector-side `ResolveIO()` calls, and the validator's Invariant 2 three-way match. Same vendor source MUST produce the same IO Name set across runs — otherwise downstream lookups silently break.
+
+**Canonical format**: `<Area>.<ApiName>.<objectKey-tail>` with the following exact rules:
+
+| Segment | Convention | Source | Example |
+|---|---|---|---|
+| `Area` | PascalCase, whitespace stripped | First path segment under the source repo's catalog root (e.g. `PublicApiSpecs/Account/...` → `Account`; `PublicApiSpecs/CRM/...` → `CRM`) | `Account`, `CRM`, `Marketing`, `Settings` |
+| `ApiName` | PascalCase, internal whitespace collapsed | Second path segment, after collapsing whitespace (e.g. `Audit Logs` → `AuditLogs`; `Marketing Emails V3` → `MarketingEmailsV3`) | `AccountInfo`, `AuditLogs`, `Contacts` |
+| `objectKey-tail` | kebab-case, preserves URL-segment shape | Last segment of the objectKey path the strategy library's `ObjectKeyForPath` emits (action-suffix vocab already stripped) | `private-apps`, `details`, `login`, `contacts` |
+| Separator | Literal `.` | n/a | `.` |
+
+**Worked example** (HubSpot's actual output, snapshot run):
+- Source spec: `PublicApiSpecs/Account/Account Info/Rollouts/144923/v3/accountInfo.json`
+- Source path: `/account-info/v3/api-usage/daily/private-apps`
+- objectKey after strategy 0 grouping: `/account-info/v3/api-usage/daily/private-apps`
+- objectKey-tail: `private-apps`
+- Final IO Name: **`Account.AccountInfo.private-apps`**
+
+**Why this format (decision recorded in commit-message after the HubSpot clean-build verification)**:
+
+1. **Versioned-rollout safety**: when v3 + v4 of the same path both exist in the source repo (`PublicApiSpecs/CRM/Contacts/.../v3/contacts.json` AND `.../2026-09-beta/contacts.json`), the (Area, ApiName) prefix distinguishes them OR the rollout-ranking picks the highest-information version. Either way no collision happens.
+2. **UpsertByKey deduplication still works** — when the SAME path is genuinely re-emitted from two distinct specs in the same Area/ApiName, UpsertByKey by Name collapses them as intended.
+3. **Provenance preservation**: a human inspecting metadata can read `Marketing.MarketingEvents.v3` and immediately know the spec category. A flatter `marketing-events.v3` loses that.
+4. **DisplayName carries the human label**: IO Name is technical; UI surfaces use DisplayName. Granular Name doesn't hurt UX.
+
+**Anti-patterns to avoid** (these surfaced in the HubSpot clean-build first attempt and produced a 47% IO-count regression vs the snapshot):
+
+```typescript
+// ❌ WRONG — collapses (Area, ApiName) information; many specs collide via UpsertByKey
+fields.Name = objectKeyTail.toLowerCase();  // → "private-apps"
+
+// ❌ WRONG — drops Area prefix; same path-tail across different vendor categories collides
+fields.Name = `${apiName}.${objectKeyTail}`;  // → "account-info.private-apps"
+
+// ✅ CORRECT — full Area.ApiName.objectKey-tail
+fields.Name = `${pascalCase(area)}.${pascalCase(apiName)}.${objectKeyTail}`;  // → "Account.AccountInfo.private-apps"
+```
+
+Determinism guarantee: same source repo + same rollout-ranking + this Name format produces the same IO set every run. If your script's output count varies more than ±2% across runs against an unchanged source, the cause is non-determinism in your spec-selection logic, not the naming convention — fix the selection logic, not the format.
 
 ## Universal PK detection gates (apply in order; first match wins)
 
