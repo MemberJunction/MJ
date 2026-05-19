@@ -183,7 +183,7 @@ This guide covers:
 
 ### ⚠️ Page Chrome — exception to be aware of
 
-If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use a local `.sticky-header` action row instead. This is Section 9b of the chrome conventions; the decision on the long-term pattern (Section 10) is deferred to a future branch.
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](/plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
 
 ---
 

@@ -1,3 +1,21 @@
+/*
+  Database Designer entity-list — sub-page of Admin → Data & Schema. Host is
+  flex column so <mj-page-header-interior> pins at the top and .scrollable-content
+  fills the rest. See Section 10 of plans/explorer-chrome-conventions.md.
+*/
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
+}
+
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+}
+
 /* Schema filter used in the [toolbar] slot. */
 .schema-filter {
   width: auto;

@@ -1,6 +1,6 @@
 # MJ Explorer · IA Standardization Progress
 
-> **Branch:** `explorer-shell-subpage-chrome` (active) · **Status:** Phase 2.3 complete; Section 10 RESOLVED — interior chrome pattern landed · **Last update:** 2026-05-19
+> **Branch:** `explorer-shell-subpage-chrome` (active) · **Status:** Section 10 interior chrome shipped to all Admin shells; `<mj-page-header-interior>` evolved to a two-row card with optional Title/Subtitle · **Last update:** 2026-05-19
 
 > Companion doc to [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the rules) and [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) (the parent plan).
 
@@ -10,9 +10,11 @@ Standardizing MJ Explorer's chrome — both the page-level header band (every da
 
 **Page-level chrome** (the original Phase 2.3 work): every standalone dashboard uses `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>`. ~65 dashboards migrated. Remaining unmigrated pages are documented Section 9 exceptions (Home / Component Studio / Data Explorer / Query Browser / AI Overview / Model Performance).
 
-**Interior chrome** (Section 10, landed 2026-05-19): sub-pages dynamically loaded into a parent left-nav shell use a body-level `<mj-page-header-interior>` card instead of their own page-level header. The parent shell owns the page identity; the rail's active-item is the section indicator. Same slot conventions (`[meta]` / `[actions]` / `[toolbar]`) as `<mj-page-header>`, different visual shape (single-row card on a surface background).
+**Interior chrome** (Section 10, landed 2026-05-19): sub-pages dynamically loaded into a parent left-nav shell use a body-level `<mj-page-header-interior>` card instead of their own page-level header. The parent shell owns the page identity; the rail's active-item is the section indicator. Same slot conventions (`[meta]` / `[actions]` / `[toolbar]`) as `<mj-page-header>`, similar visual shape — a **two-row card** with identity + actions on the primary row and toolbar content (search, tab-nav, filter chips) on a separate row that collapses when empty.
 
-Five of the six previously-deferred shell sub-pages are now migrated (Users / Roles / Apps / App Roles / Permissions). Two complex sub-pages remain (APIKeys — nested internal nav; SystemDiagnostics — pending a quick pass). Three additional Admin shells (Monitoring, Data & Schema, Dev Tools) plus AI Analytics' inline tab-sections are next.
+**Interior chrome coverage** as of 2026-05-19: all four Admin shells (Identity & Access, Data & Schema, Monitoring, Dev Tools) — ~15 sub-pages. The 7 Dev Tools inspectors share a single `.mj-inspector` body wrapper and were migrated as a batch. API Keys' chrome (page-level) is done; its 3 inner panels (Applications/Scopes/Usage) retain bespoke headers pending the L3 chrome convention decision (see `project_l3_chrome_convention_tbd` memory note).
+
+**Remaining work** — 7 inline-tab shells (AI Analytics, Knowledge Hub Analytics/Config/Tags/Classify, Communication, Credentials) have correct page-level chrome but bespoke internal left rails that could move to `<mj-left-nav>` + `<mj-left-nav-content>`. Page chrome is already right on all 7; this is pure CSS-deletion / primitive-consolidation work.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -30,7 +32,7 @@ Five of the six previously-deferred shell sub-pages are now migrated (Users / Ro
 |---|---|---|
 | `MJLeftNavComponent` | `mj-left-nav` | Canonical left rail. `[Sections]: MJLeftNavSection[]` + `[ActiveId]`; emits `(ItemClicked)`. Supports items with description / badge, section labels, optional `[header]` / `[footer]` slots. Responsive collapse-to-row at <700px. |
 | `MJLeftNavContentComponent` | `mj-left-nav-content` | Content pane paired with `<mj-left-nav>`. Built-in `[Loading]` / `[Error]` states; projected content auto-hides when busy (cached components stay attached). Replaces the `applyHostSizing()` inline-style hack. |
-| `MJPageHeaderInteriorComponent` | `mj-page-header-interior` | Body-level sibling of `<mj-page-header>` for sub-page interior chrome. Same `[meta]` / `[actions]` / `[toolbar]` slot conventions; renders as a single-row card with surface background + radius + shadow. `[AriaLabel]` + `[Role]` inputs (default `Role="search"`). |
+| `MJPageHeaderInteriorComponent` | `mj-page-header-interior` | Body-level sibling of `<mj-page-header>` for sub-page interior chrome. **Two-row card** — primary row (Title + Subtitle + meta + actions), toolbar row (search / tab-nav / filter chips). Toolbar row collapses (`:empty`) when no projected content. Inputs: `Title`, `Subtitle` (both optional but recommended), `AriaLabel`, `Role` (default `'search'`). Same `[meta]` / `[actions]` / `[toolbar]` slot conventions as `<mj-page-header>`. Typography uses `--mj-text-lg` (title) / `--mj-text-xs` (subtitle) tokens. |
 
 ### Shared chrome primitives (used in both page-level and interior chrome)
 
@@ -119,12 +121,12 @@ Section 10 of chrome-conventions resolved 2026-05-19 with the **interior filter 
 
 | Sub-page | Component (package) | Chrome | Notes |
 |---|---|---|---|
-| Users | `UserManagementComponent` (explorer-settings) | ✅ | Reference implementation. Toolbar: search + Status chips. Actions: filter-popover (Role dropdown) + refresh + Export + + Add User. |
-| Roles | `RoleManagementComponent` (explorer-settings) | ✅ | Toolbar: search + Type chips (All / System / Custom). Actions: refresh + + Add Role. No popover (Type only). |
-| Apps | `ApplicationManagementComponent` (explorer-settings) | ✅ | Twin of Users structurally. Status chips + search + refresh + + Add Application. |
-| App Roles | `ApplicationRolesResource` (dashboards) | ✅ | Action-band shape (no search/filter). `Role="toolbar"` instead of default `"search"`. Meta: HasUnsavedChanges badge. Actions: Discard / Save (conditional) + refresh. |
-| Permissions | `EntityPermissionsComponent` (explorer-settings) | ✅ | Toolbar: search + Access Level chips. Actions: filter-popover (Role) + `<mj-view-toggle>` (list/grid) + refresh. Replaced bespoke 2-button toggle with shared component. |
-| API Keys | `APIKeysResource` (dashboards) | ⏸️ | Has its own internal nav (Keys / Apps / Scopes / Usage). Pattern Y nested in Pattern X — needs separate design pass. |
+| Users | `UserManagementComponent` (explorer-settings) | ✅ | Reference implementation. Title="Users". Toolbar: search + Status chips. Actions: filter-popover (Role dropdown) + refresh + Export + + Add User. |
+| Roles | `RoleManagementComponent` (explorer-settings) | ✅ | Title="Roles". Toolbar: search + Type chips (All / System / Custom). Actions: refresh + + Add Role. No popover (Type only). |
+| Apps | `ApplicationManagementComponent` (explorer-settings) | ✅ | Title="Applications". Twin of Users structurally. Status chips + search + refresh + + Add Application. |
+| App Roles | `ApplicationRolesResource` (dashboards) | ✅ | Title="Application Roles". Action-band shape (no search/filter). `Role="toolbar"` instead of default `"search"`. Meta: HasUnsavedChanges badge. Actions: Discard / Save (conditional) + refresh. |
+| Permissions | `EntityPermissionsComponent` (explorer-settings) | ✅ | Title="Entity Permissions". Toolbar: search + Access Level chips. Actions: filter-popover (Role) + `<mj-view-toggle>` (list/grid) + refresh. Replaced bespoke 2-button toggle with shared component. |
+| API Keys | `APIKeysResource` (dashboards) | ✅ (outer) / ⏸️ (inner) | Outer chrome migrated. Per-tab dynamic `[Title]` / `[Subtitle]` getters; `<mj-tab-nav>` in `[toolbar]` for the 4 sections; per-tab `[actions]` gated by MainTab. **Inner panels** (Applications/Scopes/Usage) retain bespoke `.panel-header` blocks — deferred to the L3 chrome convention decision. |
 
 All 5 migrated sub-pages also dropped their bespoke `.{name}-container` and `.content-area` wrappers, removed `onSearchChange()` methods (mj-page-search handles it directly), and apply filter changes immediately (chip clicks + popover dropdowns bypass the 300ms search-text debounce for snappy UX).
 
@@ -132,13 +134,12 @@ All 5 migrated sub-pages also dropped their bespoke `.{name}-container` and `.co
 
 | Sub-page | Component (package) | Chrome | Notes |
 |---|---|---|---|
-| SystemDiagnosticsResource | `dashboards` | ⏸️ | Still on the older `.sticky-header` pattern. Quick migration — similar shape to UserManagement. |
-| Admin → Monitoring → Diagnostics | (shared SystemDiagnosticsResource) | ⏸️ | Migrates when SystemDiagnostics does. |
-| Admin → Monitoring → SQL Logging | `SqlLoggingComponent` (explorer-settings) | ⏸️ | Two-pane working area (sessions list + log viewer). The chrome is just the action band; needs migration. |
+| SystemDiagnostics | `dashboards/SystemDiagnostics` | ✅ | Title="System Diagnostics". `<mj-tab-nav>` in `[toolbar]` for the 4 L2 sections (Engine Registry / Redundant / Performance / Cache); auto-refresh toggle + refresh in `[actions]`. L3 perf-tabs strip inside the Performance section stays bespoke. |
+| SQL Logging | `SqlLoggingComponent` (explorer-settings) | ✅ | Title="SQL Logging". Action-band only (no `[toolbar]` content — bottom row collapses). Actions: refresh + Start New Session (conditional on Owner role). Migrated all 9 legacy `.btn-*` instances in the body + dialogs to `mjButton` directive. |
+| Database Designer | `DatabaseDesignerDashboard` + `EntityListComponent` (dashboards) | ✅ | Title="Database Designer". The dashboard component is a thin wrapper around `<mj-database-entity-list>` (which owns the interior chrome) + the create-wizard / modify slide-over panels. Toolbar: search + schema filter. Actions: refresh + + New Entity. Meta: entity count badge. |
 | Admin → Data & Schema → ERD | `EntityRelationshipDiagramDashboard` (dashboards) | ⏸️ | Complex two-pane (filter panel + diagram canvas). Needs design thought on where chrome lives. |
 | Admin → Data & Schema → Query Browser | `QueryBrowserResource` (dashboards) | ⏸️ | Two-pane (category tree + query detail). Same. |
-| Admin → Data & Schema → Database Designer | `DatabaseDesignerDashboard` (dashboards) | ⏸️ | Complex multi-pane workspace. Probably its own Section 9a exception. |
-| Admin → Dev Tools sub-pages (7) | Various inspectors (dashboards) | ⏸️ | GraphQL Console, Event Monitor, Class Registry, Lazy Loading, Settings Explorer, App State, Layout Inspector. Mostly simple inspector pages — should be quick to migrate. |
+| Admin → Dev Tools (7 inspectors) | `dashboards/DevTools/*` | ✅ | All 7 inspectors migrated: AppState, Layout, ClassRegistry, LazyModuleStatus, SettingsExplorer, EventMonitor, GraphQLConsole. Each carries its original descriptive subtitle (e.g. "Read-only snapshot of Explorer runtime state"). Action-only chromes — bottom row collapses. Shared `inspector-shared.css` stripped of `.mj-inspector__header*` / `.mj-inspector__btn*` rules (~50 lines). GraphQL Console's History toggle uses `[toggleable]+[(selected)]` for proper toggle semantics. Event Monitor's Pause button uses neutral `secondary` variant (the body badge owns LIVE/PAUSED state). L3 `.mj-inspector__sidebar` nav inside each inspector kept as-is pending L3 convention decision. |
 
 ### Inline-tab shells (Pattern Y — parent owns chrome)
 

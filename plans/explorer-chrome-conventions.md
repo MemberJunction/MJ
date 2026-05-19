@@ -396,16 +396,24 @@ containing its own search / filters / action buttons.
   Children of the sub-page render directly on the host — no `<div class="{name}-container">` wrapper.
 - **Sub-page renders `<mj-page-header-interior>` at the top of its body** —
   the shared body-level chrome card from `@memberjunction/ng-ui-components`,
-  the sibling component to `<mj-page-header>`. Same slot conventions
-  (`[meta]` / `[actions]` / `[toolbar]`); different visual shape.
+  the sibling component to `<mj-page-header>`. Two-row layout (primary row +
+  optional toolbar row). Same slot conventions (`[meta]` / `[actions]` / `[toolbar]`);
+  different visual shape — a self-contained card with surface background,
+  radius, and shadow.
+- **Sub-page sets `[Title]` and `[Subtitle]` on the chrome card** to anchor the
+  page identity on the left of the primary row. The Admin shell's left rail
+  shows which sub-page is active, but a small in-chrome identity block (e.g.
+  "App State Inspector" / "Read-only snapshot of Explorer runtime state") gives
+  the user an explicit "what am I looking at?" cue and explains the page's
+  purpose. Subtitle is especially valuable for technical pages whose role
+  isn't obvious from the rail label alone (Dev Tools inspectors are the
+  canonical case).
 - **The sub-page renders exactly one root element below the chrome.**
   `<mj-left-nav-content>`'s CSS sizes its first projected child via
   `:host ::ng-deep > *:not(error):not(loading)`. Sub-pages that project
   multiple top-level siblings will get unexpected sizing on each one. Wrap
   body content in a single container element (a `<div>` works) if you have
   more than the chrome card + content list as siblings.
-- **No on-page section title.** The rail's active-item highlight IS the
-  section indicator. Repeating it as an H1 is redundant.
 - **Same shared components everywhere.** The interior chrome uses the same
   `<mj-page-search>` / `<mj-filter-popover>` / `<mj-filter-panel>` /
   `<mj-refresh-button>` / `mjButton` primitives the exterior chrome uses.
@@ -414,23 +422,44 @@ containing its own search / filters / action buttons.
 
 ### Interior chrome layout
 
+Two-row card. The primary row holds identity + state + actions; the toolbar
+row holds dense controls that would compete with the title for horizontal
+space if they shared a row. The toolbar row collapses entirely (`:empty`) on
+pages with no toolbar content (e.g. Dev Tools inspectors, SQL Logging).
+
 ```
-[ 🔍 search …… ] [chip:All|Active|Inactive] [—— spacer ——] [Filters ▼] [↻ Refresh] [Export] [+ New X]
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Title              [—— spacer ——]                  [meta]    [actions]   │
+│  subtitle                                                                 │
+├──────────────────────────────────────────────────────────────────────────┤
+│ [ 🔍 search …… ] [chip:All|Active|Inactive] / [mj-tab-nav]                │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **Left side** — `[toolbar]` slot: `<mj-page-search>` then visible quick-toggle
-  `<mj-filter-chip>` group (if any).
-- **Right side** — `[actions]` slot: `<mj-filter-popover>` for advanced filters,
-  `<mj-refresh-button>`, secondary `mjButton`s (Export, etc.), then the
-  primary CTA (`+ New X`) rightmost.
+- **Primary row** — `[Title]` + `[Subtitle]` on the left, then spacer, then
+  `[meta]` slot (stat badges / counts), then `[actions]` slot on the right
+  edge.
+- **Toolbar row** — `[toolbar]` slot, full-width second row separated by a
+  subtle border-top. Hosts `<mj-page-search>` + visible `<mj-filter-chip>`
+  group, OR `<mj-tab-nav>` for L2 section navigation (e.g. SystemDiagnostics'
+  4 sections, API Keys' 4 tabs), OR view toggles.
 - **`[meta]` slot** — between the spacer and `[actions]` — stat badges /
   result counts. Often empty for sub-pages whose stats live in a separate
   body grid.
+- **`[actions]` slot** — right edge of the primary row: `<mj-filter-popover>`
+  for advanced filters, `<mj-refresh-button>`, secondary `mjButton`s (Export,
+  Copy, etc.), then the primary CTA (`+ New X`) rightmost.
+
+The two-row layout matches the top-level `<mj-page-header>` shape so the
+design vocabulary is consistent across both chrome surfaces.
 
 ### Standard template
 
 ```html
-<mj-page-header-interior AriaLabel="Filter users">
+<mj-page-header-interior
+  AriaLabel="Filter users"
+  Title="Users"
+  Subtitle="Manage user accounts, roles, and access">
   <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
@@ -475,7 +504,21 @@ The chrome card's surface, padding, margin, radius, and shadow are owned by
 `<mj-page-header-interior>` itself — sub-pages don't need a `.filter-card`
 or any bespoke wrapper styles. Pass `[AriaLabel]` to make the card a labeled
 landmark for assistive tech; `Role` defaults to `'search'` (override or pass
-`null` for non-filter chrome).
+`null` for non-filter chrome). Title typography uses `--mj-text-lg` /
+`--mj-font-semibold`; subtitle uses `--mj-text-xs` / `--mj-text-muted`.
+
+### `[Title]` and `[Subtitle]` — what to set
+
+| Page type | Title | Subtitle | Why |
+|---|---|---|---|
+| Sub-page with self-evident purpose (Users, Roles, Apps) | Match the rail label ("Users") | Short prose explaining the page ("Manage user accounts, roles, and access") | Subtitle adds the value; title gives the chrome a visual anchor. |
+| Sub-page with technical purpose (Dev Tools inspectors) | Full descriptive name ("App State Inspector") | The original inspector's `header-sub` text ("Read-only snapshot of Explorer runtime state") | Subtitle is essential — the rail's short label doesn't explain what the tool does. |
+| Sub-page that's a Pattern X shell with internal tab nav (SystemDiagnostics, API Keys) | Page-level identity or per-tab dynamic title (e.g. `[Title]="currentTabTitle"`) | Per-tab subtitle that changes with the active tab | Title can stay fixed or swap per tab — both are valid; consistency within the page matters more than across pages. |
+| Sub-page used as a chrome-less action band (rare) | omit | omit | The card collapses to a single row of actions. Reserved for cases where the rail context is sufficient AND there's no toolbar content. |
+
+The Title is rarely truly redundant with the rail — even when the same word
+appears in both, the in-chrome Title gives the body a visual anchor that the
+narrow rail label doesn't provide. Default to setting both.
 
 ### Filter UI decisions inside the chrome card
 
@@ -538,12 +581,24 @@ When migrating a sub-page that has bespoke `.mj-btn` overrides or legacy single-
 | **Collapsing shell header** — when a section is active, the shell's `<mj-page-header>` hides; the sub-page's chrome becomes primary | Not pursued — loses page-level identity, defeats the "page identity stays fixed" principle. |
 | **Compact breadcrumb shell** — replace the shell's full header with a thin breadcrumb row | Same problem as collapsing — parent identity gets buried. |
 | **Workspace exception** — each sub-page keeps its own full chrome trio | Produces the doubled-header pattern; twice rejected in user testing (2026-05-15, earlier). |
-| **Interior filter card (CURRENT)** | Adopted. Shell chrome stays fixed = stable page identity. Sub-page's controls live in a single clean white card inside the body. Same shared components as exterior chrome — one mental model, no special projection wiring. |
+| **Single-row interior card** (initial 2026-05-19 shape) | First-pass shape — `[toolbar]` content (search, tab-nav) shared a row with title/subtitle. Worked for action-only chromes but cramped when toolbar carried search or tab-nav. Replaced with two-row layout (current). |
+| **Interior filter card, two-row (CURRENT)** | Adopted. Shell chrome stays fixed = stable page identity. Sub-page's controls live in a single clean two-row card inside the body — identity + actions on top, search/tabs/filters on a clean second row. Mirrors `<mj-page-header>`'s shape so the design vocabulary is consistent across both surfaces. |
 
 ### Reference implementations
 
-- **`UserManagementComponent`** (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`) — first sub-page migrated to this pattern, 2026-05-19. Copy this when migrating other sub-pages.
-- Subsequent migrations expected: Roles, Apps, App Roles, Permissions, API Keys, then Monitoring + Data & Schema + Dev Tools sub-pages. See Section 11 for status.
+The interior chrome pattern is proven across all four Admin shells (~15
+sub-pages). Copy any of these when migrating a new sub-page; they all follow
+the same template shape:
+
+| Reference | Pattern variant |
+|---|---|
+| **`UserManagementComponent`** (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`) | Filter-and-search chrome with status chips in `[toolbar]` and Export + Add User in `[actions]`. The canonical "filter card" example. |
+| **`SystemDiagnosticsComponent`** (`packages/Angular/Explorer/dashboards/src/SystemDiagnostics/`) | Pattern X mini-shell — 4 L2 sections via `<mj-tab-nav>` in `[toolbar]`; refresh + auto-refresh in `[actions]`. |
+| **`APIKeysResourceComponent`** (`packages/Angular/Explorer/dashboards/src/APIKeys/`) | Pattern X mini-shell with per-tab dynamic `[Title]` / `[Subtitle]` getters that change as the user switches between Keys / Applications / Scopes / Usage. |
+| **Dev Tools inspectors** (`packages/Angular/Explorer/dashboards/src/DevTools/`) | Action-only chrome — no `[toolbar]` content, so the bottom row collapses entirely. All 7 inspectors (AppState, Layout, ClassRegistry, LazyModuleStatus, SettingsExplorer, EventMonitor, GraphQLConsole) share this shape. |
+| **`EntityListComponent`** (`packages/Angular/Explorer/dashboards/src/DatabaseDesigner/components/entity-list.component.html`) | Chrome card on a Pattern X dashboard whose parent wraps the entity list with slide-over panels. Demonstrates that "thin parent wrapper + child owns interior chrome" is fine. |
+
+See Section 11 for the full migration status table.
 
 ### Adjacent global changes (2026-05-19)
 

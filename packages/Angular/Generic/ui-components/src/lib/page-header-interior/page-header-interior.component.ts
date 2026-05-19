@@ -15,20 +15,30 @@ import { Component, Input } from '@angular/core';
  *
  * ## Layout
  *
+ * Two-row card. The primary row holds page identity + state badges + actions;
+ * the toolbar row holds dense controls (search, tab nav, filter chips) that
+ * would compete with the title for space if they shared a row. When `[toolbar]`
+ * has no projected content, the row collapses entirely.
+ *
  * ```
- * [Title  ]  [ toolbar content ……… ]  [—— spacer ——]  [meta]  [actions]
- *  subtitle
+ * ┌─────────────────────────────────────────────────────────────────────────┐
+ * │ Title             [—— spacer ——]                  [meta]      [actions] │
+ * │  subtitle                                                                │
+ * ├─────────────────────────────────────────────────────────────────────────┤
+ * │ [ toolbar content … search / tab-nav / filter chips … ]                  │
+ * └─────────────────────────────────────────────────────────────────────────┘
  * ```
  *
  * - **`[Title]`** (input, optional) — short page name. Usually redundant with
- *   the parent shell's left-rail label, so most sub-pages omit it.
+ *   the parent shell's left-rail label; most sub-pages still set it as a visual
+ *   anchor.
  * - **`[Subtitle]`** (input, optional) — short prose explaining what the page
  *   does. Recommended for pages that aren't self-explanatory from the rail
- *   label alone (e.g. Dev Tools inspectors). When provided without a Title,
- *   the subtitle anchors the left side of the card by itself.
- * - **`[toolbar]`** — left side: search, visible filter chips, view toggles
- * - **`[meta]`** — right side, before actions: status badges, result counts
- * - **`[actions]`** — right edge: filter popover, refresh, secondary buttons, primary CTA
+ *   label alone (e.g. Dev Tools inspectors).
+ * - **`[toolbar]`** — second row: search, tab nav, filter chips, view toggles
+ * - **`[meta]`** — top row, before actions: status badges, result counts
+ * - **`[actions]`** — top row, right edge: filter popover, refresh, secondary
+ *   buttons, primary CTA
  *
  * ## Example
  *
@@ -57,25 +67,27 @@ import { Component, Input } from '@angular/core';
     <div class="mj-page-header-interior"
          [attr.role]="Role"
          [attr.aria-label]="AriaLabel">
-      @if (Title || Subtitle) {
-        <div class="mj-page-header-interior__identity">
-          @if (Title) {
-            <div class="mj-page-header-interior__title">{{ Title }}</div>
-          }
-          @if (Subtitle) {
-            <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
-          }
+      <div class="mj-page-header-interior__row mj-page-header-interior__row--primary">
+        @if (Title || Subtitle) {
+          <div class="mj-page-header-interior__identity">
+            @if (Title) {
+              <div class="mj-page-header-interior__title">{{ Title }}</div>
+            }
+            @if (Subtitle) {
+              <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
+            }
+          </div>
+        }
+        <div class="mj-page-header-interior__spacer"></div>
+        <div class="mj-page-header-interior__meta">
+          <ng-content select="[meta]"></ng-content>
         </div>
-      }
-      <div class="mj-page-header-interior__toolbar">
+        <div class="mj-page-header-interior__actions">
+          <ng-content select="[actions]"></ng-content>
+        </div>
+      </div>
+      <div class="mj-page-header-interior__row mj-page-header-interior__row--toolbar">
         <ng-content select="[toolbar]"></ng-content>
-      </div>
-      <div class="mj-page-header-interior__spacer"></div>
-      <div class="mj-page-header-interior__meta">
-        <ng-content select="[meta]"></ng-content>
-      </div>
-      <div class="mj-page-header-interior__actions">
-        <ng-content select="[actions]"></ng-content>
       </div>
     </div>
   `,
@@ -87,14 +99,49 @@ import { Component, Input } from '@angular/core';
 
     .mj-page-header-interior {
       display: flex;
-      align-items: center;
-      gap: var(--mj-space-3);
-      flex-wrap: wrap;
-      padding: var(--mj-space-3) var(--mj-space-4);
+      flex-direction: column;
       background: var(--mj-bg-surface);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-lg);
       box-shadow: var(--mj-shadow-sm);
+      overflow: hidden;
+    }
+
+    /* Slot-wrapper passthrough — any element a consumer projects with the
+       \`meta\`, \`actions\`, or \`toolbar\` attribute (regardless of class name)
+       becomes a transparent container so its children become direct flex
+       children of the row wrapper and inherit the row's gap. Matches the
+       same pattern <mj-page-header> uses. */
+    :host ::ng-deep [meta],
+    :host ::ng-deep [actions],
+    :host ::ng-deep [toolbar] {
+      display: contents;
+    }
+
+    /* Rows: primary (identity + meta + actions) and toolbar (separate row). */
+    .mj-page-header-interior__row {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-3);
+      padding: var(--mj-space-3) var(--mj-space-4);
+    }
+
+    .mj-page-header-interior__row--primary {
+      gap: var(--mj-space-4);
+    }
+
+    .mj-page-header-interior__row--toolbar {
+      flex-wrap: wrap;
+      padding-top: var(--mj-space-3);
+      padding-bottom: var(--mj-space-3);
+      border-top: 1px solid var(--mj-border-subtle);
+    }
+
+    /* When the toolbar has no projected content, collapse the row entirely so
+       sub-pages with only actions (e.g. Dev Tools inspectors) don't show a
+       dangling divider + empty space. */
+    .mj-page-header-interior__row--toolbar:empty {
+      display: none;
     }
 
     .mj-page-header-interior__identity {
@@ -102,9 +149,8 @@ import { Component, Input } from '@angular/core';
       flex-direction: column;
       justify-content: center;
       gap: 2px;
-      flex-shrink: 0;
+      flex-shrink: 1;
       min-width: 0;
-      margin-right: var(--mj-space-1);
     }
     .mj-page-header-interior__title {
       font-size: var(--mj-text-lg);
@@ -119,7 +165,11 @@ import { Component, Input } from '@angular/core';
       line-height: 1.3;
     }
 
-    .mj-page-header-interior__toolbar,
+    .mj-page-header-interior__spacer {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
     .mj-page-header-interior__meta,
     .mj-page-header-interior__actions {
       display: inline-flex;
@@ -128,27 +178,11 @@ import { Component, Input } from '@angular/core';
       flex-shrink: 0;
     }
 
-    /* Slot-wrapper passthrough — any element a consumer projects with the
-       \`meta\`, \`actions\`, or \`toolbar\` attribute (regardless of class name)
-       becomes a transparent container so its children become direct flex
-       children of the slot wrapper and inherit the wrapper's gap. Matches the
-       same pattern <mj-page-header> uses. */
-    :host ::ng-deep [meta],
-    :host ::ng-deep [actions],
-    :host ::ng-deep [toolbar] {
-      display: contents;
-    }
-
     /* Collapse the meta + actions wrappers when there's nothing projected, so
        a sub-page that only uses [toolbar] doesn't leave dangling gap space. */
     .mj-page-header-interior__meta:empty,
     .mj-page-header-interior__actions:empty {
       display: none;
-    }
-
-    .mj-page-header-interior__spacer {
-      flex: 1 1 auto;
-      min-width: 0;
     }
 
     /* No .mj-btn reset here. Buttons projected into the chrome inherit the

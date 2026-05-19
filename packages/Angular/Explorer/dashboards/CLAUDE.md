@@ -30,11 +30,11 @@ Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-pag
 
 ### Exception: dynamically-loaded sub-pages of a left-nav shell
 
-If your component is loaded **into** another resource's left-nav shell (e.g. Admin's `admin-container` loading the explorer-settings sub-pages, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do NOT wrap it in the chrome trio — the parent owns the chrome.
+If your component is loaded **into** another resource's left-nav shell (Admin's `admin-container` loading the explorer-settings sub-pages, Admin → Developer Tools loading the 7 inspectors, Admin → Monitoring loading SystemDiagnostics / SQL Logging, Admin → Data & Schema loading Database Designer, etc.), do NOT wrap it in the chrome trio — the parent owns the page identity.
 
-Instead, use the **interior filter card pattern** (Section 10 of the conventions doc): one white card at the top of the body holding the sub-page's `<mj-page-search>` + visible `<mj-filter-chip>`s + `<mj-filter-popover>`/`<mj-filter-panel>` + `<mj-refresh-button>` + action buttons. Same shared primitives as the exterior chrome — one mental model, no doubled-header.
+Instead, use **`<mj-page-header-interior>`** at the top of the body (Section 10 of the conventions doc): a two-row card with `[Title]` / `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots — same slot conventions as `<mj-page-header>`, different visual shape. Primary row holds identity + meta + actions; toolbar row holds search / tab-nav / filter chips and collapses entirely when there's nothing to render. Same shared primitives as the exterior chrome (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-filter-chip>`, `<mj-refresh-button>`, `mjButton`) — one mental model, no doubled-header.
 
-Reference implementation: `packages/Angular/Explorer/explorer-settings/src/lib/user-management/`. Sub-pages that haven't been migrated yet still use the older `.sticky-header` pattern; they'll be moved to the filter card pattern in subsequent passes.
+Reference implementations cover all four Admin shells (~15 sub-pages) — copy any of them. Canonical filter-card shape: `UserManagementComponent` (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`). Action-only chrome (no toolbar): the Dev Tools inspectors. Pattern X with internal tab nav: `SystemDiagnosticsComponent`, `APIKeysResourceComponent`.
 
 ---
 
