@@ -64,6 +64,7 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
     const [authMethod, setAuthMethod] = useState<AuthMethod>(null);
 
     const bootWith = useCallback(async (token: string, method: AuthMethod) => {
+        console.log(`[MJProvider] bootWith method=${method} tokenLen=${token.length}`);
         setStatus('loading');
         setError(null);
         try {
@@ -83,10 +84,19 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                     return '';
                 },
             );
-            await setupGraphQLClient(config);
+
+            // Hard timeout so a hung MJAPI / bad token doesn't lock us in 'loading' forever.
+            const SETUP_TIMEOUT_MS = 15_000;
+            await Promise.race([
+                setupGraphQLClient(config).then((p) => { console.log('[MJProvider] setupGraphQLClient ok'); return p; }),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error(`Connection to ${Env.graphqlUrl} timed out after ${SETUP_TIMEOUT_MS}ms`)), SETUP_TIMEOUT_MS),
+                ),
+            ]);
             setAuthMethod(method);
             setStatus('ready');
         } catch (e) {
+            console.warn('[MJProvider] bootWith failed:', e);
             setError(e instanceof Error ? e : new Error(String(e)));
             setStatus('error');
         }
@@ -106,20 +116,24 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         let cancelled = false;
         (async () => {
             try {
+                console.log('[MJProvider] boot start');
                 // 1. Try Auth0 stored tokens
                 const auth0Tokens = await loadAuth0Tokens();
                 if (auth0Tokens && !isAuth0Expired(auth0Tokens)) {
+                    console.log('[MJProvider] using stored Auth0 token');
                     if (!cancelled) await bootWith(auth0Tokens.idToken, 'auth0');
                     return;
                 }
                 if (auth0Tokens) {
+                    console.log('[MJProvider] Auth0 token expired, attempting refresh');
                     try {
                         const refreshed = await getValidAuth0IdToken();
                         if (refreshed && !cancelled) {
                             await bootWith(refreshed, 'auth0');
                             return;
                         }
-                    } catch {
+                    } catch (e) {
+                        console.warn('[MJProvider] Auth0 refresh failed, clearing:', e);
                         await clearAuth0Tokens();
                     }
                 }
@@ -127,17 +141,20 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 // 2. Try MSAL stored tokens
                 const msalTokens = await loadMsalTokens();
                 if (msalTokens && !isMsalExpired(msalTokens)) {
+                    console.log('[MJProvider] using stored MSAL token');
                     if (!cancelled) await bootWith(msalTokens.idToken, 'msal');
                     return;
                 }
                 if (msalTokens) {
+                    console.log('[MJProvider] MSAL token expired, attempting refresh');
                     try {
                         const refreshed = await getValidMsalIdToken();
                         if (refreshed && !cancelled) {
                             await bootWith(refreshed, 'msal');
                             return;
                         }
-                    } catch {
+                    } catch (e) {
+                        console.warn('[MJProvider] MSAL refresh failed, clearing:', e);
                         await clearMsalTokens();
                     }
                 }
@@ -145,20 +162,24 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 // 3. Try stored dev token
                 const stored = await SecureStore.getItemAsync(DEV_TOKEN_KEY);
                 if (stored) {
+                    console.log('[MJProvider] using stored dev token');
                     if (!cancelled) await bootWith(stored, 'dev-token');
                     return;
                 }
 
                 // 4. Compile-time env token (rare)
                 if (Env.devAuthToken) {
+                    console.log('[MJProvider] using env devAuthToken');
                     if (!cancelled) await bootWith(Env.devAuthToken, 'dev-token');
                     return;
                 }
 
                 // 5. Not authenticated — login screen takes over
+                console.log('[MJProvider] no token found, going to no-token');
                 if (!cancelled) setStatus('no-token');
             } catch (e) {
                 if (cancelled) return;
+                console.warn('[MJProvider] boot threw:', e);
                 setError(e instanceof Error ? e : new Error(String(e)));
                 setStatus('error');
             }
