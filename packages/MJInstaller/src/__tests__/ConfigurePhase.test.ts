@@ -237,6 +237,57 @@ describe('ConfigurePhase', () => {
       expect(mjapiEnvContent).toContain("MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='");
     });
 
+    it('should sync DB_HOST/DB_PORT from root .env into existing MJAPI .env (Bug 5 fix)', async () => {
+      // Both root and MJAPI .env exist; MJAPI has stale DB values
+      mockFs.FileExists.mockResolvedValue(true);
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const rootEnv = [
+        "DB_HOST='docker-sql'",
+        'DB_PORT=1444',
+        "DB_USERNAME='sa'",
+        "DB_PASSWORD='Strong!Pass'",
+        "MJ_BASE_ENCRYPTION_KEY='AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='",
+        '',
+      ].join('\n');
+      const mjapiEnv = [
+        "DB_HOST='localhost'",
+        'DB_PORT=1433',
+        "DB_USERNAME='MJ_Connect'",
+        "DB_PASSWORD=''",
+        "ASK_SKIP_API_URL='http://localhost:8000'",  // MJAPI-only key — must survive
+        '',
+      ].join('\n');
+
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJAPI') && p.endsWith('.env')) return mjapiEnv;
+        if (p.endsWith('.env')) return rootEnv;
+        return '';
+      });
+
+      const ctx = makeContext({ Yes: true });
+      const result = await phase.Run(ctx);
+
+      const mjapiEnvWritten = result.FilesWritten.find((f: string) => f.includes('MJAPI') && f.endsWith('.env'));
+      expect(mjapiEnvWritten).toBeDefined();
+
+      const writtenContent = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJAPI') && p.endsWith('.env')
+      )?.[1] as string;
+
+      // DB fields should match root .env, not the original MJAPI values
+      expect(writtenContent).toContain("DB_HOST='docker-sql'");
+      expect(writtenContent).toContain("DB_PORT='1444'");
+      expect(writtenContent).toContain("DB_USERNAME='sa'");
+      expect(writtenContent).toContain("DB_PASSWORD='Strong!Pass'");
+      // MJAPI-only key should survive
+      expect(writtenContent).toContain("ASK_SKIP_API_URL='http://localhost:8000'");
+      // Original wrong DB values should be gone
+      expect(writtenContent).not.toContain("DB_HOST='localhost'");
+      expect(writtenContent).not.toContain("DB_USERNAME='MJ_Connect'");
+    });
+
     it('should not overwrite existing mj.config.cjs', async () => {
       mockFs.FileExists.mockImplementation(async (path: string) => {
         if (path.endsWith('mj.config.cjs')) return true;
