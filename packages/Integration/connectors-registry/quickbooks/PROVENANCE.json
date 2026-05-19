@@ -1,0 +1,264 @@
+{
+  "Entries": [
+    {
+      "URL": "https://quickbooks.intuit.com/online/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Canonical product name 'QuickBooks Online' and product home page (NavigationBaseURL).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Name | integration.NavigationBaseURL",
+      "Excerpt": "QuickBooks Online product home page; Intuit's canonical name for the SaaS accounting product."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Confirms QBO is a REST/JSON API and the v3 path versioning strategy.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description | configuration.APIBaseURL.VersioningStrategy | configuration.APIBaseURL.APIVersion",
+      "Excerpt": "Get Started portal: base URLs https://quickbooks.api.intuit.com/v3/company/{realmId} (production) and https://sandbox-quickbooks.api.intuit.com (sandbox); v3 path versioning."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "OAuth 2.0 authorization-code flow; scopes (com.quickbooks.accounting, com.quickbooks.payments); access token TTL 1hr; refresh token TTL 5yr / 100-day idle; refresh-token rotation.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID | configuration.Auth.Strategy | configuration.Auth.Scopes | configuration.Auth.AccessTokenTTLSeconds | configuration.Auth.RefreshTokenTTLSeconds | configuration.Auth.RefreshTokenIdleExpiryDays | configuration.Auth.RefreshTokenRotation | configuration.Auth.TokenRefreshStrategy | configuration.Auth.AuthHeaderPattern",
+      "Excerpt": "QuickBooks Online uses OAuth 2.0 Authorization Code grant. Scopes: com.quickbooks.accounting (Accounting, Reports, CDC, Batch, Webhooks) and com.quickbooks.payments (Payments). Access tokens valid for 1 hour; refresh tokens valid for ~5 years with 100-day idle expiry (rotated on each refresh)."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/faq",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Token lifecycle edge cases (refresh-token rotation semantics, idle expiry).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.Auth.RefreshTokenIdleExpiryDays | configuration.Auth.RefreshTokenRotation",
+      "Excerpt": "OAuth FAQ: refresh tokens are rotated on each use and expire after 100 days of inactivity (with a 5-year absolute lifetime)."
+    },
+    {
+      "URL": "https://developer.intuit.com/.well-known/openid_configuration",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Production OAuth/OIDC discovery document (token + authorization + revocation endpoints).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.Auth.AuthorizationEndpoint | configuration.Auth.TokenEndpoint | configuration.Auth.RevocationEndpoint",
+      "Excerpt": "Intuit OpenID discovery document publishes canonical endpoints: authorization_endpoint, token_endpoint, revocation_endpoint."
+    },
+    {
+      "URL": "https://help.developer.intuit.com/s/article/API-call-limits-and-throttling",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Rate-limit facts (500 req/min/realm standard, 40 req/min batch, 200 req/min heavy, 10 concurrent, HTTP 429 + Retry-After).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.RateLimits.Windows | configuration.RateLimits.MaxConcurrentRequests | configuration.RateLimits.ThrottleResponse",
+      "Excerpt": "API call limits: 500 requests/minute/realm for standard endpoints; 40 requests/minute for the Batch endpoint; 200 requests/minute for heavy endpoints; max 10 concurrent. 429 with Retry-After when exceeded."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/learn/rest-api-features",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Pagination via STARTPOSITION (1-based) + MAXRESULTS (max 1000); query language; minor-version query param; JSON/XML content-type duality.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.Pagination | configuration.QueryLanguage | configuration.APIBaseURL.MinorVersionQueryParam | configuration.AdditionalObservations[ContentTypeDualSupport]",
+      "Excerpt": "REST API features: pagination uses STARTPOSITION (1-based) and MAXRESULTS clauses in the query string; max page size is 1000. Minor-version pinning via ?minorversion=N. Content negotiation supports application/json and application/xml."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/learn/explore-the-quickbooks-online-api/batch",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Batch endpoint shape; 30-item max; BatchItemRequest/BatchItemResponse envelope; serial execution; partial-success support.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount | configuration.Bulk",
+      "Excerpt": "Batch API: BatchItemRequest array (max 30 items/request), each with bId, operation (create/update/delete/query). Server returns BatchItemResponse[] with per-item results or Fault errors."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/learn/explore-the-quickbooks-online-api/change-data-capture",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "CDC endpoint, query params (entities + changedSince), 30-day window cap, ISO8601 watermark format.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.IncrementalSync",
+      "Excerpt": "/v3/company/{realmId}/cdc accepts entities=<comma list> and changedSince=<ISO8601>. Returns all changes in a single response. 30-day window cap; older requests rejected."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/develop/webhooks",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Webhook configuration (developer-portal level), intuit-signature HMAC-SHA256 base64 header, payload shape (eventNotifications[].dataChangeEvent.entities[]), supported operations.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.Webhooks",
+      "Excerpt": "Webhooks: subscribed via the developer-portal app config (not a tenant API). Payload signed via intuit-signature header (HMAC-SHA256, base64 encoded). Payload shape: eventNotifications[].dataChangeEvent.entities[] with name/id/operation/lastUpdated. Operations: Create, Update, Delete, Merge, Void, Emailed."
+    },
+    {
+      "URL": "https://help.developer.intuit.com/s/article/Webhooks-for-QuickBooks-Online-REST-APIs",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Webhook signature verification details (companion to webhooks doc).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.Webhooks.SignatureAlgorithm | configuration.Webhooks.SignatureEncoding",
+      "Excerpt": "Webhooks help article: signature is HMAC-SHA256 of the raw request body using the app's verifier token, base64-encoded, in the intuit-signature header."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/develop/troubleshooting/error-codes",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Fault envelope shape (Fault.Error[]); 5010 Stale Object error (SyncToken concurrency).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.ResponseEnvelope | configuration.ConcurrencyControl | configuration.AdditionalObservations[SyncTokenIsOptimisticLock]",
+      "Excerpt": "Errors returned in Fault envelope: {Fault: {Error: [{Message, Detail, code, element}], type}}. Error 5010 = Stale Object (SyncToken mismatch) on updates."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/preferences",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Custom-field discovery via Preferences entity (SalesFormsPrefs.CustomField, VendorAndPurchasesPrefs.CustomField).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.CustomObjects.CustomFields",
+      "Excerpt": "Preferences endpoint exposes per-realm SalesFormsPrefs.CustomField[] (and similar) — the catalog of admin-defined custom fields on Sales transactions (max 3 per form)."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/api/accounting/all-entities/companyinfo",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "CompanyInfo entity as a universal health-check / TestConnection target.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.HealthCheck",
+      "Excerpt": "CompanyInfo entity is universally available on every QBO realm. GET /v3/company/{realmId}/companyinfo/{realmId} returns the realm profile."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/api/accounting/most-commonly-used/invoice",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Vendor-specific FK convention: CustomerRef.{value,name} nested-object pattern; representative of QBO-wide FK shape.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.FKConvention",
+      "Excerpt": "Invoice.CustomerRef is a nested reference object: { value: <Customer Id string>, name: <display name> }. This *Ref pattern is uniform across QBO entities (VendorRef, AccountRef, ItemRef, etc.)."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbpayments/docs/develop",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Establishes Payments API as a separate product on api.intuit.com host with com.quickbooks.payments scope — explicitly out of scope for THIS connector.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.ProductTaxonomy | configuration.AdditionalObservations[PaymentsAPIDistinctHost]",
+      "Excerpt": "QuickBooks Payments developer portal: separate API surface, separate host (api.intuit.com), distinct OAuth scope (com.quickbooks.payments)."
+    },
+    {
+      "URL": "https://github.com/intuit/QuickBooks-V3-DotNET-SDK",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Official Intuit-maintained .NET SDK — XSD-generated entity classes are the authoritative machine-readable schema source. Used as ground-truth for SyncToken pattern + nested-Ref FK shape since no OpenAPI exists.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "configuration.ConcurrencyControl | configuration.FKConvention | configuration.AdditionalObservations[NoOfficialOpenAPISpec]",
+      "Excerpt": "intuit/QuickBooks-V3-DotNET-SDK: XSD-derived entity classes for the full Accounting catalog. SyncToken field present on every mutable entity; *Ref nested-object pattern uniform across FKs."
+    },
+    {
+      "URL": "file:///Users/madhavsubramaniyam/Projects/MJ/MJ/packages/Integration/connectors/src/QuickBooksConnector.ts",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "In-tree connector confirms ImportPath=@memberjunction/connectors, ClassName=QuickBooksConnector, production+sandbox base hosts, OAuth refresh flow, SELECT-with-STARTPOSITION/MAXRESULTS query pattern.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ClassName | integration.ImportPath | configuration.APIBaseURL | configuration.Pagination | configuration.Auth",
+      "Excerpt": "QuickBooksConnector.ts constants: QBO_PRODUCTION_BASE = 'https://quickbooks.api.intuit.com', QBO_SANDBOX_BASE = 'https://sandbox-quickbooks.api.intuit.com'. Refresh flow posts grant_type=refresh_token to oauth.platform.intuit.com. Query construction uses STARTPOSITION + MAXRESULTS clauses."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/develop/authentication-and-authorization/oauth-2.0",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Authoritative source establishing that QuickBooks Online uses OAuth 2.0 (Authorization Code grant with refresh-token rotation) as its sole authentication mechanism — directly justifies the integration.CredentialTypeID lookup to 'OAuth2'.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "All apps integrating with QuickBooks Online use OAuth 2.0 (authorization code grant) for authentication and authorization. No alternative credential type is supported."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/learn/explore-the-quickbooks-online-api/batch",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Authoritative source establishing the per-request batch-item cap of 30 — directly justifies integration.BatchMaxRequestCount=30.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Batch endpoint accepts a BatchItemRequest array with a maximum of 30 items per request. Requests exceeding 30 items are rejected with an error."
+    },
+    {
+      "URL": "https://quickbooks.intuit.com/online/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Canonical product name 'QuickBooks Online' as published by Intuit on the product home page — establishes integration.Name.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Name",
+      "Excerpt": "QuickBooks Online — Intuit's canonical SaaS accounting product name as displayed on the official product home page."
+    },
+    {
+      "URL": "https://quickbooks.intuit.com/online/",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Product home page URL — establishes integration.NavigationBaseURL.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.NavigationBaseURL",
+      "Excerpt": "https://quickbooks.intuit.com/online/ is the canonical entry point for QuickBooks Online users; appropriate destination for the integration's navigation link."
+    },
+    {
+      "URL": "file:///Users/madhavsubramaniyam/Projects/MJ/MJ/packages/Integration/connectors/src/QuickBooksConnector.ts",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "In-tree connector class file confirms the registered class name — establishes integration.ClassName.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ClassName",
+      "Excerpt": "QuickBooksConnector.ts declares `export class QuickBooksConnector extends BaseRESTIntegrationConnector` with @RegisterClass(BaseIntegrationConnector, 'QuickBooksConnector')."
+    },
+    {
+      "URL": "file:///Users/madhavsubramaniyam/Projects/MJ/MJ/packages/Integration/connectors/package.json",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Connector package's npm name — establishes integration.ImportPath as '@memberjunction/connectors'.",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialSDK",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ImportPath",
+      "Excerpt": "packages/Integration/connectors/package.json declares `\"name\": \"@memberjunction/connectors\"` — the canonical TypeScript import path for the QuickBooksConnector class."
+    },
+    {
+      "URL": "https://fontawesome.com/icons/file-invoice-dollar",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Font Awesome icon catalog — confirms 'fa-file-invoice-dollar' is a valid Font Awesome icon class and is the most semantically appropriate icon for an accounting / invoicing integration (QuickBooks).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Icon",
+      "Excerpt": "fa-file-invoice-dollar — official Font Awesome icon depicting an invoice with a dollar sign. Selected for QuickBooks Online to visually represent its primary domain (accounting / invoicing)."
+    },
+    {
+      "URL": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
+      "AccessedAt": "2026-05-19T00:00:00.000Z",
+      "UsedFor": "Authoritative product/platform description compiled from Intuit's developer portal Get Started page — sources the integration.Description prose (REST/JSON API v3, OAuth 2.0, base URL pattern, scope model, pagination, batch, webhooks, CDC).",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.Description",
+      "Excerpt": "QuickBooks Online API v3 is a REST/JSON API. Production base URL: https://quickbooks.api.intuit.com/v3/company/{realmId}; sandbox: https://sandbox-quickbooks.api.intuit.com. OAuth 2.0 authorization-code flow; com.quickbooks.accounting (Accounting/Reports/CDC/Batch/Webhooks) and com.quickbooks.payments (separate Payments product on qbpayments host) scopes."
+    }
+  ]
+}
