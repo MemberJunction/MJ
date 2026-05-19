@@ -3,9 +3,9 @@
     "fields": {
       "Name": "Grok 4",
       "PowerRank": 19,
-      "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains.",
+      "Description": "x.ai's frontier reasoning model with advanced capabilities for complex tasks. Features a 256K token context window and state-of-the-art performance across various domains. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 at grok-4.3 pricing ($1.25/$2.50 per 1M). See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 6,
       "CostRank": 8,
       "InheritTypeModalities": true
@@ -6146,10 +6146,10 @@
   {
     "fields": {
       "Name": "Grok 4-1 Fast Non-Reasoning",
-      "Description": "x.AI's fast non-reasoning model with 2M token context window. Optimized for speed without extended reasoning overhead. Supports text and image input with function calling. Rate limited to 4M tokens per minute and 480 requests per minute.",
+      "Description": "x.AI's fast non-reasoning model with 2M token context window. Optimized for speed without extended reasoning overhead. Supports text and image input with function calling. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 6,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -6235,10 +6235,10 @@
   {
     "fields": {
       "Name": "Grok 4 Fast (Non-Reasoning)",
-      "Description": "x.ai's cost-efficient non-reasoning model for quick responses. Features a 2M token context window with the same unified architecture as the reasoning version but optimized for faster, lighter use cases without chain-of-thought processing.",
+      "Description": "x.ai's cost-efficient non-reasoning model for quick responses. Features a 2M token context window with the same unified architecture as the reasoning version but optimized for faster, lighter use cases without chain-of-thought processing. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=none, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 11,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 10,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -6413,10 +6413,10 @@
   {
     "fields": {
       "Name": "Grok 4-1 Fast Reasoning",
-      "Description": "x.AI's fast reasoning model with 2M token context window. Features reasoning capabilities with JSON and function calling support. Optimized for speed while maintaining reasoning depth. Rate limited to 4M tokens per minute and 480 requests per minute.",
+      "Description": "x.AI's fast reasoning model with 2M token context window. Features reasoning capabilities with JSON and function calling support. Optimized for speed while maintaining reasoning depth. Rate limited to 4M tokens per minute and 480 requests per minute. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 9,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -6502,10 +6502,10 @@
   {
     "fields": {
       "Name": "Grok 4 Fast (Reasoning)",
-      "Description": "x.ai's cost-efficient reasoning model with long chain-of-thought capabilities. Features a 2M token context window, frontier-level performance, and state-of-the-art search capabilities. Optimized for complex reasoning tasks while using 40% fewer thinking tokens than Grok 4.",
+      "Description": "x.ai's cost-efficient reasoning model with long chain-of-thought capabilities. Features a 2M token context window, frontier-level performance, and state-of-the-art search capabilities. Optimized for complex reasoning tasks while using 40% fewer thinking tokens than Grok 4. RETIRED May 15, 2026 — API requests now auto-redirect to grok-4.3 with reasoning_effort=low, billed at grok-4.3 pricing. See https://docs.x.ai/developers/migration/may-15-retirement",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 13,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 2,
       "InheritTypeModalities": true
@@ -13983,6 +13983,434 @@
     "sync": {
       "lastModified": "2026-05-14T02:07:53.266Z",
       "checksum": "87be1e78925cbdf5376feee6623e0caf74983efeab8d030f5225f73680aae050"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.6 Plus",
+      "PowerRank": 17,
+      "Description": "Alibaba Cloud's flagship Plus-tier Qwen model released April 2, 2026. MoE architecture with always-on reasoning, 1M token context window, and 65K max output tokens. Scores 78.8% on SWE-Bench Verified. Direct successor to Qwen 3.5 Plus at lower cost. Available via Alibaba's DashScope API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.6-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.6-plus",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.325,
+            "OutputPricePerUnit": 1.95,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 Plus pricing on Alibaba Cloud DashScope as of April 2, 2026 release. Source: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-plus"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-04-02T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.325,
+            "OutputPricePerUnit": 1.95,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 Plus on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.6-plus"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.6 Max Preview",
+      "PowerRank": 19,
+      "Description": "Alibaba Cloud's top-tier flagship Qwen model released April 27, 2026. Proprietary, approximately 1T parameter MoE with 262K token context window. Scores #1 on six coding benchmarks. Highest capability tier in the Qwen 3.6 family. Available via Alibaba's DashScope API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.6-max-preview",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.6-max-preview",
+            "MaxInputTokens": 262144,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-04-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.04,
+            "OutputPricePerUnit": 6.24,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 Max Preview pricing on Alibaba Cloud DashScope as of April 27, 2026 release. Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-max-preview ; https://tokenmix.ai/blog/qwen3-6-max-preview-benchmark-review-2026"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-04-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.04,
+            "OutputPricePerUnit": 6.24,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 Max Preview on OpenRouter (passthrough). Source: https://openrouter.ai/qwen/qwen3.6-max-preview"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.6 Flash",
+      "PowerRank": 14,
+      "Description": "Alibaba Cloud's cost-optimized Qwen model released April 27, 2026. 1M token context window, multimodal (text/image/video). Tiered pricing above 256K tokens. Drop-in successor to Qwen 3 Flash variants. Available via Alibaba's DashScope API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 2,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.6-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 32768,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-04-27T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 1.50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.6 Flash pricing on Alibaba Cloud DashScope as of April 27, 2026 release (tiered pricing applies above 256K tokens). Sources: https://qwen.ai/blog?id=qwen3.6 ; https://openrouter.ai/qwen/qwen3.6-flash"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cohere Command A",
+      "PowerRank": 15,
+      "Description": "Cohere's flagship language model released March 13, 2025. 111B parameter model with 256K token context window, optimized for RAG retrieval, agents, and tool-use. Strong multilingual support (23 languages). Premium tier in Cohere's Command family.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereLLM",
+            "APIName": "command-a-03-2025",
+            "MaxInputTokens": 256000,
+            "MaxOutputTokens": 8192,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "StartedAt": "2025-03-13T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.50,
+            "OutputPricePerUnit": 10.00,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Cohere Command A direct pricing as of May 2026. Sources: https://cohere.com/pricing ; https://docs.cohere.com/docs/command-a"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cohere Embed v4",
+      "PowerRank": 10,
+      "Description": "Cohere's flagship multimodal embedding model (text + image). 1536-dimensional default with Matryoshka representation learning (256/512/1024/1536 dim support). 128K token context. Dual pricing model: per-text-token and per-image-token. Replaces Embed v3 family for new workloads.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Embeddings",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 1,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "CohereEmbedding",
+            "APIName": "embed-v4.0",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cohere",
+            "StartedAt": "2025-04-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.12,
+            "OutputPricePerUnit": 0.00,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Cohere Embed v4 text pricing: $0.12/1M tokens. NOTE: Image embeddings priced separately at $0.47/1M image tokens — not represented in this cost row because the existing schema is single-input-token-rate. Sources: https://cohere.com/pricing ; https://cloudprice.net/models/cohere-embed-4"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mercury Edit 2",
+      "PowerRank": 13,
+      "Description": "Inception Labs' purpose-built diffusion LLM for next-edit prediction in IDEs and code editors. Released May 12, 2026. Same base pricing as Mercury 2 with significantly cheaper cached input. Optimized for very low-latency code-edit suggestion workflows where most prompt tokens are repeated context. OpenAI-compatible API.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mercury 2"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "InceptionLLM",
+            "APIName": "mercury-edit-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 32000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-05-12T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 0.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury Edit 2 pricing as of May 12, 2026 release: $0.25/1M input, $0.75/1M output, $0.025/1M cached input (10x discount). Sources: https://www.inceptionlabs.ai/blog/introducing-mercury-edit-2 ; https://docs.inceptionlabs.ai/get-started/models"
+          }
+        }
+      ]
     }
   }
 ]
