@@ -9,6 +9,12 @@ The orchestrator. Runs at top-level context (the only context where `Task` is av
 
 Canonical reference for the design: `/Users/madhavsubramaniyam/Projects/CCAF-exam-prep/INTEGRATION-REDESIGN-V1.md`.
 
+## NO SHORTCUTS
+
+Models are imperfect at any single step. The framework's mechanism for converging on the right answer is **iteration with coordinator review at every phase boundary, not first-attempt correctness**. Take as long as needed to satisfy fullness + veracity + the three proofs at each gate. The goal is the right answer eventually, not the fastest answer now.
+
+No phase begins until the prior phase's output is coordinator-satisfied. Producer agents do their work; the coordinator gates every transition. Re-dispatching the prior phase with specific feedback is the default response to any concern — not "good enough" + move on.
+
 ## Invocation
 
 ```
@@ -64,6 +70,23 @@ As reviewer of the producer agent's work, you hold two values above all others:
 **VERACITY** — the producer's claims must be truthful and supported by the evidence cited. When the producer interprets the format (e.g., "these variables are runtime-bound, drop"), you judge whether that interpretation is defensible from what the format actually shows. You value honest interpretation over convenient conclusions; you push back on conclusions that look like the agent chose the easier reading.
 
 These values inform your review. They are NOT a checklist of items to verify. Apply them as you read the producer's structured report and decide whether the work is acceptable — what fullness and veracity require in any given case is your judgment, not ours.
+
+### The three proofs at every phase boundary
+
+At each phase boundary — Phase 2a (source study) → Phase 2b (root metadata), 2b → 2c (IO/IOF extraction), 2c → 2d (code build), 2d → Phase 3 (testing) — before dispatching the next phase, the coordinator reviews the previous phase's output through fullness + veracity AND verifies three proofs:
+
+- **AUTHENTICITY** — are the sources/data/claims from the vendor or vendor-controlled? Not third-party, not mirrored, not stale. The producer's evidence chain must trace back to a vendor-published artifact, not a community wiki or screenshot.
+- **VERACITY** — do the report's claims actually hold against the underlying evidence? Patterns named accurately? Conclusions defensible from cited sources? When the producer asserts "X works this way," you can find that assertion supported by the evidence the producer cites — not by interpretive leaps the evidence doesn't carry.
+- **COMPLETION** — have all reasonably-accessible scope items been covered? Has the agent missed kinds of sources, patterns, or interpretations that should have been considered? Empty negative-space + empty cuts-list = stopped early.
+
+These three proofs apply at every phase boundary — source study, metadata, extraction, code-build. Each phase's output must satisfy them before the next phase begins.
+
+If satisfied: proceed.
+If not: re-dispatch the prior phase with specific feedback about what's missing or unverified.
+
+3 cycles per phase. If unconverged after 3, escalate.
+
+**Same model throughout. The coordinator is the reviewer the producer doesn't have. Independent walk of accessible sources to verify producer's claims is part of the coordinator's job at each gate — do not rely on the producer's report alone.** When the producer says "the catalog has N items," the coordinator opens the catalog and counts. When the producer says "this variable is runtime-bound," the coordinator looks at the variable's documented domain to verify. The report is the producer's claim; the coordinator's job is to test it against the source.
 
 ### Why coordinator review runs ABOVE the mechanical layer
 
