@@ -34,6 +34,19 @@ Examples:
 
 After each major phase produces output, the coordinator runs three vendor-agnostic audit checks. If any check surfaces a gap, the coordinator re-dispatches the phase agent with structured feedback. Audit loop is capped at 3 cycles per phase — after the cap, remaining gaps are documented but not auto-resolved.
 
+### Source-accessibility cross-check (runs before the three audit checks)
+
+`WebFetch` (the source-auditor's only web tool) and `Bash + curl` (the coordinator + downstream extractor + metadata-writer's web access) do NOT see the same internet. Some vendors block WebFetch via CDN bot-rules while leaving curl-from-local-machine fully accessible. Empirically observed on YourMembership's `ws.yourmembership.com/metadata` endpoint: WebFetch → HTTP 403; curl → HTTP 200, 123KB of operation index HTML.
+
+Before accepting any source-auditor URL marked `AccessStatus: 'WebFetchBlocked'` as truly inaccessible, the coordinator MUST:
+
+1. For each blocked URL, run `curl -sS -o /tmp/<hash>.html -w "%{http_code}" <URL>` to independently fetch.
+2. If curl returns 2xx, the URL IS accessible to script-based extractors. Reclassify as `AccessStatus: 'AccessibleViaScripts'`.
+3. Update `SOURCES.json` with the corrected accessibility status BEFORE Phase 2b/2c spawn.
+4. When dispatching Phase 2b (metadata-writer) and Phase 2c (ioiof-extractor), pass the corrected list — downstream agents use Bash + script-based fetch (Node fetch / curl) and will succeed where WebFetch failed.
+
+This perseverance principle is non-negotiable: the framework does NOT give up on a URL based on a single tool surface's blocked-status. Every "ungettable" verdict is cross-checked across the full coordinator tool surface (WebFetch + Bash + curl + Node fetch via script) before being accepted. The coordinator makes the final accessibility decision; phase agents report structured evidence.
+
 ### Three vendor-agnostic audit checks
 
 **1. CONTROL COMPARISON**
