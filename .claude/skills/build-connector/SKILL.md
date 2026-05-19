@@ -31,7 +31,7 @@ Examples:
 2. Skip Phase 1 if `connectors-registry/<vendor>/Phase1Handoff.json` already exists with `Status: 'Complete'`. Otherwise spawn `identity-establisher`. Gate on output.
 3. Spawn `source-auditor` (Phase 2a) → `SOURCES.json`. Gate.
 4. Spawn `metadata-writer` (Phase 2b) → root fields written to `metadata/integrations/.<vendor>.json` + `PROVENANCE.json` entries. Gate.
-5. Spawn `ioiof-extractor` (Phase 2c) → `scripts/extract-io-iof.ts` written + run; IO/IOF rows upserted into the metadata file; `CODE_EVIDENCE.json` populated. Gate.
+5. Spawn `ioiof-extractor` (Phase 2c) → `scripts/extract-io-iof.ts` written + run; IO/IOF rows upserted into the metadata file; `CODE_EVIDENCE.json` populated. **Phase 2c gate is multi-step — see "Phase 2c gate (extended)" below.**
 6. Spawn `code-builder` (Phase 2d) → `src/<Name>Connector.ts` + `src/__tests__/<Name>Connector.test.ts` + README. Gate on build clean.
 7. Spawn `testing-agent` (Phase 3) → runs T0-T4. If `--credentials` was provided, also T10. Produces `Phase3Report.json`.
 8. Print the `Phase3Report.json` to the user. Do NOT commit, do NOT open a PR (per MJ Rule #1).
@@ -107,6 +107,25 @@ If not: re-dispatch the prior phase with specific feedback about what's missing 
 3 cycles per phase. If unconverged after 3, escalate.
 
 **Same model throughout. The coordinator is the reviewer the producer doesn't have. Independent walk of accessible sources to verify producer's claims is part of the coordinator's job at each gate — do not rely on the producer's report alone.** When the producer says "the catalog has N items," the coordinator opens the catalog and counts. When the producer says "this variable is runtime-bound," the coordinator looks at the variable's documented domain to verify. The report is the producer's claim; the coordinator's job is to test it against the source.
+
+## Phase 2c gate (extended) — independent reviewer step
+
+Phase 2c is the highest-stakes gate. The IO/IOF emission is what every downstream phase reads — code-builder builds against it, testing-agent tests against it, the connector ships against it. A coverage gap or interpretive blind spot at this gate propagates. So Phase 2c gets an **additional, independent reviewer** the other phases don't have.
+
+The gate runs in this order:
+
+1. **Mechanical validators** — `mj-validate-invariants`, `tsc`, `vitest` (as defined above). Fail → re-dispatch producer with verbatim validator messages.
+2. **Coordinator two-pass audit** — Pass 1 inventory commit → Pass 2 reactive review against EXTRACTION_REPORT (as defined above). Fail → re-dispatch producer with specific feedback.
+3. **Independent reviewer** — spawned only after #1 and #2 pass. Runs on a **different model** than the producer + coordinator (this is the discipline; same model surface = shared blind spots = no value-add). Produces `INDEPENDENT_REVIEW.md` with three sections (Confirmed gaps / Judgment calls / Reviewer errors). See `.claude/agents/independent-reviewer.md` for the full role spec.
+4. **Reviewer gate decision**:
+   - **0 confirmed gaps** → Phase 2c locks; advance to Phase 2d.
+   - **≥1 confirmed gap (Blocking)** → re-dispatch producer with the reviewer's gap evidence; on producer's new emission, re-run #1, #2, AND #3 (reviewer regenerates its expected inventory; doesn't reuse prior inventory). Iterate until 0 confirmed blocking gaps.
+   - **Confirmed gaps (Advisory)** → document in handoff; do not block. Code-builder / testing-agent reads them and decides.
+   - **Judgment calls** → document, do not block; these are legitimate framework-judgment territory.
+
+**Model-difference orchestration requirement**: when spawning the independent-reviewer via `Task`, pick a model name that is NOT the model currently executing this skill. If you cannot identify the current model with certainty, pick a model from a different vendor or different family than the producer used. The reviewer's value depends on different training → different blind spots; spawning it on the same model surface is the orchestration failure the reviewer's role file calls out.
+
+**Why Phase 2c and not the others**: Phase 1 (identity) is mechanically verifiable (6 fields, name conventions). Phase 2a (sources) is verified by Phase 2b/2c using its output. Phase 2b (root metadata) has narrow scope (root-level config facts, all hard-constraint-citable). Phase 2d (code) is verified by Phase 3 (tests). Phase 2c is the only phase that produces a large interpretive output (the IO/IOF catalog), is consumed by every later phase, and has no later mechanical gate that catches its interpretive errors. The independent reviewer fills that gap.
 
 ### Why coordinator review runs ABOVE the mechanical layer
 
