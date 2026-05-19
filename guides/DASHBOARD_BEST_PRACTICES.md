@@ -1032,7 +1032,7 @@ Two documented exceptions:
 
 1. **Single-page exceptions** (Section 9a in the conventions doc) — AI Overview hero, Home, Component Studio, Data Explorer, Query Browser. These have intentionally different layouts (hero landing, workspace shells, etc.) and don't fit the standard chrome.
 
-2. **Sub-pages of a left-nav workspace shell** (Section 9b — currently deferred). If your component is dynamically loaded into another resource's left-nav shell (e.g., the 5 explorer-settings sub-pages inside Admin's "Identity & Access" shell, or `ApplicationRolesResource` / `SystemDiagnosticsResource`), do NOT add `<mj-page-header>` — the parent shell already owns the chrome. Use a local `.sticky-header` action row instead. The pattern for this is documented in Section 9b of the conventions doc.
+2. **Sub-pages of a left-nav workspace shell** (Section 9b → Section 10). If your component is dynamically loaded into another resource's left-nav shell (e.g., the 5 explorer-settings sub-pages inside Admin's "Identity & Access" shell, or `ApplicationRolesResource` / `SystemDiagnosticsResource`), do NOT add `<mj-page-header>` — the parent shell already owns the chrome. Use the **interior filter card** pattern instead: one white card at the top of the body containing search + filters + action buttons (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-filter-chip>` for quick toggles, `<mj-refresh-button>`, `mjButton`). The full contract — template, CSS, filter UI decisions, and known specificity quirks — is documented in **Section 10 of the conventions doc**. Reference implementation: `UserManagementComponent` (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`).
 
 ### The canonical rulebook
 

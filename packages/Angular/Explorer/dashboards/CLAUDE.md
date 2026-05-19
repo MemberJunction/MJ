@@ -30,7 +30,11 @@ Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-pag
 
 ### Exception: dynamically-loaded sub-pages of a left-nav shell
 
-If your component is loaded **into** another resource's left-nav shell (e.g. Admin's `admin-container` loading the explorer-settings sub-pages, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do NOT wrap it in the chrome trio — the parent owns the chrome. Use a local `.sticky-header` action row pattern instead. See Section 9b of the conventions doc for the rule and the current exception list.
+If your component is loaded **into** another resource's left-nav shell (e.g. Admin's `admin-container` loading the explorer-settings sub-pages, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do NOT wrap it in the chrome trio — the parent owns the chrome.
+
+Instead, use the **interior filter card pattern** (Section 10 of the conventions doc): one white card at the top of the body holding the sub-page's `<mj-page-search>` + visible `<mj-filter-chip>`s + `<mj-filter-popover>`/`<mj-filter-panel>` + `<mj-refresh-button>` + action buttons. Same shared primitives as the exterior chrome — one mental model, no doubled-header.
+
+Reference implementation: `packages/Angular/Explorer/explorer-settings/src/lib/user-management/`. Sub-pages that haven't been migrated yet still use the older `.sticky-header` pattern; they'll be moved to the filter card pattern in subsequent passes.
 
 ---
 

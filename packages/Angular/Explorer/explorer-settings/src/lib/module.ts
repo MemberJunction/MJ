@@ -3,7 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DragDropModule } from '@angular/cdk/drag-drop';
 
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterChipComponent,
+  MJRefreshButtonComponent
+} from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
 import { EntityFormDialogModule } from '@memberjunction/ng-entity-form-dialog';
@@ -79,7 +86,12 @@ import { ApplicationDialogComponent } from './application-management/application
     CodeEditorModule,
     SharedSettingsModule,
     SharedGenericModule,
-    MJButtonDirective
+    MJButtonDirective,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterChipComponent,
+    MJRefreshButtonComponent
   ],
   exports: [
     // Main settings container

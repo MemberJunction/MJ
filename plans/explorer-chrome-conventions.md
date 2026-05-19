@@ -337,17 +337,20 @@ sub-pages). Add to this list rather than improvising new exceptions in code.
 | **Data Explorer** | `DataExplorerResource` | Workspace with animated auto-hiding nav + dual right panels. |
 | **Query Browser** | `QueryBrowserResource` | Resizable left tree panel + content. Workspace pattern shared with Data Explorer. |
 
-### 9b. Shell-with-left-nav sub-pages (deferred — see Section 10)
+### 9b. Shell-with-left-nav sub-pages — see Section 10 for the pattern
 
 **The rule:** if a page is dynamically loaded into another resource's left-nav
 shell (i.e. a parent shell renders it into its content area via
 `ViewContainerRef` or equivalent), do **NOT** wrap it in `<mj-page-layout>` /
 `<mj-page-header>` / `<mj-page-body>`. The parent shell already owns the page
 chrome; adding it again produces a doubled-header that has been twice rejected
-in user testing (most recently 2026-05-15). Sub-pages should use a local
-`.sticky-header` action row pattern (see `UserManagementComponent` or
-`ApplicationRolesResource` for reference) until Section 10 settles the
-long-term pattern.
+in user testing.
+
+**Use the interior filter card pattern instead** — see Section 10 for the full
+contract, template, and styles. Reference implementation:
+`UserManagementComponent` (migrated 2026-05-19). Sub-pages that haven't been
+migrated yet still use the local `.sticky-header` pattern; they'll be moved to
+the filter card pattern in subsequent passes (see Section 11 progress).
 
 The rule does **NOT** apply to pages that merely have an internal left-rail of
 their own (Knowledge Hub Tags / Classify / Clusters, AI Analytics' outer
@@ -369,49 +372,210 @@ into someone else's shell" vs. "has its own rail."
 
 ---
 
-## 10. TBD: shell-with-left-nav + dynamically-loaded sub-pages
+## 10. Interior filter card for left-nav sub-pages
 
-This section captures the unsolved problem that motivates Section 9b. An outer
-"shell" resource page (`<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>`)
-hosts a left section-nav whose content area dynamically loads a different
-complete sub-component per active section. When the sub-component carries its
-own `<mj-page-header>`, the user sees a "double header" — the shell's title
-above, the sub-component's title below.
+**Status: ACTIVE — resolved 2026-05-19.** Reference implementation:
+`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`.
 
-Today, each example handles this differently:
+When a sub-page is dynamically loaded into a parent left-nav shell (e.g. Admin's
+`admin-container` rendering `UserManagementComponent`), it follows the
+**interior filter card** pattern. The parent shell owns the page-level chrome;
+the sub-page renders a single white "filter card" at the top of its body
+containing its own search / filters / action buttons.
 
-- **Admin** — sub-pages use a local `.sticky-header` action row inside the
-  shell's body, no inner `<mj-page-header>`. Currently applied to the 5
-  explorer-settings components (UserManagement / RoleManagement /
-  ApplicationManagement / EntityPermissions / SqlLogging) plus
-  `ApplicationRolesResource` and `SystemDiagnosticsResource`. The shell's own
-  `<mj-page-header>` is the only page-level chrome the user sees.
-- **KH Configuration** — sub-sections are inline templates inside the parent
-  component, not loaded sub-components, so there's only one header.
-- **AI Analytics** — sub-sections are inline components without their own
-  `<mj-page-header>`, and the shell's header dynamically projects per-section
-  filter chrome via `FilterBarConfig`.
+### The contract
 
-**Future direction:** to be decided on a future branch. Likely candidates:
+- **Parent shell `<mj-page-header>` stays fixed.** Title / Icon / Subtitle come
+  from the Admin container (e.g. "Identity & Access"). It's the page identity
+  and does NOT change when the user clicks rail items.
+- **Sub-page does NOT render its own `<mj-page-header>`.** No nested chrome
+  trio. The doubled-header problem is eliminated structurally.
+- **Sub-page renders a `.filter-card` at the top of its body** — one white
+  surface holding the sub-page's interior chrome (search, filters, actions).
+- **No on-page section title.** The rail's active-item highlight IS the
+  section indicator. Repeating it as an H1 is redundant.
+- **Same shared components everywhere.** The filter card uses the same
+  `<mj-page-search>` / `<mj-filter-popover>` / `<mj-filter-panel>` /
+  `<mj-refresh-button>` / `mjButton` primitives the exterior chrome uses.
+  One chrome contract, two surfaces (header band for top-level pages, filter
+  card for shell sub-pages).
 
-1. **Header projection** — each sub-component exposes its filter/action
-   chrome via a contract (e.g., `IHasHeaderChrome.GetActions()` /
-   `.GetToolbar()`), and the shell projects them into its own
-   `<mj-page-header>` slots. Eliminates the double-header but couples each
-   sub-component to the shell pattern.
-2. **Collapsing shell header** — when a section is active, the shell's
-   `<mj-page-header>` hides; the sub-component's chrome becomes primary.
-   Light-touch fix.
-3. **Compact breadcrumb shell** — replace the shell's full
-   `<mj-page-header>` with a thin breadcrumb row ("Admin > Identity & Access
-   > Users") that preserves orientation without competing visually.
-4. **Workspace exception** — treat shell-with-left-nav as its own template,
-   similar to Data Explorer. Each sub-component keeps full chrome.
+### Filter card layout
 
-Until this is decided, all shell-with-left-nav sub-pages stay on bespoke
-`.sticky-header` chrome (see Section 9b). When the decision IS made, all of
-them should be migrated together with whatever pattern is chosen, NOT
-piecemeal.
+```
+[ 🔍 search …… ] [chip:All|Active|Inactive] [—— spacer ——] [Filters ▼] [↻ Refresh] [Export] [+ New X]
+```
+
+- **Left side** — filter inputs: `<mj-page-search>` then visible quick-toggle
+  `<mj-filter-chip>` group (if any).
+- **Right side** — action cluster: `<mj-filter-popover>` for advanced filters,
+  `<mj-refresh-button>`, secondary `mjButton`s (Export, etc.), then the
+  primary CTA (`+ New X`) rightmost.
+
+### Standard template
+
+```html
+<div class="user-management-container">
+  <!-- Filter card — interior chrome -->
+  <div class="filter-card" role="search" aria-label="Filter users">
+    <mj-page-search
+      Placeholder="Search users by name or email..."
+      [Value]="filters$.value.search"
+      (ValueChange)="updateFilter({ search: $event })">
+    </mj-page-search>
+
+    <div class="filter-card__chips" role="group" aria-label="Filter by status">
+      <mj-filter-chip Label="All"      [Active]="filters$.value.status === 'all'"      (Clicked)="onStatusFilterChange('all')" />
+      <mj-filter-chip Label="Active"   [Active]="filters$.value.status === 'active'"   (Clicked)="onStatusFilterChange('active')" />
+      <mj-filter-chip Label="Inactive" [Active]="filters$.value.status === 'inactive'" (Clicked)="onStatusFilterChange('inactive')" />
+    </div>
+
+    <div class="filter-card__spacer"></div>
+
+    <mj-filter-popover
+      [ActiveCount]="popoverActiveFilterCount"
+      [ShowClearAll]="popoverActiveFilterCount > 0"
+      (ClearAllRequested)="onFilterPanelChange({ role: '' })">
+      <mj-filter-panel
+        [Fields]="filterFields"
+        [Values]="filterValues"
+        (ValuesChange)="onFilterPanelChange($event)"
+        (Reset)="onFilterPanelChange({ role: '' })">
+      </mj-filter-panel>
+    </mj-filter-popover>
+    <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()" />
+    <button mjButton variant="secondary" size="sm" (click)="exportUsers()">
+      <i class="fa-solid fa-download"></i> Export
+    </button>
+    <button mjButton variant="primary" size="sm" (click)="createNew()">
+      <i class="fa-solid fa-plus"></i> Add User
+    </button>
+  </div>
+
+  <!-- Below the card: bulk-action toolbar (contextual), stats grid, scrollable list. -->
+  ...
+</div>
+```
+
+### Filter card styles
+
+```css
+.filter-card {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  flex-wrap: wrap;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  margin: var(--mj-space-4) var(--mj-space-4) var(--mj-space-3);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+.filter-card__chips  { display: inline-flex; align-items: center; gap: var(--mj-space-2); flex-shrink: 0; }
+.filter-card__spacer { flex: 1 1 auto; min-width: 0; }
+```
+
+### Filter UI decisions inside the card
+
+Same decision tree as Section 3, applied inside the filter card:
+
+| Filter shape | Where it goes |
+|---|---|
+| Quick toggle, 2–4 values, single-select (Status, Time Range) | Visible `<mj-filter-chip>` group on the LEFT, after search |
+| Many values, single-select (Role, Model) | Inside `<mj-filter-popover>` → `<mj-filter-panel>` with `type: 'dropdown'` |
+| Many values, multi-select (Tags, Categories) | Inside `<mj-filter-popover>` → `<mj-filter-panel>` with `type: 'chips'` |
+| Free text | Always `<mj-page-search>`, left side. Never in popover. |
+
+The popover's `ActiveCount` badge counts **only** popover-resident filters —
+visible chips track their own state and don't ghost the badge.
+
+### TypeScript: filter panel binding
+
+```typescript
+public get filterFields(): FilterFieldConfig[] {
+  return [{
+    key: 'role',
+    type: 'dropdown',
+    label: 'Role',
+    placeholder: 'All Roles',
+    filterable: this.roles.length > 10,
+    options: [
+      { text: 'All Roles', value: '' },
+      ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+    ]
+  }];
+}
+
+public get filterValues(): Record<string, unknown> {
+  return { role: this.filters$.value.role };
+}
+
+public get popoverActiveFilterCount(): number {
+  return this.filters$.value.role !== '' ? 1 : 0;
+}
+
+public onFilterPanelChange(values: Record<string, unknown>): void {
+  const role = (values['role'] as string) ?? '';
+  this.filters$.next({ ...this.filters$.value, role });
+}
+```
+
+### Known quirk: `_admin-patterns.css` `.mj-btn` specificity
+
+`packages/Angular/Explorer/explorer-settings/src/lib/shared/styles/_admin-patterns.css`
+ships a legacy `.mj-btn` base rule (pill-shaped, heavier padding) that
+pre-dates the `mjButton` directive standardization. Angular's emulated
+encapsulation gives component-scoped selectors higher specificity than
+global ones, so that legacy rule overrides `button.scss`'s directive styles
+inside every component that imports `_admin-patterns.css` — making `<button
+mjButton>` look different from `<mj-refresh-button>` (which is a standalone
+component, separate CSS scope, so it gets the directive defaults).
+
+To restore the standardized button look inside the filter card, add a
+higher-specificity reset:
+
+```css
+.filter-card .mj-btn {
+  padding: 6px 12px;
+  border-radius: var(--mj-radius-md);
+  border: 1px solid transparent;
+  gap: 6px;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.filter-card .mj-btn i {
+  font-size: 1rem;
+  line-height: 1;
+}
+```
+
+Long-term fix: delete the legacy `.mj-btn` rule from `_admin-patterns.css`.
+That ripples across the 4 sub-pages currently using it (User / Role / App /
+Entity Permissions Management). Tracked as a separate cleanup.
+
+### Patterns explored and rejected
+
+| Pattern | Verdict |
+|---|---|
+| **Header projection** — sub-page exposes `MetaTemplate` / `ActionsTemplate` / `ToolbarTemplate` via an `ISubpageChrome` interface, shell `*ngTemplateOutlet`s them into its own header slots | Tried 2026-05-19; abandoned. Couples each sub-page to a shell-specific contract; can't render the same component standalone; complex `@ViewChild`/CD lifecycle. |
+| **Collapsing shell header** — when a section is active, the shell's `<mj-page-header>` hides; the sub-page's chrome becomes primary | Not pursued — loses page-level identity, defeats the "page identity stays fixed" principle. |
+| **Compact breadcrumb shell** — replace the shell's full header with a thin breadcrumb row | Same problem as collapsing — parent identity gets buried. |
+| **Workspace exception** — each sub-page keeps its own full chrome trio | Produces the doubled-header pattern; twice rejected in user testing (2026-05-15, earlier). |
+| **Interior filter card (CURRENT)** | Adopted. Shell chrome stays fixed = stable page identity. Sub-page's controls live in a single clean white card inside the body. Same shared components as exterior chrome — one mental model, no special projection wiring. |
+
+### Reference implementations
+
+- **`UserManagementComponent`** (`packages/Angular/Explorer/explorer-settings/src/lib/user-management/`) — first sub-page migrated to this pattern, 2026-05-19. Copy this when migrating other sub-pages.
+- Subsequent migrations expected: Roles, Apps, App Roles, Permissions, API Keys, then Monitoring + Data & Schema + Dev Tools sub-pages. See Section 11 for status.
+
+### Adjacent global changes (2026-05-19)
+
+- **`.mj-btn--secondary` background** tinted from `--mj-bg-surface` (white) to `--mj-bg-surface-sunken` (light gray) globally in `button.scss`. Secondary buttons sitting on white surfaces (cards, headers, dialogs) were near-invisible; the tint gives just enough contrast to read as a button on both white and sunken backgrounds. Affects every secondary button in MJ Explorer.
+- **`.mj-filter-popover-trigger`** dimensions and typography aligned with `mjButton size="sm"` (32px min-height, 6px 12px padding, 0.8125rem semibold, `--mj-bg-surface-sunken` background) in `filter-popover.component.ts` so the popover trigger sits cleanly inline with adjacent action buttons. Affects every popover trigger in MJ Explorer.
 
 ---
 

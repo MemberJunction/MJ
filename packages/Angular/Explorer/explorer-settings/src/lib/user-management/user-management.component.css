@@ -4,6 +4,68 @@
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
+   Filter card — standardized "interior chrome" white box for sub-pages inside
+   a parent left-nav shell. Uses the same shared primitives as Scheduling's
+   <mj-page-header> chrome — mj-page-search + mj-filter-popover (with
+   mj-filter-panel) + mj-refresh-button + mjButton — sized to their defaults.
+   ----------------------------------------------------------------------------- */
+.filter-card {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  flex-wrap: wrap;
+  padding: var(--mj-space-3) var(--mj-space-4);
+  margin: var(--mj-space-4) var(--mj-space-4) var(--mj-space-3);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-sm);
+}
+
+/* Visible quick-toggle chips group (Status). Sits between search and the
+   action-button cluster. Matches Scheduling's exterior [toolbar] chip pattern. */
+.filter-card__chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  flex-shrink: 0;
+}
+
+/* Pushes filter popover / refresh / export / +Add to the right edge of the card. */
+.filter-card__spacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   Button reset inside the filter card.
+
+   _admin-patterns.css ships a legacy `.mj-btn` rule (pill-shaped, heavier
+   padding) that pre-dates mjButton standardization. Because Angular's emulated
+   encapsulation gives component-scoped selectors higher specificity than global
+   ones, that rule wins over button.scss's directive styles INSIDE this
+   component — making Export/+Add User render differently from <mj-refresh-button>
+   on the same row (it's a standalone component, separate scope).
+
+   This override restores the standardized mjButton look in the filter card,
+   matching what Scheduling / Home / etc. render.
+   ----------------------------------------------------------------------------- */
+.filter-card .mj-btn {
+  padding: 6px 12px;
+  border-radius: var(--mj-radius-md);
+  border: 1px solid transparent;
+  gap: 6px;
+  font-size: 0.8125rem;
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.filter-card .mj-btn i {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* -----------------------------------------------------------------------------
    Container
    ----------------------------------------------------------------------------- */
 .user-management-container {
@@ -52,207 +114,6 @@
 .stat-icon-admin {
   background: var(--mj-color-warning-50);
   color: var(--mj-color-warning-700);
-}
-
-/* -----------------------------------------------------------------------------
-   User-specific Filters: Search + Mobile Filter Toggle/Dropdown
-   ----------------------------------------------------------------------------- */
-@media (max-width: 767px) {
-  .filters-section {
-    padding: 0.75rem;
-  }
-
-  .filters-row {
-    display: flex;
-    flex-direction: row;
-    gap: 0.75rem;
-    align-items: center;
-  }
-
-  .filters-row .mj-search {
-    flex: 1;
-    min-width: 0;
-  }
-}
-
-@media (max-width: 767px) {
-  .mj-search {
-    width: 100%;
-    max-width: none;
-    min-width: 0;
-  }
-}
-
-/* Search input overrides for user-mgmt at 768px */
-@media (min-width: 768px) {
-  .mj-search {
-    min-width: 320px;
-    max-width: 600px;
-  }
-
-  .mj-search .mj-search-input {
-    padding: 1rem 1.25rem 1rem 3rem;
-    min-height: 52px;
-    font-size: 1.0625rem;
-  }
-
-  .mj-search .mj-search-icon {
-    left: 1.125rem;
-    font-size: 1.125rem;
-  }
-}
-
-/* Mobile Filter Toggle Button */
-.mobile-filter-toggle {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  width: 48px;
-  height: 48px;
-  min-width: 48px;
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  background: var(--mj-bg-surface-sunken);
-  color: var(--mj-text-secondary);
-  font-size: 1.125rem;
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--mj-shadow-sm);
-  flex-shrink: 0;
-}
-
-.mobile-filter-toggle:hover {
-  background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-primary);
-}
-
-.mobile-filter-toggle.active {
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-color: var(--mj-brand-primary);
-}
-
-.filter-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--mj-radius-full);
-  background: var(--mj-status-error);
-  color: var(--mj-text-inverse);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-}
-
-/* Mobile Filter Dropdown Panel */
-.mobile-filter-dropdown {
-  display: none;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--mj-border-default);
-  animation: slideDown 0.2s ease;
-}
-
-@media (max-width: 767px) {
-  .mobile-filter-toggle {
-    display: flex !important;
-  }
-
-  .mobile-filter-dropdown {
-    display: block;
-  }
-
-  .desktop-filter-group {
-    display: none !important;
-  }
-}
-
-.mobile-filter-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.mobile-filter-content .mj-filter-group {
-  width: 100%;
-}
-
-.mobile-filter-content .mj-filter-select {
-  width: 100%;
-}
-
-.clear-filters-btn {
-  align-self: flex-start;
-  margin-top: 0.25rem;
-}
-
-/* Desktop filter groups visibility */
-.desktop-filter-group {
-  display: none !important;
-}
-
-@media screen and (min-width: 768px) {
-  .desktop-filter-group {
-    display: flex !important;
-    flex-direction: column;
-    gap: 0.375rem;
-  }
-
-  .mobile-filter-toggle {
-    display: none !important;
-  }
-
-  .mobile-filter-dropdown {
-    display: none !important;
-  }
-}
-
-@media (max-width: 767px) {
-  .mj-filter-group {
-    flex: 1;
-    min-width: 100px;
-  }
-}
-
-.mj-filter-select {
-  padding: 0.625rem 1rem;
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-md);
-  background: var(--mj-bg-surface-sunken);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--mj-text-primary);
-  cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  min-width: 120px;
-  box-shadow: var(--mj-shadow-sm);
-}
-
-.mj-filter-select:hover {
-  background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-brand-primary);
-}
-
-@media (max-width: 767px) {
-  .mj-filter-select {
-    width: 100%;
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8125rem;
-  }
-}
-
-.mj-filter-select:focus {
-  outline: none;
-  border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
 }
 
 /* -----------------------------------------------------------------------------
@@ -709,51 +570,9 @@
   box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.2);
 }
 
-/* User-mgmt specific mobile action-buttons with FAB style */
-@media (max-width: 639px) {
-  .mj-btn-primary.mj-btn-icon-mobile {
-    box-shadow: var(--mj-shadow-md);
-  }
-
-  .mj-btn-primary.mj-btn-icon-mobile:hover {
-    box-shadow: var(--mj-shadow-lg);
-    transform: scale(1.05);
-  }
-
-  .mj-btn-secondary.mj-btn-icon-mobile {
-    background: var(--mj-bg-page);
-    border: 1px solid var(--mj-color-neutral-400);
-  }
-
-  .mj-btn-secondary.mj-btn-icon-mobile:hover {
-    background: var(--mj-brand-primary);
-    color: var(--mj-brand-on-primary);
-    border-color: var(--mj-brand-primary);
-  }
-
-  .mj-btn-icon-mobile {
-    width: 48px;
-    height: 48px;
-    padding: 0;
-    border-radius: var(--mj-radius-full);
-    min-width: 48px;
-    min-height: 48px;
-  }
-
-  .mj-btn-icon-mobile i {
-    font-size: 1.25rem;
-  }
-}
-
 /* Accessibility override for user-specific elements */
 .checkbox:focus-visible,
 .user-header:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 2px;
-}
-
-/* .mj-filter-select focus indicator */
-.mj-filter-select:focus-visible {
   outline: 2px solid var(--mj-brand-primary);
   outline-offset: 2px;
 }
@@ -766,10 +585,6 @@
     margin: 0 auto;
   }
 
-  .action-buttons {
-    padding: 1.25rem 2rem;
-  }
-
   .bulk-action-toolbar {
     padding: 1.25rem 2rem;
   }
@@ -777,11 +592,6 @@
   .mj-grid-4 {
     gap: 1.5rem;
     padding: 0 2rem 1rem 2rem;
-  }
-
-  .filters-section {
-    margin: 0 2rem 1rem 2rem;
-    padding: 1rem 1.5rem;
   }
 
   .scrollable-content {
@@ -793,10 +603,6 @@
    Mobile (< 640px) - Compact adjustments
    ----------------------------------------------------------------------------- */
 @media (max-width: 639px) {
-  .sticky-header {
-    padding-bottom: 0;
-  }
-
   .mj-grid-4 {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.5rem;
@@ -822,18 +628,8 @@
     font-size: 0.6875rem;
   }
 
-  .filters-section {
-    margin: 0 0.75rem 0.5rem 0.75rem;
-    padding: 0.75rem;
-  }
-
   .scrollable-content {
     padding: 0.75rem;
-  }
-
-  .content-area {
-    padding: 0.875rem;
-    border-radius: var(--mj-radius-lg);
   }
 
   .list-header {
