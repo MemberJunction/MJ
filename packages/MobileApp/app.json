@@ -5,7 +5,6 @@
     "scheme": "mjmobile",
     "version": "0.1.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -18,11 +17,7 @@
       }
     },
     "android": {
-      "package": "org.memberjunction.mobile",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#264FAF"
-      }
+      "package": "org.memberjunction.mobile"
     },
     "plugins": [
       "expo-router",
