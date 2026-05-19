@@ -1,25 +1,41 @@
-<div class="application-management-container">
-  <!-- Sticky Header Section -->
-  <div class="sticky-header">
-    <!-- Action Buttons -->
-    <div class="action-buttons" role="toolbar" aria-label="Application management actions">
-      <button
-        mjButton variant="secondary" class="mj-btn-icon-mobile"
-        (click)="refreshData()"
-        [disabled]="isLoading"
-        aria-label="Refresh applications"
-      >
-        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading" aria-hidden="true"></i>
-        <span class="btn-text">Refresh</span>
-      </button>
-      <button mjButton variant="primary" class="mj-btn-icon-mobile" (click)="createNewApplication()" aria-label="Add new application">
-        <i class="fa-solid fa-plus" aria-hidden="true"></i>
-        <span class="btn-text">Add Application</span>
-      </button>
+<!--
+  Interior chrome — see Section 10 of explorer-chrome-conventions.
+-->
+<mj-page-header-interior AriaLabel="Filter applications">
+  <div toolbar>
+    <mj-page-search
+      Placeholder="Search applications by name or description..."
+      [Value]="filters$.value.search"
+      (ValueChange)="updateFilter({ search: $event })">
+    </mj-page-search>
+    <div class="status-chips" role="group" aria-label="Filter by status">
+      <mj-filter-chip
+        Label="All"
+        [Active]="filters$.value.status === 'all'"
+        (Clicked)="onStatusFilterChange('all')">
+      </mj-filter-chip>
+      <mj-filter-chip
+        Label="Active"
+        [Active]="filters$.value.status === 'active'"
+        (Clicked)="onStatusFilterChange('active')">
+      </mj-filter-chip>
+      <mj-filter-chip
+        Label="Inactive"
+        [Active]="filters$.value.status === 'inactive'"
+        (Clicked)="onStatusFilterChange('inactive')">
+      </mj-filter-chip>
     </div>
+  </div>
+  <div actions>
+    <mj-refresh-button [Loading]="isLoading" (Clicked)="refreshData()"></mj-refresh-button>
+    <button mjButton variant="primary" size="sm" (click)="createNewApplication()" aria-label="Add new application">
+      <i class="fa-solid fa-plus"></i> Add Application
+    </button>
+  </div>
+</mj-page-header-interior>
 
-    <!-- Stats Cards -->
-    <div class="mj-grid-4" role="region" aria-label="Application statistics">
+<!-- Stats Cards -->
+<div class="mj-grid-4" role="region" aria-label="Application statistics">
       <div class="mj-card">
         <div class="stat-icon stat-icon-total" aria-hidden="true">
           <i class="fa-solid fa-cubes"></i>
@@ -61,55 +77,8 @@
       </div>
     </div>
 
-    <!-- Filters Section -->
-    <div class="filters-section" role="search" aria-label="Filter applications">
-      <div class="filters-row">
-        <!-- Search - Enhanced prominent search box -->
-        <div class="mj-search">
-          <i class="fa-solid fa-search mj-search-icon" aria-hidden="true"></i>
-          <input
-            type="text"
-            class="mj-search-input"
-            placeholder="Search applications by name or description..."
-            (input)="onSearchChange($event)"
-            [value]="filters$.value.search"
-            aria-label="Search applications"
-          />
-        </div>
-
-        <!-- Status Filter -->
-        <div class="mj-filter-group">
-          <label class="mj-filter-label" id="status-filter-label">Status</label>
-          <div class="mj-filter-buttons" role="group" aria-labelledby="status-filter-label">
-            <button mjButton
-              [variant]="filters$.value.status === 'all' ? 'primary' : 'flat'"
-              (click)="onStatusFilterChange('all')"
-              [attr.aria-pressed]="filters$.value.status === 'all'"
-            >
-              All
-            </button>
-            <button mjButton
-              [variant]="filters$.value.status === 'active' ? 'primary' : 'flat'"
-              (click)="onStatusFilterChange('active')"
-              [attr.aria-pressed]="filters$.value.status === 'active'"
-            >
-              Active
-            </button>
-            <button mjButton
-              [variant]="filters$.value.status === 'inactive' ? 'primary' : 'flat'"
-              (click)="onStatusFilterChange('inactive')"
-              [attr.aria-pressed]="filters$.value.status === 'inactive'"
-            >
-              Inactive
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div><!-- End Sticky Header -->
-
-  <!-- Scrollable Content Section -->
-  <div class="scrollable-content">
+<!-- Scrollable Content Section -->
+<div class="scrollable-content">
     <!-- Loading State -->
   @if (isLoading) {
     <div class="loading-container" role="status" aria-live="polite">
@@ -131,10 +100,9 @@
     </div>
   }
 
-  <!-- Content Area -->
+  <!-- Applications List -->
   @if (!isLoading && !error) {
-    <div class="content-area">
-      <div class="applications-list" role="list">
+    <div class="applications-list" role="list">
         @for (app of filteredApplications; track app.ID) {
           <div class="app-card" [class.expanded]="isAppExpanded(app.ID)" role="listitem">
             <div class="app-header" (click)="toggleAppExpansion(app.ID)" role="button" [attr.aria-expanded]="isAppExpanded(app.ID)">
@@ -261,7 +229,6 @@
             <p class="empty-subtext">Try adjusting your filters or create a new application</p>
           </div>
         }
-      </div>
     </div>
   }
   </div><!-- End Scrollable Content -->
@@ -322,4 +289,3 @@
       </div>
     </div>
   }
-</div>

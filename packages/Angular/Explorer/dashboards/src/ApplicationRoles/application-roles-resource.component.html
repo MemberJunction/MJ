@@ -1,35 +1,35 @@
-<div class="app-roles-container">
-  <!--
-    Sticky Header — action row only, matching the UserManagement / RoleManagement
-    pattern. No <mj-page-header> here: ApplicationRoles renders inside Admin's
-    "Identity & Access" left-nav shell, which owns its own <mj-page-header>.
-    Adding one here would produce the doubled-header pattern Section 9b defers.
-    See plans/explorer-chrome-conventions.md Section 10.
-  -->
-  <div class="sticky-header">
-    <div class="action-buttons" role="toolbar" aria-label="Application roles actions">
-      @if (HasUnsavedChanges) {
-        <mj-stat-badge
-          Icon="fa-solid fa-circle-exclamation"
-          Label="Unsaved changes"
-          Variant="warning">
-        </mj-stat-badge>
-        <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
-          <i class="fa-solid fa-rotate-left"></i> Discard
-        </button>
-        <button mjButton variant="primary" size="sm" (click)="SaveChanges()" [disabled]="IsSaving">
-          @if (IsSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
-          } @else {
-            <i class="fa-solid fa-floppy-disk"></i> Save Changes
-          }
-        </button>
-      }
-      <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
+<!--
+  Interior chrome — see Section 10 of explorer-chrome-conventions. Role="toolbar"
+  because this is an action band, not a search/filter region.
+-->
+<mj-page-header-interior Role="toolbar" AriaLabel="Application roles actions">
+  @if (HasUnsavedChanges) {
+    <div meta>
+      <mj-stat-badge
+        Icon="fa-solid fa-circle-exclamation"
+        Label="Unsaved changes"
+        Variant="warning">
+      </mj-stat-badge>
     </div>
+  }
+  <div actions>
+    @if (HasUnsavedChanges) {
+      <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
+        <i class="fa-solid fa-rotate-left"></i> Discard
+      </button>
+      <button mjButton variant="primary" size="sm" (click)="SaveChanges()" [disabled]="IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+        } @else {
+          <i class="fa-solid fa-floppy-disk"></i> Save Changes
+        }
+      </button>
+    }
+    <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
   </div>
+</mj-page-header-interior>
 
-  <!-- Scrollable Content -->
+<!-- Scrollable Content -->
   <div class="scrollable-content">
     <!-- Status Messages -->
     @if (ErrorMessage) {
@@ -146,4 +146,3 @@
       </div>
     }
   </div>
-</div>

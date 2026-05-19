@@ -181,6 +181,12 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips) apply immediately. Text search still goes
+    // through the 300ms debounce in setupFilterSubscription.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public toggleRoleExpansion(roleId: string): void {

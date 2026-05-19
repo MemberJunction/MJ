@@ -250,6 +250,13 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription so we
+    // don't re-filter on every keystroke.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public selectUser(user: MJUserEntity): void {
@@ -455,6 +462,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       status: 'all',
       role: ''
     });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   // -- Filter panel binding (mj-filter-panel inside the popover) -------------
@@ -475,6 +484,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
         key: 'role',
         type: 'dropdown',
         label: 'Role',
+        icon: 'fa-solid fa-user-shield',
         placeholder: 'All Roles',
         filterable: this.roles.length > 10,
         options: [
@@ -499,6 +509,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public onFilterPanelChange(values: Record<string, unknown>): void {
     const role = (values['role'] as string) ?? '';
     this.filters$.next({ ...this.filters$.value, role });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   public toggleSelectAll(): void {

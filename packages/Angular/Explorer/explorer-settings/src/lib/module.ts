@@ -10,7 +10,8 @@ import {
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJFilterChipComponent,
-  MJRefreshButtonComponent
+  MJRefreshButtonComponent,
+  MJViewToggleComponent
 } from '@memberjunction/ng-ui-components';
 
 import { EntityPermissionsModule } from '@memberjunction/ng-entity-permissions';
@@ -93,7 +94,8 @@ import { ApplicationDialogComponent } from './application-management/application
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJFilterChipComponent,
-    MJRefreshButtonComponent
+    MJRefreshButtonComponent,
+    MJViewToggleComponent
   ],
   exports: [
     // Main settings container
