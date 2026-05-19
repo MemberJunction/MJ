@@ -25,7 +25,8 @@ import { OrganicKeyClusterRefiner } from './OrganicKeyClusterRefiner.js';
 import { createEmbeddingProvider } from './EmbeddingProvider.js';
 import { EmbeddingCache } from './EmbeddingCache.js';
 import { ConceptMergePass } from './ConceptMergePass.js';
-import { CanonicalConceptDetector } from './CanonicalConceptDetector.js';
+import { SemanticClusterExpander } from './SemanticClusterExpander.js';
+import { MissingConceptsDetector } from './MissingConceptsDetector.js';
 import { BusinessConceptProjector } from './BusinessConceptProjector.js';
 import { ValueOverlapSampler } from './ValueOverlapSampler.js';
 import { MinHashSignature } from './MinHashSketch.js';
@@ -83,29 +84,9 @@ export class OrganicKeyDetectionRunner {
 
         // ─── Step 1: Build input column set ─────────────────────────────────
         progress('Organic keys — gathering columns');
-        const allColumns = this.buildInputColumns(state);
+        const columns = this.buildInputColumns(state);
 
-        // ─── Step 1b: Canonical-concept pre-pass ────────────────────────────
-        // Match columns against the catalog of canonical organic-key concepts
-        // (email, phone, URL, postal code, ISO country/currency, tax id, etc.)
-        // BEFORE clustering. Matched columns get assigned to canonical clusters
-        // directly — skipping the clusterer, LLM refinement, and concept-merge
-        // entirely. Higher precision than clustering and zero LLM cost.
-        let canonicalClusters: OrganicKeyCluster[] = [];
-        let columns = allColumns;
-        if (this.config.canonicalPrePass?.enabled !== false) {
-            const canon = new CanonicalConceptDetector();
-            const result = canon.detect(allColumns);
-            canonicalClusters = result.canonicalClusters;
-            columns = result.residual;
-            if (canonicalClusters.length > 0) {
-                progress(
-                    `Organic keys — canonical pre-pass: ${canonicalClusters.length} clusters from ${result.matchedColumnCount} matched columns (${columns.length} cols passed to clustering)`,
-                );
-            }
-        }
-
-        if (columns.length === 0 && canonicalClusters.length === 0) {
+        if (columns.length === 0) {
             this.writePhase(state, {
                 triggered: true,
                 startedAt,
@@ -124,29 +105,6 @@ export class OrganicKeyDetectionRunner {
                 skipReason: 'No columns available for clustering',
             });
             state.organicKeyClusters = [];
-            return;
-        }
-
-        // If canonical pre-pass consumed every column, we can emit immediately.
-        if (columns.length === 0) {
-            state.organicKeyClusters = canonicalClusters;
-            this.writePhase(state, {
-                triggered: true,
-                startedAt,
-                completedAt: new Date().toISOString(),
-                status: 'completed',
-                candidateClusterCount: canonicalClusters.length,
-                confirmedClusterCount: canonicalClusters.length,
-                rejectedClusterCount: 0,
-                splitClusterCount: 0,
-                tokensUsed: 0,
-                inputTokens: 0,
-                outputTokens: 0,
-                estimatedCost: 0,
-                weights: { ...DEFAULT_HYBRID_WEIGHTS },
-                thresholds: { ...DEFAULT_THRESHOLDS },
-                triggerReason: 'canonical pre-pass consumed all columns',
-            });
             return;
         }
 
@@ -263,6 +221,124 @@ export class OrganicKeyDetectionRunner {
             }
         }
 
+        // ─── Step 5a: Convergence loop — expansion + missing-concepts ───────
+        // Iterate expansion (grow existing clusters by K-NN+LLM) and
+        // missing-concepts (LLM discovers concepts the refiner rejected) until
+        // the KEEP set stabilizes. Mirrors DBAutoDoc's convergence detection.
+        const expansionEnabled =
+            this.config.semanticExpansion?.enabled !== false &&
+            refinementEnabled &&
+            this.aiConfig &&
+            embeddingActive &&
+            confirmed.length > 0;
+        const missingEnabled =
+            this.config.missingConcepts?.enabled !== false &&
+            refinementEnabled &&
+            this.aiConfig &&
+            embeddingActive;
+        const convergenceEnabled = this.config.convergence?.enabled !== false;
+        const maxIter = convergenceEnabled
+            ? this.config.convergence?.maxIterations ?? 3
+            : 1;
+
+        let totalExpandedColumns = 0;
+        let totalDiscoveredConcepts = 0;
+        let convergedAtIteration: number | null = null;
+
+        if ((expansionEnabled || missingEnabled) && confirmed.length > 0) {
+            const descriptions = this.buildDescriptionsMap(state);
+            const expander = expansionEnabled ? new SemanticClusterExpander(this.aiConfig!) : null;
+            const provider = (expansionEnabled || missingEnabled)
+                ? createEmbeddingProvider({
+                      provider: this.aiConfig!.provider,
+                      apiKey: this.aiConfig!.apiKey,
+                      model: this.config.embedding?.model ?? 'gemini-embedding-001',
+                      dimensions: this.config.embedding?.dimensions,
+                      batchSize: this.config.embedding?.batchSize,
+                  })
+                : null;
+            const missingDetector = missingEnabled && provider
+                ? new MissingConceptsDetector(this.aiConfig!, provider)
+                : null;
+
+            for (let iter = 0; iter < maxIter; iter++) {
+                const beforeKeepCount = confirmed.length;
+                const beforeMemberCount = totalMemberCount(confirmed);
+
+                // Expansion
+                if (expander) {
+                    progress(
+                        `Organic keys — iteration ${iter + 1}/${maxIter}: expansion over ${confirmed.length} clusters`,
+                    );
+                    try {
+                        const result = await expander.expandAll(confirmed, columns, descriptions, {
+                            topK: this.config.semanticExpansion?.topK,
+                            similarityFloor: this.config.semanticExpansion?.similarityFloor,
+                            concurrency: this.config.semanticExpansion?.concurrency,
+                        });
+                        totalExpandedColumns += result.addedMemberCount;
+                        tokensUsed += result.tokensUsed;
+                        inputTokens += result.inputTokens;
+                        outputTokens += result.outputTokens;
+                        if (result.addedMemberCount > 0) {
+                            progress(
+                                `Organic keys — iter ${iter + 1} expansion: +${result.addedMemberCount} cols across ${result.perCluster.filter((c) => c.outcome === 'expanded').length} clusters`,
+                            );
+                        }
+                    } catch (err) {
+                        progress(`Organic keys — iter ${iter + 1} expansion skipped: ${(err as Error).message}`);
+                    }
+                }
+
+                // Missing-concepts discovery
+                if (missingDetector) {
+                    progress(`Organic keys — iter ${iter + 1}: missing-concepts discovery`);
+                    try {
+                        const result = await missingDetector.findAndExpand(
+                            confirmed,
+                            columns,
+                            descriptions,
+                            {
+                                maxConcepts: this.config.missingConcepts?.maxConcepts,
+                                topK: this.config.missingConcepts?.topK,
+                                similarityFloor: this.config.missingConcepts?.similarityFloor,
+                                residualSampleSize: this.config.missingConcepts?.residualSampleSize,
+                            },
+                        );
+                        for (const c of result.newClusters) confirmed.push(c);
+                        totalDiscoveredConcepts += result.newClusters.length;
+                        tokensUsed += result.tokensUsed;
+                        inputTokens += result.inputTokens;
+                        outputTokens += result.outputTokens;
+                        if (result.newClusters.length > 0) {
+                            const conceptNames = result.newClusters.map((c) => c.concept).join(', ');
+                            progress(
+                                `Organic keys — iter ${iter + 1} discovery: +${result.newClusters.length} new clusters [${conceptNames}]`,
+                            );
+                        }
+                    } catch (err) {
+                        progress(`Organic keys — iter ${iter + 1} discovery skipped: ${(err as Error).message}`);
+                    }
+                }
+
+                const afterKeepCount = confirmed.length;
+                const afterMemberCount = totalMemberCount(confirmed);
+                if (
+                    convergenceEnabled &&
+                    afterKeepCount === beforeKeepCount &&
+                    afterMemberCount === beforeMemberCount
+                ) {
+                    convergedAtIteration = iter + 1;
+                    progress(`Organic keys — converged after iteration ${iter + 1} (no changes)`);
+                    break;
+                }
+            }
+        }
+        // Telemetry (not currently surfaced into the phase; suppresses unused warning).
+        void totalExpandedColumns;
+        void totalDiscoveredConcepts;
+        void convergedAtIteration;
+
         // ─── Step 5b: Concept-merge pass (consolidate same-concept KEEPs) ───
         let mergedAway = 0;
         if (
@@ -294,13 +370,7 @@ export class OrganicKeyDetectionRunner {
         const estimatedCost = this.estimateCost(inputTokens, outputTokens);
 
         // ─── Step 7: Persist results ────────────────────────────────────────
-        // Prepend canonical-pre-pass clusters so they appear first in the output
-        // (they are highest-precision and deterministic).
-        const finalClusters: OrganicKeyCluster[] =
-            canonicalClusters.length > 0
-                ? [...canonicalClusters, ...confirmed]
-                : confirmed;
-        state.organicKeyClusters = finalClusters;
+        state.organicKeyClusters = confirmed;
         const cacheStats = this.embeddingCache?.stats();
         this.writePhase(state, {
             triggered: true,
@@ -580,4 +650,11 @@ export function tableMatchesAnyPattern(tableName: string, matchers: RegExp[]): b
         if (m.test(tableName)) return true;
     }
     return false;
+}
+
+/** Sum of member counts across a cluster set — used by the convergence loop to detect fixed-point. */
+function totalMemberCount(clusters: OrganicKeyCluster[]): number {
+    let n = 0;
+    for (const c of clusters) n += c.members.length;
+    return n;
 }

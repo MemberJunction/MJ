@@ -156,7 +156,7 @@ export class OrganicKeyClusterRefiner {
                 { role: 'system', content: SYSTEM_PROMPT },
                 { role: 'user', content: userPrompt },
             ],
-            temperature: this.aiConfig.temperature ?? 0.1,
+            temperature: this.aiConfig.temperature ?? 0,
             maxOutputTokens: this.aiConfig.maxTokens,
             responseFormat: 'JSON',
         };

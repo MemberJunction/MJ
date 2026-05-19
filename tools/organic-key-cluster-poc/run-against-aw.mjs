@@ -94,7 +94,7 @@ const aiConfig = {
     provider: 'gemini',
     model: 'gemini-3-flash-preview',
     apiKey: process.env.AI_API_KEY,
-    temperature: 0.1,
+    temperature: 0,
 };
 
 console.log('Running organic key detection against AW...');

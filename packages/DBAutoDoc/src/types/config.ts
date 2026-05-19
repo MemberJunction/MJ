@@ -273,19 +273,65 @@ export interface OrganicKeyDetectionConfig {
   };
 
   /**
-   * Canonical-concept pre-pass — deterministic regex/data-type matching against a
-   * curated catalog of canonical organic-key concepts (email, phone, URL/domain,
-   * postal code, ISO country/currency, tax_id, etc.) BEFORE clustering. Matched
-   * columns are pulled out and assigned to canonical clusters directly, skipping
-   * embedding clustering, LLM refinement, and concept-merge. Higher precision
-   * than the LLM path and zero LLM cost on these patterns.
+   * Semantic cluster expansion — after LLM refinement assigns concept names to
+   * KEEP clusters, the expander performs one additional pass per cluster:
+   *   1. Compute the cluster's centroid embedding from its members
+   *   2. Find K nearest-neighbor columns in the schema NOT currently in any cluster
+   *   3. Ask the LLM which of those candidates also belong in the cluster
    *
-   * Default: true. Set false only when you want every cluster to come from the
-   * clustering+LLM pipeline (e.g. for ablation testing).
+   * Replaces hardcoded regex catalogs (e.g. for email/phone/postal_code) with a
+   * fully semantic, LLM-driven expansion. Catches the under-selection failure
+   * mode where some email/phone columns sit far from the cluster centroid and
+   * got rejected as their own too-small cluster during refinement.
+   *
+   * Language-agnostic (operates on embeddings + descriptions, not name patterns)
+   * and works for any concept the LLM has named — no maintained catalog needed.
    */
-  canonicalPrePass?: {
-    /** Whether to run the canonical pre-pass (default: true). */
+  semanticExpansion?: {
+    /** Whether to run semantic expansion (default: true when embeddings + AI provider available). */
     enabled: boolean;
+    /** Number of nearest neighbors to consider per cluster (default: 15). */
+    topK?: number;
+    /** Minimum cosine similarity for a candidate to be considered (default: 0.5). */
+    similarityFloor?: number;
+    /** Concurrency for per-cluster expansion LLM calls (default: 4). */
+    concurrency?: number;
+  };
+
+  /**
+   * Missing-concepts pass — after refinement + expansion, the LLM holistically
+   * reviews the confirmed-cluster set plus a sample of residual columns and
+   * identifies organic-key concepts that should exist but weren't surfaced.
+   * For each proposed concept, the detector embeds the description, finds
+   * K-NN candidates in the residual pool, and asks the LLM to confirm members.
+   *
+   * This is the semantic equivalent of a regex catalog: it discovers concepts
+   * the cluster + refinement step rejected (e.g. small clusters of email,
+   * phone, postal_code, country_code, etc.) without hardcoded patterns.
+   */
+  missingConcepts?: {
+    /** Whether to run the missing-concepts pass (default: true when embeddings + AI provider). */
+    enabled: boolean;
+    /** Max concepts to propose per discovery call (default: 10). */
+    maxConcepts?: number;
+    /** Top-K residual columns to consider per proposed concept (default: 20). */
+    topK?: number;
+    /** Cosine-similarity floor for K-NN (default: 0.45). */
+    similarityFloor?: number;
+    /** Residual sample size for the discovery prompt (default: 60). */
+    residualSampleSize?: number;
+  };
+
+  /**
+   * Convergence loop — wrap expansion + missing-concepts in an iterative loop
+   * that runs until the KEEP set stops changing OR a hard iteration cap is hit.
+   * Mirrors DBAutoDoc's convergence detection.
+   */
+  convergence?: {
+    /** Whether to iterate to convergence (default: true). */
+    enabled: boolean;
+    /** Max iterations (default: 3). */
+    maxIterations?: number;
   };
 
   /**
