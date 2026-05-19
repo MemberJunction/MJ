@@ -460,6 +460,15 @@ design vocabulary is consistent across both chrome surfaces.
   AriaLabel="Filter users"
   Title="Users"
   Subtitle="Manage user accounts, roles, and access">
+  <div meta>
+    <!-- Compact stat badges next to the title — counts/state. Replace any
+         body-level .mj-grid-4 KPI card grid with these. Plain counts use
+         the default variant; variants are reserved for genuine state
+         (success/warning/error/running/info). -->
+    <mj-stat-badge [Count]="stats.totalUsers" Label="total" />
+    <mj-stat-badge [Count]="stats.activeUsers" Label="active" />
+    <mj-stat-badge [Count]="stats.adminUsers" Label="owners" />
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
@@ -494,18 +503,45 @@ design vocabulary is consistent across both chrome surfaces.
   </div>
 </mj-page-header-interior>
 
-<!-- Below the chrome card: bulk-action toolbar (contextual), stats grid,
-     scrollable list. The sub-page renders these as additional top-level
-     children — but see the "exactly one root element" guidance above if
-     <mj-left-nav-content> sizing looks off. -->
+<mj-page-body-interior>
+  <!-- Below the chrome card: bulk-action toolbar (contextual), scrollable list.
+       The body-interior primitive owns flex/scroll/padding/background — no
+       bespoke wrapper CSS needed. -->
+</mj-page-body-interior>
 ```
 
 The chrome card's surface, padding, margin, radius, and shadow are owned by
 `<mj-page-header-interior>` itself — sub-pages don't need a `.filter-card`
 or any bespoke wrapper styles. Pass `[AriaLabel]` to make the card a labeled
 landmark for assistive tech; `Role` defaults to `'search'` (override or pass
-`null` for non-filter chrome). Title typography uses `--mj-text-lg` /
-`--mj-font-semibold`; subtitle uses `--mj-text-xs` / `--mj-text-muted`.
+`null` for non-filter chrome). Identity typography matches `<mj-page-header>`
+exactly — title `--mj-text-xl` / `--mj-font-semibold`, subtitle `--mj-text-sm` /
+`--mj-text-secondary`. Stat-badges in `[meta]` render at default size, identical
+to the exterior chrome.
+
+### `<mj-page-body-interior>` — the paired body primitive
+
+Sub-pages that need a scrollable body region below the chrome card use
+`<mj-page-body-interior>` rather than rolling a bespoke `<div class="scrollable-content">`
+or similar. It owns:
+
+- `flex: 1` so it fills the space below the chrome
+- `overflow-y: auto` (the host typically has `overflow: hidden`)
+- Responsive padding — 16px / 24px / 32px at the 768px and 1024px breakpoints
+- `--mj-bg-page` background — matches `<mj-left-nav-content>`'s background so
+  the body blends with its parent shell context
+
+Inputs (all optional, sensible defaults):
+
+| Input | Type | Default | When to override |
+|---|---|---|---|
+| `[Padding]` | boolean | `true` | Pass `false` if your inner content owns its own gutters (e.g. an entity list whose rows have their own margins) |
+| `[Flex]` | boolean | `false` | Pass `true` to switch the body to a flex container so children with `flex: 1` can fill remaining space |
+| `[Direction]` | `'row' \| 'column'` | `'column'` | When `Flex=true`, controls flex direction. Use `'row'` for sidebar + content sub-page layouts |
+
+Background is fixed to `--mj-bg-page` (no `Tone` input). The interior chrome's
+own surface + shadow provides the visual delineation between chrome and body —
+no second background tone needed.
 
 ### `[Title]` and `[Subtitle]` — what to set
 
@@ -519,6 +555,107 @@ landmark for assistive tech; `Role` defaults to `'search'` (override or pass
 The Title is rarely truly redundant with the rail — even when the same word
 appears in both, the in-chrome Title gives the body a visual anchor that the
 narrow rail label doesn't provide. Default to setting both.
+
+### Migration recipe — bespoke sub-page → interior chrome
+
+For each sub-page being migrated to the interior chrome pattern, this is the
+mechanical recipe. Most pages take under 15 minutes once you've done one or
+two.
+
+**1. Replace the page-level chrome (if present).**
+- If the sub-page wraps itself in `<mj-page-layout>` + `<mj-page-header>` —
+  REMOVE that. It produces the doubled-header inside the parent shell.
+- Replace with `<mj-page-header-interior Title="..." Subtitle="...">` as the
+  first child below the host. Forward existing `[meta]` / `[actions]` /
+  `[toolbar]` slot content verbatim — the slot names are identical.
+- If the sub-page had a bespoke `.sticky-header` or `.{page}-header` action
+  row, lift the actions into `<div actions>` and drop the bespoke wrapper.
+
+**2. Collapse KPI card grids into `[meta]` stat-badges.**
+- Sub-pages that have a `<div class="mj-grid-4">` (or similar) showing 3–4
+  big KPI cards above the body: replace the entire grid with compact
+  `<mj-stat-badge>` instances inside the chrome's `[meta]` slot.
+- Drop redundant stats. If `inactive = total - active` or `active = total`
+  (hardcoded), drop the redundant one. Keep stats that convey distinct
+  information.
+- **Variants signal state, not category.** Plain record counts ("12 users",
+  "8 roles", "3 entities") have NO state and should use the default variant.
+  Reserve `'success'` / `'warning'` / `'error'` / `'running'` / `'info'` for
+  badges that genuinely convey a status:
+  - `'success'` — "3 healthy nodes", "All clear", a green-light indicator
+  - `'warning'` — "5 expiring soon", "Unsaved changes", needs attention
+  - `'error'` — "2 failed jobs", broken state
+  - `'running'` — "3 active runs", in-progress state
+  - `'info'` — informational accent for a truly distinctive piece of info
+  - default — every other count
+  Coloring counts arbitrarily for visual variety dilutes the semantic
+  signal everywhere else. If you find yourself reaching for a variant just
+  to add color, use default instead.
+
+```html
+<!-- BEFORE: 4 large KPI cards between chrome and scrollable body -->
+<div class="mj-grid-4" role="region" aria-label="Role statistics">
+  <div class="mj-card">… {{ stats.totalRoles }} Total Roles …</div>
+  <div class="mj-card">… {{ stats.systemRoles }} System …</div>
+  <div class="mj-card">… {{ stats.customRoles }} Custom …</div>
+  <div class="mj-card">… {{ stats.activeRoles }} Active …</div>  <!-- redundant — equals totalRoles -->
+</div>
+
+<!-- AFTER: 3 compact badges next to the title -->
+<mj-page-header-interior Title="Roles" …>
+  <div meta>
+    <mj-stat-badge [Count]="stats.totalRoles" Label="total" />
+    <mj-stat-badge [Count]="stats.systemRoles" Label="system" Variant="info" />
+    <mj-stat-badge [Count]="stats.customRoles" Label="custom" />
+  </div>
+  …
+</mj-page-header-interior>
+```
+
+**3. Replace the body wrapper with `<mj-page-body-interior>`.**
+- Find the sub-page's body wrapper — most commonly `<div class="scrollable-content">`
+  (from `_admin-patterns.css` or a per-page rule). Sometimes it's a custom
+  class like `.dashboard-content`.
+- Replace the opening tag with `<mj-page-body-interior>`. Replace the closing
+  `</div>` with `</mj-page-body-interior>`.
+- If the body's inner content owns its own padding (e.g. an entity list whose
+  rows have margins, or content with `padding: 24px` baked into a child),
+  pass `[Padding]="false"` to disable the body's responsive gutter.
+- If the body needs to be a flex container (sidebar + content sub-page
+  layouts), pass `[Flex]="true"` + `[Direction]="'row'"`.
+
+**Exception** — pages whose body is a **purpose-built flex container** hosting
+a non-scrolling primary widget (code editor, full-canvas visualization,
+split-pane workspace) do NOT need `<mj-page-body-interior>`. Examples: the 7
+Dev Tools inspectors share an `.mj-inspector__content` flex shell from
+`inspector-shared.css` that hosts a section header + `<mj-code-editor>` filling
+the remaining height. The editor manages its own scrolling, so a body primitive
+that adds `overflow-y: auto` would be redundant. Pattern indicator: the body's
+purpose is "fill the available space with one widget that owns its own
+overflow," not "render a list/grid that scrolls vertically."
+
+**4. Drop the bespoke body CSS.**
+- Delete the per-page `:host { display: flex; flex-direction: column; ... }`
+  rule if it exists. The host-level layout is still owned by the consumer (a
+  shared `_admin-patterns.css` provides it for explorer-settings; other
+  packages declare it inline).
+- Delete the per-page `.scrollable-content { flex: 1; overflow-y: auto; ... }`
+  rule — `<mj-page-body-interior>` owns this.
+- Delete the per-page `.mj-grid-4` / stat-card CSS if the stats moved to
+  `[meta]` and no other element on the page uses those classes.
+
+**5. Register the new primitives in your feature module.**
+- Add `MJPageHeaderInteriorComponent`, `MJPageBodyInteriorComponent`, and
+  `MJStatBadgeComponent` (if not already there) to your module's `imports`
+  array — all three are standalone components.
+
+**6. Build + verify.**
+- `cd packages/Angular/Explorer/{your-package} && npm run build` to verify the
+  templates compile.
+- Refresh the browser and inspect: chrome card should have title + subtitle +
+  badges next to title, actions on the right, toolbar (if used) on a second
+  row. Body should scroll independently, background matches
+  `<mj-left-nav-content>` (page tone), no doubled-header anywhere.
 
 ### Filter UI decisions inside the chrome card
 

@@ -1,8 +1,8 @@
 /*
   APIKeysResource renders as a sub-page inside Admin → Identity & Access's
-  left-nav shell. Host is a flex column so <mj-page-header-interior> sits
-  pinned at the top and .scrollable-content fills the rest. See Section 10
-  of plans/explorer-chrome-conventions.md.
+  left-nav shell. Host is a flex column so <mj-page-header-interior> pins at
+  the top and <mj-page-body-interior> fills the rest. See Section 10 of
+  plans/explorer-chrome-conventions.md.
 */
 :host {
     display: flex;
@@ -10,15 +10,6 @@
     height: 100%;
     overflow: hidden;
     background: var(--mj-bg-page);
-}
-
-.scrollable-content {
-    flex: 1;
-    overflow-y: auto;
-}
-
-.content-wrapper {
-    padding: 24px;
 }
 
 .api-keys-loading {

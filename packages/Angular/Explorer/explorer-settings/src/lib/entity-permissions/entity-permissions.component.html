@@ -5,6 +5,12 @@
   AriaLabel="Filter entity permissions"
   Title="Entity Permissions"
   Subtitle="Manage entity-level access for each role">
+  <div meta>
+    <mj-stat-badge [Count]="stats.totalEntities" Label="entities"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.publicEntities" Label="public"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.restrictedEntities" Label="restricted"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.totalPermissions" Label="permissions"></mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search entities by name or description..."
@@ -55,51 +61,8 @@
   </div>
 </mj-page-header-interior>
 
-<!-- Stats Cards -->
-<div class="mj-grid-4" role="region" aria-label="Permission statistics">
-      <div class="mj-card" role="article" aria-label="Total entities statistic">
-        <div class="stat-icon stat-icon-total" aria-hidden="true">
-          <i class="fa-solid fa-database"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Total entities count">{{ stats.totalEntities }}</div>
-          <div class="stat-label">Total Entities</div>
-        </div>
-      </div>
-
-      <div class="mj-card" role="article" aria-label="Public entities statistic">
-        <div class="stat-icon stat-icon-public" aria-hidden="true">
-          <i class="fa-solid fa-globe"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Public entities count">{{ stats.publicEntities }}</div>
-          <div class="stat-label">Public Entities</div>
-        </div>
-      </div>
-
-      <div class="mj-card" role="article" aria-label="Restricted entities statistic">
-        <div class="stat-icon stat-icon-restricted" aria-hidden="true">
-          <i class="fa-solid fa-lock"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Restricted entities count">{{ stats.restrictedEntities }}</div>
-          <div class="stat-label">Restricted Entities</div>
-        </div>
-      </div>
-
-      <div class="mj-card" role="article" aria-label="Total permissions statistic">
-        <div class="stat-icon stat-icon-permissions" aria-hidden="true">
-          <i class="fa-solid fa-key"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Total permissions count">{{ stats.totalPermissions }}</div>
-          <div class="stat-label">Total Permissions</div>
-        </div>
-      </div>
-    </div>
-
-<!-- Scrollable Content Section -->
-<div class="scrollable-content">
+<!-- Scrollable Content Section — owned by <mj-page-body-interior>. -->
+<mj-page-body-interior>
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
@@ -344,7 +307,7 @@
           </div>
         }
     }
-  </div><!-- End Scrollable Content -->
+  </mj-page-body-interior>
 
   <!-- Permission Edit Dialog -->
   <mj-permission-dialog

@@ -8,6 +8,11 @@
   AriaLabel="Filter roles"
   Title="Roles"
   Subtitle="Define system and custom roles for permissions">
+  <div meta>
+    <mj-stat-badge [Count]="stats.totalRoles" Label="total"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.systemRoles" Label="system"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.customRoles" Label="custom"></mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search roles by name or description..."
@@ -40,51 +45,8 @@
   </div>
 </mj-page-header-interior>
 
-<!-- Stats Cards -->
-<div class="mj-grid-4" role="region" aria-label="Role statistics">
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-total" aria-hidden="true">
-          <i class="fa-solid fa-user-tag"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Total roles count">{{ stats.totalRoles }}</div>
-          <div class="stat-label">Total Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-system" aria-hidden="true">
-          <i class="fa-solid fa-shield-halved"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="System roles count">{{ stats.systemRoles }}</div>
-          <div class="stat-label">System Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-custom" aria-hidden="true">
-          <i class="fa-solid fa-user-tag"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Custom roles count">{{ stats.customRoles }}</div>
-          <div class="stat-label">Custom Roles</div>
-        </div>
-      </div>
-
-      <div class="mj-card">
-        <div class="stat-icon stat-icon-active" aria-hidden="true">
-          <i class="fa-solid fa-check-circle"></i>
-        </div>
-        <div class="stat-content">
-          <div class="stat-value" aria-label="Active roles count">{{ stats.activeRoles }}</div>
-          <div class="stat-label">Active Roles</div>
-        </div>
-      </div>
-    </div>
-
-<!-- Scrollable Content Section -->
-<div class="scrollable-content">
+<!-- Scrollable Content Section — owned by <mj-page-body-interior>. -->
+<mj-page-body-interior>
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
@@ -235,7 +197,7 @@
           }
         </div>
     }
-  </div><!-- End Scrollable Content -->
+  </mj-page-body-interior>
 
   <!-- Role Create/Edit Dialog -->
   <mj-role-dialog

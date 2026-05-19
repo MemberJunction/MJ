@@ -20,6 +20,7 @@ import {
     MJPageHeaderComponent,
     MJPageBodyComponent,
     MJPageHeaderInteriorComponent,
+    MJPageBodyInteriorComponent,
     MJPageSearchComponent,
     MJRefreshButtonComponent,
     MJStatBadgeComponent
@@ -75,6 +76,7 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         MJPageHeaderComponent,
         MJPageBodyComponent,
         MJPageHeaderInteriorComponent,
+        MJPageBodyInteriorComponent,
         MJPageSearchComponent,
         MJRefreshButtonComponent,
         MJStatBadgeComponent,

@@ -149,7 +149,6 @@ const SYSTEM_DIAGNOSTICS_SETTINGS_KEY = 'SystemDiagnostics.UserPreferences';
  * Interface for persisted user preferences
  */
 export interface SystemDiagnosticsUserPreferences {
-    kpiCardsCollapsed: boolean;
     activeSection: 'engines' | 'redundant' | 'performance' | 'cache';
     perfTab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
     telemetrySource: 'client' | 'server';
@@ -187,6 +186,15 @@ export interface SystemDiagnosticsUserPreferences {
           AriaLabel="System diagnostics"
           Title="System Diagnostics"
           Subtitle="Engine registry, cache, and performance telemetry">
+          <div meta>
+            <mj-stat-badge [Count]="engineStats?.totalEngines || 0" Label="engines"></mj-stat-badge>
+            <mj-stat-badge [Count]="formatBytes(engineStats?.totalEstimatedMemoryBytes || 0)" Label="memory"></mj-stat-badge>
+            <mj-stat-badge
+              [Count]="redundantLoads.length"
+              Label="redundant"
+              [Variant]="redundantLoads.length > 0 ? 'warning' : 'default'">
+            </mj-stat-badge>
+          </div>
           <div toolbar>
             <mj-tab-nav
               [Tabs]="diagnosticsTabs"
@@ -203,81 +211,11 @@ export interface SystemDiagnosticsUserPreferences {
           </div>
         </mj-page-header-interior>
 
-        <div class="scrollable-content">
+        <mj-page-body-interior [Padding]="false">
         <div class="system-diagnostics">
 
-          <!-- Overview Cards (Collapsible) -->
-          <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
-            <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
-              <i class="fa-solid" [class.fa-chevron-up]="!kpiCardsCollapsed" [class.fa-chevron-down]="kpiCardsCollapsed"></i>
-            </button>
-        
-            @if (!kpiCardsCollapsed) {
-              <!-- Expanded View -->
-              <div class="overview-cards">
-                <div class="overview-card">
-                  <div class="card-icon card-icon--engines">
-                    <i class="fa-solid fa-cogs"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
-                    <div class="card-label">Registered Engines</div>
-                    <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
-                  </div>
-                </div>
-        
-                <div class="overview-card">
-                  <div class="card-icon card-icon--memory">
-                    <i class="fa-solid fa-microchip"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
-                    <div class="card-label">Engine Memory</div>
-                    <div class="card-subtitle">Estimated total</div>
-                  </div>
-                </div>
-        
-                <div class="overview-card">
-                  <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
-                    <i class="fa-solid fa-copy"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ redundantLoads.length }}</div>
-                    <div class="card-label">Redundant Loads</div>
-                    <div class="card-subtitle">
-                      @if (redundantLoads.length === 0) {
-                        No redundant loading detected
-                      } @else {
-                        {{ redundantLoads.length }} entities loaded by multiple engines
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-            } @else {
-              <!-- Collapsed View - Mini KPI bar -->
-              <div class="overview-cards-mini">
-                <div class="mini-kpi" title="Registered Engines">
-                  <i class="fa-solid fa-cogs"></i>
-                  <span class="mini-value">{{ engineStats?.totalEngines || 0 }}</span>
-                  <span class="mini-label">Engines</span>
-                </div>
-                <div class="mini-divider"></div>
-                <div class="mini-kpi" title="Engine Memory">
-                  <i class="fa-solid fa-microchip"></i>
-                  <span class="mini-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</span>
-                  <span class="mini-label">Memory</span>
-                </div>
-                <div class="mini-divider"></div>
-                <div class="mini-kpi" [class.warning]="redundantLoads.length > 0" title="Redundant Loads">
-                  <i class="fa-solid fa-copy"></i>
-                  <span class="mini-value">{{ redundantLoads.length }}</span>
-                  <span class="mini-label">Redundant</span>
-                </div>
-              </div>
-            }
-          </div>
-        
+          <!-- KPI overview moved into chrome [meta] slot as <mj-stat-badge>s. -->
+
           <!-- Section Content (L2 nav is rendered as horizontal tabs in the interior chrome above) -->
           <div class="content-area">
               <!-- Engine Registry Section -->
@@ -1445,7 +1383,7 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
-          </div>
+          </mj-page-body-interior>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })
@@ -1464,7 +1402,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     activeSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
-    kpiCardsCollapsed = false;
 
     // Data
     engineStats: EngineMemoryStats | null = null;
@@ -1675,11 +1612,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.saveUserPreferencesDebounced();
     }
 
-    toggleKpiCards(): void {
-        this.kpiCardsCollapsed = !this.kpiCardsCollapsed;
-        this.cdr.markForCheck();
-        this.saveUserPreferencesDebounced();
-    }
 
     async refreshData(): Promise<void> {
         this.isLoading = true;
@@ -4111,10 +4043,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
 
         // KPI cards collapsed: ?kpi=collapsed|expanded
-        if (params['kpi']) {
-            this.kpiCardsCollapsed = params['kpi'] === 'collapsed';
-        }
-
         this.cdr.markForCheck();
     }
 
@@ -4128,8 +4056,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             tab: this.perfTab !== 'monitor' ? this.perfTab : null,
             source: this.telemetrySource !== 'client' ? this.telemetrySource : null,
             category: this.categoryFilter !== 'all' ? this.categoryFilter : null,
-            search: this.searchQuery.trim() || null,
-            kpi: this.kpiCardsCollapsed ? 'collapsed' : null
+            search: this.searchQuery.trim() || null
         };
 
         // Use NavigationService to update query params properly
@@ -4173,7 +4100,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Apply loaded user preferences to component state
      */
     private applyUserPreferences(prefs: Partial<SystemDiagnosticsUserPreferences>): void {
-        if (prefs.kpiCardsCollapsed !== undefined) this.kpiCardsCollapsed = prefs.kpiCardsCollapsed;
         if (prefs.activeSection !== undefined) this.activeSection = prefs.activeSection;
         if (prefs.perfTab !== undefined) this.perfTab = prefs.perfTab;
         if (prefs.telemetrySource !== undefined) this.telemetrySource = prefs.telemetrySource;
@@ -4189,7 +4115,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      */
     private getCurrentPreferences(): SystemDiagnosticsUserPreferences {
         return {
-            kpiCardsCollapsed: this.kpiCardsCollapsed,
             activeSection: this.activeSection,
             perfTab: this.perfTab,
             telemetrySource: this.telemetrySource,

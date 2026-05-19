@@ -33,8 +33,8 @@
   </div>
 </mj-page-header-interior>
 
-<!-- Scrollable Content -->
-  <div class="scrollable-content">
+<!-- Scrollable Content — owned by <mj-page-body-interior>. -->
+  <mj-page-body-interior>
     <!-- Status Messages -->
     @if (ErrorMessage) {
       <div class="message error-message">
@@ -149,4 +149,4 @@
         }
       </div>
     }
-  </div>
+  </mj-page-body-interior>

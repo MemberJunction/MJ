@@ -8,6 +8,11 @@
   AriaLabel="Filter users"
   Title="Users"
   Subtitle="Manage user accounts, roles, and access">
+  <div meta>
+    <mj-stat-badge [Count]="stats.totalUsers" Label="total"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.activeUsers" Label="active"></mj-stat-badge>
+    <mj-stat-badge [Count]="stats.adminUsers" Label="owners"></mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
@@ -86,51 +91,8 @@
     </div>
   }
 
-  <!-- Stats Cards -->
-  <div class="mj-grid-4" role="region" aria-label="User statistics">
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-total" aria-hidden="true">
-        <i class="fa-solid fa-users"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value" aria-label="Total users count">{{ stats.totalUsers }}</div>
-        <div class="stat-label">Total Users</div>
-      </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-active" aria-hidden="true">
-        <i class="fa-solid fa-user-check"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value" aria-label="Active users count">{{ stats.activeUsers }}</div>
-        <div class="stat-label">Active Users</div>
-      </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-inactive" aria-hidden="true">
-        <i class="fa-solid fa-user-xmark"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value" aria-label="Inactive users count">{{ stats.inactiveUsers }}</div>
-        <div class="stat-label">Inactive Users</div>
-      </div>
-    </div>
-
-    <div class="mj-card">
-      <div class="stat-icon stat-icon-admin" aria-hidden="true">
-        <i class="fa-solid fa-shield-halved"></i>
-      </div>
-      <div class="stat-content">
-        <div class="stat-value" aria-label="Owner users count">{{ stats.adminUsers }}</div>
-        <div class="stat-label">Owners</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Scrollable Content Section -->
-  <div class="scrollable-content">
+  <!-- Scrollable Content Section — owned by <mj-page-body-interior>. -->
+  <mj-page-body-interior>
     <!-- Loading State -->
     @if (isLoading) {
       <div class="loading-container" role="status" aria-live="polite" aria-busy="true">
@@ -346,7 +308,7 @@
           }
         </div>
     }
-  </div><!-- End Scrollable Content -->
+  </mj-page-body-interior>
 
   <!-- User Create/Edit Dialog -->
   <mj-user-dialog

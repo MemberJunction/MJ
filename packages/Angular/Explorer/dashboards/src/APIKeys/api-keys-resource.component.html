@@ -33,8 +33,7 @@
     <mj-loading text="Loading API Keys..."></mj-loading>
   </div>
 } @else {
-  <div class="scrollable-content">
-    <div class="content-wrapper">
+  <mj-page-body-interior>
         <!-- Keys Tab Content -->
         @if (MainTab === 'keys') {
           <!-- Overview View — title + Refresh + Generate New Key now live in the page chrome above. -->
@@ -363,8 +362,7 @@
         @if (MainTab === 'usage') {
           <mj-api-usage-panel></mj-api-usage-panel>
         }
-      </div><!-- /.content-wrapper -->
-  </div>
+  </mj-page-body-interior>
 }
 
 <!-- Create Dialog -->

@@ -6,11 +6,13 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 import {
   MJButtonDirective,
   MJPageHeaderInteriorComponent,
+  MJPageBodyInteriorComponent,
   MJPageSearchComponent,
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJFilterChipComponent,
   MJRefreshButtonComponent,
+  MJStatBadgeComponent,
   MJViewToggleComponent
 } from '@memberjunction/ng-ui-components';
 
@@ -90,11 +92,13 @@ import { ApplicationDialogComponent } from './application-management/application
     SharedGenericModule,
     MJButtonDirective,
     MJPageHeaderInteriorComponent,
+    MJPageBodyInteriorComponent,
     MJPageSearchComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJFilterChipComponent,
     MJRefreshButtonComponent,
+    MJStatBadgeComponent,
     MJViewToggleComponent
   ],
   exports: [

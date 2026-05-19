@@ -38,7 +38,7 @@
   </div>
 </mj-page-header-interior>
 
-<div class="scrollable-content">
+<mj-page-body-interior [Padding]="false">
   <!-- ── Error ──────────────────────────────────────────────────────────── -->
   @if (ErrorMessage) {
     <div class="entity-list-error" role="alert">
@@ -202,4 +202,4 @@
       </div>
     }
   }
-</div>
+</mj-page-body-interior>

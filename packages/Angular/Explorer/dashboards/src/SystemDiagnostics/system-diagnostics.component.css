@@ -11,13 +11,6 @@
     background: var(--mj-bg-page);
 }
 
-/* Scrollable Content — everything below the interior chrome scrolls together. */
-.scrollable-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--mj-space-6);
-}
-
 .system-diagnostics {
     background: var(--mj-bg-surface-sunken);
     display: flex;
@@ -50,171 +43,12 @@
     100% { transform: rotate(360deg); }
 }
 
-/* Overview Cards Container (Collapsible) */
-.overview-cards-container {
-    position: relative;
-    background: var(--mj-bg-page);
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-    transition: all 0.3s ease;
-}
-
-.overview-cards-container.collapsed {
-    padding: 0;
-}
-
-.kpi-toggle-btn {
-    position: absolute;
-    right: 24px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 28px;
-    height: 28px;
-    border-radius: var(--mj-radius-full);
-    border: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-page);
-    color: var(--mj-text-secondary);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    transition: all 0.2s ease;
-    z-index: 10;
-}
-
-.kpi-toggle-btn:hover {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-default);
-    color: var(--mj-text-primary);
-}
-
-.overview-cards-container.collapsed .kpi-toggle-btn {
-    top: 50%;
-}
-
-/* Overview Cards */
-.overview-cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-    padding: 20px 24px;
-    padding-right: 60px;
-    background: var(--mj-bg-page);
-    flex-shrink: 0;
-}
-
-/* Mini KPI Bar (Collapsed State) */
-.overview-cards-mini {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    padding: 10px 60px 10px 24px;
-    background: var(--mj-bg-page);
-}
-
-.mini-kpi {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: var(--mj-text-secondary);
-}
-
-.mini-kpi i {
-    font-size: 14px;
-    color: var(--mj-color-indigo-500);
-}
-
-.mini-kpi.warning i {
-    color: var(--mj-color-warning-500);
-}
-
-.mini-value {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.mini-label {
-    font-size: 12px;
-    color: var(--mj-text-muted);
-}
-
-.mini-divider {
-    width: 1px;
-    height: 20px;
-    background: var(--mj-border-default);
-}
-
-.overview-card {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1rem;
-    background: var(--mj-bg-surface-card);
-    border-radius: var(--mj-radius-lg);
-    border: 1px solid var(--mj-border-default);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.card-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: var(--mj-radius-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.25rem;
-    flex-shrink: 0;
-}
-
-.card-icon--engines {
-    background: var(--mj-color-accent-300);
-    color: var(--mj-brand-primary);
-}
-
-.card-icon--memory {
-    background: var(--mj-color-warning-50);
-    color: var(--mj-color-warning-700);
-}
-
-.card-icon--warning {
-    background: var(--mj-color-error-100);
-    color: var(--mj-status-error);
-}
-
-.card-icon--success {
-    background: var(--mj-color-success-100);
-    color: var(--mj-status-success);
-}
-
-.card-content {
-    flex: 1;
-    min-width: 0;
-}
-
-.card-value {
-    font-size: 1.75rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    line-height: 1;
-    letter-spacing: -0.02em;
-}
-
-.card-label {
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    margin-top: 0.25rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.card-subtitle {
-    font-size: 0.6875rem;
-    color: var(--mj-text-muted);
-    margin-top: 0.125rem;
-}
+/*
+  Overview KPIs (engines / memory / redundant) now live as <mj-stat-badge>
+  instances in the chrome's [meta] slot — see the header-interior block above.
+  The legacy .overview-cards-container / .overview-card / .kpi-toggle-btn /
+  .mini-kpi rules were retired with that migration.
+*/
 
 /* Main Content */
 /*
@@ -2196,10 +2030,6 @@
 }
 
 @media (max-width: 768px) {
-    .overview-cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
     .engine-grid {
         grid-template-columns: 1fr;
     }

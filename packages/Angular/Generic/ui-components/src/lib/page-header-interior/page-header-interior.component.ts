@@ -22,7 +22,7 @@ import { Component, Input } from '@angular/core';
  *
  * ```
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ Title             [—— spacer ——]                  [meta]      [actions] │
+ * │ Title  [meta]                       [—— spacer ——]            [actions] │
  * │  subtitle                                                                │
  * ├─────────────────────────────────────────────────────────────────────────┤
  * │ [ toolbar content … search / tab-nav / filter chips … ]                  │
@@ -35,8 +35,10 @@ import { Component, Input } from '@angular/core';
  * - **`[Subtitle]`** (input, optional) — short prose explaining what the page
  *   does. Recommended for pages that aren't self-explanatory from the rail
  *   label alone (e.g. Dev Tools inspectors).
+ * - **`[meta]`** — top row, **adjacent to the title**: status badges, result
+ *   counts, stat pills. Reads as one unit with the title ("Roles · 12 total ·
+ *   4 system"). Mirrors the title-adjacent meta slot in `<mj-page-header>`.
  * - **`[toolbar]`** — second row: search, tab nav, filter chips, view toggles
- * - **`[meta]`** — top row, before actions: status badges, result counts
  * - **`[actions]`** — top row, right edge: filter popover, refresh, secondary
  *   buttons, primary CTA
  *
@@ -68,20 +70,20 @@ import { Component, Input } from '@angular/core';
          [attr.role]="Role"
          [attr.aria-label]="AriaLabel">
       <div class="mj-page-header-interior__row mj-page-header-interior__row--primary">
-        @if (Title || Subtitle) {
-          <div class="mj-page-header-interior__identity">
+        <div class="mj-page-header-interior__identity">
+          <div class="mj-page-header-interior__title-row">
             @if (Title) {
               <div class="mj-page-header-interior__title">{{ Title }}</div>
             }
-            @if (Subtitle) {
-              <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
-            }
+            <div class="mj-page-header-interior__meta">
+              <ng-content select="[meta]"></ng-content>
+            </div>
           </div>
-        }
-        <div class="mj-page-header-interior__spacer"></div>
-        <div class="mj-page-header-interior__meta">
-          <ng-content select="[meta]"></ng-content>
+          @if (Subtitle) {
+            <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
+          }
         </div>
+        <div class="mj-page-header-interior__spacer"></div>
         <div class="mj-page-header-interior__actions">
           <ng-content select="[actions]"></ng-content>
         </div>
@@ -118,6 +120,7 @@ import { Component, Input } from '@angular/core';
       display: contents;
     }
 
+
     /* Rows: primary (identity + meta + actions) and toolbar (separate row). */
     .mj-page-header-interior__row {
       display: flex;
@@ -152,17 +155,30 @@ import { Component, Input } from '@angular/core';
       flex-shrink: 1;
       min-width: 0;
     }
+
+    /* Title row — title text + [meta] slot, side by side. Matches the title-row
+       pattern in <mj-page-header>. Meta sits adjacent to the title so "Title (3
+       active)" reads as one unit. */
+    .mj-page-header-interior__title-row {
+      display: flex;
+      align-items: center;
+      gap: var(--mj-space-3);
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    /* Identity typography matches <mj-page-header> exactly — same title size,
+       same subtitle size, same colors. One mental model across both chrome
+       surfaces. */
     .mj-page-header-interior__title {
-      font-size: var(--mj-text-lg);
+      font-size: var(--mj-text-xl);
       font-weight: var(--mj-font-semibold);
       color: var(--mj-text-primary);
-      line-height: 1.2;
-      letter-spacing: -0.2px;
+      line-height: 1.25;
     }
     .mj-page-header-interior__subtitle {
-      font-size: var(--mj-text-xs);
-      color: var(--mj-text-muted);
-      line-height: 1.3;
+      font-size: var(--mj-text-sm);
+      color: var(--mj-text-secondary);
+      line-height: 1.4;
     }
 
     .mj-page-header-interior__spacer {
@@ -174,14 +190,24 @@ import { Component, Input } from '@angular/core';
     .mj-page-header-interior__actions {
       display: inline-flex;
       align-items: center;
-      gap: var(--mj-space-3);
+      gap: var(--mj-space-2);
       flex-shrink: 0;
     }
 
-    /* Collapse the meta + actions wrappers when there's nothing projected, so
-       a sub-page that only uses [toolbar] doesn't leave dangling gap space. */
+    .mj-page-header-interior__actions {
+      gap: var(--mj-space-3);
+    }
+
+    /* Collapse the meta + actions wrappers when there's nothing projected. */
     .mj-page-header-interior__meta:empty,
     .mj-page-header-interior__actions:empty {
+      display: none;
+    }
+
+    /* Collapse the identity wrapper when nothing is projected — covers the
+       no-title / no-subtitle / no-meta case. The :empty check is on the
+       title-row sub-element because that's where ng-content lives. */
+    .mj-page-header-interior__identity:has(.mj-page-header-interior__title-row:empty):not(:has(.mj-page-header-interior__subtitle)) {
       display: none;
     }
 
