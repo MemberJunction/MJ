@@ -111,6 +111,34 @@ Per `INTEGRATION-FRAMEWORK-REQUIREMENTS.md` §5.2.1. Self-report matched gate(s)
 
 `Definite` → write `RelatedIntegrationObjectID` directly with CODE_EVIDENCE + `IsForeignKey=true`. `Strong`/`Moderate` → write + flag. `Weak` → don't write FK; surface as gap.
 
+### RelatedIntegrationObjectFieldName — resolve from target IO's actual PK, never hardcode
+
+When emitting an FK reference, `RelatedIntegrationObjectFieldName` MUST be set by **looking up the target IO's actual primary-key IOF**, NOT by hardcoding a guess like `'id'`. The naive shortcut `RelatedIntegrationObjectFieldName: 'id'` produces Invariant 3 errors of the form *"IOF X points to Target.id but that field doesn't exist on target"* whenever the target IO's PK is named anything else (`hs_object_id`, `userId`, `flowId`, custom-object typeId, etc.).
+
+Required emission procedure (two-pass — fields emitted first, FKs resolved second):
+
+1. **Pass 1** — emit every IO with its IOFs. PK detection per gates DP1–DP8 sets `IsPrimaryKey=true` on one IOF per IO (when detectable).
+2. **Pass 2** — build a `Map<IOName, PrimaryKeyFieldName>` from the emissions: for each IO, find the IOF where `IsPrimaryKey === true` and record its `Name`. Then for every FK emitted in Pass 1, look up the target IO in this map:
+   - **Found** → set `RelatedIntegrationObjectFieldName` to the looked-up PK field name. Emit CODE_EVIDENCE entry citing the DP-gate that established the target's PK.
+   - **Not found** (target IO has no detectable PK) → set `RelatedIntegrationObjectFieldName: null` and append a PROVENANCE entry citing the absence-of-evidence. Do NOT fabricate `'id'`. Surface as a gap in `GapsForLLMCompletion`.
+
+Anti-pattern to avoid (this is exactly what surfaced in the HubSpot clean-build):
+
+```typescript
+// ❌ WRONG — hardcoded guess; produces Invariant 3 errors when target's PK isn't 'id'
+fields.RelatedIntegrationObjectFieldName = 'id';
+
+// ❌ WRONG — copying source IO's PK field name onto the target (wrong direction)
+fields.RelatedIntegrationObjectFieldName = sourceIO.PrimaryKeyFieldName;
+
+// ✅ CORRECT — resolve from the target IO's IsPrimaryKey IOF
+const targetPK = pkByIO.get(targetIOName);
+fields.RelatedIntegrationObjectFieldName = targetPK ?? null;
+if (!targetPK) gaps.push({ TargetIO: targetIOName, Reason: 'no detectable PK on target' });
+```
+
+Invariant 3 enforces this — if you emit `RelatedIntegrationObjectFieldName: 'X'` and the target IO has no IOF named `X`, the validator flags it as an error. The two-pass resolution is the only way to avoid the failure for non-`id`-PK vendors.
+
 ## Hierarchy + traversal order (per requirements §5.3)
 
 Observe URL path templates. When a path like `/parents/{ParentID}/children` is grouped to an `objectKey` ending in `children`, the path implies `children` is nested under `parents`:
