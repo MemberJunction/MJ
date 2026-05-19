@@ -68,11 +68,35 @@ Audit-log only (do NOT re-dispatch):
 2. If any check fires re-dispatch → re-spawn the phase agent with structured feedback → wait → audit again.
 3. Cap at 3 audit cycles per phase. After the cap, escalate to user: "audit cycle limit reached; remaining gaps documented but not auto-resolved."
 
-### Phase-specific application
+### Phase-specific rubrics
 
-- **After Phase 2b (metadata-writer)**: audit root fields only. Every emitted root field (`CredentialTypeID`, `BatchMaxRequestCount`, `APIBaseURL` if present, etc.) has provenance AND aligns with control if a control exists.
-- **After Phase 2c (ioiof-extractor)**: full three-check audit on the IO list.
-- **After Phase 2d (code-builder)**: method-coverage audit. Every IO with `SupportsX=true` has a corresponding `XRecord` method on the connector class.
+In addition to the three general vendor-agnostic checks above, each phase has its own rubric the coordinator runs against the phase output.
+
+#### Phase 2b (metadata-writer) rubric
+
+- **Coverage threshold**: every entity named in the vendor's product overview that maps to a root-level concept (auth model, pagination shape, rate limits, error envelope, webhook signature, etc.) has a corresponding root field or `Configuration` JSON entry. Mismatch → flag.
+- **Structural completeness**: every hard-constraint root field (the set named in `.claude/rules/metadata-file-conventions.md`) has a `PROVENANCE.json` entry whose `TargetField` matches exactly (single-target, not pipe-delimited compound).
+- **Cross-source corroboration**: when multiple Tier-1 sources in `SOURCES.json` describe the same root fact, the emitted value aligns with all of them. Surfacing contradiction → flag (don't pick silently).
+
+#### Phase 2c (ioiof-extractor) rubric
+
+- **Coverage threshold**: IO count ~ 100% of entities identifiable from the vendor's product overview / catalog index. Less than that → flag (per Control Comparison + Product Overview Cross-Reference checks).
+- **Structural completeness**: every IO has ≥ 1 IOF; every IOF emitted with `IsPrimaryKey=true` / `IsRequired=true` / `IsReadOnly=true` (non-default) / `SupportsWrite=true` / `SupportsIncrementalSync=true` has a corresponding `CODE_EVIDENCE.json` entry at per-(IO|IOF, field, signal) granularity.
+- **Cross-source corroboration**: when multiple sources describe the same entity (e.g., OpenAPI + SDK + docs page), the emitted IO/IOF rows align across all. Divergence → flag.
+- **Bidirectional set-completeness**: no orphans from prior runs (extractor's bidirectional-merge deletes IOs/IOFs in existing metadata that aren't in this run's emissions).
+
+#### Phase 2d (code-builder) rubric
+
+- **Metadata-driven routing**: every method body uses metadata routing fields (`APIPath` from IO, `CreateAPIPath` / `UpdateAPIPath` / etc. if present in vendor config). No hardcoded URLs in method bodies.
+- **No inline crypto**: imports come from `@memberjunction/integration-engine/auth-helpers` (`OAuth2TokenManager`, `JWTSigner`, `HMACSigner`, `APIKeyHeaderBuilder`). If a primitive is missing, extend `auth-helpers` — don't inline a crypto path in the connector.
+- **DiscoverObjects override**: present if the metadata declares runtime catalog discovery (vendor exposes `/schemas`, `/describe`, `/preferences`, or equivalent enumeration endpoint).
+- **WatermarkService integration**: if any IO has `SupportsIncrementalSync=true`, `FetchChanges` reads + advances watermark via `WatermarkService.Load` / `.Update`. Watermark advances only on full-batch success.
+- **MatchEngine integration**: Update / Delete paths flow through `MatchEngine` for Create-vs-Update decision via `IsKeyField` lookup.
+- **NO hardcoded catalog mirror**: connector class's `DiscoverObjects` reads from `IntegrationEngineBase.Instance` cache (per `MJ-INTEGRATIONS-ARCHITECTURE.md` §4.6), NOT from a hardcoded TypeScript constant. Tests assert against the cache, not against a hardcoded count.
+- **Capability ↔ method coherence**: every `SupportsX=true` flag has: (1) a method declared on the concrete class, (2) a real non-stub body (not `throw "not implemented"`), (3) at least one fixture-based unit test asserting URL / method / body shape.
+- **Control connector cross-reference**: if `packages/Integration/connectors/src/<Name>Connector.ts` exists as a control, diff method signatures + capability flag set + base class choice. Mismatches → flag.
+
+Each rubric check failure → re-dispatch the phase with structured feedback citing the specific check + the specific mismatch. Audit loop cap (3 cycles) applies per phase.
 
 ### Why audit is part of the coordinator and not the phase agent
 
