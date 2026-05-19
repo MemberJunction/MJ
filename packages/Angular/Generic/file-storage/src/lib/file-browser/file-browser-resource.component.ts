@@ -12,25 +12,35 @@ import { RegisterClass } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-file-browser-resource',
   template: `
-    <div class="file-browser-resource-container">
-      <mj-file-browser></mj-file-browser>
-    </div>
+    <mj-page-layout>
+      <mj-page-header
+        Title="File Browser"
+        Icon="fa-solid fa-folder-tree"
+        Subtitle="Browse and manage files across storage providers">
+      </mj-page-header>
+      <div class="file-browser-body">
+        <mj-file-browser></mj-file-browser>
+      </div>
+    </mj-page-layout>
   `,
   styles: [`
     :host {
       display: block;
       width: 100%;
       height: 100%;
-      position: relative;
-      overflow: hidden;
     }
-    .file-browser-resource-container {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      overflow: hidden;
+    .file-browser-body {
+      flex: 1;
+      min-height: 0;
+      padding: 0 24px 24px;
+      display: flex;
+    }
+    /* The inner mj-file-browser needs to fill the body container. */
+    .file-browser-body :is(mj-file-browser) {
+      flex: 1;
+      min-height: 0;
+      min-width: 0;
+      display: flex;
     }
   `]
 })

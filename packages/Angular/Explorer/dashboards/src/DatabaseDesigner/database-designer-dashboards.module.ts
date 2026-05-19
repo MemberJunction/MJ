@@ -14,7 +14,15 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+    MJButtonDirective,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent
+} from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
@@ -62,6 +70,12 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         CommonModule,
         FormsModule,
         MJButtonDirective,
+        MJPageLayoutComponent,
+        MJPageHeaderComponent,
+        MJPageBodyComponent,
+        MJPageSearchComponent,
+        MJRefreshButtonComponent,
+        MJStatBadgeComponent,
         SharedGenericModule,
         VersionsModule,
         MarkdownModule,

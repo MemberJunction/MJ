@@ -5,6 +5,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface SystemConfigFilter {
   searchTerm: string;
@@ -149,6 +150,80 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
       status: 'all',
       isDefault: 'all'
     };
+    this.applyFilters();
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly configViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip', title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+  ];
+
+  /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
+  public resetPopoverFilters(): void {
+    this.currentFilters = { ...this.currentFilters, status: 'all', isDefault: 'all' };
+    this.applyFilters();
+  }
+
+  /** Number of active filter criteria inside the popover (excludes searchTerm — surfaced separately). */
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.currentFilters.status && this.currentFilters.status !== 'all') n++;
+    if (this.currentFilters.isDefault && this.currentFilters.isDefault !== 'all') n++;
+    return n;
+  }
+
+  /** Values record consumed by the centralized <mj-filter-panel>. */
+  public get configFilterValues(): Record<string, unknown> {
+    return {
+      status: this.currentFilters.status,
+      isDefault: this.currentFilters.isDefault,
+    };
+  }
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get configFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'status',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-toggle-on',
+        options: [
+          { text: 'All Statuses', value: 'all' },
+          { text: 'Active',       value: 'Active' },
+          { text: 'Inactive',     value: 'Inactive' },
+          { text: 'Deprecated',   value: 'Deprecated' },
+          { text: 'Preview',      value: 'Preview' },
+        ],
+      },
+      {
+        key: 'isDefault',
+        type: 'dropdown',
+        label: 'Default',
+        icon: 'fa-solid fa-star',
+        options: [
+          { text: 'All Configurations', value: 'all' },
+          { text: 'Default Only',       value: 'true' },
+          { text: 'Non-Default Only',   value: 'false' },
+        ],
+      },
+    ];
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    this.currentFilters = {
+      ...this.currentFilters,
+      status:    (values['status']    as string) ?? 'all',
+      isDefault: (values['isDefault'] as string) ?? 'all',
+    };
+    this.applyFilters();
+  }
+
+  /** Update searchTerm from the toolbar search input. */
+  public onSearchTermChange(value: string): void {
+    this.currentFilters = { ...this.currentFilters, searchTerm: value ?? '' };
     this.applyFilters();
   }
 

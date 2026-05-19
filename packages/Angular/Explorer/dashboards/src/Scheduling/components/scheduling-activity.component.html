@@ -1,42 +1,48 @@
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduling Activity"
+      Icon="fa-solid fa-clock-rotate-left"
+      Subtitle="Execution history, trends, and job type statistics">
+      <div actions>
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="ActivityFilterFields"
+            [Values]="ActivityFilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search executions..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+        @for (range of TimeRanges; track range.value) {
+          <mj-filter-chip
+            [Label]="range.label"
+            [Active]="SelectedTimeRange === range.value"
+            (Clicked)="OnTimeRangeChange(range.value)">
+          </mj-filter-chip>
+        }
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
 <div class="activity-container">
-  <!-- Toolbar -->
-  <div class="activity-toolbar">
-    <div class="toolbar-left">
-      <div class="search-box">
-        <i class="fa-solid fa-search"></i>
-        <input type="text" placeholder="Search executions..."
-          [value]="SearchTerm"
-          (input)="OnSearchChange($any($event.target).value)" />
-      </div>
-      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-        <option value="">All Statuses</option>
-        @for (s of StatusOptions.slice(1); track s) {
-          <option [value]="s">{{s}}</option>
-        }
-      </select>
-      <select class="filter-select" [value]="JobNameFilter" (change)="OnJobNameFilterChange($any($event.target).value)">
-        <option value="">All Jobs</option>
-        @for (name of UniqueJobNames; track name) {
-          <option [value]="name">{{name}}</option>
-        }
-      </select>
-    </div>
-    <div class="toolbar-right">
-      <div class="time-range-group">
-        @for (range of TimeRanges; track range) {
-          <button
-            class="range-btn"
-            [class.active]="SelectedTimeRange === range.value"
-            (click)="OnTimeRangeChange(range.value)">
-            {{range.label}}
-          </button>
-        }
-      </div>
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-    </div>
-  </div>
 
   <!-- Loading -->
   @if (IsLoading) {
@@ -216,3 +222,4 @@
     </div>
   }
 </div>
+</ng-template>

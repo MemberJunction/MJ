@@ -9,6 +9,8 @@
   background: var(--mj-bg-page);
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 .schedules-root {
   padding: 24px;
   max-width: 1400px;
@@ -25,51 +27,6 @@
 /* --------------------------------------------------------------------------
    Header
    -------------------------------------------------------------------------- */
-
-.section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.section-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.section-title i {
-  color: var(--mj-brand-primary);
-}
-
-.header-meta {
-  font-size: 13px;
-  color: var(--mj-text-muted);
-  padding: 2px 10px;
-  background: var(--mj-bg-surface-active);
-  border-radius: 12px;
-}
-
-.running-badge {
-  background: var(--mj-color-warning-100);
-  color: var(--mj-color-warning-600);
-}
-
-.running-badge i {
-  margin-right: 4px;
-}
 
 /* --------------------------------------------------------------------------
    Buttons (shared)
@@ -711,15 +668,5 @@
 
   .schedules-root {
     padding: 16px;
-  }
-
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .header-left {
-    gap: 8px;
   }
 }

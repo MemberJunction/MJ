@@ -1,15 +1,11 @@
-<div class="permissions-container">
-  <div class="header">
-    <div class="header-left">
-      <i class="fa-solid fa-cube header-icon"></i>
-      <h2 class="header-title">Resource Access Report</h2>
-    </div>
-  </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Resource Access Report"
+    Icon="fa-solid fa-cube"
+    Subtitle="Look up every grantee for a specific resource">
+  </mj-page-header>
 
-  <p class="description">
-    Look up every grantee for a specific resource. Pick a permission domain, supply the resource
-    type and the resource's ID, then press Lookup.
-  </p>
+  <mj-page-body>
 
   @if (ErrorMessage) {
     <div class="message error-message">
@@ -131,4 +127,5 @@
       </table>
     </div>
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

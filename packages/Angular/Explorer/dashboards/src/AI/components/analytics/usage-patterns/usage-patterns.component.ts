@@ -64,16 +64,6 @@ const FIELDS: string[] = [
     standalone: false,
     selector: 'app-analytics-usage-patterns',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [ShowModelFilter]="false"
-            [ShowAgentFilter]="false"
-            [ShowPromptFilter]="false"
-            [ShowStatusFilter]="false"
-            [ShowCompareToggle]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">
