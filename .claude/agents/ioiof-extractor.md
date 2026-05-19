@@ -27,7 +27,7 @@ So: any fetch the extraction needs **must be a `fetch()` / `https.get` call insi
 | ALWAYS_SKIP lists ≤ 5 entries (known test endpoints) | Object catalogs of any size |
 | Type-mapping tables (vendor type string → MJ type) | Hardcoded field lists per object |
 | The URL **pattern** for fetching | Hardcoded descriptions, displayNames, capability flags, typeIds, API paths |
-| ≤ 3 seed values to bootstrap iteration | Anything resembling "I know HubSpot has Contacts and Companies and..." |
+| ≤ 3 seed values to bootstrap iteration | Anything resembling "I know <Vendor> has Object1 and Object2 and..." (pre-imposed knowledge of the vendor's catalog) |
 
 **If your script has > 5 object literals in a literal array, that's a violation.** Refactor to fetch.
 
@@ -56,7 +56,7 @@ io["relatedEntities"]["MJ: Integration Object Fields"]   ← required key, verba
 
 Do NOT write to alternate keys like `Integration Objects`, `IntegrationObjects`, `IOs`, `Objects`, or any other variant. The validator, mj-sync, and code-builder all look at `MJ: Integration Objects` verbatim; deviating makes the rows invisible downstream and produces false-positive Invariant 1 passes (the validator finds no IOs to check, so trivially passes — even when thousands of provable-only failures are hiding under the wrong key).
 
-If unsure, look at HubSpot's metadata file as the canonical example.
+If unsure, look at any existing vendor's `metadata/integrations/.<vendor>.json` in `connectors-registry/` as a worked example — read its shape (key names, nesting), not its values.
 
 ## Script structure
 
@@ -91,67 +91,98 @@ The IO Name field is the technical identifier used by metadata FK references (`@
 | `objectKey-tail` | kebab-case, preserves URL-segment shape | Last segment of the objectKey path the strategy library's `ObjectKeyForPath` emits (action-suffix vocab already stripped) | `private-apps`, `details`, `login`, `contacts` |
 | Separator | Literal `.` | n/a | `.` |
 
-**Worked example** (HubSpot's actual output, snapshot run):
-- Source spec: `PublicApiSpecs/Account/Account Info/Rollouts/144923/v3/accountInfo.json`
-- Source path: `/account-info/v3/api-usage/daily/private-apps`
-- objectKey after strategy 0 grouping: `/account-info/v3/api-usage/daily/private-apps`
-- objectKey-tail: `private-apps`
-- Final IO Name: **`Account.AccountInfo.private-apps`**
+**Worked example** (illustrative — generic vendor, not pre-imposed knowledge):
+- Source spec: `<repo>/<RootCatalog>/<AreaSegment>/<ApiNameSegment>/Rollouts/<id>/<version>/<file>.json`
+- Source path: `/<area-slug>/<api-version>/<sub-path>/<object>`
+- objectKey after strategy 0 grouping: `/<area-slug>/<api-version>/<sub-path>/<object>`
+- objectKey-tail: `<object>`
+- Final IO Name: **`<AreaSegment>.<ApiNameSegment>.<object>`**
 
-**Why this format (decision recorded in commit-message after the HubSpot clean-build verification)**:
+**Why this format**:
 
-1. **Versioned-rollout safety**: when v3 + v4 of the same path both exist in the source repo (`PublicApiSpecs/CRM/Contacts/.../v3/contacts.json` AND `.../2026-09-beta/contacts.json`), the (Area, ApiName) prefix distinguishes them OR the rollout-ranking picks the highest-information version. Either way no collision happens.
+1. **Versioned-rollout safety**: when v3 + v4 (or any two API versions) of the same path both exist in the source repo, the (Area, ApiName) prefix distinguishes them OR the rollout-ranking picks the highest-information version. Either way no collision happens.
 2. **UpsertByKey deduplication still works** — when the SAME path is genuinely re-emitted from two distinct specs in the same Area/ApiName, UpsertByKey by Name collapses them as intended.
-3. **Provenance preservation**: a human inspecting metadata can read `Marketing.MarketingEvents.v3` and immediately know the spec category. A flatter `marketing-events.v3` loses that.
+3. **Provenance preservation**: a human inspecting metadata can read `<Area>.<ApiName>.<object>` and immediately know the spec category. A flatter `<api-name>.<object>` loses that.
 4. **DisplayName carries the human label**: IO Name is technical; UI surfaces use DisplayName. Granular Name doesn't hurt UX.
 
-**Anti-patterns to avoid** (these surfaced in the HubSpot clean-build first attempt and produced a 47% IO-count regression vs the snapshot):
+**Anti-patterns to avoid** (these patterns produce IO-count regressions because they over-collapse via UpsertByKey when multiple specs share the same path-tail):
 
 ```typescript
 // ❌ WRONG — collapses (Area, ApiName) information; many specs collide via UpsertByKey
-fields.Name = objectKeyTail.toLowerCase();  // → "private-apps"
+fields.Name = objectKeyTail.toLowerCase();  // → "<object>"
 
 // ❌ WRONG — drops Area prefix; same path-tail across different vendor categories collides
-fields.Name = `${apiName}.${objectKeyTail}`;  // → "account-info.private-apps"
+fields.Name = `${apiName}.${objectKeyTail}`;  // → "<api-name>.<object>"
 
 // ✅ CORRECT — full Area.ApiName.objectKey-tail
-fields.Name = `${pascalCase(area)}.${pascalCase(apiName)}.${objectKeyTail}`;  // → "Account.AccountInfo.private-apps"
+fields.Name = `${pascalCase(area)}.${pascalCase(apiName)}.${objectKeyTail}`;
 ```
 
 Determinism guarantee: same source repo + same rollout-ranking + this Name format produces the same IO set every run. If your script's output count varies more than ±2% across runs against an unchanged source, the cause is non-determinism in your spec-selection logic, not the naming convention — fix the selection logic, not the format.
 
-## Universal PK detection gates (apply in order; first match wins)
+### Auto-discovery of vendor version proliferation
 
-Per `INTEGRATION-FRAMEWORK-REQUIREMENTS.md` §5.1. Self-report the matched gate per IO as `PrimaryKeyDetectionMethod` (values listed below).
+Many vendors maintain multiple API versions side-by-side (v3, v4, year-month-dated betas, etc.). Your extraction script must **discover the version surface automatically**, not assume a single version:
+
+1. Enumerate every `Rollouts/<id>/<version>/...` folder (or whatever the vendor's spec repo uses) in the source.
+2. Rank versions by information density. Common heuristics: prefer numbered major versions (v3, v4) over dated betas (`2026-09-beta`); prefer the highest numbered version when shapes are equivalent; prefer the version with the most concrete typed paths over generic-path templates.
+3. Pick one version per (Area, ApiName) tuple. Record the rejected versions in stdout stats so a future drift-detection pass can review the decision.
+
+The version-ranking logic is vendor-specific (each vendor's repo layout differs); record it in the script's source as a small named function with comments explaining the heuristics. No hardcoded version preferences in the framework.
+
+### URL template variable syntax — observe, do not assume
+
+Different vendors use different syntaxes for path template variables:
+- `/path/{var}/...` — OpenAPI / many REST APIs
+- `/path/:var/...` — Express-style / some Ruby APIs
+- `/path/<var>/...` — Python-Flask-style
+- `/path/{{var}}/...` — handlebars-style (rare in APIs but possible)
+- Positional (no syntax — vendor docs say "the third segment is the ID")
+
+Your script must **observe the syntax in the vendor's source** and parse it accordingly. Do NOT hardcode `/{var}/` as the only recognized form. The framework's downstream consumers (connectors that fill in template variables at runtime) read the source-as-documented; the extractor just records what's there.
+
+## PK detection gates — HINTS, not rules (apply in order; first match wins)
+
+Per `INTEGRATION-FRAMEWORK-REQUIREMENTS.md` §5.1. These are common naming hints / structural signals — NOT a closed list. If the vendor's source signals PK in a way none of these gates capture, observe that signal and add a new self-reported gate name (the extractor's `PrimaryKeyDetectionMethod` field is free-form text). The framework prefers honest observation over forcing the source into a pre-known shape.
+
+Self-report the matched gate per IO as `PrimaryKeyDetectionMethod`:
 
 | Gate | Check | Self-report value | Confidence |
 |---|---|---|---|
-| DP1 | OpenAPI extension `x-key: true` or `primary: true` on field | `documented-explicit` | Provable |
-| DP2 | SDK type marks as PK (Salesforce sObject describe `idLookup=true` + `field-type=id`; jsforce typedef pattern) | `documented-explicit` | Provable |
+| DP1 | Source schema extension explicitly marks the field as PK (e.g. an OpenAPI vendor extension like `x-key: true` / `x-primary: true`, or any vendor-documented PK flag on the field) | `documented-explicit` | Provable |
+| DP2 | SDK type / runtime describe-endpoint marks the field as PK (e.g. a `describe`-style endpoint returning `idLookup=true`, a typed SDK exposing an explicit PK annotation) | `documented-explicit` | Provable |
 | DP3 | Field name matches `Integration.PrimaryKeyFieldName` exactly AND `PrimaryKeyFieldConfidence=Provable` | `naming-convention-provable` | Provable |
-| DP4 | Field named exactly `id`/`Id`/`ID` AND required AND type is string-UUID or integer | `naming-convention-likely` | Likely |
+| DP4 | **Naming hint**: field name matches a common universal-PK shape (`id`/`Id`/`ID`) AND required AND type is string-UUID or integer. Hint, not a rule — works for many vendors but not all. | `naming-convention-likely` | Likely |
 | DP5 | Field has `unique: true` AND `required: true` in source | `unique-required-inference` | Likely |
 | DP6 | Field name matches `Integration.PrimaryKeyFieldName` AND `Confidence=Likely` | `naming-convention-likely` | Likely |
-| DP7 | Field at position 0 + plausible PK type + required | `position-0-heuristic` | Likely (low) |
+| DP7 | **Position heuristic**: field at position 0 + plausible PK type + required. Weakest hint; only when nothing else fires. | `position-0-heuristic` | Likely (low) |
 | DP8 | None of the above | `unknown` | — emit `IsPrimaryKey=false`, surface as gap |
+| (extensible) | Any vendor-specific signal not in DP1–DP7 (record a descriptive name for the gate; agent will emit it with CODE_EVIDENCE citing the source signal) | `<descriptive-gate-name>` | as appropriate |
 
 `Provable` → write `IOF.IsPrimaryKey=true` directly with CODE_EVIDENCE. `Likely` → write + flag in `AdditionalObservations`. `Unknown` → don't write `IsPrimaryKey=true`; surface as gap for post-sync `LightweightConstraintDiscovery` to resolve.
 
-## Universal FK detection gates (apply each; multiple matches strengthen)
+**Important**: do not hardcode "the universal PK name is `id`" into the script's source. The DP4 hint says `id`/`Id`/`ID` is COMMON across many vendors — that's a shortcut to try first, not a guarantee. If the vendor uses a different convention (and `Integration.PrimaryKeyFieldName` from Phase 1 should already tell you), follow that.
 
-Per `INTEGRATION-FRAMEWORK-REQUIREMENTS.md` §5.2.1. Self-report matched gate(s) per IOF as `FKDetectionMethod`.
+## FK detection gates — HINTS, not rules (apply each; multiple matches strengthen)
+
+Per `INTEGRATION-FRAMEWORK-REQUIREMENTS.md` §5.2.1. Same flexibility principle as PK gates: these are common signals, not an exhaustive list. If the vendor's source signals an FK in a shape none of these gates capture, record what you actually observed.
+
+Self-report matched gate(s) per IOF as `FKDetectionMethod`:
 
 | Gate | Check | Self-report value | Strength |
 |---|---|---|---|
 | DF1 | OpenAPI `$ref` pointing to another schema definition | `openapi-ref` | Definite |
-| DF2 | SDK relationship annotation (Salesforce `type='reference'` + `referenceTo`; jsforce `relationshipName`) | `sdk-relationship-annotation` | Definite |
-| DF3 | URL path parent → child (path `/parents/{ParentID}/children` implies `children.ParentID` is FK to `parents`) | `url-path-parent` | Definite |
-| DF4 | Field name matches `{ObjectName}Id` / `{object_name}_id` exactly where ObjectName matches another IO's Name | `name-pattern-suffix` | Strong |
-| DF5 | Field name matches `{ObjectName}` exactly (no Id suffix) where target object's PK name is `id` | `name-pattern-suffix` | Moderate |
+| DF2 | SDK relationship annotation (typed SDK exposes a `reference`-style relationship marker plus an explicit `referenceTo` / `relationshipName` target) | `sdk-relationship-annotation` | Definite |
+| DF3 | URL path nesting implies parent→child: when a path's template variables include a non-tail variable whose collection segment matches another IO's name, the variable is interpreted as an FK to that parent. **Note**: template-variable syntax varies by vendor (`{var}` is common but not universal — see "URL template variable syntax" above). The detection logic matches the GROUPING semantics (a variable mid-path implies parent context), not a single literal syntax. | `url-path-parent` | Definite |
+| DF4 | **Name-pattern hint**: field name matches `{ObjectName}Id` / `{object_name}_id` / `{object_name}-id` exactly where `ObjectName` matches another IO's Name. Common across many vendors but not universal. | `name-pattern-suffix` | Strong |
+| DF5 | **Name-pattern hint**: field name matches `{ObjectName}` exactly (no Id suffix) where target object's PK name is just `id`. | `name-pattern-suffix` | Moderate |
 | DF6 | Field name matches `Integration.FKNamingConvention` pattern + target IO exists | `vendor-specific` | Moderate |
-| DF7 | Field type is `string-uuid` AND name ends with `Id` (no specific target match) | `unknown` | Weak — emit as candidate |
+| DF7 | **Type-shape hint**: field type is `string-uuid` AND name ends with `Id` (no specific target match) | `unknown` | Weak — emit as candidate |
+| (extensible) | Any vendor-specific FK signal not in DF1–DF7 (record a descriptive name + CODE_EVIDENCE) | `<descriptive-gate-name>` | as appropriate |
 
 `Definite` → write `RelatedIntegrationObjectID` directly with CODE_EVIDENCE + `IsForeignKey=true`. `Strong`/`Moderate` → write + flag. `Weak` → don't write FK; surface as gap.
+
+**Important**: the name-pattern hints (DF4, DF5) work because many vendors converge on similar conventions, but they are NOT the only valid FK shape. Vendors that expose relationships via association APIs (separate endpoint surfaces dedicated to relationship management) won't match these hints at all — the FK is still real, just not visible as a field on the source IOF. Record that case with an explicit `vendor-specific` gate name + provenance citing the association-API doc.
 
 ### RelatedIntegrationObjectFieldName — resolve from target IO's actual PK, never hardcode
 
@@ -164,7 +195,7 @@ Required emission procedure (two-pass — fields emitted first, FKs resolved sec
    - **Found** → set `RelatedIntegrationObjectFieldName` to the looked-up PK field name. Emit CODE_EVIDENCE entry citing the DP-gate that established the target's PK.
    - **Not found** (target IO has no detectable PK) → set `RelatedIntegrationObjectFieldName: null` and append a PROVENANCE entry citing the absence-of-evidence. Do NOT fabricate `'id'`. Surface as a gap in `GapsForLLMCompletion`.
 
-Anti-pattern to avoid (this is exactly what surfaced in the HubSpot clean-build):
+Anti-pattern to avoid (this exact bug shape was caught by a clean-build verification run):
 
 ```typescript
 // ❌ WRONG — hardcoded guess; produces Invariant 3 errors when target's PK isn't 'id'

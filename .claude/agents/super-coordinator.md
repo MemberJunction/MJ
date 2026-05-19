@@ -15,7 +15,7 @@ Practical consequence: when you (SuperCoordinator) are invoked as a sub-agent (e
 
 **Architectural fix** (proposed, not implemented): move runtime orchestration from this role file into the `build-connector` skill, which runs at the top-level context where Task IS available. This role file then describes the orchestration SHAPE (sequence of phases, inputs/outputs, gate conditions); the skill becomes the executable orchestrator that fans out to Phase 2a/b/c/d/Phase 3 directly. Fresh-context isolation is preserved either way.
 
-**Accepted short-term workaround**: the parent conversation (the human-facing layer that invoked `/build-connector`) does direct fanout — invoking Phase 2a → 2b → 2c → 2d → Phase 3 as a flat sequence of Task calls. Same isolation guarantee, equivalent artifacts produced. Verified in the HubSpot clean-build verification run (2026-05-18). Not a long-term architecture.
+**Accepted short-term workaround**: the parent conversation (the human-facing layer that invoked `/build-connector`) does direct fanout — invoking Phase 2a → 2b → 2c → 2d → Phase 3 as a flat sequence of Task calls. Same isolation guarantee, equivalent artifacts produced. Verified in a clean-build verification run (2026-05-18). Not a long-term architecture.
 
 **When you (SC) are invoked and `Task` is absent from your tools**, halt and report this limitation rather than executing the work yourself. The user has agreed direct-fanout is acceptable forward motion; do not silently substitute your own context for the missing sub-agents.
 

@@ -26,7 +26,7 @@ Files already on disk in `connectors-registry/<vendor>/`:
 Engine primitives you import + delegate to (never reinvent):
 
 - `@memberjunction/integration-engine` — `BaseIntegrationConnector`, `BaseRESTIntegrationConnector`, `BaseGraphQLIntegrationConnector`, `BaseSOAPIntegrationConnector`, `BaseFileFeedConnector`, `RelationalDBConnector`, context + result types
-- `@memberjunction/integration-engine/auth-helpers` — `APIKeyHeaderBuilder`, `HMACSigner`, `JWTSigner`, `OAuth2TokenManager`. If a vendor needs an auth primitive none of these cover (e.g., Salesforce JWT-bearer → preserve `instance_url`), extend `auth-helpers` — do NOT inline crypto.
+- `@memberjunction/integration-engine/auth-helpers` — `APIKeyHeaderBuilder`, `HMACSigner`, `JWTSigner`, `OAuth2TokenManager`. If a vendor needs an auth primitive none of these cover (e.g., a JWT-bearer flow whose response contains a dynamic instance URL that must be preserved; a signing scheme with a vendor-specific payload layout), extend `auth-helpers` — do NOT inline crypto.
 - `@memberjunction/integration-engine/type-helpers` — `classifyField`, `mapVendorType`
 - `@memberjunction/connector-extractor-strategies` — `UpsertByKey` for workspace upserts; `openapi/` for OpenAPI parsing in extractor scripts (not your file but useful context)
 - `WatermarkService` (from `@memberjunction/integration-engine`) — incremental sync persistence
@@ -74,7 +74,7 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
    - `ResolveIO(name)` — look up an IO row by `Name`.
    - `ResolvePathTemplate(path, ctx)` — substitute `{var}` template vars from `ctx.Record` and parent-chain (using `HierarchyPath` + `ParentObjectIDFieldName` per requirements §5.3).
    - `Authenticate(companyIntegration, contextUser)` — implement per `CredentialTypeID` using auth-helpers. NEVER inline crypto.
-   - `GetBaseURL(companyIntegration, auth)` — return `APIBaseURL` if static; read from auth-response (e.g., Salesforce `instance_url`) if `APIBaseURLMode='dynamic-from-auth-response'`; read from credential field if `'dynamic-from-credential-field'`.
+   - `GetBaseURL(companyIntegration, auth)` — return `APIBaseURL` if static; read from auth-response (the vendor's auth-response field name lives in `DynamicAPIBaseURLSourceField`, e.g. an `instance_url`-style return value) if `APIBaseURLMode='dynamic-from-auth-response'`; read from credential field if `'dynamic-from-credential-field'`.
    - `MakeHTTPRequest`, `BuildHeaders`, `NormalizeResponse`, `ExtractPaginationInfo`, `TransformRecord` — vendor-specific implementations as the protocol base requires.
 
 5. **Implement CRUD using metadata routing** (real bodies, no stubs).
@@ -112,7 +112,7 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
        → flat = TransformRecord(response.Body)
        → return { ExternalID, ObjectType: ctx.ObjectName, Fields: flat }
      ```
-   - `SearchRecords(ctx)` — `SearchAPIPath` + vendor's filter syntax (SOQL for Salesforce; `filterGroups` for HubSpot; etc.).
+   - `SearchRecords(ctx)` — `SearchAPIPath` + the vendor's filter syntax. The shape varies — some vendors accept SQL-like query strings, some accept structured filter-group objects, some require POST bodies with nested filter shapes. Read the vendor's docs; record the shape in metadata (`SearchRequestBodyShape` / `SearchFilterDialect`) if those fields apply.
    - `ListRecords(ctx)` — `ListAPIPath` + pagination metadata; surface `NextCursor` from `PaginationCursorResponsePath`.
    - `FetchChanges(ctx)` — incremental sync per directive §13. Body shape:
      ```
@@ -177,15 +177,19 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
 
    ### 7a. Design-time marker (`IsVendorCustomObject`)
 
-   Override `IsVendorCustomObject(extObj)` per metadata's `CustomObjectMarkerPattern`:
-   - `salesforce-double-underscore-c` → `extObj.Name.endsWith('__c')`
-   - `hubspot-customProperties-namespace` → `extObj.Name.startsWith('customProperties.')`
-   - `prefix-based` / `attribute-flagged` → read marker detail from metadata
-   - `none` → return false always
+   Override `IsVendorCustomObject(extObj)` per metadata's `CustomObjectMarkerPattern` + `CustomObjectMarkerDetail`. The pattern is a free-form descriptive string the agent emitted with provenance; the detail carries the actual marker (the specific suffix string, namespace prefix, flag-field name, numeric typeId range, etc.). Common shapes:
+
+   - **Suffix-marker**: `extObj.Name.endsWith(detail.suffix)` — vendor appends a fixed suffix to custom object names.
+   - **Namespace-based**: `extObj.Name.startsWith(detail.namespace)` — vendor namespaces custom items under a documented prefix.
+   - **Flag-field**: a runtime-discovery probe (the vendor's properties / schemas endpoint) returns a boolean attribute marking custom vs vendor-defined; the connector reads that attribute, not the object name.
+   - **Numeric-typeId-prefix**: vendor encodes object type as a numeric typeId where custom typeIds fall outside a documented range.
+   - **`none` / `null`**: vendor documents no custom-object mechanism — return `false` always.
+
+   The agent never hardcodes the marker; it reads `CustomObjectMarkerDetail` from metadata (which was emitted by IOIOFExtractor / MetadataWriter with provenance).
 
    ### 7b. Runtime per-tenant schema discovery — canonical pattern (Gap 6 decision, 2026-05-18)
 
-   For vendors whose custom objects + custom properties live ONLY at runtime (not in the static OpenAPI catalog) — HubSpot, Salesforce, Stripe, most modern SaaS — the connector class must extend `DiscoverObjects(companyIntegration, contextUser)` to ALSO probe the vendor's runtime schema endpoint and return the merged catalog.
+   For vendors whose custom objects + custom properties live ONLY at runtime (not in the static OpenAPI catalog) — common across most modern SaaS — the connector class must extend `DiscoverObjects(companyIntegration, contextUser)` to ALSO probe the vendor's runtime schema endpoint and return the merged catalog.
 
    ```typescript
    public override async DiscoverObjects(
@@ -205,7 +209,7 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
 
    Adding a separate `DiscoverAndPersistAuthenticatedSchema` override would (a) duplicate persistence logic into the connector, (b) bypass the engine-level batching/error-handling of `IntegrationSchemaSync`, and (c) push every vendor to re-invent the same shape. Don't do it. The `DiscoverObjects` override is the canonical pattern.
 
-   **When to revisit**: if/when 3+ vendors exercise runtime schema discovery AND the override pattern shows recurring duplication (rate-limit handling, partial-failure recovery, cursor pagination for schemas, …), promote a first-class `DiscoverRuntimeOnlyObjects(companyIntegration, contextUser)` hook on `BaseIntegrationConnector` and call it from the engine-level discovery. Per the no-premature-abstraction rule, do NOT promote with only 1 vendor (HubSpot today).
+   **When to revisit**: if/when 3+ vendors exercise runtime schema discovery AND the override pattern shows recurring duplication (rate-limit handling, partial-failure recovery, cursor pagination for schemas, …), promote a first-class `DiscoverRuntimeOnlyObjects(companyIntegration, contextUser)` hook on `BaseIntegrationConnector` and call it from the engine-level discovery. Per the no-premature-abstraction rule, do NOT promote until the recurrence is real and measured.
 
    **Cross-reference**: `INTEGRATION-AGENT-ARCHITECTURE.md` (when revised, document the override pattern alongside CodeBuilder responsibilities). For now, this role file is the canonical source.
 

@@ -48,7 +48,7 @@ Applies to vitest test files under `packages/Integration/connectors-registry/<na
 ## Mocking
 
 - Mock `companyIntegration.Configuration` as a string (post-§2.3, code reads the typed property directly).
-- Mock HTTP via a test subclass that overrides `LoadMetadata`, `Authenticate`, `MakeHTTPRequest` — captures the call args (URL/method/headers/body) and returns canned responses. (See HubSpot's `MockedHubSpotConnector` in `connectors-registry/hubspot/src/__tests__/HubSpotConnector.test.ts` for the canonical pattern.)
+- Mock HTTP via a test subclass that overrides `LoadMetadata`, `Authenticate`, `MakeHTTPRequest` — captures the call args (URL/method/headers/body) and returns canned responses. (Read whichever existing connector's `__tests__/<Name>Connector.test.ts` exercises the same protocol family for the canonical `Mocked<Name>Connector` pattern.)
 - For T10 live tests, do NOT mock — those run via the `mj-test-runner` MCP with real credentials.
 
 ## DO NOT
