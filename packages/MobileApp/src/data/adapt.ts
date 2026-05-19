@@ -8,7 +8,7 @@ import type { ConversationListItem, ConversationDetailLoad, ConversationMessage 
 import type {
     ConversationParticipantAgent,
     ConversationSummary,
-} from '@/data/mock-conversations';
+} from '@/data/types';
 import { Colors, colorForAgent } from '@/theme/tokens';
 
 function initialsOf(name: string | null): string {

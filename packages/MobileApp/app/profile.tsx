@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
-import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
+import { useMJ } from '@/providers/mj-provider';
+import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
  * Profile & settings.
@@ -12,6 +13,11 @@ import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
  * but inert until Phase 2 wires them.
  */
 export default function ProfileScreen() {
+    const { signOut, authMethod } = useMJ();
+    const handleSignOut = async () => {
+        await signOut();
+        router.replace('/login');
+    };
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
             <View style={styles.header}>
@@ -48,11 +54,13 @@ export default function ProfileScreen() {
                     <SettingRow icon={<Icons.Search size={16} color={Colors.ink2} strokeWidth={2} />} label="Help & feedback" arrow />
                 </View>
 
-                <Pressable style={styles.signOut}>
+                <Pressable style={styles.signOut} onPress={handleSignOut}>
                     <Text style={styles.signOutText}>Sign out</Text>
                 </Pressable>
 
-                <Text style={styles.versionFooter}>MJ Mobile · v0.1.0 · Phase 1</Text>
+                <Text style={styles.versionFooter}>
+                    MJ Mobile · v0.1.0 · Phase 1{authMethod ? ` · ${authMethod}` : ''}
+                </Text>
             </ScrollView>
         </SafeAreaView>
     );

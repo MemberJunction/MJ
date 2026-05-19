@@ -1,8 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { router } from 'expo-router';
 import { Icons } from '@/components/Icon';
-import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
-import type { InlineArtifact } from '@/data/mock-thread';
+import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
+import type { InlineArtifactCardData as InlineArtifact } from '@/data/types';
 
 const TYPE_GLYPHS = {
     'data-table': (

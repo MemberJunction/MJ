@@ -4,20 +4,18 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
-import { MJStatusBanner } from '@/components/MJStatusBanner';
-import {
-    MOCK_CONVERSATIONS_PINNED,
-    MOCK_CONVERSATIONS_TODAY,
-    MOCK_CONVERSATIONS_YESTERDAY,
-    type ConversationSummary,
-} from '@/data/mock-conversations';
 import { groupConversations } from '@/data/adapt';
+import type { ConversationSummary } from '@/data/types';
 import { useConversations } from '@/hooks/useConversations';
 import { useMJ } from '@/providers/mj-provider';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /**
  * Conversation list — global nav root.
+ * Real data only; no mock fallback. The boot gate (app/index.tsx) routes
+ * users to /login when not authenticated, so this screen always renders
+ * for a connected user.
+ *
  * Spec: plans/mobile-app-react-native/index.html · B1
  */
 export default function ConversationsScreen() {
@@ -25,31 +23,18 @@ export default function ConversationsScreen() {
     const { conversations, loading, error, refresh } = useConversations();
 
     const grouped = useMemo(() => {
-        if (conversations && conversations.length > 0) {
-            return groupConversations(conversations);
-        }
-        return null;
+        if (!conversations) return null;
+        return groupConversations(conversations);
     }, [conversations]);
 
-    // Render either real data (when available) or mocks (visual preview).
-    const pinned = grouped?.pinned ?? MOCK_CONVERSATIONS_PINNED;
-    const today = grouped?.today ?? MOCK_CONVERSATIONS_TODAY;
-    const yesterday = grouped?.yesterday ?? MOCK_CONVERSATIONS_YESTERDAY;
-    const earlier = grouped?.earlier ?? [];
-    const usingMockData = !grouped;
+    const totalCount = conversations?.length ?? 0;
 
     return (
         <SafeAreaView style={styles.safe} edges={['top']}>
-            <MJStatusBanner />
             <View style={styles.navTop}>
-                <Pressable hitSlop={8} style={styles.iconBtn}>
-                    <Icons.ChevronLeft size={22} color={Colors.ink} />
-                </Pressable>
+                <View style={styles.iconBtn} />
                 <View style={styles.titleStack}>
                     <Text style={styles.title}>Conversations</Text>
-                    {usingMockData && status === 'ready' ? (
-                        <Text style={styles.emptyHint}>No conversations · showing sample</Text>
-                    ) : null}
                 </View>
                 <Pressable hitSlop={8} style={styles.iconBtn}>
                     <Icons.Sliders size={22} color={Colors.ink} />
@@ -90,47 +75,57 @@ export default function ConversationsScreen() {
                     </View>
                 ) : null}
 
-                {loading && status === 'ready' && !grouped ? (
+                {loading && !grouped ? (
                     <View style={styles.loadingBlock}>
                         <ActivityIndicator size="small" color={Colors.brand} />
                         <Text style={styles.loadingText}>Loading your conversations…</Text>
                     </View>
                 ) : null}
 
-                {pinned.length > 0 ? (
+                {grouped && totalCount === 0 && !loading ? (
+                    <View style={styles.emptyBlock}>
+                        <View style={styles.emptyIcon}>
+                            <Icons.Sparkle size={28} color={Colors.brand} strokeWidth={2} />
+                        </View>
+                        <Text style={styles.emptyTitle}>No conversations yet</Text>
+                        <Text style={styles.emptyBody}>
+                            Tap "New conversation" to ask Skip or any other agent your first question.
+                        </Text>
+                    </View>
+                ) : null}
+
+                {grouped?.pinned.length ? (
                     <>
                         <Section label="Pinned" icon={<Icons.Pin size={11} color="#c9a76b" />} />
                         <View style={styles.list}>
-                            {pinned.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.pinned.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {today.length > 0 ? (
+                {grouped?.today.length ? (
                     <>
-                        <Section label={`Today · ${today.length}`} />
+                        <Section label={`Today · ${grouped.today.length}`} />
                         <View style={styles.list}>
-                            {today.map((conv, idx) => (
-                                <ConversationRow key={conv.id} conv={conv} active={idx === 0 && usingMockData} />
-                            ))}
+                            {grouped.today.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {yesterday.length > 0 ? (
+                {grouped?.yesterday.length ? (
                     <>
-                        <Section label={`Yesterday · ${yesterday.length}`} />
+                        <Section label={`Yesterday · ${grouped.yesterday.length}`} />
                         <View style={styles.list}>
-                            {yesterday.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.yesterday.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
 
-                {earlier.length > 0 ? (
+                {grouped?.earlier.length ? (
                     <>
-                        <Section label={`Earlier · ${earlier.length}`} />
+                        <Section label={`Earlier · ${grouped.earlier.length}`} />
                         <View style={styles.list}>
-                            {earlier.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
+                            {grouped.earlier.map((conv) => <ConversationRow key={conv.id} conv={conv} />)}
                         </View>
                     </>
                 ) : null}
@@ -150,18 +145,14 @@ function Section({ label, icon }: { label: string; icon?: React.ReactNode }) {
     );
 }
 
-function ConversationRow({ conv, active = false }: { conv: ConversationSummary; active?: boolean }) {
+function ConversationRow({ conv }: { conv: ConversationSummary }) {
     return (
         <Pressable
             onPress={() => router.push({ pathname: '/chat/[id]', params: { id: conv.id } })}
-            style={[styles.row, active && styles.rowActive]}
+            style={styles.row}
         >
             <View style={styles.avSlot}>
-                <AgentAvatarStack
-                    agents={conv.agents}
-                    size={30}
-                    borderColor={active ? Colors.surface : Colors.bg}
-                />
+                <AgentAvatarStack agents={conv.agents} size={30} borderColor={Colors.bg} />
             </View>
             <View style={styles.body}>
                 <View style={styles.bodyTop}>
@@ -170,8 +161,10 @@ function ConversationRow({ conv, active = false }: { conv: ConversationSummary; 
                 </View>
                 <Text numberOfLines={1} style={styles.rowSnippet}>{conv.snippet}</Text>
                 <View style={styles.rowMeta}>
-                    <Text style={styles.agentTag}>
-                        {conv.agents.map(a => a.name).join(' · ')} · {conv.messageCount} messages
+                    <Text style={styles.agentTag} numberOfLines={1}>
+                        {conv.agents.length > 0
+                            ? `${conv.agents.map(a => a.name).join(' · ')} · ${conv.messageCount} messages`
+                            : `${conv.messageCount} messages`}
                     </Text>
                     {conv.live ? (
                         <View style={styles.liveTag}>
@@ -227,7 +220,6 @@ const styles = StyleSheet.create({
     iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
     titleStack: { flex: 1, paddingLeft: 4 },
     title: { fontSize: 20, fontWeight: Type.bold, letterSpacing: -0.4, color: Colors.ink },
-    emptyHint: { fontSize: 11, color: Colors.ink3, marginTop: 1 },
     scroll: { paddingBottom: Spacing.xxxl },
 
     actions: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md },
@@ -242,12 +234,16 @@ const styles = StyleSheet.create({
     loadingBlock: { paddingVertical: 24, alignItems: 'center', gap: 8 },
     loadingText: { fontSize: 13, color: Colors.ink3 },
 
+    emptyBlock: { paddingVertical: 48, paddingHorizontal: 32, alignItems: 'center', gap: 14 },
+    emptyIcon: { width: 64, height: 64, borderRadius: 18, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+    emptyTitle: { fontSize: 18, fontWeight: Type.semibold, color: Colors.ink, letterSpacing: -0.2 },
+    emptyBody: { fontSize: 14, color: Colors.ink2, textAlign: 'center', lineHeight: 21 },
+
     section: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.xl, paddingTop: 18, paddingBottom: 8 },
     sectionLabel: { fontSize: 11, fontWeight: Type.bold, letterSpacing: 1.4, color: Colors.ink3 },
 
     list: { paddingHorizontal: 10 },
     row: { flexDirection: 'row', gap: 12, paddingVertical: 13, paddingHorizontal: 12, borderRadius: Radius.lg },
-    rowActive: { backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, ...Shadow.card },
     avSlot: { width: 44, height: 44, justifyContent: 'center', alignItems: 'flex-start' },
     body: { flex: 1, minWidth: 0 },
     bodyTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
@@ -255,7 +251,7 @@ const styles = StyleSheet.create({
     rowTime: { fontSize: 11.5, fontWeight: Type.medium, color: Colors.ink3 },
     rowSnippet: { fontSize: 12.5, color: Colors.ink3, marginTop: 3 },
     rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
-    agentTag: { fontSize: 11, color: Colors.ink3, fontWeight: Type.medium },
+    agentTag: { flex: 1, fontSize: 11, color: Colors.ink3, fontWeight: Type.medium },
     liveTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
     liveText: { fontSize: 11, fontWeight: Type.semibold, color: Colors.brand },

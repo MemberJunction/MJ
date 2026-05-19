@@ -1,45 +1,45 @@
 /**
  * Mobile app environment configuration.
  *
- * For Phase 1 dev, these are static. Phase 2+ should drive them from
- * Expo's app.config.js extra block or a real env loader.
+ * Mirrors MJ Explorer's environment.ts so the mobile app authenticates
+ * against the same Auth0 tenant (and same MJAPI endpoint).
  *
- * The MSAL_* values mirror the development environment of MJ Explorer
- * (packages/MJExplorer/src/environments/environment.ts) so the mobile
- * app authenticates against the same Azure AD tenant and client app.
- *
- * Required Azure AD setup (one-time, in Azure portal):
- *   1. Open the existing MJ Explorer app registration.
- *   2. Authentication → Add a platform → Mobile and desktop applications.
- *   3. Add redirect URI: `mjmobile://auth` (matches our app.json scheme).
- *   4. Enable "Allow public client flows" under Advanced settings.
+ * One-time Auth0 setup (already configured for the BlueCypress dev tenant):
+ *   - Application Type: Native
+ *   - Allowed Callback URLs: `mjmobile://auth`
+ *   - Allowed Logout URLs:   `mjmobile://auth`
+ *   - Refresh Token Rotation: enabled
+ *   - Token Settings → Refresh Token Behavior: Rotating
  */
 export const Env = {
   /** MJAPI GraphQL endpoint. iOS Simulator can hit localhost directly. */
   graphqlUrl: 'http://localhost:4001/graphql',
 
-  /** WebSocket subscription endpoint. Same host, ws protocol. */
+  /** WebSocket subscription endpoint. */
   graphqlWsUrl: 'ws://localhost:4001/graphql',
 
-  /** Azure AD tenant ID (matches MJExplorer's environment.ts) */
+  // ---------------------------------------------------------------------
+  // Auth0 (primary mobile auth path)
+  // ---------------------------------------------------------------------
+  auth0Domain: 'bluecypress-dev.us.auth0.com',
+  auth0ClientId: 'uRNpH3B0sFKVc2yrfBGBalfiUphUK5JI',
+  auth0Scopes: ['openid', 'profile', 'email', 'offline_access'] as const,
+
+  // ---------------------------------------------------------------------
+  // MSAL (Azure AD) — preserved for future enablement; not on the boot path
+  // until the mobile redirect URI is registered in Azure AD.
+  // ---------------------------------------------------------------------
   msalTenantId: 'ff10ade7-5d03-40a9-be28-cb7ab99670b1',
-
-  /** Azure AD app registration client ID */
   msalClientId: '7e6e6ecf-66ff-4733-9c60-1e6def949897',
-
-  /** Authority URL derived from tenant */
   get msalAuthority(): string {
     return `https://login.microsoftonline.com/${this.msalTenantId}`;
   },
-
-  /** Scopes requested at sign-in. openid + profile are required for an idToken; User.Read matches Explorer's request. */
   msalScopes: ['openid', 'profile', 'User.Read', 'offline_access'] as const,
 
   /**
-   * Optional dev auth token fallback. Used when MSAL hasn't been wired or
-   * we're testing without going through the full OAuth flow. Leave blank
-   * in committed code — paste a JWT only in your local working copy when
-   * needed for ad-hoc tests.
+   * Optional dev JWT fallback for ad-hoc API testing. Leave empty in
+   * committed code — paste a token only in your local working copy if
+   * you need to bypass the OAuth flow temporarily.
    */
   devAuthToken: '',
 } as const;

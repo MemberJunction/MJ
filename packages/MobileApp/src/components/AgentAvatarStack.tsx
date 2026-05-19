@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Colors } from '@/theme/tokens';
-import type { ConversationParticipantAgent } from '@/data/mock-conversations';
+import type { ConversationParticipantAgent } from '@/data/types';
 
 type Props = {
     agents: ConversationParticipantAgent[];
