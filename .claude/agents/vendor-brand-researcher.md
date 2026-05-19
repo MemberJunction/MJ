@@ -40,6 +40,26 @@ Return ONLY this JSON shape. No prose, no commentary:
 - DO NOT speculate. If a field is unknowable from the sources, return `null` for it.
 - DO NOT return more than 4 candidates in `Disambiguation`.
 
+## ProductTaxonomy (required)
+
+Research the product's structural taxonomy: what kind of product is this (CRM platform, payments, marketing automation, ERP, AMS, accounting, file storage, etc.), and what modules / product areas / API namespaces does it expose? Capture in handoff as `ProductTaxonomy` with provenance citing the vendor's own product index / docs root / developer portal landing page.
+
+Add to the output JSON:
+
+```json
+"ProductTaxonomy": {
+  "ProductKind": "...",
+  "Areas": [
+    { "Name": "...", "Description": "...", "VendorReferenceURL": "..." }
+  ],
+  "APIParadigm": "REST" | "GraphQL" | "SOAP" | "SQL/Database" | "FileFeed" | "Hybrid" | "Unknown"
+}
+```
+
+Each `Area` is one top-level slice of the vendor's API surface — modules (HubSpot Hubs, Salesforce Clouds), product lines (QuickBooks Online vs Desktop), or namespaces (Stripe's `/v1/charges` vs `/v1/customers` are NOT separate areas — they're endpoints; "Payments" / "Subscriptions" / "Connect" ARE areas). Source the area list from the vendor's own product page or developer portal navigation, not from your own categorization. If the vendor doesn't slice their own product into areas, `Areas` contains one entry covering the whole product.
+
+`APIParadigm` is the dominant interaction style. Hybrid is acceptable (HubSpot is REST + Webhooks; pick the dominant one for connector-base-class selection but note the other).
+
 ## Budget
 
 ~$1 per invocation.
