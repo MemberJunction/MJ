@@ -175,7 +175,6 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
             : await this.createDashboardRef(section.source.dashboardName);
 
         if (ref) {
-            this.applyHostSizing(ref);
             this.cache.set(section.id, ref);
             this.currentSectionId = section.id;
         }
@@ -226,22 +225,6 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         instance.Config = { dashboard, userState: undefined };
         instance.Refresh();
         return ref;
-    }
-
-    /**
-     * Force the rendered sub-component's host element to fill the container
-     * cell. Mirrors what `tab-container` does for top-level resources — many
-     * dashboards rely on inline `height: 100%` to bound their internal layout
-     * (so their own `overflow-y: auto` regions actually scroll).
-     */
-    private applyHostSizing(ref: ComponentRef<unknown>): void {
-        const hostEl = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
-        if (!hostEl || !(hostEl instanceof HTMLElement)) return;
-        hostEl.style.height = '100%';
-        hostEl.style.minHeight = '0';
-        hostEl.style.display = 'flex';
-        hostEl.style.flexDirection = 'column';
-        hostEl.style.flex = '1 1 auto';
     }
 
     private findSection(id: string | undefined | null): AdminSection | undefined {

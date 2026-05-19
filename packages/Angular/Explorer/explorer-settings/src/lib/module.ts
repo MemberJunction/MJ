@@ -5,6 +5,7 @@ import { DragDropModule } from '@angular/cdk/drag-drop';
 
 import {
   MJButtonDirective,
+  MJPageHeaderInteriorComponent,
   MJPageSearchComponent,
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
@@ -87,6 +88,7 @@ import { ApplicationDialogComponent } from './application-management/application
     SharedSettingsModule,
     SharedGenericModule,
     MJButtonDirective,
+    MJPageHeaderInteriorComponent,
     MJPageSearchComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,

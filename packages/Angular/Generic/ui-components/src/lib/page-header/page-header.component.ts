@@ -25,6 +25,10 @@ import { Component, Input } from '@angular/core';
  *   </div>
  * </mj-page-header>
  * ```
+ *
+ * For the body-level interior chrome variant used by left-nav sub-pages, use
+ * `<mj-page-header-interior>` instead — same slot conventions, different
+ * visual shape (single-row card, no titlebar).
  */
 @Component({
   selector: 'mj-page-header',

@@ -1,18 +1,17 @@
 <!--
-  Filter card — the standardized "interior chrome" pattern for sub-pages
-  rendered inside a parent left-nav shell. The Admin shell's <mj-page-header>
-  keeps the page identity ("Identity & Access"); this card is the sub-section's
-    own controls (search, filters, actions). White surface, rounded corners,
-    subtle shadow — sits at the top of the body, above stats + list.
-  -->
-  <div class="filter-card" role="search" aria-label="Filter users">
+  Interior chrome — <mj-page-header-interior> is the body-level sibling of
+  <mj-page-header>. Same slot conventions ([toolbar] / [meta] / [actions]);
+  different visual shape (single-row card). See Section 10 of
+  explorer-chrome-conventions.
+-->
+<mj-page-header-interior AriaLabel="Filter users">
+  <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
       [Value]="filters$.value.search"
       (ValueChange)="updateFilter({ search: $event })">
     </mj-page-search>
-
-    <div class="filter-card__chips" role="group" aria-label="Filter by status">
+    <div class="status-chips" role="group" aria-label="Filter by status">
       <mj-filter-chip
         Label="All"
         [Active]="filters$.value.status === 'all'"
@@ -29,9 +28,8 @@
         (Clicked)="onStatusFilterChange('inactive')">
       </mj-filter-chip>
     </div>
-
-    <div class="filter-card__spacer"></div>
-
+  </div>
+  <div actions>
     <mj-filter-popover
       [ActiveCount]="popoverActiveFilterCount"
       [ShowClearAll]="popoverActiveFilterCount > 0"
@@ -51,6 +49,7 @@
       <i class="fa-solid fa-plus"></i> Add User
     </button>
   </div>
+</mj-page-header-interior>
 
   <!-- Bulk Action Toolbar — contextual band shown above the list when users are selected. -->
   @if (hasSelection) {

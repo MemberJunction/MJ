@@ -394,48 +394,56 @@ containing its own search / filters / action buttons.
   element already has `display: flex; flex-direction: column; height: 100%;
   overflow: hidden` from `_admin-patterns.css`'s `:host` rule (or equivalent).
   Children of the sub-page render directly on the host — no `<div class="{name}-container">` wrapper.
-- **Sub-page renders a `.filter-card` at the top of its body** — one white
-  surface holding the sub-page's interior chrome (search, filters, actions).
+- **Sub-page renders `<mj-page-header-interior>` at the top of its body** —
+  the shared body-level chrome card from `@memberjunction/ng-ui-components`,
+  the sibling component to `<mj-page-header>`. Same slot conventions
+  (`[meta]` / `[actions]` / `[toolbar]`); different visual shape.
+- **The sub-page renders exactly one root element below the chrome.**
+  `<mj-left-nav-content>`'s CSS sizes its first projected child via
+  `:host ::ng-deep > *:not(error):not(loading)`. Sub-pages that project
+  multiple top-level siblings will get unexpected sizing on each one. Wrap
+  body content in a single container element (a `<div>` works) if you have
+  more than the chrome card + content list as siblings.
 - **No on-page section title.** The rail's active-item highlight IS the
   section indicator. Repeating it as an H1 is redundant.
-- **Same shared components everywhere.** The filter card uses the same
+- **Same shared components everywhere.** The interior chrome uses the same
   `<mj-page-search>` / `<mj-filter-popover>` / `<mj-filter-panel>` /
   `<mj-refresh-button>` / `mjButton` primitives the exterior chrome uses.
-  One chrome contract, two surfaces (header band for top-level pages, filter
-  card for shell sub-pages).
+  One chrome contract, two surfaces (header band for top-level pages,
+  `<mj-page-header-interior>` for shell sub-pages).
 
-### Filter card layout
+### Interior chrome layout
 
 ```
 [ 🔍 search …… ] [chip:All|Active|Inactive] [—— spacer ——] [Filters ▼] [↻ Refresh] [Export] [+ New X]
 ```
 
-- **Left side** — filter inputs: `<mj-page-search>` then visible quick-toggle
+- **Left side** — `[toolbar]` slot: `<mj-page-search>` then visible quick-toggle
   `<mj-filter-chip>` group (if any).
-- **Right side** — action cluster: `<mj-filter-popover>` for advanced filters,
+- **Right side** — `[actions]` slot: `<mj-filter-popover>` for advanced filters,
   `<mj-refresh-button>`, secondary `mjButton`s (Export, etc.), then the
   primary CTA (`+ New X`) rightmost.
+- **`[meta]` slot** — between the spacer and `[actions]` — stat badges /
+  result counts. Often empty for sub-pages whose stats live in a separate
+  body grid.
 
 ### Standard template
 
 ```html
-<div class="user-management-container">
-  <!-- Filter card — interior chrome -->
-  <div class="filter-card" role="search" aria-label="Filter users">
+<mj-page-header-interior AriaLabel="Filter users">
+  <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
       [Value]="filters$.value.search"
       (ValueChange)="updateFilter({ search: $event })">
     </mj-page-search>
-
-    <div class="filter-card__chips" role="group" aria-label="Filter by status">
+    <div class="status-chips" role="group" aria-label="Filter by status">
       <mj-filter-chip Label="All"      [Active]="filters$.value.status === 'all'"      (Clicked)="onStatusFilterChange('all')" />
       <mj-filter-chip Label="Active"   [Active]="filters$.value.status === 'active'"   (Clicked)="onStatusFilterChange('active')" />
       <mj-filter-chip Label="Inactive" [Active]="filters$.value.status === 'inactive'" (Clicked)="onStatusFilterChange('inactive')" />
     </div>
-
-    <div class="filter-card__spacer"></div>
-
+  </div>
+  <div actions>
     <mj-filter-popover
       [ActiveCount]="popoverActiveFilterCount"
       [ShowClearAll]="popoverActiveFilterCount > 0"
@@ -455,35 +463,23 @@ containing its own search / filters / action buttons.
       <i class="fa-solid fa-plus"></i> Add User
     </button>
   </div>
+</mj-page-header-interior>
 
-  <!-- Below the card: bulk-action toolbar (contextual), stats grid, scrollable list. -->
-  ...
-</div>
+<!-- Below the chrome card: bulk-action toolbar (contextual), stats grid,
+     scrollable list. The sub-page renders these as additional top-level
+     children — but see the "exactly one root element" guidance above if
+     <mj-left-nav-content> sizing looks off. -->
 ```
 
-### Filter card styles
+The chrome card's surface, padding, margin, radius, and shadow are owned by
+`<mj-page-header-interior>` itself — sub-pages don't need a `.filter-card`
+or any bespoke wrapper styles. Pass `[AriaLabel]` to make the card a labeled
+landmark for assistive tech; `Role` defaults to `'search'` (override or pass
+`null` for non-filter chrome).
 
-```css
-.filter-card {
-  display: flex;
-  align-items: center;
-  gap: var(--mj-space-3);
-  flex-wrap: wrap;
-  padding: var(--mj-space-3) var(--mj-space-4);
-  margin: var(--mj-space-4) var(--mj-space-4) var(--mj-space-3);
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-lg);
-  box-shadow: var(--mj-shadow-sm);
-}
+### Filter UI decisions inside the chrome card
 
-.filter-card__chips  { display: inline-flex; align-items: center; gap: var(--mj-space-2); flex-shrink: 0; }
-.filter-card__spacer { flex: 1 1 auto; min-width: 0; }
-```
-
-### Filter UI decisions inside the card
-
-Same decision tree as Section 3, applied inside the filter card:
+Same decision tree as Section 3, applied to `<mj-page-header-interior>`:
 
 | Filter shape | Where it goes |
 |---|---|
@@ -537,11 +533,23 @@ inside every component that imports `_admin-patterns.css` — making `<button
 mjButton>` look different from `<mj-refresh-button>` (which is a standalone
 component, separate CSS scope, so it gets the directive defaults).
 
-To restore the standardized button look inside the filter card, add a
-higher-specificity reset:
+**`<mj-page-header-interior>` ships its own internal reset** for buttons
+projected into its slots (via `:host ::ng-deep .mj-btn` inside the component).
+So buttons in the interior chrome — Refresh / Export / + Add User —
+automatically render at the standardized `size="sm"` look without each
+sub-page declaring its own override.
+
+**Sub-page-bespoke button regions** outside the chrome card (e.g. user-management's
+contextual bulk-action toolbar) DO need their own targeted reset because they
+sit in the sub-page's CSS scope where `_admin-patterns.css`'s `.mj-btn` rule
+applies. Scope the reset to the specific region — do NOT broadly target
+`:host .mj-btn`, or modal buttons (Delete confirm, Bulk Action confirm, etc.)
+get shrunken too, producing inconsistency with other admin sub-pages whose
+modals still render at the natural 44px:
 
 ```css
-.filter-card .mj-btn {
+/* targeted: only the bulk-action toolbar's buttons */
+.bulk-action-toolbar .mj-btn {
   padding: 6px 12px;
   border-radius: var(--mj-radius-md);
   border: 1px solid transparent;
@@ -549,11 +557,6 @@ higher-specificity reset:
   font-size: 0.8125rem;
   min-height: 32px;
   white-space: nowrap;
-}
-
-.filter-card .mj-btn i {
-  font-size: 1rem;
-  line-height: 1;
 }
 ```
 

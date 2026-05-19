@@ -46,11 +46,7 @@ import { CommonModule } from '@angular/common';
         <span>{{ LoadingLabel }}</span>
       </div>
     }
-    <div
-      class="mj-left-nav-content__host"
-      [class.mj-left-nav-content__host--hidden]="Loading || !!Error">
-      <ng-content></ng-content>
-    </div>
+    <ng-content></ng-content>
   `,
   styles: [`
     :host {
@@ -62,24 +58,27 @@ import { CommonModule } from '@angular/common';
       overflow: hidden;
     }
 
-    .mj-left-nav-content__host {
-      flex: 1;
+    /* Force dynamically-projected components (via ViewContainerRef.createComponent
+       or ng-content) to fill the host with a proper flex-column layout. ::ng-deep
+       is required because Angular's emulated encapsulation gives the host a scope
+       attribute that dynamically-created components do not inherit, so a plain
+       direct-child selector would not match them. The :not() filters skip our own
+       error / loading elements which already have their own layout rules. This
+       replaces the bespoke inline-style hack admin shells used to apply via
+       applyHostSizing(). */
+    :host ::ng-deep > *:not(.mj-left-nav-content__error):not(.mj-left-nav-content__loading) {
+      flex: 1 1 auto;
       min-height: 0;
+      height: 100%;
       display: flex;
       flex-direction: column;
       overflow: hidden;
     }
 
-    .mj-left-nav-content__host--hidden {
+    /* When busy, hide projected content but keep cached components attached
+       to the DOM so their state survives the loading / error transition. */
+    :host(.mj-left-nav-content--busy) ::ng-deep > *:not(.mj-left-nav-content__error):not(.mj-left-nav-content__loading) {
       display: none;
-    }
-
-    /* Ensure dynamically inserted content fills the host. Matches the
-       applyHostSizing fallback admin shells were applying inline. */
-    .mj-left-nav-content__host > * {
-      flex: 1;
-      min-height: 0;
-      display: block;
     }
 
     .mj-left-nav-content__error,
@@ -125,7 +124,15 @@ export class MJLeftNavContentComponent {
   /** Label shown in the loading state. Defaults to "Loading…". */
   @Input() LoadingLabel: string = 'Loading…';
 
-  /** Aliases `--hidden` class on the host wrapper for consumer styling hooks. */
+  /**
+   * Drives the busy-state class on the host. When set, CSS hides projected
+   * content (cached components stay attached, just not visible).
+   */
+  @HostBinding('class.mj-left-nav-content--busy')
+  get IsBusy(): boolean {
+    return this.Loading || !!this.Error;
+  }
+
   @HostBinding('attr.aria-busy')
   get AriaBusy(): string | null {
     return this.Loading ? 'true' : null;

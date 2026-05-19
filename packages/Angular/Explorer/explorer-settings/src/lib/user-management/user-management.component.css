@@ -4,53 +4,34 @@
    ============================================================================= */
 
 /* -----------------------------------------------------------------------------
-   Filter card — standardized "interior chrome" white box for sub-pages inside
-   a parent left-nav shell. Uses the same shared primitives as Scheduling's
-   <mj-page-header> chrome — mj-page-search + mj-filter-popover (with
-   mj-filter-panel) + mj-refresh-button + mjButton — sized to their defaults.
+   Status chip group inside <mj-page-header-interior>'s [toolbar] slot. Sits
+   alongside the search input. Tight spacing distinguishes the chips visually
+   from the [actions] cluster on the right.
    ----------------------------------------------------------------------------- */
-.filter-card {
-  display: flex;
-  align-items: center;
-  gap: var(--mj-space-3);
-  flex-wrap: wrap;
-  padding: var(--mj-space-3) var(--mj-space-4);
-  margin: var(--mj-space-4) var(--mj-space-4) var(--mj-space-3);
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: var(--mj-radius-lg);
-  box-shadow: var(--mj-shadow-sm);
-}
-
-/* Visible quick-toggle chips group (Status). Sits between search and the
-   action-button cluster. Matches Scheduling's exterior [toolbar] chip pattern. */
-.filter-card__chips {
+.status-chips {
   display: inline-flex;
   align-items: center;
   gap: var(--mj-space-2);
   flex-shrink: 0;
 }
 
-/* Pushes filter popover / refresh / export / +Add to the right edge of the card. */
-.filter-card__spacer {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
 /* -----------------------------------------------------------------------------
-   Button reset inside the filter card.
+   Button reset for the bulk-action toolbar only.
 
-   _admin-patterns.css ships a legacy `.mj-btn` rule (pill-shaped, heavier
-   padding) that pre-dates mjButton standardization. Because Angular's emulated
-   encapsulation gives component-scoped selectors higher specificity than global
-   ones, that rule wins over button.scss's directive styles INSIDE this
-   component — making Export/+Add User render differently from <mj-refresh-button>
-   on the same row (it's a standalone component, separate scope).
+   _admin-patterns.css ships a legacy `.mj-btn` rule (pill-shaped, 44px) that
+   overrides mjButton's directive styles inside every component that imports
+   it. The interior-chrome buttons get their reset from inside
+   <mj-page-header-interior> (via ::ng-deep). The bulk-action toolbar sits in
+   user-management's scope and isn't a child of mj-page-header-interior, so it
+   needs its own targeted reset — but ONLY here, NOT broadly across :host.
+   Modal buttons (Delete confirm, Bulk Action confirm, Bulk Role Assign) are
+   left at their default 44px so they match modal-button density across all
+   other admin sub-pages.
 
-   This override restores the standardized mjButton look in the filter card,
-   matching what Scheduling / Home / etc. render.
+   Long-term fix: delete the legacy .mj-btn rule from _admin-patterns.css.
+   Tracked as a separate cleanup.
    ----------------------------------------------------------------------------- */
-.filter-card .mj-btn {
+.bulk-action-toolbar .mj-btn {
   padding: 6px 12px;
   border-radius: var(--mj-radius-md);
   border: 1px solid transparent;
@@ -60,7 +41,7 @@
   white-space: nowrap;
 }
 
-.filter-card .mj-btn i {
+.bulk-action-toolbar .mj-btn i {
   font-size: 1rem;
   line-height: 1;
 }
