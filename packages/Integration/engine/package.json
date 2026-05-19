@@ -5,6 +5,21 @@
   "description": "MemberJunction Integration Engine - orchestration, field mapping, and connector framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./auth-helpers": {
+      "types": "./dist/auth-helpers/index.d.ts",
+      "default": "./dist/auth-helpers/index.js"
+    },
+    "./type-helpers": {
+      "types": "./dist/type-helpers/index.d.ts",
+      "default": "./dist/type-helpers/index.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "/dist"
   ],
@@ -17,11 +32,12 @@
     "@memberjunction/core": "5.34.1",
     "@memberjunction/core-entities": "5.34.1",
     "@memberjunction/global": "5.34.1",
-    "@memberjunction/integration-engine-base": "5.34.1"
+    "@memberjunction/integration-engine-base": "5.34.1",
+    "jose": "^5.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3",
     "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "repository": {
