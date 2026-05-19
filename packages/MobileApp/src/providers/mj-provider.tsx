@@ -2,34 +2,44 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import * as SecureStore from 'expo-secure-store';
 import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
 import { Env } from '@/config/env';
+import {
+    clearStoredTokens,
+    getValidIdToken,
+    isExpired,
+    loadStoredTokens,
+    type MJAuthTokens,
+} from '@/auth/msal';
 
 /**
- * Mobile-side MJ provider boot.
+ * MJ provider boot — wraps `setupGraphQLClient(config)` from
+ * `@memberjunction/graphql-dataprovider`. Supports two auth paths:
  *
- * Wraps the `setupGraphQLClient(config)` flow from
- * @memberjunction/graphql-dataprovider with a React-friendly state machine and
- * persistent dev-token storage in expo-secure-store.
+ *   1. **MSAL** (primary) — tokens come from Azure AD via expo-auth-session.
+ *      Refresh happens silently when the idToken nears expiry.
+ *   2. **Dev token paste** (fallback) — manual JWT pasted via the status
+ *      banner. Useful for quick API testing without going through OAuth.
  *
- * - `loading` → initial state while we check for a stored / env token
- * - `no-token` → no token available; the app should prompt the user to paste one
- * - `ready` → provider is initialized; Metadata / RunView / agent calls work
- * - `error` → setup attempted and failed (network down, token invalid, etc.)
- *
- * Phase 2 will replace the dev-token flow with real OAuth via expo-auth-session.
+ * The provider is "ready" once either path has produced a usable token AND
+ * `setupGraphQLClient` has completed. Screens consume `useMJ()` and decide
+ * whether to render real data or mocks based on `status === 'ready'`.
  */
 
 export type MJStatus = 'loading' | 'no-token' | 'ready' | 'error';
+export type AuthMethod = 'msal' | 'dev-token' | null;
 
 type MJState = {
     status: MJStatus;
     error: Error | null;
+    authMethod: AuthMethod;
+    /** Boot the GraphQL client with a freshly-obtained MSAL token bundle. */
+    bootWithMsalTokens: (tokens: MJAuthTokens) => Promise<void>;
     /** Persist a dev JWT and reboot the provider. */
     setDevToken: (token: string) => Promise<void>;
-    /** Clear any stored token and revert to the no-token state. */
-    clearToken: () => Promise<void>;
+    /** Sign out: clear all stored tokens and revert to no-token state. */
+    signOut: () => Promise<void>;
 };
 
-const SECURE_STORE_KEY = 'mj-dev-token';
+const DEV_TOKEN_KEY = 'mj-dev-token';
 
 const MJContext = createContext<MJState | null>(null);
 
@@ -42,8 +52,9 @@ export function useMJ(): MJState {
 export function MJProviderRoot({ children }: { children: ReactNode }) {
     const [status, setStatus] = useState<MJStatus>('loading');
     const [error, setError] = useState<Error | null>(null);
+    const [authMethod, setAuthMethod] = useState<AuthMethod>(null);
 
-    const boot = useCallback(async (token: string) => {
+    const bootWith = useCallback(async (token: string, method: AuthMethod) => {
         setStatus('loading');
         setError(null);
         try {
@@ -52,12 +63,16 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 Env.graphqlUrl,
                 Env.graphqlWsUrl,
                 async () => {
-                    // Phase 1: no refresh function. Token expiry => user re-pastes.
-                    // Phase 2: implement a real refresh via expo-auth-session.
+                    // Refresh function — only useful for MSAL. Dev token has no refresh.
+                    if (method === 'msal') {
+                        try { return await getValidIdToken(); }
+                        catch { return ''; }
+                    }
                     return '';
                 },
             );
             await setupGraphQLClient(config);
+            setAuthMethod(method);
             setStatus('ready');
         } catch (e) {
             setError(e instanceof Error ? e : new Error(String(e)));
@@ -65,19 +80,52 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         }
     }, []);
 
+    const bootWithMsalTokens = useCallback(async (tokens: MJAuthTokens) => {
+        if (!tokens.idToken) {
+            throw new Error('MSAL response did not include an idToken.');
+        }
+        await bootWith(tokens.idToken, 'msal');
+    }, [bootWith]);
+
     useEffect(() => {
         let cancelled = false;
         (async () => {
             try {
-                // Check stored token first; fall back to compile-time env token.
-                const stored = await SecureStore.getItemAsync(SECURE_STORE_KEY);
-                const token = stored || Env.devAuthToken || '';
-                if (cancelled) return;
-                if (!token) {
-                    setStatus('no-token');
+                // 1. Try MSAL stored tokens
+                const msalTokens = await loadStoredTokens();
+                if (msalTokens && !isExpired(msalTokens)) {
+                    if (!cancelled) await bootWith(msalTokens.idToken, 'msal');
                     return;
                 }
-                await boot(token);
+                if (msalTokens) {
+                    // Expired — attempt silent refresh
+                    try {
+                        const refreshed = await getValidIdToken();
+                        if (refreshed && !cancelled) {
+                            await bootWith(refreshed, 'msal');
+                            return;
+                        }
+                    } catch {
+                        // Refresh failed — fall through to other auth options
+                        await clearStoredTokens();
+                    }
+                }
+
+                // 2. Try stored dev token
+                const stored = await SecureStore.getItemAsync(DEV_TOKEN_KEY);
+                if (stored) {
+                    if (!cancelled) await bootWith(stored, 'dev-token');
+                    return;
+                }
+
+                // 3. Compile-time env token (committed JWT, rare)
+                if (Env.devAuthToken) {
+                    if (!cancelled) await bootWith(Env.devAuthToken, 'dev-token');
+                    return;
+                }
+
+                // 4. Nothing — wait for user to sign in
+                if (!cancelled) setStatus('no-token');
             } catch (e) {
                 if (cancelled) return;
                 setError(e instanceof Error ? e : new Error(String(e)));
@@ -85,25 +133,25 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
             }
         })();
         return () => { cancelled = true; };
-    }, [boot]);
+    }, [bootWith]);
 
     const setDevToken = useCallback(async (token: string) => {
-        await SecureStore.setItemAsync(SECURE_STORE_KEY, token);
-        await boot(token);
-    }, [boot]);
+        await SecureStore.setItemAsync(DEV_TOKEN_KEY, token);
+        await bootWith(token, 'dev-token');
+    }, [bootWith]);
 
-    const clearToken = useCallback(async () => {
-        await SecureStore.deleteItemAsync(SECURE_STORE_KEY).catch(() => undefined);
-        setStatus('no-token');
+    const signOut = useCallback(async () => {
+        await clearStoredTokens();
+        await SecureStore.deleteItemAsync(DEV_TOKEN_KEY).catch(() => undefined);
+        setAuthMethod(null);
         setError(null);
+        setStatus('no-token');
     }, []);
 
     const value = useMemo<MJState>(() => ({
-        status,
-        error,
-        setDevToken,
-        clearToken,
-    }), [status, error, setDevToken, clearToken]);
+        status, error, authMethod,
+        bootWithMsalTokens, setDevToken, signOut,
+    }), [status, error, authMethod, bootWithMsalTokens, setDevToken, signOut]);
 
     return <MJContext.Provider value={value}>{children}</MJContext.Provider>;
 }
