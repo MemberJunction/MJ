@@ -157,6 +157,212 @@ export interface AnalysisConfig {
   guardrails?: GuardrailsConfig;
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
+  organicKeyDetection?: OrganicKeyDetectionConfig;
+}
+
+/**
+ * Configuration for cluster-based organic key detection.
+ * Baseline runs with name + value signals only (no external API).
+ * Embedding and LLM refinement layer on top when an AI provider is configured.
+ */
+export interface OrganicKeyDetectionConfig {
+  /** Enable organic key detection pass (default: false). */
+  enabled: boolean;
+
+  /**
+   * Table-name patterns to EXCLUDE from clustering even when those tables exist
+   * in the state.json (i.e. were documented by DBAutoDoc's prior pass).
+   *
+   * Use this when DBAutoDoc was configured permissively (e.g. it indexed
+   * `tw_temp_*`, `DataConversion*`, `_BAK_*` style scaffolding tables) but those
+   * tables shouldn't participate in organic-key proposals — they're analyst
+   * temp data, migration scratch, or backup snapshots, not production
+   * navigation endpoints.
+   *
+   * Matching: case-insensitive, supports `*` and `%` as wildcards. Each pattern
+   * is checked against the unqualified table name (not schema-qualified).
+   *
+   * Example: `["tw_temp_*", "tmp_*", "DataConversion*", "*_BAK_*", "*_bk_*", "*__bk"]`
+   *
+   * When omitted (default), every table in the state.json is eligible.
+   * Distinct from DBAutoDoc's own `tables.exclude` config — that filter runs
+   * at introspection time; this filter runs at organic-key-detection time so
+   * you can reuse an existing state.json without re-querying the database.
+   */
+  excludeTablePatterns?: string[];
+
+  /** Weights for the hybrid distance metric. Setting any weight to 0 disables that signal. */
+  weights?: {
+    /** Weight for name-token Jaccard similarity (deps-free, default: 1.0). */
+    nameSimilarity?: number;
+    /** Weight for embedding cosine distance (requires AI provider, default: 1.0 when available, 0 otherwise). */
+    embeddingDistance?: number;
+    /** Weight for MinHash value-overlap (requires column sampling, default: 0.5). */
+    valueOverlap?: number;
+  };
+
+  /** Tunable clustering thresholds. */
+  thresholds?: {
+    /** Edges with hybrid distance > this are not merge candidates (default: 0.5). */
+    candidateEdgeMax?: number;
+    /** Complete-linkage cut — max intra-cluster pairwise distance after merge (default: 0.4). */
+    mergeMax?: number;
+    /** Top-K nearest neighbors per column retained as candidate edges (default: 20). */
+    topKNeighbors?: number;
+    /** Minimum cluster size to report (default: 2). */
+    minClusterSize?: number;
+    /** Minimum distinct tables a cluster must span (default: 2). */
+    minDistinctTables?: number;
+  };
+
+  /** Embedding configuration. Omit to skip embedding-based clustering. */
+  embedding?: {
+    /** Whether to compute embeddings for column descriptions (default: false). */
+    enabled: boolean;
+    /** Model identifier (default: 'gemini-embedding-001'). */
+    model?: string;
+    /** Embedding dimensions (default: 1536). */
+    dimensions?: number;
+    /** Batch size for embedding requests (default: 100). */
+    batchSize?: number;
+    /**
+     * Use business-concept projection (default: false).
+     *
+     * EXPERIMENTAL — defaults to off based on empirical validation. Projecting raw
+     * Gemini embeddings (1536-dim) into a small business-concept anchor space
+     * (~14-dim) over-merges distinct business concepts: BusinessEntityID and
+     * ProductID both project strongly onto the "business identifier" axis and
+     * collapse into one mega-cluster, losing the cross-concept discrimination
+     * that raw embeddings preserve. The projector is kept for experimentation
+     * (e.g. as a future post-filter gate on cluster-level business-ness) but
+     * the runtime path defaults to raw embeddings.
+     *
+     * See: tools/organic-key-cluster-poc/compare-projection-modes.mjs for
+     * the side-by-side numbers.
+     */
+    useBusinessProjection?: boolean;
+    /**
+     * Additional domain-specific anchor texts to append to the default business
+     * anchors (e.g., healthcare-specific or industry-specific concepts).
+     */
+    additionalBusinessAnchors?: string[];
+    /** Fully override the default business anchors (advanced). */
+    customBusinessAnchors?: string[];
+  };
+
+  /** LLM refinement configuration. Omit to skip refinement entirely. */
+  refinement?: {
+    /** Whether to run LLM refinement on candidate clusters (default: true when AI provider configured). */
+    enabled: boolean;
+    /** Override model for refinement; falls back to AIConfig.model if absent. */
+    model?: string;
+    /** Concurrency for refinement calls (default: 4). */
+    concurrency?: number;
+  };
+
+  /**
+   * Concept-merge pass — after LLM refinement, group KEEP clusters by normalized
+   * concept name and call the LLM once per multi-cluster group to confirm/merge.
+   * Addresses the case where complete-linkage prevented merging at clustering time
+   * but the LLM assigned the same concept name to multiple survivors (e.g. three
+   * separate `product_id` clusters in the AdventureWorks POC).
+   */
+  conceptMerge?: {
+    /** Default: true when LLM refinement is enabled. Set false to disable. */
+    enabled: boolean;
+  };
+
+  /**
+   * Semantic cluster expansion — after LLM refinement assigns concept names to
+   * KEEP clusters, the expander performs one additional pass per cluster:
+   *   1. Compute the cluster's centroid embedding from its members
+   *   2. Find K nearest-neighbor columns in the schema NOT currently in any cluster
+   *   3. Ask the LLM which of those candidates also belong in the cluster
+   *
+   * Replaces hardcoded regex catalogs (e.g. for email/phone/postal_code) with a
+   * fully semantic, LLM-driven expansion. Catches the under-selection failure
+   * mode where some email/phone columns sit far from the cluster centroid and
+   * got rejected as their own too-small cluster during refinement.
+   *
+   * Language-agnostic (operates on embeddings + descriptions, not name patterns)
+   * and works for any concept the LLM has named — no maintained catalog needed.
+   */
+  semanticExpansion?: {
+    /** Whether to run semantic expansion (default: true when embeddings + AI provider available). */
+    enabled: boolean;
+    /** Number of nearest neighbors to consider per cluster (default: 15). */
+    topK?: number;
+    /** Minimum cosine similarity for a candidate to be considered (default: 0.5). */
+    similarityFloor?: number;
+    /** Concurrency for per-cluster expansion LLM calls (default: 4). */
+    concurrency?: number;
+  };
+
+  /**
+   * Missing-concepts pass — after refinement + expansion, the LLM holistically
+   * reviews the confirmed-cluster set plus a sample of residual columns and
+   * identifies organic-key concepts that should exist but weren't surfaced.
+   * For each proposed concept, the detector embeds the description, finds
+   * K-NN candidates in the residual pool, and asks the LLM to confirm members.
+   *
+   * This is the semantic equivalent of a regex catalog: it discovers concepts
+   * the cluster + refinement step rejected (e.g. small clusters of email,
+   * phone, postal_code, country_code, etc.) without hardcoded patterns.
+   */
+  missingConcepts?: {
+    /** Whether to run the missing-concepts pass (default: true when embeddings + AI provider). */
+    enabled: boolean;
+    /** Max concepts to propose per discovery call (default: 10). */
+    maxConcepts?: number;
+    /** Top-K residual columns to consider per proposed concept (default: 20). */
+    topK?: number;
+    /** Cosine-similarity floor for K-NN (default: 0.45). */
+    similarityFloor?: number;
+    /** Residual sample size for the discovery prompt (default: 60). */
+    residualSampleSize?: number;
+  };
+
+  /**
+   * Convergence loop — wrap expansion + missing-concepts in an iterative loop
+   * that runs until the KEEP set stops changing OR a hard iteration cap is hit.
+   * Mirrors DBAutoDoc's convergence detection.
+   */
+  convergence?: {
+    /** Whether to iterate to convergence (default: true). */
+    enabled: boolean;
+    /** Max iterations (default: 3). */
+    maxIterations?: number;
+  };
+
+  /**
+   * Business-concept gate — uses BusinessConceptProjector to score each candidate
+   * cluster's centroid against business vs system/audit anchor axes. Clusters
+   * dominated by negative anchors (audit timestamps, replication GUIDs) get
+   * dropped BEFORE LLM refinement, saving tokens.
+   *
+   * Operates as a filter, not a clustering space. Uses raw embeddings for the
+   * clustering itself; only the centroid is projected for gating.
+   */
+  businessGate?: {
+    /** Whether to apply the gate (default: false). Requires embeddings to be enabled. */
+    enabled: boolean;
+    /**
+     * Threshold on (antiScore - businessScore) above which a cluster is dropped.
+     * Default 0.05 — modest preference for business clusters. Raise to be stricter,
+     * lower (or negative) to be more permissive.
+     */
+    threshold?: number;
+  };
+
+  /** MinHash signatures for value-overlap verification. */
+  minHash?: {
+    /** Whether to compute MinHash sketches during column sampling (default: false). */
+    enabled: boolean;
+    /** Number of hash functions (default: 128). */
+    numHashes?: number;
+    /** Sample size per column for sketching (default: reuses relationshipDiscovery.sampling.maxRowsPerTable). */
+    sampleSize?: number;
+  };
 }
 
 export interface SampleQueryGenerationConfig {

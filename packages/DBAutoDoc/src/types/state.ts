@@ -5,6 +5,7 @@
 
 import { RelationshipDiscoveryPhase, CachedColumnStats } from './discovery.js';
 import { SampleQuery, SampleQueryGenerationSummary } from './sample-queries.js';
+import { OrganicKeyCluster, OrganicKeyDetectionPhase } from './organic-keys.js';
 
 export interface DatabaseDocumentation {
   version: string;
@@ -14,6 +15,7 @@ export interface DatabaseDocumentation {
   phases: AnalysisPhases; // Multi-phase workflow organization
   schemas: SchemaDefinition[]; // Deliverable: Database structure with descriptions
   sampleQueries?: SampleQueriesDeliverable; // Deliverable: Training queries generated from schemas
+  organicKeyClusters?: OrganicKeyCluster[]; // Deliverable: Confirmed organic key clusters from detection pass
   resumedFromFile?: string; // Path to the state file this analysis resumed from
 }
 
@@ -62,6 +64,7 @@ export interface AnalysisPhases {
   keyDetection?: RelationshipDiscoveryPhase; // Primary key and foreign key detection
   descriptionGeneration: AnalysisRun[]; // Table and column description analysis
   queryGeneration?: QueryGenerationPhase; // Metadata about query generation process
+  organicKeyDetection?: OrganicKeyDetectionPhase; // Cluster-based organic key detection
 }
 
 /**
