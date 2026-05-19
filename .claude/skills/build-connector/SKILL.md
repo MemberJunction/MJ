@@ -56,7 +56,9 @@ The coordinator's review of phase output runs in **two ordered passes**. The ord
 
 **Pass 1 — Inventory (before reading EXTRACTION_REPORT)**
 
-Open `SOURCE_STUDY.md`. List every taxonomy named in it. This is the expected coverage skeleton. Write it to a coordinator scratch file (`/tmp/<vendor>_inventory.txt`) BEFORE proceeding to Pass 2. Pass 1's output is committed before Pass 2 sees the producer's report — this prevents the producer's framing from shaping the coordinator's inventory.
+Open `SOURCE_STUDY.md`. Build the inventory by extracting ONLY the COVERABLE taxonomies — the leaves of any container hierarchy, excluding internal/test scaffolding, excluding L1 container labels that aren't themselves coverable, excluding INFORMATIONAL taxonomies. This is the expected coverage skeleton. Write it to a coordinator scratch file (`/tmp/<vendor>_inventory.txt`) BEFORE proceeding to Pass 2. Pass 1's output is committed before Pass 2 sees the producer's report — this prevents the producer's framing from shaping the coordinator's inventory.
+
+If SOURCE_STUDY doesn't clearly distinguish COVERABLE vs INFORMATIONAL or doesn't pin L1↔L2 container/surface relationships, that's a SOURCE_STUDY defect — re-dispatch the source-auditor with feedback before proceeding to Phase 2c. The inventory must be unambiguous BEFORE the producer is asked to classify against it.
 
 **Pass 2 — Reactive review (after Pass 1 inventory committed)**
 
