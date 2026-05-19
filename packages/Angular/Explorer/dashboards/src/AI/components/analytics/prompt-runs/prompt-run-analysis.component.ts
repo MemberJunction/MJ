@@ -84,16 +84,6 @@ const PAGE_SIZE = 25;
     standalone: false,
     selector: 'app-analytics-prompt-runs',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="Filters"
-            [ShowExportButton]="true"
-            [ShowCompareToggle]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-            (ExportClicked)="ExportCSV()"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">

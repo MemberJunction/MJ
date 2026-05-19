@@ -37,29 +37,21 @@ interface EntityOption {
   standalone: false,
   selector: 'mj-lists-operations-resource',
   template: `
-    <div class="operations-container">
-      <!-- Header -->
-      <div class="operations-header">
-        <div class="header-top">
-          <div class="header-title">
-            <i class="fa-solid fa-diagram-project"></i>
-            <h2>List Operations</h2>
-          </div>
-          @if (selectedLists.length > 0 || selectedEntityId) {
-            <button
-              class="clear-all-btn"
-              (click)="clearAllSelections()"
-              title="Clear all selections">
-              <i class="fa-solid fa-xmark"></i>
-              Clear
+    <mj-page-layout>
+      <mj-page-header
+        Title="List Operations"
+        Icon="fa-solid fa-diagram-project"
+        Subtitle="Visualize overlaps and perform set operations on your lists">
+        @if (selectedLists.length > 0 || selectedEntityId) {
+          <div actions>
+            <button mjButton variant="secondary" size="sm" (click)="clearAllSelections()" title="Clear all selections">
+              <i class="fa-solid fa-xmark"></i> Clear
             </button>
-          }
-        </div>
-        <div class="header-subtitle">
-          Visualize overlaps and perform set operations on your lists
-        </div>
-      </div>
-    
+          </div>
+        }
+      </mj-page-header>
+
+      <mj-page-body [Flex]="true" [Padding]="false">
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
@@ -400,20 +392,14 @@ interface EntityOption {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
       display: block;
       width: 100%;
       height: 100%;
-    }
-
-    .operations-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
     }
 
     .operations-header {

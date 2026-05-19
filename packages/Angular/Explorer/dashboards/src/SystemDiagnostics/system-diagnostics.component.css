@@ -1,102 +1,64 @@
-.system-diagnostics {
-    padding: 0;
-    background: var(--mj-bg-surface-sunken);
-    height: 100%;
+/* Container — flex-column workspace inside Admin's left-nav shell. */
+.sd-container {
     display: flex;
     flex-direction: column;
+    height: 100%;
     overflow: hidden;
-}
-
-/* Header */
-.diagnostics-header {
     background: var(--mj-bg-page);
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--mj-border-default);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 16px;
+}
+
+/* Sticky Header — action row only (no title; Admin shell provides it). */
+.sd-container > .sticky-header {
     flex-shrink: 0;
+    background: var(--mj-bg-surface);
+    border-bottom: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
+    z-index: 10;
 }
 
-.header-title {
+.sd-container > .sticky-header > .action-buttons {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--mj-space-3);
+    justify-content: flex-end;
+    padding: var(--mj-space-3) var(--mj-space-6);
 }
 
-.header-title i {
-    font-size: 24px;
-    color: var(--mj-status-success);
+@media (max-width: 639px) {
+    .sd-container > .sticky-header > .action-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
 }
 
-.header-title h2 {
-    margin: 0;
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
+/* Scrollable Content */
+.sd-container > .scrollable-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--mj-space-6);
 }
 
-.header-controls {
+.system-diagnostics {
+    background: var(--mj-bg-surface-sunken);
     display: flex;
-    align-items: center;
-    gap: 20px;
+    flex-direction: column;
 }
 
-.auto-refresh-control {
-    display: flex;
+/* Inline auto-refresh toggle in the [actions] slot. */
+.auto-refresh-toggle {
+    display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 6px;
+    cursor: pointer;
     font-size: 13px;
     color: var(--mj-text-secondary);
+    white-space: nowrap;
 }
 
-.auto-refresh-control label {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.auto-refresh-toggle input[type="checkbox"] {
+    width: 14px;
+    height: 14px;
     cursor: pointer;
-}
-
-.auto-refresh-control input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-}
-
-.refresh-indicator {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--mj-status-success);
-    font-size: 12px;
-}
-
-.refresh-btn {
-    background: var(--mj-status-success);
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: var(--mj-radius-md);
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-}
-
-.refresh-btn:hover:not(:disabled) {
-    background: var(--mj-color-success-800);
-    transform: translateY(-1px);
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
-}
-
-.refresh-btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
 }
 
 .spinning {
@@ -2339,16 +2301,6 @@
 }
 
 @media (max-width: 768px) {
-    .diagnostics-header {
-        flex-direction: column;
-        align-items: flex-start;
-    }
-
-    .header-controls {
-        width: 100%;
-        flex-wrap: wrap;
-    }
-
     .overview-cards {
         grid-template-columns: repeat(2, 1fr);
     }

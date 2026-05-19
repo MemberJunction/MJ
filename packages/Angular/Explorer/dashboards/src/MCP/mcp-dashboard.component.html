@@ -1,247 +1,93 @@
-<div class="mcp-dashboard">
+<mj-page-layout>
     <!-- Header -->
-    <div class="dashboard-header">
-        <div class="header-info">
-            <h2 class="dashboard-title">
-                <i class="fa-solid fa-plug-circle-bolt"></i>
-                MCP Dashboard
-            </h2>
-            <button
-                type="button"
-                class="filter-toggle-btn"
-                (click)="toggleFilterPanel()"
-                title="Toggle Filters">
-                <i class="fa-solid fa-filter"></i>
-                @if (FilterPanelVisible) {
-                    Hide Filters
-                } @else {
-                    Show Filters
-                }
-            </button>
-            <span class="item-count">{{ CurrentFilteredCount }} of {{ CurrentTotalCount }} items</span>
+    <mj-page-header
+        Title="MCP Dashboard"
+        Icon="fa-solid fa-plug-circle-bolt">
+        <div meta>
+            <mj-stat-badge [Count]="CurrentFilteredCount" [Total]="CurrentTotalCount" Label="items"></mj-stat-badge>
         </div>
+        <div actions>
+            <mj-filter-popover
+                [ActiveCount]="ActiveFilterCount"
+                [ShowClearAll]="ActiveFilterCount > 0"
+                (ClearAllRequested)="resetPopoverFilters()">
+                <mj-filter-panel
+                    [Fields]="mcpFilterFields"
+                    [Values]="mcpFilterValues"
+                    (ValuesChange)="onFilterValuesChange($event)"
+                    (Reset)="resetPopoverFilters()">
+                </mj-filter-panel>
+            </mj-filter-popover>
 
-        <div class="header-controls">
             <!-- Tab Navigation -->
-            <div class="tab-nav">
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'servers'"
-                    (click)="setActiveTab('servers')">
-                    <i class="fa-solid fa-server"></i>
-                    <span class="tab-label">Servers</span>
-                    <span class="tab-badge">{{ servers.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'connections'"
-                    (click)="setActiveTab('connections')">
-                    <i class="fa-solid fa-link"></i>
-                    <span class="tab-label">Connections</span>
-                    <span class="tab-badge">{{ connections.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'tools'"
-                    (click)="setActiveTab('tools')">
-                    <i class="fa-solid fa-wrench"></i>
-                    <span class="tab-label">Tools</span>
-                    <span class="tab-badge">{{ tools.length }}</span>
-                </button>
-                <button
-                    type="button"
-                    class="tab-btn"
-                    [class.active]="ActiveTab === 'logs'"
-                    (click)="setActiveTab('logs')">
-                    <i class="fa-solid fa-list-check"></i>
-                    <span class="tab-label">Logs</span>
-                    <span class="tab-badge" [class.has-errors]="stats.failedExecutions > 0">{{ executionLogs.length }}</span>
-                </button>
-            </div>
+            <mj-tab-nav
+                [Tabs]="mcpTabs"
+                [ActiveKey]="ActiveTab"
+                (TabChange)="setActiveTab($any($event))">
+            </mj-tab-nav>
 
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
-                    <button mjButton variant="primary" (click)="createServer()">
+                    <button mjButton variant="primary" size="sm" (click)="createServer()">
                         <i class="fa-solid fa-plus"></i>
                         Add Server
                     </button>
                 }
                 @case ('connections') {
-                    <button mjButton variant="primary" (click)="createConnection()">
+                    <button mjButton variant="primary" size="sm" (click)="createConnection()">
                         <i class="fa-solid fa-plus"></i>
                         Add Connection
                     </button>
                 }
                 @case ('tools') {
-                    <!-- View Mode Toggle -->
-                    <div class="view-toggle">
-                        <button
-                            type="button"
-                            class="view-btn"
-                            [class.active]="ToolsViewMode === 'card'"
-                            (click)="setToolsViewMode('card')"
-                            title="Card View">
-                            <i class="fa-solid fa-grip"></i>
-                        </button>
-                        <button
-                            type="button"
-                            class="view-btn"
-                            [class.active]="ToolsViewMode === 'list'"
-                            (click)="setToolsViewMode('list')"
-                            title="List View">
-                            <i class="fa-solid fa-list"></i>
-                        </button>
-                    </div>
-                    <button mjButton variant="primary" (click)="openTestToolDialog()">
+                    <mj-view-toggle
+                        [Options]="toolsViewOptions"
+                        [ActiveKey]="ToolsViewMode"
+                        (KeyChange)="setToolsViewMode($any($event))">
+                    </mj-view-toggle>
+                    <button mjButton variant="secondary" size="sm"
+                        (click)="toggleScalableMode(!useScalablePagination)"
+                        [title]="useScalablePagination ? 'Scale mode on: virtual scroll, paginated' : 'Enable scale mode for large tool sets'">
+                        <i class="fa-solid" [class.fa-bolt]="useScalablePagination" [class.fa-bolt-lightning]="!useScalablePagination"></i>
+                        Scale: {{ useScalablePagination ? 'ON' : 'OFF' }}
+                    </button>
+                    <button mjButton variant="primary" size="sm" (click)="openTestToolDialog()">
                         <i class="fa-solid fa-play"></i>
                         Test Tool
                     </button>
                 }
                 @case ('logs') {
-                    <button mjButton variant="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
-                        <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
-                        Refresh
-                    </button>
+                    <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadAllData()"></mj-refresh-button>
                 }
             }
         </div>
-    </div>
+        <div toolbar>
+            <mj-page-search
+                Placeholder="Search…"
+                [Value]="CurrentFilters.searchTerm"
+                (ValueChange)="onSearchTermChange($event)">
+            </mj-page-search>
+        </div>
+    </mj-page-header>
 
-    <!-- Main Content with Filter Panel -->
-    <div class="main-content">
-        <!-- Filter Panel (Left) — INLINED to avoid module-resolution failures in dynamic component -->
-        <div class="filter-panel-container" [class.hidden]="!FilterPanelVisible">
-            <div style="padding:12px;border-right:1px solid var(--mj-border-default,#e0e0e0);height:100%;box-sizing:border-box;overflow-y:auto;background:var(--mj-bg-surface,#fff);min-width:240px">
-                <!-- Header -->
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-                    <div style="display:flex;align-items:center;gap:6px">
-                        <h3 style="margin:0;font-size:0.95rem;font-weight:600">MCP Filters</h3>
-                        @if (activeFilterCount() > 0) {
-                            <span style="padding:2px 8px;background:var(--mj-brand-primary,#264FAF);color:#fff;border-radius:10px;font-size:0.7rem;font-weight:600">{{ activeFilterCount() }}</span>
-                        }
-                    </div>
-                    <div style="font-size:0.75rem;color:var(--mj-text-muted,#888)">{{ CurrentFilteredCount }} / {{ CurrentTotalCount }}</div>
-                </div>
-
-                <!-- Search -->
-                <div style="margin-bottom:12px">
-                    <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-search"></i> Search</label>
-                    <input #fSearch type="text" class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.searchTerm" (input)="onFilterFieldChange('searchTerm', fSearch.value)" placeholder="Search…" />
-                </div>
-
-                <!-- Tool tab filters -->
-                @if (ActiveTab === 'tools') {
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-server"></i> Server</label>
-                        <select #fServer class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolsServer ?? 'all'" (change)="onFilterFieldChange('toolsServer', fServer.value)">
-                            <option value="all">All Servers</option>
-                            @for (s of toolsAvailableServers; track s.ID) {
-                                <option [value]="s.ID">{{ s.Name }}</option>
-                            }
-                        </select>
-                    </div>
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-tags"></i> Category</label>
-                        <select #fCat class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolsCategory ?? 'all'" (change)="onFilterFieldChange('toolsCategory', fCat.value)">
-                            <option value="all">All Categories</option>
-                            @for (c of toolsAvailableCategories; track c.category) {
-                                <option [value]="c.category">{{ c.category }} ({{ c.count }})</option>
-                            }
-                        </select>
-                    </div>
-                    <div style="margin-bottom:12px">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
-                            <input #fFav type="checkbox" [checked]="CurrentFilters.favoritesOnly === true" (change)="onFilterFieldChange('favoritesOnly', fFav.checked)" />
-                            <i class="fa-solid fa-star" style="color:var(--mj-status-warning,#f59e0b)"></i>
-                            Favorites only
-                        </label>
-                    </div>
-                    <div style="margin-bottom:12px">
-                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.85rem">
-                            <input #fRec type="checkbox" [checked]="CurrentFilters.recentOnly === true" (change)="onFilterFieldChange('recentOnly', fRec.checked)" />
-                            <i class="fa-solid fa-clock-rotate-left" style="color:var(--mj-brand-primary,#264FAF)"></i>
-                            Recently used only
-                        </label>
-                    </div>
-                }
-
-                <!-- Tab-specific status filter -->
-                @if (ActiveTab === 'servers') {
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Server Status</label>
-                        <select #fSStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.serverStatus" (change)="onFilterFieldChange('serverStatus', fSStatus.value)">
-                            <option value="all">All Statuses</option>
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
-                    </div>
-                }
-                @if (ActiveTab === 'connections') {
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Connection Status</label>
-                        <select #fCStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.connectionStatus" (change)="onFilterFieldChange('connectionStatus', fCStatus.value)">
-                            <option value="all">All Statuses</option>
-                            <option value="Active">Active</option>
-                            <option value="Inactive">Inactive</option>
-                            <option value="Error">Error</option>
-                        </select>
-                    </div>
-                }
-                @if (ActiveTab === 'tools') {
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-toggle-on"></i> Tool Status</label>
-                        <select #fTStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.toolStatus" (change)="onFilterFieldChange('toolStatus', fTStatus.value)">
-                            <option value="all">All Statuses</option>
-                            <option value="Active">Active</option>
-                            <option value="Deprecated">Deprecated</option>
-                        </select>
-                    </div>
-                }
-                @if (ActiveTab === 'logs') {
-                    <div style="margin-bottom:12px">
-                        <label style="display:block;font-size:0.75rem;color:var(--mj-text-secondary,#475569);margin-bottom:4px"><i class="fa-solid fa-circle-check"></i> Log Status</label>
-                        <select #fLStatus class="mj-input" style="width:100%;box-sizing:border-box" [value]="CurrentFilters.logStatus" (change)="onFilterFieldChange('logStatus', fLStatus.value)">
-                            <option value="all">All Statuses</option>
-                            <option value="Success">Success</option>
-                            <option value="Error">Error</option>
-                            <option value="Running">Running</option>
-                        </select>
-                    </div>
-                }
-
-                <!-- Reset -->
-                <div style="margin-top:16px">
-                    <button mjButton variant="flat" style="width:100%" (click)="resetAllFilters()">
-                        <i class="fa-solid fa-undo"></i> Reset Filters
-                    </button>
-                </div>
+    <!-- Main Content -->
+    <mj-page-body [Flex]="true">
+        <!-- Error Message -->
+        @if (ErrorMessage) {
+            <div class="error-banner">
+                <i class="fa-solid fa-exclamation-triangle"></i>
+                {{ ErrorMessage }}
+                <button class="close-btn" (click)="ErrorMessage = null">
+                    <i class="fa-solid fa-times"></i>
+                </button>
             </div>
-            <div class="resize-handle"></div>
-        </div>
+        }
 
-        <!-- Content Area -->
-        <div class="content-area">
-            <!-- Error Message -->
-            @if (ErrorMessage) {
-                <div class="error-banner">
-                    <i class="fa-solid fa-exclamation-triangle"></i>
-                    {{ ErrorMessage }}
-                    <button class="close-btn" (click)="ErrorMessage = null">
-                        <i class="fa-solid fa-times"></i>
-                    </button>
-                </div>
-            }
-
-            <!-- Content Body -->
-            <div class="content-body">
-                @if (IsLoading) {
-                    <mj-loading text="Loading MCP data..."></mj-loading>
-                } @else {
-                    @switch (ActiveTab) {
+        @if (IsLoading) {
+            <mj-loading text="Loading MCP data..."></mj-loading>
+        } @else {
+            @switch (ActiveTab) {
                         <!-- Servers Tab -->
                         @case ('servers') {
                             <div class="data-grid servers-grid">
@@ -249,7 +95,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-server"></i>
                                         <p>No MCP servers configured</p>
-                                        <button mjButton variant="primary" (click)="createServer()">
+                                        <button mjButton variant="primary" size="sm" (click)="createServer()">
                                             Add Your First Server
                                         </button>
                                     </div>
@@ -362,7 +208,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-link"></i>
                                         <p>No connections configured</p>
-                                        <button mjButton variant="primary" (click)="createConnection()">
+                                        <button mjButton variant="primary" size="sm" (click)="createConnection()">
                                             Add Your First Connection
                                         </button>
                                     </div>
@@ -495,16 +341,6 @@
 
                         <!-- Tools Tab -->
                         @case ('tools') {
-                            <!-- Scale-mode toggle (Part 3.2): flip to virtual-scrolled paginated list for 1000s of tools -->
-                            <div style="display:flex;justify-content:flex-end;align-items:center;gap:8px;padding:4px 0;font-size:0.8rem;color:var(--mj-text-muted,#888)">
-                                <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
-                                    <input type="checkbox" [checked]="useScalablePagination" (change)="toggleScalableMode($any($event.target).checked)" />
-                                    Scale mode (virtual scroll, paginated)
-                                </label>
-                                @if (useScalablePagination) {
-                                    <span>· Showing {{ pagedTools.length }} of {{ toolsTotalCount }}</span>
-                                }
-                            </div>
                             @if (useScalablePagination) {
                                 <div style="padding:8px 12px;font-size:0.8rem;color:var(--mj-text-secondary,#475569);background:var(--mj-bg-surface-card,#f8f9fa);border-radius:4px;margin-bottom:6px">
                                     Showing <strong>{{ visiblePagedTools.length }}</strong> of <strong>{{ scaleDenominator() }}</strong> tools
@@ -801,10 +637,8 @@
                         }
                     }
                 }
-            </div>
-        </div>
-    </div>
-</div>
+    </mj-page-body>
+</mj-page-layout>
 
 <!-- Server Dialog (inline — avoids sub-component DI issues) -->
 @if (ShowServerDialog) {
