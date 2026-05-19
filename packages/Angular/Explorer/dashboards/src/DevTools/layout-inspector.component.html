@@ -1,4 +1,4 @@
-<div class="mj-inspector">
+<div class="mj-inspector mj-inspector--solo">
     <mj-page-header-interior
         Role="region"
         AriaLabel="Layout inspector"
@@ -18,37 +18,27 @@
                 <i class="fa-solid fa-download" aria-hidden="true"></i>
             </button>
         </div>
+        <div toolbar>
+            <mj-tab-nav
+                [Tabs]="tabsConfig"
+                [ActiveKey]="ActiveSection"
+                (TabChange)="onTabChange($event)">
+            </mj-tab-nav>
+        </div>
     </mj-page-header-interior>
 
-    <div class="mj-inspector__body">
-        <aside class="mj-inspector__sidebar">
-            @for (section of Sections; track section.id) {
-                <button type="button"
-                        class="mj-inspector__nav-item"
-                        [class.mj-inspector__nav-item--active]="ActiveSection === section.id"
-                        (click)="OnSectionClick(section)">
-                    <i class="mj-inspector__nav-icon" [class]="section.icon"></i>
-                    <div class="mj-inspector__nav-text">
-                        <div class="mj-inspector__nav-label">{{ section.label }}</div>
-                        <div class="mj-inspector__nav-desc">{{ section.description }}</div>
-                    </div>
-                </button>
-            }
-        </aside>
-
-        <div class="mj-inspector__content">
-            <div class="mj-inspector__content-head">
-                <h4 class="mj-inspector__content-title">{{ SectionLabel }}</h4>
-                <span class="mj-inspector__content-meta">Refreshed {{ LastRefreshedLabel }}</span>
-            </div>
-            <div class="mj-inspector__editor">
-                <mj-code-editor
-                    [(ngModel)]="LayoutJson"
-                    [language]="'json'"
-                    [readonly]="true"
-                    [lineWrapping]="true">
-                </mj-code-editor>
-            </div>
+    <div class="mj-inspector__content">
+        <div class="mj-inspector__content-head">
+            <h4 class="mj-inspector__content-title">{{ SectionLabel }}</h4>
+            <span class="mj-inspector__content-meta">Refreshed {{ LastRefreshedLabel }}</span>
+        </div>
+        <div class="mj-inspector__editor">
+            <mj-code-editor
+                [(ngModel)]="LayoutJson"
+                [language]="'json'"
+                [readonly]="true"
+                [lineWrapping]="true">
+            </mj-code-editor>
         </div>
     </div>
 </div>

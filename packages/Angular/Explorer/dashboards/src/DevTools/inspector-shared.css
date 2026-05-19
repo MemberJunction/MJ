@@ -5,9 +5,12 @@
   chrome (title icon, title, subtitle, action buttons) was previously rendered
   via .mj-inspector__header*, but that's been replaced by <mj-page-header-interior>
   in every inspector template. Action buttons now use the mjButton directive
-  (variant="secondary" / "success") so they inherit global button styling.
-  L3 inner-sidebar nav (.mj-inspector__body / __sidebar / __nav-item) is kept
-  as-is pending the L3 chrome convention decision.
+  (variant="secondary" / "success") so they inherit global button styling. App
+  State + Layout inspectors used to carry an inner left rail (.mj-inspector__body
+  + __sidebar + __nav-item) for L2 sections; that rail was retired 2026-05-19 in
+  favor of <mj-tab-nav> projected into the chrome's [toolbar] slot, matching
+  SystemDiagnostics and the API Keys tab strip. All inspectors are now "solo"
+  mode (no sidebar).
 */
 .mj-inspector {
     display: flex;
@@ -17,71 +20,6 @@
     background: var(--mj-bg-page);
     color: var(--mj-text-primary);
     font-family: inherit;
-}
-
-/* Layout: sidebar + content */
-.mj-inspector__body {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
-.mj-inspector__sidebar {
-    width: 220px;
-    border-right: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-surface);
-    overflow-y: auto;
-    flex-shrink: 0;
-    padding: 8px;
-}
-.mj-inspector__nav-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.12s;
-    margin-bottom: 2px;
-    font-family: inherit;
-    border: none;
-    background: transparent;
-    color: var(--mj-text-secondary);
-    text-align: left;
-    width: 100%;
-}
-.mj-inspector__nav-item:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-primary);
-}
-.mj-inspector__nav-item--active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-    color: var(--mj-brand-primary);
-}
-.mj-inspector__nav-item--active:hover {
-    background: color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);
-}
-.mj-inspector__nav-icon {
-    width: 18px;
-    text-align: center;
-    font-size: 13px;
-    margin-top: 1px;
-    flex-shrink: 0;
-    color: inherit;
-}
-.mj-inspector__nav-text { flex: 1; min-width: 0; }
-.mj-inspector__nav-label {
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.2;
-}
-.mj-inspector__nav-desc {
-    font-size: 11px;
-    color: var(--mj-text-muted);
-    margin-top: 3px;
-    line-height: 1.3;
-}
-.mj-inspector__nav-item--active .mj-inspector__nav-desc {
-    color: color-mix(in srgb, var(--mj-brand-primary) 70%, var(--mj-text-muted));
 }
 
 /* Content area */
@@ -133,18 +71,3 @@
     font-size: 13px;
 }
 
-@media (max-width: 700px) {
-    .mj-inspector__body { flex-direction: column; }
-    .mj-inspector__sidebar {
-        width: 100%;
-        height: auto;
-        max-height: 200px;
-        border-right: none;
-        border-bottom: 1px solid var(--mj-border-default);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-    .mj-inspector__nav-item { flex: 1 1 calc(50% - 8px); margin-bottom: 0; }
-    .mj-inspector__nav-desc { display: none; }
-}
