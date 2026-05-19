@@ -3,18 +3,45 @@
  * QuickBooks Online IO/IOF extractor.
  *
  * Source paradigm: NO OpenAPI/Swagger. Canonical schema lives in XSD files
- * inside the official Intuit .NET SDK repo. Top-level REST entities are
- * marked via `substitutionGroup="IntuitObject"` in `IntuitRestServiceDef.xsd`.
- * Per-entity field shapes (name, type, minOccurs, doc-annotations like
- * `Required: ALL`, `InputType: ReadOnly`, `ValidRange: QBO: Max=N`) live in
- * `Finance.xsd` (Accounting API + Webhooks-eligible entities). Report names
- * are enumerated in `ReportNames.cs` (Reports API has one generic schema —
- * the names are the catalog).
+ * inside the official Intuit .NET SDK repo. The SDK splits the data model
+ * across MULTIPLE XSDs in a single Schema directory:
+ *
+ *   - IntuitBaseTypes.xsd       — IntuitEntity base + ID/MetaData primitives
+ *   - IntuitRestServiceDef.xsd  — REST entity declarations (substitutionGroup="IntuitObject")
+ *                                  + a few entity complexTypes defined inline
+ *                                  (RecurringTransaction, SyncActivity, Status)
+ *   - Finance.xsd               — most Accounting transaction entities (Invoice,
+ *                                  Bill, Estimate, Payment, etc.) as complexTypes
+ *   - IntuitNamesTypes.xsd      — name-list entities (Customer, Vendor, Employee,
+ *                                  TaxAgency, CustomerType, VendorType, OtherName) as complexTypes
+ *   - SalesTax.xsd              — TaxService (declared as IntuitObject inside this file) as complexType
+ *   - Report.xsd                — generic Report envelope (one entity, many report names)
+ *   - EntitlementsResponse.xsd  — out-of-band entitlements response (NOT IntuitObject)
+ *
+ * The previous version of this script only fetched 4 XSDs and missed
+ * IntuitNamesTypes.xsd + SalesTax.xsd, which caused Customer, Vendor,
+ * Employee, TaxAgency, CustomerType, VendorType, OtherName, TaxService,
+ * and (because of a separate complexType-lookup bug) RecurringTransaction
+ * + SyncActivity to silently drop out.
+ *
+ * Set-completeness strategy (per audit re-dispatch 2026-05-19):
+ *   1. Discover XSDs dynamically via the GitHub Contents API for the Schema
+ *      directory — no hardcoded list of file names.
+ *   2. Fetch every .xsd file; union their complexType definitions into one
+ *      global map.
+ *   3. Union every `substitutionGroup="IntuitObject"` declaration across ALL
+ *      XSDs — TaxService is declared this way inside SalesTax.xsd itself.
+ *   4. For each substituting entity, look up its complexType from the global
+ *      union map (works regardless of which XSD declared it).
+ *   5. Reports come from ReportNames.cs separately.
+ *
+ * Report names are enumerated in `ReportNames.cs` (Reports API has one
+ * generic schema — the names are the catalog).
  *
  * Areas covered (per ProductTaxonomy):
- *   - Accounting API — every IntuitObject element from IntuitRestServiceDef.xsd
+ *   - Accounting API — every IntuitObject element across ALL XSDs
  *   - Reports API   — every report name in ReportNames.cs (read-only, no PK)
- *   - Webhooks      — covered by Accounting entities (webhook is push-notification on those)
+ *   - Webhooks      — covered by Accounting entities (webhook = push-notification on those)
  *   - CDC           — every Accounting entity has SupportsIncrementalSync=true (CDC endpoint)
  *   - Batch         — covered as a transport (not a separate entity)
  *   - Payments      — SCOPED OUT (separate host + connector, per Phase 2b)
@@ -25,9 +52,10 @@
  *   IOF: Name, Type, Length, IsPrimaryKey, IsRequired, IsReadOnly
  *
  * Per-flag CODE_EVIDENCE: for every hard-constraint flag the script emits
- * (IsPrimaryKey=true, IsRequired=true, IsReadOnly=true, SupportsWrite=true),
- * a dedicated CODE_EVIDENCE entry is appended citing the specific XSD signal
- * that justified that flag. Per .claude/rules/connector-provenance-conventions.md.
+ * (IsPrimaryKey=true, IsRequired=true, IsReadOnly=true, SupportsWrite=true,
+ * SupportsIncrementalSync=true), a dedicated CODE_EVIDENCE entry is appended
+ * citing the specific XSD signal that justified that flag. Per
+ * .claude/rules/connector-provenance-conventions.md.
  */
 
 import { XMLParser } from 'fast-xml-parser';
@@ -135,6 +163,7 @@ const ParsedComplexTypeSchema = z.object({
     Name: z.string().min(1),
     ExtendsBase: z.string().nullable(),
     Fields: z.array(ParsedFieldSchema),
+    DefinedIn: z.string().min(1),
 });
 type ParsedComplexType = z.infer<typeof ParsedComplexTypeSchema>;
 
@@ -167,9 +196,25 @@ type IOFRow = z.infer<typeof IOFRowSchema>;
 // source signal that justified each hard-constraint emission.
 // -----------------------------------------------------------------------------
 
+/**
+ * Signal source files. Expanded from the original 4 to the full XSD universe
+ * the SDK ships. New: IntuitNamesTypes.xsd + SalesTax.xsd + EntitlementsResponse.xsd.
+ * (EntitlementsResponse.xsd is structurally a sibling but currently contributes
+ * no IntuitObject entities — kept here for forward-compat citation if it ever does.)
+ */
+type SourceFileName =
+    | 'IntuitBaseTypes.xsd'
+    | 'Finance.xsd'
+    | 'Report.xsd'
+    | 'IntuitRestServiceDef.xsd'
+    | 'IntuitNamesTypes.xsd'
+    | 'SalesTax.xsd'
+    | 'EntitlementsResponse.xsd'
+    | 'ReportNames.cs';
+
 interface FlagSignal {
     /** Path-fragment of the XSD source the signal was read from. */
-    SourceFile: 'IntuitBaseTypes.xsd' | 'Finance.xsd' | 'Report.xsd' | 'IntuitRestServiceDef.xsd' | 'ReportNames.cs';
+    SourceFile: SourceFileName;
     /** Human-readable description of the structural signal (NOT a value-excerpt). */
     BasedOn: string;
     /** Structured discriminator (e.g., 'inherited-from-IntuitEntity', 'doc-annotation-Required'). */
@@ -208,6 +253,16 @@ function rawRepoRoot(repoKey: string): string {
 
 function rawUrl(repoPath: string): string {
     return `${rawRepoRoot(SDK_REPO_URL_KEY)}/${repoPath}`;
+}
+
+/**
+ * Build the GitHub Contents API URL for a directory in the SDK repo. We use
+ * this to enumerate XSD files dynamically — the script does not hardcode the
+ * list of XSDs, so new vendor-added schemas would be picked up automatically.
+ */
+function repoContentsApiUrl(repoPath: string): string {
+    const stripped = SDK_REPO_URL_KEY.replace(/^github\.com\//, '');
+    return `https://api.github.com/repos/${stripped}/contents/${repoPath}`;
 }
 
 // =============================================================================
@@ -257,6 +312,64 @@ async function loadAndValidateSources(): Promise<void> {
 }
 
 // =============================================================================
+// Dynamic XSD discovery — enumerate every .xsd file in the Schema directory
+// =============================================================================
+
+const GithubDirEntrySchema = z.object({
+    name: z.string().min(1),
+    type: z.string().min(1),
+});
+type GithubDirEntry = z.infer<typeof GithubDirEntrySchema>;
+
+const GithubDirListingSchema = z.array(GithubDirEntrySchema);
+
+/**
+ * Hit the GitHub Contents API for the SDK Schema directory and return the
+ * list of XSD file names. We cache the API response on disk too, so re-runs
+ * don't re-hit GitHub.
+ *
+ * Why dynamic discovery: the previous version of this script hardcoded the
+ * 4 XSD names it knew about, which silently missed IntuitNamesTypes.xsd +
+ * SalesTax.xsd (the files where Customer/Vendor/Employee/TaxAgency/TaxService
+ * live as complexTypes). If Intuit adds a new XSD in a future SDK release,
+ * dynamic discovery picks it up automatically. The CONNECTOR-PROVENANCE
+ * conventions specifically forbid hardcoded vendor object/field lists in
+ * script source code; this also applies to file lists when the file set
+ * encodes the vendor's catalog structure.
+ */
+async function discoverXsdFiles(): Promise<string[]> {
+    const cachePath = path.join(CACHE_DIR, '_xsd-directory-listing.json');
+    let listingJson: string;
+    try {
+        const stat = await fs.stat(cachePath);
+        if (stat.isFile() && stat.size > 0) {
+            listingJson = await fs.readFile(cachePath, 'utf8');
+        } else {
+            throw new Error('cache empty');
+        }
+    } catch {
+        const resp = await fetch(repoContentsApiUrl(XSD_BASE_PATH), {
+            headers: { Accept: 'application/vnd.github+json' },
+        });
+        if (!resp.ok) {
+            throw new Error(
+                `GitHub directory listing failed for ${XSD_BASE_PATH}: ${resp.status} ${resp.statusText}. ` +
+                    `Cannot enumerate XSD universe — aborting rather than fall back to a hardcoded list.`,
+            );
+        }
+        listingJson = await resp.text();
+        await fs.mkdir(path.dirname(cachePath), { recursive: true });
+        await fs.writeFile(cachePath, listingJson, 'utf8');
+    }
+    const parsedListing: unknown = JSON.parse(listingJson);
+    const entries: GithubDirEntry[] = GithubDirListingSchema.parse(parsedListing);
+    return entries
+        .filter(e => e.type === 'file' && e.name.toLowerCase().endsWith('.xsd'))
+        .map(e => e.name)
+        .sort();
+}
+
+// =============================================================================
 // XSD parsing
 // =============================================================================
 
@@ -293,10 +406,16 @@ function collectDocText(annotation: unknown): string {
 
 interface ParsedSchema {
     ComplexTypes: Map<string, ParsedComplexType>;
-    TopLevelEntities: Set<string>; // entity names with substitutionGroup="IntuitObject"
+    /** Names whose declaration carries substitutionGroup="IntuitObject". */
+    TopLevelEntities: Set<string>;
+    /** File path-fragment this schema was parsed from. */
+    DefinedIn: SourceFileName;
 }
 
-function parseComplexType(rawType: Record<string, unknown>): ParsedComplexType | null {
+function parseComplexType(
+    rawType: Record<string, unknown>,
+    definedIn: SourceFileName,
+): ParsedComplexType | null {
     const name = rawType['@_name'];
     if (typeof name !== 'string') return null;
 
@@ -327,6 +446,10 @@ function parseComplexType(rawType: Record<string, unknown>): ParsedComplexType |
                 const elObj = el as Record<string, unknown>;
                 const fName = elObj['@_name'];
                 const fType = elObj['@_type'];
+                // Skip <xs:element ref="X"/> entries (substitution-group placeholders
+                // like RecurringTransaction's `<xs:element ref="IntuitObject"/>`) — they
+                // have no @_name + no @_type and contribute no own fields. The entity
+                // still inherits IntuitEntity's fields via its extension base.
                 if (typeof fName !== 'string' || typeof fType !== 'string') continue;
                 const minOccursRaw = elObj['@_minOccurs'];
                 const maxOccursRaw = elObj['@_maxOccurs'];
@@ -351,15 +474,16 @@ function parseComplexType(rawType: Record<string, unknown>): ParsedComplexType |
         Name: name,
         ExtendsBase: extendsBase,
         Fields: fields,
+        DefinedIn: definedIn,
     };
 }
 
-function parseSchemaXsd(xsdText: string): ParsedSchema {
+function parseSchemaXsd(xsdText: string, definedIn: SourceFileName): ParsedSchema {
     const parser = buildXmlParser();
     const parsed = parser.parse(xsdText) as Record<string, unknown>;
     const schema = parsed['xs:schema'] as Record<string, unknown> | undefined;
     if (!schema) {
-        throw new Error('Parsed XSD has no <xs:schema> root');
+        throw new Error(`Parsed XSD ${definedIn} has no <xs:schema> root`);
     }
 
     const complexTypes = new Map<string, ParsedComplexType>();
@@ -367,7 +491,7 @@ function parseSchemaXsd(xsdText: string): ParsedSchema {
     if (Array.isArray(rawCTs)) {
         for (const ct of rawCTs) {
             if (!ct || typeof ct !== 'object') continue;
-            const parsedCt = parseComplexType(ct as Record<string, unknown>);
+            const parsedCt = parseComplexType(ct as Record<string, unknown>, definedIn);
             if (parsedCt) {
                 ParsedComplexTypeSchema.parse(parsedCt); // validate
                 complexTypes.set(parsedCt.Name, parsedCt);
@@ -390,7 +514,7 @@ function parseSchemaXsd(xsdText: string): ParsedSchema {
         }
     }
 
-    return { ComplexTypes: complexTypes, TopLevelEntities: topLevel };
+    return { ComplexTypes: complexTypes, TopLevelEntities: topLevel, DefinedIn: definedIn };
 }
 
 // =============================================================================
@@ -493,9 +617,9 @@ function buildBaseFields(baseType: ParsedComplexType | undefined): BuiltFieldRow
                 BasedOn:
                     `Field 'Id' is declared on the abstract complexType 'IntuitEntity' in ` +
                     `IntuitBaseTypes.xsd (xs:element name="Id" type="id"). Every top-level ` +
-                    `Accounting REST entity (substitutionGroup="IntuitObject" in ` +
-                    `IntuitRestServiceDef.xsd) extends IntuitEntity, making 'Id' the universal ` +
-                    `QBO primary key by inheritance.`,
+                    `Accounting REST entity (substitutionGroup="IntuitObject" across any ` +
+                    `XSD) extends IntuitEntity, making 'Id' the universal QBO primary key ` +
+                    `by inheritance.`,
             };
         }
         if (isRequired) {
@@ -579,21 +703,22 @@ function buildEntityFields(
         const flagSignals: IOFFlagSignals = { Name: f.Name };
         if (signals.Required && signals.RequiredMatchedText) {
             flagSignals.IsRequired = {
-                SourceFile: 'Finance.xsd',
+                SourceFile: entity.DefinedIn as SourceFileName,
                 SignalKind: 'doc-annotation-Required',
                 BasedOn:
                     `XSD xs:annotation/xs:documentation on entity field '${entity.Name}.${f.Name}' ` +
-                    `contains the structured marker '${signals.RequiredMatchedText}' ` +
-                    `(QBO product applicability).`,
+                    `(declared in ${entity.DefinedIn}) contains the structured marker ` +
+                    `'${signals.RequiredMatchedText}' (QBO product applicability).`,
             };
         }
         if (signals.ReadOnly && signals.ReadOnlyMatchedText) {
             flagSignals.IsReadOnly = {
-                SourceFile: 'Finance.xsd',
+                SourceFile: entity.DefinedIn as SourceFileName,
                 SignalKind: 'doc-annotation-InputType-ReadOnly',
                 BasedOn:
                     `XSD xs:annotation/xs:documentation on entity field '${entity.Name}.${f.Name}' ` +
-                    `contains the structured marker '${signals.ReadOnlyMatchedText}'.`,
+                    `(declared in ${entity.DefinedIn}) contains the structured marker ` +
+                    `'${signals.ReadOnlyMatchedText}'.`,
             };
         }
 
@@ -633,6 +758,10 @@ interface ExtractionResult {
     IOSignalsByIO: Map<string, IOFlagSignals>;
     FetchedURLs: string[];
     PerAreaCounts: Record<string, number>;
+    /** Names declared as IntuitObject across ALL XSDs (audit-visible set). */
+    IntuitObjectDeclarations: string[];
+    /** XSD file names walked at runtime. */
+    XsdFilesWalked: string[];
 }
 
 async function extract(): Promise<ExtractionResult> {
@@ -642,50 +771,72 @@ async function extract(): Promise<ExtractionResult> {
     // 1. Validate SOURCES.json references the SDK repo
     await loadAndValidateSources();
 
-    // 2. Fetch XSDs + ReportNames.cs (disk-cached)
-    const baseUrl = rawUrl(`${XSD_BASE_PATH}/IntuitBaseTypes.xsd`);
-    const restDefUrl = rawUrl(`${XSD_BASE_PATH}/IntuitRestServiceDef.xsd`);
-    const financeUrl = rawUrl(`${XSD_BASE_PATH}/Finance.xsd`);
-    const reportXsdUrl = rawUrl(`${XSD_BASE_PATH}/Report.xsd`);
-    const reportNamesUrl = rawUrl(REPORT_NAMES_PATH);
-    fetchedURLs.push(baseUrl, restDefUrl, financeUrl, reportXsdUrl, reportNamesUrl);
+    // 2. Dynamically discover the set of XSD files in the SDK Schema directory.
+    //    No hardcoded list — script reads the directory at runtime.
+    const xsdFileNames = await discoverXsdFiles();
+    if (xsdFileNames.length === 0) {
+        throw new Error('Discovered zero XSD files in SDK Schema directory. Aborting.');
+    }
 
-    const [baseTypesXsd, restDefXsd, financeXsd, reportXsd, reportNamesCs] = await Promise.all([
-        fetchWithCache(baseUrl, 'IntuitBaseTypes.xsd'),
-        fetchWithCache(restDefUrl, 'IntuitRestServiceDef.xsd'),
-        fetchWithCache(financeUrl, 'Finance.xsd'),
-        fetchWithCache(reportXsdUrl, 'Report.xsd'),
-        fetchWithCache(reportNamesUrl, 'ReportNames.cs'),
-    ]);
+    // 3. Fetch each XSD (disk-cached) + ReportNames.cs
+    const reportNamesUrl = rawUrl(REPORT_NAMES_PATH);
+    fetchedURLs.push(reportNamesUrl);
+
+    const xsdContents = new Map<SourceFileName, string>();
+    await Promise.all(
+        xsdFileNames.map(async name => {
+            const url = rawUrl(`${XSD_BASE_PATH}/${name}`);
+            fetchedURLs.push(url);
+            const text = await fetchWithCache(url, name);
+            xsdContents.set(name as SourceFileName, text);
+        }),
+    );
+    const reportNamesCs = await fetchWithCache(reportNamesUrl, 'ReportNames.cs');
 
     if (Date.now() - startMs > WALL_CLOCK_MS) {
         throw new Error('Wall-clock budget exceeded during fetch');
     }
 
-    // 3. Parse the schemas
-    const baseSchema = parseSchemaXsd(baseTypesXsd);
-    const financeSchema = parseSchemaXsd(financeXsd);
-    const restDefSchema = parseSchemaXsd(restDefXsd);
-    const reportSchema = parseSchemaXsd(reportXsd);
+    // 4. Parse every XSD. Each yields its own (complexTypes, IntuitObject-declarations).
+    const parsedSchemas: ParsedSchema[] = [];
+    for (const [name, text] of xsdContents.entries()) {
+        parsedSchemas.push(parseSchemaXsd(text, name));
+    }
 
-    // The IntuitEntity base type lives in IntuitBaseTypes.xsd
-    const intuitEntityBase = baseSchema.ComplexTypes.get('IntuitEntity');
+    // 5. Union all complexTypes into one global map. When the same name exists
+    //    in multiple XSDs (shouldn't happen in practice — SDK keeps types unique),
+    //    the LAST one wins; we log a warning via gaps for the caller.
+    const allComplexTypes = new Map<string, ParsedComplexType>();
+    const complexTypeCollisions: string[] = [];
+    for (const sch of parsedSchemas) {
+        for (const [k, v] of sch.ComplexTypes.entries()) {
+            if (allComplexTypes.has(k)) {
+                complexTypeCollisions.push(
+                    `${k} (already from ${allComplexTypes.get(k)?.DefinedIn}, now from ${sch.DefinedIn})`,
+                );
+            }
+            allComplexTypes.set(k, v);
+        }
+    }
+
+    // 6. Union all substitutionGroup="IntuitObject" declarations across all XSDs.
+    //    TaxService is declared inside SalesTax.xsd itself; previous version of
+    //    the script only walked IntuitRestServiceDef.xsd and missed it.
+    const declaredByFile = new Map<string, SourceFileName>();
+    for (const sch of parsedSchemas) {
+        for (const nm of sch.TopLevelEntities) {
+            // First declaration wins — but in practice each entity is declared once.
+            if (!declaredByFile.has(nm)) declaredByFile.set(nm, sch.DefinedIn);
+        }
+    }
+    const topLevelEntityNames = new Set<string>(declaredByFile.keys());
+
+    // 7. Resolve the base type (IntuitEntity) — its inherited fields are
+    //    pre-pended to every Accounting entity's field list.
+    const intuitEntityBase = allComplexTypes.get('IntuitEntity');
     const baseBuilt = buildBaseFields(intuitEntityBase);
 
-    // The list of top-level Accounting REST entities is the union of
-    // substitutionGroup="IntuitObject" elements from IntuitRestServiceDef.xsd
-    // (which is itself an aggregator over Finance.xsd + Report.xsd).
-    const topLevelEntityNames = new Set<string>(restDefSchema.TopLevelEntities);
-
-    // Resolve each top-level entity name to its complexType definition (lives
-    // in Finance.xsd; a few like Report live in Report.xsd).
-    const allComplexTypes = new Map<string, ParsedComplexType>([
-        ...baseSchema.ComplexTypes,
-        ...financeSchema.ComplexTypes,
-        ...reportSchema.ComplexTypes,
-    ]);
-
-    // 4. Build Accounting IOs
+    // 8. Build Accounting IOs
     const ios: IORow[] = [];
     const iofsByIO = new Map<string, IOFRow[]>();
     const iofSignalsByIO = new Map<string, IOFFlagSignals[]>();
@@ -694,12 +845,16 @@ async function extract(): Promise<ExtractionResult> {
 
     // Some "entities" in REST def are response envelopes, not queryable
     // resources. Filter these out structurally — they have no resource URL.
+    // BatchItemRequest is a transport wrapper for the Batch operation — not
+    // a top-level queryable resource. The audit re-dispatch explicitly noted
+    // it's correctly excluded.
     const responseOnlyTypes = new Set<string>([
         'EmailDeliveryInfo',
         'SyncErrorResponse',
         'Status',
         'IntuitResponse',
         'OLBStatus',
+        'BatchItemRequest',
     ]);
 
     // Sort entity names for stable output ordering (idempotency).
@@ -709,6 +864,8 @@ async function extract(): Promise<ExtractionResult> {
         if (ios.length >= IO_CAP) {
             throw new Error(`IO cap of ${IO_CAP} exceeded during Accounting walk`);
         }
+        // Skip pure response envelopes / transport wrappers.
+        if (responseOnlyTypes.has(entityName)) continue;
         // The generic Report entity is handled by the Reports loop below.
         if (entityName === 'Report') continue;
 
@@ -730,8 +887,9 @@ async function extract(): Promise<ExtractionResult> {
         const responseDataKey = entityName;
 
         // SupportsWrite: every accounting entity supports POST for create
-        // and POST-with-SyncToken for update, EXCEPT pure response envelopes.
-        const supportsWrite = !responseOnlyTypes.has(entityName);
+        // and POST-with-SyncToken for update, EXCEPT pure response envelopes
+        // (which are filtered above).
+        const supportsWrite = true;
 
         // SupportsIncrementalSync: per the task brief + configuration.json
         // IncrementalSync.Capability, the CDC endpoint covers all accounting
@@ -754,37 +912,30 @@ async function extract(): Promise<ExtractionResult> {
 
         // Per-IO flag signals. We collect SupportsWrite + SupportsIncrementalSync
         // here so the CODE_EVIDENCE emitter can cite the specific structural
-        // signal that justified each true-flag emission.
+        // signal that justified each true-flag emission. The SignalSourceFile
+        // is the XSD where the IntuitObject declaration lives — which is the
+        // structural marker that gates these flags.
+        const declarationFile = declaredByFile.get(entityName) ?? 'IntuitRestServiceDef.xsd';
         const ioSig: IOFlagSignals = {};
-        // SupportsWrite signal: the entity's element has substitutionGroup=
-        // "IntuitObject" in IntuitRestServiceDef.xsd (= top-level REST resource),
-        // and Intuit's REST convention for IntuitObject members is POST /v3/
-        // company/{realmId}/{resource} for both create + update.
         if (supportsWrite) {
             ioSig.SupportsWrite = {
-                SourceFile: 'IntuitRestServiceDef.xsd',
+                SourceFile: declarationFile,
                 SignalKind: 'substitution-group-IntuitObject',
                 BasedOn:
                     `Entity '${entityName}' is declared as an xs:element with ` +
-                    `substitutionGroup="IntuitObject" in IntuitRestServiceDef.xsd, ` +
+                    `substitutionGroup="IntuitObject" in ${declarationFile}, ` +
                     `which is the universal QBO marker for top-level REST resources ` +
                     `that support POST create/update + DELETE via ?operation=delete ` +
                     `per the v3 REST convention.`,
             };
         }
-        // SupportsIncrementalSync signal: every Accounting entity (= every
-        // IntuitObject member) is queryable via the CDC endpoint
-        // GET /v3/company/{realmId}/cdc?entities=<EntityName>&changedSince=...
-        // per the universal QBO v3 REST convention. The structural signal is
-        // again substitutionGroup="IntuitObject" — CDC is open to all such
-        // entities.
         if (supportsIncrementalSync) {
             ioSig.SupportsIncrementalSync = {
-                SourceFile: 'IntuitRestServiceDef.xsd',
+                SourceFile: declarationFile,
                 SignalKind: 'cdc-endpoint-covers-IntuitObject-members',
                 BasedOn:
                     `Entity '${entityName}' is declared with ` +
-                    `substitutionGroup="IntuitObject" in IntuitRestServiceDef.xsd. ` +
+                    `substitutionGroup="IntuitObject" in ${declarationFile}. ` +
                     `The QBO v3 CDC endpoint (/v3/company/{realmId}/cdc) accepts ` +
                     `any IntuitObject member in its 'entities' query parameter and ` +
                     `returns deltas since a watermark, making CDC the universal ` +
@@ -800,7 +951,7 @@ async function extract(): Promise<ExtractionResult> {
         iofSignalsByIO.set(entityName, built.map(b => b.Signals));
     }
 
-    // 5. Build Reports IOs (one per report name; read-only; no PK + no IOFs)
+    // 9. Build Reports IOs (one per report name; read-only; no PK + no IOFs)
     const reportNames = parseReportNames(reportNamesCs);
     for (const reportName of reportNames) {
         if (ios.length >= IO_CAP) {
@@ -841,6 +992,8 @@ async function extract(): Promise<ExtractionResult> {
         IOSignalsByIO: ioSignalsByIO,
         FetchedURLs: fetchedURLs,
         PerAreaCounts: perAreaCounts,
+        IntuitObjectDeclarations: Array.from(topLevelEntityNames).sort(),
+        XsdFilesWalked: xsdFileNames,
     };
 }
 
@@ -956,13 +1109,10 @@ interface CodeEvidenceEntry {
     TargetField: string;
 }
 
-const SOURCE_FILE_TO_URL: Record<FlagSignal['SourceFile'], string> = {
-    'IntuitBaseTypes.xsd': rawUrl(`${XSD_BASE_PATH}/IntuitBaseTypes.xsd`),
-    'Finance.xsd': rawUrl(`${XSD_BASE_PATH}/Finance.xsd`),
-    'Report.xsd': rawUrl(`${XSD_BASE_PATH}/Report.xsd`),
-    'IntuitRestServiceDef.xsd': rawUrl(`${XSD_BASE_PATH}/IntuitRestServiceDef.xsd`),
-    'ReportNames.cs': rawUrl(REPORT_NAMES_PATH),
-};
+function sourceFileToUrl(sourceFile: SourceFileName): string {
+    if (sourceFile === 'ReportNames.cs') return rawUrl(REPORT_NAMES_PATH);
+    return rawUrl(`${XSD_BASE_PATH}/${sourceFile}`);
+}
 
 interface PerFlagBreakdown {
     SupportsWrite: number;
@@ -1012,7 +1162,7 @@ async function appendCodeEvidence(result: ExtractionResult): Promise<AppendResul
         existing.Entries.push({
             ScriptPath: scriptPath,
             ScriptRunAt: now,
-            SourceURL: SOURCE_FILE_TO_URL[signal.SourceFile],
+            SourceURL: sourceFileToUrl(signal.SourceFile),
             StructuredOutput: {
                 IOName: ioName,
                 IOFName: iofName ?? null,
@@ -1182,6 +1332,23 @@ async function main(): Promise<void> {
     // Areas walked is computed structurally from the IOs we emitted.
     const areasWalked = Array.from(new Set(result.IOs.map(io => io.Category))).sort();
 
+    // Set-completeness self-check: every IntuitObject declaration across all
+    // XSDs should be either present as an IO or in the documented exclusion
+    // list (response-only types). Anything else is a gap.
+    const ioNames = new Set(result.IOs.map(io => io.Name));
+    const documentedExclusions = new Set<string>([
+        'EmailDeliveryInfo',
+        'SyncErrorResponse',
+        'Status',
+        'IntuitResponse',
+        'OLBStatus',
+        'BatchItemRequest',
+        'Report', // handled separately via Reports loop
+    ]);
+    const unmatchedDeclarations = result.IntuitObjectDeclarations.filter(
+        n => !ioNames.has(n) && !documentedExclusions.has(n),
+    );
+
     // Gaps: things the AS-IS schema can't express + tier-1 source absences.
     // Surface these for downstream agents (validate-invariants, code-builder).
     const gapsForDownstream: string[] = [];
@@ -1194,7 +1361,7 @@ async function main(): Promise<void> {
         'Webhooks area is not represented as separate IOs — webhooks are push-notifications keyed by Accounting entity name. The Webhooks area capabilities are at integration-root level (SignatureAlgorithm, VerifierToken) in configuration.json, not per-IO. Downstream webhook-router uses Accounting IOs + the configuration.Webhooks.MaxSupportedEntities list.',
     );
     gapsForDownstream.push(
-        'Batch area is not represented as a separate IO — Batch is a transport that wraps create/update/delete operations on Accounting IOs. Downstream connector implements Batch as a method, not as a queryable entity.',
+        'Batch area is not represented as a separate IO — Batch is a transport that wraps create/update/delete operations on Accounting IOs. Downstream connector implements Batch as a method, not as a queryable entity. BatchItemRequest is declared as an IntuitObject but is structurally a transport wrapper, not a resource — excluded.',
     );
     gapsForDownstream.push(
         'CDC area is not represented as a separate IO — CDC is a polling endpoint that returns deltas for any combination of Accounting IOs. SupportsIncrementalSync=true on Accounting IOs is the structural signal.',
@@ -1208,6 +1375,25 @@ async function main(): Promise<void> {
     gapsForDownstream.push(
         'Custom fields (per-tenant on Sales transactions: Invoice, Estimate, SalesReceipt, PurchaseOrder, Bill, CreditMemo, RefundReceipt) are NOT extracted statically — they live in the per-realm Preferences endpoint. Connector DiscoverFields override must fetch /v3/company/{realmId}/preferences at runtime.',
     );
+    if (unmatchedDeclarations.length > 0) {
+        gapsForDownstream.push(
+            `IntuitObject declarations missing both an IO and a documented exclusion: [${unmatchedDeclarations.join(', ')}]. Each is declared with substitutionGroup="IntuitObject" but no complexType definition was found in any walked XSD. Likely cause: complexType lives in an XSD file not surfaced by the GitHub Contents API listing.`,
+        );
+    }
+
+    // Per-entity canonical check for the audit re-dispatch's named entities.
+    const auditCheckEntities = [
+        'Customer',
+        'Vendor',
+        'Employee',
+        'TaxAgency',
+        'TaxService',
+        'RecurringTransaction',
+    ];
+    const perEntityCanonicalCheck: Record<string, 'present' | 'missing'> = {};
+    for (const e of auditCheckEntities) {
+        perEntityCanonicalCheck[e] = ioNames.has(e) ? 'present' : 'missing';
+    }
 
     const stats = {
         IOCount: result.IOs.length,
@@ -1217,6 +1403,10 @@ async function main(): Promise<void> {
         SupportsIncrementalCount: supportsIncrementalCount,
         AreasWalked: areasWalked,
         PerAreaCounts: result.PerAreaCounts,
+        XsdFilesWalked: result.XsdFilesWalked,
+        IntuitObjectDeclarationsCount: result.IntuitObjectDeclarations.length,
+        UnmatchedDeclarationsAfterExclusions: unmatchedDeclarations,
+        PerEntityCanonicalCheck: perEntityCanonicalCheck,
         GapsForDownstream: gapsForDownstream,
         Status: errors.length === 0 ? 'Complete' : 'PartialWithErrors',
         ScriptPath: 'connectors-registry/quickbooks/scripts/extract-io-iof.ts',
