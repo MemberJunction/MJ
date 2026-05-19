@@ -19,8 +19,8 @@ export class MJVectorDatabaseFormComponent extends BaseFormComponent {
             { sectionKey: 'vectorDatabaseDetails', sectionName: 'Vector Database Details', isExpanded: true },
             { sectionKey: 'authentication', sectionName: 'Authentication', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false },
-            { sectionKey: 'mJVectorIndexes', sectionName: 'Vector Indexes', isExpanded: false }
+            { sectionKey: 'mJVectorIndexes', sectionName: 'Vector Indexes', isExpanded: false },
+            { sectionKey: 'mJEntityDocuments', sectionName: 'Entity Documents', isExpanded: false }
         ]);
     }
 }

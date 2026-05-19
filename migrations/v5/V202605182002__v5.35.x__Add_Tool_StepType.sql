@@ -57,12 +57,3 @@ EXEC sp_addextendedproperty
     @level1type = N'TABLE',  @level1name = N'AIAgentRunStep',
     @level2type = N'COLUMN', @level2name = N'StepType';
 GO
-
--- Add 'Tool' to the EntityFieldValue dropdown so the explorer UI picks it up.
--- EntityFieldID 'B04A327B-55BF-4914-9DCF-3552A5DD0293' is the AIAgentRunStep.StepType
--- field (used the same way for the earlier ForEach/While addition).
-INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-    (ID, EntityFieldID, Sequence, Value, Code)
-VALUES
-    ('930A0C3F-F09C-4122-BB20-0527B7F55EE4', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 9, 'Tool', 'Tool');
-GO

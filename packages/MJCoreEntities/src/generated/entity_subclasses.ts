@@ -3629,25 +3629,25 @@ export const MJAIAgentSchema = z.object({
         * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
     PayloadDownstreamPaths: z.string().describe(`
         * * Field Name: PayloadDownstreamPaths
-        * * Display Name: Downstream Paths
+        * * Display Name: Payload Downstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
     PayloadUpstreamPaths: z.string().describe(`
         * * Field Name: PayloadUpstreamPaths
-        * * Display Name: Upstream Paths
+        * * Display Name: Payload Upstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
         * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
     PayloadSelfReadPaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfReadPaths
-        * * Display Name: Self Read Paths
+        * * Display Name: Payload Self Read Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.`),
     PayloadSelfWritePaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfWritePaths
-        * * Display Name: Self Write Paths
+        * * Display Name: Payload Self Write Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.`),
@@ -3658,7 +3658,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`),
     FinalPayloadValidation: z.string().nullable().describe(`
         * * Field Name: FinalPayloadValidation
-        * * Display Name: Final Validation Schema
+        * * Display Name: Final Payload Validation
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
@@ -3681,41 +3681,41 @@ data flow when the agent executes its own prompt step.`),
 Retry mode. After reaching this limit, the validation will fail permanently.`),
     MaxCostPerRun: z.number().nullable().describe(`
         * * Field Name: MaxCostPerRun
-        * * Display Name: Max Cost Per Run
+        * * Display Name: Max Cost per Run
         * * SQL Data Type: decimal(10, 4)
         * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
 if this limit is exceeded.`),
     MaxTokensPerRun: z.number().nullable().describe(`
         * * Field Name: MaxTokensPerRun
-        * * Display Name: Max Tokens Per Run
+        * * Display Name: Max Tokens per Run
         * * SQL Data Type: int
         * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
 be terminated if this limit is exceeded.`),
     MaxIterationsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxIterationsPerRun
-        * * Display Name: Max Iterations Per Run
+        * * Display Name: Max Iterations per Run
         * * SQL Data Type: int
         * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
 terminated if this limit is exceeded.`),
     MaxTimePerRun: z.number().nullable().describe(`
         * * Field Name: MaxTimePerRun
-        * * Display Name: Max Time Per Run
+        * * Display Name: Max Time per Run
         * * SQL Data Type: int
         * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
 if this limit is exceeded.`),
     MinExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MinExecutionsPerRun
-        * * Display Name: Min Executions
+        * * Display Name: Min Executions per Run
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`),
     MaxExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxExecutionsPerRun
-        * * Display Name: Max Executions
+        * * Display Name: Max Executions per Run
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`),
     StartingPayloadValidation: z.string().nullable().describe(`
         * * Field Name: StartingPayloadValidation
-        * * Display Name: Starting Validation Schema
+        * * Display Name: Starting Payload Validation
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
@@ -3730,12 +3730,12 @@ if this limit is exceeded.`),
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
-        * * Display Name: Default Effort Level
+        * * Display Name: Default Prompt Effort Level
         * * SQL Data Type: int
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
-        * * Display Name: Chat Handling
+        * * Display Name: Chat Handling Option
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -3796,13 +3796,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent notes will be automatically injected into the agent context based on scoping rules.`),
     MaxNotesToInject: z.number().describe(`
         * * Field Name: MaxNotesToInject
-        * * Display Name: Max Notes
+        * * Display Name: Max Notes to Inject
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Maximum number of notes to inject into agent context per request.`),
     NoteInjectionStrategy: z.union([z.literal('All'), z.literal('Recent'), z.literal('Relevant')]).describe(`
         * * Field Name: NoteInjectionStrategy
-        * * Display Name: Note Strategy
+        * * Display Name: Note Injection Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Relevant
     * * Value List Type: List
@@ -3819,13 +3819,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent examples will be automatically injected into the agent context based on scoping rules.`),
     MaxExamplesToInject: z.number().describe(`
         * * Field Name: MaxExamplesToInject
-        * * Display Name: Max Examples
+        * * Display Name: Max Examples to Inject
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of examples to inject into agent context per request.`),
     ExampleInjectionStrategy: z.union([z.literal('Rated'), z.literal('Recent'), z.literal('Semantic')]).describe(`
         * * Field Name: ExampleInjectionStrategy
-        * * Display Name: Example Strategy
+        * * Display Name: Example Injection Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Semantic
     * * Value List Type: List
@@ -3859,18 +3859,18 @@ if this limit is exceeded.`),
         * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     AttachmentStorageProviderID: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProviderID
-        * * Display Name: Storage Provider
+        * * Display Name: Attachment Storage Provider
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
         * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.`),
     AttachmentRootPath: z.string().nullable().describe(`
         * * Field Name: AttachmentRootPath
-        * * Display Name: Root Path
+        * * Display Name: Attachment Root Path
         * * SQL Data Type: nvarchar(500)
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Threshold (Bytes)
+        * * Display Name: Inline Storage Threshold
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
@@ -3914,7 +3914,7 @@ if this limit is exceeded.`),
         * * Description: Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution.`),
     AllowEphemeralClientTools: z.boolean().describe(`
         * * Field Name: AllowEphemeralClientTools
-        * * Display Name: Allow Ephemeral Tools
+        * * Display Name: Allow Ephemeral Client Tools
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
@@ -3947,7 +3947,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Compression Prompt Text
+        * * Display Name: Compression Prompt Name
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
@@ -3963,7 +3963,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(100)`),
     AttachmentStorageProvider: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProvider
-        * * Display Name: Storage Provider Name
+        * * Display Name: Attachment Storage Provider Name
         * * SQL Data Type: nvarchar(50)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -3971,7 +3971,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Storage Account Name
+        * * Display Name: Default Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -6423,7 +6423,7 @@ export const MJAIResultCacheSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: The configuration used for this execution.`),
-    PromptEmbedding: z.string().nullable().describe(`
+    PromptEmbedding: z.number().nullable().describe(`
         * * Field Name: PromptEmbedding
         * * Display Name: Prompt Embedding
         * * SQL Data Type: varbinary
@@ -8097,7 +8097,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: User comments specific to this version`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User
+        * * Display Name: User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -8127,7 +8127,7 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`),
     FileID: z.string().nullable().describe(`
         * * Field Name: FileID
-        * * Display Name: File
+        * * Display Name: File ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.`),
@@ -8164,15 +8164,15 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact Reference
+        * * Display Name: Artifact
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User Reference
+        * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
-        * * Display Name: File Reference
+        * * Display Name: File
         * * SQL Data Type: nvarchar(500)`),
 });
 
@@ -11555,7 +11555,7 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.`),
     FileID: z.string().nullable().describe(`
         * * Field Name: FileID
-        * * Display Name: File Reference ID
+        * * Display Name: File ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.`),
@@ -28537,7 +28537,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * @memberof MJActionEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -33748,7 +33748,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @memberof MJAIAgentRunStepEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -34207,7 +34207,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * @memberof MJAIAgentRunEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -35536,7 +35536,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * @memberof MJAIAgentStepEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -36239,7 +36239,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @memberof MJAIAgentEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -36652,7 +36652,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadDownstreamPaths
-    * * Display Name: Downstream Paths
+    * * Display Name: Payload Downstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]
@@ -36666,7 +36666,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadUpstreamPaths
-    * * Display Name: Upstream Paths
+    * * Display Name: Payload Upstream Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Default Value: ["*"]
     * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]
@@ -36680,7 +36680,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: PayloadSelfReadPaths
-    * * Display Name: Self Read Paths
+    * * Display Name: Payload Self Read Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
 flow when the agent executes its own prompt step.
@@ -36694,7 +36694,7 @@ flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: PayloadSelfWritePaths
-    * * Display Name: Self Write Paths
+    * * Display Name: Payload Self Write Paths
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
 data flow when the agent executes its own prompt step.
@@ -36721,7 +36721,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidation
-    * * Display Name: Final Validation Schema
+    * * Display Name: Final Payload Validation
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.
     */
@@ -36768,7 +36768,7 @@ Retry mode. After reaching this limit, the validation will fail permanently.
 
     /**
     * * Field Name: MaxCostPerRun
-    * * Display Name: Max Cost Per Run
+    * * Display Name: Max Cost per Run
     * * SQL Data Type: decimal(10, 4)
     * * Description: Maximum cost in dollars allowed for a single agent run. Run will be terminated
 if this limit is exceeded.
@@ -36782,7 +36782,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxTokensPerRun
-    * * Display Name: Max Tokens Per Run
+    * * Display Name: Max Tokens per Run
     * * SQL Data Type: int
     * * Description: Maximum total tokens (input + output) allowed for a single agent run. Run will
 be terminated if this limit is exceeded.
@@ -36796,7 +36796,7 @@ be terminated if this limit is exceeded.
 
     /**
     * * Field Name: MaxIterationsPerRun
-    * * Display Name: Max Iterations Per Run
+    * * Display Name: Max Iterations per Run
     * * SQL Data Type: int
     * * Description: Maximum number of prompt iterations allowed for a single agent run. Run will be
 terminated if this limit is exceeded.
@@ -36810,7 +36810,7 @@ terminated if this limit is exceeded.
 
     /**
     * * Field Name: MaxTimePerRun
-    * * Display Name: Max Time Per Run
+    * * Display Name: Max Time per Run
     * * SQL Data Type: int
     * * Description: Maximum time in seconds allowed for a single agent run. Run will be terminated
 if this limit is exceeded.
@@ -36824,7 +36824,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MinExecutionsPerRun
-    * * Display Name: Min Executions
+    * * Display Name: Min Executions per Run
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run
     */
@@ -36837,7 +36837,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExecutionsPerRun
-    * * Display Name: Max Executions
+    * * Display Name: Max Executions per Run
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run
     */
@@ -36850,7 +36850,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidation
-    * * Display Name: Starting Validation Schema
+    * * Display Name: Starting Payload Validation
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.
     */
@@ -36881,7 +36881,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultPromptEffortLevel
-    * * Display Name: Default Effort Level
+    * * Display Name: Default Prompt Effort Level
     * * SQL Data Type: int
     * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.
     */
@@ -36894,7 +36894,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ChatHandlingOption
-    * * Display Name: Chat Handling
+    * * Display Name: Chat Handling Option
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -37019,7 +37019,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxNotesToInject
-    * * Display Name: Max Notes
+    * * Display Name: Max Notes to Inject
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Maximum number of notes to inject into agent context per request.
@@ -37033,7 +37033,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteInjectionStrategy
-    * * Display Name: Note Strategy
+    * * Display Name: Note Injection Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Relevant
     * * Value List Type: List
@@ -37066,7 +37066,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExamplesToInject
-    * * Display Name: Max Examples
+    * * Display Name: Max Examples to Inject
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of examples to inject into agent context per request.
@@ -37080,7 +37080,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleInjectionStrategy
-    * * Display Name: Example Strategy
+    * * Display Name: Example Injection Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Semantic
     * * Value List Type: List
@@ -37146,7 +37146,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProviderID
-    * * Display Name: Storage Provider
+    * * Display Name: Attachment Storage Provider
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: File Storage Providers (vwFileStorageProviders.ID)
     * * Description: File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default.
@@ -37160,7 +37160,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentRootPath
-    * * Display Name: Root Path
+    * * Display Name: Attachment Root Path
     * * SQL Data Type: nvarchar(500)
     * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder
     */
@@ -37173,7 +37173,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Threshold (Bytes)
+    * * Display Name: Inline Storage Threshold
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -37281,7 +37281,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AllowEphemeralClientTools
-    * * Display Name: Allow Ephemeral Tools
+    * * Display Name: Allow Ephemeral Client Tools
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.
@@ -37351,7 +37351,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Compression Prompt Text
+    * * Display Name: Compression Prompt Name
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -37387,7 +37387,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AttachmentStorageProvider
-    * * Display Name: Storage Provider Name
+    * * Display Name: Attachment Storage Provider Name
     * * SQL Data Type: nvarchar(50)
     */
     get AttachmentStorageProvider(): string | null {
@@ -37405,7 +37405,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Storage Account Name
+    * * Display Name: Default Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -37940,7 +37940,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     * @memberof MJAIConfigurationEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -41507,7 +41507,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * @memberof MJAIPromptRunEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -42986,7 +42986,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @memberof MJAIPromptEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -44217,10 +44217,10 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     * * SQL Data Type: varbinary
     * * Description: Vector representation of the prompt for similarity matching.
     */
-    get PromptEmbedding(): string | null {
+    get PromptEmbedding(): number | null {
         return this.Get('PromptEmbedding');
     }
-    set PromptEmbedding(value: string | null) {
+    set PromptEmbedding(value: number | null) {
         this.Set('PromptEmbedding', value);
     }
 
@@ -48452,7 +48452,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: UserID
-    * * Display Name: User
+    * * Display Name: User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -48524,7 +48524,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: FileID
-    * * Display Name: File
+    * * Display Name: File ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: Foreign key to the MJ: Files entity. When ContentMode is 'File', this references the binary file stored in MJStorage. NULL when ContentMode is 'Text'.
@@ -48609,7 +48609,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: Artifact
-    * * Display Name: Artifact Reference
+    * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string {
@@ -48618,7 +48618,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: User
-    * * Display Name: User Reference
+    * * Display Name: User
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -48627,7 +48627,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: File
-    * * Display Name: File Reference
+    * * Display Name: File
     * * SQL Data Type: nvarchar(500)
     */
     get File(): string | null {
@@ -56837,7 +56837,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * @memberof MJConversationArtifactVersionEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -57040,7 +57040,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * @memberof MJConversationArtifactEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -57530,7 +57530,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
 
     /**
     * * Field Name: FileID
-    * * Display Name: File Reference ID
+    * * Display Name: File ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.
@@ -57857,7 +57857,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * @memberof MJConversationDetailEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -58392,7 +58392,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * @memberof MJConversationEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -60586,7 +60586,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * @memberof MJDashboardEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -77822,7 +77822,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * @memberof MJQueryEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -82493,7 +82493,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     * @memberof MJReportEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider

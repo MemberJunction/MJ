@@ -260,6 +260,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Test Queries Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeTestQueries"
+        SectionName="Search Scope Test Queries"
+        Icon="fa fa-search"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Search Scope Providers Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchScopeProviders"
@@ -304,31 +329,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Search Scope Test Queries Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeTestQueries"
-        SectionName="Search Scope Test Queries"
-        Icon="fa fa-search"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

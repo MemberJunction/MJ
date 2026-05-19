@@ -184,31 +184,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Content Types Section -->
-    <mj-collapsible-panel
-        SectionKey="mJContentTypes"
-        SectionName="Content Types"
-        Icon="fa fa-folder"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentTypes')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Types','VectorIndexID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Types')"
-                [AllowLoad]="IsSectionExpanded('mJContentTypes')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentTypes', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Entity Documents Section -->
     <mj-collapsible-panel
         SectionKey="mJEntityDocuments"
@@ -228,6 +203,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityDocuments', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Content Types Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentTypes"
+        SectionName="Content Types"
+        Icon="fa fa-folder"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentTypes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Types','VectorIndexID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Types')"
+                [AllowLoad]="IsSectionExpanded('mJContentTypes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentTypes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
