@@ -39,6 +39,133 @@ So: every fact you write to metadata comes from a script that fetches the cited 
 
 The relatedEntities section (IO/IOF) is left empty — that's IOIOFExtractor's responsibility.
 
+## CHECK-constraint enum vocabulary (Gap 11)
+
+Several root fields have a database `CHECK` constraint enforcing an enum. **If you emit a value not in the allowed list, the row will fail on insert.** The agent must emit the CANONICAL ENUM VALUE for the category, NOT a richer / more-descriptive variant.
+
+Use the companion `*Detail` columns (per the "Category-vs-Detail split" section below) when you have richer specifics to record — the schema accepts both.
+
+| Field | Allowed values (CHECK enforced) | Companion Detail column |
+|---|---|---|
+| `APIBaseURLMode` | `'static'` / `'dynamic-from-auth-response'` / `'dynamic-from-credential-field'` | `DynamicAPIBaseURLSourceField` (the field name to read) |
+| `TokenRefreshStrategy` | `'static-token'` / `'oauth2-refresh'` / `'jwt-resign-periodically'` / `'none'` | `TokenRefreshDetail` |
+| `AuthHeaderPattern` | `'authorization-bearer'` / `'x-api-key'` / `'custom-header'` / `'none-uses-query'` | `AuthHeaderDetail` (the literal wire format like `"Bearer <token>"`, custom header name, etc.) |
+| `ErrorResponseShape` | `'json-errors-array'` / `'envelope-with-error-field'` / `'http-status-only'` / `'custom'` | `ErrorResponseDetail` (the actual JSON shape) |
+| `IncrementalSyncCapability` | `'global-query-param'` / `'per-resource-query-param'` / `'webhook-only'` / `'polling-only'` / `'none'` | `IncrementalSyncDetail` (per-vendor specifics) |
+| `WebhookSignatureAlgorithm` | `'hmac-sha256'` / `'hmac-sha512'` / `'rsa'` / `'none'` | `WebhookSignatureDetail` (encoding + payload structure — e.g., "HMAC-SHA256-Base64 over raw-body-bytes") |
+| `APIVersioningStrategy` | `'path'` / `'header'` / `'query'` / `'none'` | `APIVersion` (the actual version string like `"v3"`, `"2026-09"`) |
+| `IncrementalWatermarkType` (per-IO) | `'Timestamp'` / `'Version'` / `'Cursor'` / `'ChangeToken'` | `IncrementalWatermarkDetail` (per-IO format specifics) |
+| `BulkAPIMethod` (per-IO) | `'GET'` / `'POST'` / `'PUT'` / `'PATCH'` / `'DELETE'` | (HTTP verbs — no Detail needed) |
+
+These fields are NVARCHAR(255) with NO CHECK constraint (vendor reality is open-ended; the agent emits whatever the vendor's docs describe with provenance):
+
+- `IncrementalQueryParamFormat` (e.g. `'ISO8601'`, `'epoch-seconds'`, `'epoch-milliseconds'`, `'RFC2822'`, `'opaque-cursor'`, `'vendor-custom'`)
+- `FKNamingConvention` (e.g. `'snake-case-id-suffix'`, `'camelCase-Id-suffix'`, `'associations-api'`, `'graphql-edges'`, `'vendor-specific'`) — companion `FKNamingDetail` carries specifics
+- `FKDetectionMethod` (per-IOF; per the `(extensible)` slot in ioiof-extractor.md's DF1-DF7 table) — companion `FKDetectionDetail`
+- `CustomObjectMarkerPattern` (e.g. `'namespace-based'`, `'suffix-marker'`, `'flag-field'`, `'numeric-typeid-prefix'`) — companion `CustomObjectMarkerDetail` (NEW column — agents previously emitted this as a JSON field-key without a column to land in; now the column exists)
+- `CustomFieldMarkerPattern` (same shape) — companion `CustomFieldMarkerDetail`
+
+**Anti-pattern that surfaced in Phase 2b clean-build and prompted this section**:
+
+```
+// ❌ WRONG — agent emitted a wire-format string instead of the enum value
+fields.AuthHeaderPattern = "Bearer <token>";   // CHECK fails
+
+// ❌ WRONG — agent emitted the full JSON shape instead of the category
+fields.ErrorResponseShape = JSON.stringify({status: 'string', message: 'string', ...});   // CHECK fails
+
+// ❌ WRONG — agent invented "path-segment" when canonical value is just "path"
+fields.APIVersioningStrategy = "path-segment";   // CHECK fails
+
+// ✅ CORRECT — category in the enum field, rich detail in the companion Detail field
+fields.AuthHeaderPattern = "authorization-bearer";   // CHECK passes
+fields.AuthHeaderDetail = "Bearer <token>";          // free-form NVARCHAR(MAX)
+
+fields.ErrorResponseShape = "envelope-with-error-field";
+fields.ErrorResponseDetail = JSON.stringify({status: 'string', message: 'string', ...});
+
+fields.APIVersioningStrategy = "path";
+fields.APIVersion = "v3";   // already exists as the version-detail column
+```
+
+## Null-requires-provenance rule (Gap 11)
+
+**Every null in metadata MUST have a corresponding absence-of-evidence PROVENANCE entry stating WHY the field is null.** A null without provenance IS a hallucination — the agent is asserting "this doesn't exist" without proof.
+
+The previous "don't fabricate" guidance was too loose — it covered values you couldn't determine, but agents read it as "OK to emit null for fields the vendor doesn't seem to expose, no further action needed." That produces silent hallucinated nulls.
+
+Required for every null:
+
+```json
+// PROVENANCE.json entry shape for an absent fact
+{
+  "URL": "<the doc URL the agent checked for this fact>",
+  "AccessedAt": "<ISO timestamp>",
+  "UsedFor": "Confirming absence of <FieldName>",
+  "SourceTier": 1,
+  "SourceCategory": "OfficialDocs",
+  "EvidenceStrength": "AbsenceOfEvidence",
+  "TargetField": "integration.<FieldName>",
+  "Excerpt": "<vendor's exact text that establishes the absence, OR explicit note that the doc does not mention this concept anywhere — short phrase>"
+}
+```
+
+Common legitimate absence cases that still require provenance:
+
+- **Vendor doesn't document the concept**: PROVENANCE excerpt: "Vendor's API reference at <URL> does not mention idempotency-key headers anywhere; searched all auth + best-practices pages."
+- **Concept doesn't apply to vendor's auth model**: PROVENANCE excerpt: "Vendor uses static long-lived bearer tokens with no TTL — TokenTTLSeconds N/A."
+- **Value varies per-IO**: PROVENANCE excerpt: "Field varies per resource; per-IO values land in Phase 2c via IOIOFExtractor. Root null is correct — no vendor-wide invariant."
+
+A null with NO PROVENANCE entry is a defect. Validator Invariant 1 should treat it as a hard fail in a future iteration; for now the role-file requirement is the gate.
+
+## Root-vs-per-IO scope (Gap 11)
+
+**Root-level values must be vendor-wide invariants** — same value applies to every IO under this vendor. If a value varies per IO, **emit null at root with absence-of-evidence noting "varies per-IO; per-IO emissions land in Phase 2c."** Do NOT pick the most-common value and assert it at root.
+
+Common per-IO-not-root variants:
+
+- `IncrementalQueryParamName` — many vendors use different param names per resource (e.g. one resource uses `modifiedSince`, another uses `since`, another uses a filter-syntax expression). Root null + per-IO in Phase 2c.
+- `IncrementalCursorFieldName` — per-IO by definition (which field on THIS object carries the watermark).
+- `BulkAPIPath` / `BulkAPIMethod` — per-IO (the bulk endpoint differs per resource family).
+
+Common vendor-wide-and-OK-at-root:
+
+- `APIBaseURL`, `APIBaseURLMode`, `DynamicAPIBaseURLSourceField` — auth lifecycle is vendor-wide.
+- `AuthHeaderPattern`, `TokenRefreshStrategy`, `TokenTTLSeconds` — auth is vendor-wide.
+- `PaginationCursorParamName`, `PaginationCursorResponsePath`, `PaginationLimitParamName`, etc. — typically vendor-wide (vendor exposes one pagination shape across resources).
+- `ErrorResponseShape` + `ErrorResponseDetail` — typically vendor-wide.
+- `WebhooksAvailable`, `WebhookSignatureAlgorithm`, `WebhookSignatureHeaderName` — vendor-wide.
+- `BatchMaxRequestCount`, `BatchRequestWaitTime` — typically vendor-wide.
+
+Test: if you're tempted to write a comment "this is the value for most resources, but X resource uses Y", **the root field should be null + absence-of-evidence**.
+
+## Category-vs-Detail split (Gap 11)
+
+For every field with a CHECK-constraint enum (per the "CHECK-constraint enum vocabulary" section), there's an implicit companion. **Enum value = CATEGORY** (which kind of vendor pattern). **Companion `*Detail` field (NVARCHAR(MAX)) = the actual specifics.**
+
+This split lets you emit BOTH:
+- The categorical assignment (schema-validated, downstream consumers can switch on it)
+- Rich vendor-specific detail (free-form, captures synthesis)
+
+Worked example from the empirical evidence that prompted Gap 11:
+
+```
+// Vendor X uses HMAC-SHA256 over the raw request body, base64-encodes the
+// signature, and sends it in the "X-Vendor-Signature" header.
+
+// ❌ WRONG — agent tried to express all of that in the algorithm field
+fields.WebhookSignatureAlgorithm = "HMAC-SHA256-Base64";   // CHECK fails (`-Base64` not in enum)
+
+// ✅ CORRECT — category in enum, detail in companion
+fields.WebhookSignatureAlgorithm = "hmac-sha256";            // category — CHECK passes
+fields.WebhookSignatureHeaderName = "X-Vendor-Signature";    // header name
+fields.WebhookSignatureDetail = "HMAC-SHA256 computed over the raw request body bytes (no canonicalization); signature is base64-encoded.";  // free-form detail with provenance
+```
+
+**Direct empirical evidence (recorded for ConnectorProfile / Gap 9 design)**: Phase 2b audit revealed agent emitting synthesized vendor-specific values when forced into pre-imposed enum vocabulary. The agent KNEW the vendor's actual mechanism specifically enough to describe it. Synthesis output had no productive landing zone outside enum-allowed values — so synthesis appeared as "invalid enum value" rather than "rich detail in Detail field". This informs future Gap 9 (ConnectorProfile) design: Gap 9's shape is about providing structured landing zones for already-happening synthesis, not about prompting synthesis to happen.
+
+The Detail companions added by this round (TokenRefreshDetail / AuthHeaderDetail / ErrorResponseDetail / IncrementalSyncDetail / WebhookSignatureDetail / CustomObjectMarkerDetail / CustomFieldMarkerDetail / FKNamingDetail / IncrementalWatermarkDetail / FKDetectionDetail) ARE the structured landing zones for synthesis at the field level. ConnectorProfile (when designed) becomes the structured landing zone for synthesis at the connector level.
+
 ## Auth-classification disambiguation rule (unchanged from prior version)
 
 Some vendors document auth in prose categories that diverge from how their SDKs implement the same wire format. Resolve by classifying for the **wire format** the connector code will produce, not the prose category:
