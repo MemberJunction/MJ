@@ -30,7 +30,10 @@ Produce a ranked list of authoritative documentation sources for the vendor. Dow
   - Identify patterns and motifs (repeating shapes, naming conventions, abstraction patterns, version structures, parametric variable conventions, hierarchy nesting).
   - Understand its scope (what's covered, what's explicitly NOT covered, where it overlaps with other sources).
   - Note idiosyncrasies (vendor-specific quirks, naming choices, structural decisions that inform extraction logic).
-  - Document the study as a structured `SOURCE_STUDY.md` alongside the ranked `SOURCES.json` list. Per-source sections with the four bullets above filled in concretely.
+  - **Name TAXONOMIES of artifacts the source exposes** — named categories of endpoints discovered by walking the source itself. Categories aren't invented or borrowed from a generic list; they EMERGE from how the source organizes its own surface (e.g., the source's own navigation, sidebar groupings, OpenAPI tags, SDK module structure, repository folder layout). Single-endpoint categories are still categories. Each named with a short label and a one-line definition.
+  - **Source-mapping per taxonomy** — for each taxonomy, cite the specific URL / file / section(s) documenting it. No taxonomy without a citation.
+  - **Discovery rule**: you've finished studying a source when you can group every endpoint it documents into a named taxonomy with source evidence. If endpoints exist that don't fit any named taxonomy, name a new taxonomy — don't drop them.
+  - Document the study as a structured `SOURCE_STUDY.md` alongside the ranked `SOURCES.json` list. Per-source sections with the bullets above filled in concretely; a "Taxonomies" subsection per source listing the named categories + source-mapping citation per category.
 
   This study is NOT optional. Extraction depends on it. An extraction agent walking sources blind misses patterns the sources actually carry. Study informs scrape. Take as long as needed.
 

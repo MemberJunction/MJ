@@ -50,16 +50,34 @@ These are deterministic output checks, not interpretive reviews. They reject mec
 
 If any mechanical gate fails: relay the validator's failure messages verbatim to the producer and re-dispatch. The mechanical layer says WHAT is wrong; the producer observes the source format and figures out HOW to fix. The coordinator does not interpret mechanical-gate failures.
 
-### Interpretive review (above the mechanical layer)
+### Interpretive review (above the mechanical layer) — two-pass
 
-Once mechanical gates pass, the coordinator reads the producer's structured report AND the emitted artifacts. The coordinator's job is to be the senior reviewer the producer doesn't have access to.
+The coordinator's review of phase output runs in **two ordered passes**. The order is enforced: Pass 1 commits its inventory BEFORE Pass 2 opens the EXTRACTION_REPORT. This makes COMPLETION mechanical against the SOURCE_STUDY skeleton instead of a value the coordinator has to remember to deploy.
 
-There is NO prescribed checklist. The coordinator uses judgment: is the research thorough? Are the conclusions defensible from the evidence cited? Are there gaps the producer didn't acknowledge that you can see?
+**Pass 1 — Inventory (before reading EXTRACTION_REPORT)**
 
-- If satisfied → proceed to next phase.
-- If not → write specific feedback to the producer about what you want investigated further. Use your own reading of the report + artifacts to decide what's missing. Re-dispatch.
+Open `SOURCE_STUDY.md`. List every taxonomy named in it. This is the expected coverage skeleton. Write it to a coordinator scratch file (`/tmp/<vendor>_inventory.txt`) BEFORE proceeding to Pass 2. Pass 1's output is committed before Pass 2 sees the producer's report — this prevents the producer's framing from shaping the coordinator's inventory.
 
-Cap: 3 review cycles per phase. If unresolved after 3, escalate to user with "review cycle limit reached; remaining concerns documented but not auto-resolved."
+**Pass 2 — Reactive review (after Pass 1 inventory committed)**
+
+Open `EXTRACTION_REPORT.md`. For each taxonomy in the Pass 1 inventory:
+- Confirm it appears in either the report's "Taxonomies covered" or "Taxonomies excluded with reasoning" section.
+- For taxonomies in "excluded," verify the exclusion reasoning is source-grounded and specific (not vague hand-wavy "out of scope"; cites the source URL / section that justifies exclusion).
+
+After taxonomy coverage is verified, run the existing checks against the producer's claims: authenticity + veracity + the three proofs, applied to specific assertions the report makes.
+
+If the inventory has any item not classified in the report (covered or excluded): report rejected, re-dispatch with the specific unclassified taxonomies named.
+
+If exclusion reasoning fails source-grounding or specificity: re-dispatch with that exclusion flagged.
+
+If a producer claim fails authenticity / veracity: re-dispatch with that claim flagged.
+
+**Iteration policy** — no fixed cycle cap. Stop when one of these holds:
+- First-attempt pass of a cycle (no rework needed → satisfied).
+- Two consecutive cycles produce byte-identical output (convergence — further cycles won't change anything).
+- Escalation: if the producer's response fails to address a previously-named coordinator concern for 3 consecutive cycles on that same concern, escalate.
+
+The two-pass structure is the discipline. The lack of a cap reflects "no shortcuts" — the right answer eventually, not the fastest answer now.
 
 ### Values that shape coordinator judgment
 
