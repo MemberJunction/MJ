@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "MJ Mobile",
+    "slug": "mj-mobile",
+    "scheme": "mjmobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "org.memberjunction.mobile",
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "MJ Mobile uses your microphone for voice conversations with agents.",
+        "NSCameraUsageDescription": "MJ Mobile may use the camera for attachments to conversations.",
+        "NSFaceIDUsageDescription": "MJ Mobile uses Face ID to lock the app when it's not in use."
+      }
+    },
+    "android": {
+      "package": "org.memberjunction.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#264FAF"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

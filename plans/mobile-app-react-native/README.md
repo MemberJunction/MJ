@@ -444,6 +444,10 @@ The decision tree above stays in this document and gets updated as those investi
 
 ## Part 5: The One Refactor Required — Cache Abstraction
 
+> **Implementation update (2026-05-19):** This work turned out to be ~90% already done. `ILocalStorageProvider` is defined in [`@memberjunction/core/src/generic/interfaces.ts`](../../packages/MJCore/src/generic/interfaces.ts) and [`@memberjunction/graphql-dataprovider`](../../packages/GraphQLDataProvider/src/storage-providers.ts) already ships `BrowserStorageProviderBase` (in-memory), `BrowserLocalStorageProvider`, and `BrowserIndexedDBStorageProvider`. The "refactor" is just **adding a new MMKV-backed implementation for RN** — done in [`packages/MobileApp/src/providers/mmkv-storage-provider.ts`](../../packages/MobileApp/src/providers/mmkv-storage-provider.ts). No changes needed in `core` or `graphql-dataprovider`. The original phrasing below describes what would have been required had the abstraction not already existed; preserved for context.
+
+---
+
 `@memberjunction/graphql-dataprovider` currently uses **IndexedDB** for its client-side cache. IndexedDB doesn't exist in React Native (no DOM). This is the one piece of shared code that needs to change.
 
 ### What to do
