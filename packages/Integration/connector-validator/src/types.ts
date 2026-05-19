@@ -28,6 +28,16 @@ export interface InvariantValidationResult {
     Invariant2_ThreeWayNameMatch: InvariantResult;
     Invariant3_FKMetadataCorrectness: InvariantResult;
     Invariant4_CapabilityMethodMatch: InvariantResult;
+    /**
+     * Structural-completeness check — emitted string-valued metadata fields
+     * MUST NOT contain unresolved placeholder structure ({var}, <var>, :var,
+     * {{var}}). Catches the failure mode where an agent emits a single IO for
+     * a multi-variable URL template instead of enumerating the cross-product.
+     * The rejection message says WHAT is unresolved (the matched token, the
+     * field, the IO) and never HOW to resolve — the agent observes the source
+     * format and acts on what it sees.
+     */
+    Check_UnresolvedEmissions: InvariantResult;
     FailureDetails: FailureDetail[];
     WarningDetails: FailureDetail[];
     Overall: 'Pass' | 'Fail';

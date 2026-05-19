@@ -29,6 +29,7 @@ import { CheckInvariant2 } from './Invariant2_ThreeWayNameMatch.js';
 import { CheckInvariant3 } from './Invariant3_FKMetadataCorrectness.js';
 import { CheckInvariant4 } from './Invariant4_CapabilityMethodMatch.js';
 import { CheckScriptInspection } from './InvariantScriptInspection.js';
+import { CheckUnresolvedEmissions } from './CheckUnresolvedEmissions.js';
 import type {
     InvariantValidationResult,
     MetadataFile,
@@ -69,9 +70,11 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
     const r2 = CheckInvariant2(metadata, connectorTsPath);
     const r3 = CheckInvariant3(metadata);
     const r4 = CheckInvariant4(metadata, connectorTsPath);
+    const rUE = CheckUnresolvedEmissions(metadata);
 
     const allFailures = [
         ...r1.Failures, ...r1b.Failures, ...r2.Failures, ...r3.Failures, ...r4.Failures,
+        ...rUE.Failures,
     ];
     const errors = allFailures.filter((f) => f.Severity === 'Error');
     const warnings = allFailures.filter((f) => f.Severity === 'Warning');
@@ -83,6 +86,7 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
         Invariant2_ThreeWayNameMatch: r2.Status,
         Invariant3_FKMetadataCorrectness: r3.Status,
         Invariant4_CapabilityMethodMatch: r4.Status,
+        Check_UnresolvedEmissions: rUE.Status,
         FailureDetails: errors,
         WarningDetails: warnings,
         Overall: errors.length === 0 ? 'Pass' : 'Fail',
