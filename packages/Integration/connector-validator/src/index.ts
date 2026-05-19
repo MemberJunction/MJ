@@ -22,7 +22,7 @@
  *
  * Output: structured JSON {@link InvariantValidationResult} on stdout.
  */
-import { readFileSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -46,7 +46,13 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
     const metadataPath = resolve(connectorDir, `metadata/integrations/.${connectorName}.json`);
     const provenancePath = resolve(connectorDir, 'PROVENANCE.json');
     const codeEvidencePath = resolve(connectorDir, 'CODE_EVIDENCE.json');
-    const extractorScriptPath = resolve(connectorDir, 'scripts', 'extract-io-iof.ts');
+    // Locate the extractor script. Both `.ts` and `.mts` are valid — the
+    // strategy library's package.json `exports` field requires `.mts` for
+    // tsx to resolve subpath imports in some Node versions, so the agent
+    // legitimately picks either extension. We prefer `.ts` then `.mts`;
+    // if neither exists, pass the `.ts` path through so I1b can emit its
+    // "script absent + fabrication" error against a deterministic path.
+    const extractorScriptPath = ResolveExtractorScriptPath(connectorDir);
 
     const metadata = JSON.parse(readFileSync(metadataPath, 'utf-8')) as MetadataFile;
     const provenance: ProvenanceFile = existsOr(provenancePath, { Entries: [] });
@@ -94,6 +100,24 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
         Overall: errors.length === 0 ? 'Pass' : 'Fail',
         ValidatedAt: new Date().toISOString(),
     };
+}
+
+/**
+ * Resolves the connector's extractor script path. Tries `extract-io-iof.ts`
+ * first, falls back to `extract-io-iof.mts`. The `.mts` variant is required
+ * by some tsx/ESM setups when the script imports from packages whose
+ * `package.json` declares `"type": "module"` + subpath exports.
+ *
+ * Returns the resolved existing path if found; otherwise returns the
+ * canonical `.ts` path so downstream invariants (specifically Invariant 1b)
+ * surface a deterministic "script absent" error.
+ */
+export function ResolveExtractorScriptPath(connectorDir: string): string {
+    const tsPath = resolve(connectorDir, 'scripts', 'extract-io-iof.ts');
+    if (existsSync(tsPath)) return tsPath;
+    const mtsPath = resolve(connectorDir, 'scripts', 'extract-io-iof.mts');
+    if (existsSync(mtsPath)) return mtsPath;
+    return tsPath;
 }
 
 function existsOr<T>(path: string, fallback: T): T {
