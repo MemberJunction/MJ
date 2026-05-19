@@ -581,6 +581,38 @@ Entity Permissions Management). Tracked as a separate cleanup.
 - **`.mj-btn--secondary` background** tinted from `--mj-bg-surface` (white) to `--mj-bg-surface-sunken` (light gray) globally in `button.scss`. Secondary buttons sitting on white surfaces (cards, headers, dialogs) were near-invisible; the tint gives just enough contrast to read as a button on both white and sunken backgrounds. Affects every secondary button in MJ Explorer.
 - **`.mj-filter-popover-trigger`** dimensions and typography aligned with `mjButton size="sm"` (32px min-height, 6px 12px padding, 0.8125rem semibold, `--mj-bg-surface-sunken` background) in `filter-popover.component.ts` so the popover trigger sits cleanly inline with adjacent action buttons. Affects every popover trigger in MJ Explorer.
 - **`<mj-page-body>` gained a `Direction` input** (`'row' | 'column'`, defaults `'column'`). When `[Flex]="true" Direction="row"`, the body becomes a flex row — replacing the bespoke per-shell `.{shell}-container__body` flex wrapper that every left-rail shell used to declare. The Admin shells use this now; KH Config / AI Analytics shells can adopt it in subsequent passes.
+- **`<mj-left-nav>` + `<mj-left-nav-content>` shared components** (`@memberjunction/ng-ui-components`). Canonical pair for shells with internal section nav — `<mj-left-nav>` is the rail, `<mj-left-nav-content>` is the content pane that sits to its right.
+
+  **`<mj-left-nav>`** — supports plain items, items with description, items with badge, sections with uppercase headers, optional `[header]` / `[footer]` content slots, responsive collapse-to-row at narrow viewports. Driven by `[Sections]` (array of `MJLeftNavSection`) + `[ActiveId]`, emits `(ItemClicked)`.
+
+  **`<mj-left-nav-content>`** — flex-column content box with built-in `[Loading]` and `[Error]` states. Projected content auto-hides via CSS when loading/errored (cached components stay attached). Replaces the bespoke `.{shell}-container__content` + `.{shell}-container__host` + `.{shell}-container__loading` + `.{shell}-container__error` rules.
+
+  Admin shells migrated 2026-05-19 — `admin-container.component.css` reduced to a single `:host` rule + a 4-line responsive `@media` override.
+
+  ```html
+  <mj-page-body [Flex]="true" [Padding]="false" Direction="row">
+    <mj-left-nav
+      [Sections]="NavSections"
+      [ActiveId]="ActiveSection"
+      (ItemClicked)="OnNavItemClicked($event)">
+    </mj-left-nav>
+    <mj-left-nav-content [Loading]="IsLoading" [Error]="LoadError">
+      <ng-container #contentHost></ng-container>
+    </mj-left-nav-content>
+  </mj-page-body>
+  ```
+
+  ```typescript
+  // Items shape — id / label required; icon / description / badge / disabled optional
+  public NavSections: MJLeftNavSection[] = [{
+    items: [
+      { id: 'users', icon: 'fa-solid fa-users', label: 'Users', description: 'Manage user accounts' },
+      { id: 'roles', icon: 'fa-solid fa-user-shield', label: 'Roles', description: 'Define roles and assignments' }
+    ]
+  }];
+  ```
+
+  Other shells (KH Config, KH Analytics, AI Analytics, Communication, Credentials, APIKeys, MCP) follow in subsequent passes — each is currently a separate component file with its own bespoke nav + content area.
 
 ---
 

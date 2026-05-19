@@ -26,3 +26,5 @@ export * from './lib/filter-field/filter-field.component';
 export * from './lib/filter-panel/filter-panel.component';
 export * from './lib/tab-nav/tab-nav.component';
 export * from './lib/view-toggle/view-toggle.component';
+export * from './lib/left-nav/left-nav.component';
+export * from './lib/left-nav/left-nav-content.component';
