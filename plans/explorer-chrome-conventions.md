@@ -522,47 +522,13 @@ public onFilterPanelChange(values: Record<string, unknown>): void {
 }
 ```
 
-### Known quirk: `_admin-patterns.css` `.mj-btn` specificity
+### Button styling
 
-`packages/Angular/Explorer/explorer-settings/src/lib/shared/styles/_admin-patterns.css`
-ships a legacy `.mj-btn` base rule (pill-shaped, heavier padding) that
-pre-dates the `mjButton` directive standardization. Angular's emulated
-encapsulation gives component-scoped selectors higher specificity than
-global ones, so that legacy rule overrides `button.scss`'s directive styles
-inside every component that imports `_admin-patterns.css` — making `<button
-mjButton>` look different from `<mj-refresh-button>` (which is a standalone
-component, separate CSS scope, so it gets the directive defaults).
+Buttons inside `<mj-page-header-interior>` follow the same rule as buttons everywhere else in MJ Explorer — they're styled by the `mjButton` directive's global `button.scss`, not by any component-scoped CSS. The chrome doesn't need an internal `.mj-btn` reset, and sub-pages don't need any targeted overrides.
 
-**`<mj-page-header-interior>` ships its own internal reset** for buttons
-projected into its slots (via `:host ::ng-deep .mj-btn` inside the component).
-So buttons in the interior chrome — Refresh / Export / + Add User —
-automatically render at the standardized `size="sm"` look without each
-sub-page declaring its own override.
+See **[Button Styling: Don't Override `.mj-btn` in Component CSS](../packages/Angular/CLAUDE.md#-button-styling-dont-override-mj-btn-in-component-css-)** in the Angular guide for the principle and the anti-patterns.
 
-**Sub-page-bespoke button regions** outside the chrome card (e.g. user-management's
-contextual bulk-action toolbar) DO need their own targeted reset because they
-sit in the sub-page's CSS scope where `_admin-patterns.css`'s `.mj-btn` rule
-applies. Scope the reset to the specific region — do NOT broadly target
-`:host .mj-btn`, or modal buttons (Delete confirm, Bulk Action confirm, etc.)
-get shrunken too, producing inconsistency with other admin sub-pages whose
-modals still render at the natural 44px:
-
-```css
-/* targeted: only the bulk-action toolbar's buttons */
-.bulk-action-toolbar .mj-btn {
-  padding: 6px 12px;
-  border-radius: var(--mj-radius-md);
-  border: 1px solid transparent;
-  gap: 6px;
-  font-size: 0.8125rem;
-  min-height: 32px;
-  white-space: nowrap;
-}
-```
-
-Long-term fix: delete the legacy `.mj-btn` rule from `_admin-patterns.css`.
-That ripples across the 4 sub-pages currently using it (User / Role / App /
-Entity Permissions Management). Tracked as a separate cleanup.
+When migrating a sub-page that has bespoke `.mj-btn` overrides or legacy single-dash classes (`mj-btn-primary`, `mj-btn-icon-mobile`, etc.), strip them. Buttons render correctly from the directive's inputs alone.
 
 ### Patterns explored and rejected
 

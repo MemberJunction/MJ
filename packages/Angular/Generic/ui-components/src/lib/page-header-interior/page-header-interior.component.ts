@@ -112,33 +112,9 @@ import { Component, Input } from '@angular/core';
       min-width: 0;
     }
 
-    /* Button reset for chrome buttons projected into the slots.
-       _admin-patterns.css (loaded by the 5 explorer-settings sub-pages) ships
-       a legacy .mj-btn rule (pill-shaped, heavier padding, 44px min-height)
-       that pre-dates the mjButton directive standardization. Angular's emulated
-       encapsulation gives the consuming component's scoped rule higher
-       specificity than the global button.scss directive styles. So buttons
-       projected into the interior chrome would render as pill-shaped 44px,
-       inconsistent with mj-refresh-button (standalone component, separate
-       scope) on the same row.
-
-       Restoring the size="sm" look here via ::ng-deep means every sub-page
-       using mj-page-header-interior gets consistent chrome buttons for free,
-       without each sub-page polluting its modal buttons with the same reset. */
-    :host ::ng-deep .mj-btn {
-      padding: 6px 12px;
-      border-radius: var(--mj-radius-md);
-      border: 1px solid transparent;
-      gap: 6px;
-      font-size: 0.8125rem;
-      min-height: 32px;
-      white-space: nowrap;
-    }
-
-    :host ::ng-deep .mj-btn i {
-      font-size: 1rem;
-      line-height: 1;
-    }
+    /* No .mj-btn reset here. Buttons projected into the chrome inherit the
+       mjButton directive's global styles from button.scss — see "Button Styling"
+       in packages/Angular/CLAUDE.md. */
   `]
 })
 export class MJPageHeaderInteriorComponent {

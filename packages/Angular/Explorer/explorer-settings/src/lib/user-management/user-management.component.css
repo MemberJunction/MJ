@@ -15,36 +15,8 @@
   flex-shrink: 0;
 }
 
-/* -----------------------------------------------------------------------------
-   Button reset for the bulk-action toolbar only.
-
-   _admin-patterns.css ships a legacy `.mj-btn` rule (pill-shaped, 44px) that
-   overrides mjButton's directive styles inside every component that imports
-   it. The interior-chrome buttons get their reset from inside
-   <mj-page-header-interior> (via ::ng-deep). The bulk-action toolbar sits in
-   user-management's scope and isn't a child of mj-page-header-interior, so it
-   needs its own targeted reset — but ONLY here, NOT broadly across :host.
-   Modal buttons (Delete confirm, Bulk Action confirm, Bulk Role Assign) are
-   left at their default 44px so they match modal-button density across all
-   other admin sub-pages.
-
-   Long-term fix: delete the legacy .mj-btn rule from _admin-patterns.css.
-   Tracked as a separate cleanup.
-   ----------------------------------------------------------------------------- */
-.bulk-action-toolbar .mj-btn {
-  padding: 6px 12px;
-  border-radius: var(--mj-radius-md);
-  border: 1px solid transparent;
-  gap: 6px;
-  font-size: 0.8125rem;
-  min-height: 32px;
-  white-space: nowrap;
-}
-
-.bulk-action-toolbar .mj-btn i {
-  font-size: 1rem;
-  line-height: 1;
-}
+/* No bespoke .mj-btn rules here. Buttons inherit the mjButton directive's
+   global styles from button.scss — see "Button Styling" in packages/Angular/CLAUDE.md. */
 
 /* :host already provides flex column / 100% height / overflow hidden via
    _admin-patterns.css. No bespoke container wrapper here — see Section 10 of
