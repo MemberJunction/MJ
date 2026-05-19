@@ -1,24 +1,22 @@
 #!/usr/bin/env node
 /**
- * Eight-invariant validator CLI entry point.
+ * Five-invariant validator CLI entry point.
  *
  * Usage:
  *   mj-validate-invariants <connector-name> [<registry-root>]
  *
  * Exit codes:
- *   0 — Overall=Pass (all 8 invariants Pass; warnings only)
+ *   0 — Overall=Pass (all invariants Pass; warnings only)
  *   1 — Overall=Fail (one or more invariants Fail)
  *   2 — Bad invocation (missing args)
  *
- * Invariants checked:
+ * Invariants checked (per INTEGRATION-REDESIGN-V1.md §12 — "no new invariants
+ * beyond the original 5"):
  *   1   — Provable-only (every hard-constraint field has provenance)
  *   1b  — Script inspection (CODE_EVIDENCE URLs actually fetched)
  *   2   — Three-way name match
  *   3   — FK metadata correctness
  *   4   — Capability ↔ method existence
- *   5   — Hierarchy validity (new — parent refs, traversal order)
- *   6   — Incremental sync consistency (new — cursor field, watermark type)
- *   7   — CRUD bodies real (new — non-stub via ts-morph)
  *
  * Output: structured JSON {@link InvariantValidationResult} on stdout.
  */
@@ -31,9 +29,6 @@ import { CheckInvariant2 } from './Invariant2_ThreeWayNameMatch.js';
 import { CheckInvariant3 } from './Invariant3_FKMetadataCorrectness.js';
 import { CheckInvariant4 } from './Invariant4_CapabilityMethodMatch.js';
 import { CheckScriptInspection } from './InvariantScriptInspection.js';
-import { CheckHierarchyValidity } from './Invariant5_HierarchyValidity.js';
-import { CheckIncrementalConsistency } from './Invariant6_IncrementalConsistency.js';
-import { CheckCRUDBodiesReal } from './Invariant7_CRUDBodiesReal.js';
 import type {
     InvariantValidationResult,
     MetadataFile,
@@ -74,13 +69,9 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
     const r2 = CheckInvariant2(metadata, connectorTsPath);
     const r3 = CheckInvariant3(metadata);
     const r4 = CheckInvariant4(metadata, connectorTsPath);
-    const r5 = CheckHierarchyValidity(metadata);
-    const r6 = CheckIncrementalConsistency(metadata);
-    const r7 = CheckCRUDBodiesReal(connectorTsPath, metadata);
 
     const allFailures = [
-        ...r1.Failures, ...r1b.Failures, ...r2.Failures, ...r3.Failures,
-        ...r4.Failures, ...r5.Failures, ...r6.Failures, ...r7.Failures,
+        ...r1.Failures, ...r1b.Failures, ...r2.Failures, ...r3.Failures, ...r4.Failures,
     ];
     const errors = allFailures.filter((f) => f.Severity === 'Error');
     const warnings = allFailures.filter((f) => f.Severity === 'Warning');
@@ -92,9 +83,6 @@ export function ValidateInvariants(connectorName: string, registryRoot: string):
         Invariant2_ThreeWayNameMatch: r2.Status,
         Invariant3_FKMetadataCorrectness: r3.Status,
         Invariant4_CapabilityMethodMatch: r4.Status,
-        Invariant5_HierarchyValidity: r5.Status,
-        Invariant6_IncrementalConsistency: r6.Status,
-        Invariant7_CRUDBodiesReal: r7.Status,
         FailureDetails: errors,
         WarningDetails: warnings,
         Overall: errors.length === 0 ? 'Pass' : 'Fail',

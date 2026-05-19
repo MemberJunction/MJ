@@ -1,12 +1,15 @@
 /**
- * Shared types for the four-invariant validator.
+ * Shared types for the five-invariant validator.
  *
- * @see INTEGRATION-AGENT-TODO.md §2.17.1
+ * Invariants per `INTEGRATION-REDESIGN-V1.md` §12: original 5 only
+ * (1, 1b, 2, 3, 4). Invariants 5/6/7 were reverted in the validator
+ * cleanup because they checked for columns that Phase 0 dropped or
+ * imposed heuristics beyond the redesign discipline.
  */
 export type InvariantResult = 'Pass' | 'Fail' | 'NotApplicable';
 
 export interface FailureDetail {
-    InvariantNumber: 1 | 2 | 3 | 4 | 5 | 6 | 7;
+    InvariantNumber: 1 | 2 | 3 | 4;
     Severity: 'Error' | 'Warning';
     Failure: string;
     Location: string;
@@ -25,31 +28,6 @@ export interface InvariantValidationResult {
     Invariant2_ThreeWayNameMatch: InvariantResult;
     Invariant3_FKMetadataCorrectness: InvariantResult;
     Invariant4_CapabilityMethodMatch: InvariantResult;
-    /**
-     * Invariant 5 — Hierarchy validity. Every IO.ParentObjectName resolves
-     * to an existing IO; every IO.ParentObjectIDFieldName resolves to an
-     * IOF whose RelatedIntegrationObjectID points to the parent IO;
-     * HierarchyPath consistent with ParentObjectName chain; TraversalOrder
-     * is a valid topological sort.
-     */
-    Invariant5_HierarchyValidity: InvariantResult;
-    /**
-     * Invariant 6 — Incremental sync consistency. For every IO where
-     * SupportsIncrementalSync=true: IncrementalCursorFieldName is set;
-     * the named IOF exists on this IO; that IOF's Type is compatible
-     * with the declared IncrementalWatermarkType
-     * (Timestamp → date/datetime, Version → integer/string,
-     *  Cursor/ChangeToken → string).
-     */
-    Invariant6_IncrementalConsistency: InvariantResult;
-    /**
-     * Invariant 7 — CRUD bodies are structurally real. Inspects method
-     * bodies via ts-morph; rejects bodies consisting solely of 501-stubs,
-     * "not implemented" throws, or empty returns when the capability
-     * flag is true. Catches the failure mode where Invariant 4 (existence)
-     * passes but methods do no runtime work.
-     */
-    Invariant7_CRUDBodiesReal: InvariantResult;
     FailureDetails: FailureDetail[];
     WarningDetails: FailureDetail[];
     Overall: 'Pass' | 'Fail';
@@ -71,29 +49,6 @@ export interface MetadataFile {
                 Source?: string;
                 SupportsWrite?: boolean;
                 IncludeInActionGeneration?: boolean;
-                // Bidirectional / hierarchy / incremental / custom-object expansion (framework A.1):
-                IsBidirectional?: boolean;
-                ParentObjectName?: string | null;
-                ParentObjectIDFieldName?: string | null;
-                SupportsIncrementalSync?: boolean;
-                IncrementalCursorFieldName?: string | null;
-                IncrementalWatermarkType?: 'Timestamp' | 'Version' | 'Cursor' | 'ChangeToken' | null;
-                IsStandardObject?: boolean;
-                IsCustomObject?: boolean;
-                BulkAPIPath?: string | null;
-                BulkAPIMethod?: string | null;
-                // CRUD routing (Phase 0):
-                CreateAPIPath?: string | null;
-                CreateMethod?: string | null;
-                UpdateAPIPath?: string | null;
-                UpdateMethod?: string | null;
-                DeleteAPIPath?: string | null;
-                GetAPIPath?: string | null;
-                GetMethod?: string | null;
-                SearchAPIPath?: string | null;
-                SearchMethod?: string | null;
-                ListAPIPath?: string | null;
-                ListMethod?: string | null;
                 [key: string]: unknown;
             };
             relatedEntities?: {
@@ -105,15 +60,6 @@ export interface MetadataFile {
                         IsReadOnly?: boolean;
                         RelatedIntegrationObjectID?: string;
                         RelatedIntegrationObjectFieldName?: string;
-                        // IOF expansion (framework A.1):
-                        IsAPIWritable?: boolean;
-                        IsComputed?: boolean;
-                        IsImmutableAfterCreate?: boolean;
-                        IsCustomField?: boolean;
-                        IsIncrementalCursorCandidate?: boolean;
-                        IsForeignKey?: boolean;
-                        FKDetectionMethod?: 'openapi-ref' | 'sdk-relationship-annotation' | 'name-pattern-suffix' | 'url-path-parent' | 'vendor-specific' | 'unknown' | null;
-                        IsDeprecated?: boolean;
                         Type?: string;
                         [key: string]: unknown;
                     };
