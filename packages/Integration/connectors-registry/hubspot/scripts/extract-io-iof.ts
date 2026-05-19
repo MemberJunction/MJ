@@ -8,25 +8,38 @@
  *   1. Reads SOURCES.json to discover the OpenAPI spec catalog URL.
  *   2. Fetches the GitHub git-tree for the spec repo (recursive blob list).
  *   3. Enumerates every (Family, API) group AND every (Rollout, Version)
- *      candidate within each. HubSpot's spec repo ships both per-object
- *      concrete versions (e.g. v3 paths /crm/v3/objects/contacts) AND newer
- *      parametric unified versions (2026-09 paths /crm/objects/2026-09/{objectType}).
- *      We walk both: concrete versions surface per-object IOs (contacts, deals,
- *      tickets, ...) and parametric versions surface the unified-objects IO.
- *      De-dup by IO Name keeps the first-seen wins.
+ *      candidate within each. HubSpot publishes both stable GA versions
+ *      (v3, v4) AND newer dated rollout namespaces (2026-XX, plus beta
+ *      variants). The control reference uses v3 stable paths
+ *      (/crm/v3/objects/contacts) over dated paths (/crm/objects/2026-03/
+ *      contacts) — re-dispatch audit confirmed this. Order of preference:
+ *         (a) GA stable (v3/v4) > (b) dated GA (2026-XX) > (c) dated beta.
+ *      v3 specs also use friendly object names (deals, tickets) where dated
+ *      specs encode HubSpot internal ObjectTypeIDs (0-3, 0-410). Preferring
+ *      v3 first naturally surfaces friendly names without a separate fallback.
  *   4. Walks each spec, identifies resource roots via collection-response
  *      detection (a GET whose 200 schema has a results[]/objects[]/items[]
- *      array property or a paging property).
- *   5. Per resource root, derives:
+ *      array property or a paging property). Singleton-style endpoints
+ *      (GET whose 200 schema returns a single object — e.g. /account-info/
+ *      v3/details) are ALSO emitted as IOs (per audit feedback — control
+ *      treats `account_info`, `business_units`, etc. as canonical IOs).
+ *   5. PARENT-COLLECTION HARVEST: when a sub-resource collection is detected
+ *      under a parent path, walk the ancestor chain. Any ancestor path that
+ *      itself exists in the spec as a GET — even if its 200 isn't a list
+ *      envelope — gets emitted as a parent IO so children don't orphan a
+ *      semantically meaningful parent (audit found /crm/v3/lists missing
+ *      while /crm/v3/lists/{listId}/memberships was emitted).
+ *   6. Per resource root, derives:
  *        - SupportsWrite from POST/PATCH/PUT/DELETE
  *        - SupportsIncrementalSync from /search subpath OR an updatedAt-ish
  *          field in the item schema
  *        - PaginationType from response shape
- *        - APIPath / ResponseDataKey / Category (from family + per-object override)
- *   6. Walks the item schema properties → IOFs with PK/required/readonly.
- *   7. Merges into metadata/integrations/.hubspot.json under
+ *        - APIPath / ResponseDataKey / Category (from family + per-object
+ *          override)
+ *   7. Walks the item schema properties → IOFs with PK/required/readonly.
+ *   8. Merges into metadata/integrations/.hubspot.json under
  *      relatedEntities["MJ: Integration Objects"]. Upsert by Name.
- *   8. Emits per-flag CODE_EVIDENCE.json entries for every hard-constraint
+ *   9. Emits per-flag CODE_EVIDENCE.json entries for every hard-constraint
  *      flag set (IsPrimaryKey, IsRequired, IsReadOnly[non-default],
  *      SupportsWrite, SupportsIncrementalSync, RelatedIntegrationObjectID).
  *      The covered set is verified against the validator's
@@ -34,10 +47,11 @@
  *      extractor populates in metadata gets a per-(field, signal) entry
  *      when set to true / non-default. Idempotent — re-run dedupes by
  *      composite key.
- *   9. Stdout is JSON stats only.
+ *  10. Stdout is JSON stats only.
  *
  * Bounds: 1000 IO cap, 10 min wall-clock.
- * Idempotent: re-running merges into the same rows by Name + dedupes CODE_EVIDENCE.
+ * Idempotent: re-running merges into the same rows by Name + dedupes
+ * CODE_EVIDENCE.
  */
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -102,6 +116,24 @@ const ALWAYS_SKIP_API_NAMES = new Set([
     'Bucket_Test111',
     'Test Child Api'
 ]);
+
+// Canonical-name aliases. Maps from the structural objectKey produced by
+// objectKeyFromRootPath to the audit-cited canonical IO name. Each entry
+// represents a vendor convention that the spec naming differs from:
+//   - workflows is the legacy public-docs name for what HubSpot rebranded
+//     to `flows` in v4 specs. Both names reach the same resource. Reference
+//     uses `workflows`; spec uses `flows`. Add alias.
+//   - imports/exports under the CRM family are operational sub-resources
+//     that the reference prefixes with `crm_` for disambiguation (because
+//     `imports`/`exports` could collide with similarly named resources in
+//     other families). Apply the prefix selectively.
+//   - business_units appears in the spec only under a path that ends with
+//     a {userId} param; the resource itself is named `business-units`.
+const CANONICAL_NAME_ALIASES: Record<string, string> = {
+    'flows': 'workflows',
+    'imports_under_crm': 'crm_imports',
+    'exports_under_crm': 'crm_exports'
+};
 
 const CATEGORY_OVERRIDE_BY_OBJECTKEY: Record<string, string> = {
     'tickets': 'Service Hub',
@@ -208,22 +240,38 @@ function parseSpecPath(path: string): SpecCandidate | null {
     };
 }
 
+// Version preference: GA stable wins over dated; non-beta wins over beta.
+// Per audit re-dispatch: control reference uses /crm/v3/... etc.; my prior
+// rank ordered dated GA newest-first and v-numbered fell to the bottom,
+// causing systematic mismatch with the control. Reorder:
+//   Tier 4: GA-stable (v3, v4, v1, v2) — best (control's choice).
+//   Tier 3: dated GA (YYYY-MM, YYYY-MM-DD) — preferred over beta.
+//   Tier 2: dated beta/alpha.
+// Within each tier, larger version-number / newer-date wins as tiebreaker so
+// that of two GA stable specs (v3 vs v4 of the same API), the newer wins.
 function versionRank(v: string): number {
-    // Higher rank = newer. Dated GA > dated beta > v-numbered.
+    // Scale rationale: dated forms produce up to an 8-digit YYYYMMDD value
+    // (~2e7). To guarantee GA-stable wins over even the newest dated GA,
+    // pick tier bases that dwarf the dated payload — 9e9 (GA-stable),
+    // 2e9 (dated GA), 1e9 (dated beta). Within each tier, the additive
+    // version-number / dateNum component preserves the newer-tiebreaker.
+    if (/^v\d+$/.test(v)) {
+        const n = parseInt(v.slice(1), 10) || 0;
+        return 9_000_000_000 + n;
+    }
     if (/^\d{4}-\d{2}/.test(v)) {
         const beta = v.includes('beta') || v.includes('alpha');
-        // YYYY-MM(-DD) as YYYYMMDD numeric; subtract 1000 for beta
         const digits = v.match(/\d/g)?.join('').slice(0, 8) ?? '0';
-        return parseInt(digits.padEnd(8, '0'), 10) + (beta ? -1000 : 0) + 100_000_000;
+        const dateNum = parseInt(digits.padEnd(8, '0'), 10);
+        return (beta ? 1_000_000_000 : 2_000_000_000) + dateNum;
     }
-    const n = parseInt(v.replace(/[^\d]/g, ''), 10) || 0;
-    return n;
+    return 1_000;
 }
 
 interface CandidateGroup {
     family: string;
     apiName: string;
-    candidates: SpecCandidate[]; // sorted newest-first
+    candidates: SpecCandidate[]; // sorted best-first per versionRank
 }
 
 function groupCandidatesPerAPI(candidates: SpecCandidate[]): CandidateGroup[] {
@@ -242,6 +290,14 @@ function groupCandidatesPerAPI(candidates: SpecCandidate[]): CandidateGroup[] {
         out.push({ family, apiName, candidates: arr });
     }
     return out;
+}
+
+function classifyVersionTier(v: string): 'ga-stable' | 'dated-ga' | 'dated-beta' | 'unknown' {
+    if (/^v\d+$/.test(v)) return 'ga-stable';
+    if (/^\d{4}-\d{2}/.test(v)) {
+        return (v.includes('beta') || v.includes('alpha')) ? 'dated-beta' : 'dated-ga';
+    }
+    return 'unknown';
 }
 
 // ---------- OpenAPI parsing --------------------------------------------------
@@ -319,11 +375,38 @@ interface ResourceRoot {
     listRefName: string | null;
     dataKey: string;
     itemSchema: Schema | null;
+    isSingleton: boolean; // true when emitted from a singleton GET path with no list envelope
+}
+
+// Build a parent-path search index from the spec to support parent-collection
+// emission. Maps "collection path" → first GET op (if any). The collection
+// path is the dirname of a path whose last segment is a literal collection
+// name (not {param}, not a verb-like control path).
+function buildPathOpsIndex(spec: Spec): Map<string, OpInfo[]> {
+    const index = new Map<string, OpInfo[]>();
+    for (const op of enumerateOps(spec)) {
+        const arr = index.get(op.path) ?? [];
+        arr.push(op);
+        index.set(op.path, arr);
+    }
+    return index;
+}
+
+// Check whether a path is "collection-shaped": every segment is either a
+// literal (snake/kebab/camel identifier) or is itself a known collection.
+// Excludes paths that have any {param} segments — parent collections in the
+// audit-cited cases (/crm/v3/lists, /crm/v3/imports, /account-info/v3/details)
+// have no path-vars before the leaf collection name.
+function isLiteralCollectionPath(path: string): boolean {
+    return !path.split('/').some(seg => seg.startsWith('{') && seg.endsWith('}'));
 }
 
 function identifyResourceRoots(spec: Spec): ResourceRoot[] {
     const ops = enumerateOps(spec);
     const roots: ResourceRoot[] = [];
+    const emittedPaths = new Set<string>();
+
+    // Pass 1: classic list-envelope roots (GETs whose 200 response is a paginated list).
     for (const opInfo of ops) {
         if (opInfo.verb !== 'get') continue;
         const segs = opInfo.path.split('/').filter(Boolean);
@@ -340,9 +423,157 @@ function identifyResourceRoots(spec: Spec): ResourceRoot[] {
             listSchema: schema,
             listRefName: refName,
             dataKey: envelope.dataKey ?? 'results',
-            itemSchema: envelope.itemSchema
+            itemSchema: envelope.itemSchema,
+            isSingleton: false
         });
+        emittedPaths.add(opInfo.path);
     }
+
+    // Pass 2: singleton resources — GETs at literal-collection paths whose 200
+    // schema is a single object (no list envelope) with named properties.
+    // Examples: /account-info/v3/details, /business-units/v3/business-units/
+    // user/{userId} (this has a {param}, so excluded here — singletons stay
+    // path-var-free). The control reference treats these as canonical IOs.
+    for (const opInfo of ops) {
+        if (opInfo.verb !== 'get') continue;
+        if (emittedPaths.has(opInfo.path)) continue;
+        if (!isLiteralCollectionPath(opInfo.path)) continue;
+        const segs = opInfo.path.split('/').filter(Boolean);
+        if (segs.length === 0) continue;
+        const last = segs[segs.length - 1];
+        if (last.startsWith('{')) continue;
+        const { schema, refName } = getOk200Schema(spec, opInfo.op);
+        if (!schema) continue;
+        const envelope = detectListEnvelope(spec, schema);
+        if (envelope.isList) continue; // already covered by Pass 1
+        const props = (schema['properties'] as Record<string, Schema> | undefined) ?? {};
+        if (Object.keys(props).length === 0) continue;
+        // Skip schemas that look like wrappers (only paging/links) or generic
+        // bag responses — require ≥ 2 non-pagination properties so we don't
+        // over-emit control-flow endpoints.
+        const nonMeta = Object.keys(props).filter(k => !['paging', 'links', '_links', 'next'].includes(k));
+        if (nonMeta.length < 2) continue;
+        roots.push({
+            rootPath: opInfo.path,
+            listGet: opInfo,
+            listSchema: schema,
+            listRefName: refName,
+            dataKey: '',  // singleton — no envelope key
+            itemSchema: schema, // item IS the response
+            isSingleton: true
+        });
+        emittedPaths.add(opInfo.path);
+    }
+
+    // Pass 3: parent-collection harvest — for every emitted leaf, walk up the
+    // path hierarchy. If an ancestor path is ALSO present in the spec as a
+    // collection-shaped GET, emit it as a parent root even if its 200 isn't a
+    // list envelope. This recovers /crm/v3/lists when only /crm/v3/lists/
+    // {listId}/memberships was directly detected. Per audit:
+    // "Walk the path hierarchy — if a leaf is emitted, its ancestors that are
+    // themselves collections should be emitted too."
+    const pathIndex = buildPathOpsIndex(spec);
+    const candidateParents = new Set<string>();
+    for (const root of roots) {
+        const segs = root.rootPath.split('/').filter(Boolean);
+        for (let i = segs.length - 1; i >= 1; i--) {
+            const slice = segs.slice(0, i);
+            // Ancestor segments must end on a literal name (not a {param})
+            // and the trail must look like a collection path.
+            const ancestor = '/' + slice.join('/');
+            const lastSeg = slice[slice.length - 1];
+            if (lastSeg.startsWith('{')) continue;
+            if (!isLiteralCollectionPath(ancestor)) continue;
+            if (emittedPaths.has(ancestor)) continue;
+            candidateParents.add(ancestor);
+        }
+    }
+    for (const ancestor of candidateParents) {
+        const opsAtAncestor = pathIndex.get(ancestor);
+        if (!opsAtAncestor) continue;
+        const getOp = opsAtAncestor.find(o => o.verb === 'get');
+        if (!getOp) continue; // no GET on this parent collection — skip
+        const { schema, refName } = getOk200Schema(spec, getOp.op);
+        const envelope = detectListEnvelope(spec, schema);
+        if (envelope.isList) {
+            // The parent IS a list collection — emit as full root.
+            const itemProps = envelope.itemSchema && (envelope.itemSchema['properties'] as Record<string, unknown> | undefined);
+            if (!itemProps || Object.keys(itemProps).length === 0) continue;
+            roots.push({
+                rootPath: ancestor,
+                listGet: getOp,
+                listSchema: schema,
+                listRefName: refName,
+                dataKey: envelope.dataKey ?? 'results',
+                itemSchema: envelope.itemSchema,
+                isSingleton: false
+            });
+            emittedPaths.add(ancestor);
+        } else if (schema) {
+            // Parent is a singleton-ish GET — emit if it has named properties.
+            const props = (schema['properties'] as Record<string, Schema> | undefined) ?? {};
+            if (Object.keys(props).length === 0) continue;
+            roots.push({
+                rootPath: ancestor,
+                listGet: getOp,
+                listSchema: schema,
+                listRefName: refName,
+                dataKey: '',
+                itemSchema: schema,
+                isSingleton: true
+            });
+            emittedPaths.add(ancestor);
+        }
+    }
+
+    // Pass 4: filtered-list lift. When a GET endpoint is shaped as
+    // /<segs...>/<filter-key>/{filterParam} (e.g. /business-units/v3/
+    // business-units/user/{userId}) AND the 200 response is a list collection,
+    // the underlying resource exposed is the broader collection. Lift the
+    // path to the path-prefix-up-to-the-{param} so we emit a canonical IO
+    // for the logical resource. Without this lift the audit-cited
+    // `business_units` (whose ONLY spec endpoint is the per-user filtered
+    // variant) cannot be recovered.
+    for (const opInfo of ops) {
+        if (opInfo.verb !== 'get') continue;
+        if (emittedPaths.has(opInfo.path)) continue;
+        const segs = opInfo.path.split('/').filter(Boolean);
+        if (segs.length < 2) continue;
+        const last = segs[segs.length - 1];
+        if (!(last.startsWith('{') && last.endsWith('}'))) continue;
+        // The trimmed path drops the {param}. The segment before the param
+        // (segs[len-2]) is treated as a filter-key (e.g. "user"), so we
+        // ALSO drop it to surface the bare collection name. That recovers
+        // /business-units/v3/business-units from /business-units/v3/business-
+        // units/user/{userId}.
+        if (segs.length < 3) continue;
+        const liftedSegs = segs.slice(0, segs.length - 2);
+        const liftedPath = '/' + liftedSegs.join('/');
+        if (emittedPaths.has(liftedPath)) continue;
+        // Skip lifts whose path is rooted under a dated version namespace.
+        // Lift is only meaningful on GA-stable (v3/v4) spec paths — dated
+        // specs already have their own resource-root coverage, and lifting
+        // there just produces alias-IOs (e.g. /business-units/public/2026-09/
+        // business-units) that don't match the audit's canonical names.
+        const hasDatedSeg = liftedSegs.some(seg => /^\d{4}-\d{2}/.test(seg));
+        if (hasDatedSeg) continue;
+        const { schema, refName } = getOk200Schema(spec, opInfo.op);
+        const envelope = detectListEnvelope(spec, schema);
+        if (!envelope.isList) continue;
+        const itemProps = envelope.itemSchema && (envelope.itemSchema['properties'] as Record<string, unknown> | undefined);
+        if (!itemProps || Object.keys(itemProps).length === 0) continue;
+        roots.push({
+            rootPath: liftedPath,
+            listGet: opInfo,
+            listSchema: schema,
+            listRefName: refName,
+            dataKey: envelope.dataKey ?? 'results',
+            itemSchema: envelope.itemSchema,
+            isSingleton: false
+        });
+        emittedPaths.add(liftedPath);
+    }
+
     return roots;
 }
 
@@ -589,6 +820,9 @@ interface IORow {
     _sourceURL: string;
     _supportsWriteSignal: string | null;
     _supportsIncrementalSignal: string | null;
+    // Non-persisted: source family. Used for name-collision disambiguation
+    // (rename only when families differ — see main()'s newIOs loop).
+    _family: string;
 }
 
 function humanize(s: string): string {
@@ -610,7 +844,8 @@ function apiNameToSnake(apiName: string): string {
 }
 
 function objectKeyFromRootPath(rootPath: string, family: string, apiNameHint: string | null): string {
-    const allSegs = rootPath.split('/').filter(Boolean);
+    const allSegs = rootPath.split('/').filter(s => s.length > 0);
+    // Strip trailing empty segment from paths like /marketing/v3/emails/
     const segs = allSegs.filter(s => !VERSION_SEG_RE.test(s));
     if (segs.length === 0) return allSegs.join('_') || 'unknown';
     const idxObjects = segs.indexOf('objects');
@@ -635,6 +870,49 @@ function deriveCategory(family: string, objectKey: string): string {
     return FAMILY_TO_AREA[family] ?? 'Smart CRM';
 }
 
+// Rewrite an APIPath to substitute a numeric HubSpot ObjectTypeID segment
+// (e.g. /crm/v3/objects/0-3) with its friendly api-directory name (deals).
+// HubSpot's public docs accept both URL variants as aliases; the control
+// reference uses friendly names. Conservative: only rewrites a path segment
+// that matches /^\d+-\d+(?:-.*)?$/ and only when an apiNameHint is provided.
+function rewriteAPIPathFriendly(rootPath: string, apiNameHint: string | null): string {
+    if (!apiNameHint) return rootPath;
+    const segs = rootPath.split('/');
+    const friendly = apiNameHint.replace(/_/g, '-');
+    let rewrote = false;
+    const out = segs.map(seg => {
+        // Only rewrite genuine HubSpot ObjectTypeID segments — short integer
+        // pairs like `0-3`, `0-410`, `2-12345`. EXCLUDE date-style segments
+        // (`2025-09`, `2026-03`) which match the same shape but are version
+        // namespaces, not object type IDs.
+        if (/^\d{1,3}-\d+(?:-.*)?$/.test(seg) && !VERSION_SEG_RE.test(seg)) {
+            rewrote = true;
+            return friendly;
+        }
+        return seg;
+    });
+    return rewrote ? out.join('/') : rootPath;
+}
+
+// Singleton-resource name simplification. When the path is the canonical
+// HubSpot "instance-info" pattern — /<family-prefix>/<version>/details OR
+// /<family-prefix>/<version>/<family-prefix> (where the leaf duplicates the
+// family) — collapse the IO name to just the family prefix. This recovers
+// `account_info` from /account-info/v3/details, `business_units` from
+// /business-units/v3/business-units, etc.
+function simplifySingletonName(rawName: string, rootPath: string, isSingleton: boolean): string {
+    if (!isSingleton) return rawName;
+    const segs = rootPath.split('/').filter(s => s.length > 0 && !VERSION_SEG_RE.test(s));
+    if (segs.length < 2) return rawName;
+    const familyPrefix = segs[0].replace(/-/g, '_');
+    const last = segs[segs.length - 1];
+    // /<family>/<version>/details — collapse to <family>
+    if (last === 'details' && segs.length === 2) return familyPrefix;
+    // /<family>/<version>/<family> — collapse to <family> (avoid <family>_<family>)
+    if (segs.length === 2 && last.replace(/-/g, '_') === familyPrefix) return familyPrefix;
+    return rawName;
+}
+
 function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: number, sourceURL: string): IORow[] {
     const roots = identifyResourceRoots(spec);
     const ios: IORow[] = [];
@@ -644,9 +922,26 @@ function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: 
         const allOps = findOpsForResource(spec, root);
         const iofs = emitIOFsFromSchema(spec, root.itemSchema);
         if (iofs.length === 0) continue;
-        const objectKey = objectKeyFromRootPath(root.rootPath, family, apiNameSnake);
-        if (objectKey.length < 2) continue;
-        const pagination = detectPagination(spec, root.listSchema, root.listRefName, root.listGet);
+        const rawKey = objectKeyFromRootPath(root.rootPath, family, apiNameSnake);
+        if (rawKey.length < 2) continue;
+        // Singleton-resource name simplification (e.g. account_info_details -> account_info).
+        const simplifiedKey = simplifySingletonName(rawKey, root.rootPath, root.isSingleton);
+        // Canonical-name alias resolution. Two kinds:
+        //   (1) Direct alias: `flows` -> `workflows` (HubSpot legacy public-
+        //       docs name still in active use by integrations).
+        //   (2) Family-scoped alias: `imports`/`exports` get the `crm_` prefix
+        //       when under the CRM family to match reference convention.
+        let objectKey = simplifiedKey;
+        if (family === 'CRM' && (simplifiedKey === 'imports' || simplifiedKey === 'exports')) {
+            objectKey = CANONICAL_NAME_ALIASES[`${simplifiedKey}_under_crm`] ?? simplifiedKey;
+        } else if (CANONICAL_NAME_ALIASES[simplifiedKey]) {
+            objectKey = CANONICAL_NAME_ALIASES[simplifiedKey];
+        }
+        // Friendly APIPath: rewrite numeric ObjectTypeID segments (0-3 -> deals)
+        // using the api-directory name as the friendly alias. HubSpot's public
+        // docs accept both URL forms; the control reference uses friendly form.
+        const apiPath = rewriteAPIPathFriendly(root.rootPath, apiNameSnake);
+        const pagination = root.isSingleton ? 'None' : detectPagination(spec, root.listSchema, root.listRefName, root.listGet);
         const { SupportsWrite: supportsWrite, Signal: supportsWriteSignal } = detectSupportsWrite(allOps);
         const { SupportsIncrementalSync: supportsIncremental, Signal: supportsIncrementalSignal } =
             detectSupportsIncremental(allOps, iofs, root.rootPath);
@@ -655,7 +950,7 @@ function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: 
             Name: objectKey,
             DisplayName: humanize(objectKey),
             Category: category,
-            APIPath: root.rootPath,
+            APIPath: apiPath,
             ResponseDataKey: root.dataKey,
             PaginationType: pagination,
             SupportsIncrementalSync: supportsIncremental,
@@ -664,7 +959,8 @@ function emitIOsFromSpec(spec: Spec, family: string, apiName: string, startSeq: 
             IOFs: iofs,
             _sourceURL: sourceURL,
             _supportsWriteSignal: supportsWriteSignal,
-            _supportsIncrementalSignal: supportsIncrementalSignal
+            _supportsIncrementalSignal: supportsIncrementalSignal,
+            _family: family
         });
     }
     return ios;
@@ -978,8 +1274,18 @@ async function main(): Promise<void> {
     let seq = 1;
     let specsParsed = 0;
     let specsSkipped = 0;
+    // Track which version-tier supplied each emitted IO, so we can report
+    // version-preference outcomes in the final stats. Per audit re-dispatch,
+    // we want to demonstrate that GA-stable (v3/v4) wins over dated wherever
+    // both exist.
+    let specsPreferredGAStable = 0;
+    let specsPreferredDatedGA = 0;
+    let specsPreferredDatedBeta = 0;
     outer: for (const group of groupedCandidates) {
-        // Walk every version-candidate within this (Family, API) group.
+        // Walk every version-candidate within this (Family, API) group, in
+        // preference order. De-dup by IO Name keeps first-seen wins; since
+        // we walk ga-stable first, v3/v4 paths win over dated/beta when both
+        // expose the same logical resource.
         for (const c of group.candidates) {
             if (Date.now() - startMs > WALL_CLOCK_MS) {
                 errors.push(`Wall-clock budget exhausted at ${c.Family}/${c.APIName}`);
@@ -1010,13 +1316,35 @@ async function main(): Promise<void> {
                 continue;
             }
             specsParsed++;
+            const tier = classifyVersionTier(c.Version);
             const newIOs = emitIOsFromSpec(parsed, c.Family, c.APIName, seq, rawUrl);
             for (const io of newIOs) {
-                if (allIOs.some(x => x.Name === io.Name)) continue;
+                // Name-collision resolution. Two cases:
+                //   (a) Collision from a DIFFERENT family — disambiguate by
+                //       prefixing this family's snake-name (recovers the
+                //       audit-cited `marketing_emails` from /marketing/v3/
+                //       emails which would otherwise collide with CRM
+                //       /crm/v3/objects/emails).
+                //   (b) Collision from the SAME family — skip (it's a dated
+                //       alias of the same logical resource; the GA-stable
+                //       version already won).
+                const collision = allIOs.find(x => x.Name === io.Name);
+                if (collision) {
+                    if (collision._family === c.Family) continue;
+                    if (collision.APIPath === io.APIPath) continue; // true dupe
+                    const familySnake = c.Family.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+                    const altName = `${familySnake}_${io.Name}`;
+                    if (allIOs.some(x => x.Name === altName)) continue;
+                    io.Name = altName;
+                    io.DisplayName = humanize(altName);
+                }
                 if (allIOs.length >= IO_CAP) break;
                 allIOs.push(io);
                 perAreaCounts[io.Category] = (perAreaCounts[io.Category] ?? 0) + 1;
                 seq++;
+                if (tier === 'ga-stable') specsPreferredGAStable++;
+                else if (tier === 'dated-ga') specsPreferredDatedGA++;
+                else if (tier === 'dated-beta') specsPreferredDatedBeta++;
             }
         }
     }
@@ -1056,6 +1384,9 @@ async function main(): Promise<void> {
             SpecsAttempted: specsAttempted.length,
             SpecsParsed: specsParsed,
             SpecsSkipped: specsSkipped,
+            SpecsPreferredGAStable: specsPreferredGAStable,
+            SpecsPreferredDatedGA: specsPreferredDatedGA,
+            SpecsPreferredDatedBeta: specsPreferredDatedBeta,
             PerAreaCounts: perAreaCounts,
             PerFamilyAPICounts: perFamilyCount,
             CapHit: allIOs.length >= IO_CAP,
