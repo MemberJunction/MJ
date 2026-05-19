@@ -337,10 +337,13 @@ GO
 
 
 
--- CODEGEN OUTPUT
+
+
+
+
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a24c39f9-257d-4191-bb1f-426879850dd9' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'AcceptUnregisteredFiles')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1380146e-bf7d-4624-803a-45b1e65f0b52' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'AcceptUnregisteredFiles')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -373,7 +376,7 @@ GO
          )
          VALUES
          (
-            'a24c39f9-257d-4191-bb1f-426879850dd9',
+            '1380146e-bf7d-4624-803a-45b1e65f0b52',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: MJ: AI Agents
             100141,
             'AcceptUnregisteredFiles',
@@ -405,7 +408,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '5450a7c6-8141-4b67-85c0-23793523c1a7' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'Priority')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '9279b488-477d-4c80-8b23-8b73a91c810d' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'Priority')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -438,7 +441,7 @@ GO
          )
          VALUES
          (
-            '5450a7c6-8141-4b67-85c0-23793523c1a7',
+            '9279b488-477d-4c80-8b23-8b73a91c810d',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100032,
             'Priority',
@@ -470,7 +473,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ab51de00-ec6f-469d-bc33-2329edd20bfd' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'DefaultDeliveryMode')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2210a5a6-c0c5-4a9a-aed7-08737e91d904' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'DefaultDeliveryMode')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -503,7 +506,7 @@ GO
          )
          VALUES
          (
-            'ab51de00-ec6f-469d-bc33-2329edd20bfd',
+            '2210a5a6-c0c5-4a9a-aed7-08737e91d904',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100033,
             'DefaultDeliveryMode',
@@ -535,7 +538,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '65ba2c5c-26e9-46cb-83bd-998a86a2099c' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'SystemSupplied')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '7fbc52a3-54d0-41ca-9c0d-87c7205d0642' OR (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'SystemSupplied')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -568,7 +571,7 @@ GO
          )
          VALUES
          (
-            '65ba2c5c-26e9-46cb-83bd-998a86a2099c',
+            '7fbc52a3-54d0-41ca-9c0d-87c7205d0642',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100034,
             'SystemSupplied',
@@ -600,7 +603,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'dfb4085f-32ea-4d6c-9a76-eaa2d9574e30' OR (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'ForceToolsOnly')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '511c85a7-9701-4895-801d-ae8532435e5b' OR (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'ForceToolsOnly')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -633,7 +636,7 @@ GO
          )
          VALUES
          (
-            'dfb4085f-32ea-4d6c-9a76-eaa2d9574e30',
+            '511c85a7-9701-4895-801d-ae8532435e5b',
             'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', -- Entity: MJ: Artifact Versions
             100039,
             'ForceToolsOnly',
@@ -665,7 +668,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a4ed4b7f-194e-4ee0-a629-5231d1bc3c3a' OR (EntityID = '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3' AND Name = 'ArtifactVersionID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f790943a-7970-47b2-bde5-918c355c5dcb' OR (EntityID = '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3' AND Name = 'ArtifactVersionID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -698,7 +701,7 @@ GO
          )
          VALUES
          (
-            'a4ed4b7f-194e-4ee0-a629-5231d1bc3c3a',
+            'f790943a-7970-47b2-bde5-918c355c5dcb',
             '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3', -- Entity: MJ: Conversation Detail Attachments
             100037,
             'ArtifactVersionID',
@@ -728,26 +731,26 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID a839b227-45e2-4642-9fdd-ac7f2b3b4793 */
+/* SQL text to insert entity field value with ID f9ac61da-4830-44ec-8b83-2d496833c96a */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('a839b227-45e2-4642-9fdd-ac7f2b3b4793', 'AB51DE00-EC6F-469D-BC33-2329EDD20BFD', 1, 'Inline', 'Inline', GETUTCDATE(), GETUTCDATE());
+                                       ('f9ac61da-4830-44ec-8b83-2d496833c96a', '2210A5A6-C0C5-4A9A-AED7-08737E91D904', 1, 'Inline', 'Inline', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2126a305-c3ce-4166-b4ec-5a0cd6232e8a */
+/* SQL text to insert entity field value with ID e8621ac2-7db1-476a-a2ed-79a7df8d323e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2126a305-c3ce-4166-b4ec-5a0cd6232e8a', 'AB51DE00-EC6F-469D-BC33-2329EDD20BFD', 2, 'ToolsOnly', 'ToolsOnly', GETUTCDATE(), GETUTCDATE());
+                                       ('e8621ac2-7db1-476a-a2ed-79a7df8d323e', '2210A5A6-C0C5-4A9A-AED7-08737E91D904', 2, 'ToolsOnly', 'ToolsOnly', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID AB51DE00-EC6F-469D-BC33-2329EDD20BFD */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='AB51DE00-EC6F-469D-BC33-2329EDD20BFD';
+/* SQL text to update ValueListType for entity field ID 2210A5A6-C0C5-4A9A-AED7-08737E91D904 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='2210A5A6-C0C5-4A9A-AED7-08737E91D904';
 
-/* SQL text to insert entity field value with ID 645bfb3f-9bca-4b6e-ac11-a69b2b9046c8 */
+/* SQL text to insert entity field value with ID ba69dcbc-b743-4ded-930d-6f0db4e8c01e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('645bfb3f-9bca-4b6e-ac11-a69b2b9046c8', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 7, 'Tool', 'Tool', GETUTCDATE(), GETUTCDATE());
+                                       ('ba69dcbc-b743-4ded-930d-6f0db4e8c01e', 'B04A327B-55BF-4914-9DCF-3552A5DD0293', 7, 'Tool', 'Tool', GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to update entity field value sequence */
 UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=8 WHERE ID='61F9CF39-ECB3-4476-9AFC-7F037F5EB34E';
@@ -758,11 +761,11 @@ UPDATE [${flyway:defaultSchema}].[EntityFieldValue] SET Sequence=9 WHERE ID='5E9
 
 /* Create Entity Relationship: MJ: Artifact Versions -> MJ: Conversation Detail Attachments (One To Many via ArtifactVersionID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ac2f8437-1517-4c8a-a3b2-badc546527c7'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0310e829-a8d9-4cb6-b73c-b86f266db9ec'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ac2f8437-1517-4c8a-a3b2-badc546527c7', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3', 'ArtifactVersionID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('0310e829-a8d9-4cb6-b73c-b86f266db9ec', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3', 'ArtifactVersionID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for AIAgent */
@@ -3335,8 +3338,8 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ConversationDetailAttachment_ArtifactVersionID ON [${flyway:defaultSchema}].[ConversationDetailAttachment] ([ArtifactVersionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID A4ED4B7F-194E-4EE0-A629-5231D1BC3C3A */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='A4ED4B7F-194E-4EE0-A629-5231D1BC3C3A', @RelatedEntityNameFieldMap='ArtifactVersion';
+/* SQL text to update entity field related entity name field map for entity field ID F790943A-7970-47B2-BDE5-918C355C5DCB */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F790943A-7970-47B2-BDE5-918C355C5DCB', @RelatedEntityNameFieldMap='ArtifactVersion';
 
 /* Base View SQL for MJ: Conversation Detail Attachments */
 -----------------------------------------------------------------
@@ -4806,7 +4809,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e216f544-d37b-4e01-bbab-52bc0ff54549' OR (EntityID = '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3' AND Name = 'ArtifactVersion')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fae6b379-4c57-4491-9d61-55a59fd64daa' OR (EntityID = '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3' AND Name = 'ArtifactVersion')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -4839,7 +4842,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
          )
          VALUES
          (
-            'e216f544-d37b-4e01-bbab-52bc0ff54549',
+            'fae6b379-4c57-4491-9d61-55a59fd64daa',
             '4EDC5656-949F-4FA4-B909-DFC61AD4E1C3', -- Entity: MJ: Conversation Detail Attachments
             100041,
             'ArtifactVersion',
@@ -4872,9 +4875,29 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET IsNameField = 1
+               WHERE ID = '9C2B8B64-F592-4BFD-8ED4-E0488C042A5D'
+               AND AutoUpdateIsNameField = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '65BA2C5C-26E9-46CB-83BD-998A86A2099C'
+               WHERE ID = '9C004E0E-12A3-47EB-9E7A-6A306E1868D4'
                AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'BeginsWith'
+               WHERE ID = 'C8DA4933-F812-48B2-A445-E49413076B6B'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = '9C2B8B64-F592-4BFD-8ED4-E0488C042A5D'
+               AND AutoUpdateUserSearchPredicate = 1;
+
+            UPDATE [${flyway:defaultSchema}].[Entity]
+            SET AllowUserSearchAPI = 1
+            WHERE ID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01'
+            AND AutoUpdateAllowUserSearchAPI = 1;
 
 /* Set field properties for entity */
 
@@ -4896,11 +4919,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Contains'
-               WHERE ID = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
                WHERE ID = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D'
                AND AutoUpdateUserSearchPredicate = 1;
@@ -4908,34 +4926,14 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IsNameField = 1
-               WHERE ID = '9C2B8B64-F592-4BFD-8ED4-E0488C042A5D'
-               AND AutoUpdateIsNameField = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '9C004E0E-12A3-47EB-9E7A-6A306E1868D4'
+               WHERE ID = '7FBC52A3-54D0-41CA-9C0D-87C7205D0642'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '1811BC2E-C1EA-4F7F-9AAD-892A909E2109'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'C8DA4933-F812-48B2-A445-E49413076B6B'
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = '2492DE21-A1E2-497B-9B47-96CC61A08164'
                AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = 'E1A69905-07E6-4852-AA41-9D4E610B0AAE'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-            UPDATE [${flyway:defaultSchema}].[Entity]
-            SET AllowUserSearchAPI = 1
-            WHERE ID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01'
-            AND AutoUpdateAllowUserSearchAPI = 1;
 
 /* Set categories for 21 fields */
 
@@ -5020,20 +5018,11 @@ SET
 WHERE 
    ID = '02F91602-349C-4F60-B9C4-356BBC029C59' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Artifact Versions.ForceToolsOnly 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Content & Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'DFB4085F-32EA-4D6C-9A76-EAA2D9574E30' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Artifact Versions.UserID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'User ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5043,7 +5032,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5053,34 +5041,16 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'User Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '315DF2ED-FC5C-4337-B346-FC91AFE461CC' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Artifact Versions.__mj_CreatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '9C004E0E-12A3-47EB-9E7A-6A306E1868D4' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Artifact Versions.__mj_UpdatedAt 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '2F378B93-C2A0-47A2-AF7A-7E77C5461E6F' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Artifact Versions.FileID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'File ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5117,7 +5087,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'File Size (Bytes)',
+   DisplayName = 'Content Size (Bytes)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5127,11 +5097,38 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'File Reference',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = 'D4E062FC-5555-4B7C-82A6-87A6E46747CD' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Artifact Versions.ForceToolsOnly 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'File Storage',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '511C85A7-9701-4895-801D-AE8532435E5B' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Artifact Versions.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '9C004E0E-12A3-47EB-9E7A-6A306E1868D4' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Artifact Versions.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '2F378B93-C2A0-47A2-AF7A-7E77C5461E6F' AND AutoUpdateCategory = 1;
 
 /* Set categories for 18 fields */
 
@@ -5224,7 +5221,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '5450A7C6-8141-4B67-85C0-23793523C1A7' AND AutoUpdateCategory = 1;
+   ID = '9279B488-477D-4C80-8B23-8B73A91C810D' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Artifact Types.DefaultDeliveryMode 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5234,7 +5231,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'AB51DE00-EC6F-469D-BC33-2329EDD20BFD' AND AutoUpdateCategory = 1;
+   ID = '2210A5A6-C0C5-4A9A-AED7-08737E91D904' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Artifact Types.SystemSupplied 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5244,7 +5241,7 @@ SET
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '65BA2C5C-26E9-46CB-83BD-998A86A2099C' AND AutoUpdateCategory = 1;
+   ID = '7FBC52A3-54D0-41CA-9C0D-87C7205D0642' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Artifact Types.ParentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5259,9 +5256,8 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Extract Rules',
    ExtendedType = 'Code',
-   CodeType = 'TypeScript'
+   CodeType = 'Other'
 WHERE 
    ID = '6CACE3BF-BDF2-4443-9D2C-E28E4FE4E489' AND AutoUpdateCategory = 1;
 
@@ -5397,7 +5393,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Conversation Detail Reference',
+   DisplayName = 'Conversation Detail Record',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5407,33 +5403,11 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Modality Reference',
+   DisplayName = 'Modality Record',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '0823CFA2-D5FB-4FF6-9F2F-BB8269FEAD3D' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Conversation Detail Attachments.ArtifactVersionID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Attachment Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Version',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A4ED4B7F-194E-4EE0-A629-5231D1BC3C3A' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Conversation Detail Attachments.ArtifactVersion 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Attachment Metadata',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Artifact Version Reference',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'E216F544-D37B-4E01-BBAB-52BC0FF54549' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversation Detail Attachments.Width 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -5484,7 +5458,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'File Reference ID',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5494,11 +5467,32 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'File Reference',
+   DisplayName = 'File Record',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
    ID = '8D926FA8-6DA2-435B-8B5F-079BFD0E0FC8' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Attachments.ArtifactVersionID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage Details',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'F790943A-7970-47B2-BDE5-918C355C5DCB' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Conversation Detail Attachments.ArtifactVersion 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Storage Details',
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Artifact Version Record',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = 'FAE6B379-4C57-4491-9D61-55A59FD64DAA' AND AutoUpdateCategory = 1;
 
 /* Set categories for 75 fields */
 
@@ -5641,7 +5635,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Type Prompt Parameters',
+   DisplayName = 'Agent Type Prompt Params',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5660,7 +5654,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Agent Type Name',
+   DisplayName = 'Type',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5679,7 +5673,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Owner User Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5788,6 +5781,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Compression Message Threshold',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5806,6 +5800,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Compression Retention Count',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5815,6 +5810,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Compression Prompt Text',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5824,6 +5820,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Payload Downstream Paths',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5833,6 +5830,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Payload Upstream Paths',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5842,6 +5840,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Payload Self Read Paths',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5851,6 +5850,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Payload Self Write Paths',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5869,7 +5869,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Final Validation Schema',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5879,6 +5878,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Final Payload Validation Mode',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5888,6 +5888,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Final Payload Validation Max Retries',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5897,7 +5898,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Starting Validation Schema',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5907,6 +5907,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Starting Payload Validation Mode',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5925,6 +5926,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Max Notes To Inject',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5952,6 +5954,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Max Examples To Inject',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -5997,7 +6000,6 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Max Time Per Run (Seconds)',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -6025,6 +6027,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
+   DisplayName = 'Default Prompt Effort Level',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -6067,6 +6070,16 @@ SET
 WHERE 
    ID = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: AI Agents.AcceptUnregisteredFiles 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Runtime Limits & Execution Settings',
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '1380146E-BF7D-4624-803A-45B1E65F0B52' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: AI Agents.AttachmentStorageProviderID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -6091,7 +6104,7 @@ WHERE
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Inline Storage Threshold (Bytes)',
+   DisplayName = 'Inline Storage Threshold Bytes',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -6178,14 +6191,4 @@ SET
    CodeType = NULL
 WHERE 
    ID = '948E9C24-C50E-47BF-8A93-D4ABAA0BBBBB' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: AI Agents.AcceptUnregisteredFiles 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Attachment Storage',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'A24C39F9-257D-4191-BB1F-426879850DD9' AND AutoUpdateCategory = 1;
 
