@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "Name": "known-failing-connector",
+    "ClassName": "KnownFailingConnector",
+    "IntegrationName": "known-failing-connector",
+    "Description": "Known-failing fixture for CLI entry-point regression test.",
+    "CredentialTypeID": "OAuth2AuthCode"
+  },
+  "relatedEntities": {
+    "MJ: Integration Objects": []
+  }
+}

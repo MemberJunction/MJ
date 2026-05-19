@@ -22,8 +22,9 @@
  *
  * Output: structured JSON {@link InvariantValidationResult} on stdout.
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { CheckInvariant1 } from './Invariant1_ProvableOnly.js';
 import { CheckInvariant2 } from './Invariant2_ThreeWayNameMatch.js';
@@ -107,8 +108,33 @@ function capitalize(s: string): string {
     return s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
+/**
+ * Detect whether this module is the process's entry point.
+ *
+ * The naive check `import.meta.url === \`file://${process.argv[1]}\`` is BROKEN
+ * when the CLI is invoked through npm's bin symlink (or `npx`): `import.meta.url`
+ * points at the resolved file (after npm resolves the symlink), while
+ * `process.argv[1]` is the symlink path itself. The two strings never match,
+ * the CLI body silently doesn't run, and the process exits 0 — which made the
+ * mj-test-runner MCP report `T1_InvariantValidator: Pass` on connectors that
+ * actually failed validation. Clean-build verification surfaced this.
+ *
+ * Fix: resolve symlinks on both sides via `realpathSync` and compare absolute
+ * filesystem paths.
+ */
+export function IsCLIEntryPoint(metaURL: string, argv1: string | undefined): boolean {
+    if (!argv1) return false;
+    try {
+        const thisFile = realpathSync(fileURLToPath(metaURL));
+        const entryFile = realpathSync(argv1);
+        return thisFile === entryFile;
+    } catch {
+        return false;
+    }
+}
+
 // CLI entry — runs when invoked directly (not when imported)
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (IsCLIEntryPoint(import.meta.url, process.argv[1])) {
     const connectorName = process.argv[2];
     const registryRoot = process.argv[3] ?? resolve(process.cwd(), 'packages/Integration/connectors-registry');
     if (!connectorName) {
