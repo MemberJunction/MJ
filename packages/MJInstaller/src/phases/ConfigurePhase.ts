@@ -136,8 +136,13 @@ export class ConfigurePhase {
         filesWritten.push(mjapiEnvPath);
       } else if (await this.fileSystem.FileExists(mjapiEnvPath)) {
         const existingMjapiEnv = await this.fileSystem.ReadText(mjapiEnvPath);
-        const patchedMjapiEnv = this.ensureEnvVar(
-          existingMjapiEnv,
+        // Sync DB/auth fields from root to MJAPI — root is the canonical source
+        // of database settings (anyone editing them edits root). Without this,
+        // MJAPI keeps the original values from initial install and silently
+        // fails to connect when the user updates root .env.
+        let patchedMjapiEnv = this.syncEnvFieldsFromRoot(existingMjapiEnv, patchedRootEnv);
+        patchedMjapiEnv = this.ensureEnvVar(
+          patchedMjapiEnv,
           'MJ_BASE_ENCRYPTION_KEY',
           config.BaseEncryptionKey ?? ''
         );
@@ -572,6 +577,71 @@ ${newUserSection}  output: [],
 
     const suffix = content.endsWith('\n') ? '' : '\n';
     return `${content}${suffix}${name}='${value}'\n`;
+  }
+
+  /**
+   * Keys that should be kept in sync between the root `.env` and
+   * `apps/MJAPI/.env` (or `packages/MJAPI/.env`). The user typically edits
+   * the root file when adjusting database credentials post-install; without
+   * propagating those edits to the MJAPI-local copy, MJAPI silently keeps
+   * connecting to the original (often wrong) target.
+   *
+   * Keep this list focused on cross-file invariants — anything truly
+   * MJAPI-specific (e.g., GRAPHQL_PORT overrides, MJAPI-only auth keys)
+   * should stay where it is.
+   */
+  private static readonly ROOT_TO_MJAPI_SYNC_KEYS: ReadonlyArray<string> = Object.freeze([
+    'DB_HOST', 'DB_PORT', 'DB_DATABASE',
+    'DB_USERNAME', 'DB_PASSWORD',
+    'CODEGEN_DB_USERNAME', 'CODEGEN_DB_PASSWORD',
+    'DB_TRUST_SERVER_CERTIFICATE',
+    'MJ_CORE_SCHEMA',
+  ]);
+
+  /**
+   * Update the MJAPI .env's shared keys (database credentials, schema) to
+   * match the root .env. Returns the patched MJAPI content. Keys not present
+   * in the root are left untouched; keys present in root but not in MJAPI
+   * are appended. Keys MJAPI-only (e.g., ASK_SKIP_API_URL) are preserved.
+   */
+  private syncEnvFieldsFromRoot(mjapiContent: string, rootContent: string): string {
+    let result = mjapiContent;
+    for (const key of ConfigurePhase.ROOT_TO_MJAPI_SYNC_KEYS) {
+      const rootValue = this.extractEnvValue(rootContent, key);
+      if (rootValue === undefined) continue;
+      result = this.replaceOrAppendEnvVar(result, key, rootValue);
+    }
+    return result;
+  }
+
+  /**
+   * Extract a single env var's raw value from dotenv-style content.
+   * Returns the value with surrounding quotes stripped, or undefined if absent.
+   */
+  private extractEnvValue(content: string, name: string): string | undefined {
+    const pattern = new RegExp(`^\\s*${name}\\s*=\\s*(.*?)\\s*$`, 'm');
+    const match = content.match(pattern);
+    if (!match) return undefined;
+    let value = match[1];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    return value;
+  }
+
+  /**
+   * Replace an existing `NAME=...` line with the new value, or append it
+   * if absent. Preserves the rest of the file as-is. Uses single-quoted
+   * form to match the rest of the .env file's convention.
+   */
+  private replaceOrAppendEnvVar(content: string, name: string, value: string): string {
+    const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
+    const newLine = `${name}='${value}'`;
+    if (pattern.test(content)) {
+      return content.replace(pattern, newLine);
+    }
+    const suffix = content.endsWith('\n') ? '' : '\n';
+    return `${content}${suffix}${newLine}\n`;
   }
 
   // ---------------------------------------------------------------------------

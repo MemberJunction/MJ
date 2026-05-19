@@ -277,6 +277,48 @@ async function handleSQLScriptsDirectory(dir, normalizedDir, archive) {
   });
 }
 
+/**
+ * Add the Claude Code pack's pre-built dist contents into the archive root.
+ *
+ * Discovers `templates/claude-pack/dist/v{N}/` folders, picks the highest
+ * available major, and globs its contents into the archive root so the user
+ * gets `CLAUDE.md` + `.claude/` in their project after extraction. The pack's
+ * own `.gitkeep`-style internal markers are not in `dist/`, so the entire
+ * contents are intended to ship.
+ *
+ * Throws if no `v*` folder exists — the caller (release CI, manual build) must
+ * run `npm run claude-pack:build` first. This is a hard failure rather than a
+ * warning because the bootstrap ZIP is contract-promised to ship the pack.
+ *
+ * @param {import('archiver').Archiver} archive
+ */
+function addClaudePackToArchive(archive) {
+  const packDistRoot = path.join(__dirname, 'templates', 'claude-pack', 'dist');
+  if (!fs.existsSync(packDistRoot)) {
+    throw new Error(
+      `Claude pack dist not found at ${packDistRoot}. ` +
+      `Run 'npm run claude-pack:build' before building the bootstrap ZIP.`
+    );
+  }
+  const majorDirs = fs
+    .readdirSync(packDistRoot, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && /^v\d+$/.test(e.name))
+    .map((e) => e.name)
+    .sort((a, b) => parseInt(b.slice(1), 10) - parseInt(a.slice(1), 10));
+  if (majorDirs.length === 0) {
+    throw new Error(
+      `Claude pack dist at ${packDistRoot} contains no v{N}/ subdirectories. ` +
+      `Run 'npm run claude-pack:build' to generate them.`
+    );
+  }
+  const selectedMajor = majorDirs[0];
+  const packDir = path.join(packDistRoot, selectedMajor);
+  console.log(`Adding Claude Code pack (${selectedMajor}) to zip file from ${packDir}...`);
+  // dot: true so the `.claude/` directory (dot-prefixed) is included.
+  // prefix: '' places contents at archive root alongside the other root files.
+  archive.glob('**/*', { cwd: packDir, dot: true }, { prefix: '' });
+}
+
 async function createMJDistribution() {
   console.log('Starting the process of creating a distribution zip file for MemberJunction...');
 
@@ -411,6 +453,11 @@ async function createMJDistribution() {
   // NOTE: Root tsconfig files (tsconfig.server.json, tsconfig.angular.json) are NOT shipped.
   // Instead, each package's tsconfig.json is flattened to include the base config inline.
   // This keeps customer environments simple without root-level config dependencies.
+
+  // Add the Claude Code pack at archive root. Contents of dist/v{MAJOR}/ land
+  // alongside the other root files, so users get CLAUDE.md + .claude/ in their
+  // project after extraction. See plans/claude-install-pack.md §6.1.
+  addClaudePackToArchive(archive);
 
   // Finalize the archive
   console.log('Finalizing creation of zip file...');

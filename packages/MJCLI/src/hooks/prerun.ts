@@ -8,6 +8,12 @@ const hook: Hook<'prerun'> = async function (options) {
     return;
   }
 
+  // Skip banners when --json is requested — the contract for --json is that
+  // stdout is parseable JSON, and a banner above it breaks `mj … --json | jq`.
+  if (options.argv?.some((arg) => arg === '--json')) {
+    return;
+  }
+
   options.context.log(
     process.stdout.columns >= 81
       ? figlet.textSync('MemberJunction', {

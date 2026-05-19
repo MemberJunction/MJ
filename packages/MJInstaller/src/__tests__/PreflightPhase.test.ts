@@ -312,6 +312,40 @@ describe('PreflightPhase', () => {
       expect(sqlCheck).toBeUndefined();
       expect(mockSql.CheckConnectivity).not.toHaveBeenCalled();
     });
+
+    it('should prefer DB_HOST/DB_PORT from .env over config defaults (Bug 4 fix)', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('/.env'));
+      mockFs.ReadText.mockResolvedValue(`DB_HOST='envhost'\nDB_PORT=1444\nDB_USERNAME=sa\n`);
+
+      const ctx = makeContext(); // default config -> localhost:1433
+      await phase.Run(ctx);
+
+      // The connectivity adapter should be called with the .env values, not the defaults
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('envhost', 1444);
+    });
+
+    it('should fall back to config when .env is missing', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
+      mockFs.FileExists.mockResolvedValue(false); // no .env
+
+      const ctx = makeContext({ Config: { DatabaseHost: 'cfg', DatabasePort: 5555 } });
+      await phase.Run(ctx);
+
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('cfg', 5555);
+    });
+
+    it('should not throw when .env exists but has neither DB_HOST nor DB_PORT', async () => {
+      mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('/.env'));
+      mockFs.ReadText.mockResolvedValue(`SOME_OTHER_KEY=value\n# comment\n`);
+
+      const ctx = makeContext({ Config: { DatabaseHost: 'cfg', DatabasePort: 5555 } });
+      await phase.Run(ctx);
+
+      // Should fall back to config since .env has no DB fields
+      expect(mockSql.CheckConnectivity).toHaveBeenCalledWith('cfg', 5555);
+    });
   });
 
   // ─── OS detection ──────────────────────────────────────────────────

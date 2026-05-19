@@ -21,6 +21,7 @@
  * @see FileSystemAdapter — handles ZIP extraction and temp directory management.
  */
 
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import { InstallerError } from '../errors/InstallerError.js';
@@ -132,6 +133,13 @@ export class ScaffoldPhase {
       // non-critical
     }
 
+    // Step 6: Surface Claude Code pack presence (info if present, warn if absent).
+    // The pack is contract-shipped with every bootstrap ZIP since Milestone 2 of
+    // plans/claude-install-pack.md; a missing pack means the ZIP was built against
+    // an old MJ release or with a broken build, both of which are recoverable via
+    // `mj install:claude` later.
+    await this.reportClaudePack(context.Dir, emitter);
+
     emitter.Emit('step:progress', {
       Type: 'step:progress',
       Phase: 'scaffold',
@@ -142,6 +150,35 @@ export class ScaffoldPhase {
       Version: version,
       ExtractedDir: context.Dir,
     };
+  }
+
+  /**
+   * Read the Claude Code pack version stamp and emit a log or warn accordingly.
+   * Non-fatal — a missing pack is recoverable post-install via `mj install:claude`.
+   */
+  private async reportClaudePack(dir: string, emitter: InstallerEventEmitter): Promise<void> {
+    const versionPath = path.join(dir, '.claude', 'mj', 'VERSION');
+    let packVersion: string | null = null;
+    try {
+      const raw = await fs.readFile(versionPath, 'utf8');
+      packVersion = raw.trim();
+    } catch {
+      // file absent or unreadable — fall through to the warn branch
+    }
+
+    if (packVersion) {
+      emitter.Emit('log', {
+        Type: 'log',
+        Level: 'info',
+        Message: `Claude Code pack v${packVersion} installed.`,
+      });
+    } else {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'scaffold',
+        Message: 'Claude Code pack not found in distribution. Run `mj install:claude` to add it.',
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
