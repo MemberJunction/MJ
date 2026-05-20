@@ -21,11 +21,11 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'navigationSettings', sectionName: 'Navigation Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJApplicationEntities', sectionName: 'Entities', isExpanded: false },
-            { sectionKey: 'mJUserApplications', sectionName: 'User Applications', isExpanded: false },
             { sectionKey: 'mJApplicationSettings', sectionName: 'Application Settings', isExpanded: false },
+            { sectionKey: 'mJUserApplications', sectionName: 'User Applications', isExpanded: false },
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
-            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false },
-            { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false }
+            { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false },
+            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false }
         ]);
     }
 }
