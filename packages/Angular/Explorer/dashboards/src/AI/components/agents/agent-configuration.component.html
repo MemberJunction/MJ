@@ -3,9 +3,8 @@
   <mj-page-header
     Title="Agents"
     Icon="fa-solid fa-robot">
-    <div meta>
-      <mj-stat-badge [Count]="filteredAgents.length" Label="agents"></mj-stat-badge>
-    </div>
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "filteredAgents.length" was just the visible card-grid row count. -->
     <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"

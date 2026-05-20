@@ -47,16 +47,58 @@ deleted across all migrated pages.
 
 ### `[meta]` — "What am I looking at?"
 
-Read-only context that sits next to the title. **Never anything actionable.**
+Read-only context that sits below the subtitle in the identity column.
+**Never anything actionable.**
 
-✅ Permitted:
+**Decision rule — a badge earns its meta spot when ALL three are true:**
+
+1. **You can't get the info by glancing at the page below.** If the list already
+   shows 12 visible rows, a `12 total` badge is noise.
+2. **It carries signal, not just inventory.** A user looks at the badge and
+   either *acts on it* (Unsaved → Save, Alerts → investigate) or *adjusts their
+   mental model* (Hit rate dropped to 65% → something's wrong).
+3. **It's worth always-on real estate.** If the user could happily click a
+   button to see it, it's not a meta badge — it's a detail panel.
+
+**Three patterns that pass the test:**
+
+| Pattern | Examples | Why it works |
+|---|---|---|
+| **Status callout with variant** | "Unsaved changes" `warning`, "3 alerts" `error`, "Healthy" `success`, "X running" `running` | Genuine condition the user needs to know about; non-default variant draws the eye |
+| **Non-trivially derived metric** | "Hit rate 92%", "P95 320ms", "Avg score 87%", "Total spend $1,234" | The user couldn't get this by counting rows — it's aggregation across the dataset |
+| **Hero metric (single, dominant)** | "Total Users: 2,431" *when there's nothing else and the page IS that count* | A solo headline. Only when the count itself is the point. |
+
+**Three anti-patterns (drop them):**
+
+| Anti-pattern | What it looks like | Fix |
+|---|---|---|
+| **Row count = `.length`** | `total: 12` next to a list of 12 visible rows | Drop. The list shows it. |
+| **Partition mirror** | `active: 8 · inactive: 4` next to Active / Inactive filter chips in the toolbar | Drop. The chips already show the split. |
+| **Zero clutter** | `inactive: 0` / `owners: 0` perpetually rendering | Drop, or wrap in `@if (count > 0)` so it appears only when relevant. |
+
+**Conditional rendering is encouraged.** Knowledge Hub Configuration's
+"Unsaved changes" pill only renders when `HasUnsavedChanges` is true. That's
+the gold standard — zero noise when there's nothing to say. Apply `@if`
+liberally around badges that aren't always relevant.
+
+**Cap at 3 visible badges.** Past three, the title row reads as a metrics bar
+instead of identity. If you genuinely have more derived metrics to surface,
+they belong in a body-level KPI strip, not in the chrome.
+
+**Quick test before adding a badge:**
+> *If I removed this badge, would a user complain?*
+> "They probably wouldn't notice" → drop.
+> "They'd lose situational awareness of X" → keep.
+
+✅ Permitted (when the decision rule passes):
 - `<mj-stat-badge [Count] [Total]? Label="…" [Variant]?>` (covers both result-count "X of Y label" and status pills via Variant)
 - Status pills (Healthy / Alert / Running / Unsaved / Pending review) via `Variant="success|warning|error|running|info"`
-- Stat counts (`3 active`, `12 errors`, `8 of 50 prompts`)
+- Derived metrics (`avg score 87%`, `hit rate 92%`, `total $1,234`)
 
 ❌ Not permitted:
 - Buttons, dropdowns, popovers, search, view-toggles
 - Anything the user clicks to *change* state
+- Trivial counts that mirror visible row count or filter-chip partitions
 
 If you reach for a click target, it belongs in `[actions]` or `[toolbar]`.
 

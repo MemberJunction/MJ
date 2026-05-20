@@ -3,9 +3,8 @@
     Title="Entity Admin"
     Icon="fa-solid fa-database"
     Subtitle="Browse and configure entity definitions">
-    <div meta>
-      <mj-stat-badge [Count]="filteredEntities.length" Label="visible entities"></mj-stat-badge>
-    </div>
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "visible entities" count just mirrored the row count of the list. -->
     <div actions>
       <button
         mjButton

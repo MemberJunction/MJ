@@ -34,9 +34,8 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   template: `
     <mj-page-layout>
       <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
-        <div meta>
-          <mj-stat-badge [Count]="filteredLists.length" Label="lists"></mj-stat-badge>
-        </div>
+        <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+             filteredLists.length was just the visible row count. -->
         <div actions>
           <mj-filter-popover
             [ActiveCount]="ActiveFilterCount"

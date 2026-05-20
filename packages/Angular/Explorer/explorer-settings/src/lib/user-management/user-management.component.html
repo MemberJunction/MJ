@@ -8,11 +8,11 @@
   AriaLabel="Filter users"
   Title="Users"
   Subtitle="Manage user accounts, roles, and access">
-  <div meta>
-    <mj-stat-badge [Count]="stats.totalUsers" Label="total"></mj-stat-badge>
-    <mj-stat-badge [Count]="stats.activeUsers" Label="active"></mj-stat-badge>
-    <mj-stat-badge [Count]="stats.adminUsers" Label="owners"></mj-stat-badge>
-  </div>
+  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+       The total/active/owners count badges duplicated the Active/Inactive
+       filter chips in [toolbar] below AND the visible row count in the
+       list, so they were noise. `stats` stays computed (used elsewhere
+       in the component); only the meta-slot rendering was dropped. -->
   <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."

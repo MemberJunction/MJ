@@ -5,12 +5,10 @@
   AriaLabel="Filter entity permissions"
   Title="Entity Permissions"
   Subtitle="Manage entity-level access for each role">
-  <div meta>
-    <mj-stat-badge [Count]="stats.totalEntities" Label="entities"></mj-stat-badge>
-    <mj-stat-badge [Count]="stats.publicEntities" Label="public"></mj-stat-badge>
-    <mj-stat-badge [Count]="stats.restrictedEntities" Label="restricted"></mj-stat-badge>
-    <mj-stat-badge [Count]="stats.totalPermissions" Label="permissions"></mj-stat-badge>
-  </div>
+  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+       entities/public/restricted partition counts duplicated the
+       Public/Restricted/Custom filter chips in [toolbar] below.
+       `stats` remains computed; only the meta-slot rendering was dropped. -->
   <div toolbar>
     <mj-page-search
       Placeholder="Search entities by name or description..."

@@ -8,9 +8,8 @@
   AriaLabel="Database Designer"
   Title="Database Designer"
   Subtitle="Browse and create user-defined entities">
-  <div meta>
-    <mj-stat-badge [Count]="FilteredEntities.length" Label="entities"></mj-stat-badge>
-  </div>
+  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+       FilteredEntities.length was just the visible row count. -->
   <div actions>
     <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
     <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">

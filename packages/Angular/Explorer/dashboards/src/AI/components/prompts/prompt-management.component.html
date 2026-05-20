@@ -3,9 +3,8 @@
   <mj-page-header
     Title="Prompts"
     Icon="fa-solid fa-comment-dots">
-    <div meta>
-      <mj-stat-badge [Count]="filteredPrompts.length" Label="prompts"></mj-stat-badge>
-    </div>
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "filteredPrompts.length" was just the visible card-grid row count. -->
     <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"

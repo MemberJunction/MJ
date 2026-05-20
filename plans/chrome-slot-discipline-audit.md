@@ -1,6 +1,6 @@
 # Chrome Slot Discipline Audit
 
-> **Branch:** `explorer-shell-subpage-chrome` (active) · **Status:** Task A complete; Tasks B + C pending · **Last update:** 2026-05-20
+> **Branch:** `explorer-shell-subpage-chrome` (active) · **Status:** Tasks A + B complete; Task C pending · **Last update:** 2026-05-20
 
 > Companion to [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the rules) and [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) (the migration log).
 
@@ -37,16 +37,62 @@ After the page-header / interior-chrome standardization, we have ~65 dashboards 
 - Dev Tools — App State Inspector, Layout Inspector (`[toolbar]`)
 - AI Tags, AI Autotagging Pipeline / KH Classify (`[toolbar]` in per-section interior chrome)
 
-### Task B — `[meta]` audit ⏸ NOT STARTED
+### Task B — `[meta]` audit ✅ COMPLETE (2026-05-20)
 
-**Rule:** `[meta]` only takes badges that are:
-- **Non-trivially derived** (avg score, total spend, "X of Y healthy", percentage) — data the user can't compute by glancing at the list below
-- **Non-default variant** (`Variant="warning"`, `Variant="error"`, `Variant="success"`) — genuine status callouts that need attention
-- **A single hero metric** when the page IS that metric
+**Canonical rule:** see [`plans/explorer-chrome-conventions.md` §2 → `[meta]`](explorer-chrome-conventions.md#meta--what-am-i-looking-at) for the full decision framework. The short version: a badge earns its spot when (1) the info isn't visible by glancing at the page below, AND (2) it carries signal not just inventory, AND (3) it's worth always-on real estate.
 
-Plain row-counts that equal `.length` of the list below don't belong here. Drop them — the page-search's "of N" sub-count or a `<mj-stat-badge>` at the top of the body carries that information when needed.
+**Pages where badges were dropped (~14 pages):**
 
-**Scope:** every dashboard with `<mj-stat-badge>` in `[meta]`. ~30 pages estimated. Will be done as a sweep after Task A; specific list TBD.
+| Page | What was dropped |
+|---|---|
+| Identity & Access → Users | total / active / owners (mirrored the list + Active/Inactive chips) |
+| Identity & Access → Roles | total / system / custom (mirrored the System/Custom chips) |
+| Identity & Access → Apps | apps / entities / public (mirrored the Active/Inactive chips + list) |
+| Identity & Access → Permissions | entities / public / restricted / permissions (mirrored the Public/Restricted/Custom chips) |
+| Credentials → Types | cross-entity reference counts (categories, credentials) — kept the X-of-Y types filter count |
+| Credentials → Categories | both badges (row count + cross-entity types reference) |
+| Integration → Connections | row-count badge |
+| Integration → Pipelines | both badges (row count + cross-aggregate entity-maps) |
+| Integration → Schedules | integrations / scheduled (row counts) — kept the conditional `running` status pill |
+| Integration → Activity | `total` row count — kept `succeeded` / `failed` (variant-bearing) + `records` (aggregate) |
+| AI → Agents | filteredAgents row count |
+| AI → Models | filteredModels row count |
+| AI → Prompts | filteredPrompts row count |
+| Actions → Overview | totalActions inventory count (body has KPI cards) |
+| Actions → Monitor | totalExecutions inventory count |
+| Database Designer → Entity List | FilteredEntities row count |
+| Entity Admin | filteredEntities row count |
+| Lists → Browse | filteredLists row count |
+| Testing → Explorer | FilteredResultCount row count |
+
+**Pages kept unchanged (already correct):**
+
+| Page | Why it passes |
+|---|---|
+| Identity & Access → App Roles | "Unsaved changes" `Variant="warning"` pill, conditional on dirty state. **Gold standard.** |
+| Credentials → List | "X of Y credentials" filtered count + conditional `expiring` warning + conditional `expired` error |
+| Credentials → Types | "X of Y types" filtered count |
+| Credentials → Audit | "X of Y events" filtered count |
+| Knowledge Hub → Analytics | PipelineStatusText with success/error variant |
+| Knowledge Hub → Configuration | "Unsaved changes" warning, conditional on dirty |
+| Knowledge Hub → Scheduling | Conditional `active` success + `paused` warning |
+| Integration → Overview | TotalIntegrations single hero metric (page IS the overview) |
+| Integration → Activity | succeeded/failed status variants + records aggregate |
+| AI → System Configuration | "X of Y configurations" filtered count |
+| Actions → Explorer | "X of Y actions" filtered count |
+| Version History → Labels | "X of Y labels" filtered count |
+| Version History → Restore | "X of Y restores" filtered count |
+| Version History → Graph | entities / with-dependents / relationships (aggregated graph stats, non-trivially derived) |
+| MCP Dashboard | "X of Y items" filtered count |
+| Scheduling Dashboard | AlertCount error / Healthy success (conditional) + X of Y jobs |
+| Scheduling → Jobs | "X of Y jobs" filtered count |
+| SystemDiagnostics | engines / memory (non-trivially derived runtime stats) + redundant with conditional warning variant |
+| Testing Dashboard | Conditional `running` variant pill |
+| Testing → Review | Conditional `pending` warning |
+| Lists → My Lists | "X of Y lists" filtered count |
+
+**Pages with no [meta] (no audit needed):**
+Credentials → Overview, AI → Agent Requests, AI → Overview Hub, KH sub-pages without inline counts.
 
 ### Task C — `[actions]` ordering convention ⏸ NOT STARTED
 

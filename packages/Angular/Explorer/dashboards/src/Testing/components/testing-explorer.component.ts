@@ -106,9 +106,9 @@ interface TestRunStatRow {
           Title="Test Explorer"
           Icon="fa-solid fa-compass"
           Subtitle="Browse tests and test suites">
-          <div meta>
-            <mj-stat-badge [Count]="FilteredResultCount" Label="results"></mj-stat-badge>
-          </div>
+          <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+               FilteredResultCount mirrored the visible card-grid; the
+               left-rail selection + body cards already make that obvious. -->
           <div actions>
             <mj-view-toggle
               [Options]="HeaderViewOptions"
