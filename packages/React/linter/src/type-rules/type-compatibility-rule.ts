@@ -62,6 +62,12 @@ export interface LintContext {
   controlFlowAnalyzer: ControlFlowAnalyzer;
   /** SQL dialect for WHERE clause parsing. Flows to semantic validators via ValidationContext. */
   sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  /**
+   * Resolver for registry-located dependency components. Forwarded from
+   * the caller-supplied `LinterOptions.componentResolver` so rules don't
+   * do their own I/O.
+   */
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
 }
 
 /**

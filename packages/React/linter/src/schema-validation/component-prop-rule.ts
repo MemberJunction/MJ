@@ -34,7 +34,6 @@ type TraverseModule = typeof _traverse & { default?: typeof _traverse };
 const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import * as t from '@babel/types';
 import { ComponentSpec, PropertyConstraint } from '@memberjunction/interactive-component-types';
-import { ComponentMetadataEngineServer } from '@memberjunction/core-entities-server';
 import { PropValueExtractor } from '../prop-value-extractor';
 import { SemanticValidator } from './semantic-validators/semantic-validator';
 import { SemanticValidatorRegistry } from './semantic-validators/semantic-validator-registry';
@@ -63,6 +62,12 @@ export interface LintContext {
   controlFlowAnalyzer: any; // ControlFlowAnalyzer
   /** SQL dialect for WHERE clause parsing in semantic validators */
   sqlDialect?: import('@memberjunction/sql-dialect').SQLParserDialect;
+  /**
+   * Resolver for registry-located dependency components. Caller-supplied
+   * (see LinterOptions.componentResolver). Optional — rules degrade
+   * gracefully when absent.
+   */
+  componentResolver?: (name: string, namespace?: string, registry?: string) => ComponentSpec | undefined;
 }
 
 /**
@@ -118,7 +123,7 @@ export class ComponentPropRule {
     }
 
     // Build a map of dependency components to their full specs
-    const dependencySpecs = this.buildDependencySpecs(context.componentSpec);
+    const dependencySpecs = this.buildDependencySpecs(context.componentSpec, context.componentResolver);
 
     // Build validation context helpers from parent spec's dataRequirements
     const validationHelpers = this.buildValidationHelpers(context.componentSpec);
@@ -173,19 +178,24 @@ export class ComponentPropRule {
   /**
    * Build map of dependency components to their full specs
    */
-  private buildDependencySpecs(componentSpec: ComponentSpec): Map<string, ComponentSpec> {
+  private buildDependencySpecs(
+    componentSpec: ComponentSpec,
+    componentResolver: LintContext['componentResolver'],
+  ): Map<string, ComponentSpec> {
     const dependencySpecs = new Map<string, ComponentSpec>();
 
     for (const dep of componentSpec.dependencies || []) {
       if (dep && dep.name) {
         if (dep.location === 'registry') {
-          // Try to load from registry
-          const match = ComponentMetadataEngineServer.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
+          // Try to load via caller-supplied resolver; degrade gracefully if absent
+          const match = componentResolver?.(dep.name, dep.namespace, dep.registry);
 
           if (!match) {
-            console.warn(`Dependency component not found in registry: ${dep.name} (${dep.namespace || 'no namespace'})`);
+            // No resolver supplied OR resolver returned nothing — skip cross-spec
+            // validation for this dep. Not an error; rules that need the dep's
+            // contract will surface their own warnings.
           } else {
-            dependencySpecs.set(dep.name, match.spec);
+            dependencySpecs.set(dep.name, match);
           }
         } else {
           // Embedded dependencies have their spec inline

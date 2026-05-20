@@ -5,7 +5,7 @@ import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentProperty, ComponentEvent } from '@memberjunction/interactive-component-types';
-import { ComponentMetadataEngineServer } from '@memberjunction/core-entities-server';
+import type { LinterOptions } from '../linter-options';
 
 /**
  * Rule: child-component-prop-validation
@@ -156,23 +156,19 @@ interface ChildComponentInfo {
  */
 function tryRegistryLookup(
   dep: ComponentSpec,
+  resolver: NonNullable<LinterOptions['componentResolver']> | undefined,
 ): { properties: ComponentProperty[]; events: ComponentEvent[] | undefined } | undefined {
+  if (!resolver) return undefined;
   try {
-    const engine = ComponentMetadataEngineServer.Instance;
-
-    const registryComponent = engine.FindComponent(
-      dep.name,
-      dep.namespace,
-      dep.registry,
-    );
-    if (registryComponent?.spec?.properties?.length) {
+    const registrySpec = resolver(dep.name, dep.namespace, dep.registry);
+    if (registrySpec?.properties?.length) {
       return {
-        properties: registryComponent.spec.properties,
-        events: registryComponent.spec.events,
+        properties: registrySpec.properties,
+        events: registrySpec.events,
       };
     }
   } catch {
-    // DB not available or engine not initialized — fall through
+    // Resolver threw — degrade gracefully
   }
 
   return undefined;
@@ -182,12 +178,13 @@ function tryRegistryLookup(
  * Build a lookup map from dependency component name to its prop info.
  * Uses a 3-tier fallback:
  *   1. Primary: dep.properties/events from the spec's dependencies array
- *   2. Fallback 1: Registry lookup via ComponentMetadataEngine
+ *   2. Fallback 1: Registry lookup via the caller-supplied componentResolver
  *   3. Fallback 2: Skip with a low-severity warning
  */
 function buildDependencyMap(
   dependencies: ComponentSpec[] | undefined,
   warnings: Violation[],
+  componentResolver: LinterOptions['componentResolver'],
 ): Map<string, ChildComponentInfo> {
   const result = new Map<string, ChildComponentInfo>();
   if (!dependencies) return result;
@@ -198,9 +195,9 @@ function buildDependencyMap(
     let properties = dep.properties ?? [];
     let events: ComponentEvent[] | undefined = dep.events;
 
-    // Fallback 1: If no properties from spec, try the registry
+    // Fallback 1: If no properties from spec, ask the resolver
     if (properties.length === 0) {
-      const registryResult = tryRegistryLookup(dep);
+      const registryResult = tryRegistryLookup(dep, componentResolver);
       if (registryResult) {
         properties = registryResult.properties;
         events = registryResult.events;
@@ -373,7 +370,12 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
   get Name() { return 'child-component-prop-validation'; }
   get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec): Violation[] {
+  Test(
+    ast: t.File,
+    _componentName: string,
+    componentSpec?: ComponentSpec,
+    options?: LinterOptions,
+  ): Violation[] {
     const violations: Violation[] = [];
 
     // If no dependencies, nothing to validate
@@ -381,7 +383,7 @@ export class ChildComponentPropValidationRule extends BaseLintRule {
       return violations;
     }
 
-    const depMap = buildDependencyMap(componentSpec.dependencies, violations);
+    const depMap = buildDependencyMap(componentSpec.dependencies, violations, options?.componentResolver);
     if (depMap.size === 0) return violations;
 
     // Collect variable types from useState calls for type-checking

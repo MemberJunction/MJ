@@ -39,4 +39,25 @@ export interface LinterOptions {
    * (e.g. utilities.md.Entities). Optional — rules guard against absence.
    */
   utilities?: ComponentUtilities;
+
+  /**
+   * Optional resolver for dependency components referenced by name (+ optional
+   * namespace + registry). Lint rules call this when a dep is `location:
+   * 'registry'` and the parent spec didn't denormalize the dep's props/events
+   * inline — most commonly to verify props passed to a child component match
+   * the child's declared property contract.
+   *
+   * The linter never does I/O itself; it asks this resolver. Callers wire it
+   * however suits their side of the wire:
+   *   - server-side: close over `ComponentMetadataEngineServer.Instance.FindComponent(...)?.spec`
+   *   - client-side: close over a pre-loaded array or a GQL cache
+   *
+   * If absent, rules that rely on registry lookup degrade gracefully
+   * (they simply skip the cross-component check).
+   */
+  componentResolver?: (
+    name: string,
+    namespace?: string,
+    registry?: string,
+  ) => ComponentSpec | undefined;
 }

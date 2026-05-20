@@ -247,6 +247,7 @@ export class ComponentLinter {
           typeEngine,
           controlFlowAnalyzer,
           sqlDialect: ComponentLinter._sqlDialect,
+          componentResolver: options?.componentResolver,
         };
         const propViolations = componentPropRule.validate(ast, lintContext);
         violations.push(...propViolations);
