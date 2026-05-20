@@ -254,25 +254,18 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
       const schema = listDetailsEntityInfo.SchemaName;
       const extraFilter = this.buildListFilter(entityInfo, schema, list.ID);
 
-      // Cache-buster:
-      // The grid filter is a cross-entity subquery into `vwListDetails`, so
-      // the server's RunView cache keys this query under the LIST'S TARGET
-      // entity (e.g. `MJ: Actions`). When the user adds/removes rows the
-      // mutation lands on `MJ: List Details`, which the server-side cache
-      // invalidator has no reason to associate with the cached target-entity
-      // query — so the grid keeps serving stale rows until a server restart.
-      //
-      // `RunViewParams.BypassCache` is not (yet) part of the GraphQL input
-      // type, so it never reaches the server. Until that's wired up, we
-      // append an always-true predicate with a fresh integer on every load
-      // so the literal filter string differs and the server's cache key
-      // misses. SQL comments (`/* */`) get rejected by the ExtraFilter
-      // injection validator, so we use a plain numeric equality instead.
-      const cb = Date.now();
+      // The grid filter is a cross-entity subquery into `vwListDetails`
+      // (`ID IN (SELECT RecordID FROM vwListDetails WHERE ListID='…')`).
+      // The server's RunView cache fingerprints by the OUTER entity, so a
+      // mutation on `MJ: List Details` doesn't invalidate this query's
+      // cached result — the grid would otherwise serve stale rows until a
+      // server restart. `BypassCache: true` makes the server skip both
+      // the cache lookup and the write for this query.
       this.gridParams = {
         EntityName: entityInfo.Name,
-        ExtraFilter: `${extraFilter} AND ${cb} = ${cb}`,
-        ResultType: 'entity_object'
+        ExtraFilter: extraFilter,
+        ResultType: 'entity_object',
+        BypassCache: true
       };
 
       this.listLoaded = true;
