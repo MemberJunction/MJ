@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectionStrategy, HostListener, Vi
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { MJTestEntity, MJTestRunEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJUserSettingEntity, UserInfoEngine, MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestRunEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJUserSettingEntity, UserInfoEngine, MJTestRunFeedbackEntity, MJTestTypeEntity } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -114,9 +114,17 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   private viewContainerRef = inject(ViewContainerRef);
   private appManager = inject(ApplicationManager);
 
+  // Edit state
+  isSaving = false;
+  testTypeOptions: MJTestTypeEntity[] = [];
+  tagDraft = '';
+  readonly statusOptions: readonly string[] = ['Active', 'Pending', 'Disabled'];
+
   async ngOnInit() {
     await super.ngOnInit();
     this.loadShortcutsSetting();
+    // Fire-and-forget: test type list for the edit form
+    this.loadTestTypeOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -148,6 +156,15 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   handleKeyboardShortcut(event: KeyboardEvent) {
     if (!this.keyboardShortcutsEnabled) return;
 
+    // Cmd/Ctrl + S: Save (if dirty)
+    if ((event.metaKey || event.ctrlKey) && event.key === 's' && !event.shiftKey) {
+      if (this.isDirty) {
+        event.preventDefault();
+        this.saveChanges();
+      }
+      return;
+    }
+
     // Cmd/Ctrl + R: Refresh
     if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
       event.preventDefault();
@@ -162,8 +179,8 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
       return;
     }
 
-    // Number keys for tabs (1-5)
-    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+    // Number keys for tabs (1-5) — skip when typing into form inputs
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && !this.isTextInputFocused()) {
       switch (event.key) {
         case '1': this.changeTab('overview'); break;
         case '2': this.changeTab('config'); break;
@@ -172,6 +189,22 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
         case '5': this.changeTab('analytics'); break;
       }
     }
+  }
+
+  // Warn before tab close / hard navigation when there are unsaved changes
+  @HostListener('window:beforeunload', ['$event'])
+  handleBeforeUnload(event: BeforeUnloadEvent) {
+    if (this.isDirty) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
+  private isTextInputFocused(): boolean {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
   }
 
   private async loadTestRuns() {
@@ -845,6 +878,116 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
       await this.shortcutsSettingEntity.Save();
     } catch (error) {
       console.warn('Failed to save shortcuts setting:', error);
+    }
+  }
+
+  // ==========================================
+  // Edit / Save Methods
+  // ==========================================
+
+  /** True if the test record has any unsaved field changes. */
+  get isDirty(): boolean {
+    return this.record?.Dirty === true;
+  }
+
+  /** Names of fields with pending edits, used by the save bar. */
+  get dirtyFieldNames(): string[] {
+    if (!this.record?.Fields) return [];
+    return this.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+  }
+
+  /** Parsed tags as a plain array — derived from record.Tags JSON. */
+  get tags(): string[] {
+    return TagsHelper.parseTags(this.record?.Tags);
+  }
+
+  /** Load test types for the Type dropdown. */
+  private async loadTestTypeOptions() {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJTestTypeEntity>({
+        EntityName: 'MJ: Test Types',
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      });
+      if (result.Success) {
+        this.testTypeOptions = result.Results || [];
+        this.cdr.markForCheck();
+      }
+    } catch (error) {
+      console.warn('Failed to load test type options:', error);
+    }
+  }
+
+  /** Save all pending changes on the test record. */
+  async saveChanges(): Promise<void> {
+    if (!this.isDirty || this.isSaving) return;
+
+    this.isSaving = true;
+    this.cdr.markForCheck();
+    try {
+      const ok = await this.SaveRecord(false);
+      if (ok) {
+        SharedService.Instance.CreateSimpleNotification('Test saved', 'success', 2000);
+        // Re-parse JSON fields since editor content may have changed
+        this.parseJsonFields();
+      } else {
+        const detail = this.record?.LatestResult?.CompleteMessage || this.record?.LatestResult?.Message || 'Save failed';
+        SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
+    } finally {
+      this.isSaving = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Discard all pending field changes on the test. */
+  discardChanges(): void {
+    if (!this.isDirty) return;
+    if (!confirm('Discard your unsaved changes?')) return;
+    this.record.Revert();
+    this.tagDraft = '';
+    this.parseJsonFields();
+    this.cdr.markForCheck();
+  }
+
+  /** Add a tag from tagDraft (called on Enter / comma / blur). */
+  addTagFromDraft(): void {
+    const raw = this.tagDraft.trim();
+    if (!raw) return;
+    const incoming = raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const existing = this.tags;
+    const merged = [...existing];
+    for (const t of incoming) {
+      if (!merged.includes(t)) merged.push(t);
+    }
+    this.record.Tags = TagsHelper.toJson(merged);
+    this.tagDraft = '';
+    this.cdr.markForCheck();
+  }
+
+  /** Remove a single tag. */
+  removeTag(tag: string): void {
+    this.record.Tags = TagsHelper.removeTag(this.record.Tags, tag);
+    this.cdr.markForCheck();
+  }
+
+  /** Handle Enter / comma in the tag input to commit the draft tag. */
+  onTagInputKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.addTagFromDraft();
+      return;
+    }
+    if (event.key === 'Backspace' && !this.tagDraft) {
+      const all = this.tags;
+      if (all.length > 0) {
+        event.preventDefault();
+        this.removeTag(all[all.length - 1]);
+      }
     }
   }
 }
