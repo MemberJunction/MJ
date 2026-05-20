@@ -32,7 +32,7 @@ import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-sha
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
-import { ComponentCacheManager } from './component-cache-manager';
+import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -310,6 +310,67 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.layoutManager.FocusTab(config.activeTabId);
       }
     }, 50);
+  }
+
+  /**
+   * Clear cached components matching a predicate. Components that match are
+   * destroyed; others are kept. Use for tenant switching — clear org-scoped
+   * components while keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   *                  If omitted, clears ALL cached components.
+   * @returns Number of components destroyed.
+   */
+  public ClearComponentCache(predicate?: (info: CachedComponentInfo) => boolean): number {
+    if (predicate) {
+      return this.cacheManager.clearCacheByPredicate(predicate);
+    }
+    const stats = this.cacheManager.getCacheStats();
+    this.cacheManager.clearCache();
+    return stats.total;
+  }
+
+  /**
+   * Destroy all cached components and reload open tabs.
+   *
+   * In single-resource mode: clears the signature to force a reload, then
+   * re-invokes loadSingleResourceContent().
+   *
+   * In multi-tab mode: destroys all cached components, marks all tabs as
+   * not-loaded, then reloads the currently active tab immediately. Other
+   * tabs reload lazily when the user switches to them (onTabShown fires
+   * with isFirstShow=true after MarkTabNotLoaded).
+   *
+   * Use this for tenant switching — tabs stay open but their components
+   * are recreated fresh with the new org context.
+   */
+  public async ReloadAllTabs(): Promise<void> {
+    // Destroy all cached component instances
+    this.cacheManager.clearCache();
+
+    if (this.useSingleResourceMode) {
+      // Force reload by clearing the signature check
+      this.currentSingleResourceSignature = null;
+      this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
+      await this.loadSingleResourceContent();
+    } else {
+      // Mark all tabs as not-loaded so onTabShown will trigger loadTabContent
+      const tabIds = this.layoutManager.GetAllTabIds();
+      for (const tabId of tabIds) {
+        this.layoutManager.MarkTabNotLoaded(tabId);
+      }
+
+      // Reload the currently active tab immediately
+      const activeTabId = this.workspaceManager.GetActiveTabId();
+      if (activeTabId && this.layoutManager.IsInitialized) {
+        const container = this.layoutManager.GetContainer(activeTabId);
+        if (container) {
+          await this.loadTabContent(activeTabId, container);
+          this.layoutManager.MarkTabLoaded(activeTabId);
+        }
+      }
+    }
   }
 
   ngOnDestroy(): void {
