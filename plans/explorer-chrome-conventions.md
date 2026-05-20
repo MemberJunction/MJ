@@ -7,6 +7,13 @@ migration, or when designing a new page from scratch.
 If a page seems to need an exception, **stop and consult this document** before
 inventing a new pattern. Exceptions get added here, not improvised in code.
 
+> **Future work:** see [`plans/list-page-standardization.md`](list-page-standardization.md)
+> for the proposal to standardize the **control set** every list-of-records page
+> should have (search, sort, filter, refresh, primary CTA). The slot rules in this
+> document say *where* a control goes — that proposal addresses *which* controls
+> a list page should have at all. Out of scope for the current chrome migration;
+> queued as the next phase.
+
 ---
 
 ## 1. The container
