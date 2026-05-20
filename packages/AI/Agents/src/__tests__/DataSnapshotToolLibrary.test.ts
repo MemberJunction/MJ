@@ -56,9 +56,13 @@ describe('DataSnapshotToolLibrary', () => {
     const snapshot = makeSnapshotJson();
 
     describe('GetToolList', () => {
-        it('should return exactly 6 tool definitions', () => {
+        // DataSnapshot used to register its own get_full; it now inherits
+        // the base library's default get_full (raw JSON passthrough).
+        // Subclass tools (5) plus inherited get_full (1) = 6 total.
+        it('should return 5 subclass tools plus inherited get_full (6 total)', () => {
             const tools = lib.GetToolList();
             expect(tools).toHaveLength(6);
+            expect(tools[0].name).toBe('get_full');
         });
 
         it('should include the expected tool names', () => {
@@ -272,15 +276,15 @@ describe('DataSnapshotToolLibrary', () => {
     // -----------------------------------------------------------------------
 
     describe('get_full', () => {
-        it('should return the parsed snapshot with tables', async () => {
+        // DataSnapshot now inherits the base library's default get_full, which
+        // returns the raw artifact content (utf-8 passthrough for string content).
+        // Agents needing parsed table access should call get_tables / get_rows.
+        it('should return the raw JSON snapshot content', async () => {
             const result = await lib.InvokeTool('get_full', {}, snapshot);
             expect(result.success).toBe(true);
-            const data = result.data as { tables: Array<{ name: string; rows: Array<Record<string, unknown>> }> };
-            expect(data.tables).toHaveLength(2);
-            expect(data.tables.map(t => t.name)).toEqual(['customers', 'orders']);
-            // Small tables are returned in full (no truncation)
-            expect(data.tables[0].rows).toHaveLength(3);
-            expect(data.tables[1].rows).toHaveLength(2);
+            const data = result.data as { content: string; encoding: string };
+            expect(data.encoding).toBe('utf8');
+            expect(data.content).toBe(snapshot);
         });
     });
 

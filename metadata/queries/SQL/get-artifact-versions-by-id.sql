@@ -12,11 +12,13 @@ SELECT
     av.FileID,
     av.Content,
     av.MimeType,
+    av.ForceToolsOnly,
 
     a.Name as ArtifactName,
     a.Type as TypeName,
 
-    at.ToolLibraryClass
+    at.ToolLibraryClass,
+    at.DefaultDeliveryMode
 
 FROM [__mj].[vwArtifactVersions] av
 INNER JOIN [__mj].[vwArtifacts] a ON av.ArtifactID = a.ID

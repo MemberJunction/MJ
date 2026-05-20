@@ -1,24 +1,14 @@
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput } from '@memberjunction/ai-core-plus';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
 
-/**
- * An input artifact provided to an agent run.
- */
-export interface InputArtifact {
-  name: string;
-  typeName: string;
-  content: string | Buffer;
-  /** MIME type of the artifact content (e.g., 'application/pdf').
-   *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
-  mimeType?: string;
-  /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
-   *  When set, used for plugin-based resolution via ClassFactory. */
-  toolLibraryClass?: string;
-}
+// Re-export so existing consumers that import { InputArtifact } from
+// './ArtifactToolManager' continue to compile. The canonical declaration
+// now lives in @memberjunction/ai-core-plus alongside ExecuteAgentParams.
+export type { InputArtifact };
 
 /**
  * A single artifact tool invocation requested by the LLM.
@@ -39,6 +29,9 @@ interface ArtifactEntry {
   mimeType?: string;
   content: string | Buffer;
   library: BaseArtifactToolLibrary;
+  annotation?: string;
+  deliveryMode?: 'Inline' | 'ToolsOnly';
+  forceToolsOnly?: boolean;
 }
 
 /**
@@ -56,7 +49,10 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
     super();
   }
 
-  GetToolList(): ArtifactToolDefinition[] {
+  // Composite wraps a chain of real libraries and fully overrides the public
+  // dispatchers — the abstract Subclass methods below are required to make the
+  // class concrete but are never reached.
+  public override GetToolList(): ArtifactToolDefinition[] {
     const seen = new Set<string>();
     const merged: ArtifactToolDefinition[] = [];
     for (const lib of this.chain) {
@@ -69,7 +65,7 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
     return merged;
   }
 
-  async InvokeTool(
+  public override async InvokeTool(
     toolName: string,
     input: Record<string, unknown>,
     artifactContent: string | Buffer,
@@ -86,9 +82,18 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
       errorMessage: `Tool "${toolName}" is not defined by any library in this artifact type's chain.`,
     };
   }
+
+  // Required by the abstract base but never invoked — GetToolList / InvokeTool
+  // are fully overridden above.
+  protected getSubclassToolList(): ArtifactToolDefinition[] {
+    return [];
+  }
+  protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
+    return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via invokeSubclassTool.' };
+  }
 }
 
-interface StoredToolResult {
+export interface StoredToolResult {
   artifactId: string;
   tool: string;
   input: Record<string, unknown>;
@@ -102,20 +107,6 @@ interface StoredToolResult {
 export interface ArtifactToolSnapshot {
   artifacts: Array<{ alphaId: string; name: string; typeName: string }>;
   resultCount: number;
-}
-
-/**
- * A single tool invocation, projected from the internal result store.
- * Used for audit / training-data / debugging.
- */
-export interface ArtifactAccessLogEntry {
-  artifactId: string;
-  tool: string;
-  input: Record<string, unknown>;
-  success: boolean;
-  errorMessage?: string;
-  timestamp: Date;
-  durationMs: number;
 }
 
 /**
@@ -147,6 +138,9 @@ export class ArtifactToolManager {
         mimeType: artifact.mimeType,
         content: artifact.content,
         library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+        annotation: artifact.annotation,
+        deliveryMode: artifact.deliveryMode,
+        forceToolsOnly: artifact.forceToolsOnly,
       });
     }
   }
@@ -191,6 +185,15 @@ export class ArtifactToolManager {
     const candidates: NativeFileInput[] = [];
     for (const entry of this.artifacts.values()) {
       if (!entry.mimeType) continue;
+      // Skip artifacts the agent is supposed to reach via tools. Including
+      // them here would duplicate-deliver: AIPromptRunner.injectNativeFileInputs
+      // would either inject the bytes as a file_url block OR fall back to
+      // embedding the full extracted text — both paths leak content the
+      // routing layer already decided not to inline.
+      const effectiveMode: 'Inline' | 'ToolsOnly' = entry.forceToolsOnly
+        ? 'ToolsOnly'
+        : (entry.deliveryMode ?? 'ToolsOnly');
+      if (effectiveMode === 'ToolsOnly') continue;
       const contentBuffer = typeof entry.content === 'string'
         ? Buffer.from(entry.content)
         : entry.content;
@@ -253,11 +256,24 @@ export class ArtifactToolManager {
 
   // ─── PROMPT INJECTION ───
 
-  /** Markdown manifest: artifact IDs, names, types */
-  ToManifestString(): string {
+  /**
+   * Markdown manifest: artifact IDs, names, types, optional routing
+   * annotations, plus modality-mismatch warnings when the active driver
+   * can't process a media artifact's MIME. The warning is what stops
+   * non-vision models from pretending to see image artifacts based on
+   * pattern-matched few-shot examples.
+   *
+   * @param opts.supportedMimeTypes Driver-declared file capabilities. When
+   *        provided, any artifact whose MIME doesn't match (and isn't a
+   *        text-based type the agent reaches via tools) gets a per-entry
+   *        warning telling the agent the model can't process the artifact.
+   *        Pass `undefined` to disable the check (legacy callers).
+   */
+  ToManifestString(opts?: { supportedMimeTypes?: ReadonlyArray<string> | null }): string {
     if (this.artifacts.size === 0) return '';
 
     const lines: string[] = ['## Available Artifacts\n'];
+    const supportedMimes = opts?.supportedMimeTypes ?? null;
     for (const entry of this.artifacts.values()) {
       const sizeSuffix = Buffer.isBuffer(entry.content)
         ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
@@ -266,6 +282,21 @@ export class ArtifactToolManager {
           : '';
       const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
       lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${mimeNote}${sizeSuffix}`);
+
+      // Modality-mismatch warning: when the driver can't process the
+      // artifact's media type, tell the agent explicitly so it doesn't
+      // hallucinate a description from few-shot examples or pretend the
+      // base64 it gets from get_full means something visual to it.
+      const mismatch = this.modalityMismatchMessage(entry.mimeType, supportedMimes);
+      if (mismatch) {
+        lines.push(`    > ⚠ ${mismatch}`);
+      }
+      if (entry.annotation) {
+        const annotation = entry.annotation.length > ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT
+          ? entry.annotation.slice(0, ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT) + '...[truncated]'
+          : entry.annotation;
+        lines.push(`    > Note: ${annotation}`);
+      }
     }
     lines.push('');
     lines.push('Use the artifact tools below to explore content.');
@@ -302,77 +333,51 @@ export class ArtifactToolManager {
   }
 
   /**
+   * Returns a per-artifact warning when the active driver can't process the
+   * artifact's media type. Only fires for media MIMEs (image/audio/video) —
+   * text-y MIMEs (json/text/csv/xml/etc.) are reached via tools and don't
+   * need modality support from the driver itself, so this stays quiet.
+   */
+  private modalityMismatchMessage(
+    mimeType: string | undefined,
+    supportedMimes: ReadonlyArray<string> | null,
+  ): string | null {
+    if (!mimeType) return null;
+    const lower = mimeType.toLowerCase();
+    const isMediaModality = lower.startsWith('image/') || lower.startsWith('audio/') || lower.startsWith('video/');
+    if (!isMediaModality) return null;
+
+    if (!supportedMimes || supportedMimes.length === 0) {
+      const modality = lower.split('/')[0];
+      return `The current model cannot process ${modality} content. ` +
+        `Calling get_full will return the raw base64 bytes — you cannot interpret those visually. ` +
+        `Tell the user the active model does not support ${modality} input rather than guessing what the file contains.`;
+    }
+    const supported = supportedMimes.some((pattern) => {
+      const p = pattern.toLowerCase();
+      if (p.endsWith('/*')) return lower.startsWith(p.slice(0, -1));
+      return lower === p;
+    });
+    if (supported) return null;
+
+    const modality = lower.split('/')[0];
+    return `The current model cannot process ${modality} content (${lower}). ` +
+      `Calling get_full will return the raw base64 bytes — you cannot interpret those visually. ` +
+      `Tell the user the active model does not support ${modality} input rather than guessing what the file contains.`;
+  }
+
+  /**
+   * Per-artifact cap on manifest extras (annotations, future preview content).
+   * Keeps any one artifact entry from dominating the manifest in a long
+   * conversation. The LLM sees a `...[truncated]` marker when the cap fires.
+   */
+  private static readonly MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT = 1_000;
+
+  /**
    * Max characters for the tool results section injected into the prompt.
    * Prevents context overflow when tool results contain large datasets.
    * Results are truncated from oldest first, with a summary of what was dropped.
    */
-  private static readonly MAX_RESULTS_CHARS = 50_000;
-
-  /**
-   * Max characters for a single tool result's data section.
-   * Individual results that exceed this are truncated with a note,
-   * preventing one huge result from consuming the entire budget.
-   */
-  private static readonly MAX_SINGLE_RESULT_CHARS = 15_000;
-
-  /** Markdown results from previous turns */
-  GetPendingResults(): string {
-    if (this.toolResults.length === 0) return '';
-
-    const header = [
-      '## Artifact Tool Results',
-      '',
-      'These are results from your previous artifact tool calls. **Use these results to answer the user — do NOT re-call the same tools.**',
-      '',
-    ].join('\n');
-
-    // Render each result, capping individual results that are disproportionately large
-    const rendered: Array<{ text: string; index: number }> = [];
-    for (let i = 0; i < this.toolResults.length; i++) {
-      const stored = this.toolResults[i];
-      const lines: string[] = [];
-      lines.push(`### Result ${i + 1}: ${stored.artifactId}.${stored.tool}(${JSON.stringify(stored.input)})`);
-      if (stored.result.success) {
-        let data = typeof stored.result.data === 'string' ? stored.result.data : JSON.stringify(stored.result.data, null, 2);
-        if (data.length > ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) {
-          data =
-            data.slice(0, ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) +
-            `\n... (truncated — ${data.length} chars total. Use more specific tool calls to narrow results.)`;
-        }
-        lines.push('```json');
-        lines.push(data);
-        lines.push('```');
-      } else {
-        lines.push(`**Error:** ${stored.result.errorMessage}`);
-      }
-      lines.push('');
-      rendered.push({ text: lines.join('\n'), index: i });
-    }
-
-    // Check total size and truncate oldest results if over limit
-    let totalChars = header.length;
-    const included: string[] = [];
-    let droppedCount = 0;
-
-    // Include results from newest to oldest so most recent are preserved
-    for (let i = rendered.length - 1; i >= 0; i--) {
-      if (totalChars + rendered[i].text.length > ArtifactToolManager.MAX_RESULTS_CHARS && included.length > 0) {
-        droppedCount = i + 1;
-        break;
-      }
-      totalChars += rendered[i].text.length;
-      included.unshift(rendered[i].text);
-    }
-
-    const parts = [header];
-    if (droppedCount > 0) {
-      parts.push(`> **Note:** ${droppedCount} earlier result(s) truncated to fit context window. Use artifact tools to re-query if needed.\n`);
-    }
-    parts.push(...included);
-
-    return parts.join('\n');
-  }
-
   /** One-line summary for compact contexts */
   GetSummary(): string {
     if (this.artifacts.size === 0) return '';
@@ -384,67 +389,84 @@ export class ArtifactToolManager {
 
   // ─── TOOL EXECUTION ───
 
-  /** Execute tool calls from LLM response */
-  async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
-    const promises = calls.map(async (call) => {
-      const startedAt = Date.now();
-      // Try exact alpha ID first, then fallback to name match
-      let entry = this.artifacts.get(call.artifactId);
-      if (!entry) {
-        // LLMs sometimes use the artifact name instead of the alpha ID
-        for (const e of this.artifacts.values()) {
-          if (e.name.toLowerCase() === call.artifactId.toLowerCase() || e.name.toLowerCase().replace(/\s+/g, '_') === call.artifactId.toLowerCase()) {
-            entry = e;
-            break;
-          }
+  /**
+   * Execute a single tool call and return its stored result. The result is
+   * also retained in the manager's internal store, so {@link ToJSON} reflects
+   * the resultCount and bulk callers can be sure every dispatch is recorded.
+   *
+   * Exposed publicly so the agent runtime can wrap each call in its own
+   * AIAgentRunStep (StepType='Tool'). For bulk-dispatch use, see
+   * {@link ExecuteToolCalls}.
+   */
+  async ExecuteSingleToolCall(call: ArtifactToolCall): Promise<StoredToolResult> {
+    const startedAt = Date.now();
+    // Try exact alpha ID first, then fallback to name match
+    let entry = this.artifacts.get(call.artifactId);
+    if (!entry) {
+      // LLMs sometimes use the artifact name instead of the alpha ID
+      for (const e of this.artifacts.values()) {
+        if (e.name.toLowerCase() === call.artifactId.toLowerCase() || e.name.toLowerCase().replace(/\s+/g, '_') === call.artifactId.toLowerCase()) {
+          entry = e;
+          break;
         }
       }
-      if (!entry && this.artifacts.size === 1) {
-        // If there's only one artifact, use it regardless of what ID was passed
-        entry = this.artifacts.values().next().value;
-      }
-      if (!entry) {
-        this.toolResults.push({
-          artifactId: call.artifactId,
-          tool: call.tool,
-          input: call.input,
-          result: {
-            success: false,
-            data: null,
-            errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
-          },
-          timestamp: new Date(),
-          durationMs: Date.now() - startedAt,
-        });
-        return;
-      }
-
-      // Wrap InvokeTool so any exception inside a handler becomes a structured
-      // error result instead of propagating up to the agent loop. Without this,
-      // a single malformed artifact (e.g. a table missing `rows`) crashes the
-      // entire run via `executePromptStep`'s catch → isConfigurationError.
-      let result: ArtifactToolResult;
-      try {
-        result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        result = {
-          success: false,
-          data: null,
-          errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
-        };
-      }
-      this.toolResults.push({
+    }
+    if (!entry && this.artifacts.size === 1) {
+      // If there's only one artifact, use it regardless of what ID was passed
+      entry = this.artifacts.values().next().value;
+    }
+    if (!entry) {
+      const stored: StoredToolResult = {
         artifactId: call.artifactId,
         tool: call.tool,
         input: call.input,
-        result,
+        result: {
+          success: false,
+          data: null,
+          errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
+        },
         timestamp: new Date(),
         durationMs: Date.now() - startedAt,
-      });
-    });
+      };
+      this.toolResults.push(stored);
+      return stored;
+    }
 
-    await Promise.all(promises);
+    // Wrap InvokeTool so any exception inside a handler becomes a structured
+    // error result instead of propagating up to the agent loop. Without this,
+    // a single malformed artifact (e.g. a table missing `rows`) crashes the
+    // entire run via `executePromptStep`'s catch → isConfigurationError.
+    let result: ArtifactToolResult;
+    try {
+      result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result = {
+        success: false,
+        data: null,
+        errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
+      };
+    }
+    const stored: StoredToolResult = {
+      artifactId: call.artifactId,
+      tool: call.tool,
+      input: call.input,
+      result,
+      timestamp: new Date(),
+      durationMs: Date.now() - startedAt,
+    };
+    this.toolResults.push(stored);
+    return stored;
+  }
+
+  /**
+   * Execute a batch of tool calls in parallel. Each call's StoredToolResult is
+   * also returned by {@link ExecuteSingleToolCall} for callers that wrap each
+   * invocation in its own AIAgentRunStep. Returns void to preserve the
+   * original contract.
+   */
+  async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
+    await Promise.all(calls.map((c) => this.ExecuteSingleToolCall(c)));
   }
 
   // ─── SERIALIZATION ───
@@ -459,25 +481,6 @@ export class ArtifactToolManager {
       })),
       resultCount: this.toolResults.length,
     };
-  }
-
-  // ─── AUDIT ───
-
-  /**
-   * Access log for this run — one entry per tool invocation, in call order.
-   * Useful for audit trails, training data capture, and debugging.
-   * Projected from the internal result store (no parallel state).
-   */
-  GetAccessLog(): ArtifactAccessLogEntry[] {
-    return this.toolResults.map((r) => ({
-      artifactId: r.artifactId,
-      tool: r.tool,
-      input: r.input,
-      success: r.result.success,
-      errorMessage: r.result.errorMessage,
-      timestamp: r.timestamp,
-      durationMs: r.durationMs,
-    }));
   }
 
   // ─── STATIC HELPERS ───
