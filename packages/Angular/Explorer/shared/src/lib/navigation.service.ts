@@ -2,7 +2,8 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
-import { fromEvent, Subject, Subscription } from 'rxjs';
+import { fromEvent, Subject, Subscription, Observable } from 'rxjs';
+import { map, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from './base-resource-component';
 
@@ -744,8 +745,13 @@ export class NavigationService implements OnDestroy {
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
    * @param appId The application ID to switch to
    * @param navItemName Optional name of a nav item to open within the app. If provided, opens that nav item.
+   * @param queryParams Optional query params to apply to the target tab. Applied SYNCHRONOUSLY once the
+   *                    target tab is active — critical when navigating (e.g. from a Home pin) to an
+   *                    app whose resource component is cached: the params must be in the tab config
+   *                    BEFORE the tab-container reattaches the cached component, otherwise the cache
+   *                    restores its own (stale) saved params and the navigation intent is lost.
    */
-  async SwitchToApp(appId: string, navItemName?: string): Promise<void> {
+  async SwitchToApp(appId: string, navItemName?: string, queryParams?: Record<string, string | null>): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
     const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
@@ -772,6 +778,14 @@ export class NavigationService implements OnDestroy {
         } else {
           // Open new tab for this nav item
           this.OpenNavItem(appId, navItem, app.GetColor());
+        }
+        // Apply the requested query params to whichever tab is now active — synchronously,
+        // so they're present before the (possibly cached) resource component reattaches.
+        if (queryParams && Object.keys(queryParams).length > 0) {
+          const targetTabId = this.workspaceManager.GetActiveTabId();
+          if (targetTabId) {
+            this.applyQueryParamsToTab(targetTabId, queryParams);
+          }
         }
         return;
       }
@@ -830,6 +844,39 @@ export class NavigationService implements OnDestroy {
    */
   NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
     this.queryParamChanged$.next({ TabId: tabId, Params: params });
+  }
+
+  /**
+   * Reactively observe the query params for a specific tab.
+   *
+   * Backed by the workspace BehaviorSubject, so a subscriber receives the current
+   * params *immediately* on subscribe AND every subsequent change — including the
+   * deep-link params that the ResourceResolver merges into the tab configuration on
+   * a cold/direct URL load.
+   *
+   * This is the race-free counterpart to {@link NotifyQueryParamsChanged} (a plain
+   * Subject that drops events fired before a component has subscribed). A resource
+   * component that mounts from workspace restoration can subscribe here and still
+   * pick up its initial deep-link state regardless of whether the params landed in
+   * the tab config before or after it mounted.
+   */
+  public ObserveTabQueryParams(tabId: string): Observable<Record<string, string>> {
+    return this.workspaceManager.Configuration.pipe(
+      map(config => {
+        const tab = config?.tabs?.find(t => t.id === tabId);
+        return (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+      }),
+      distinctUntilChanged((a, b) => this.shallowParamsEqual(a, b))
+    );
+  }
+
+  private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) {
+      return false;
+    }
+    return keysA.every(key => a[key] === b[key]);
   }
 
   /**
