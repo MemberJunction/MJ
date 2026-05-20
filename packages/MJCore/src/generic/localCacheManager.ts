@@ -1131,6 +1131,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
+        // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
+        // sends a different AfterKey but otherwise-identical params; without this, sequential
+        // pages collide on the same fingerprint and the dedup/linger layer hands page N+1 the
+        // result of page N — freezing the cursor and looping forever. Appended only when present
+        // so non-keyset fingerprints stay byte-for-byte identical (no cache invalidation).
+        if (params.AfterKey) {
+            parts.push(`ak:${params.AfterKey.ToString()}`);
+        }
+
         // Only include connection if provided
         if (connection) {
             parts.push(connection);
