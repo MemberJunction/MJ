@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -134,7 +134,83 @@ const RASA_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Topic interest ID' },
         ],
     },
+    {
+        Name: 'person-attributes', DisplayName: 'Person Attribute',
+        Description: 'Flattened custom attribute key-value pairs per person from GET /v1/persons/{id}/attributes. Custom attributes are free-form — any key the client has populated.',
+        SupportsWrite: false,
+        Fields: [
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Rasa.io person identifier (composite key)' },
+            { Name: 'external_id', DisplayName: 'External ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'External system identifier' },
+            { Name: 'email', DisplayName: 'Email', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Subscriber email' },
+            { Name: 'attribute_name', DisplayName: 'Attribute Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Custom attribute key (composite key)' },
+            { Name: 'attribute_value', DisplayName: 'Attribute Value', Type: 'text', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Stringified attribute value' },
+        ],
+    },
+    {
+        Name: 'analytics-activities', DisplayName: 'Activities Analytics',
+        Description: 'Email activity metrics (opens, clicks, deliveries, bounces) bucketed by date from POST /v1/analytics/activities. Supports date_range / interval / segment filters.',
+        SupportsWrite: false,
+        Fields: [
+            { Name: 'bucket_start', DisplayName: 'Bucket Start', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Bucket start timestamp (composite key)' },
+            { Name: 'metric_name', DisplayName: 'Metric Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Metric name (opens, clicks, ...) — composite key' },
+            { Name: 'metric_value', DisplayName: 'Metric Value', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Aggregated metric count' },
+            { Name: 'segment_code', DisplayName: 'Segment Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Segment filter' },
+            { Name: 'interval', DisplayName: 'Interval', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Bucket interval (day/hour/week)' },
+            { Name: 'timezone', DisplayName: 'Timezone', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Aggregation timezone' },
+        ],
+    },
+    {
+        Name: 'analytics-articles', DisplayName: 'Articles Analytics',
+        Description: 'Article click analytics ranked by popularity from POST /v1/analytics/articles.',
+        SupportsWrite: false,
+        Fields: [
+            { Name: 'article_id', DisplayName: 'Article ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Article identifier' },
+            { Name: 'title', DisplayName: 'Title', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Article title' },
+            { Name: 'url', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Article URL' },
+            { Name: 'click_count', DisplayName: 'Click Count', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total clicks' },
+            { Name: 'unique_click_count', DisplayName: 'Unique Click Count', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Unique click count' },
+            { Name: 'date_range', DisplayName: 'Date Range', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date range filter used' },
+            { Name: 'segment_code', DisplayName: 'Segment Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Segment filter' },
+        ],
+    },
+    {
+        Name: 'analytics-topics', DisplayName: 'Topics Analytics',
+        Description: 'Topic engagement ranking with unique user counts from POST /v1/analytics/topics.',
+        SupportsWrite: false,
+        Fields: [
+            { Name: 'topic', DisplayName: 'Topic', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Topic name' },
+            { Name: 'total_interactions', DisplayName: 'Total Interactions', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Total engagement count' },
+            { Name: 'unique_users', DisplayName: 'Unique Users', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Unique engaged users' },
+            { Name: 'date_range', DisplayName: 'Date Range', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date range filter used' },
+            { Name: 'segment_code', DisplayName: 'Segment Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Segment filter' },
+            { Name: 'timezone', DisplayName: 'Timezone', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Aggregation timezone' },
+        ],
+    },
 ];
+
+// ─── Analytics query defaults ─────────────────────────────────────────
+
+/** Default date range label when no watermark is present (covers recent history). */
+const ANALYTICS_DEFAULT_DATE_RANGE = 'past_month';
+
+/** Default bucket interval for activities analytics. */
+const ANALYTICS_DEFAULT_INTERVAL = 'day';
+
+/** Default suspect-click filter. */
+const ANALYTICS_DEFAULT_SUSPECT_CLICK = 'real_clicks';
+
+/** Default analytics timezone. */
+const ANALYTICS_DEFAULT_TIMEZONE = 'UTC';
+
+/** Default segment code for analytics. */
+const ANALYTICS_DEFAULT_SEGMENT = 'All';
+
+/** Object names that require a POST body for analytics endpoints. */
+const ANALYTICS_POST_OBJECTS = new Set([
+    'analytics-activities',
+    'analytics-articles',
+    'analytics-topics',
+]);
 
 @RegisterClass(BaseIntegrationConnector, 'RasaConnector')
 export class RasaConnector extends BaseRESTIntegrationConnector {
@@ -298,6 +374,18 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
             if (this._currentObjectName.toLowerCase() === 'insights-topics') {
                 return this.FlattenInsightsTopics(rawResults);
             }
+
+            // person-attributes: flatten the attributes object per person into one row per (person, attribute)
+            if (this._currentObjectName.toLowerCase() === 'person-attributes') {
+                return this.FlattenPersonAttributes(rawResults);
+            }
+
+            // analytics-activities: flatten date-bucketed metric dictionary into rows
+            if (this._currentObjectName.toLowerCase() === 'analytics-activities') {
+                return this.FlattenActivitiesAnalytics(rawResults);
+            }
+
+            // analytics-articles / analytics-topics: plain rows — just unwrap data envelopes
 
             // Standard envelope: each item may wrap actual record under 'data' key — unwrap it
             const records = rawResults.map(item => {
@@ -557,6 +645,13 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
             return this.ServeBufferedRecords(ctx.ObjectName, buffered, ctx.BatchSize);
         }
 
+        // Analytics endpoints use POST with a JSON body — the generic GET-only
+        // paginated loop in BaseRESTIntegrationConnector does not fit, so we
+        // short-circuit here.
+        if (ANALYTICS_POST_OBJECTS.has(ctx.ObjectName.toLowerCase())) {
+            return this.FetchAnalyticsBatch(ctx);
+        }
+
         const result = await super.FetchChanges(ctx);
 
         // Detect API wrap-around: track all seen IDs, stop when entire batch is duplicates
@@ -661,6 +756,168 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
+     * Flattens the /persons/{id}/attributes response into one row per (person, attribute).
+     * Rasa.io does NOT expose a schema discovery endpoint for attributes — custom attributes
+     * are free-form key-value pairs, so we emit each non-null key as a separate row.
+     */
+    private FlattenPersonAttributes(rawResults: Record<string, unknown>[]): Record<string, unknown>[] {
+        const rows: Record<string, unknown>[] = [];
+
+        for (const item of rawResults) {
+            const record = (item['data'] && typeof item['data'] === 'object' && !Array.isArray(item['data']))
+                ? item['data'] as Record<string, unknown>
+                : item;
+
+            const personId = record['id'] ?? record['person_id'];
+            const externalId = record['external_id'];
+            const email = record['email'];
+            const attributes = record['attributes'] ?? record['custom_attributes'];
+
+            if (!attributes || typeof attributes !== 'object' || Array.isArray(attributes)) continue;
+
+            for (const [attrName, attrValue] of Object.entries(attributes as Record<string, unknown>)) {
+                if (attrValue === undefined) continue;
+                rows.push({
+                    person_id: personId,
+                    external_id: externalId,
+                    email,
+                    attribute_name: attrName,
+                    attribute_value: this.StringifyAttributeValue(attrValue),
+                });
+            }
+        }
+
+        this._runningFetchTotal += rows.length;
+        console.log(`[Rasa.io] Flattened ${rows.length} person-attribute rows from ${rawResults.length} persons`);
+        return rows;
+    }
+
+    /**
+     * Flattens /analytics/activities date-histogram responses. Each result is a bucket
+     * containing { bucket_start, <metric>: value, ... }. We emit one row per
+     * (bucket_start, metric_name).
+     */
+    private FlattenActivitiesAnalytics(rawResults: Record<string, unknown>[]): Record<string, unknown>[] {
+        const rows: Record<string, unknown>[] = [];
+
+        for (const item of rawResults) {
+            const record = (item['data'] && typeof item['data'] === 'object' && !Array.isArray(item['data']))
+                ? item['data'] as Record<string, unknown>
+                : item;
+
+            const bucketStart = (record['bucket_start'] ?? record['date'] ?? record['timestamp']) as unknown;
+            if (bucketStart == null) continue;
+
+            // The body carries metric values keyed by name (opens, clicks, deliveries, bounces, ...)
+            for (const [key, value] of Object.entries(record)) {
+                if (key === 'bucket_start' || key === 'date' || key === 'timestamp') continue;
+                if (key === 'segment_code' || key === 'interval' || key === 'timezone') continue;
+                if (value == null || typeof value === 'object') continue;
+                rows.push({
+                    bucket_start: String(bucketStart),
+                    metric_name: key,
+                    metric_value: typeof value === 'number' ? value : Number(value),
+                    segment_code: record['segment_code'] ?? null,
+                    interval: record['interval'] ?? null,
+                    timezone: record['timezone'] ?? null,
+                });
+            }
+        }
+
+        this._runningFetchTotal += rows.length;
+        console.log(`[Rasa.io] Flattened ${rows.length} analytics-activities rows from ${rawResults.length} buckets`);
+        return rows;
+    }
+
+    /** Stringifies a custom attribute value for nvarchar storage. */
+    private StringifyAttributeValue(value: unknown): string | null {
+        if (value == null) return null;
+        if (typeof value === 'string') return value;
+        if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+        try { return JSON.stringify(value); }
+        catch { return null; }
+    }
+
+    /**
+     * Fetches a batch from a Rasa analytics endpoint. These endpoints require POST
+     * with a JSON body and are NOT paginated — the whole response is returned in
+     * one call. We build a body that respects the caller's watermark (if any) and
+     * delegate to the base pipeline for flattening/pagination-state resolution.
+     */
+    private async FetchAnalyticsBatch(ctx: FetchContext): Promise<FetchBatchResult> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const obj = this.GetCachedObject(ctx.CompanyIntegration.IntegrationID, ctx.ObjectName);
+        const fields = this.GetCachedFields(obj.ID);
+
+        const baseURL = this.GetBaseURL(ctx.CompanyIntegration);
+        const url = `${baseURL.replace(/\/+$/, '')}${obj.APIPath.startsWith('/') ? obj.APIPath : `/${obj.APIPath}`}`;
+        this._lastFetchedPath = obj.APIPath;
+
+        const body = this.BuildAnalyticsBody(ctx.ObjectName, ctx.WatermarkValue, ctx.BatchSize ?? DEFAULT_PAGE_SIZE);
+        const headers = this.BuildHeaders(auth);
+        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
+
+        if (response.Status < 200 || response.Status >= 300) {
+            console.warn(`[Rasa.io] Analytics POST ${url} returned HTTP ${response.Status}`);
+            return { Records: [], HasMore: false };
+        }
+
+        const records = this.NormalizeResponse(response.Body, obj.ResponseDataKey);
+        const pkFieldNames = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);
+        const pkNames = pkFieldNames.length > 0 ? pkFieldNames : ['id'];
+
+        const externalRecords = records.map(r => ({
+            ExternalID: pkNames.map(n => r[n] != null ? String(r[n]) : '').join('|'),
+            ObjectType: ctx.ObjectName,
+            Fields: r,
+        }));
+
+        // Advance watermark to 'now' — analytics endpoints don't return per-record timestamps.
+        const nowIso = new Date().toISOString();
+        return {
+            Records: externalRecords,
+            HasMore: false,
+            NewWatermarkValue: nowIso,
+        };
+    }
+
+    /**
+     * Builds the POST body for an analytics endpoint. Watermark is translated into
+     * an explicit `date_range.start_date` so that subsequent runs only pull new data.
+     */
+    private BuildAnalyticsBody(
+        objectName: string,
+        watermark: string | null,
+        limit: number
+    ): Record<string, unknown> {
+        const now = new Date();
+
+        // If we have a watermark, use explicit date range from watermark to now;
+        // otherwise fall back to the preset label.
+        const useExplicitRange = typeof watermark === 'string' && watermark.length > 0;
+        const dateRange: unknown = useExplicitRange
+            ? {
+                start_date: watermark,
+                end_date: now.toISOString(),
+            }
+            : ANALYTICS_DEFAULT_DATE_RANGE;
+
+        const commonBody: Record<string, unknown> = {
+            date_range: dateRange,
+            suspect_click: ANALYTICS_DEFAULT_SUSPECT_CLICK,
+            segment_code: ANALYTICS_DEFAULT_SEGMENT,
+            timezone: ANALYTICS_DEFAULT_TIMEZONE,
+            limit,
+        };
+
+        if (objectName.toLowerCase() === 'analytics-activities') {
+            commonBody['interval'] = ANALYTICS_DEFAULT_INTERVAL;
+        }
+
+        return commonBody;
+    }
+
+    /**
      * Parses connection config from CompanyIntegration credentials.
      * Tries CredentialID first (MJ: Credentials entity), then Configuration JSON.
      */
@@ -684,8 +941,8 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     /**
      * Loads credentials from the MJ: Credentials entity.
      */
-    private async ParseConfigFromCredential(credentialID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<RasaConnectionConfig> {
-        const md = provider ?? new Metadata();
+    private async ParseConfigFromCredential(credentialID: string, contextUser?: UserInfo): Promise<RasaConnectionConfig> {
+        const md = new Metadata();
         const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         await credEntity.Load(credentialID);
 
