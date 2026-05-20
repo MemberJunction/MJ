@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -76,7 +76,7 @@ const MAX_RETRIES = 5;
 const REQUEST_TIMEOUT_MS = 30000;
 
 /** Minimum milliseconds between API requests to avoid rate limiting */
-const MIN_REQUEST_INTERVAL_MS = 600;
+const MIN_REQUEST_INTERVAL_MS = 1000;
 
 /** Number of members to enrich per batch before writing to DB */
 const ENRICH_BATCH_SIZE = 500;
@@ -92,6 +92,229 @@ const METADATA_KEYS = new Set([
     'ResponseStatus', 'UsingRedis', 'AppInitTime', 'ServerID',
     'ClientID', 'BypassCache', 'DateCached', 'Device',
 ]);
+
+/**
+ * Endpoints that live under the /Ymc/ base URL instead of /Ams/.
+ * These are Career Center endpoints requiring the alternate base path.
+ */
+const YM_YMC_ENDPOINTS = new Set([
+    'jobalerts', 'jobalertscriteria', 'jobsearch',
+    'locationcoordinates', 'pinpoint', 'savedjobs', 'templates',
+]);
+
+/**
+ * Server-side date filter params for incremental sync, sourced directly from the
+ * research analysis (yourmembership_analysis.json → incremental.server_filter_params).
+ *
+ * Maps lowercase object name → the query param name to pass with the watermark ISO date.
+ * EventIDs is the only confirmed (high-confidence) server-side filter; the rest are
+ * "probable" — accepted at runtime, confirmed by integration testing.
+ */
+const YM_SERVER_FILTER_PARAMS: Record<string, string> = {
+    'eventids':              'LastModifiedDate',  // server_side_filter (confirmed high confidence)
+    'campaignreports':       'FromDate',          // server_side_filter_probable
+    'careeropenings':        'DateFrom',          // server_side_filter_probable
+    'dashboarddata':         'EndDate',           // server_side_filter_probable
+    'donationtransactions':  'DateFrom',          // server_side_filter_probable
+    'duestionstransactions': 'DateFrom',          // server_side_filter_probable — alias
+    'duestransactions':      'DateFrom',          // server_side_filter_probable
+    'groupmembershiplogs':   'StartDate',         // server_side_filter_probable
+    'invoiceitems':          'DateFrom',          // server_side_filter_probable
+    'storeorderdetails':     'DateFrom',          // server_side_filter_probable
+    'storeorders':           'StartDate',         // server_side_filter_probable
+    'topcontributors':       'DateEnd',           // server_side_filter_probable
+    'trendingposts':         'EndDate',           // server_side_filter_probable
+};
+
+/**
+ * Client-side watermark fields for endpoints that have no server-side date filter
+ * but include a date field in each record that can be used for client-side filtering.
+ * Maps lowercase object name → { fieldName, strategy }.
+ *
+ * 'partial' means only creation date is available (misses updates to existing records).
+ * 'full'    means a last-updated timestamp is available (catches both creates and updates).
+ *
+ * Source: yourmembership_analysis.json → incremental.watermark_fields
+ */
+const YM_CLIENT_WATERMARK_FIELDS: Record<string, { field: string; strategy: 'full' | 'partial' }> = {
+    'allcampaigns':    { field: 'DateCreated',  strategy: 'partial' },
+    // 'campaigns' is NOT here — it's parameterized (Campaigns/{id}) and routes via YM_PARENT_SCOPED
+    'memberlist':      { field: 'LastUpdated',  strategy: 'full' },
+    'membersprofiles': { field: 'LastUpdated',  strategy: 'full' },
+};
+
+/**
+ * Parent-scoped endpoint configuration.
+ * - 'Event' / 'Member': built-in parent types — IDs come from EventIDs / PeopleIDs endpoints.
+ * - 'Custom': IDs fetched dynamically from a secondary list endpoint.
+ *   idSourcePath  — path relative to /Ams/{ClientID}/ to call for the ID list (no leading slash)
+ *   idResponseKey — top-level key in the response body that holds the array
+ *   idField       — field name within each item to extract as the string parent ID
+ */
+type YMParentScopeConfig =
+    | { parentType: 'Event' | 'Member' | 'Group'; pathTemplate: string }
+    | { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
+
+/**
+ * Parent-scoped endpoints that require enumerating parent IDs before fetching.
+ * Maps lowercase endpoint name → YMParentScopeConfig.
+ * pathTemplate uses {parentId} as placeholder for the resolved parent ID.
+ */
+const YM_PARENT_SCOPED: Record<string, YMParentScopeConfig> = {
+    // ── Event-scoped ──────────────────────────────────────────────────
+    'eventalias':                        { parentType: 'Event', pathTemplate: 'Event/{parentId}/Alias' },
+    'eventattendeesessions':             { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeSessions' },
+    'eventattendeetypesessions':         { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeSessions' },
+    'eventattendeetypetickets':          { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypeTickets' },
+    'eventattendeetypes':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/AttendeeTypes' },
+    'eventceuawards':                    { parentType: 'Event', pathTemplate: 'Event/{parentId}/CEUAwards' },
+    'eventcustomlabels':                 { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventCustomLabels' },
+    'eventsessiongroups':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventSessionGroups' },
+    'eventsessions':                     { parentType: 'Event', pathTemplate: 'Event/{parentId}/Sessions' },
+    'eventtickets':                      { parentType: 'Event', pathTemplate: 'Event/{parentId}/Tickets' },
+    'eventvirtualmeetings':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualMeetings' },
+    'eventvirtualwebinars':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualWebinars' },
+    'eventvirtualusers':                 { parentType: 'Event', pathTemplate: 'Event/{parentId}/VirtualUsers' },
+    'eventregistrations':                { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrants' },
+    'eventregistrationids':              { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrationIDs' },
+    'registrationsessionrequest':        { parentType: 'Event', pathTemplate: 'Event/{parentId}/EventRegistrationSessions' },
+    'eventsessionceuawards':             { parentType: 'Event', pathTemplate: 'Event/{parentId}/Sessions' },
+    // ── Member-scoped ─────────────────────────────────────────────────
+    'basicmemberprofile':                { parentType: 'Member', pathTemplate: 'Member/{parentId}/BasicMemberProfile' },
+    'connections':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/Connections' },
+    'contentproxy':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/ContentProxy' },
+    'donationhistory':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/DonationHistory' },
+    'engagementscores':                  { parentType: 'Member', pathTemplate: 'Member/{parentId}/EngagementScores' },
+    'favorites':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/Favorites' },
+    'memberfavorites':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/Favorites' },
+    'memberconfig':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/Config' },
+    'membergroups':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/Groups' },
+    'membernetworks':                    { parentType: 'Member', pathTemplate: 'Member/{parentId}/Networks' },
+    'memberprofile':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberProfile' },
+    'memberpulse':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberPulse' },
+    'messagefolders':                    { parentType: 'Member', pathTemplate: 'Member/{parentId}/MessageFolders' },
+    'messages':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Messages' },
+    'notificationsubscription':          { parentType: 'Member', pathTemplate: 'Member/{parentId}/NotificationSubscription' },
+    'wallcomments':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallComments' },
+    'wallpostfirst':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallPostFirst' },
+    'wallposts':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/WallPosts' },
+    // ── Additional Member-scoped (from research SOT) ─────────────────
+    'connectioncategorylist':            { parentType: 'Member', pathTemplate: 'Member/{parentId}/ConnectionCategoryList' },
+    'connectionsuggestions':             { parentType: 'Member', pathTemplate: 'Member/{parentId}/ConnectionSuggestions' },
+    'directorysearch':                   { parentType: 'Member', pathTemplate: 'Member/{parentId}/DirectorySearch' },
+    'eventregistrants':                  { parentType: 'Member', pathTemplate: 'Member/{parentId}/EventRegistrants' },
+    'eventsearch':                       { parentType: 'Member', pathTemplate: 'Member/{parentId}/EventSearch' },
+    'feeds':                             { parentType: 'Member', pathTemplate: 'Member/{parentId}/Feeds' },
+    'mediagalleryalbum':                 { parentType: 'Member', pathTemplate: 'Member/{parentId}/MediaGalleryAlbum' },
+    'networks':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Networks' },
+    'networktypes':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/NetworkTypes' },
+    'networkscloud':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/NetworksCloud' },
+    'notifications':                     { parentType: 'Member', pathTemplate: 'Member/{parentId}/Notifications' },
+    'photos':                            { parentType: 'Member', pathTemplate: 'Member/{parentId}/Photos' },
+    'pushnotificationsconfig':           { parentType: 'Member', pathTemplate: 'Member/{parentId}/PushNotificationsConfig' },
+    'sponsorposts':                      { parentType: 'Member', pathTemplate: 'Member/{parentId}/SponsorPosts' },
+    // ── /Ymc/ member-scoped (base URL handled separately) ────────────
+    'jobalerts':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobAlerts' },
+    'jobalertscriteria':                 { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobAlertsCriteria' },
+    'jobsearch':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/JobSearch' },
+    'locationcoordinates':               { parentType: 'Member', pathTemplate: 'Member/{parentId}/LocationCoordinates' },
+    'pinpoint':                          { parentType: 'Member', pathTemplate: 'Member/{parentId}/Pinpoint' },
+    'savedjobs':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/SavedJobs' },
+    'templates':                         { parentType: 'Member', pathTemplate: 'Member/{parentId}/Templates' },
+    // ── Custom-enumerated (IDs fetched from a secondary list endpoint) ─
+    // Locations/{countryId} — enumerate country IDs from Countries endpoint
+    'locations': {
+        parentType: 'Custom',
+        pathTemplate: 'Locations/{parentId}',
+        idSourcePath: 'Countries',
+        idResponseKey: 'countryList',
+        idField: 'countryId',
+    },
+    // MarkupRender/{MarkupId} — enumerate markup IDs from Markup list endpoint
+    'markuprender': {
+        parentType: 'Custom',
+        pathTemplate: 'MarkupRender/{parentId}',
+        idSourcePath: 'Markup',
+        idResponseKey: 'MarkupList',
+        idField: 'MarkupId',
+    },
+    // MemberReferrals/{ProfileID} — enumerate member IDs from PeopleIDs endpoint
+    'memberreferrals': { parentType: 'Member', pathTemplate: 'Member/{parentId}/MemberReferrals' },
+    // StoreOrders/{ProfileID} — enumerate member IDs from PeopleIDs endpoint (requires ProfileID)
+    'storeorders':     { parentType: 'Member', pathTemplate: 'Member/{parentId}/StoreOrders' },
+    // GroupMembershipLogs/{GroupID} — enumerate group IDs from Groups endpoint
+    'groupmembershiplogs': { parentType: 'Group', pathTemplate: 'Group/{parentId}/MembershipLogs' },
+    // FinanceBatchDetails/{BatchId} — enumerate batch IDs from FinanceBatches endpoint
+    'financebatchdetails': {
+        parentType: 'Custom',
+        pathTemplate: 'FinanceBatchDetails/{parentId}',
+        idSourcePath: 'FinanceBatches',
+        idResponseKey: 'FinanceBatch',
+        idField: 'BatchID',
+    },
+    // CustomPageVersions/{PageID} — enumerate page IDs from CustomPages endpoint
+    'custompageversions': {
+        parentType: 'Custom',
+        pathTemplate: 'CustomPageVersions/{parentId}',
+        idSourcePath: 'CustomPages',
+        idResponseKey: 'CustomPages',
+        idField: 'PageID',
+    },
+    // MembershipModifiers/{MembershipID} — enumerate membership type IDs from Memberships
+    'membershipmodifiers': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipModifiers/{parentId}',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // MembershipPromoCodes/{MembershipID}/ — enumerate membership type IDs from Memberships
+    'membershipPromoCodes': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipPromoCodes/{parentId}/',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // MembershipRenewalReminder/{id} — enumerate membership type IDs from Memberships
+    'membershiprenewalremindergetrequest': {
+        parentType: 'Custom',
+        pathTemplate: 'MembershipRenewalReminder/{parentId}',
+        idSourcePath: 'Memberships/',
+        idResponseKey: 'membershipList',
+        idField: 'MemberTypeId',
+    },
+    // Campaigns/{CampaignId} — enumerate campaign IDs from AllCampaigns (response.Campaigns[].Id)
+    'campaigns': {
+        parentType: 'Custom',
+        pathTemplate: 'Campaigns/{parentId}',
+        idSourcePath: 'AllCampaigns',
+        idResponseKey: 'Campaigns',
+        idField: 'Id',
+    },
+    // CampaignReports/{CampaignId} — enumerate campaign IDs from AllCampaigns
+    'campaignreports': {
+        parentType: 'Custom',
+        pathTemplate: 'CampaignReports/{parentId}',
+        idSourcePath: 'AllCampaigns',
+        idResponseKey: 'Campaigns',
+        idField: 'Id',
+    },
+    // CampaignEmailListDuplicates/{ListId} — enumerate list IDs from CampaignEmailLists (response.CampaignEmailLists[].ListId)
+    'campaignemaillistduplicates': {
+        parentType: 'Custom',
+        pathTemplate: 'CampaignEmailListDuplicates/{parentId}',
+        idSourcePath: 'CampaignEmailLists',
+        idResponseKey: 'CampaignEmailLists',
+        idField: 'ListId',
+    },
+    // NOTE: Two parameterized endpoints are intentionally NOT in this map:
+    // - 'eventattendees': doubly nested (Member/{MemberId}/Event/{EventId}/EventAttendees) — needs
+    //   both member and event IDs. Falls through to super.FetchChanges() which will fail. Requires
+    //   custom FetchChanges logic if sync is needed.
+    // - 'customformfields': scoped by FormID (CustomForms/{FormID}/Fields) — no flat form list
+    //   endpoint to enumerate IDs from. Requires manual form ID configuration if sync is needed.
+};
 
 // ─── Connector Implementation ───────────────────────────────────────
 
@@ -199,7 +422,8 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'PeopleIDs', DisplayName: 'People IDs',
         Description: 'Member and non-member identity records for data synchronization with timestamp support', SupportsWrite: false,
         Fields: [
-            { Name: 'ID', DisplayName: 'Person ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Person ID' },
+            { Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' },
+            { Name: 'ID', DisplayName: 'Person ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
             { Name: 'UserType', DisplayName: 'User Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'User Type' },
             { Name: 'DateRegistered', DisplayName: 'Date Registered', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Date Registered' },
         ],
@@ -468,7 +692,8 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'StoreOrderDetails', DisplayName: 'Store Order Details',
         Description: 'Individual line items within store orders with product, pricing, and quantity details', SupportsWrite: false,
         Fields: [
-            { Name: 'OrderID', DisplayName: 'OrderID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'OrderID' },
+            { Name: 'OrderID', DisplayName: 'OrderID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Parent order ID' },
+            { Name: 'InvoiceNumber', DisplayName: 'Invoice Number', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Invoice Number' },
             { Name: 'WebsiteMemberID', DisplayName: 'Member ID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Member ID' },
             { Name: 'ProductName', DisplayName: 'Product Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Product Name' },
             { Name: 'Quantity', DisplayName: 'Quantity', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Quantity' },
@@ -477,7 +702,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'OrderDate', DisplayName: 'Order Date', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Order Date' },
             { Name: 'Status', DisplayName: 'Status', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Status' },
             { Name: 'ShippingMethod', DisplayName: 'Shipping Method', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Shipping Method' },
-            { Name: 'ProductCode', DisplayName: 'Product Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: true, Description: 'Product Code' },
+            { Name: 'ProductCode', DisplayName: 'Product Code', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Product Code' },
         ],
     },
     {
@@ -802,7 +1027,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'Locations', DisplayName: 'Locations',
         Description: 'States, provinces, and regions within countries with tax GL codes', SupportsWrite: false,
         Fields: [
-            { Name: 'locationCode', DisplayName: 'Location Code', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Location Code' },
+            { Name: 'locationCode', DisplayName: 'Location Code', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Location Code (filled with locationName when absent in the API response)' },
             { Name: 'countryId', DisplayName: 'Country ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Country ID' },
             { Name: 'locationName', DisplayName: 'Location Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Location Name' },
             { Name: 'taxGLCode', DisplayName: 'Tax GL Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Tax GL Code' },
@@ -1348,14 +1573,14 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Description: 'YourMembership LatestPosts data', SupportsWrite: false,
         Fields: [
             { Name: 'Sponsored', DisplayName: 'Sponsored', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Sponsored' },
-            { Name: 'MemberID', DisplayName: 'MemberID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'MemberID' },
+            { Name: 'MemberID', DisplayName: 'MemberID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'MemberID' },
             { Name: 'PostText', DisplayName: 'PostText', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostText' },
             { Name: 'PostHtml', DisplayName: 'PostHtml', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostHtml' },
             { Name: 'AuthorId', DisplayName: 'AuthorId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'AuthorId' },
             { Name: 'WallOwnerId', DisplayName: 'WallOwnerId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'WallOwnerId' },
             { Name: 'AuthorName', DisplayName: 'AuthorName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'AuthorName' },
             { Name: 'WallOwnerName', DisplayName: 'WallOwnerName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'WallOwnerName' },
-            { Name: 'PostId', DisplayName: 'PostId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostId' },
+            { Name: 'PostId', DisplayName: 'PostId', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'PostId' },
             { Name: 'PostDate', DisplayName: 'PostDate', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostDate' },
             { Name: 'PostType', DisplayName: 'PostType', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PostType' },
             { Name: 'ShareCount', DisplayName: 'ShareCount', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ShareCount' },
@@ -1495,11 +1720,11 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
         Name: 'MarkupComponentTypes', DisplayName: 'MarkupComponentTypes',
         Description: 'YourMembership MarkupComponentTypes data', SupportsWrite: false,
         Fields: [
-            { Name: 'ComponentType', DisplayName: 'ComponentType', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ComponentType' },
+            { Name: 'ComponentType', DisplayName: 'ComponentType', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Component type identifier (unique per record)' },
             { Name: 'ComponentName', DisplayName: 'ComponentName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ComponentName' },
             { Name: 'IsAtRootColumn', DisplayName: 'IsAtRootColumn', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'IsAtRootColumn' },
             { Name: 'CanHaveChildren', DisplayName: 'CanHaveChildren', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'CanHaveChildren' },
-            { Name: 'OrderId', DisplayName: 'OrderId', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'OrderId' },
+            { Name: 'OrderId', DisplayName: 'OrderId', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Sort order (API returns 0 for all records — not usable as PK)' },
             { Name: 'ButtonData', DisplayName: 'ButtonData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ButtonData' },
             { Name: 'ImageData', DisplayName: 'ImageData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ImageData' },
             { Name: 'DividerData', DisplayName: 'DividerData', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'DividerData' },
@@ -1620,7 +1845,7 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'GroupCode', DisplayName: 'GroupCode', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupCode' },
             { Name: 'GroupName', DisplayName: 'GroupName', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupName' },
             { Name: 'PrimaryGroup', DisplayName: 'PrimaryGroup', Type: 'boolean', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'PrimaryGroup' },
-            { Name: 'GroupID', DisplayName: 'GroupID', Type: 'number', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'GroupID' },
+            { Name: 'GroupID', DisplayName: 'GroupID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'GroupID' },
         ],
     },
     {
@@ -2126,6 +2351,115 @@ const YM_ACTION_OBJECTS: IntegrationObjectInfo[] = [
             { Name: 'OriginalSrc', DisplayName: 'OriginalSrc', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'OriginalSrc' },
         ],
     },
+    // ── Objects present in metadata but not previously listed in YM_ACTION_OBJECTS ──
+    // Added so DiscoverObjects()/IntrospectSchema() returns them and buildTargetConfigs
+    // does not emit "not found in source schema" warnings for these entity maps.
+    { Name: 'BasicMemberProfile', DisplayName: 'Basic Member Profile', Description: 'Basic member profile data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' }] },
+    { Name: 'BrandingConfig', DisplayName: 'Branding Config', Description: 'Site branding configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ContentAreas', DisplayName: 'Content Areas', Description: 'CMS content areas', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ContentProxy', DisplayName: 'Content Proxy', Description: 'Member content proxy data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomCSS', DisplayName: 'Custom CSS', Description: 'Custom site CSS configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPageCategories', DisplayName: 'Custom Page Categories', Description: 'Categories for custom pages', SupportsWrite: false, Fields: [{ Name: 'CategoryID', DisplayName: 'Category ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Category ID' }] },
+    { Name: 'CustomPageDocTypes', DisplayName: 'Custom Page Doc Types', Description: 'Document types for custom pages', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPageFileCollections', DisplayName: 'Custom Page File Collections', Description: 'File collections on custom pages', SupportsWrite: false, Fields: [{ Name: 'FileCollectionID', DisplayName: 'File Collection ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'File Collection ID' }, { Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'ID' }] },
+    { Name: 'CustomPageTemplates', DisplayName: 'Custom Page Templates', Description: 'Templates for custom pages', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CustomPages', DisplayName: 'Custom Pages', Description: 'Custom CMS pages', SupportsWrite: false, Fields: [{ Name: 'PageID', DisplayName: 'Page ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Page ID' }] },
+    { Name: 'Donations', DisplayName: 'Donations', Description: 'Member donation records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Dues', DisplayName: 'Dues', Description: 'Membership dues information', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventAlias', DisplayName: 'Event Alias', Description: 'Event URL aliases (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventRegistrationIDs', DisplayName: 'Event Registration IDs', Description: 'Registration ID list for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'RegistrationID', DisplayName: 'Registration ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Registration ID' }] },
+    { Name: 'EventVirtualMeetings', DisplayName: 'Event Virtual Meetings', Description: 'Virtual meeting settings for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventVirtualUsers', DisplayName: 'Event Virtual Users', Description: 'Virtual meeting users for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventVirtualWebinars', DisplayName: 'Event Virtual Webinars', Description: 'Virtual webinar settings for events (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Favorites', DisplayName: 'Favorites', Description: 'Member favorite items (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'FavoriteId', DisplayName: 'Favorite ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Favorite ID' }] },
+    { Name: 'FreestoneTypes', DisplayName: 'Freestone Types', Description: 'Freestone integration types', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HelpTopic', DisplayName: 'Help Topic', Description: 'Help topics', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InvoicePayments', DisplayName: 'Invoice Payments', Description: 'Payments applied to invoices', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'JobAlertsCriteria', DisplayName: 'Job Alerts Criteria', Description: 'Criteria for job alerts (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'JobSearch', DisplayName: 'Job Search', Description: 'Job board search (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MemberConfig', DisplayName: 'Member Config', Description: 'Member configuration settings (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MemberProfile', DisplayName: 'Member Profile', Description: 'Full member profile (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'ProfileID', DisplayName: 'Profile ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Profile ID' }] },
+    { Name: 'MemberPulse', DisplayName: 'Member Pulse', Description: 'Member engagement pulse data (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MessageFolders', DisplayName: 'Message Folders', Description: 'Member message folders (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Messages', DisplayName: 'Messages', Description: 'Member messages (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'MessageId', DisplayName: 'Message ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Message ID' }] },
+    { Name: 'NotificationDetails', DisplayName: 'Notification Details', Description: 'Notification detail records', SupportsWrite: false, Fields: [{ Name: 'NotificationID', DisplayName: 'Notification ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Notification ID' }] },
+    { Name: 'NotificationSubscription', DisplayName: 'Notification Subscription', Description: 'Member notification subscriptions (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Orders', DisplayName: 'Orders', Description: 'Store orders', SupportsWrite: false, Fields: [{ Name: 'OrderID', DisplayName: 'Order ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Order ID' }] },
+    { Name: 'PeopleGroups', DisplayName: 'People Groups', Description: 'Groups of people/members', SupportsWrite: false, Fields: [{ Name: 'GroupID', DisplayName: 'Group ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Group ID' }] },
+    { Name: 'Pinpoint', DisplayName: 'Pinpoint', Description: 'Member pinpoint/location data (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ProductMemberPrice', DisplayName: 'Product Member Price', Description: 'Member-specific product pricing', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'RegistrationSessionRequest', DisplayName: 'Registration Session Request', Description: 'Event registration session requests (event-scoped)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SMSCampaigns', DisplayName: 'SMS Campaigns', Description: 'SMS marketing campaigns', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SavedJobs', DisplayName: 'Saved Jobs', Description: 'Member saved job listings (member-scoped, /Ymc/)', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SingleMembership', DisplayName: 'Single Membership', Description: 'Single membership record lookup', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'WallPostFirst', DisplayName: 'Wall Post First', Description: 'First wall post for a member (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'WallId', DisplayName: 'Wall ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Wall ID' }] },
+    { Name: 'WallPosts', DisplayName: 'Wall Posts', Description: 'Member wall posts (member-scoped)', SupportsWrite: false, Fields: [{ Name: 'WallId', DisplayName: 'Wall ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Wall ID' }] },
+    // ── Additional stubs from DB entity maps (write/action endpoints not used for pull sync) ──
+    { Name: 'Auth', DisplayName: 'Auth', Description: 'Authentication endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'Authenticate', DisplayName: 'Authenticate', Description: 'Authenticate endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'BrandingConfigCss', DisplayName: 'Branding Config CSS', Description: 'Branding configuration CSS', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CBXClientConfig', DisplayName: 'CBX Client Config', Description: 'CBX client configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ClientConfig', DisplayName: 'Client Config', Description: 'Client configuration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ConvertToMemberRequest', DisplayName: 'Convert To Member Request', Description: 'Convert non-member to member request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'CopyCampaign', DisplayName: 'Copy Campaign', Description: 'Copy campaign action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'DonationHistoryCancelAutoBill', DisplayName: 'Donation History Cancel Auto Bill', Description: 'Cancel auto-bill on donation history', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventRegistrationAttendance', DisplayName: 'Event Registration Attendance', Description: 'Event registration attendance tracking', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'EventSessionAttendanceRequest', DisplayName: 'Event Session Attendance Request', Description: 'Event session attendance request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ExternalLink', DisplayName: 'External Link', Description: 'External link records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FacebookProfile', DisplayName: 'Facebook Profile', Description: 'Facebook profile integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FilesUpload', DisplayName: 'Files Upload', Description: 'File upload endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FinalizeLogin', DisplayName: 'Finalize Login', Description: 'Finalize login action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindEventRegistrationForms', DisplayName: 'Find Event Registration Forms', Description: 'Search event registration forms', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindEventTickets', DisplayName: 'Find Event Tickets', Description: 'Search event tickets', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindMembers', DisplayName: 'Find Members', Description: 'Member search endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'FindProducts', DisplayName: 'Find Products', Description: 'Product search endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GetAccessToken', DisplayName: 'Get Access Token', Description: 'OAuth access token endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GetToken', DisplayName: 'Get Token', Description: 'Token retrieval endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'GroupJoin', DisplayName: 'Group Join', Description: 'Join group action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HasInformz', DisplayName: 'Has Informz', Description: 'Informz integration check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HassAcessTestFolder', DisplayName: 'Has Access Test Folder', Description: 'Access test folder check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'HtmlSanitization', DisplayName: 'HTML Sanitization', Description: 'HTML sanitization utility', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadBySearchGuidRequest', DisplayName: 'Informz Bulk Upload By Search GUID', Description: 'Informz bulk upload by search GUID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadEventRegistrantsRequest', DisplayName: 'Informz Bulk Upload Event Registrants', Description: 'Informz bulk upload event registrants', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForDuesBySearchIdRequest', DisplayName: 'Informz Bulk Upload For Dues By Search ID', Description: 'Informz bulk upload dues by search ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForDuesRequest', DisplayName: 'Informz Bulk Upload For Dues', Description: 'Informz bulk upload for dues', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForOrdersBySearchIdRequest', DisplayName: 'Informz Bulk Upload For Orders By Search ID', Description: 'Informz bulk upload orders by search ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForOrdersRequest', DisplayName: 'Informz Bulk Upload For Orders', Description: 'Informz bulk upload for orders', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzBulkUploadForReportsRequest', DisplayName: 'Informz Bulk Upload For Reports', Description: 'Informz bulk upload for reports', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'InformzFindGroupRequest', DisplayName: 'Informz Find Group', Description: 'Informz find group request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MarkupRender', DisplayName: 'Markup Render', Description: 'Render markup content (custom-scoped)', SupportsWrite: false, Fields: [{ Name: 'MarkupId', DisplayName: 'Markup ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Markup ID' }] },
+    { Name: 'MemberPasswordReset', DisplayName: 'Member Password Reset', Description: 'Member password reset action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MembershipRenewalReminderGetRequest', DisplayName: 'Membership Renewal Reminder Get', Description: 'Get membership renewal reminder settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'MembershipRenewalReminderPutRequest', DisplayName: 'Membership Renewal Reminder Put', Description: 'Update membership renewal reminder settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'NotificationUpdate', DisplayName: 'Notification Update', Description: 'Update notification records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OAuthClientAppAPISetting', DisplayName: 'OAuth Client App API Setting', Description: 'OAuth client app API settings', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OIDCGetAccessToken', DisplayName: 'OIDC Get Access Token', Description: 'OIDC access token endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'OrganizationPosts', DisplayName: 'Organization Posts', Description: 'Organization post records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PageMetaInfo', DisplayName: 'Page Meta Info', Description: 'Page metadata information', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PasswordValidityRequest', DisplayName: 'Password Validity Request', Description: 'Password validity check', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PeopleBulkDetachRequest', DisplayName: 'People Bulk Detach Request', Description: 'Bulk detach people records', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PeopleProfileFindID', DisplayName: 'People Profile Find ID', Description: 'Find member profile ID', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'PhotoComments', DisplayName: 'Photo Comments', Description: 'Comments on member photos', SupportsWrite: false, Fields: [{ Name: 'PhotoCommentId', DisplayName: 'Photo Comment ID', Type: 'number', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Photo Comment ID' }] },
+    { Name: 'Ping', DisplayName: 'Ping', Description: 'API health check endpoint', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ProductsDto', DisplayName: 'Products DTO', Description: 'Products data transfer object', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'QuickBooksOnlineOAuth', DisplayName: 'QuickBooks Online OAuth', Description: 'QuickBooks Online OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ResendCampaign', DisplayName: 'Resend Campaign', Description: 'Resend campaign action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ResourceManagerFilesUpload', DisplayName: 'Resource Manager Files Upload', Description: 'Resource manager file upload', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'RssBuilder', DisplayName: 'RSS Builder', Description: 'RSS feed builder', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SMSCampaignListDetails', DisplayName: 'SMS Campaign List Details', Description: 'SMS campaign list details', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SendTestNotification', DisplayName: 'Send Test Notification', Description: 'Send test notification action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'SocialOAuth', DisplayName: 'Social OAuth', Description: 'Social OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductBulkStatus', DisplayName: 'Store Product Bulk Status', Description: 'Bulk update store product status', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductBulkStatusAll', DisplayName: 'Store Product Bulk Status All', Description: 'Bulk update all store product statuses', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductPromoCodes', DisplayName: 'Store Product Promo Codes', Description: 'Promo codes for store products', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductSequence', DisplayName: 'Store Product Sequence', Description: 'Store product sequence ordering', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'StoreProductUpdate', DisplayName: 'Store Product Update', Description: 'Update store product action', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'TaxRateRequest', DisplayName: 'Tax Rate Request', Description: 'Tax rate lookup request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'UnblockCardRequest', DisplayName: 'Unblock Card Request', Description: 'Unblock payment card request', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'UsernameAvailabilityRequest', DisplayName: 'Username Availability Request', Description: 'Check username availability', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomEventListener', DisplayName: 'Zoom Event Listener', Description: 'Zoom event listener integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomEventListenerOAuth', DisplayName: 'Zoom Event Listener OAuth', Description: 'Zoom event listener OAuth', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
+    { Name: 'ZoomOAuth', DisplayName: 'Zoom OAuth', Description: 'Zoom OAuth integration', SupportsWrite: false, Fields: [{ Name: 'Id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'ID' }] },
 ];
 
 
@@ -2418,20 +2752,26 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     /** Current adaptive request interval — increases on 429, recovers toward resolved MIN */
     private currentRequestIntervalMs = MIN_REQUEST_INTERVAL_MS;
+    /** Successful requests since the last 429 — used to gate interval recovery */
+    private _successesSince429 = 0;
 
     // ── Per-instance config accessors (fall back to module-level defaults) ──
     private get effectiveMaxRetries(): number { return this._config?.MaxRetries ?? MAX_RETRIES; }
     private get effectiveRequestTimeoutMs(): number { return this._config?.RequestTimeoutMs ?? REQUEST_TIMEOUT_MS; }
     private get effectiveMinRequestIntervalMs(): number { return this._config?.MinRequestIntervalMs ?? MIN_REQUEST_INTERVAL_MS; }
-    private get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
+    protected get effectiveEnrichBatchSize(): number { return this._config?.EnrichBatchSize ?? ENRICH_BATCH_SIZE; }
     private get effectiveJsonTimeoutMs(): number { return this._config?.JsonTimeoutMs ?? JSON_TIMEOUT_MS; }
     private get effectiveEnrichTimeoutMs(): number { return this._config?.EnrichTimeoutMs ?? ENRICH_TIMEOUT_MS; }
 
-    /** Cache of the filtered member list pending enrichment, shared across batch calls */
-    private memberFetchCache: {
-        changedRecords: ExternalRecord[];
-        newWatermark: string | null;
-    } | null = null;
+    /** Cached parent IDs for parent-scoped fetches (keyed by objectName) */
+    private parentIdCache: Map<string, string[]> = new Map();
+
+    /**
+     * Holds the current watermark value for the duration of a FetchChanges call.
+     * Set at the top of FetchChanges so that AppendDefaultQueryParams can inject
+     * the server-side date filter param for endpoints listed in YM_SERVER_FILTER_PARAMS.
+     */
+    private _currentWatermark: string | null = null;
 
     // ─── Abstract method implementations (BaseRESTIntegrationConnector) ──
 
@@ -2451,6 +2791,36 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
     protected BuildHeaders(auth: RESTAuthContext): Record<string, string> {
         return { 'X-SS-ID': auth.SessionID!, 'Accept': 'application/json' };
+    }
+
+    /**
+     * Extends the base class implementation by injecting an incremental-sync date
+     * filter query parameter for endpoints that support server-side filtering.
+     *
+     * When a watermark is active (`_currentWatermark` is set by `FetchChanges`) and
+     * the current object appears in `YM_SERVER_FILTER_PARAMS`, the appropriate
+     * date param (e.g. `LastModifiedDate`, `DateFrom`, `StartDate`) is appended.
+     * The base class then appends any additional DefaultQueryParams from metadata.
+     */
+    protected override AppendDefaultQueryParams(url: string, obj: MJIntegrationObjectEntity): string {
+        let result = super.AppendDefaultQueryParams(url, obj);
+
+        if (this._currentWatermark) {
+            const paramName = YM_SERVER_FILTER_PARAMS[obj.Name.toLowerCase()];
+            if (paramName) {
+                // Avoid injecting a duplicate if the param is already in the URL
+                const existingKeys = new Set(
+                    (result.includes('?') ? result.split('?')[1].split('&') : [])
+                        .map(p => p.split('=')[0].toLowerCase())
+                );
+                if (!existingKeys.has(paramName.toLowerCase())) {
+                    const sep = result.includes('?') ? '&' : '?';
+                    result += `${sep}${encodeURIComponent(paramName)}=${encodeURIComponent(this._currentWatermark)}`;
+                }
+            }
+        }
+
+        return result;
     }
 
     protected async MakeHTTPRequest(
@@ -2493,18 +2863,30 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
 
             if (response.status === 429) {
                 const delayMs = this.CalculateRetryDelay(response, attempt);
-                this.currentRequestIntervalMs = Math.min(this.currentRequestIntervalMs * 2, 10000);
+                // Jump hard on every 429: first 429 goes straight to 3s floor, subsequent
+                // 429s double. Prevents the "ramp up to 10s → shave → hit 429 again" sawtooth.
+                this.currentRequestIntervalMs = Math.min(
+                    Math.max(this.currentRequestIntervalMs * 2, 3000),
+                    15000
+                );
+                this._successesSince429 = 0;
                 console.warn(`YM rate limited (429), retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxRetries}). Interval adjusted to ${this.currentRequestIntervalMs}ms`);
                 await this.Sleep(delayMs);
                 continue;
             }
 
             this.lastRequestTime = Date.now();
-            // Gradually recover interval toward configured minimum on successful requests
+            // Multiplicative recovery (2% per success) is gentler than -50ms linear — a
+            // 15s elevated interval stays above 10s for ~20 successes before recovering,
+            // giving YM's rate limit window time to fully reset instead of re-triggering.
+            // Also delay any recovery until we've seen 30 clean successes since the last
+            // 429, so a brief success streak doesn't immediately drop us back into the
+            // rate-limit zone.
             const minInterval = this.effectiveMinRequestIntervalMs;
-            if (this.currentRequestIntervalMs > minInterval) {
+            this._successesSince429++;
+            if (this._successesSince429 > 30 && this.currentRequestIntervalMs > minInterval) {
                 this.currentRequestIntervalMs = Math.max(
-                    this.currentRequestIntervalMs - 50,
+                    Math.floor(this.currentRequestIntervalMs * 0.98),
                     minInterval
                 );
             }
@@ -2593,7 +2975,7 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         if (ymAuth.Config?.ClientID) {
             return `${YM_API_BASE}/Ams/${ymAuth.Config.ClientID}`;
         }
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
             const clientId = parsed['ClientID'] || parsed['clientId'] || parsed['ClientId'];
@@ -2619,11 +3001,16 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     ): string {
         const separator = basePath.includes('?') ? '&' : '?';
 
+        // MembersGroups: YM enforces max page size of 100
+        const pageSize = obj.Name.toLowerCase() === 'membersgroups'
+            ? Math.min(obj.DefaultPageSize, 100)
+            : obj.DefaultPageSize;
+
         switch (obj.PaginationType) {
             case 'PageNumber':
-                return `${basePath}${separator}PageNumber=${page}&PageSize=${obj.DefaultPageSize}`;
+                return `${basePath}${separator}PageNumber=${page}&PageSize=${pageSize}`;
             case 'Offset':
-                return `${basePath}${separator}OffSet=${offset}&PageSize=${obj.DefaultPageSize}`;
+                return `${basePath}${separator}OffSet=${offset}&PageSize=${pageSize}`;
             case 'Cursor':
                 return cursor
                     ? `${basePath}${separator}cursor=${encodeURIComponent(cursor)}&limit=${obj.DefaultPageSize}`
@@ -2649,7 +3036,73 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
     public override async FetchChanges(ctx: FetchContext): Promise<FetchBatchResult> {
         console.log(`[YM] FetchChanges called for '${ctx.ObjectName}' (batchSize=${ctx.BatchSize}, watermark=${ctx.WatermarkValue ?? 'none'}, offset=${ctx.CurrentOffset ?? 'none'})`);
 
+        // Store watermark so AppendDefaultQueryParams can inject server-side date filters.
+        this._currentWatermark = ctx.WatermarkValue;
+
         const objLower = ctx.ObjectName.toLowerCase();
+
+        // Objects that cannot be synced: doubly parameterized, or require unresolvable query params.
+        // ── NOT_DATA: Auth, action, webhook, utility endpoints — never syncable ──
+        const notDataObjects = new Set([
+            'auth', 'authenticate', 'brandingconfigcss', 'converttomemberrequest',
+            'copycampaign', 'customcss', 'donationhistorycancelautobill', 'donations',
+            'dues', 'eventregistrationattendance', 'eventsessionattendancerequest',
+            'externallink', 'filesupload', 'finalizelogin', 'getaccesstoken', 'gettoken',
+            'groupjoin', 'hasinformz', 'hassacesstestfolder', 'htmlsanitization',
+            'informzbulkuploadbysearchguidrequest', 'informzbulkuploadeventregistrantsrequest',
+            'informzbulkuploadforduesbysearchidrequest', 'informzbulkuploadforduesrequest',
+            'informzbulkuploadforordersbysearchidrequest', 'informzbulkuploadforordersrequest',
+            'informzbulkuploadforreportsrequest', 'informzfindgrouprequest',
+            'invoicepayments', 'memberpasswordreset', 'membershiprenewalreminderputrequest',
+            'notificationsubscription', 'notificationupdate', 'oauthclientappname',
+            'oidcgetaccesstoken', 'orders', 'passwordvalidityrequest', 'productsdto',
+            'peoplebulkdetachrequest', 'quickbooksonlineoauth', 'registrationsessionrequest',
+            'resendcampaign', 'resourcemanagerfilesupload', 'rssbuilder',
+            'sendtestnotification', 'socialoauth', 'storeproductbulkstatus',
+            'storeproductbulkstatusall', 'storeproductpromocodes', 'storeproductsequence',
+            'storeproductupdate', 'unblockcardrequest', 'usernameavailabilityrequest',
+            'webscraper', 'zoomeventlistener', 'zoomeventlisteneroauth', 'zoomoauth',
+            'ping', 'wallpostfirst',
+            'facebookprofile',       // returns malformed/empty JSON (Unexpected end of JSON input)
+        ]);
+        // ── UNSYNCABLE: Requires params that can't be enumerated ──
+        const unsyncableObjects = new Set([
+            'productmemberprice',    // doubly parameterized (ProductId + MemberId)
+            'contentareas',          // requires AreaType query param
+            'customformfields',      // scoped by FormID — no form list
+            'markupcomponenttypes',  // OrderId=0 for all records — no unique key
+            'custompagedoctypes',    // field name mismatch (DocTypeID vs Id)
+            'dashboarddata',         // requires EndDate param, aggregate not entity
+            'eventattendees',        // doubly nested (Member + Event)
+            'eventsessionceuawards', // doubly nested (Event + Session)
+            'communityPhotos',       // requires PhotoId — no flat list
+            'feeds',                 // requires PostId — no flat list
+            'helptopic',             // requires HelpTopicID — no flat list
+            'notificationdetails',   // requires NotificationID — no flat list
+            'wallcomments',          // requires PostId — no flat list
+            'wallcomments_memberlist', // sub-object of WallComments
+            'photocomments',         // doubly nested (Member + Photo), write-only
+            'taxraterequest',        // lookup requiring address params
+            'findeventregistrationforms', // search endpoint requiring params
+            'findeventtickets',      // search endpoint requiring params
+            'findmembers',           // search endpoint requiring params
+            'findproducts',          // search endpoint requiring params
+            'peopleprofilefindid',   // search/lookup requiring params
+            'smscampaignlistdetails', // requires ListId — no flat SMS list
+            'smscampaignreports',    // requires CampaignId — could be Custom but not configured
+            'smscampaignreports_messages', // sub-object of SMSCampaignReports
+            'campaignreports_dailyrate',      // sub-object extracted from CampaignReports response
+            'campaignreports_messageactivity', // sub-object extracted from CampaignReports response
+            'campaignreports_messages',       // sub-object extracted from CampaignReports response
+        ]);
+        if (notDataObjects.has(objLower)) {
+            return { Records: [], HasMore: false };
+        }
+        if (unsyncableObjects.has(objLower)) {
+            console.warn(`[YM] '${ctx.ObjectName}' requires unenumerable parameters. Skipping.`);
+            return { Records: [], HasMore: false };
+        }
+
         if (objLower === 'groups' || objLower === 'grouptypes') {
             return this.FetchGroups(ctx);
         }
@@ -2658,7 +3111,45 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             return this.FetchMemberBatch(ctx);
         }
 
-        return super.FetchChanges(ctx);
+        // PeopleIDs returns flat ID arrays under "IDList" — wrap each as {ID: value}
+        if (objLower === 'peopleids') {
+            return this.FetchPeopleIDs(ctx);
+        }
+
+        // All remaining paths wrapped in error catch for graceful 400/404/500 handling
+        let result: FetchBatchResult;
+        try {
+            // Client-side watermark filtering: fetch all records, filter locally by date field.
+            const clientWatermark = YM_CLIENT_WATERMARK_FIELDS[objLower];
+            if (clientWatermark) {
+                result = await this.FetchWithClientWatermark(ctx, clientWatermark.field);
+            } else {
+                // Parent-scoped endpoints: only run on first call (offset 0 / undefined)
+                const parentScope = YM_PARENT_SCOPED[objLower];
+                if (parentScope && (ctx.CurrentOffset ?? 0) === 0 && !ctx.CurrentPage && !ctx.CurrentCursor) {
+                    result = await this.FetchParentScopedRecords(ctx, parentScope);
+                } else {
+                    result = await super.FetchChanges(ctx);
+                }
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (message.includes('HTTP 404') || message.includes('HTTP 400') || message.includes('HTTP 500')) {
+                const code = message.includes('HTTP 404') ? '404' : message.includes('HTTP 400') ? '400' : '500';
+                console.warn(`[YM] '${ctx.ObjectName}' returned ${code}. Skipping.`);
+                return { Records: [], HasMore: false };
+            }
+            throw err;
+        }
+
+        // ── GENERAL RULE: Filter out records with unresolvable PK fields ──
+        // Drops records where the declared PK field is null and can't be resolved
+        // via case-insensitive matching. Better to skip than insert a garbage-keyed row.
+        if (result.Records.length > 0) {
+            result.Records = this.EnsurePrimaryKeys(result.Records, ctx);
+        }
+
+        return result;
     }
 
     /**
@@ -2706,6 +3197,81 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         }
 
         console.log(`[YM Members] ${changedRecords.length}/${enriched.length} changed since watermark`);
+
+        return {
+            Records: changedRecords,
+            HasMore: pageResult.HasMore,
+            NextOffset: pageResult.NextOffset,
+            NextPage: pageResult.NextPage,
+            NextCursor: pageResult.NextCursor,
+            NewWatermarkValue: !pageResult.HasMore ? newWatermark : undefined,
+        };
+    }
+
+    /**
+     * Fetches records from a flat (non-enriched) endpoint and applies client-side
+     * watermark filtering against a known date field.
+     *
+     * Used for endpoints that include a usable date field (e.g. `DateCreated`,
+     * `LastUpdated`) but have no server-side date filter query parameter.
+     * The base class pagination loop is used to collect all records, then
+     * `FilterByWatermark` narrows to only changed ones.
+     *
+     * Because these endpoints are typically small-to-medium in size, fetching
+     * all and filtering locally is acceptable.
+     */
+    /**
+     * PeopleIDs endpoint returns a flat array of ID numbers under "IDList",
+     * not objects with named fields. This wraps each ID as {ID: value} so
+     * the engine can map it to the PeopleIDs table's ID column.
+     */
+    private async FetchPeopleIDs(ctx: FetchContext): Promise<FetchBatchResult> {
+        const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser) as YMAuthContext;
+        const page = (ctx.CurrentPage ?? 0) + 1;
+        const pageSize = 200;
+        const url = `${YM_API_BASE}/Ams/${auth.Config.ClientID}/PeopleIDs?PageNumber=${page}&PageSize=${pageSize}`;
+        const headers = this.BuildHeaders(auth);
+        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+
+        if (resp.Status >= 400 || !resp.Body) {
+            return { Records: [], HasMore: false };
+        }
+
+        const body = resp.Body as Record<string, unknown>;
+        const list = (body['IDList'] ?? body['PeopleIDs'] ?? body['Ids'] ?? []) as unknown[];
+        if (!Array.isArray(list) || list.length === 0) {
+            return { Records: [], HasMore: false };
+        }
+
+        const records: ExternalRecord[] = list.map(item => {
+            const id = typeof item === 'object' && item !== null
+                ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? (item as Record<string, unknown>)['ID'] ?? item)
+                : String(item);
+            const fields: Record<string, unknown> = typeof item === 'object' && item !== null
+                ? { ID: id, ...(item as Record<string, unknown>) }
+                : { ID: id };
+            return { ExternalID: id, ObjectType: ctx.ObjectName, Fields: fields };
+        });
+
+        return {
+            Records: records,
+            HasMore: list.length >= pageSize,
+            NextPage: page,
+        };
+    }
+
+    private async FetchWithClientWatermark(ctx: FetchContext, dateFieldName: string): Promise<FetchBatchResult> {
+        const pageResult = await super.FetchChanges(ctx);
+
+        if (pageResult.Records.length === 0) {
+            return pageResult;
+        }
+
+        const { changedRecords, newWatermark } = this.FilterByWatermark(
+            pageResult.Records, ctx.WatermarkValue, dateFieldName
+        );
+
+        console.log(`[YM] ${ctx.ObjectName}: ${changedRecords.length}/${pageResult.Records.length} records changed since watermark (field: ${dateFieldName})`);
 
         return {
             Records: changedRecords,
@@ -2954,8 +3520,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
                 ];
             case 'StoreOrderDetails':
                 return [
-                    { SourceFieldName: 'OrderDetailID', DestinationFieldName: 'OrderDetailID', IsKeyField: true },
-                    { SourceFieldName: 'OrderID', DestinationFieldName: 'OrderID' },
+                    { SourceFieldName: 'OrderID', DestinationFieldName: 'OrderID', IsKeyField: true },
+                    { SourceFieldName: 'ProductCode', DestinationFieldName: 'ProductCode', IsKeyField: true },
                     { SourceFieldName: 'WebsiteMemberID', DestinationFieldName: 'WebsiteMemberID' },
                     { SourceFieldName: 'ProductName', DestinationFieldName: 'ProductName' },
                     { SourceFieldName: 'Quantity', DestinationFieldName: 'Quantity' },
@@ -3086,6 +3652,10 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         auth: YMAuthContext,
         record: ExternalRecord
     ): Promise<ExternalRecord> {
+        if (!record.ExternalID) {
+            console.warn(`[YM Members] Skipping enrichment for record with empty ExternalID`);
+            return record;
+        }
         try {
             const detailPath = `Members/${record.ExternalID}`;
             const fetchPromise = this.MakeYMRequest(auth, detailPath);
@@ -3161,13 +3731,13 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser?: UserInfo
     ): Promise<YMConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID && contextUser) {
             const config = await this.LoadFromCredential(credentialID, contextUser);
             if (config) return config;
         }
 
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             return this.ParseConfigJson(configJson);
         }
@@ -3175,8 +3745,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         throw new Error('No YM credentials found. Attach a credential with ClientID, APIKey, and APIPassword, or set Configuration JSON on the CompanyIntegration.');
     }
 
-    private async LoadFromCredential(credentialID: string, contextUser: UserInfo): Promise<YMConnectionConfig | null> {
-        const md = new Metadata();
+    private async LoadFromCredential(credentialID: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<YMConnectionConfig | null> {
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
@@ -3381,6 +3951,355 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         }
     }
 
+    // ─── Parent-scoped endpoint traversal ────────────────────────────
+
+    /**
+     * Returns the /Ymc/ base URL for Career Center endpoints.
+     */
+    private GetYmcBaseURL(clientId: string): string {
+        return `${YM_API_BASE}/Ymc/${clientId}`;
+    }
+
+    /**
+     * Fetches all event IDs by paginating the EventIDs endpoint.
+     * Returns an array of event ID strings for use in parent-scoped fetches.
+     */
+    private async FetchAllEventIDs(
+        auth: RESTAuthContext,
+        config: YMConnectionConfig
+    ): Promise<string[]> {
+        const baseUrl = `${YM_API_BASE}/Ams/${config.ClientID}/EventIDs`;
+        const headers = this.BuildHeaders(auth);
+        const ids: string[] = [];
+        let page = 1;
+
+        try {
+            while (true) {
+                const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) break;
+
+                const body = resp.Body as Record<string, unknown>;
+                const list = (body['EventIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+                if (!Array.isArray(list) || list.length === 0) break;
+
+                for (const item of list) {
+                    const id = typeof item === 'object' && item !== null
+                        ? String((item as Record<string, unknown>)['EventId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                        : String(item);
+                    ids.push(id);
+                }
+
+                if (list.length < 500) break;
+                page++;
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllEventIDs failed: ${message} — skipping event-scoped objects`);
+            return [];
+        }
+
+        console.log(`[YM] FetchAllEventIDs: found ${ids.length} event IDs`);
+        return ids;
+    }
+
+    /**
+     * Fetches all member/people IDs from the PeopleIDs endpoint.
+     */
+    private async FetchAllMemberIDs(
+        auth: RESTAuthContext,
+        config: YMConnectionConfig
+    ): Promise<string[]> {
+        const baseUrl = `${YM_API_BASE}/Ams/${config.ClientID}/PeopleIDs`;
+        const headers = this.BuildHeaders(auth);
+        const ids: string[] = [];
+        let page = 1;
+
+        try {
+            while (true) {
+                const url = `${baseUrl}?PageNumber=${page}&PageSize=500`;
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) break;
+
+                const body = resp.Body as Record<string, unknown>;
+                const list = (body['PeopleIDs'] ?? body['Ids'] ?? body['IDs'] ?? []) as unknown[];
+                if (!Array.isArray(list) || list.length === 0) break;
+
+                for (const item of list) {
+                    const id = typeof item === 'object' && item !== null
+                        ? String((item as Record<string, unknown>)['ProfileId'] ?? (item as Record<string, unknown>)['Id'] ?? item)
+                        : String(item);
+                    ids.push(id);
+                }
+
+                if (list.length < 500) break;
+                page++;
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllMemberIDs failed: ${message} — skipping member-scoped objects`);
+            return [];
+        }
+
+        console.log(`[YM] FetchAllMemberIDs: found ${ids.length} member IDs`);
+        return ids;
+    }
+
+    /**
+     * Fetches all group IDs by calling the Groups endpoint and flattening
+     * the nested GroupTypeList → Groups[].Id structure.
+     */
+    private async FetchAllGroupIDs(
+        auth: RESTAuthContext,
+        _config: YMConnectionConfig
+    ): Promise<string[]> {
+        try {
+            const json = await this.MakeYMRequest(auth as YMAuthContext, 'Groups');
+            const typeList = json['GroupTypeList'] as GroupTypeListItem[] | undefined;
+            if (!typeList || !Array.isArray(typeList)) {
+                console.warn(`[YM] FetchAllGroupIDs: no GroupTypeList in Groups response`);
+                return [];
+            }
+            const ids: string[] = [];
+            for (const groupType of typeList) {
+                for (const group of groupType.Groups ?? []) {
+                    if (group.Id !== undefined) ids.push(String(group.Id));
+                }
+            }
+            console.log(`[YM] FetchAllGroupIDs: found ${ids.length} group IDs`);
+            return ids;
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            console.warn(`[YM] FetchAllGroupIDs failed: ${message} — skipping group-scoped objects`);
+            return [];
+        }
+    }
+
+    /**
+     * Fetches parent IDs from a secondary list endpoint for 'Custom' parent-scoped objects.
+     * Calls GET /Ams/{ClientID}/{sourcePath}, extracts the array at responseKey,
+     * and returns the idField value from each item as a string.
+     *
+     * Results are NOT cached here — callers manage the cache via parentIdCache.
+     */
+    private async FetchCustomParentIDs(
+        auth: YMAuthContext,
+        config: YMConnectionConfig,
+        sourcePath: string,
+        responseKey: string,
+        idField: string,
+    ): Promise<string[]> {
+        const url = `${YM_API_BASE}/Ams/${config.ClientID}/${sourcePath}`;
+        const headers = this.BuildHeaders(auth);
+        const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (resp.Status >= 400 || !resp.Body) {
+            console.warn(`[YM] FetchCustomParentIDs: failed to fetch '${sourcePath}' (HTTP ${resp.Status})`);
+            return [];
+        }
+
+        const body = resp.Body as Record<string, unknown>;
+        const raw = body[responseKey];
+        if (!Array.isArray(raw)) {
+            console.warn(`[YM] FetchCustomParentIDs: '${sourcePath}' response has no array at key '${responseKey}'`);
+            return [];
+        }
+
+        const ids: string[] = [];
+        for (const item of raw as Record<string, unknown>[]) {
+            const val = item[idField];
+            if (val !== undefined && val !== null) ids.push(String(val));
+        }
+
+        console.log(`[YM] FetchCustomParentIDs: '${sourcePath}' → ${ids.length} IDs (field '${idField}')`);
+        return ids;
+    }
+
+    /**
+     * Fetches all records for a parent-scoped endpoint by:
+     * 1. Enumerating all parent IDs (cached per sync run)
+     * 2. Fetching child records for each parent ID
+     * 3. Returning all records as a single batch with HasMore=false
+     *
+     * Parent IDs are cached in parentIdCache so subsequent calls for the same
+     * parent type within a sync run don't re-fetch the ID list.
+     */
+    private async FetchParentScopedRecords(
+        ctx: FetchContext,
+        scope: YMParentScopeConfig
+    ): Promise<FetchBatchResult> {
+        const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+        const config = await this.ParseConfig(companyIntegration, ctx.ContextUser);
+        const auth = await this.Authenticate(companyIntegration, ctx.ContextUser) as YMAuthContext;
+        const headers = this.BuildHeaders(auth);
+
+        // Fetch or use cached parent IDs
+        // Narrow the Custom variant explicitly to satisfy TypeScript (first union member
+        // uses 'Event'|'Member'|'Group' as combined literals so narrowing via else doesn't work).
+        type CustomScope = { parentType: 'Custom'; pathTemplate: string; idSourcePath: string; idResponseKey: string; idField: string };
+        const isCustom = (s: YMParentScopeConfig): s is CustomScope => s.parentType === 'Custom';
+
+        const cacheKey = isCustom(scope) ? `custom:${scope.idSourcePath}` : scope.parentType;
+        let parentIds = this.parentIdCache.get(cacheKey);
+        if (!parentIds) {
+            if (scope.parentType === 'Event') {
+                parentIds = await this.FetchAllEventIDs(auth, config);
+            } else if (scope.parentType === 'Member') {
+                parentIds = await this.FetchAllMemberIDs(auth, config);
+            } else if (scope.parentType === 'Group') {
+                parentIds = await this.FetchAllGroupIDs(auth, config);
+            } else {
+                const cs = scope as CustomScope;
+                parentIds = await this.FetchCustomParentIDs(auth, config, cs.idSourcePath, cs.idResponseKey, cs.idField);
+            }
+            this.parentIdCache.set(cacheKey, parentIds);
+        }
+
+        if (parentIds.length === 0) {
+            const sourceDesc = isCustom(scope) ? scope.idSourcePath
+                : scope.parentType === 'Event' ? 'EventIDs'
+                : scope.parentType === 'Group' ? 'Groups'
+                : 'PeopleIDs';
+            console.warn(`[YM] FetchParentScopedRecords: 0 ${scope.parentType} IDs found for '${ctx.ObjectName}' — check ${sourceDesc} endpoint`);
+            return { Records: [], HasMore: false };
+        }
+
+        console.log(`[YM] FetchParentScopedRecords: fetching '${ctx.ObjectName}' for ${parentIds.length} ${scope.parentType} IDs`);
+
+        const isYmc = YM_YMC_ENDPOINTS.has(ctx.ObjectName.toLowerCase());
+        const baseUrl = isYmc
+            ? this.GetYmcBaseURL(config.ClientID)
+            : `${YM_API_BASE}/Ams/${config.ClientID}`;
+
+        const allRecords: ExternalRecord[] = [];
+        let fetched = 0;
+
+        for (const parentId of parentIds) {
+            const childPath = scope.pathTemplate.replace('{parentId}', parentId);
+            const url = `${baseUrl}/${childPath}`;
+
+            try {
+                const resp = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+                if (resp.Status >= 400 || !resp.Body) continue;
+
+                const raw = resp.Body as Record<string, unknown>;
+                // Resolve records from the response shape. YM parent-scoped endpoints
+                // can return three shapes:
+                //   A) A top-level array (rare) — `[{...}, {...}]`
+                //   B) A wrapper with a nested array (most common for list-per-parent) —
+                //      `{ EventId, Sessions: [...], ...other wrapper fields }`
+                //   C) A single detail object (for per-parent detail endpoints) —
+                //      `{ SessionId, EventId, ... }` directly.
+                // For (B), we emit inner array items — NOT the wrapper — so the PK
+                // (SessionId, TicketId, etc.) is actually present on each record. If the
+                // wrapper's nested array is empty, we emit 0 records for that parent
+                // rather than falling back to the wrapper (which has no PK and would be
+                // dropped by EnsurePrimaryKeys).
+                let records: Record<string, unknown>[] = [];
+                let hasArrayProperty = false;
+                if (Array.isArray(resp.Body)) {
+                    records = resp.Body as Record<string, unknown>[];
+                    hasArrayProperty = true;
+                } else {
+                    for (const val of Object.values(raw)) {
+                        if (Array.isArray(val)) {
+                            hasArrayProperty = true;
+                            if (val.length > 0) {
+                                records = val as Record<string, unknown>[];
+                                break;
+                            }
+                        }
+                    }
+                    // Only treat whole response as a single record when there's NO
+                    // array property anywhere — i.e., genuinely shape (C).
+                    if (!hasArrayProperty && Object.keys(raw).length > 0) {
+                        records = [this.FilterMetadataKeys(raw)];
+                    }
+                }
+
+                for (const rec of records) {
+                    const sanitized = this.SanitizeDateFields({ ...rec, _parentId: parentId });
+                    const flattened = this.FlattenYMRecord(sanitized);
+
+                    // For Locations: locationCode is the PK (NOT NULL in DB) but is absent on many YM
+                    // records (254/330 in production). Fill it with locationName as fallback so inserts
+                    // always succeed. Build a stable countryId|locationCode ExternalID for deduplication.
+                    let locationExternalId: string | undefined;
+                    if (ctx.ObjectName.toLowerCase() === 'locations') {
+                        const locName = flattened['locationName'] as string | null | undefined;
+                        if (!flattened['locationCode']) {
+                            // PK is NOT NULL — fill with locationName, or countryId_index as last resort
+                            flattened['locationCode'] = locName ?? `${parentId}_${allRecords.length}`;
+                        }
+                        const countryId = (flattened['countryId'] as string | undefined) ?? parentId;
+                        locationExternalId = `${countryId}|${String(flattened['locationCode'])}`;
+                    }
+
+                    const externalId = String(
+                        locationExternalId ??
+                        flattened['Id'] ?? flattened['ID'] ?? flattened['ProfileID'] ??
+                        flattened['EventId'] ?? flattened['SessionId'] ?? `${parentId}_${fetched}_${allRecords.length}`
+                    );
+                    allRecords.push({ Fields: flattened, ExternalID: externalId, ObjectType: ctx.ObjectName });
+                }
+
+                fetched++;
+            } catch (err) {
+                console.warn(`[YM] FetchParentScopedRecords: error fetching '${ctx.ObjectName}' for ${scope.parentType} ${parentId}: ${err}`);
+            }
+        }
+
+        console.log(`[YM] FetchParentScopedRecords: '${ctx.ObjectName}' — ${allRecords.length} records from ${fetched}/${parentIds.length} parents`);
+        return { Records: allRecords, HasMore: false };
+    }
+
+    /**
+     * Flattens YM custom field DTOs into top-level fields.
+     * Handles two shapes from the research:
+     *   Simple:  [{ Code: 'field_code', Response: 'value' }]
+     *   Complex: [{ ExportLabel: 'label', CustomFieldValue: { FieldCode: 'code', Values: [{ Value: 'v' }] } }]
+     */
+    private FlattenYMRecord(record: Record<string, unknown>): Record<string, unknown> {
+        const result: Record<string, unknown> = { ...record };
+
+        for (const [key, value] of Object.entries(record)) {
+            if (!Array.isArray(value)) continue;
+
+            const arr = value as Record<string, unknown>[];
+            if (arr.length === 0) continue;
+            const first = arr[0];
+            if (typeof first !== 'object' || first === null) continue;
+
+            // Simple shape: { Code, Response }
+            if ('Code' in first && 'Response' in first) {
+                delete result[key];
+                for (const item of arr) {
+                    const code = String(item['Code'] ?? '');
+                    if (code) result[`cf_${code}`] = item['Response'] ?? null;
+                }
+                continue;
+            }
+
+            // Complex shape: { ExportLabel, CustomFieldValue: { FieldCode, Values: [{ Value }] } }
+            if ('ExportLabel' in first || 'CustomFieldValue' in first) {
+                delete result[key];
+                for (const item of arr) {
+                    const cfv = item['CustomFieldValue'] as Record<string, unknown> | undefined;
+                    const code = cfv ? String(cfv['FieldCode'] ?? item['ExportLabel'] ?? '') : String(item['ExportLabel'] ?? '');
+                    if (!code) continue;
+                    const values = cfv?.['Values'];
+                    if (Array.isArray(values) && values.length > 0) {
+                        const firstVal = values[0] as Record<string, unknown>;
+                        result[`cf_${code}`] = firstVal['Value'] ?? null;
+                    } else {
+                        result[`cf_${code}`] = null;
+                    }
+                }
+            }
+        }
+
+        return result;
+    }
+
     /** Filters out YM API metadata keys that shouldn't be stored as field data. */
     private FilterMetadataKeys(data: Record<string, unknown>): Record<string, unknown> {
         const result: Record<string, unknown> = {};
@@ -3404,6 +4323,66 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
             }
         }
         return 0;
+    }
+
+    /**
+     * General-purpose PK safety net: filters out records where a declared PK field is null/missing
+     * and cannot be resolved via case-insensitive field name matching.
+     *
+     * Strategy per PK field:
+     * 1. Field is already present and non-null → keep record as-is.
+     * 2. Case-insensitive match finds the field under a different casing → copy the value.
+     * 3. No match at all → DROP the record and log a warning.
+     *
+     * Dropping is intentional: inserting with a garbage or positional PK creates phantom rows
+     * that can never be correctly updated on subsequent incremental syncs.
+     *
+     * Returns a new array with only the records that have valid PKs.
+     */
+    private EnsurePrimaryKeys(records: ExternalRecord[], ctx: FetchContext): ExternalRecord[] {
+        // Look up the declared PK field names from cached metadata.
+        let pkFieldNames: string[] = [];
+        try {
+            const integrationID = ctx.CompanyIntegration.IntegrationID;
+            const obj = this.GetCachedObject(integrationID, ctx.ObjectName);
+            const fields = this.GetCachedFields(obj.ID);
+            pkFieldNames = fields
+                .filter(f => f.IsPrimaryKey)
+                .sort((a, b) => a.Sequence - b.Sequence)
+                .map(f => f.Name);
+        } catch {
+            // Object or fields not in cache yet — pass through unchanged.
+            return records;
+        }
+
+        if (pkFieldNames.length === 0) return records;
+
+        const valid: ExternalRecord[] = [];
+        for (const record of records) {
+            const raw = record.Fields;
+            let drop = false;
+
+            for (const pkField of pkFieldNames) {
+                if (raw[pkField] != null) continue; // already present
+
+                // Case-insensitive search among the record's own keys.
+                const recordKeys = Object.keys(raw);
+                const matchKey = recordKeys.find(k => k.toLowerCase() === pkField.toLowerCase());
+                if (matchKey && raw[matchKey] != null) {
+                    raw[pkField] = raw[matchKey];
+                    continue;
+                }
+
+                // No recoverable value — drop this record.
+                console.warn(`[YM] '${ctx.ObjectName}': dropping record with null PK field '${pkField}'. Record keys: ${recordKeys.join(', ')}`);
+                drop = true;
+                break;
+            }
+
+            if (!drop) valid.push(record);
+        }
+
+        return valid;
     }
 }
 

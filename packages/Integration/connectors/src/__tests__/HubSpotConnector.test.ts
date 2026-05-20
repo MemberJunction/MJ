@@ -66,7 +66,11 @@ describe('HubSpotConnector (unit)', () => {
         });
 
         it('should pass through unknown types', () => {
-            expect(connector.MapHubSpotType('totally_unknown_vendor_type', 'some-widget')).toBe('totally_unknown_vendor_type');
+            expect(connector.MapHubSpotType('custom_widget', 'widget')).toBe('custom_widget');
+        });
+
+        it('should map phone_number to string', () => {
+            expect(connector.MapHubSpotType('phone_number', 'phonenumber')).toBe('string');
         });
     });
 

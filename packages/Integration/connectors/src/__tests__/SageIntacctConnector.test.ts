@@ -81,17 +81,20 @@ describe('SageIntacctConnector (unit)', () => {
     });
 
     describe('GetIntegrationObjects', () => {
-        it('should return core Sage Intacct objects', () => {
+        it('should return all known Sage Intacct objects', () => {
             const objects = connector.GetIntegrationObjects();
-            // Exact catalog size will drift as objects are added/removed; assert presence,
-            // not count. Connector emission is the source of truth.
-            expect(objects.length).toBeGreaterThan(0);
+            expect(objects.length).toBe(9);
 
             const names = objects.map(o => o.Name);
-            // Core financial entities every Sage Intacct deployment exposes:
             expect(names).toContain('CUSTOMER');
             expect(names).toContain('VENDOR');
             expect(names).toContain('GLACCOUNT');
+            expect(names).toContain('APBILL');
+            expect(names).toContain('ARINVOICE');
+            expect(names).toContain('PROJECT');
+            expect(names).toContain('EMPLOYEE');
+            expect(names).toContain('DEPARTMENT');
+            expect(names).toContain('CLASS');
         });
 
         it('should have correct field definitions for CUSTOMER', () => {
@@ -118,7 +121,7 @@ describe('SageIntacctConnector (unit)', () => {
             expect(config!.IconClass).toBe('fa-solid fa-file-invoice-dollar');
             expect(config!.IncludeSearch).toBe(true);
             expect(config!.IncludeList).toBe(true);
-            expect(config!.Objects.length).toBeGreaterThan(0);
+            expect(config!.Objects.length).toBe(9);
         });
     });
 
