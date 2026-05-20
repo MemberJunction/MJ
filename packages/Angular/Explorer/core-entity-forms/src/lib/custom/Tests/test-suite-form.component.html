@@ -253,6 +253,22 @@
     <!-- Tests Tab -->
     @if (activeTab === 'tests') {
       <div class="tests-tab">
+        <!-- Header: action bar -->
+        <div class="tests-actionbar">
+          <div class="tests-actionbar-text">
+            <strong>Suite tests</strong>
+            @if (testsLoaded) {
+              <span class="tests-actionbar-count">{{ suiteTests.length }}</span>
+            }
+            <span class="tests-actionbar-hint">Drag to reorder · Hover a row to remove</span>
+          </div>
+          <div class="tests-actionbar-actions">
+            <button mjButton variant="primary" (click)="openAddTestsDialog()" [disabled]="isReorderingTests">
+              <i class="fas fa-plus"></i> Add tests
+            </button>
+          </div>
+        </div>
+
         <!-- Loading State -->
         @if (loadingTests) {
           <div class="loading-state">
@@ -272,12 +288,15 @@
         }
         <!-- Tests List -->
         @if (!loadingTests && suiteTests.length > 0) {
-          <div class="tests-list">
-            @for (test of suiteTests; track test) {
-              <div class="test-item" (click)="openTest(test.TestID)">
+          <div class="tests-list" cdkDropList (cdkDropListDropped)="onTestDrop($event)">
+            @for (test of suiteTests; track test.ID) {
+              <div class="test-item" cdkDrag [cdkDragDisabled]="isReorderingTests || isRemovingTest">
+                <span class="test-drag-handle" cdkDragHandle title="Drag to reorder" aria-label="Drag to reorder">
+                  <i class="fas fa-grip-vertical"></i>
+                </span>
                 <div class="test-sequence">{{ test.Sequence }}</div>
                 <div class="test-icon"><i class="fas fa-flask"></i></div>
-                <div class="test-content">
+                <div class="test-content" (click)="openTest(test.TestID)">
                   <div class="test-name">{{ test.Test }}</div>
                   <div class="test-status">
                     @if (test.Status) {
@@ -285,7 +304,43 @@
                     }
                   </div>
                 </div>
-                <i class="fas fa-chevron-right"></i>
+                <!-- Inline remove confirm OR hover-reveal X -->
+                @if (confirmingRemoveSuiteTestId === test.ID) {
+                  <div class="test-remove-confirm" (click)="$event.stopPropagation()">
+                    <span class="test-remove-confirm-text">Remove from suite?</span>
+                    <button
+                      type="button"
+                      class="test-remove-confirm-btn test-remove-confirm-btn--danger"
+                      (click)="confirmRemoveTest(test, $event)"
+                      [disabled]="isRemovingTest"
+                    >
+                      @if (isRemovingTest) {
+                        <i class="fas fa-spinner fa-spin"></i>
+                      } @else {
+                        Remove
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="test-remove-confirm-btn test-remove-confirm-btn--ghost"
+                      (click)="cancelRemoveTest($event)"
+                      [disabled]="isRemovingTest"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="test-remove-btn"
+                    title="Remove from suite"
+                    aria-label="Remove from suite"
+                    (click)="requestRemoveTest(test, $event)"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
+                  <i class="fas fa-chevron-right test-chevron" (click)="openTest(test.TestID)"></i>
+                }
               </div>
             }
           </div>
@@ -298,6 +353,9 @@
             </div>
             <h4>No Tests in Suite</h4>
             <p>Add tests to this suite to start running them together.</p>
+            <button mjButton variant="primary" (click)="openAddTestsDialog()">
+              <i class="fas fa-plus"></i> Add tests
+            </button>
           </div>
         }
       </div>
@@ -1128,6 +1186,137 @@
         (PanelClose)="OnPanelClosed()">
       </app-test-run-dialog>
     </mj-slide-panel>
+  }
+
+  <!-- Add Tests Picker Dialog -->
+  @if (showAddTestsDialog) {
+    <div class="picker-backdrop" (click)="closeAddTestsDialog()"></div>
+    <div class="picker-dialog" role="dialog" aria-modal="true" aria-labelledby="add-tests-dialog-title" (click)="$event.stopPropagation()">
+      <div class="picker-header">
+        <h2 id="add-tests-dialog-title" class="picker-title">
+          <i class="fas fa-plus-circle"></i> Add tests to suite
+        </h2>
+        <button type="button" class="picker-close" (click)="closeAddTestsDialog()" [disabled]="isAddingTests" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="picker-search">
+        <i class="fas fa-search picker-search-icon"></i>
+        <input
+          #pickerSearch
+          type="text"
+          class="picker-search-input"
+          placeholder="Search tests by name, description, or type..."
+          [(ngModel)]="addTestsSearch"
+          autofocus
+        />
+        @if (addTestsSearch) {
+          <button type="button" class="picker-search-clear" (click)="addTestsSearch = ''" aria-label="Clear search">
+            <i class="fas fa-times"></i>
+          </button>
+        }
+      </div>
+
+      <div class="picker-toolbar">
+        <span class="picker-toolbar-status">
+          @if (selectedTestIdsToAdd.size > 0) {
+            <strong>{{ selectedTestIdsToAdd.size }}</strong> selected
+          } @else if (!loadingAvailableTests) {
+            {{ filteredAvailableTests.length }} test{{ filteredAvailableTests.length === 1 ? '' : 's' }} available
+          }
+        </span>
+        <div class="picker-toolbar-actions">
+          <button type="button" class="picker-link-btn" (click)="selectAllFiltered()" [disabled]="loadingAvailableTests || filteredAvailableTests.length === 0">
+            Select all
+          </button>
+          <button type="button" class="picker-link-btn" (click)="clearAddSelection()" [disabled]="selectedTestIdsToAdd.size === 0">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="picker-body">
+        @if (loadingAvailableTests) {
+          <div class="picker-loading">
+            <mj-loading text="Loading tests..."></mj-loading>
+          </div>
+        } @else if (filteredAvailableTests.length === 0) {
+          <div class="picker-empty">
+            @if (availableTests.length === 0) {
+              <i class="fas fa-check-circle"></i>
+              <h4>Everything's already in the suite</h4>
+              <p>This suite contains every available test. Create a new test first to add more.</p>
+            } @else {
+              <i class="fas fa-search"></i>
+              <h4>No matches</h4>
+              <p>No tests match "{{ addTestsSearch }}".</p>
+            }
+          </div>
+        } @else {
+          <ul class="picker-list">
+            @for (t of filteredAvailableTests; track t.ID) {
+              <li
+                class="picker-row"
+                [class.picker-row--selected]="isAddSelected(t.ID)"
+                (click)="toggleAddSelection(t.ID)"
+                role="checkbox"
+                [attr.aria-checked]="isAddSelected(t.ID)"
+                tabindex="0"
+              >
+                <span class="picker-check">
+                  @if (isAddSelected(t.ID)) {
+                    <i class="fas fa-check"></i>
+                  }
+                </span>
+                <div class="picker-row-main">
+                  <div class="picker-row-name">{{ t.Name }}</div>
+                  @if (t.Description) {
+                    <div class="picker-row-desc">{{ t.Description }}</div>
+                  }
+                </div>
+                <div class="picker-row-meta">
+                  @if (t.Type) {
+                    <span class="picker-row-pill">{{ t.Type }}</span>
+                  }
+                  <span class="picker-row-pill picker-row-pill--status" [attr.data-status]="t.Status?.toLowerCase()">{{ t.Status }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="picker-footer">
+        <button
+          type="button"
+          class="picker-btn picker-btn--primary"
+          (click)="confirmAddTests()"
+          [disabled]="selectedTestIdsToAdd.size === 0 || isAddingTests"
+        >
+          @if (isAddingTests) {
+            <i class="fas fa-spinner fa-spin"></i> Adding…
+          } @else {
+            <i class="fas fa-check"></i>
+            @if (selectedTestIdsToAdd.size === 0) {
+              Add tests
+            } @else if (selectedTestIdsToAdd.size === 1) {
+              Add 1 test
+            } @else {
+              Add {{ selectedTestIdsToAdd.size }} tests
+            }
+          }
+        </button>
+        <button
+          type="button"
+          class="picker-btn picker-btn--ghost"
+          (click)="closeAddTestsDialog()"
+          [disabled]="isAddingTests"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
   }
 
   <!-- Sticky Save Bar — always in the DOM so CSS transitions can fire reliably.

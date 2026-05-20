@@ -3,7 +3,8 @@ import * as d3 from 'd3';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
-import { MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJTestRunEntity, MJTestRunFeedbackEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { CdkDragDrop, moveItemInArray } from '@angular/cdk/drag-drop';
+import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestSuiteRunEntity, MJTestRunEntity, MJTestRunFeedbackEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
@@ -98,6 +99,21 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   parentSuiteOptions: MJTestSuiteEntity[] = [];
   tagDraft = '';
   readonly statusOptions: readonly string[] = ['Active', 'Pending', 'Disabled'];
+
+  // Add Tests picker state
+  showAddTestsDialog = false;
+  availableTests: MJTestEntity[] = [];
+  loadingAvailableTests = false;
+  selectedTestIdsToAdd = new Set<string>();
+  addTestsSearch = '';
+  isAddingTests = false;
+
+  // Remove-confirm state (per-row inline confirm)
+  confirmingRemoveSuiteTestId: string | null = null;
+  isRemovingTest = false;
+
+  // Reorder state
+  isReorderingTests = false;
 
   // Service injections
   private navigationService = inject(NavigationService);
@@ -2064,6 +2080,254 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         event.preventDefault();
         this.removeTag(all[all.length - 1]);
       }
+    }
+  }
+
+  // ==========================================
+  // Suite Membership: Add / Remove / Reorder Tests
+  // ==========================================
+
+  /** Open the picker dialog and load tests not yet in this suite. */
+  async openAddTestsDialog(): Promise<void> {
+    this.showAddTestsDialog = true;
+    this.selectedTestIdsToAdd = new Set<string>();
+    this.addTestsSearch = '';
+    this.loadingAvailableTests = true;
+    this.cdr.markForCheck();
+
+    try {
+      if (!this.testsLoaded) {
+        await this.loadTests();
+      }
+
+      const existingTestIds = new Set(this.suiteTests.map(st => st.TestID));
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJTestEntity>({
+        EntityName: 'MJ: Tests',
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success) {
+        this.availableTests = (result.Results || []).filter(t => !existingTestIds.has(t.ID));
+      } else {
+        SharedService.Instance.CreateSimpleNotification('Failed to load tests', 'error', 3000);
+      }
+    } catch (err) {
+      console.error('Error loading available tests:', err);
+      SharedService.Instance.CreateSimpleNotification('Failed to load tests', 'error', 3000);
+    } finally {
+      this.loadingAvailableTests = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  closeAddTestsDialog(): void {
+    if (this.isAddingTests) return;
+    this.showAddTestsDialog = false;
+    this.selectedTestIdsToAdd = new Set<string>();
+    this.addTestsSearch = '';
+    this.cdr.markForCheck();
+  }
+
+  toggleAddSelection(testId: string): void {
+    if (this.selectedTestIdsToAdd.has(testId)) {
+      this.selectedTestIdsToAdd.delete(testId);
+    } else {
+      this.selectedTestIdsToAdd.add(testId);
+    }
+    // Set mutation alone doesn't trigger OnPush — assign a new reference
+    this.selectedTestIdsToAdd = new Set(this.selectedTestIdsToAdd);
+    this.cdr.markForCheck();
+  }
+
+  isAddSelected(testId: string): boolean {
+    return this.selectedTestIdsToAdd.has(testId);
+  }
+
+  /** Tests that match the picker search filter. */
+  get filteredAvailableTests(): MJTestEntity[] {
+    const q = this.addTestsSearch.trim().toLowerCase();
+    if (!q) return this.availableTests;
+    return this.availableTests.filter(t =>
+      (t.Name || '').toLowerCase().includes(q) ||
+      (t.Description || '').toLowerCase().includes(q) ||
+      (t.Type || '').toLowerCase().includes(q)
+    );
+  }
+
+  selectAllFiltered(): void {
+    for (const t of this.filteredAvailableTests) {
+      this.selectedTestIdsToAdd.add(t.ID);
+    }
+    this.selectedTestIdsToAdd = new Set(this.selectedTestIdsToAdd);
+    this.cdr.markForCheck();
+  }
+
+  clearAddSelection(): void {
+    this.selectedTestIdsToAdd = new Set<string>();
+    this.cdr.markForCheck();
+  }
+
+  /** Create suite-test rows for every selected test, appended after existing ones. */
+  async confirmAddTests(): Promise<void> {
+    if (this.selectedTestIdsToAdd.size === 0 || this.isAddingTests) return;
+
+    this.isAddingTests = true;
+    this.cdr.markForCheck();
+
+    const provider = this.ProviderToUse;
+    const startSequence = this.suiteTests.reduce((max, st) => Math.max(max, st.Sequence ?? 0), 0);
+    const idsToAdd = Array.from(this.selectedTestIdsToAdd);
+    // Snapshot test names from the picker so we can hydrate the joined "Test"
+    // column on the optimistic rows (BaseEntity's joined view fields aren't
+    // always populated through a TransactionGroup save).
+    const testNameById = new Map<string, string>(
+      this.availableTests.map(t => [t.ID, t.Name])
+    );
+
+    try {
+      const tg = await provider.CreateTransactionGroup();
+      const newRows: MJTestSuiteTestEntity[] = [];
+
+      for (let i = 0; i < idsToAdd.length; i++) {
+        const row = await provider.GetEntityObject<MJTestSuiteTestEntity>('MJ: Test Suite Tests', provider.CurrentUser);
+        row.NewRecord();
+        row.SuiteID = this.record.ID;
+        row.TestID = idsToAdd[i];
+        row.Sequence = startSequence + i + 1;
+        row.Status = 'Active';
+        row.TransactionGroup = tg;
+        await row.Save();
+        newRows.push(row);
+      }
+
+      const ok = await tg.Submit();
+      if (ok) {
+        // Optimistic UI update: append the saved rows immediately so the user
+        // sees the new tests right away. If the joined "Test" name field
+        // didn't come back from the save (TG quirk), hydrate it from the
+        // picker snapshot.
+        for (const row of newRows) {
+          if (!row.Test) {
+            const name = testNameById.get(row.TestID);
+            if (name) {
+              row.Set('Test', name);
+            }
+          }
+        }
+        this.suiteTests = [...this.suiteTests, ...newRows];
+        this.cdr.markForCheck();
+
+        SharedService.Instance.CreateSimpleNotification(
+          idsToAdd.length === 1 ? 'Test added to suite' : `${idsToAdd.length} tests added to suite`,
+          'success',
+          2000
+        );
+        this.showAddTestsDialog = false;
+        this.selectedTestIdsToAdd = new Set<string>();
+        this.addTestsSearch = '';
+      } else {
+        const failed = newRows.find(r => r.LatestResult && !r.LatestResult.Success);
+        const detail = failed?.LatestResult?.CompleteMessage || 'Failed to add tests';
+        SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add tests';
+      SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
+    } finally {
+      this.isAddingTests = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Show the inline remove-confirm for one suite-test row. */
+  requestRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): void {
+    if (event) event.stopPropagation();
+    this.confirmingRemoveSuiteTestId = suiteTest.ID;
+    this.cdr.markForCheck();
+  }
+
+  cancelRemoveTest(event?: Event): void {
+    if (event) event.stopPropagation();
+    this.confirmingRemoveSuiteTestId = null;
+    this.cdr.markForCheck();
+  }
+
+  /** Delete the suite-test join row and refresh the list. */
+  async confirmRemoveTest(suiteTest: MJTestSuiteTestEntity, event?: Event): Promise<void> {
+    if (event) event.stopPropagation();
+    if (this.isRemovingTest) return;
+    this.isRemovingTest = true;
+    this.cdr.markForCheck();
+
+    try {
+      const ok = await suiteTest.Delete();
+      if (ok) {
+        this.suiteTests = this.suiteTests.filter(t => t.ID !== suiteTest.ID);
+        SharedService.Instance.CreateSimpleNotification('Test removed from suite', 'success', 2000);
+      } else {
+        const detail = suiteTest.LatestResult?.CompleteMessage || 'Failed to remove test';
+        SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to remove test';
+      SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
+    } finally {
+      this.isRemovingTest = false;
+      this.confirmingRemoveSuiteTestId = null;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Handle CDK drag-drop reordering — persists new Sequence values. */
+  async onTestDrop(event: CdkDragDrop<MJTestSuiteTestEntity[]>): Promise<void> {
+    if (event.previousIndex === event.currentIndex) return;
+
+    // Optimistic reorder
+    const reordered = [...this.suiteTests];
+    moveItemInArray(reordered, event.previousIndex, event.currentIndex);
+    this.suiteTests = reordered;
+    this.cdr.markForCheck();
+
+    // Compute which rows actually changed sequence (1-based contiguous numbering)
+    const dirty: MJTestSuiteTestEntity[] = [];
+    reordered.forEach((row, idx) => {
+      const newSeq = idx + 1;
+      if (row.Sequence !== newSeq) {
+        row.Sequence = newSeq;
+        dirty.push(row);
+      }
+    });
+
+    if (dirty.length === 0) return;
+
+    this.isReorderingTests = true;
+    this.cdr.markForCheck();
+
+    const provider = this.ProviderToUse;
+    try {
+      const tg = await provider.CreateTransactionGroup();
+      for (const row of dirty) {
+        row.TransactionGroup = tg;
+        await row.Save();
+      }
+      const ok = await tg.Submit();
+      if (!ok) {
+        const failed = dirty.find(r => r.LatestResult && !r.LatestResult.Success);
+        const detail = failed?.LatestResult?.CompleteMessage || 'Failed to save new order';
+        SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
+        this.testsLoaded = false;
+        await this.loadTests();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to save new order';
+      SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
+      this.testsLoaded = false;
+      await this.loadTests();
+    } finally {
+      this.isReorderingTests = false;
+      this.cdr.markForCheck();
     }
   }
 }

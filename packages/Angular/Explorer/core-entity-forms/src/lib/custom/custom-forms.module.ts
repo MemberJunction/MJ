@@ -1,6 +1,7 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
@@ -118,6 +119,7 @@ import { SearchModule } from "@memberjunction/ng-search";
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        DragDropModule,
         AgGridModule,
         MJButtonDirective,
         MJAccordionPanelComponent,
