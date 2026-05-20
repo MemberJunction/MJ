@@ -1,7 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
     ActivityIndicator,
+    KeyboardAvoidingView,
+    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -14,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
+import { sendMessage, type SendProgress } from '@/data/services/agents';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -24,9 +27,41 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 export default function ChatThreadScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
     const { data, loading, error, refresh } = useConversation(id);
-    const { conversations: allConversations } = useConversations();
+    const { conversations: allConversations, refresh: refreshList } = useConversations();
+
+    const [sending, setSending] = useState(false);
+    const [progress, setProgress] = useState<SendProgress | null>(null);
+    const [pendingUserText, setPendingUserText] = useState<string | null>(null);
+    const [sendError, setSendError] = useState<string | null>(null);
 
     const view = useMemo(() => (data ? adaptConversation(data) : null), [data]);
+
+    const handleSend = useCallback(async (text: string) => {
+        if (!id || !text.trim()) return;
+        setSending(true);
+        setSendError(null);
+        setPendingUserText(text.trim());
+        setProgress({ currentStep: 'starting', message: 'Sending…' });
+        try {
+            const result = await sendMessage({
+                conversationId: id,
+                text: text.trim(),
+                onProgress: (p) => setProgress(p),
+            });
+            if (!result.success) {
+                setSendError(result.errorMessage ?? 'Send failed.');
+            }
+        } catch (e) {
+            setSendError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setSending(false);
+            setProgress(null);
+            setPendingUserText(null);
+            // Reload the thread (server created the AI response) + the list (recency/snippet).
+            await refresh();
+            void refreshList();
+        }
+    }, [id, refresh, refreshList]);
 
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
@@ -63,31 +98,64 @@ export default function ChatThreadScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live} />
-            {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
-
-            <ScrollView
-                style={styles.thread}
-                contentContainerStyle={styles.threadContent}
-                showsVerticalScrollIndicator={false}
-                refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} tintColor={Colors.brand} />}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={0}
             >
-                {view.messages.length === 0 ? (
-                    <View style={styles.empty}>
-                        <Text style={styles.emptyTitle}>No messages yet</Text>
-                        <Text style={styles.emptyBody}>Start the conversation below.</Text>
-                    </View>
-                ) : (
-                    <>
-                        <Text style={styles.dayDivider}>Conversation</Text>
-                        {view.messages.map((msg) => <MessageRenderer key={msg.id} message={msg} />)}
-                    </>
-                )}
-                <View style={{ height: 8 }} />
-            </ScrollView>
+                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} />
+                {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
 
-            <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
-            <Composer />
+                <ScrollView
+                    style={styles.thread}
+                    contentContainerStyle={styles.threadContent}
+                    showsVerticalScrollIndicator={false}
+                    refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refresh()} tintColor={Colors.brand} />}
+                >
+                    {view.messages.length === 0 && !pendingUserText ? (
+                        <View style={styles.empty}>
+                            <Text style={styles.emptyTitle}>No messages yet</Text>
+                            <Text style={styles.emptyBody}>Start the conversation below.</Text>
+                        </View>
+                    ) : (
+                        <>
+                            <Text style={styles.dayDivider}>Conversation</Text>
+                            {view.messages.map((msg) => <MessageRenderer key={msg.id} message={msg} />)}
+                        </>
+                    )}
+
+                    {/* Optimistic pending user message while the agent runs */}
+                    {pendingUserText ? (
+                        <View style={styles.userMsgWrap}>
+                            <Text style={[styles.userMsg, styles.userMsgPending]}>{pendingUserText}</Text>
+                        </View>
+                    ) : null}
+
+                    {/* Live progress while the agent works */}
+                    {sending ? (
+                        <View style={styles.agentMsg}>
+                            <View style={styles.agentLine}>
+                                <View style={[styles.agentAv, { backgroundColor: Colors.brand }]}>
+                                    <ActivityIndicator size="small" color={Colors.inverse} />
+                                </View>
+                                <Text style={styles.agentName}>Working…</Text>
+                            </View>
+                            {progress?.message ? <Text style={styles.progressText}>{progress.message}</Text> : null}
+                        </View>
+                    ) : null}
+
+                    {sendError ? (
+                        <View style={styles.sendErrorBox}>
+                            <Text style={styles.sendErrorText}>{sendError}</Text>
+                        </View>
+                    ) : null}
+
+                    <View style={{ height: 8 }} />
+                </ScrollView>
+
+                <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
+                <Composer onSend={handleSend} disabled={sending} />
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -233,7 +301,17 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
     );
 }
 
-function Composer() {
+function Composer({ onSend, disabled }: { onSend: (text: string) => void; disabled: boolean }) {
+    const [text, setText] = useState('');
+    const canSend = text.trim().length > 0 && !disabled;
+
+    const submit = () => {
+        if (!canSend) return;
+        const t = text;
+        setText('');
+        onSend(t);
+    };
+
     return (
         <View style={styles.composerWrap}>
             <View style={styles.composer}>
@@ -242,10 +320,19 @@ function Composer() {
                     placeholderTextColor={Colors.ink3}
                     style={styles.composerInput}
                     multiline
+                    value={text}
+                    onChangeText={setText}
+                    editable={!disabled}
                 />
-                <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')}>
-                    <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
-                </Pressable>
+                {canSend ? (
+                    <Pressable style={styles.sendBtn} onPress={submit}>
+                        <Icons.Send size={18} color={Colors.inverse} strokeWidth={2.2} />
+                    </Pressable>
+                ) : (
+                    <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={disabled}>
+                        <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
+                    </Pressable>
+                )}
             </View>
         </View>
     );
@@ -283,7 +370,11 @@ const styles = StyleSheet.create({
 
     userMsgWrap: { alignItems: 'flex-end', marginBottom: 16 },
     userMsg: { maxWidth: '86%', backgroundColor: Colors.userBg, paddingHorizontal: 15, paddingVertical: 11, borderRadius: 18, borderBottomRightRadius: 4, fontSize: 15.5, lineHeight: 22, color: Colors.ink },
+    userMsgPending: { opacity: 0.55 },
     mention: { fontWeight: Type.semibold, color: Colors.ink },
+    progressText: { fontSize: 13, color: Colors.ink3, marginTop: 2, fontStyle: 'italic' },
+    sendErrorBox: { backgroundColor: Colors.dangerSoft, borderRadius: Radius.lg, padding: 12, marginTop: 4, marginBottom: 8 },
+    sendErrorText: { fontSize: 13, color: Colors.danger, lineHeight: 18 },
 
     agentMsg: { marginBottom: 18 },
     agentLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
@@ -311,4 +402,5 @@ const styles = StyleSheet.create({
     composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 16, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
     composerInput: { flex: 1, fontSize: 15.5, color: Colors.ink, paddingVertical: 9, maxHeight: 120 },
     micBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },
+    sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },
 });

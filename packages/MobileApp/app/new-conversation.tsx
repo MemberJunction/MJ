@@ -1,126 +1,147 @@
 import { router } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import {
+    ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+    ScrollView, StyleSheet, Text, TextInput, View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
+import { useAgents } from '@/hooks/useAgents';
+import { createConversation, sendMessage } from '@/data/services/agents';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
-type Suggestion = {
-    title: string;
-    sub: string;
-    color: string;
-    icon: React.ReactNode;
-};
-
-type AgentPill = {
-    id: string;
-    name: string;
-    color: string;
-    initial: string;
-};
+type Suggestion = { title: string; prompt: string; color: string; icon: React.ReactNode };
 
 const SUGGESTIONS: Suggestion[] = [
-    {
-        title: "Today's pipeline",
-        sub: 'Open deals, owners, what changed',
-        color: Colors.brand,
-        icon: <Icons.Sparkle size={16} color={Colors.inverse} strokeWidth={2.2} />,
-    },
-    {
-        title: "What's on my plate?",
-        sub: 'Open tasks, approvals, and follow-ups',
-        color: Colors.positive,
-        icon: <Icons.Sliders size={16} color={Colors.inverse} strokeWidth={2.2} />,
-    },
-    {
-        title: 'Look up a contact',
-        sub: 'Find someone, see recent activity',
-        color: Colors.agentAnalyst,
-        icon: <Icons.Search size={16} color={Colors.inverse} strokeWidth={2.2} />,
-    },
-    {
-        title: 'Research an account',
-        sub: 'Recent news, signals, and risks',
-        color: Colors.agentResearch,
-        icon: <Icons.Database size={16} color={Colors.inverse} strokeWidth={2.2} />,
-    },
-];
-
-const AGENTS: AgentPill[] = [
-    { id: 'skip', name: 'Skip', color: Colors.agentSkip, initial: 'S' },
-    { id: 'analyst', name: 'Account Analyst', color: Colors.agentAnalyst, initial: 'A' },
-    { id: 'research', name: 'Research', color: Colors.agentResearch, initial: 'R' },
-    { id: 'forecaster', name: 'Forecaster', color: Colors.agentForecaster, initial: 'F' },
-    { id: 'email', name: 'Email Drafter', color: Colors.agentEmailDrafter, initial: 'E' },
+    { title: "Today's pipeline", prompt: 'What does my pipeline look like today? Show open deals, owners, and what changed.', color: Colors.brand, icon: <Icons.Sparkle size={16} color={Colors.inverse} strokeWidth={2.2} /> },
+    { title: "What's on my plate?", prompt: 'What are my open tasks, approvals, and follow-ups right now?', color: Colors.positive, icon: <Icons.Sliders size={16} color={Colors.inverse} strokeWidth={2.2} /> },
+    { title: 'Look up a contact', prompt: 'Help me find a contact and see their recent activity.', color: Colors.agentAnalyst, icon: <Icons.Search size={16} color={Colors.inverse} strokeWidth={2.2} /> },
+    { title: 'Research an account', prompt: 'Research an account — recent news, signals, and risks.', color: Colors.agentResearch, icon: <Icons.Database size={16} color={Colors.inverse} strokeWidth={2.2} /> },
 ];
 
 export default function NewConversationScreen() {
+    const { agents } = useAgents();
+    const [text, setText] = useState('');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const canSend = text.trim().length > 0 && !busy;
+
+    const start = async (overrideText?: string) => {
+        const body = (overrideText ?? text).trim();
+        if (!body || busy) return;
+        setBusy(true);
+        setError(null);
+        try {
+            // Title from the first ~6 words of the prompt
+            const title = body.split(/\s+/).slice(0, 6).join(' ');
+            const conv = await createConversation(title);
+            if (!conv) {
+                setError('Could not create the conversation.');
+                return;
+            }
+            // Fire the first message + agent run, then navigate into the thread.
+            // We don't await the agent completion here — the thread screen shows
+            // progress and refreshes when done.
+            void sendMessage({ conversationId: conv.id, text: body });
+            router.replace({ pathname: '/chat/[id]', params: { id: conv.id } });
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <View style={styles.header}>
-                <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.back()}>
-                    <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
-                </Pressable>
-                <Text style={styles.title}>New conversation</Text>
-                <View style={styles.iconBtn} />
-            </View>
-
-            <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-                <View style={styles.heroBlock}>
-                    <Text style={styles.heroTitle}>What can we help with today?</Text>
-                    <Text style={styles.heroCopy}>
-                        Start typing, or pick a prompt below. You can address a specific agent with{' '}
-                        <Text style={styles.bold}>@</Text>.
-                    </Text>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                <View style={styles.header}>
+                    <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.back()}>
+                        <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />
+                    </Pressable>
+                    <Text style={styles.title}>New conversation</Text>
+                    <View style={styles.iconBtn} />
                 </View>
 
-                <View style={styles.composerCard}>
-                    <TextInput
-                        placeholder="Ask anything — Skip will route to the right agent…"
-                        placeholderTextColor={Colors.ink3}
-                        style={styles.composerInput}
-                        multiline
-                    />
-                    <View style={styles.composerFoot}>
-                        <Pressable style={styles.composerIcon}>
-                            <Icons.Plus size={18} color={Colors.ink2} />
-                        </Pressable>
-                        <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')}>
-                            <Icons.Mic size={16} color={Colors.inverse} strokeWidth={2.2} />
-                        </Pressable>
-                        <Pressable style={[styles.sendBtn, styles.sendBtnMuted]}>
-                            <Text style={styles.sendBtnText}>Send</Text>
-                            <Icons.ChevronRight size={13} color={Colors.ink3} strokeWidth={2.5} />
-                        </Pressable>
+                <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                    <View style={styles.heroBlock}>
+                        <Text style={styles.heroTitle}>What can we help with today?</Text>
+                        <Text style={styles.heroCopy}>
+                            Start typing, or pick a prompt below. Address a specific agent with{' '}
+                            <Text style={styles.bold}>@</Text>.
+                        </Text>
                     </View>
-                </View>
 
-                <Text style={styles.sectionLabel}>Start a conversation about…</Text>
-                <View style={styles.suggestions}>
-                    {SUGGESTIONS.map((s) => (
-                        <Pressable key={s.title} style={styles.sug}>
-                            <View style={[styles.sugIcon, { backgroundColor: s.color }]}>{s.icon}</View>
-                            <View style={styles.sugBody}>
-                                <Text style={styles.sugTitle}>{s.title}</Text>
-                                <Text style={styles.sugSub}>{s.sub}</Text>
-                            </View>
-                            <Icons.ChevronRight size={16} color={Colors.ink3} strokeWidth={2} />
-                        </Pressable>
-                    ))}
-                </View>
+                    <View style={styles.composerCard}>
+                        <TextInput
+                            placeholder="Ask anything — Skip will route to the right agent…"
+                            placeholderTextColor={Colors.ink3}
+                            style={styles.composerInput}
+                            multiline
+                            value={text}
+                            onChangeText={setText}
+                            editable={!busy}
+                        />
+                        <View style={styles.composerFoot}>
+                            <Pressable style={styles.micBtn} onPress={() => router.push('/voice-mode')} disabled={busy}>
+                                <Icons.Mic size={16} color={Colors.inverse} strokeWidth={2.2} />
+                            </Pressable>
+                            <Pressable
+                                style={[styles.sendBtn, canSend ? styles.sendBtnActive : styles.sendBtnMuted]}
+                                onPress={() => start()}
+                                disabled={!canSend}
+                            >
+                                {busy ? (
+                                    <ActivityIndicator size="small" color={canSend ? Colors.inverse : Colors.ink3} />
+                                ) : (
+                                    <>
+                                        <Text style={[styles.sendBtnText, canSend && styles.sendBtnTextActive]}>Send</Text>
+                                        <Icons.ChevronRight size={13} color={canSend ? Colors.inverse : Colors.ink3} strokeWidth={2.5} />
+                                    </>
+                                )}
+                            </Pressable>
+                        </View>
+                    </View>
 
-                <Text style={styles.sectionLabel}>Or talk to an agent</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentRail}>
-                    {AGENTS.map((a) => (
-                        <Pressable key={a.id} style={styles.agentPill}>
-                            <View style={[styles.agentPillAv, { backgroundColor: a.color }]}>
-                                <Text style={styles.agentPillAvText}>{a.initial}</Text>
-                            </View>
-                            <Text style={styles.agentPillName}>{a.name}</Text>
-                        </Pressable>
-                    ))}
+                    {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                    <Text style={styles.sectionLabel}>Start a conversation about…</Text>
+                    <View style={styles.suggestions}>
+                        {SUGGESTIONS.map((s) => (
+                            <Pressable key={s.title} style={styles.sug} onPress={() => setText(s.prompt)} disabled={busy}>
+                                <View style={[styles.sugIcon, { backgroundColor: s.color }]}>{s.icon}</View>
+                                <View style={styles.sugBody}>
+                                    <Text style={styles.sugTitle}>{s.title}</Text>
+                                    <Text style={styles.sugSub} numberOfLines={1}>{s.prompt}</Text>
+                                </View>
+                                <Icons.ChevronRight size={16} color={Colors.ink3} strokeWidth={2} />
+                            </Pressable>
+                        ))}
+                    </View>
+
+                    {agents && agents.length > 0 ? (
+                        <>
+                            <Text style={styles.sectionLabel}>Or talk to an agent</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.agentRail} keyboardShouldPersistTaps="handled">
+                                {agents.map((a) => (
+                                    <Pressable
+                                        key={a.id}
+                                        style={styles.agentPill}
+                                        onPress={() => setText((t) => `@${a.name.replace(/\s+/g, '')} ${t}`.trimStart())}
+                                        disabled={busy}
+                                    >
+                                        <View style={[styles.agentPillAv, { backgroundColor: a.color }]}>
+                                            <Text style={styles.agentPillAvText}>{a.initial}</Text>
+                                        </View>
+                                        <Text style={styles.agentPillName}>{a.name}</Text>
+                                    </Pressable>
+                                ))}
+                            </ScrollView>
+                        </>
+                    ) : null}
+                    <View style={{ height: Spacing.xxxl }} />
                 </ScrollView>
-                <View style={{ height: Spacing.xxxl }} />
-            </ScrollView>
+            </KeyboardAvoidingView>
         </SafeAreaView>
     );
 }
@@ -142,9 +163,12 @@ const styles = StyleSheet.create({
     composerFoot: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
     composerIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
     micBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center' },
-    sendBtn: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 6 },
+    sendBtn: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 76, justifyContent: 'center' },
     sendBtnMuted: { backgroundColor: Colors.surface2 },
+    sendBtnActive: { backgroundColor: Colors.brand },
     sendBtnText: { fontSize: 13.5, fontWeight: Type.semibold, color: Colors.ink3 },
+    sendBtnTextActive: { color: Colors.inverse },
+    errorText: { color: Colors.danger, fontSize: 13, paddingHorizontal: 22, paddingTop: 10 },
 
     sectionLabel: { paddingHorizontal: 22, paddingTop: 22, paddingBottom: 8, fontSize: 11, fontWeight: Type.bold, color: Colors.ink3, letterSpacing: 1.4, textTransform: 'uppercase' },
 
