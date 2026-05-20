@@ -101,6 +101,12 @@ export type RunViewGenericParams = {
   resultType?: string;
   userPayload?: UserPayload;
   aggregates?: AggregateExpression[];
+  /**
+   * When true, the server-side cache layer is bypassed for this view run —
+   * neither the pre-check cache lookup nor the post-query cache write
+   * happens. Propagated to `RunViewParams.BypassCache`.
+   */
+  bypassCache?: boolean;
 };
 
 
