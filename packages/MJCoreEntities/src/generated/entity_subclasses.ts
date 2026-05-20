@@ -57344,6 +57344,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Detail Attachments')
 export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversationDetailAttachmentEntityType> {
