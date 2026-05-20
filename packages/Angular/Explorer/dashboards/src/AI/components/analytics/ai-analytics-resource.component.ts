@@ -26,6 +26,11 @@ interface NavItem {
     Label?: string;
     Icon?: string;
     Key: string;
+    /**
+     * Short prose used as the Subtitle on this section's
+     * <mj-page-header-interior> card. Omitted for the `divider` entry.
+     */
+    Description?: string;
 }
 
 @RegisterClass(BaseResourceComponent, 'AIAnalyticsResource')
@@ -34,10 +39,32 @@ interface NavItem {
     selector: 'app-ai-analytics-resource',
     template: `
       <mj-page-layout>
+        <!-- Outer chrome — pure identity. Every control (filter-popover,
+             TimeRange chips, Compare, Export) lives in the per-section
+             <mj-page-header-interior> card below because each section
+             configures its own filter fields and time-range options. -->
         <mj-page-header
-            Title="Analytics"
-            Icon="fa-solid fa-chart-line">
-            @if (ShowSharedFilterBar) {
+            Title="AI Analytics"
+            Icon="fa-solid fa-chart-line"
+            Subtitle="Performance, cost, and usage analytics">
+        </mj-page-header>
+        <mj-page-body [Padding]="false" class="analytics-shell">
+            <mj-left-nav
+                [Sections]="navSections"
+                [ActiveId]="ActiveSection"
+                (ItemClicked)="onNavItemClicked($event)">
+            </mj-left-nav>
+
+            <mj-left-nav-content>
+            <!-- Per-section interior chrome owns the complete control surface
+                 for the active section: identity + actions + the section's
+                 own time-range chip strip. Even TimeRange options vary per
+                 section (Cost & Budget adds MTD / YTD, Model Performance
+                 drops 1h / 6h, etc.) so it belongs here rather than in the
+                 outer chrome. -->
+            <mj-page-header-interior
+                [Title]="currentSection?.Label || ''"
+                [Subtitle]="currentSection?.Description || ''">
                 <div actions>
                     @if (analyticsFilterFields.length > 0) {
                         <mj-filter-popover
@@ -63,27 +90,19 @@ interface NavItem {
                         </button>
                     }
                 </div>
-            }
-            @if (ShowSharedFilterBar && timeRangeChipOptions.length > 0) {
-                <div toolbar class="time-range-chips">
-                    @for (chip of timeRangeChipOptions; track chip.value) {
-                        <mj-filter-chip
-                            [Label]="chip.text"
-                            [Active]="CurrentTimeRange === chip.value"
-                            (Clicked)="OnTimeRangeChange(chip.value)">
-                        </mj-filter-chip>
-                    }
-                </div>
-            }
-        </mj-page-header>
-        <mj-page-body [Padding]="false" class="analytics-shell">
-            <mj-left-nav
-                [Sections]="navSections"
-                [ActiveId]="ActiveSection"
-                (ItemClicked)="onNavItemClicked($event)">
-            </mj-left-nav>
-
-            <mj-left-nav-content>
+                @if (timeRangeChipOptions.length > 0) {
+                    <div toolbar class="time-range-chips">
+                        @for (chip of timeRangeChipOptions; track chip.value) {
+                            <mj-filter-chip
+                                [Label]="chip.text"
+                                [Active]="CurrentTimeRange === chip.value"
+                                (Clicked)="OnTimeRangeChange(chip.value)">
+                            </mj-filter-chip>
+                        }
+                    </div>
+                }
+            </mj-page-header-interior>
+            <mj-page-body-interior [Padding]="false">
             <div class="analytics-content">
                 @switch (ActiveSection) {
                     @case ('executive-summary') {
@@ -133,6 +152,7 @@ interface NavItem {
                     }
                 }
             </div>
+            </mj-page-body-interior>
             </mj-left-nav-content>
         </mj-page-body>
       </mj-page-layout>
@@ -431,15 +451,32 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     }
 
     readonly NavItems: NavItem[] = [
-        { Label: 'Executive Summary', Icon: 'fa-solid fa-gauge-high', Key: 'executive-summary' },
-        { Label: 'Prompt Runs', Icon: 'fa-solid fa-comment-dots', Key: 'prompt-runs' },
-        { Label: 'Agent Runs', Icon: 'fa-solid fa-robot', Key: 'agent-runs' },
-        { Label: 'Model Performance', Icon: 'fa-solid fa-microchip', Key: 'model-performance' },
+        { Label: 'Executive Summary', Icon: 'fa-solid fa-gauge-high', Key: 'executive-summary',
+          Description: 'High-level KPIs and trends across the platform' },
+        { Label: 'Prompt Runs', Icon: 'fa-solid fa-comment-dots', Key: 'prompt-runs',
+          Description: 'Detailed analysis of individual prompt executions' },
+        { Label: 'Agent Runs', Icon: 'fa-solid fa-robot', Key: 'agent-runs',
+          Description: 'Performance breakdown by agent' },
+        { Label: 'Model Performance', Icon: 'fa-solid fa-microchip', Key: 'model-performance',
+          Description: 'Compare models across cost, speed, and quality' },
         { Key: 'divider' },
-        { Label: 'Cost & Budget', Icon: 'fa-solid fa-coins', Key: 'cost-budget' },
-        { Label: 'Error Analysis', Icon: 'fa-solid fa-triangle-exclamation', Key: 'error-analysis' },
-        { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns' },
+        { Label: 'Cost & Budget', Icon: 'fa-solid fa-coins', Key: 'cost-budget',
+          Description: 'Spend trends and budget tracking' },
+        { Label: 'Error Analysis', Icon: 'fa-solid fa-triangle-exclamation', Key: 'error-analysis',
+          Description: 'Failure patterns and root causes' },
+        { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns',
+          Description: 'Volume, frequency, and concurrency over time' },
     ];
+
+    /**
+     * Active section metadata — drives <mj-page-header-interior> Title +
+     * Subtitle. Mirrors the pattern in KH Configuration / KH Analytics: one
+     * source of truth (NavItems) used both to build the rail and to render
+     * per-section identity.
+     */
+    get currentSection(): NavItem | undefined {
+        return this.NavItems.find(n => n.Key === this.ActiveSection);
+    }
 
     /**
      * Wraps `NavItems` for `<mj-left-nav>`. The `{ Key: 'divider' }` entry
