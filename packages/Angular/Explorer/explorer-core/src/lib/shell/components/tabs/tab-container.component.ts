@@ -323,7 +323,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   public ClearComponentCache(predicate?: (info: CachedComponentInfo) => boolean): number {
     if (predicate) {
-      return this.cacheManager.clearCacheByPredicate(predicate);
+      return this.cacheManager.ClearCacheByPredicate(predicate);
     }
     const stats = this.cacheManager.getCacheStats();
     this.cacheManager.clearCache();

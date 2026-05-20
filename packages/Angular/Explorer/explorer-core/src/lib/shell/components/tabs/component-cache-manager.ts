@@ -275,7 +275,7 @@ export class ComponentCacheManager {
    * @param predicate Return true for components that should be destroyed.
    * @returns Number of components destroyed.
    */
-  clearCacheByPredicate(predicate: (info: CachedComponentInfo) => boolean): number {
+  ClearCacheByPredicate(predicate: (info: CachedComponentInfo) => boolean): number {
     let destroyed = 0;
     const toRemove: string[] = [];
 
