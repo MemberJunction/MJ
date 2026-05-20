@@ -3,6 +3,7 @@ import { CompositeKey, RunView, LogError } from '@memberjunction/core';
 import { MJActionExecutionLogEntity, MJActionEntity, ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 interface ExecutionMetrics {
@@ -32,7 +33,7 @@ interface ExecutionTrend {
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.css']
 })
-export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class ActionExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
   public executions: MJActionExecutionLogEntity[] = [];
   public filteredExecutions: MJActionExecutionLogEntity[] = [];
@@ -313,6 +314,66 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   public onActionFilterChange(actionId: string): void {
     this.selectedAction$.next(actionId);
+  }
+
+  // ───── Filter-popover plumbing for the [actions] slot ─────
+
+  public get FilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'timeRange',
+        type: 'dropdown',
+        label: 'Time range',
+        icon: 'fa-solid fa-clock',
+        options: this.timeRangeOptions
+      },
+      {
+        key: 'result',
+        type: 'dropdown',
+        label: 'Result',
+        icon: 'fa-solid fa-circle-info',
+        options: this.resultOptions
+      },
+      {
+        key: 'action',
+        type: 'dropdown',
+        label: 'Action',
+        icon: 'fa-solid fa-bolt',
+        filterable: true,
+        options: this.actionOptions
+      }
+    ];
+  }
+  public get FilterValues(): Record<string, unknown> {
+    return {
+      timeRange: this.selectedTimeRange$.value,
+      result: this.selectedResult$.value,
+      action: this.selectedAction$.value
+    };
+  }
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedTimeRange$.value !== '7days') n++;
+    if (this.selectedResult$.value !== 'all') n++;
+    if (this.selectedAction$.value !== 'all') n++;
+    return n;
+  }
+  public onFilterValuesChange(v: Record<string, unknown>): void {
+    const next = (v ?? {}) as { timeRange?: string; result?: string; action?: string };
+    if ((next.timeRange ?? '7days') !== this.selectedTimeRange$.value) {
+      this.onTimeRangeChange(next.timeRange ?? '7days');
+    }
+    if ((next.result ?? 'all') !== this.selectedResult$.value) {
+      this.onResultFilterChange(next.result ?? 'all');
+    }
+    if ((next.action ?? 'all') !== this.selectedAction$.value) {
+      this.onActionFilterChange(next.action ?? 'all');
+    }
+  }
+  public resetFilters(): void {
+    if (this.selectedTimeRange$.value !== '7days') this.onTimeRangeChange('7days');
+    if (this.selectedResult$.value !== 'all') this.onResultFilterChange('all');
+    if (this.selectedAction$.value !== 'all') this.onActionFilterChange('all');
   }
 
   public openExecution(execution: MJActionExecutionLogEntity): void {

@@ -3,13 +3,6 @@
    Based on AI Dashboard patterns
    ============================================ */
 
-.testing-dashboard-container {
-  height: 100%;
-  background: var(--mj-bg-surface-sunken);
-  position: relative;
-  overflow: hidden;
-}
-
 /* Loading State */
 .loading-container {
   display: flex;
@@ -72,98 +65,10 @@
   font-weight: 500;
 }
 
-/* Dashboard Layout */
-.dashboard-content-wrapper {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
 .dashboard-content {
   flex: 1;
+  min-height: 0;
   overflow: hidden;
-}
-
-/* Premium Navigation Tabs */
-.testing-dashboard-nav {
-  display: flex;
-  justify-content: flex-start;
-  gap: 2px;
-  background: var(--mj-bg-surface);
-  border-bottom: 1px solid var(--mj-border-default);
-  box-shadow: var(--mj-shadow-sm);
-  padding: 0 16px;
-  position: relative;
-  z-index: 10;
-}
-
-.nav-item {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 16px 24px;
-  cursor: pointer;
-  color: var(--mj-text-muted);
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  border-bottom: 3px solid transparent;
-  white-space: nowrap;
-  position: relative;
-  font-weight: 500;
-}
-
-.nav-item::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 3px;
-  background: transparent;
-  transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 8px 8px 0 0;
-}
-
-.nav-item:hover {
-  color: var(--mj-brand-primary);
-}
-
-.nav-item:hover::before {
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-}
-
-.nav-item.active {
-  color: var(--mj-brand-primary);
-  border-bottom-color: var(--mj-brand-primary);
-}
-
-.nav-item.active::before {
-  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
-}
-
-.nav-item i {
-  font-size: 16px;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  z-index: 1;
-}
-
-.nav-item:hover i {
-  transform: scale(1.1);
-}
-
-.nav-item span {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  position: relative;
-  z-index: 1;
-}
-
-/* Spacer for flex layout */
-.nav-spacer {
-  flex: 1;
 }
 
 /* Active Runs Banner */

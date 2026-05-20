@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
 import { TestingDialogService, TestingExecutionService, ActiveRun } from '@memberjunction/ng-testing';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { TestingInstrumentationService } from './services/testing-instrumentation.service';
 
 interface TestingDashboardState {
@@ -50,6 +51,21 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
     { text: 'Analytics', icon: 'fa-solid fa-chart-bar', selected: false },
     { text: 'Review', icon: 'fa-solid fa-clipboard-check', selected: false }
   ];
+
+  public get Tabs(): TabConfig[] {
+    return [
+      { key: 'dashboard', label: 'Dashboard', icon: 'fa-solid fa-gauge-high' },
+      {
+        key: 'runs',
+        label: 'Runs',
+        icon: 'fa-solid fa-play-circle',
+        badge: this.ActiveRuns.length > 0 ? this.ActiveRuns.length : null,
+        badgeVariant: this.ActiveRuns.length > 0 ? 'warning' : 'default'
+      },
+      { key: 'analytics', label: 'Analytics', icon: 'fa-solid fa-chart-bar' },
+      { key: 'review',    label: 'Review',    icon: 'fa-solid fa-clipboard-check' }
+    ];
+  }
 
   private stateChangeSubject = new Subject<TestingDashboardState>();
   protected override destroy$ = new Subject<void>();

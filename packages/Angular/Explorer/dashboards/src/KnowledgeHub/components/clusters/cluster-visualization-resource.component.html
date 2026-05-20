@@ -1,3 +1,16 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Cluster Visualization"
+    Icon="fa-solid fa-circle-nodes"
+    Subtitle="Explore semantic clusters in your knowledge base">
+    <div actions>
+      <button mjButton variant="primary" size="sm" (click)="OnNewAnalysis()">
+        <i class="fa-solid fa-plus"></i> New Analysis
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <div class="cluster-viz-container">
     <!-- Left Sidebar: Saved Visualizations -->
     <div class="sidebar">
@@ -29,9 +42,6 @@
                 </div>
             }
         </div>
-        <button class="new-btn" (click)="OnNewAnalysis()">
-            <i class="fa-solid fa-plus"></i> New Cluster Analysis
-        </button>
     </div>
 
     <!-- Main Area -->
@@ -88,3 +98,5 @@
         </div>
     </div>
 </div>
+  </mj-page-body>
+</mj-page-layout>

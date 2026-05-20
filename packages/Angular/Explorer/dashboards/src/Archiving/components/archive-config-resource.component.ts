@@ -15,8 +15,19 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 @Component({
     standalone: false,
     selector: 'app-archive-config-resource',
-    template: `<mj-archive-config-admin></mj-archive-config-admin>`,
-    styles: [`:host { display: block; height: 100%; width: 100%; overflow: auto; }`],
+    template: `
+        <mj-page-layout>
+            <mj-page-header
+                Title="Archive Configuration"
+                Icon="fa-solid fa-sliders"
+                Subtitle="Configure entity archiving policies and schedules">
+            </mj-page-header>
+            <mj-page-body [Flex]="true" [Padding]="false">
+                <mj-archive-config-admin></mj-archive-config-admin>
+            </mj-page-body>
+        </mj-page-layout>
+    `,
+    styles: [`:host { display: block; height: 100%; width: 100%; }`],
 })
 export class ArchiveConfigResourceComponent extends BaseResourceComponent implements AfterViewInit {
     ngAfterViewInit(): void {
