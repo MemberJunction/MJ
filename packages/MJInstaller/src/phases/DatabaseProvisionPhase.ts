@@ -348,11 +348,11 @@ PRINT '=== Validation complete ===';
    * this is a diagnostic enhancement, not a hard requirement.
    *
    * Mirrors {@link PreflightPhase.readEnvDbTarget} — kept duplicated rather
-   * than extracted because the two phases shouldn't coupling through a
+   * than extracted because the two phases shouldn't be coupled through a
    * shared helper for a small piece of optional logic.
    */
   private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
-    const envPath = `${targetDir}/.env`;
+    const envPath = path.join(targetDir, '.env');
     try {
       if (!(await this.fileSystem.FileExists(envPath))) return null;
       const raw = await this.fileSystem.ReadText(envPath);

@@ -233,7 +233,7 @@ describe('DatabaseProvisionPhase', () => {
 
     it('should prefer DB_HOST/DB_PORT from .env over config defaults (Bug #6 fix)', async () => {
       mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 8 });
-      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('/.env'));
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
       mockFs.ReadText.mockResolvedValue("DB_HOST='envhost'\nDB_PORT=1444\nDB_USERNAME=sa\n");
 
       const ctx = makeContext({ Yes: true });

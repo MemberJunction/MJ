@@ -315,7 +315,7 @@ describe('PreflightPhase', () => {
 
     it('should prefer DB_HOST/DB_PORT from .env over config defaults (Bug 4 fix)', async () => {
       mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
-      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('/.env'));
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
       mockFs.ReadText.mockResolvedValue(`DB_HOST='envhost'\nDB_PORT=1444\nDB_USERNAME=sa\n`);
 
       const ctx = makeContext(); // default config -> localhost:1433
@@ -337,7 +337,7 @@ describe('PreflightPhase', () => {
 
     it('should not throw when .env exists but has neither DB_HOST nor DB_PORT', async () => {
       mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 5 });
-      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('/.env'));
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.env'));
       mockFs.ReadText.mockResolvedValue(`SOME_OTHER_KEY=value\n# comment\n`);
 
       const ctx = makeContext({ Config: { DatabaseHost: 'cfg', DatabasePort: 5555 } });

@@ -24,6 +24,7 @@
 
 import os from 'node:os';
 import net from 'node:net';
+import path from 'node:path';
 import type { InstallerEventEmitter, DiagnosticEvent } from '../events/InstallerEvents.js';
 import type { PartialInstallConfig } from '../models/InstallConfig.js';
 import { InstallerError } from '../errors/InstallerError.js';
@@ -382,7 +383,7 @@ export class PreflightPhase {
    * failures. Any read or parse error is treated as "no override available."
    */
   private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
-    const envPath = `${targetDir}/.env`;
+    const envPath = path.join(targetDir, '.env');
     try {
       if (!(await this.fileSystem.FileExists(envPath))) return null;
       const raw = await this.fileSystem.ReadText(envPath);
