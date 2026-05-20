@@ -10,6 +10,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 .connections-container {
   padding: 24px;
   max-width: 1400px;
@@ -28,35 +30,6 @@
 .connections-container.detail-active,
 .connections-container.editor-active {
   overflow: hidden;
-}
-
-.connections-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--mj-text-primary);
-}
-
-.header-count {
-  font-size: 14px;
-  color: var(--mj-text-disabled);
-}
-
-.add-connection-btn i {
-  margin-right: 6px;
 }
 
 /* ---------------------------------------------------------------------------

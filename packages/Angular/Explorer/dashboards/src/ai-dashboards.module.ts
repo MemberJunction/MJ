@@ -11,18 +11,15 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJComboboxComponent, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJFilterPopoverComponent, MJPageSearchComponent, MJFilterPanelComponent, MJFilterFieldComponent, MJFilterChipComponent, MJViewToggleComponent, MJStatBadgeComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
 import { PromptManagementComponent } from './AI/components/prompts/prompt-management.component';
-import { PromptFilterPanelComponent } from './AI/components/prompts/prompt-filter-panel.component';
 import { AgentConfigurationComponent } from './AI/components/agents/agent-configuration.component';
-import { AgentFilterPanelComponent } from './AI/components/agents/agent-filter-panel.component';
 import { AgentEditorComponent } from './AI/components/agents/agent-editor.component';
 import { ExecutionMonitoringComponent } from './AI/components/execution-monitoring.component';
 import { SystemConfigurationComponent } from './AI/components/system/system-configuration.component';
-import { SystemConfigFilterPanelComponent } from './AI/components/system/system-config-filter-panel.component';
 import { ModelPromptPriorityMatrixComponent } from './AI/components/prompts/model-prompt-priority-matrix.component';
 import { PromptVersionControlComponent } from './AI/components/prompts/prompt-version-control.component';
 // AI Instrumentation Widgets (KPICard and TimeSeriesChart are in SharedDashboardWidgetsModule)
@@ -77,13 +74,10 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
   declarations: [
     ModelManagementComponent,
     PromptManagementComponent,
-    PromptFilterPanelComponent,
     AgentConfigurationComponent,
-    AgentFilterPanelComponent,
     AgentEditorComponent,
     ExecutionMonitoringComponent,
     SystemConfigurationComponent,
-    SystemConfigFilterPanelComponent,
     ModelPromptPriorityMatrixComponent,
     PromptVersionControlComponent,
     LiveExecutionWidgetComponent,
@@ -123,8 +117,20 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    MJButtonDirective,
     MJComboboxComponent,
     MJDropdownComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJFilterPopoverComponent,
+    MJPageSearchComponent,
+    MJFilterPanelComponent,
+    MJFilterFieldComponent,
+    MJFilterChipComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent

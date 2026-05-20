@@ -21,80 +21,91 @@ interface FilterOption {
     selector: 'app-analytics-filter-bar',
     template: `
         <div class="filter-bar">
-            <div class="filter-controls">
-                <span class="filter-label">
-                    <i class="fa-solid fa-filter"></i>
-                    Filters:
-                </span>
+            @if (HasFilterDropdowns) {
+                <mj-filter-popover
+                    [ActiveCount]="ActiveFilterCount"
+                    [ShowClearAll]="ActiveFilterCount > 0"
+                    (ClearAllRequested)="ClearAllFilters()">
+                    <div class="popover-fields">
+                        @if (ShowModelFilter) {
+                            <label class="popover-field">
+                                <span class="popover-field-label">Model</span>
+                                <mj-dropdown
+                                    [Data]="ModelOptions"
+                                    TextField="text"
+                                    ValueField="value"
+                                    [ValuePrimitive]="true"
+                                    [DefaultItem]="modelDefaultItem"
+                                    [Filterable]="ModelOptions.length > 10"
+                                    Placeholder="All Models"
+                                    (ValueChange)="OnModelChange($event)">
+                                </mj-dropdown>
+                            </label>
+                        }
+                        @if (ShowAgentFilter) {
+                            <label class="popover-field">
+                                <span class="popover-field-label">Agent</span>
+                                <mj-dropdown
+                                    [Data]="AgentOptions"
+                                    TextField="text"
+                                    ValueField="value"
+                                    [ValuePrimitive]="true"
+                                    [DefaultItem]="agentDefaultItem"
+                                    [Filterable]="AgentOptions.length > 10"
+                                    Placeholder="All Agents"
+                                    (ValueChange)="OnAgentChange($event)">
+                                </mj-dropdown>
+                            </label>
+                        }
+                        @if (ShowPromptFilter) {
+                            <label class="popover-field">
+                                <span class="popover-field-label">Prompt</span>
+                                <mj-dropdown
+                                    [Data]="PromptOptions"
+                                    TextField="text"
+                                    ValueField="value"
+                                    [ValuePrimitive]="true"
+                                    [DefaultItem]="promptDefaultItem"
+                                    [Filterable]="PromptOptions.length > 10"
+                                    Placeholder="All Prompts"
+                                    (ValueChange)="OnPromptChange($event)">
+                                </mj-dropdown>
+                            </label>
+                        }
+                        @if (ShowStatusFilter) {
+                            <label class="popover-field">
+                                <span class="popover-field-label">Status</span>
+                                <mj-dropdown
+                                    [Data]="StatusOptions"
+                                    TextField="text"
+                                    ValueField="value"
+                                    [ValuePrimitive]="true"
+                                    [DefaultItem]="statusDefaultItem"
+                                    Placeholder="All Statuses"
+                                    (ValueChange)="OnStatusChange($event)">
+                                </mj-dropdown>
+                            </label>
+                        }
+                    </div>
+                </mj-filter-popover>
+            }
 
-                @if (ShowModelFilter) {
-                    <mj-dropdown
-                        [Data]="ModelOptions"
-                        TextField="text"
-                        ValueField="value"
-                        [ValuePrimitive]="true"
-                        [DefaultItem]="modelDefaultItem"
-                        [Filterable]="ModelOptions.length > 10"
-                        Placeholder="All Models"
-                        (ValueChange)="OnModelChange($event)">
-                    </mj-dropdown>
-                }
+            @if (ShowCompareToggle) {
+                <button
+                    class="compare-btn"
+                    [class.active]="compareActive"
+                    (click)="ToggleCompare()">
+                    <i class="fa-solid fa-code-compare"></i>
+                    Compare
+                </button>
+            }
 
-                @if (ShowAgentFilter) {
-                    <mj-dropdown
-                        [Data]="AgentOptions"
-                        TextField="text"
-                        ValueField="value"
-                        [ValuePrimitive]="true"
-                        [DefaultItem]="agentDefaultItem"
-                        [Filterable]="AgentOptions.length > 10"
-                        Placeholder="All Agents"
-                        (ValueChange)="OnAgentChange($event)">
-                    </mj-dropdown>
-                }
-
-                @if (ShowPromptFilter) {
-                    <mj-dropdown
-                        [Data]="PromptOptions"
-                        TextField="text"
-                        ValueField="value"
-                        [ValuePrimitive]="true"
-                        [DefaultItem]="promptDefaultItem"
-                        [Filterable]="PromptOptions.length > 10"
-                        Placeholder="All Prompts"
-                        (ValueChange)="OnPromptChange($event)">
-                    </mj-dropdown>
-                }
-
-                @if (ShowStatusFilter) {
-                    <mj-dropdown
-                        [Data]="StatusOptions"
-                        TextField="text"
-                        ValueField="value"
-                        [ValuePrimitive]="true"
-                        [DefaultItem]="statusDefaultItem"
-                        Placeholder="All Statuses"
-                        (ValueChange)="OnStatusChange($event)">
-                    </mj-dropdown>
-                }
-
-                @if (ShowCompareToggle) {
-                    <button
-                        class="compare-btn"
-                        [class.active]="compareActive"
-                        (click)="ToggleCompare()">
-                        <i class="fa-solid fa-code-compare"></i>
-                        Compare
-                    </button>
-                }
-
-                @if (ShowExportButton) {
-                    <button class="export-btn" (click)="ExportClicked.emit()">
-                        <i class="fa-solid fa-download"></i>
-                        Export
-                    </button>
-                }
-            </div>
+            @if (ShowExportButton) {
+                <button class="export-btn" (click)="ExportClicked.emit()">
+                    <i class="fa-solid fa-download"></i>
+                    Export
+                </button>
+            }
 
             <div class="time-chips">
                 @for (option of TimeRangeOptions; track option) {
@@ -109,47 +120,40 @@ interface FilterOption {
         </div>
     `,
     styles: [`
+        /* Filter bar renders inline inside <mj-page-header>'s actions slot — no wrapper card. */
         .filter-bar {
             display: flex;
             align-items: center;
-            gap: 12px;
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 10px;
-            padding: 12px 16px;
-            flex-wrap: wrap;
+            gap: 8px;
         }
 
-        .filter-controls {
+        /* Popover panel content — stacked labeled fields */
+        .popover-fields {
             display: flex;
-            align-items: center;
+            flex-direction: column;
             gap: 10px;
-            flex-wrap: wrap;
         }
 
-        .filter-label {
-            font-size: 13px;
+        .popover-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .popover-field-label {
+            font-size: 11px;
             font-weight: 600;
             color: var(--mj-text-secondary);
-            white-space: nowrap;
-            display: flex;
-            align-items: center;
-            gap: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
-        .filter-label i {
-            font-size: 12px;
-            color: var(--mj-text-muted);
-        }
-
-        :host ::ng-deep mj-dropdown {
-            min-width: 160px;
-            max-width: 220px;
-        }
-
-        :host ::ng-deep mj-dropdown .mj-dropdown {
-            font-size: 13px;
-            border-radius: 6px;
+        .popover-field :host ::ng-deep mj-dropdown,
+        :host ::ng-deep .popover-field mj-dropdown {
+            display: block;
+            width: 100%;
+            min-width: 0;
+            max-width: none;
         }
 
         .compare-btn,
@@ -184,7 +188,6 @@ interface FilterOption {
             display: flex;
             align-items: center;
             gap: 4px;
-            margin-left: auto;
         }
 
         .time-chip {
@@ -260,6 +263,22 @@ export class AnalyticsFilterBarComponent implements OnInit {
     public statusDefaultItem: FilterOption = { text: 'All Statuses', value: '' };
 
     public compareActive = false;
+
+    /** True when at least one of the filter dropdowns is enabled — drives whether to render the popover trigger. */
+    public get HasFilterDropdowns(): boolean {
+        return this.ShowModelFilter || this.ShowAgentFilter || this.ShowPromptFilter || this.ShowStatusFilter;
+    }
+
+    /** Number of active filter selections — drives the popover badge. */
+    public get ActiveFilterCount(): number {
+        const f = this.Filters ?? { Models: [], Agents: [], Prompts: [], Statuses: [] };
+        return (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
+    }
+
+    public ClearAllFilters(): void {
+        this.Filters = { Models: [], Agents: [], Prompts: [], Statuses: [] };
+        this.FiltersChange.emit(this.Filters);
+    }
 
     ngOnInit(): void {
         this.BuildOptions();

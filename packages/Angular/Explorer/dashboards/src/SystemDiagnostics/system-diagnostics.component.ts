@@ -172,33 +172,31 @@ export interface SystemDiagnosticsUserPreferences {
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <div class="system-diagnostics">
-          <!-- Header -->
-          <div class="diagnostics-header">
-            <div class="header-title">
-              <i class="fa-solid fa-stethoscope"></i>
-              <h2>System Diagnostics</h2>
-            </div>
-            <div class="header-controls">
-              <div class="auto-refresh-control">
-                <label>
-                  <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                  Auto-refresh
-                </label>
-                @if (autoRefresh) {
-                  <span class="refresh-indicator">
-                    <i class="fa-solid fa-sync-alt spinning"></i>
-                    Every 5s
-                  </span>
-                }
-              </div>
-              <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-                <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-                Refresh Now
-              </button>
+        <!--
+          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell,
+          which owns its own <mj-page-header>. We deliberately do NOT render a
+          <mj-page-header> here to avoid the doubled-header pattern Section 9b
+          defers. Action chrome (auto-refresh toggle + refresh button) lives
+          inline in the .sticky-header below, matching UserManagement /
+          ApplicationRoles. See plans/explorer-chrome-conventions.md Section 10.
+        -->
+        <div class="sd-container">
+          <div class="sticky-header">
+            <div class="action-buttons" role="toolbar" aria-label="System diagnostics actions">
+              @if (autoRefresh) {
+                <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
+              }
+              <label class="auto-refresh-toggle">
+                <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+                Auto-refresh
+              </label>
+              <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
             </div>
           </div>
-        
+
+          <div class="scrollable-content">
+        <div class="system-diagnostics">
+
           <!-- Overview Cards (Collapsible) -->
           <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
             <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
@@ -1488,6 +1486,8 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
+          </div>
+        </div>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })

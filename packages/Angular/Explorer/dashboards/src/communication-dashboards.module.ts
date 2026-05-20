@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
+import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent, MJRefreshButtonComponent } from '@memberjunction/ng-ui-components';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 
 // Communication Components
@@ -36,7 +37,14 @@ import { CommunicationsNewMessageResource } from './Communication/communication-
     ContainerDirectivesModule,
     SharedGenericModule,
     SharedDashboardWidgetsModule,
-    ListManagementModule
+    ListManagementModule,
+    MJButtonDirective,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterChipComponent,
+    MJRefreshButtonComponent
   ],
   exports: [
     CommunicationDashboardComponent,

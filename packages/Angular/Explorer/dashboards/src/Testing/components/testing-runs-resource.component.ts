@@ -7,7 +7,8 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
 
 /**
- * Testing Runs Resource - displays test execution history and monitoring
+ * Testing Runs Resource — thin shim that renders the inner component.
+ * The inner owns its own <mj-page-layout> + <mj-page-header> when used standalone.
  */
 @RegisterClass(BaseResourceComponent, 'TestingRunsResource')
 @Component({
@@ -15,9 +16,7 @@ import { TestingDialogService } from '@memberjunction/ng-testing';
   selector: 'mj-testing-runs-resource',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="resource-container">
-      <app-testing-runs></app-testing-runs>
-    </div>
+    <app-testing-runs></app-testing-runs>
 
     <!-- Slide Panel for Test Execution -->
     @if (testingDialogService.IsPanelOpen) {
@@ -36,13 +35,7 @@ import { TestingDialogService } from '@memberjunction/ng-testing';
       </mj-slide-panel>
     }
   `,
-  styles: [`
-    .resource-container {
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-    }
-  `]
+  styles: [`:host { display: block; width: 100%; height: 100%; }`]
 })
 export class TestingRunsResourceComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   protected override destroy$ = new Subject<void>();

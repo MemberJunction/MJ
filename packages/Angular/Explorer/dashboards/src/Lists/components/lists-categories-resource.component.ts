@@ -18,21 +18,16 @@ interface CategoryViewModel {
   standalone: false,
   selector: 'mj-lists-categories-resource',
   template: `
-    <div class="lists-categories-container">
-      <!-- Header -->
-      <div class="categories-header">
-        <div class="header-title">
-          <i class="fa-solid fa-tags"></i>
-          <h2>List Categories</h2>
-        </div>
-        <div class="header-actions">
-          <button class="btn-create" (click)="createCategory()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New Category</span>
+    <mj-page-layout>
+      <mj-page-header Title="List Categories" Icon="fa-solid fa-tags">
+        <div actions>
+          <button mjButton variant="primary" size="sm" (click)="createCategory()">
+            <i class="fa-solid fa-plus"></i> New Category
           </button>
         </div>
-      </div>
-    
+      </mj-page-header>
+
+      <mj-page-body>
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -273,7 +268,8 @@ interface CategoryViewModel {
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -281,14 +277,6 @@ interface CategoryViewModel {
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    .lists-categories-container {
-      display: flex;
-      flex-direction: column;
-      height: 100%;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
     }
 
     /* Header */
