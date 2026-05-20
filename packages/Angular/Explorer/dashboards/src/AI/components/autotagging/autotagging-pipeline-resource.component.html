@@ -29,6 +29,23 @@
     <mj-page-header-interior
         [Title]="currentTabTitle"
         [Subtitle]="currentTabSubtitle">
+      @if (ActiveTab === 'tags' || ActiveTab === 'taxonomy') {
+        <div toolbar>
+          @switch (ActiveTab) {
+            @case ('tags') {
+              <input type="text" class="at-search-input" placeholder="Search tags..."
+                     [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+            }
+            @case ('taxonomy') {
+              <mj-tab-nav
+                  [Tabs]="taxSubTabsConfig"
+                  [ActiveKey]="TaxSubTab"
+                  (TabChange)="onTaxSubTabChange($event)">
+              </mj-tab-nav>
+            }
+          }
+        </div>
+      }
       <div actions>
         @switch (ActiveTab) {
           @case ('pipeline') {
@@ -46,28 +63,23 @@
               <i class="fa-solid fa-plus"></i> Add Type
             </button>
           }
-          @case ('tags') {
-            <input type="text" class="at-search-input" placeholder="Search tags..."
-                   [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
-          }
           @case ('taxonomy') {
             <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
               <i class="fa-solid fa-arrows-rotate"></i> Refresh
             </button>
           }
           @case ('history') {
-            <select class="at-filter-select" [(ngModel)]="HistorySourceFilter" (change)="FilterRunHistory()">
-              <option value="">All Sources</option>
-              @for (s of HistorySourceOptions; track s) {
-                <option [value]="s">{{ s }}</option>
-              }
-            </select>
-            <select class="at-filter-select" [(ngModel)]="HistoryStatusFilter" (change)="FilterRunHistory()">
-              <option value="">All Status</option>
-              <option value="complete">Complete</option>
-              <option value="failed">Failed</option>
-              <option value="running">Running</option>
-            </select>
+            <mj-filter-popover
+                [ActiveCount]="historyActiveFilterCount"
+                [ShowClearAll]="historyActiveFilterCount > 0"
+                (ClearAllRequested)="onHistoryFilterReset()">
+              <mj-filter-panel
+                  [Fields]="historyFilterFields"
+                  [Values]="historyFilterValues"
+                  (ValuesChange)="onHistoryFilterChange($event)"
+                  (Reset)="onHistoryFilterReset()">
+              </mj-filter-panel>
+            </mj-filter-popover>
           }
         }
       </div>
@@ -690,30 +702,6 @@
             <!-- TAB 6: TAXONOMY GOVERNANCE -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'taxonomy') {
-                <!-- Sub-tab strip -->
-                <div class="at-tax-tab-strip">
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'tree'" (click)="SwitchTaxSubTab('tree')">
-                        <i class="fa-solid fa-sitemap"></i> Tree View
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'duplicates'" (click)="SwitchTaxSubTab('duplicates')">
-                        <i class="fa-solid fa-link"></i> Duplicates
-                        @if (TaxDuplicates.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-warning">{{ TaxDuplicates.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'orphans'" (click)="SwitchTaxSubTab('orphans')">
-                        <i class="fa-solid fa-ban"></i> Orphans
-                        @if (TaxOrphans.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-error">{{ TaxOrphans.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'treemap'" (click)="SwitchTaxSubTab('treemap')">
-                        <i class="fa-solid fa-chart-tree-map"></i> Treemap
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'audit'" (click)="SwitchTaxSubTab('audit')">
-                        <i class="fa-solid fa-scroll"></i> Audit Log
-                    </div>
-                </div>
 
                 <div class="at-page-body">
 

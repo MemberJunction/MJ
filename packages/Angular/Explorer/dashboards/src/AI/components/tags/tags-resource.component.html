@@ -29,12 +29,25 @@
     <mj-page-header-interior
         [Title]="currentTabTitle"
         [Subtitle]="currentTabSubtitle">
+      @if (ActiveTab === 'tags' || ActiveTab === 'taxonomy') {
+        <div toolbar>
+          @switch (ActiveTab) {
+            @case ('tags') {
+              <input type="text" class="at-search-input" placeholder="Search tags..."
+                     [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+            }
+            @case ('taxonomy') {
+              <mj-tab-nav
+                  [Tabs]="taxSubTabsConfig"
+                  [ActiveKey]="TaxSubTab"
+                  (TabChange)="onTaxSubTabChange($event)">
+              </mj-tab-nav>
+            }
+          }
+        </div>
+      }
       <div actions>
         @switch (ActiveTab) {
-          @case ('tags') {
-            <input type="text" class="at-search-input" placeholder="Search tags..."
-                   [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
-          }
           @case ('taxonomy') {
             <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
               <i class="fa-solid fa-arrows-rotate"></i> Refresh
@@ -203,30 +216,6 @@
             <!-- TAB 6: TAXONOMY GOVERNANCE -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'taxonomy') {
-                <!-- Sub-tab strip -->
-                <div class="at-tax-tab-strip">
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'tree'" (click)="SwitchTaxSubTab('tree')">
-                        <i class="fa-solid fa-sitemap"></i> Tree View
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'duplicates'" (click)="SwitchTaxSubTab('duplicates')">
-                        <i class="fa-solid fa-link"></i> Duplicates
-                        @if (TaxDuplicates.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-warning">{{ TaxDuplicates.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'orphans'" (click)="SwitchTaxSubTab('orphans')">
-                        <i class="fa-solid fa-ban"></i> Orphans
-                        @if (TaxOrphans.length > 0) {
-                            <span class="at-tax-tab-badge at-tax-badge-error">{{ TaxOrphans.length }}</span>
-                        }
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'treemap'" (click)="SwitchTaxSubTab('treemap')">
-                        <i class="fa-solid fa-chart-tree-map"></i> Treemap
-                    </div>
-                    <div class="at-tax-tab" [class.active]="TaxSubTab === 'audit'" (click)="SwitchTaxSubTab('audit')">
-                        <i class="fa-solid fa-scroll"></i> Audit Log
-                    </div>
-                </div>
 
                 <div class="at-page-body">
 

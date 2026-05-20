@@ -657,6 +657,164 @@ overflow," not "render a list/grid that scrolls vertically."
   row. Body should scroll independently, background matches
   `<mj-left-nav-content>` (page tone), no doubled-header anywhere.
 
+### Sub-tabs / nested navigation — always project into the chrome `[toolbar]` slot
+
+When a section inside a multi-section workspace has its own **horizontal
+sub-tab strip** (e.g. Tags' Taxonomy section: Tree View / Duplicates / Orphans /
+Treemap / Audit Log; SystemDiagnostics' L2 sections; API Keys' tab strip), that
+sub-tab nav is **chrome**, not content. It goes in the parent chrome's
+`[toolbar]` slot, gated on the active section so it only renders when that
+section is rendered.
+
+```html
+<mj-page-header-interior [Title]="currentTabTitle" [Subtitle]="currentTabSubtitle">
+  @if (ActiveTab === 'taxonomy') {
+    <div toolbar>
+      <mj-tab-nav
+          [Tabs]="taxSubTabsConfig"
+          [ActiveKey]="TaxSubTab"
+          (TabChange)="onTaxSubTabChange($event)">
+      </mj-tab-nav>
+    </div>
+  }
+  <div actions>
+    @switch (ActiveTab) {
+      @case ('taxonomy') {
+        <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </button>
+      }
+      ...
+    }
+  </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior [Padding]="false" [Flex]="true">
+  @if (ActiveTab === 'taxonomy') {
+    <!-- section body content only — NO inline <mj-tab-nav>, NO inline title -->
+    @if (TaxSubTab === 'tree') { ... }
+    @if (TaxSubTab === 'duplicates') { ... }
+    ...
+  }
+</mj-page-body-interior>
+```
+
+This produces the canonical two-row interior chrome card:
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│ Taxonomy Governance  [meta]            [Refresh]              │  ← primary row
+│  Manage tag hierarchy, resolve duplicates ...                  │
+├───────────────────────────────────────────────────────────────┤
+│ [Tree View] [Duplicates (3)] [Orphans (1)] [Treemap] [Audit]  │  ← toolbar row
+└───────────────────────────────────────────────────────────────┘
+[ body content for the active sub-tab ]
+```
+
+**Reference implementations:** SystemDiagnostics (4 L2 sections in `[toolbar]`),
+API Keys (4 tabs in `[toolbar]`), Tags + Classify (Taxonomy sub-tabs in
+`[toolbar]`, gated on `ActiveTab === 'taxonomy'`).
+
+**Anti-pattern:** rendering `<mj-tab-nav>` as a free-floating element above the
+body content, outside the chrome. That breaks the canonical card shape and
+inconsistently positions nav chrome between the two surfaces (chrome card vs
+body region). Heuristic check before placing any `<mj-tab-nav>`: *is this nav
+chrome (selecting between siblings) or content (the thing being navigated
+to)?* If chrome → `[toolbar]` slot. If content → body. The horizontal tab
+strip is **almost always** chrome.
+
+**TabConfig + state badges:** `<mj-tab-nav>` supports per-tab badges via the
+`TabConfig.badge` field (number or string) with optional `badgeVariant`
+(`'default' | 'error' | 'warning' | 'success'`). Use this for the same kind of
+contextual count the bespoke strips often carry (e.g. Duplicates count in
+warning, Orphans count in error). Drive badges off a getter so they update
+reactively when the underlying counts change.
+
+### Per-section slot population — gate the slot wrapper with `@if`, not just `@switch` inside it
+
+A common mistake when wiring per-section `[toolbar]` content is:
+
+```html
+<!-- ❌ ANTI-PATTERN: empty toolbar wrapper still renders, producing a phantom row -->
+<mj-page-header-interior ...>
+  <div toolbar>
+    @switch (ActiveTab) {
+      @case ('tags')     { <input class="at-search-input" ... /> }
+      @case ('taxonomy') { <mj-tab-nav ... /> }
+    }
+  </div>
+  ...
+</mj-page-header-interior>
+```
+
+For tabs where `@switch` has no matching case, the `<div toolbar>` wrapper is
+STILL projected into the chrome (it has the `[toolbar]` attribute). The chrome
+sees a non-empty `[toolbar]` slot and renders the toolbar row + its
+border-top divider, producing a dangling empty band.
+
+**The correct pattern is to gate the entire `<div toolbar>` projection with
+`@if`** so the wrapper isn't projected at all when nothing inside it would
+render:
+
+```html
+<!-- ✅ CORRECT: <div toolbar> only projected when one of its @switch cases matches -->
+<mj-page-header-interior ...>
+  @if (ActiveTab === 'tags' || ActiveTab === 'taxonomy') {
+    <div toolbar>
+      @switch (ActiveTab) {
+        @case ('tags')     { <input class="at-search-input" ... /> }
+        @case ('taxonomy') { <mj-tab-nav ... /> }
+      }
+    </div>
+  }
+  ...
+</mj-page-header-interior>
+```
+
+Both layers protect against the phantom row:
+
+- **Consumer level** (preferred for readability) — the `@if` makes the gating
+  explicit at the call site. A reader sees exactly which sections render
+  toolbar content.
+- **Primitive level** — `<mj-page-header-interior>` collapses the toolbar
+  row via `:host ::ng-deep .row:not(:has(> [toolbar]:has(*)))` — the row is
+  hidden unless a `[toolbar]` direct child exists AND has its own descendant
+  elements. `::ng-deep` is required because the projected `[toolbar]`
+  wrapper carries the consumer's view-encapsulation scope, not ours — a
+  scoped `[toolbar]` selector would never match the projected wrapper. The
+  selector covers (a) no projection at all (more robust than `:empty`
+  because `:has(*)` ignores stray template whitespace), and (b) the
+  projected-but-empty case where the consumer's `@switch` had no matching
+  case. Safety net for consumers who forget the `@if`.
+
+The same rule applies to `[meta]` / `[actions]` slots if you ever wire them
+with a `@switch`: gate the projection wrapper itself with `@if`, don't just
+put the `@switch` inside an always-projected wrapper.
+
+### Filter controls — follow Section 3's decision tree
+
+When a section needs to filter its content, place the controls per Section 3
+rules, applied to the chrome card:
+
+| Filter shape | Where it goes |
+|---|---|
+| Free text — search | `<mj-page-search>` in `[toolbar]` slot |
+| Quick toggle, 2–4 single-select values (Status, Time Range) | `<mj-filter-chip>` group in `[toolbar]` slot |
+| Many values, single-select (Role, Model, Source) | `<mj-filter-popover>` + `<mj-filter-panel>` with `type: 'dropdown'` field, in `[actions]` slot |
+| Many values, multi-select (Tags, Categories) | `<mj-filter-popover>` + `<mj-filter-panel>` with `type: 'chips'` field, in `[actions]` slot |
+| Two-or-more independent filters on the same section | Put ALL of them into ONE `<mj-filter-popover>` panel with multiple `FilterFieldConfig` entries. Do NOT scatter bare `<select>` elements across the chrome. |
+
+**Reference for multi-filter popover:** Classify's Run History section bundles
+its Source + Status filters into a single `<mj-filter-popover>` driven by a
+`historyFilterFields: FilterFieldConfig[]` getter, a `historyFilterValues`
+getter, and `onHistoryFilterChange` / `onHistoryFilterReset` handlers. The
+popover's `[ActiveCount]` badge surfaces the count of currently-applied
+filters. Copy this when migrating any other multi-filter section.
+
+**Anti-pattern:** bare `<select class="some-filter-select">` elements lined up
+in `[actions]` or `[toolbar]`. They lose the active-count badge, the clear-all
+affordance, and the consistent popover surface used everywhere else in the app.
+
 ### Filter UI decisions inside the chrome card
 
 Same decision tree as Section 3, applied to `<mj-page-header-interior>`:

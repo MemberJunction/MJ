@@ -1980,56 +1980,9 @@
    TAXONOMY GOVERNANCE TAB
    ════════════════════════════════════════════ */
 
-/* ── Sub-tab strip ── */
-
-.at-tax-tab-strip {
-    display: flex;
-    border-bottom: 2px solid var(--mj-border-default);
-    padding: 0 20px;
-    gap: 0;
-    flex-shrink: 0;
-}
-
-.at-tax-tab {
-    padding: 10px 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.at-tax-tab:hover {
-    color: var(--mj-text-secondary);
-}
-
-.at-tax-tab.active {
-    color: var(--mj-brand-primary);
-    border-bottom-color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-tax-tab-badge {
-    font-size: 0.62rem;
-    font-weight: 600;
-    padding: 1px 7px;
-    border-radius: 10px;
-}
-
-.at-tax-badge-warning {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-warning);
-}
-
-.at-tax-badge-error {
-    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-error);
-}
+/* Sub-tab strip + badges retired — taxonomy sub-tabs now driven by <mj-tab-nav>
+   in the [toolbar] slot of the taxonomy section, with TabConfig badges
+   (warning variant for duplicates, error variant for orphans). */
 
 /* ── Tree View: Split layout ── */
 

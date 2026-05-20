@@ -133,18 +133,30 @@ import { Component, Input } from '@angular/core';
       gap: var(--mj-space-4);
     }
 
+    /* Toolbar row — hidden by default, opt-in via consumer projection.
+
+       Defaulting to display:none (instead of "show then hide when empty")
+       eliminates the dangling divider + empty band on sub-pages that have
+       no toolbar content (Dev Tools inspectors, action-only sections, etc.).
+       The row only appears when the consumer projects a [toolbar] element
+       that actually has content.
+
+       ::ng-deep is required because the projected [toolbar] wrapper carries
+       the CONSUMER's view-encapsulation scope, not ours — a scoped selector
+       for [toolbar] would never match the projected wrapper, so we have to
+       escape our scope to see it. The matched-content rule restores all
+       the row's intended styling (flex layout, padding, divider). */
     .mj-page-header-interior__row--toolbar {
-      flex-wrap: wrap;
-      padding-top: var(--mj-space-3);
-      padding-bottom: var(--mj-space-3);
-      border-top: 1px solid var(--mj-border-subtle);
+      display: none;
     }
 
-    /* When the toolbar has no projected content, collapse the row entirely so
-       sub-pages with only actions (e.g. Dev Tools inspectors) don't show a
-       dangling divider + empty space. */
-    .mj-page-header-interior__row--toolbar:empty {
-      display: none;
+    :host ::ng-deep .mj-page-header-interior__row--toolbar:has(> [toolbar]:has(*)) {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--mj-space-3);
+      padding: var(--mj-space-3) var(--mj-space-4);
+      border-top: 1px solid var(--mj-border-subtle);
     }
 
     .mj-page-header-interior__identity {

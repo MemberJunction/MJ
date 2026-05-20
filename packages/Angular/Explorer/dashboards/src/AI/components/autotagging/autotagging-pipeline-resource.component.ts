@@ -15,7 +15,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
+import { MJLeftNavItem, MJLeftNavSection, TabConfig, FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -456,7 +456,12 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (raw) {
             try {
                 const prefs = JSON.parse(raw);
-                if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
+                // Guard against stale persisted state that doesn't match the
+                // current Classify rail (e.g. 'tags'/'taxonomy' from when those
+                // surfaces lived here, or a value seeded by a sibling dashboard).
+                if (prefs.ActiveTab && AutotaggingPipelineResourceComponent.VALID_TABS.includes(prefs.ActiveTab)) {
+                    this.ActiveTab = prefs.ActiveTab;
+                }
                 if (prefs.ShowPipelineConfig != null) this.ShowPipelineConfig = prefs.ShowPipelineConfig;
             } catch { /* ignore */ }
         }
@@ -940,6 +945,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ── Lifecycle ──
 
     private static readonly PREFS_KEY = 'KH_Classify_Preferences';
+    private static readonly VALID_TABS: TabName[] = ['pipeline', 'sources', 'types', 'history'];
 
     async ngAfterViewInit(): Promise<void> {
         await Promise.all([
@@ -1672,6 +1678,59 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             return true;
         });
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Filter fields for the Run History section, rendered inside an
+     * `<mj-filter-popover>` (Section 3 decision tree: many values, single-select
+     * → popover with dropdown).
+     */
+    public get historyFilterFields(): FilterFieldConfig[] {
+        return [
+            {
+                key: 'source',
+                type: 'dropdown',
+                label: 'Source',
+                placeholder: 'All Sources',
+                filterable: this.HistorySourceOptions.length > 10,
+                options: [
+                    { text: 'All Sources', value: '' },
+                    ...this.HistorySourceOptions.map(s => ({ text: s, value: s }))
+                ]
+            },
+            {
+                key: 'status',
+                type: 'dropdown',
+                label: 'Status',
+                placeholder: 'All Status',
+                options: [
+                    { text: 'All Status', value: '' },
+                    { text: 'Complete', value: 'complete' },
+                    { text: 'Failed',   value: 'failed' },
+                    { text: 'Running',  value: 'running' }
+                ]
+            }
+        ];
+    }
+
+    public get historyFilterValues(): Record<string, unknown> {
+        return { source: this.HistorySourceFilter, status: this.HistoryStatusFilter };
+    }
+
+    public get historyActiveFilterCount(): number {
+        return (this.HistorySourceFilter ? 1 : 0) + (this.HistoryStatusFilter ? 1 : 0);
+    }
+
+    public onHistoryFilterChange(values: Record<string, unknown>): void {
+        this.HistorySourceFilter = (values['source'] as string) ?? '';
+        this.HistoryStatusFilter = (values['status'] as string) ?? '';
+        this.FilterRunHistory();
+    }
+
+    public onHistoryFilterReset(): void {
+        this.HistorySourceFilter = '';
+        this.HistoryStatusFilter = '';
+        this.FilterRunHistory();
     }
 
     // ════════════════════════════════════════════
@@ -3268,6 +3327,28 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     // ════════════════════════════════════════════
     // TAXONOMY GOVERNANCE TAB
     // ════════════════════════════════════════════
+
+    /** Taxonomy sub-tabs as `TabConfig[]` for `<mj-tab-nav>`. */
+    public get taxSubTabsConfig(): TabConfig[] {
+        return [
+            { key: 'tree',       label: 'Tree View',  icon: 'fa-solid fa-sitemap' },
+            { key: 'duplicates', label: 'Duplicates', icon: 'fa-solid fa-link',
+              badge: this.TaxDuplicates.length > 0 ? this.TaxDuplicates.length : null,
+              badgeVariant: 'warning' },
+            { key: 'orphans',    label: 'Orphans',    icon: 'fa-solid fa-ban',
+              badge: this.TaxOrphans.length > 0 ? this.TaxOrphans.length : null,
+              badgeVariant: 'error' },
+            { key: 'treemap',    label: 'Treemap',    icon: 'fa-solid fa-chart-tree-map' },
+            { key: 'audit',      label: 'Audit Log',  icon: 'fa-solid fa-scroll' }
+        ];
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTaxSubTabChange(key: string): void {
+        if (key === 'tree' || key === 'duplicates' || key === 'orphans' || key === 'treemap' || key === 'audit') {
+            this.SwitchTaxSubTab(key);
+        }
+    }
 
     public SwitchTaxSubTab(sub: TaxonomySubTab): void {
         this.TaxSubTab = sub;
