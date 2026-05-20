@@ -687,9 +687,9 @@
     "fields": {
       "Name": "Gemini 3 Pro",
       "PowerRank": 25,
-      "Description": "Google's most powerful agentic and multimodal model with state-of-the-art reasoning. Features industry-leading 1M token input context window and 64k output capacity. Achieves top scores across 19 of 20 major AI benchmarks (1501 Elo on LMArena). Exceptional multimodal understanding, coding, and agentic capabilities with knowledge cutoff of January 2025.",
+      "Description": "Google's most powerful agentic and multimodal model with state-of-the-art reasoning. Features industry-leading 1M token input context window and 64k output capacity. Achieves top scores across 19 of 20 major AI benchmarks (1501 Elo on LMArena). Exceptional multimodal understanding, coding, and agentic capabilities with knowledge cutoff of January 2025. DEPRECATED: The gemini-3-pro-preview API endpoint was shut down by Google on March 9, 2026; replacement is gemini-3.1-pro-preview (separate MJ model entry: Gemini 3.1 Pro). Source: https://ai.google.dev/gemini-api/docs/deprecations",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 8,
       "CostRank": 10,
       "InheritTypeModalities": true
@@ -11091,7 +11091,7 @@
             "Priority": 0,
             "Status": "Active",
             "DriverClass": "GeminiLLM",
-            "APIName": "gemini-3.1-flash-lite-preview",
+            "APIName": "gemini-3.1-flash-lite",
             "MaxInputTokens": 1000000,
             "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
@@ -11133,7 +11133,7 @@
             "Priority": 1,
             "Status": "Active",
             "DriverClass": "VertexLLM",
-            "APIName": "gemini-3.1-flash-lite-preview",
+            "APIName": "gemini-3.1-flash-lite",
             "MaxInputTokens": 1000000,
             "MaxOutputTokens": 64000,
             "SupportedResponseFormats": "Any, JSON",
@@ -14408,6 +14408,110 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Mercury Edit 2 pricing as of May 12, 2026 release: $0.25/1M input, $0.75/1M output, $0.025/1M cached input (10x discount). Sources: https://www.inceptionlabs.ai/blog/introducing-mercury-edit-2 ; https://docs.inceptionlabs.ai/get-started/models"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gemini 3.5 Flash",
+      "PowerRank": 23,
+      "Description": "Google's cost-efficient frontier multimodal model released at Google I/O 2026 (May 19, 2026). Features 1M token input context window and 64K output capacity with configurable thinking levels (minimal/low/medium/high) for controlling the mix of quality, cost, and latency. Beats Gemini 3.1 Pro on Terminal-Bench 2.1 (76.2 vs 70.3), MCP Atlas (83.6 vs 78.2), Finance Agent v2 (57.9 vs 43.0), and GDPval-AA Elo (1656 vs 1314). 4x faster output tokens/sec than other frontier models. Supports multimodal input (text, image, audio, video), tool use, agentic workflows, and structured output. Knowledge cutoff January 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 6,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "GeminiLLM",
+            "APIName": "gemini-3.5-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "VertexLLM",
+            "APIName": "gemini-3.5-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "StartedAt": "2026-05-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 9,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.5 Flash pricing on Google as of May 19, 2026 GA release at Google I/O 2026. Standard global tier: $1.50/1M input, $9.00/1M output (including thinking tokens), $0.15/1M cached input. Batch tier: $0.75/$4.50, cached $0.075. Flex tier: $0.75/$4.50, cached $0.08. Priority tier: $2.70/$16.20, cached $0.27. Context caching storage: $1.00/1M tokens per hour across all tiers. Sources: https://deepmind.google/models/model-cards/gemini-3-5-flash/ ; https://ai.google.dev/gemini-api/docs/pricing"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "StartedAt": "2026-05-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 9,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Gemini 3.5 Flash pricing on Vertex AI as of May 19, 2026 GA release. Same pricing structure as Google direct: $1.50/1M input, $9.00/1M output, $0.15/1M cached input. Sources: https://ai.google.dev/gemini-api/docs/pricing"
           }
         }
       ]

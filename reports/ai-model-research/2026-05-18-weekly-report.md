@@ -268,3 +268,79 @@ The following exist and have verified pricing, but were not added to the JSON in
 - [Artificial Analysis — Fireworks provider](https://artificialanalysis.ai/providers/fireworks)
 - [OpenRouter Models](https://openrouter.ai/models)
 - [OpenRouter Free Models](https://openrouter.ai/collections/free-models)
+
+---
+
+## Addendum — Google I/O 2026 (2026-05-19)
+
+**Addendum Date**: 2026-05-20
+**Event**: Google I/O 2026 developer keynote (Tuesday, May 19, 2026)
+
+Google held the I/O 2026 keynote yesterday and shipped a significant Gemini wave. The headline release is **Gemini 3.5 Flash** (GA same day), which materially changes the cost-efficient frontier tier and is recommended as a **Tier-1 add** to MJ inventory.
+
+### New Models (Tier-1 — add to MJ inventory)
+
+| Model              | Vendor | API ID              | In / Out / 1M     | Cached In | Context     | Notes                                                                                               |
+| ------------------ | ------ | ------------------- | ----------------- | --------- | ----------- | --------------------------------------------------------------------------------------------------- |
+| **Gemini 3.5 Flash** | Google | `gemini-3.5-flash` | **$1.50 / $9.00** | $0.15     | 1M / 64K out | GA 2026-05-19. Beats Gemini 3.1 Pro on Terminal-Bench 2.1 (76.2 vs 70.3), MCP Atlas (83.6 vs 78.2), Finance Agent v2 (57.9 vs 43.0). 4× faster output tokens/sec than other frontier models. New `thinking_level` enum (`minimal`/`low`/`medium`/`high`) — supports effort level. Default thinking now `medium`. Knowledge cutoff Jan 2026. Internal versioned tag `3.5-flash-05-2026`. Non-global regions: $1.65/$9.90; Batch/Flex 50% off; Priority tier $2.70/$16.20. |
+
+### New Models (Tier-2 — verified but deferred)
+
+| Model | Vendor | Status | Notes |
+|---|---|---|---|
+| **Gemini 3.5 Pro** | Google | Internal testing 2026-05-19; wider distribution ~June 2026 | API ID / pricing / context not yet disclosed |
+| **Gemini Omni / Omni Flash** | Google | Rolling out 2026-05-19 to AI Plus/Pro/Ultra subscribers; **developer API "in coming weeks"** | Net-new category — multimodal-in + video-out, conversational scene editing. No developer API pricing yet (third-party projections only; do not record). |
+| **Veo 4** | Google | Announced at I/O 2026 | 30-sec video generation, prompt-based scene editing. API ID/pricing/GA date pending. Supersedes existing "Veo 4" Tier-2 flag with confirmed capability scope. |
+| **Imagen 5** | Google | Announced at I/O 2026 | Supersedes Imagen 4 Tier-2 flag. Improved visual quality, prompt interpretation, text-in-image. API ID/pricing pending. |
+
+### Pricing Changes Detected
+
+No price changes recorded for Gemini 3 Pro, 2.5 Pro, 2.5 Flash, 2.5 Flash-Lite, 3.1 Pro Preview, or 3.1 Flash-Lite as of 2026-05-19. Current published pricing per the official page (for reference):
+
+- **Gemini 3.1 Pro Preview**: $2.00 / $12.00 (≤200k); $4.00 / $18.00 (>200k)
+- **Gemini 2.5 Pro**: $1.25 / $10.00 (≤200k); $2.50 / $15.00 (>200k)
+- **Gemini 2.5 Flash**: $0.30 / $2.50
+- **Gemini 2.5 Flash-Lite**: $0.10 / $0.40
+- **Gemini 3.1 Flash-Lite**: $0.25 / $1.50
+
+### Deprecations
+
+| Model | Retirement Date | Source | Action |
+|---|---|---|---|
+| Gemini 2.0 Flash | **Jun 1, 2026** (12 days out) | ai.google.dev/gemini-api/docs/pricing | **In MJ inventory** — mark deprecating; entry exists at `gemini-2.0-flash` / `gemini-2.0-flash-001` |
+| Gemini 2.0 Flash-Lite | **Jun 1, 2026** | ai.google.dev/gemini-api/docs/pricing | Verify whether in MJ inventory; mark deprecating if present |
+| **Gemini 3 Pro** (`gemini-3-pro-preview`) | **Already shut down 2026-03-09** | ai.google.dev/gemini-api/docs/deprecations | **In MJ inventory** — endpoint dead 2+ months; flipped `IsActive=false` in this addendum. Replacement is `gemini-3.1-pro-preview` (separate MJ entry "Gemini 3.1 Pro"). |
+| `gemini-3-flash-preview` (Gemini 3 Flash) | On deprecation list; **no shutdown date yet announced** | ai.google.dev/gemini-api/docs/deprecations | **In MJ inventory** — keep `IsActive=true` per policy ("keep until actually deprecated"); revisit when Google announces shutdown date. Eventual replacement is `gemini-3.5-flash`. |
+| `gemini-3.1-flash-lite-preview` (Gemini 3.1 Flash-Lite) | **Preview shuts down 2026-05-25** (5 days); GA `gemini-3.1-flash-lite` is available | ai.google.dev/gemini-api/docs/deprecations | **✅ DONE — Updated APIName to `gemini-3.1-flash-lite`** on both Google and Vertex AI vendor rows in this addendum (preempting the 5-day shutdown clock since the GA replacement is live). |
+| `gemini-3-pro-image-preview` | On deprecation list; no shutdown date yet | ai.google.dev/gemini-api/docs/deprecations | **In MJ inventory** as "Gemini 3 Pro Image (Nano Banana Pro)" — keep until shutdown date announced. |
+
+### API / Integration Notes
+
+- **New `thinking_level` enum** (string: `minimal`/`low`/`medium`/`high`) replaces the older numeric `thinking_budget` parameter for Gemini 3.5 family. May affect how MJ's effort-level integration translates to Gemini calls. Default thinking moved from `high` → `medium`.
+- **Google Search grounding**: 5,000 prompts/month free on Gemini 3 family, then $14 / 1,000 queries.
+- **Tooling-only announcements** (not new models): Antigravity 2.0 (agent dev platform), AI Studio updates, Gemini Spark consumer agent.
+
+### Recommended Actions (Addendum)
+
+1. **✅ DONE — Added Gemini 3.5 Flash to `.ai-models.json`** as Tier-1. PowerRank 23, SpeedRank 10, CostRank 6. `SupportsEffortLevel=true` (confirmed by thinking levels). DriverClass: `GeminiLLM` (Google direct) + `VertexLLM` (Vertex AI). APIName: `gemini-3.5-flash` on both vendors. Dual-vendor + dual-type structure (Google + Vertex AI, each with Model Developer + Inference Provider). Vertex AI availability verified GA same-day at `cloud.google.com/vertex-ai/generative-ai/pricing`.
+2. **✅ DONE — Flipped `Gemini 3 Pro` to `IsActive=false`**. The `gemini-3-pro-preview` endpoint was shut down by Google on 2026-03-09 (2+ months ago). Replacement model `Gemini 3.1 Pro` already exists as a separate MJ entry using `gemini-3.1-pro-preview`.
+3. **Mark Gemini 2.0 Flash for deprecation** in MJ (Jun 1, 2026 sunset).
+4. **Verify Gemini 2.0 Flash-Lite presence** in MJ inventory; mark deprecating if found.
+5. **Update Tier-2 watchlist**: replace "Imagen 4" with "Imagen 5"; keep Veo 4 flagged with confirmed 30-sec capability; add Gemini 3.5 Pro and Gemini Omni / Omni Flash as new Tier-2 entries pending developer API release.
+6. **Plan integration test** of the new `thinking_level` enum vs MJ's current effort-level abstraction.
+7. **✅ DONE — Updated Gemini 3.1 Flash-Lite APIName** from `gemini-3.1-flash-lite-preview` → `gemini-3.1-flash-lite` (GA stable form) on both Google and Vertex AI vendor rows. Done preemptively since the GA endpoint is already live and the preview shuts down in 5 days (2026-05-25).
+
+### Addendum Sources
+
+- [Google I/O 2026 developer keynote recap (official)](https://developers.googleblog.com/all-the-news-from-the-google-io-2026-developer-keynote/)
+- [Google I/O 2026 developer highlights (official Google blog)](https://blog.google/innovation-and-ai/technology/developers-tools/google-io-2026-developer-highlights/)
+- [Gemini 3.5 Flash model card (official DeepMind)](https://deepmind.google/models/model-cards/gemini-3-5-flash/) — "Published 19 May 2026"
+- [DeepMind Gemini Flash landing page](https://deepmind.google/models/gemini/flash/)
+- [Gemini API pricing (official)](https://ai.google.dev/gemini-api/docs/pricing) — primary source for prices, deprecations, tiers
+- [Gemini 3.5 Flash launch benchmarks — llm-stats.com](https://llm-stats.com/blog/research/gemini-3.5-flash-launch)
+- [Google introduces Gemini 3.5 Flash at I/O 2026 — MarkTechPost](https://www.marktechpost.com/2026/05/20/google-introduces-gemini-3-5-flash-at-i-o-2026-a-faster-and-cheaper-model-for-ai-agents-and-coding/)
+- [CNBC — Google AI Ultra / Gemini Spark / Omni](https://www.cnbc.com/2026/05/19/google-ai-ultra-gemini-spark-omni.html)
+- [TechCrunch — Gemini Omni turns images, audio, text into video](https://techcrunch.com/2026/05/19/googles-gemini-omni-turns-images-audio-and-text-into-video-and-thats-just-the-start/)
+- [9to5Google — Google I/O 2026 news roundup](https://9to5google.com/2026/05/19/google-io-2026-news/)
+- [Gemini 3.5 Flash on OpenRouter (third-party listing)](https://openrouter.ai/google/gemini-3.5-flash) — confirms `gemini-3.5-flash` identifier
+- [AIxploria — Google I/O 2026 Gemini announcements](https://www.aixploria.com/en/ai-radar/google-io-2026-gemini-announcements-preview/) — Veo 4 / Imagen 5 coverage
