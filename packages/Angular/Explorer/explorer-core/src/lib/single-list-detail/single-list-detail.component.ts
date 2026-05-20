@@ -274,8 +274,18 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         this.currentLevel = 'View';
         return;
       }
-      // Route through ListSharingService (GraphQL) — never instantiate the
-      // server-side `ListSharing` class from a browser bundle.
+      // Fast path: the list's UserID is its owner. Owners always have full
+      // capabilities and don't carry a Resource Permission row (ownership
+      // is implicit), so the permission-row lookup below would return null
+      // and incorrectly hide all edit/share/delete buttons. Mirrors the
+      // owner short-circuit in the server-side ListSharing.ResolveEffectivePermission.
+      if (UUIDsEqual(this.listRecord.UserID, currentUserId)) {
+        this.currentLevel = 'Owner';
+        this.capabilities = CapabilitiesForLevel('Owner');
+        return;
+      }
+      // Non-owner: resolve via ListSharingService (GraphQL). Never instantiate
+      // the server-side `ListSharing` class from a browser bundle.
       const level = (await this.listSharingService.getUserPermissionLevel(this.listRecord.ID, currentUserId)) as SharePermissionLevel | null;
       this.currentLevel = level;
       this.capabilities = CapabilitiesForLevel(level);
