@@ -14,7 +14,7 @@ describe('WildApricotConnector (smoke)', () => {
         });
 
         it('IntegrationName getter returns the canonical name', () => {
-            expect(connector.IntegrationName).toBe('WildApricot');
+            expect(connector.IntegrationName).toBe('Wild Apricot');
         });
     });
 

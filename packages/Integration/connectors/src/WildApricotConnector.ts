@@ -491,7 +491,7 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
     public override get SupportsUpdate(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
 
-    public override get IntegrationName(): string { return 'WildApricot'; }
+    public override get IntegrationName(): string { return 'Wild Apricot'; }
 
     // ── Action generation ─────────────────────────────────────────────
 
@@ -503,8 +503,8 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
         const objects = this.GetIntegrationObjects();
         if (objects.length === 0) return null;
         return {
-            IntegrationName: 'WildApricot',
-            CategoryName: 'WildApricot',
+            IntegrationName: 'Wild Apricot',
+            CategoryName: 'Wild Apricot',
             IconClass: 'fa-solid fa-apple-whole',
             Objects: objects,
             IncludeSearch: false,
@@ -516,7 +516,7 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
 
     public override GetDefaultConfiguration(): DefaultIntegrationConfig | null {
         return {
-            DefaultSchemaName: 'WildApricot',
+            DefaultSchemaName: 'Wild Apricot',
             DefaultObjects: [
                 {
                     SourceObjectName: 'Contacts',

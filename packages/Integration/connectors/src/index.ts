@@ -21,6 +21,5 @@ export { WildApricotConnector } from './WildApricotConnector.js';
 export { Reach360Connector } from './Reach360Connector.js';
 export { BlackbaudConnector } from './BlackbaudConnector.js';
 export { NetSuiteConnector } from './NetSuiteConnector.js';
-export { Personify360Connector } from './Personify360Connector.js';
 export { NetForumConnector } from './NetForumConnector.js';
 export { NimbleAMSConnector } from './NimbleAMSConnector.js';
