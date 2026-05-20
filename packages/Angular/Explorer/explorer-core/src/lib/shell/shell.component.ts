@@ -447,6 +447,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       })
     );
 
+    // Listen for tenant context changes (e.g., BCSaaS org switching).
+    // Two phases:
+    //   'start' (eventCode TenantChanging) — show loading screen immediately
+    //   'complete' (eventCode TenantChanged) — reload tabs and hide loading screen
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
+        if (event.event === MJEventType.TenantChanged) {
+          if (event.eventCode === 'TenantChanging') {
+            this.currentLoadingText = 'Switching organization...';
+            this.loading = true;
+            this.cdr.detectChanges();
+          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+            try {
+              await this.tabContainerRef.ReloadAllTabs();
+            } finally {
+              this.loading = false;
+              this.cdr.detectChanges();
+            }
+          }
+        }
+      })
+    );
+
     // Load searchable entities for search functionality
     await this.loadSearchableEntities();
 
