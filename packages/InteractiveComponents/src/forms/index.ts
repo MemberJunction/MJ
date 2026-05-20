@@ -20,6 +20,7 @@
 export * from './form-host-props';
 export * from './form-event-names';
 export * from './form-method-names';
+export * from './curated-form-schema';
 
 import type { ComponentSpec } from '../component-spec';
 

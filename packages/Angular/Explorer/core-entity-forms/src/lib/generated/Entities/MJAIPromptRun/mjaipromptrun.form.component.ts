@@ -23,8 +23,8 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunPromptRuns', sectionName: 'Content Process Run Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsRerunFromPromptRunID', sectionName: 'AI Prompt Runs (Rerun From)', isExpanded: false },
+            { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJAIPromptRunsParentID', sectionName: 'AI Prompt Runs (Parent Run)', isExpanded: false }
         ]);

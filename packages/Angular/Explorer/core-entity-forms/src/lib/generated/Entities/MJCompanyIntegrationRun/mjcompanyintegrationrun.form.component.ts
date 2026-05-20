@@ -21,8 +21,8 @@ export class MJCompanyIntegrationRunFormComponent extends BaseFormComponent {
             { sectionKey: 'diagnosticDetails', sectionName: 'Diagnostic Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrationRunAPILogs', sectionName: 'Company Integration Run API Logs', isExpanded: false },
-            { sectionKey: 'mJCompanyIntegrationRunDetails', sectionName: 'Company Integration Run Details', isExpanded: false },
-            { sectionKey: 'mJErrorLogs', sectionName: 'Error Logs', isExpanded: false }
+            { sectionKey: 'mJErrorLogs', sectionName: 'Error Logs', isExpanded: false },
+            { sectionKey: 'mJCompanyIntegrationRunDetails', sectionName: 'Company Integration Run Details', isExpanded: false }
         ]);
     }
 }

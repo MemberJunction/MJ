@@ -1,0 +1,181 @@
+<div class="fb-resource" [class.left-collapsed]="LeftRailCollapsed" [class.right-collapsed]="RightRailCollapsed">
+
+    <!-- ============================================================
+         LEFT RAIL — existing form-role Components
+         ============================================================ -->
+    <aside class="fb-left-rail">
+        <div class="fb-rail-header">
+            <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
+                    [attr.aria-label]="LeftRailCollapsed ? 'Expand form list' : 'Collapse form list'">
+                <i class="fa-solid" [class.fa-chevron-left]="!LeftRailCollapsed" [class.fa-chevron-right]="LeftRailCollapsed"></i>
+            </button>
+            @if (!LeftRailCollapsed) {
+                <h3 class="fb-rail-title">Forms</h3>
+                <button class="fb-rail-new" type="button" (click)="OnNewForm()" title="New form">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New</span>
+                </button>
+            }
+        </div>
+        @if (!LeftRailCollapsed) {
+            <div class="fb-rail-search">
+                <i class="fa-solid fa-search"></i>
+                <input type="text"
+                       placeholder="Search forms…"
+                       [value]="LeftRailFilter"
+                       (input)="OnLeftRailFilterChange($event)" />
+            </div>
+
+            <div class="fb-rail-list">
+                @if (IsLoading) {
+                    <div class="fb-rail-empty">Loading…</div>
+                } @else if (filteredForms.length === 0) {
+                    <div class="fb-rail-empty">
+                        <i class="fa-solid fa-table-list"></i>
+                        <p>No forms yet. Click <strong>New</strong> to start.</p>
+                    </div>
+                } @else {
+                    @for (form of filteredForms; track form.ID) {
+                        <button class="fb-rail-item"
+                                type="button"
+                                [class.active]="form.ID === SelectedFormID"
+                                (click)="OnFormPicked(form)">
+                            <div class="fb-rail-item-name">{{ form.Name }}</div>
+                            @if (form.Status) {
+                                <div class="fb-rail-item-meta">
+                                    <span class="fb-rail-badge" [class.is-active]="form.Status === 'Active'">{{ form.Status }}</span>
+                                </div>
+                            }
+                        </button>
+                    }
+                }
+            </div>
+        }
+    </aside>
+
+    <!-- ============================================================
+         CENTER — entity picker + canvas + Save
+         ============================================================ -->
+    <section class="fb-center">
+
+        <div class="fb-toolbar">
+            <input type="text"
+                   class="fb-name-input"
+                   [value]="SelectedFormName"
+                   placeholder="Form name…"
+                   (input)="OnFormNameInput($event)"
+                   title="Form name — used as the JS function identifier in the generated code" />
+
+            <div class="fb-entity-picker" [class.open]="IsEntityPickerOpen">
+                <button type="button" class="fb-entity-btn" (click)="ToggleEntityPicker()">
+                    <i class="fa-solid fa-table"></i>
+                    <span>
+                        @if (TargetEntityName) {
+                            {{ TargetEntityName }}
+                        } @else {
+                            <em>Pick entity…</em>
+                        }
+                    </span>
+                    <i class="fa-solid fa-chevron-down chev"></i>
+                </button>
+                @if (IsEntityPickerOpen) {
+                    <div class="fb-entity-popover" (click)="$event.stopPropagation()">
+                        <input type="text"
+                               class="fb-entity-search"
+                               placeholder="Search entities…"
+                               [value]="EntityPickerSearch"
+                               (input)="OnEntityPickerSearch($event)" />
+                        <ul class="fb-entity-list">
+                            @for (e of filteredEntityChoices; track e.Name; let idx = $index) {
+                                @if (idx < 50) {
+                                    <li class="fb-entity-item" (click)="OnEntityPicked(e.Name)">
+                                        <span class="fb-entity-display">{{ e.DisplayName }}</span>
+                                        <span class="fb-entity-name">{{ e.Name }}</span>
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+
+            @if (SelectedFormID) {
+                <button type="button" class="fb-action fb-action--danger" (click)="OnDelete()"
+                        title="Delete this form and its overrides">
+                    <i class="fa-solid fa-trash"></i>
+                    <span>Delete</span>
+                </button>
+            }
+            <button type="button" class="fb-action fb-action--primary" (click)="OnSave()" [disabled]="!DirtyFlag">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>Save</span>
+            </button>
+        </div>
+
+        <div class="fb-canvas-host">
+            @if (!TargetEntityName) {
+                <div class="fb-empty">
+                    <i class="fa-solid fa-table-list"></i>
+                    <h3>Pick an entity to start</h3>
+                    <p>Choose the target entity above, then drag fields from the right panel onto the canvas.</p>
+                </div>
+            } @else {
+                <mj-form-builder-canvas
+                    [Canvas]="Canvas"
+                    [Schema]="Schema"
+                    [SelectedElementId]="SelectedElementId"
+                    [SelectedSectionId]="SelectedSectionId"
+                    (CanvasChanged)="OnCanvasChanged($event)"
+                    (ElementSelected)="OnElementSelected($event)"
+                    (SectionSelected)="OnSectionSelected($event)"
+                    (Deselected)="OnDeselected()">
+                </mj-form-builder-canvas>
+            }
+        </div>
+    </section>
+
+    <!-- ============================================================
+         RIGHT RAIL — palette / inspector
+         ============================================================ -->
+    <aside class="fb-right-rail">
+        <div class="fb-rail-header">
+            @if (!RightRailCollapsed) {
+                <h3 class="fb-rail-title">
+                    @if (SelectedElementId || SelectedSectionId) {
+                        Inspector
+                    } @else {
+                        Fields
+                    }
+                </h3>
+            }
+            <button class="fb-rail-collapse" type="button" (click)="ToggleRightRail()"
+                    [attr.aria-label]="RightRailCollapsed ? 'Expand inspector' : 'Collapse inspector'">
+                <i class="fa-solid" [class.fa-chevron-right]="!RightRailCollapsed" [class.fa-chevron-left]="RightRailCollapsed"></i>
+            </button>
+        </div>
+        @if (!RightRailCollapsed) {
+            <mj-form-builder-right-panel
+                [Schema]="Schema"
+                [Canvas]="Canvas"
+                [SelectedElementId]="SelectedElementId"
+                [SelectedSectionId]="SelectedSectionId"
+                (ElementChanged)="OnElementChanged($event)"
+                (SectionChanged)="OnSectionChanged($event)"
+                (ElementDeleted)="OnElementDeleted($event)"
+                (SectionDeleted)="OnSectionDeleted($event)"
+                (FieldAdded)="OnFieldAddedFromPalette($event)">
+            </mj-form-builder-right-panel>
+        }
+    </aside>
+
+    <!-- ============================================================
+         POST-SAVE OVERRIDE DIALOG
+         ============================================================ -->
+    <mj-form-override-dialog
+        [Visible]="ShowFormOverrideDialog"
+        [ComponentName]="PendingOverrideComponentName"
+        [EntityName]="PendingOverrideEntityName"
+        (confirmed)="OnFormOverrideDialogConfirm($event)"
+        (dismissed)="OnFormOverrideDialogDismiss()">
+    </mj-form-override-dialog>
+</div>

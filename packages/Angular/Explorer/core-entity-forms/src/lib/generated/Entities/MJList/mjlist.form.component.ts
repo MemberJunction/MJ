@@ -19,10 +19,10 @@ export class MJListFormComponent extends BaseFormComponent {
             { sectionKey: 'listDefinition', sectionName: 'List Definition', isExpanded: true },
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJListDetails', sectionName: 'Details', isExpanded: false },
-            { sectionKey: 'mJListInvitations', sectionName: 'List Invitations', isExpanded: false },
-            { sectionKey: 'mJListShares', sectionName: 'List Shares', isExpanded: false }
+            { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
+            { sectionKey: 'mJListShares', sectionName: 'List Shares', isExpanded: false },
+            { sectionKey: 'mJListInvitations', sectionName: 'List Invitations', isExpanded: false }
         ]);
     }
 }

@@ -21,14 +21,14 @@ export class MJQueryFormComponent extends BaseFormComponent {
             { sectionKey: 'cachingExecutionSettings', sectionName: 'Caching & Execution Settings', isExpanded: false },
             { sectionKey: 'aIEmbeddings', sectionName: 'AI & Embeddings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },
             { sectionKey: 'mJQueryPermissions', sectionName: 'Query Permissions', isExpanded: false },
-            { sectionKey: 'mJQueryDependenciesDependsOnQueryID', sectionName: 'Query Dependencies (Depends On Query)', isExpanded: false },
+            { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJQueryParameters', sectionName: 'Query Parameters', isExpanded: false },
-            { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false },
+            { sectionKey: 'mJQueryDependenciesDependsOnQueryID', sectionName: 'Query Dependencies (Depends On Query)', isExpanded: false },
             { sectionKey: 'mJQueryEntities', sectionName: 'Query Entities', isExpanded: false },
-            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false }
+            { sectionKey: 'mJQuerySQLs', sectionName: 'Query SQLs', isExpanded: false },
+            { sectionKey: 'mJQueryDependenciesQueryID', sectionName: 'Query Dependencies (Query)', isExpanded: false }
         ]);
     }
 }

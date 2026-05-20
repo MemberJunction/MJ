@@ -349,16 +349,16 @@ No data seeded in the migration. EntityFormOverride rows are authored via `mj-sy
 
 ## Phasing
 
-| Phase | What ships | Approx scope |
+| Phase | What ships | Status |
 |---|---|---|
-| **A. Form contract** | `componentRole` on `ComponentSpec`; `FormHostProps`, event/method name constants, helper builders in `@memberjunction/interactivecomponents/forms`; documented. | 1–2 days. Foundation — every authoring path targets this. |
-| **B. Runtime substrate** | `EntityFormOverride` migration + CodeGen run; `InteractiveFormComponent` wrapper (owns BaseEntity lifecycle); resolver in `SingleRecordComponent.LoadForm`; mj-sync metadata + worked example for one entity. | ~1 week. Forms become runtime artifacts. |
-| **C. AI authoring** | In-app Form Manager agent (creates / modifies a form Component + override from entity schema + NL requirements). Skip integration — Skip emits the same artifact shape. Shared prompt + contract definitions so in-app and external agents agree. | Separate PR(s) after B. **This is where the headline business value lands.** |
-| **D. Form Studio** | Component Studio "form mode" — entity-aware scaffolding, field-binding inspector, live preview, override row creation, "open in chat" handoff to the agent. | Separate PR after B; can overlap with C. |
+| **A. Form contract** | `componentRole` on `ComponentSpec`; `FormHostProps`, event/method name constants, helper builders in `@memberjunction/interactive-component-types/forms`; plus the `CuratedFormSchema` builder consumed by the agent + Studio. | **In this PR.** |
+| **B. Runtime substrate** | `EntityFormOverride` migration + CodeGen run; `InteractiveFormComponent` wrapper (owns BaseEntity lifecycle); resolver in `SingleRecordComponent.LoadForm`; mj-sync metadata + worked example for the Applications entity. | **In this PR.** |
+| **C. AI authoring (create-only)** | In-app **Form Builder** agent — Sage sub-agent. Two actions: `Get Entity Schema For Form` (curated read), `Create Interactive Form` (lints spec, persists Component + User-scope EntityFormOverride). Skip integration is intentionally *contract-only* (Skip implements against the documented contract on their schedule). | **In this PR.** |
+| **D. Form Studio additions** | "New Form Component" entry with JSX skeleton; field-binding inspector (Mid — AST-aware via runtime Babel, regex fallback); fixture-record live preview; post-save Override dialog; existing-overrides sub-list. | **In this PR** (cuts: no two-way AST mutation, no real-record preview, no "open in chat" handoff — see "What's not in this PR"). |
 
-This branch / PR is **Phase A + Phase B** — the runtime substrate. C is the AI authoring story (in-app + Skip), D is the citizen-developer authoring story. C and D can run in parallel once B merges.
+This PR folds C and D into the substrate after reviewer feedback that they wanted the full runtime-AI-forms loop in a single mergeable cut rather than three sequential PRs. The contract (Phase A) is still the deliberate pivot point — locked early so every authoring path (agent, Studio scaffold, hand-authored) targets the same `FormHostProps` + event/method names + curated schema.
 
-The contract (Phase A) is the deliberate pivot point: lock the shape of `FormHostProps` + events + methods early so C, D, and any future authoring tool are all writing to the same target.
+**Blocker for full Phase C land**: the `CreateInteractiveForm` write path requires the generated `EntityFormOverrideEntity` TypeScript class, which is produced by `mj codegen` against a DB with the Interactive_Forms migration applied. That class is not yet in `entity_subclasses.ts`. Until it lands, the action implementation is stubbed (returns a clear "needs codegen" error) but the agent metadata, prompt template, action metadata, Studio dialog UI, and override-list query are all wired and reviewable. Same blocker applies to the Studio "Create Override" write button.
 
 ---
 

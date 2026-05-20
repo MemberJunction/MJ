@@ -15,6 +15,7 @@
         </div>
     } @else if (componentSpec && formHostProps) {
         <mj-react-component
+            #reactComponent
             [component]="componentSpec"
             [componentProps]="formHostProps"
             (componentEvent)="OnReactComponentEvent($event)">

@@ -1,15 +1,16 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     FormHostProps,
     FormEventNames,
+    FormMethodNames,
     FormBeforeSaveArgs,
     FormBeforeDeleteArgs,
     FormEditModeChangeRequestedArgs,
 } from '@memberjunction/interactive-component-types/forms';
 import { SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
-import { ReactComponentEvent } from '@memberjunction/ng-react';
+import { MJReactComponent, ReactBridgeService, ReactComponentEvent } from '@memberjunction/ng-react';
 import { BaseFormComponent } from '../base-form-component';
 
 /**
@@ -55,10 +56,41 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
     /** Tracks last-known field snapshot for computing the dirty-field diff on save. */
     private originalSnapshot: Record<string, unknown> = {};
 
+    /**
+     * Reference to the mounted React component. Used by the SaveRecord /
+     * CancelEdit overrides below to invoke the component's registered
+     * `RequestSave` / `RequestCancel` methods when the host toolbar fires
+     * Save/Cancel — so the single user-visible Save lives on the toolbar
+     * (consistent with every other entity form in MJ) and not duplicated
+     * inside the form body.
+     */
+    @ViewChild('reactComponent') public reactComponent?: MJReactComponent;
+
+    /**
+     * Promise resolver populated when `SaveRecord` invokes `RequestSave`
+     * on the React component. `handleBeforeSave` resolves it after the
+     * BeforeSave-driven entity save completes, so SaveRecord can return
+     * a meaningful success boolean and honor `StopEditModeAfterSave`.
+     */
+    private pendingSaveResolver: ((success: boolean) => void) | null = null;
+
     private readonly changeDetector = inject(ChangeDetectorRef);
+    private readonly reactBridge = inject(ReactBridgeService);
 
     public override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
+        // Force the React bridge to be initialized BEFORE we let our template
+        // mount the `<mj-react-component>` child. Without this, the child's
+        // ngAfterViewInit can race the adapter bootstrap and throw "React
+        // runtime not initialized" — which then prevents the form from
+        // rendering and silently breaks the save flow.
+        try {
+            await this.reactBridge.getReactContext();
+        } catch (err) {
+            LogError(`InteractiveFormComponent: React bridge bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
+            this.loadError = 'React runtime failed to load. Try a hard refresh.';
+            return;
+        }
         if (this.record) {
             this.originalSnapshot = this.record.GetAll();
             this.rebuildFormHostProps();
@@ -92,21 +124,46 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      * Apply the React component's dirty-field diff to the BaseEntity, save,
      * and refresh the snapshot. Errors surface via `LatestResult.CompleteMessage`
      * per the BaseEntity Save contract.
+     *
+     * Resolves `pendingSaveResolver` if {@link SaveRecord} initiated this
+     * flow via the toolbar — so the toolbar can return a meaningful boolean
+     * and honor `StopEditModeAfterSave`.
      */
     private async handleBeforeSave(args: FormBeforeSaveArgs): Promise<void> {
         if (args.cancel) {
+            this.resolvePendingSave(false);
             return;
         }
         if (!this.record) {
             LogError('InteractiveFormComponent.handleBeforeSave: no record loaded');
+            this.resolvePendingSave(false);
             return;
         }
 
-        for (const [fieldName, value] of Object.entries(args.dirtyFields ?? {})) {
+        const dirtyEntries = Object.entries(args.dirtyFields ?? {});
+        if (dirtyEntries.length === 0) {
+            // No-op save — most likely cause is the React draft didn't reach
+            // the host before RequestSave fired. Surface it so the user sees
+            // why their edits didn't land, instead of silently "succeeding".
+            console.warn(
+                '[InteractiveFormComponent] BeforeSave fired with no dirtyFields. ' +
+                'Either the user clicked Save without changing anything, or the ' +
+                'React draft did not propagate before save fired.'
+            );
+        }
+        for (const [fieldName, value] of dirtyEntries) {
             const field = this.record.Fields.find(f =>
                 f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
             if (field) {
-                this.record.Set(fieldName, value);
+                // Use the canonical field name from the lookup so case
+                // mismatches between the React draft and the entity schema
+                // don't silently drop the value.
+                this.record.Set(field.Name, value);
+            } else {
+                console.warn(
+                    `[InteractiveFormComponent] Unknown field "${fieldName}" in dirtyFields ` +
+                    `for entity ${this.record.EntityInfo.Name}. Value not applied.`
+                );
             }
         }
 
@@ -116,6 +173,14 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             this.rebuildFormHostProps();
         } else {
             LogError(`InteractiveFormComponent: save failed for ${this.record.EntityInfo.Name}: ${this.record.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        this.resolvePendingSave(saved);
+    }
+
+    private resolvePendingSave(success: boolean): void {
+        if (this.pendingSaveResolver) {
+            this.pendingSaveResolver(success);
+            this.pendingSaveResolver = null;
         }
     }
 
@@ -160,6 +225,67 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
     }
 
     /**
+     * Toolbar **Save** override. Routes the click through the React
+     * component's registered `RequestSave` method so the React layer can
+     * (a) run its own validation, (b) flush its draft state, (c) emit
+     * `BeforeSave` with the dirty-field diff — exactly the flow the
+     * in-form Save button would trigger. The wrapper then awaits the
+     * BeforeSave handler via `pendingSaveResolver`, gets a real
+     * success/failure boolean, and honors `StopEditModeAfterSave`.
+     *
+     * Falls back to the base implementation for components that haven't
+     * registered `RequestSave` — preserves correctness for forms that
+     * keep their own in-form Save button (older sample, hand-authored
+     * forms that pre-date this contract).
+     */
+    public override async SaveRecord(StopEditModeAfterSave: boolean): Promise<boolean> {
+        if (!this.reactComponent?.hasMethod?.(FormMethodNames.RequestSave)) {
+            return super.SaveRecord(StopEditModeAfterSave);
+        }
+        const completion = new Promise<boolean>(resolve => {
+            this.pendingSaveResolver = resolve;
+        });
+        try {
+            this.reactComponent.invokeMethod(FormMethodNames.RequestSave);
+        } catch (err) {
+            this.pendingSaveResolver = null;
+            LogError(`InteractiveFormComponent.SaveRecord: RequestSave threw: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+        const success = await completion;
+        if (success && StopEditModeAfterSave) {
+            this.EndEditMode();
+        }
+        return success;
+    }
+
+    /**
+     * Toolbar **Cancel** override. Asks the React component to discard
+     * its draft via `RequestCancel`, then flips out of edit mode the
+     * same way the base implementation would. The React component is
+     * expected to (a) clear its local draft state and (b) emit
+     * `EditModeChangeRequested({ requestedMode: 'view' })` — though we
+     * call `EndEditMode` here directly anyway, so even a no-op handler
+     * leaves the form in a coherent state.
+     */
+    public override CancelEdit(): void {
+        if (this.reactComponent?.hasMethod?.(FormMethodNames.RequestCancel)) {
+            try {
+                this.reactComponent.invokeMethod(FormMethodNames.RequestCancel);
+            } catch (err) {
+                LogError(`InteractiveFormComponent.CancelEdit: RequestCancel threw: ${err instanceof Error ? err.message : String(err)}`);
+            }
+            // Don't call super.CancelEdit() — base reverts the BaseEntity,
+            // but for interactive forms the BaseEntity never received the
+            // React draft in the first place, so there's nothing to revert.
+            // Just flip mode.
+            this.EndEditMode();
+            return;
+        }
+        super.CancelEdit();
+    }
+
+    /**
      * Resolve the Component row, parse its `Specification`, and surface either
      * the spec or an error. Uses a simple-row RunView (cheap, single record)
      * and falls back to a clear error message if the spec is malformed or
@@ -178,6 +304,13 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
                 ExtraFilter: `ID='${this.ComponentID}'`,
                 MaxRows: 1,
                 ResultType: 'simple',
+                // Components have AllowCaching=1. The override row this
+                // wrapper is mounting in response to may point at a
+                // freshly-created Component (AI authoring path) — the
+                // session-side cache won't have it yet. Bypassing the
+                // cache for this one indexed lookup is cheap and avoids
+                // a "Component not found" stutter on first render.
+                BypassCache: true,
             }, this.ProviderToUse.CurrentUser);
 
             if (!result.Success || !result.Results?.length) {
