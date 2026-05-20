@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -1091,14 +1091,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         apiPath: string; write: boolean; incremental: boolean;
         pkField: string; incrementalParam?: string;
         /**
-         * Server-side incremental sync query parameter name.
-         * When set and a watermark exists, appended as `&{param}={watermark}` to the request URL.
-         * This enables server-side date filtering, which is far more efficient than client-side.
-         * When set, client-side date filtering is skipped (server already filtered).
-         * Common values: 'updatedAfter' (CMS/Marketing/Files endpoints), 'occurredAfter' (Events).
-         */
-        serverIncrementalParam?: string;
-        /**
          * For parameterized endpoints (apiPath contains {placeholder}):
          * the name of the parent NON_CRM_OBJECTS entry whose records provide
          * the substitution values. The placeholder in apiPath is replaced with
@@ -1126,11 +1118,11 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         { name: 'crm_exports', label: 'CRM Exports', description: 'Export job history and status', apiPath: '/crm/v3/exports/export/async', write: false, incremental: false, pkField: 'id' },
 
         // ── Marketing ────────────────────────────────────────────────────
-        { name: 'marketing_emails', label: 'Marketing Emails', description: 'Marketing email campaigns', apiPath: '/marketing/v3/emails', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
-        { name: 'campaigns', label: 'Campaigns', description: 'Marketing campaign tracking', apiPath: '/marketing/v3/campaigns', write: false, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'marketing_emails', label: 'Marketing Emails', description: 'Marketing email campaigns', apiPath: '/marketing/v3/emails', write: true, incremental: true, pkField: 'id' },
+        { name: 'campaigns', label: 'Campaigns', description: 'Marketing campaign tracking', apiPath: '/marketing/v3/campaigns', write: false, incremental: true, pkField: 'id' },
         // Forms v3 — DEVELOPER_PREVIEW status in HubSpot API catalog. Use for listing/reading;
         // creating forms programmatically may not be supported in all plans.
-        { name: 'forms', label: 'Forms', description: 'HubSpot forms for lead capture', apiPath: '/marketing/v3/forms', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'forms', label: 'Forms', description: 'HubSpot forms for lead capture', apiPath: '/marketing/v3/forms', write: true, incremental: true, pkField: 'id' },
         // Form submissions — legacy v1 endpoint; parameterized (requires formGuid); falls back to DB fields
         { name: 'form_submissions', label: 'Form Submissions', description: 'Submitted form data across all forms', apiPath: '/form-integrations/v1/submissions/forms', write: false, incremental: true, pkField: 'submittedAt' },
         // Transactional email — v3 SMTP tokens for single-send (legacy Transactional Single Send)
@@ -1138,15 +1130,15 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         // Single-send v4 — separate from the v3 SMTP token endpoint; DEVELOPER_PREVIEW in catalog
         { name: 'single_send_v4', label: 'Single Send (v4)', description: 'Single-send transactional email via Marketing API v4', apiPath: '/marketing/v4/email/single-send', write: true, incremental: false, pkField: 'id' },
         // Ads
-        { name: 'ad_campaigns', label: 'Ad Campaigns', description: 'Advertising campaigns across ad networks', apiPath: '/marketing/v3/ads/campaigns', write: false, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'ad_campaigns', label: 'Ad Campaigns', description: 'Advertising campaigns across ad networks', apiPath: '/marketing/v3/ads/campaigns', write: false, incremental: true, pkField: 'id' },
         { name: 'ad_accounts', label: 'Ad Accounts', description: 'Connected advertising accounts', apiPath: '/marketing/v3/ads/accounts', write: false, incremental: false, pkField: 'id' },
 
         // ── CMS ──────────────────────────────────────────────────────────
-        { name: 'site_pages', label: 'Site Pages', description: 'CMS website pages', apiPath: '/cms/v3/pages/site-pages', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
-        { name: 'landing_pages', label: 'Landing Pages', description: 'CMS landing pages', apiPath: '/cms/v3/pages/landing-pages', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
-        { name: 'blog_posts', label: 'Blog Posts', description: 'CMS blog posts', apiPath: '/cms/v3/blogs/posts', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
-        { name: 'blog_authors', label: 'Blog Authors', description: 'CMS blog author profiles', apiPath: '/cms/v3/blogs/authors', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
-        { name: 'blog_tags', label: 'Blog Tags', description: 'CMS blog tag taxonomy', apiPath: '/cms/v3/blogs/tags', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'site_pages', label: 'Site Pages', description: 'CMS website pages', apiPath: '/cms/v3/pages/site-pages', write: true, incremental: true, pkField: 'id' },
+        { name: 'landing_pages', label: 'Landing Pages', description: 'CMS landing pages', apiPath: '/cms/v3/pages/landing-pages', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_posts', label: 'Blog Posts', description: 'CMS blog posts', apiPath: '/cms/v3/blogs/posts', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_authors', label: 'Blog Authors', description: 'CMS blog author profiles', apiPath: '/cms/v3/blogs/authors', write: true, incremental: true, pkField: 'id' },
+        { name: 'blog_tags', label: 'Blog Tags', description: 'CMS blog tag taxonomy', apiPath: '/cms/v3/blogs/tags', write: true, incremental: true, pkField: 'id' },
         { name: 'blog_settings', label: 'Blog Settings', description: 'CMS blog configuration', apiPath: '/cms/v3/blogs/settings', write: false, incremental: false, pkField: 'id' },
         { name: 'domains', label: 'Domains', description: 'Connected domains', apiPath: '/cms/v3/domains', write: false, incremental: false, pkField: 'id' },
         { name: 'url_mappings', label: 'URL Mappings', description: 'CMS URL mapping rules', apiPath: '/cms/v3/url-redirects/mapping', write: true, incremental: false, pkField: 'id' },
@@ -1154,7 +1146,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         { name: 'site_search', label: 'Site Search', description: 'CMS site search index results', apiPath: '/cms/v3/site-search/search', write: false, incremental: false, pkField: 'id' },
         { name: 'source_code', label: 'Source Code', description: 'CMS theme and template source files', apiPath: '/cms/v3/source-code/environment/published', write: true, incremental: false, pkField: 'path' },
         { name: 'media_bridge', label: 'Media Bridge', description: 'External media provider bridge objects', apiPath: '/cms/v3/media-bridge/objects', write: true, incremental: false, pkField: 'id' },
-        { name: 'hubdb_tables', label: 'HubDB Tables', description: 'HubDB structured data tables', apiPath: '/cms/v3/hubdb/tables', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'hubdb_tables', label: 'HubDB Tables', description: 'HubDB structured data tables', apiPath: '/cms/v3/hubdb/tables', write: true, incremental: true, pkField: 'id' },
         // HubDB rows — parameterized; fan-out across all HubDB tables
         { name: 'hubdb_rows', label: 'HubDB Rows', description: 'Row data within HubDB tables', apiPath: '/cms/v3/hubdb/tables/{tableIdOrName}/rows', write: true, incremental: false, pkField: 'id', parentObject: 'hubdb_tables' },
 
@@ -1165,13 +1157,13 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         { name: 'custom_coded_actions', label: 'Custom Coded Actions', description: 'Developer-created workflow extension actions', apiPath: '/automation/v4/actions/{appId}', write: true, incremental: false, pkField: 'id' },
 
         // ── Events ───────────────────────────────────────────────────────
-        { name: 'behavioral_events', label: 'Behavioral Events', description: 'Custom behavioral event completions', apiPath: '/events/v3/events', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'occurredAfter' },
+        { name: 'behavioral_events', label: 'Behavioral Events', description: 'Custom behavioral event completions', apiPath: '/events/v3/events', write: true, incremental: true, pkField: 'id' },
         { name: 'event_definitions', label: 'Event Definitions', description: 'Custom event type definitions', apiPath: '/events/v3/event-definitions', write: true, incremental: false, pkField: 'name' },
         // Event completions — parameterized; fan-out across all event definitions
         { name: 'event_completions', label: 'Event Completions', description: 'Completion records for a specific custom behavioral event type', apiPath: '/events/v3/event-definitions/{eventDefinitionName}/completions', write: false, incremental: true, pkField: 'id', parentObject: 'event_definitions' },
 
         // ── Files ────────────────────────────────────────────────────────
-        { name: 'files', label: 'Files', description: 'File manager files and documents', apiPath: '/files/v3/files', write: true, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'files', label: 'Files', description: 'File manager files and documents', apiPath: '/files/v3/files', write: true, incremental: true, pkField: 'id' },
         { name: 'file_folders', label: 'File Folders', description: 'File manager folder structure', apiPath: '/files/v3/folders', write: true, incremental: false, pkField: 'id' },
 
         // ── Account & Settings ───────────────────────────────────────────
@@ -1194,7 +1186,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
         // ── Conversations ────────────────────────────────────────────────
         { name: 'conversation_inboxes', label: 'Conversation Inboxes', description: 'Conversations inbox definitions', apiPath: '/conversations/v3/conversations/inboxes', write: false, incremental: false, pkField: 'id' },
-        { name: 'conversation_threads', label: 'Conversation Threads', description: 'Conversations inbox threads', apiPath: '/conversations/v3/conversations/threads', write: false, incremental: true, pkField: 'id', serverIncrementalParam: 'updatedAfter' },
+        { name: 'conversation_threads', label: 'Conversation Threads', description: 'Conversations inbox threads', apiPath: '/conversations/v3/conversations/threads', write: false, incremental: true, pkField: 'id' },
         // Conversation messages — parameterized; fan-out across threads. NOTE: can be very large
         // at scale (one fetch per thread). Consider disabling for high-volume portals.
         { name: 'conversation_messages', label: 'Conversation Messages', description: 'Messages within conversation threads', apiPath: '/conversations/v3/conversations/threads/{threadId}/messages', write: false, incremental: false, pkField: 'id', parentObject: 'conversation_threads' },
@@ -1230,39 +1222,39 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      */
     private static readonly ASSOCIATION_OBJECTS: Array<{
         name: string; label: string; description: string;
-        apiPath: string; pkFields: [string, string];
+        apiPath: string;
     }> = [
-        { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies', pkFields: ['contact_id', 'company_id'] },
-        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals', pkFields: ['contact_id', 'deal_id'] },
-        { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets', pkFields: ['contact_id', 'ticket_id'] },
-        { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls', pkFields: ['contact_id', 'call_id'] },
-        { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails', pkFields: ['contact_id', 'email_id'] },
-        { name: 'assoc_contacts_meetings', label: 'Contact ↔ Meeting', description: 'Associations between contacts and meetings', apiPath: '/crm/v4/associations/contacts/meetings', pkFields: ['contact_id', 'meeting_id'] },
-        { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes', pkFields: ['contact_id', 'note_id'] },
-        { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks', pkFields: ['contact_id', 'task_id'] },
-        { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions', pkFields: ['contact_id', 'feedback_submission_id'] },
-        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals', pkFields: ['company_id', 'deal_id'] },
-        { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets', pkFields: ['company_id', 'ticket_id'] },
-        { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls', pkFields: ['company_id', 'call_id'] },
-        { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails', pkFields: ['company_id', 'email_id'] },
-        { name: 'assoc_companies_meetings', label: 'Company ↔ Meeting', description: 'Associations between companies and meetings', apiPath: '/crm/v4/associations/companies/meetings', pkFields: ['company_id', 'meeting_id'] },
-        { name: 'assoc_companies_notes', label: 'Company ↔ Note', description: 'Associations between companies and notes', apiPath: '/crm/v4/associations/companies/notes', pkFields: ['company_id', 'note_id'] },
-        { name: 'assoc_companies_tasks', label: 'Company ↔ Task', description: 'Associations between companies and tasks', apiPath: '/crm/v4/associations/companies/tasks', pkFields: ['company_id', 'task_id'] },
-        { name: 'assoc_deals_calls', label: 'Deal ↔ Call', description: 'Associations between deals and calls', apiPath: '/crm/v4/associations/deals/calls', pkFields: ['deal_id', 'call_id'] },
-        { name: 'assoc_deals_emails', label: 'Deal ↔ Email', description: 'Associations between deals and emails', apiPath: '/crm/v4/associations/deals/emails', pkFields: ['deal_id', 'email_id'] },
-        { name: 'assoc_deals_meetings', label: 'Deal ↔ Meeting', description: 'Associations between deals and meetings', apiPath: '/crm/v4/associations/deals/meetings', pkFields: ['deal_id', 'meeting_id'] },
-        { name: 'assoc_deals_notes', label: 'Deal ↔ Note', description: 'Associations between deals and notes', apiPath: '/crm/v4/associations/deals/notes', pkFields: ['deal_id', 'note_id'] },
-        { name: 'assoc_deals_tasks', label: 'Deal ↔ Task', description: 'Associations between deals and tasks', apiPath: '/crm/v4/associations/deals/tasks', pkFields: ['deal_id', 'task_id'] },
-        { name: 'assoc_deals_quotes', label: 'Deal ↔ Quote', description: 'Associations between deals and quotes', apiPath: '/crm/v4/associations/deals/quotes', pkFields: ['deal_id', 'quote_id'] },
-        { name: 'assoc_deals_line_items', label: 'Deal ↔ Line Item', description: 'Associations between deals and line items', apiPath: '/crm/v4/associations/deals/line_items', pkFields: ['deal_id', 'line_item_id'] },
-        { name: 'assoc_tickets_calls', label: 'Ticket ↔ Call', description: 'Associations between tickets and calls', apiPath: '/crm/v4/associations/tickets/calls', pkFields: ['ticket_id', 'call_id'] },
-        { name: 'assoc_tickets_emails', label: 'Ticket ↔ Email', description: 'Associations between tickets and emails', apiPath: '/crm/v4/associations/tickets/emails', pkFields: ['ticket_id', 'email_id'] },
-        { name: 'assoc_tickets_meetings', label: 'Ticket ↔ Meeting', description: 'Associations between tickets and meetings', apiPath: '/crm/v4/associations/tickets/meetings', pkFields: ['ticket_id', 'meeting_id'] },
-        { name: 'assoc_tickets_notes', label: 'Ticket ↔ Note', description: 'Associations between tickets and notes', apiPath: '/crm/v4/associations/tickets/notes', pkFields: ['ticket_id', 'note_id'] },
-        { name: 'assoc_tickets_tasks', label: 'Ticket ↔ Task', description: 'Associations between tickets and tasks', apiPath: '/crm/v4/associations/tickets/tasks', pkFields: ['ticket_id', 'task_id'] },
-        { name: 'assoc_tickets_feedback_submissions', label: 'Ticket ↔ Feedback Submission', description: 'Associations between tickets and feedback submissions', apiPath: '/crm/v4/associations/tickets/feedback_submissions', pkFields: ['ticket_id', 'feedback_submission_id'] },
-        { name: 'assoc_quotes_contacts', label: 'Quote ↔ Contact', description: 'Associations between quotes and contacts', apiPath: '/crm/v4/associations/quotes/contacts', pkFields: ['quote_id', 'contact_id'] },
-        { name: 'assoc_quotes_line_items', label: 'Quote ↔ Line Item', description: 'Associations between quotes and line items', apiPath: '/crm/v4/associations/quotes/line_items', pkFields: ['quote_id', 'line_item_id'] },
+        { name: 'assoc_contacts_companies', label: 'Contact ↔ Company', description: 'Associations between contacts and companies', apiPath: '/crm/v4/associations/contacts/companies' },
+        { name: 'assoc_contacts_deals', label: 'Contact ↔ Deal', description: 'Associations between contacts and deals', apiPath: '/crm/v4/associations/contacts/deals' },
+        { name: 'assoc_contacts_tickets', label: 'Contact ↔ Ticket', description: 'Associations between contacts and tickets', apiPath: '/crm/v4/associations/contacts/tickets' },
+        { name: 'assoc_contacts_calls', label: 'Contact ↔ Call', description: 'Associations between contacts and calls', apiPath: '/crm/v4/associations/contacts/calls' },
+        { name: 'assoc_contacts_emails', label: 'Contact ↔ Email', description: 'Associations between contacts and emails', apiPath: '/crm/v4/associations/contacts/emails' },
+        { name: 'assoc_contacts_meetings', label: 'Contact ↔ Meeting', description: 'Associations between contacts and meetings', apiPath: '/crm/v4/associations/contacts/meetings' },
+        { name: 'assoc_contacts_notes', label: 'Contact ↔ Note', description: 'Associations between contacts and notes', apiPath: '/crm/v4/associations/contacts/notes' },
+        { name: 'assoc_contacts_tasks', label: 'Contact ↔ Task', description: 'Associations between contacts and tasks', apiPath: '/crm/v4/associations/contacts/tasks' },
+        { name: 'assoc_contacts_feedback_submissions', label: 'Contact ↔ Feedback Submission', description: 'Associations between contacts and feedback submissions', apiPath: '/crm/v4/associations/contacts/feedback_submissions' },
+        { name: 'assoc_companies_deals', label: 'Company ↔ Deal', description: 'Associations between companies and deals', apiPath: '/crm/v4/associations/companies/deals' },
+        { name: 'assoc_companies_tickets', label: 'Company ↔ Ticket', description: 'Associations between companies and tickets', apiPath: '/crm/v4/associations/companies/tickets' },
+        { name: 'assoc_companies_calls', label: 'Company ↔ Call', description: 'Associations between companies and calls', apiPath: '/crm/v4/associations/companies/calls' },
+        { name: 'assoc_companies_emails', label: 'Company ↔ Email', description: 'Associations between companies and emails', apiPath: '/crm/v4/associations/companies/emails' },
+        { name: 'assoc_companies_meetings', label: 'Company ↔ Meeting', description: 'Associations between companies and meetings', apiPath: '/crm/v4/associations/companies/meetings' },
+        { name: 'assoc_companies_notes', label: 'Company ↔ Note', description: 'Associations between companies and notes', apiPath: '/crm/v4/associations/companies/notes' },
+        { name: 'assoc_companies_tasks', label: 'Company ↔ Task', description: 'Associations between companies and tasks', apiPath: '/crm/v4/associations/companies/tasks' },
+        { name: 'assoc_deals_calls', label: 'Deal ↔ Call', description: 'Associations between deals and calls', apiPath: '/crm/v4/associations/deals/calls' },
+        { name: 'assoc_deals_emails', label: 'Deal ↔ Email', description: 'Associations between deals and emails', apiPath: '/crm/v4/associations/deals/emails' },
+        { name: 'assoc_deals_meetings', label: 'Deal ↔ Meeting', description: 'Associations between deals and meetings', apiPath: '/crm/v4/associations/deals/meetings' },
+        { name: 'assoc_deals_notes', label: 'Deal ↔ Note', description: 'Associations between deals and notes', apiPath: '/crm/v4/associations/deals/notes' },
+        { name: 'assoc_deals_tasks', label: 'Deal ↔ Task', description: 'Associations between deals and tasks', apiPath: '/crm/v4/associations/deals/tasks' },
+        { name: 'assoc_deals_quotes', label: 'Deal ↔ Quote', description: 'Associations between deals and quotes', apiPath: '/crm/v4/associations/deals/quotes' },
+        { name: 'assoc_deals_line_items', label: 'Deal ↔ Line Item', description: 'Associations between deals and line items', apiPath: '/crm/v4/associations/deals/line_items' },
+        { name: 'assoc_tickets_calls', label: 'Ticket ↔ Call', description: 'Associations between tickets and calls', apiPath: '/crm/v4/associations/tickets/calls' },
+        { name: 'assoc_tickets_emails', label: 'Ticket ↔ Email', description: 'Associations between tickets and emails', apiPath: '/crm/v4/associations/tickets/emails' },
+        { name: 'assoc_tickets_meetings', label: 'Ticket ↔ Meeting', description: 'Associations between tickets and meetings', apiPath: '/crm/v4/associations/tickets/meetings' },
+        { name: 'assoc_tickets_notes', label: 'Ticket ↔ Note', description: 'Associations between tickets and notes', apiPath: '/crm/v4/associations/tickets/notes' },
+        { name: 'assoc_tickets_tasks', label: 'Ticket ↔ Task', description: 'Associations between tickets and tasks', apiPath: '/crm/v4/associations/tickets/tasks' },
+        { name: 'assoc_tickets_feedback_submissions', label: 'Ticket ↔ Feedback Submission', description: 'Associations between tickets and feedback submissions', apiPath: '/crm/v4/associations/tickets/feedback_submissions' },
+        { name: 'assoc_quotes_contacts', label: 'Quote ↔ Contact', description: 'Associations between quotes and contacts', apiPath: '/crm/v4/associations/quotes/contacts' },
+        { name: 'assoc_quotes_line_items', label: 'Quote ↔ Line Item', description: 'Associations between quotes and line items', apiPath: '/crm/v4/associations/quotes/line_items' },
     ];
 
     /**
@@ -1356,13 +1348,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Returns association object config if objectName is an association table, null otherwise.
-     */
-    private GetAssociationObject(objectName: string): typeof HubSpotConnector.ASSOCIATION_OBJECTS[number] | undefined {
-        return HubSpotConnector.ASSOCIATION_OBJECTS.find(a => a.name === objectName);
-    }
-
-    /**
      * Discovers all fields on a HubSpot object via the Properties API.
      * Returns field types, constraints, PKs, and read-only flags from live metadata.
      */
@@ -1374,9 +1359,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(companyIntegration, contextUser);
         const headers = this.BuildHeaders(auth);
 
-        // Non-CRM objects have fixed schemas — return static PK field; IntrospectSchema supplements from DB
+        // Non-CRM objects don't have /crm/v3/properties — discover fields dynamically
         if (!this.IsCRMObject(objectName)) {
-            return this.DiscoverNonCRMFields(objectName);
+            return this.DiscoverNonCRMFields(auth, headers, objectName);
         }
 
         // CRM objects: live field discovery via Properties API
@@ -1427,39 +1412,71 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      * and inferring field names/types from the response.
      */
     /**
-     * Non-CRM and association objects have fixed, documented schemas.
-     * - Association objects: return both composite PK fields from ASSOCIATION_OBJECTS config.
-     * - Non-CRM objects: return the PK field from NON_CRM_OBJECTS config.
-     * IntrospectSchema's DB-fallback supplements with the full field list from metadata.
-     * No live API sampling needed.
+     * Discovers fields for T3 (non-CRM) objects by sampling up to 10 live records
+     * and unioning all keys across the sample. This catches undocumented fields,
+     * computed fields, and metadata fields that the API spec doesn't enumerate.
+     *
+     * Falls back gracefully:
+     * - Parameterized endpoints (parentObject set): return [] — no parent IDs at discovery time
+     * - Scope-restricted endpoints (403): return [] — IntrospectSchema uses DB-cached static fields
+     * - Empty endpoints (no data yet): return [] — static metadata is the fallback
      */
-    private DiscoverNonCRMFields(objectName: string): ExternalFieldSchema[] {
-        const assocConfig = this.GetAssociationObject(objectName);
-        if (assocConfig) {
-            return assocConfig.pkFields.map(pk => ({
-                Name: pk,
-                Label: pk,
-                Description: `Key field for ${assocConfig.label}`,
-                DataType: 'string',
-                IsRequired: true,
-                IsUniqueKey: true,
-                IsReadOnly: true,
-            }));
-        }
-
+    private async DiscoverNonCRMFields(
+        auth: RESTAuthContext,
+        _headers: Record<string, string>,
+        objectName: string
+    ): Promise<ExternalFieldSchema[]> {
         const objConfig = this.GetNonCRMObject(objectName);
-        if (!objConfig) return [];
-        return [{
-            Name: objConfig.pkField,
-            Label: objConfig.pkField,
-            Description: `Primary key for ${objConfig.label}`,
-            DataType: 'string',
-            IsRequired: true,
-            IsUniqueKey: true,
-            IsReadOnly: true,
-        }];
+        // Parameterized endpoints require parent IDs — can't call at discovery time
+        if (!objConfig || objConfig.parentObject) return [];
+
+        try {
+            const url = `${HUBSPOT_API_BASE}${objConfig.apiPath}?limit=10`;
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', this.BuildHeaders(auth));
+            if (response.Status !== 200) return [];
+
+            const body = response.Body as Record<string, unknown>;
+            const results = (body['Resources'] ?? body['results'] ?? body['objects'] ?? []) as Array<Record<string, unknown>>;
+            if (results.length === 0) return [];
+
+            // Union all field keys across all sampled records for maximum coverage
+            const allKeys = new Map<string, unknown>();
+            for (const raw of results) {
+                // Flatten properties envelope if present
+                const props = raw['properties'] as Record<string, unknown> | undefined;
+                const flat = props ? { ...raw, ...props } : raw;
+                for (const [k, v] of Object.entries(flat)) {
+                    if (!allKeys.has(k)) allKeys.set(k, v);
+                }
+            }
+
+            return [...allKeys.entries()].map(([name, sample]) => ({
+                Name: name,
+                Label: name,
+                DataType: this.InferFieldType(sample),
+                IsRequired: false,
+                IsUniqueKey: name === objConfig.pkField,
+                IsReadOnly: false,
+                Description: undefined,
+            }));
+        } catch {
+            return [];
+        }
     }
 
+    /**
+     * Infer a MJ-compatible type string from a JavaScript value.
+     */
+    private InferFieldType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'boolean') return 'bool';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'number';
+        if (typeof value === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+            return 'string';
+        }
+        return 'string';
+    }
 
     /**
      * Full schema introspection — discovers all objects and their fields from the live API.
@@ -1474,10 +1491,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         for (const obj of objects) {
             try {
                 const nonCrmConfig = this.GetNonCRMObject(obj.Name);
-                const assocConfig = this.GetAssociationObject(obj.Name);
-                const pkFieldNames: string[] = assocConfig
-                    ? assocConfig.pkFields
-                    : [nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id'];
+                const pkFieldName = nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id';
 
                 let liveFields = await this.DiscoverFields(companyIntegration, obj.Name, contextUser);
 
@@ -1498,22 +1512,20 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                                 Description: f.Description ?? undefined,
                                 DataType: f.Type ?? 'string',
                                 IsRequired: f.IsRequired ?? false,
-                                IsUniqueKey: f.IsPrimaryKey || pkFieldNames.includes(f.Name),
+                                IsUniqueKey: f.IsPrimaryKey || f.Name === pkFieldName,
                                 IsReadOnly: false,
                             }));
-                            // Guarantee PK fields are present — DB records may not include them
-                            for (const pkName of pkFieldNames) {
-                                if (!liveFields.some(f => f.Name === pkName)) {
-                                    liveFields.unshift({
-                                        Name: pkName,
-                                        Label: pkName,
-                                        Description: `Primary key for ${obj.Name}`,
-                                        DataType: 'string',
-                                        IsRequired: true,
-                                        IsUniqueKey: true,
-                                        IsReadOnly: true,
-                                    });
-                                }
+                            // Guarantee pkField is present — DB records may not include it
+                            if (pkFieldName && !liveFields.some(f => f.Name === pkFieldName)) {
+                                liveFields.unshift({
+                                    Name: pkFieldName,
+                                    Label: pkFieldName,
+                                    Description: `Primary key for ${obj.Name}`,
+                                    DataType: 'string',
+                                    IsRequired: true,
+                                    IsUniqueKey: true,
+                                    IsReadOnly: true,
+                                });
                             }
                         }
                     } catch {
@@ -1527,7 +1539,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                     Description: f.Description,
                     SourceType: f.DataType,
                     IsRequired: f.IsRequired,
-                    IsPrimaryKey: f.IsUniqueKey || pkFieldNames.includes(f.Name),
+                    IsPrimaryKey: f.IsUniqueKey || f.Name === pkFieldName,
                     IsForeignKey: false,
                     ForeignKeyTarget: null,
                     MaxLength: null,
@@ -1551,11 +1563,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
                 // Unexpected exception path — try DB as last resort
                 try {
-                    const nonCrmConfig2 = this.GetNonCRMObject(obj.Name);
-                    const assocConfig2 = this.GetAssociationObject(obj.Name);
-                    const pkFieldNames2: string[] = assocConfig2
-                        ? assocConfig2.pkFields
-                        : [nonCrmConfig2 ? nonCrmConfig2.pkField : 'hs_object_id'];
+                    const nonCrmConfig = this.GetNonCRMObject(obj.Name);
+                    const pkFieldName = nonCrmConfig ? nonCrmConfig.pkField : 'hs_object_id';
                     const integrationObj = this.GetCachedObject(companyIntegration.IntegrationID, obj.Name);
                     const dbFields = this.GetCachedFields(integrationObj.ID);
                     if (dbFields.length > 0) {
@@ -1565,7 +1574,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
                             Description: f.Description ?? undefined,
                             SourceType: f.Type ?? 'string',
                             IsRequired: f.IsRequired ?? false,
-                            IsPrimaryKey: f.IsPrimaryKey || pkFieldNames2.includes(f.Name),
+                            IsPrimaryKey: f.IsPrimaryKey || f.Name === pkFieldName,
                             IsForeignKey: false,
                             ForeignKeyTarget: null,
                             MaxLength: null,
@@ -1618,14 +1627,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Creates a new record in HubSpot.
-     * Routes association objects to the v4 batch/create endpoint instead of v3 objects.
      */
     public override async CreateRecord(ctx: CreateRecordContext): Promise<CRUDResult> {
-        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
-        if (assocConfig) {
-            return this.CreateAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.Attributes, assocConfig);
-        }
-
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1649,16 +1652,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Updates an existing record in HubSpot by ExternalID.
-     * For association objects, re-creates the association (idempotent in HubSpot).
      */
     public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
-        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
-        if (assocConfig) {
-            // Associations have no updatable properties — the IDs ARE the relationship.
-            // Re-creating is idempotent: HubSpot ignores duplicates.
-            return this.CreateAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.Attributes, assocConfig);
-        }
-
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1682,14 +1677,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
     /**
      * Deletes (archives) a record in HubSpot by ExternalID.
-     * Routes association objects to the v4 batch/archive endpoint instead of v3 objects.
      */
     public override async DeleteRecord(ctx: DeleteRecordContext): Promise<CRUDResult> {
-        const assocConfig = this.GetAssociationObject(ctx.ObjectName);
-        if (assocConfig) {
-            return this.DeleteAssociation(ctx.CompanyIntegration, ctx.ContextUser, ctx.ObjectName, ctx.ExternalID, assocConfig);
-        }
-
         const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
         const contextUser = ctx.ContextUser as UserInfo;
         const auth = await this.Authenticate(companyIntegration, contextUser);
@@ -1707,94 +1696,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         }
 
         return this.BuildCRUDErrorResult(response, 'DeleteRecord', ctx.ObjectName);
-    }
-
-    /**
-     * Creates an association in HubSpot using the v4 batch/create endpoint.
-     * ExternalID returned is "{leftID}|{rightID}" matching the pull ExternalID format.
-     */
-    private async CreateAssociation(
-        rawCompanyIntegration: unknown,
-        rawContextUser: unknown,
-        objectName: string,
-        attributes: Record<string, unknown>,
-        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
-    ): Promise<CRUDResult> {
-        const companyIntegration = rawCompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = rawContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
-        const headers = this.BuildHeaders(auth);
-
-        const [leftField, rightField] = assocConfig.pkFields;
-        const leftID = String(attributes[leftField] ?? '');
-        const rightID = String(attributes[rightField] ?? '');
-
-        if (!leftID || !rightID) {
-            return {
-                Success: false,
-                ExternalID: '',
-                StatusCode: 400,
-                ErrorMessage: `CreateAssociation ${objectName}: missing PK fields '${leftField}' or '${rightField}' in attributes`,
-            };
-        }
-
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
-
-        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/create`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID }, types: [] }] };
-        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
-
-        if (response.Status >= 200 && response.Status < 300) {
-            return { Success: true, ExternalID: `${leftID}|${rightID}`, StatusCode: response.Status };
-        }
-
-        return this.BuildCRUDErrorResult(response, 'CreateAssociation', objectName);
-    }
-
-    /**
-     * Removes an association in HubSpot using the v4 batch/archive endpoint.
-     * ExternalID must be "{leftID}|{rightID}" — the same format stored by pull sync.
-     */
-    private async DeleteAssociation(
-        rawCompanyIntegration: unknown,
-        rawContextUser: unknown,
-        objectName: string,
-        externalID: string,
-        assocConfig: typeof HubSpotConnector.ASSOCIATION_OBJECTS[number]
-    ): Promise<CRUDResult> {
-        const companyIntegration = rawCompanyIntegration as MJCompanyIntegrationEntity;
-        const contextUser = rawContextUser as UserInfo;
-        const auth = await this.Authenticate(companyIntegration, contextUser);
-        const headers = this.BuildHeaders(auth);
-
-        const pipeIndex = externalID.indexOf('|');
-        if (pipeIndex < 0) {
-            return {
-                Success: false,
-                ExternalID: externalID,
-                StatusCode: 400,
-                ErrorMessage: `DeleteAssociation ${objectName}: cannot parse composite ExternalID '${externalID}' — expected 'leftID|rightID'`,
-            };
-        }
-        const leftID = externalID.substring(0, pipeIndex);
-        const rightID = externalID.substring(pipeIndex + 1);
-
-        const pathParts = assocConfig.apiPath.split('/').filter(Boolean);
-        const fromType = pathParts[pathParts.length - 2];
-        const toType = pathParts[pathParts.length - 1];
-
-        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/archive`;
-        const body = { inputs: [{ from: { id: leftID }, to: { id: rightID } }] };
-        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
-
-        // batch/archive returns 204 No Content on success
-        if (response.Status === 204 || (response.Status >= 200 && response.Status < 300)) {
-            return { Success: true, ExternalID: externalID, StatusCode: response.Status };
-        }
-
-        return this.BuildCRUDErrorResult(response, 'DeleteAssociation', objectName);
     }
 
     /**
@@ -1894,15 +1795,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     /** Builds a CRUDResult for error responses. */
     private BuildCRUDErrorResult(response: RESTResponse, operation: string, objectName: string): CRUDResult {
         const bodyObj = response.Body as Record<string, unknown> | undefined;
-        let message: string;
-        if (response.Status === 403) {
-            message = `[HubSpot] 403 Forbidden — OAuth scope missing for ${operation} on '${objectName}'. ` +
-                `Add the required scope to your HubSpot app and reconnect.`;
-        } else {
-            message = bodyObj?.['message']
-                ? String(bodyObj['message'])
-                : `[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status})`;
-        }
+        const message = bodyObj?.['message']
+            ? String(bodyObj['message'])
+            : `[HubSpot] ${operation} on ${objectName} failed (HTTP ${response.Status})`;
         return {
             Success: false,
             ErrorMessage: message,
@@ -2202,7 +2097,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             ApiVersion: credentials.ApiVersion,
         };
 
-        const configJson = companyIntegration.Configuration;
+        const configJson = companyIntegration.Get('Configuration') as string | null;
         if (configJson) {
             this.ApplyConfigOverrides(config, configJson);
         }
@@ -2243,14 +2138,14 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<HubSpotCredentials> {
         // Try loading from linked Credential entity first
-        const credentialID = companyIntegration.CredentialID;
+        const credentialID = companyIntegration.Get('CredentialID') as string | null;
         if (credentialID) {
             const creds = await this.LoadFromCredentialEntity(credentialID, contextUser);
             if (creds) return creds;
         }
 
         // Fallback: read from CompanyIntegration Configuration JSON
-        const configJson = companyIntegration.Configuration;
+        const configJson = companyIntegration.Get('Configuration') as string | null;
         if (configJson) {
             const creds = this.ParseCredentialJson(configJson);
             if (creds) return creds;
@@ -2263,8 +2158,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /** Loads credentials from a Credential entity by ID. */
-    private async LoadFromCredentialEntity(credentialID: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<HubSpotCredentials | null> {
-        const md = provider ?? new Metadata();
+    private async LoadFromCredentialEntity(credentialID: string, contextUser: UserInfo): Promise<HubSpotCredentials | null> {
+        const md = new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
@@ -2369,7 +2264,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const headers = this.BuildHeaders(auth);
 
         const limit = Math.min(ctx.BatchSize ?? 100, 100); // HubSpot CRM list API max is 100
-        const propertiesParam = this.BuildPropertiesParam(ctx.ObjectName, ctx.RequestedSourceFields);
+        const propertiesParam = this.BuildPropertiesParam(ctx.ObjectName);
         let url = `${HUBSPOT_API_BASE}/crm/v3/objects/${ctx.ObjectName}?limit=${limit}${propertiesParam}`;
         if (ctx.CurrentCursor) {
             url += `&after=${ctx.CurrentCursor}`;
@@ -2586,11 +2481,8 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             }
         }
 
-        // Server-side incremental filtering (preferred over client-side)
-        if (ctx.WatermarkValue && objConfig.serverIncrementalParam) {
-            url += `&${objConfig.serverIncrementalParam}=${encodeURIComponent(ctx.WatermarkValue)}`;
-        } else if (ctx.WatermarkValue && objConfig.incrementalParam === 'after') {
-            // Legacy: owners endpoint uses incrementalParam: 'after' → maps to updatedAfter
+        // Some non-CRM endpoints support server-side incremental via updatedAfter
+        if (ctx.WatermarkValue && objConfig.incrementalParam === 'after') {
             url += `&updatedAfter=${ctx.WatermarkValue}`;
         }
 
@@ -2619,10 +2511,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
             };
         });
 
-        // Client-side watermark filtering only when no server-side param is available
-        const hasServerSideFilter = !!(ctx.WatermarkValue && (objConfig.serverIncrementalParam || objConfig.incrementalParam === 'after'));
+        // Client-side watermark filtering (if API doesn't support server-side)
         let filteredRecords = records;
-        if (ctx.WatermarkValue && !hasServerSideFilter) {
+        if (ctx.WatermarkValue && objConfig.incrementalParam !== 'after') {
             const watermarkMs = new Date(ctx.WatermarkValue).getTime();
             filteredRecords = records.filter(r => {
                 // Check common date fields
@@ -2702,7 +2593,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
         const dateField = this.GetWatermarkField(ctx.ObjectName);
         const watermarkMs = new Date(ctx.WatermarkValue!).getTime();
-        const properties = this.BuildEffectiveProperties(ctx.ObjectName, ctx.RequestedSourceFields);
+        const properties = this.GetObjectFieldNames(ctx.ObjectName);
         const pageSize = Math.min(ctx.BatchSize ?? 100, 100); // HubSpot search API max is 100
 
         const searchBody: Record<string, unknown> = {
@@ -2875,11 +2766,6 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
      * Uses ctx.CurrentOffset to track parent position across batch calls, so the engine
      * can page through all parents without truncating records.
      */
-    /**
-     * Fetches association records using the HubSpot v4 batch/read endpoint.
-     * Batches up to 100 parent IDs per request instead of one GET per parent,
-     * reducing API calls from O(n) to O(n/100).
-     */
     private async FetchAssociationChanges(
         ctx: FetchContext,
         obj: MJIntegrationObjectEntity
@@ -2892,6 +2778,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const { fromType, toType } = parsed;
 
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
+        const baseURL = this.GetBaseURL(ctx.CompanyIntegration, auth);
 
         // Derive PK field names from the API path object type names.
         // "companies" → "company_id", "emails" → "email_id", "contacts" → "contact_id"
@@ -2901,77 +2788,77 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
 
         const parentIDs = await this.LoadAssociationParentIDs(fromType, ctx);
         const parentOffset = ctx.CurrentOffset ?? 0;
-        const BATCH_LIMIT = 100; // HubSpot v4 batch/read max inputs per request
 
         if (parentOffset === 0) {
-            console.log(`[HubSpot] Fetching ${obj.Name}: ${parentIDs.length} parent ${fromType} via batch API (100/request)`);
+            console.log(`[HubSpot] Fetching ${obj.Name}: ${parentIDs.length} parent ${fromType} to iterate`);
         }
 
-        const batchParentIDs = parentIDs.slice(parentOffset, parentOffset + BATCH_LIMIT);
-        if (batchParentIDs.length === 0) {
-            return { Records: [], HasMore: false };
-        }
+        const batchSize = Math.min(ctx.BatchSize ?? 200, 200);
+        const batchRecords: ExternalRecord[] = [];
+        let parentIndex = parentOffset;
 
-        const records = await this.FetchAssociationBatch(
-            auth, fromType, toType, batchParentIDs, leftFieldName, rightFieldName, ctx.ObjectName
-        );
-
-        const nextOffset = parentOffset + batchParentIDs.length;
-        const hasMore = nextOffset < parentIDs.length;
-        console.log(`[HubSpot] ${obj.Name}: fetched ${records.length} association records (parents ${parentOffset}–${parentOffset + batchParentIDs.length - 1} of ${parentIDs.length})`);
-        return { Records: records, HasMore: hasMore, NextOffset: hasMore ? nextOffset : undefined };
-    }
-
-    /**
-     * Calls POST /crm/v4/associations/{fromType}/{toType}/batch/read with up to 100 parent IDs.
-     * Response format: { results: [{ from: { id }, to: [{ toObjectId, associationTypes }] }] }
-     */
-    private async FetchAssociationBatch(
-        auth: RESTAuthContext,
-        fromType: string,
-        toType: string,
-        parentIDs: string[],
-        leftFieldName: string,
-        rightFieldName: string,
-        objectName: string
-    ): Promise<ExternalRecord[]> {
-        const headers = this.BuildHeaders(auth);
-        const url = `${HUBSPOT_API_BASE}/crm/v4/associations/${fromType}/${toType}/batch/read`;
-        const body = { inputs: parentIDs.map(id => ({ id })) };
-
-        const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, body);
-        if (response.Status < 200 || response.Status >= 300) {
-            const respBody = response.Body as Record<string, unknown> | undefined;
-            const msg = respBody?.message ?? respBody?.error ?? JSON.stringify(respBody);
-            console.warn(`[HubSpot] Association batch read failed for ${objectName}: HTTP ${response.Status} — ${msg}`);
-            return [];
-        }
-
-        const respBody = response.Body as {
-            results?: Array<{
-                from: { id: string };
-                to: Array<{ toObjectId: number; associationTypes: Array<{ label?: string; typeId: number; category: string }> }>;
-            }>;
-        };
-
-        const records: ExternalRecord[] = [];
-        for (const item of respBody.results ?? []) {
-            const parentID = item.from.id;
-            for (const assoc of item.to ?? []) {
-                const flat = this.FlattenAssociationRecord(
-                    { toObjectId: assoc.toObjectId, associationTypes: assoc.associationTypes },
-                    leftFieldName,
-                    parentID,
-                    rightFieldName
-                );
-                records.push({
+        while (parentIndex < parentIDs.length && batchRecords.length < batchSize) {
+            const parentID = parentIDs[parentIndex];
+            const basePath = `${baseURL}/crm/v4/objects/${fromType}/${parentID}/associations/${toType}`;
+            const rawRecords = await this.FetchAllAssociationPages(auth, basePath, obj.DefaultPageSize ?? 500);
+            let addedAll = true;
+            for (const record of rawRecords) {
+                if (batchRecords.length >= batchSize) {
+                    addedAll = false;
+                    break;
+                }
+                const flat = this.FlattenAssociationRecord(record, leftFieldName, parentID, rightFieldName);
+                batchRecords.push({
                     ExternalID: `${flat[leftFieldName]}|${flat[rightFieldName]}`,
-                    ObjectType: objectName,
+                    ObjectType: ctx.ObjectName,
                     Fields: flat,
                 });
             }
+            if (addedAll) {
+                parentIndex++;
+            } else {
+                // Don't advance — next batch re-fetches this parent so no records are lost
+                break;
+            }
         }
-        return records;
+
+        const hasMore = parentIndex < parentIDs.length;
+        console.log(`[HubSpot] ${obj.Name}: fetched ${batchRecords.length} association records (parents ${parentOffset}-${parentIndex - 1} of ${parentIDs.length})`);
+        return { Records: batchRecords, HasMore: hasMore, NextOffset: hasMore ? parentIndex : undefined };
+    }
+
+    /**
+     * Paginates through all pages of a HubSpot v4 per-object association endpoint,
+     * returning the raw result items (each with toObjectId + associationTypes).
+     */
+    private async FetchAllAssociationPages(
+        auth: RESTAuthContext,
+        basePath: string,
+        pageSize: number
+    ): Promise<Record<string, unknown>[]> {
+        const headers = this.BuildHeaders(auth);
+        const allRecords: Record<string, unknown>[] = [];
+        let cursor: string | undefined;
+
+        do {
+            const url = cursor
+                ? `${basePath}?limit=${pageSize}&after=${encodeURIComponent(cursor)}`
+                : `${basePath}?limit=${pageSize}`;
+
+            const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+            if (response.Status < 200 || response.Status >= 300) break;
+
+            const body = response.Body as Record<string, unknown>;
+            const results = body['results'];
+            if (!results || !Array.isArray(results) || results.length === 0) break;
+
+            allRecords.push(...(results as Record<string, unknown>[]));
+
+            const paging = body['paging'] as { next?: { after?: string } } | undefined;
+            cursor = paging?.next?.after;
+        } while (cursor);
+
+        return allRecords;
     }
 
     /**
@@ -2985,10 +2872,9 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         rightFieldName: string
     ): Record<string, unknown> {
         const assocTypes = record['associationTypes'] as Array<{ label?: string }> | undefined;
-        const rightValue = String(record['toObjectId']);
         return {
             [leftFieldName]: leftValue,
-            [rightFieldName]: rightValue,
+            [rightFieldName]: String(record['toObjectId']),
             association_type: assocTypes?.[0]?.label ?? null,
         };
     }
@@ -3060,37 +2946,11 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Returns the effective property list for a HubSpot CRM request.
-     *
-     * When `requestedFields` (from FetchContext.RequestedSourceFields) is provided it
-     * contains the source fields from active field maps, including any custom properties.
-     * We merge those with the essential system properties so watermark tracking always works.
-     *
-     * Falls back to the static HUBSPOT_OBJECTS field list when no requestedFields are given.
-     *
-     * Note: hs_object_id is NOT included — it's the top-level `id` field on every HubSpot
-     * response and is injected by FlattenHubSpotRecord regardless of `?properties=`.
-     * Essential system properties (always included):
-     * - GetWatermarkField(objectName) — the per-object modified-date property (object-specific;
-     *   contacts use 'lastmodifieddate', all others use 'hs_lastmodifieddate')
-     * - createdate — creation timestamp
-     */
-    private BuildEffectiveProperties(objectName: string, requestedFields?: string[]): string[] {
-        const essentialProperties = [this.GetWatermarkField(objectName), 'createdate'];
-        if (requestedFields && requestedFields.length > 0) {
-            const merged = new Set([...requestedFields, ...essentialProperties]);
-            return [...merged];
-        }
-        return this.GetObjectFieldNames(objectName);
-    }
-
-    /**
      * Builds the `properties` query parameter for a HubSpot object type.
-     * Accepts optional `requestedFields` from FetchContext to include custom-mapped properties.
      * Returns empty string if no properties are configured for the object.
      */
-    private BuildPropertiesParam(objectName: string, requestedFields?: string[]): string {
-        const properties = this.BuildEffectiveProperties(objectName, requestedFields);
+    private BuildPropertiesParam(objectName: string): string {
+        const properties = this.GetObjectFieldNames(objectName);
         if (properties.length > 0) {
             return `&properties=${properties.join(',')}`;
         }

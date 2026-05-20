@@ -9,10 +9,8 @@ import type { FetchContext, RESTResponse } from '@memberjunction/integration-eng
 function createMockCompanyIntegration(config: Record<string, string>): MJCompanyIntegrationEntity {
     const configJson = JSON.stringify(config);
     return {
-        Configuration: configJson,
-        CredentialID: null,
-        IntegrationID: 'test-integration-id',
         Get: (field: string) => field === 'Configuration' ? configJson : null,
+        IntegrationID: 'test-integration-id',
     } as unknown as MJCompanyIntegrationEntity;
 }
 

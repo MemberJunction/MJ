@@ -3697,6 +3697,330 @@
             "lastModified": "2026-03-12T21:00:30.669Z",
             "checksum": "0ed4222c307897fe490e184d91b6e37d81358e831e09c8080b1874fb64460275"
           }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "people_web_addresses",
+            "DisplayName": "Person Web Addresses",
+            "Description": "URLs and web links associated with a person (LinkedIn, website, etc.)",
+            "Category": "Contact Info",
+            "APIPath": "/people/{person_id}/web_addresses",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "PageNumber",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address record ID",
+                  "Sequence": 1
+                },
+                "primaryKey": {
+                  "ID": "A6C7F5C8-B437-4A90-8B34-FF64E08E30B5"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:06.972Z",
+                  "checksum": "336a0d4867de95c702cabdec49aed2a90be306fb824d0cf1aa4dc20c662f9304"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "address",
+                  "DisplayName": "URL",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address URL",
+                  "Sequence": 2
+                },
+                "primaryKey": {
+                  "ID": "EB57D01C-D505-4849-BF8F-1D2EE39C270A"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:06.997Z",
+                  "checksum": "69ca5bd01a320bf5149e3ef79d7cff2145330edd202f99344398309aacb0a6f2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "Type",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address type (website, linkedin, twitter, etc.)",
+                  "Sequence": 3
+                },
+                "primaryKey": {
+                  "ID": "EE512D86-2FD9-4C66-B5CF-6FD9D6896F53"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.021Z",
+                  "checksum": "46784be6adad7fd14aa2a49603ec658bf89e55df5b2af7b7f7493acc73da092f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "primary",
+                  "DisplayName": "Primary",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Description": "Whether this is the primary web address",
+                  "Sequence": 4
+                },
+                "primaryKey": {
+                  "ID": "9C165981-7683-4746-9A5B-6DB7CCCDC637"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.047Z",
+                  "checksum": "6870261561910a7a74a04aa30613a54c038a07bdbd52ad71d2fdbd03e3d17cda"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Sequence": 5
+                },
+                "primaryKey": {
+                  "ID": "3B0A4EBB-FB8E-4AA2-B5DC-680105068BF1"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.071Z",
+                  "checksum": "5f187f8ff4dcc048aac7950891a846fc0a09c2b3f0085eb91cc3d87ba9a5ab51"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Sequence": 6
+                },
+                "primaryKey": {
+                  "ID": "B6ACBEA3-11A6-485A-8B9C-2F6AEC09F266"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.153Z",
+                  "checksum": "4c0c5e7b56888850cdb109d9f26e86d1ca0988f146cefc47355196363886632e"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "51E0EF62-BC92-44C7-A405-F2C0334B8C1F"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T08:09:01.246Z",
+            "checksum": "c9ef764d2bcbb9a92f93f7a900c64a6b418a304f40147b6a91a9f76193671bae"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "org_web_addresses",
+            "DisplayName": "Organization Web Addresses",
+            "Description": "URLs and web links associated with an organization",
+            "Category": "Contact Info",
+            "APIPath": "/organizations/{organization_id}/web_addresses",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "PageNumber",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address record ID",
+                  "Sequence": 1
+                },
+                "primaryKey": {
+                  "ID": "41E9E76D-D097-4307-B48E-E836AC7E9B04"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.178Z",
+                  "checksum": "336a0d4867de95c702cabdec49aed2a90be306fb824d0cf1aa4dc20c662f9304"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "address",
+                  "DisplayName": "URL",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address URL",
+                  "Sequence": 2
+                },
+                "primaryKey": {
+                  "ID": "285E4D9E-CB59-4161-9E96-53A678C617CC"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.202Z",
+                  "checksum": "69ca5bd01a320bf5149e3ef79d7cff2145330edd202f99344398309aacb0a6f2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "Type",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Length": 255,
+                  "Description": "Web address type (website, linkedin, twitter, etc.)",
+                  "Sequence": 3
+                },
+                "primaryKey": {
+                  "ID": "50EE22E4-F9AC-44AB-9E65-8249E0136393"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.227Z",
+                  "checksum": "46784be6adad7fd14aa2a49603ec658bf89e55df5b2af7b7f7493acc73da092f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "primary",
+                  "DisplayName": "Primary",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Description": "Whether this is the primary web address",
+                  "Sequence": 4
+                },
+                "primaryKey": {
+                  "ID": "98162D0B-7493-4123-AAEA-5A1A835F3F43"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.253Z",
+                  "checksum": "6870261561910a7a74a04aa30613a54c038a07bdbd52ad71d2fdbd03e3d17cda"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Sequence": 5
+                },
+                "primaryKey": {
+                  "ID": "655E453B-FF8B-4A61-BEED-5C686E3FDAFB"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.276Z",
+                  "checksum": "5f187f8ff4dcc048aac7950891a846fc0a09c2b3f0085eb91cc3d87ba9a5ab51"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Status": "Active",
+                  "Sequence": 6
+                },
+                "primaryKey": {
+                  "ID": "E0D5C55A-DD44-404E-93BF-1A088A632EB1"
+                },
+                "sync": {
+                  "lastModified": "2026-04-13T08:09:07.298Z",
+                  "checksum": "4c0c5e7b56888850cdb109d9f26e86d1ca0988f146cefc47355196363886632e"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "008EBAA2-5357-4246-95DA-FA61CE75B654"
+          },
+          "sync": {
+            "lastModified": "2026-04-13T08:09:01.260Z",
+            "checksum": "d3594a914b92316b92228d64f16e418a6d4cc33a8e31afbb8f5277c19b1e94b1"
+          }
         }
       ]
     },

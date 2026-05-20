@@ -1,0 +1,1432 @@
+[
+  {
+    "fields": {
+      "Name": "MJ to MJ",
+      "Description": "Read-only connector that pulls conversational data (Conversations, Conversation Details, optional AI Agent Runs/Steps) from a remote MemberJunction instance via its GraphQL API. Maps to MJ: Conversations and MJ: Conversation Details. Every MJ deployment is self-hosted per customer — GraphQL endpoint URL + read-only API key must be provisioned by the remote MJ admin. Not a full object-model sync; use MJ's native integration surface for that.",
+      "ClassName": "MJToMJConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": 50,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=MJ API Key",
+      "Icon": "fa-solid fa-share-nodes"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Conversations",
+            "DisplayName": "Conversations",
+            "Description": "MJ Conversations on the remote instance — chat sessions. Maps directly to MJ: Conversations on the destination side. Watermark on __mj_UpdatedAt. GraphQL query name is 'Conversations' (plural), filtered via MJ's ExtraFilter SQL WHERE string convention.",
+            "Category": "Conversations",
+            "APIPath": "Conversations",
+            "ResponseDataKey": "Conversations",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,Name,Description,UserID,ExternalID,DataContextID,Type,Status,LinkedEntityID,LinkedRecordID,IsArchived,IsPinned,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": "MJ: Conversations",
+              "mj_field_map": "{\"ID\":\"ExternalID\",\"Name\":\"Name\",\"Description\":\"Description\",\"UserID\":\"UserID\",\"Status\":\"Status\",\"Type\":\"Type\"}"
+            },
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ primary key for the Conversation. Maps to MJ: Conversations.ExternalID on the destination side.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Conversation title/topic. Maps to MJ: Conversations.Name.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Long-form description of the conversation.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "UserID",
+                  "DisplayName": "User ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "FK to Users — the owner of the conversation on the remote instance.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ExternalID",
+                  "DisplayName": "External ID",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "External identifier from yet another system (if the remote MJ was itself syncing conversations from elsewhere). Not used for mapping on the destination side.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "DataContextID",
+                  "DisplayName": "Data Context ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to MJ: Data Contexts (on remote). Typically not synced across instances — data contexts are per-environment.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Type",
+                  "DisplayName": "Type",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Conversation type (Skip, Support, Chat, etc.). Maps to MJ: Conversations.Type.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Processing status on the remote MJ: Available / Processing. Maps to MJ: Conversations.Status.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LinkedEntityID",
+                  "DisplayName": "Linked Entity ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to MJ: Entities on remote — if the conversation is linked to a specific entity type.",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LinkedRecordID",
+                  "DisplayName": "Linked Record ID",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "ID of a related record the conversation pertains to (ticket, order, etc.).",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsArchived",
+                  "DisplayName": "Is Archived",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "True if archived on the remote MJ — consider filtering these out at mapping time.",
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsPinned",
+                  "DisplayName": "Is Pinned",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "True if pinned on the remote MJ UI.",
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on the remote MJ (BaseEntity field).",
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on the remote MJ — used as the incremental-sync watermark.",
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ConversationDetails",
+            "DisplayName": "Conversation Details",
+            "Description": "Individual messages inside a remote MJ Conversation — one row per user/AI turn. Maps to MJ: Conversation Details. Watermark on __mj_UpdatedAt. Filter by ConversationID at mapping time to thread messages under the right parent conversation.",
+            "Category": "Conversations",
+            "APIPath": "ConversationDetails",
+            "ResponseDataKey": "ConversationDetails",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,ConversationID,ExternalID,Role,Message,Error,HiddenToUser,Status,UserID,AgentID,CompletionTime,ParentID,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": "MJ: Conversation Details",
+              "mj_field_map": "{\"ID\":\"ExternalID\",\"ConversationID\":\"ConversationID\",\"Role\":\"Role\",\"Message\":\"Message\",\"Error\":\"Error\",\"HiddenToUser\":\"HiddenToUser\",\"Status\":\"Status\"}"
+            },
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ primary key for the Conversation Detail. Maps to MJ: Conversation Details.ExternalID on the destination side.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ConversationID",
+                  "DisplayName": "Conversation ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "FK to Conversations.ID on remote. Maps at sync time to the local MJ: Conversations.ID by joining on the synced ExternalID.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ExternalID",
+                  "DisplayName": "External ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "External identifier from yet another system (rarely used).",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Role",
+                  "DisplayName": "Role",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Message role: AI / Error / User. Maps directly to MJ: Conversation Details.Role.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Message",
+                  "DisplayName": "Message",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Message body text. Maps to MJ: Conversation Details.Message.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Error",
+                  "DisplayName": "Error",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Error text if this turn failed. Maps to MJ: Conversation Details.Error.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "HiddenToUser",
+                  "DisplayName": "Hidden To User",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "True for system / function / tool-call messages the user never saw. Maps to MJ: Conversation Details.HiddenToUser.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Processing status of the message: Complete / In-Progress / Error. Maps to MJ: Conversation Details.Status.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "UserID",
+                  "DisplayName": "User ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Optional override user for this message (normally derived from the parent conversation).",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AgentID",
+                  "DisplayName": "Agent ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to AIAgents on remote — denormalized agent identifier for quick display.",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CompletionTime",
+                  "DisplayName": "Completion Time (ms)",
+                  "Type": "bigint",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Duration in milliseconds for the AI response at this turn.",
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ParentID",
+                  "DisplayName": "Parent ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to ConversationDetails.ID on remote for threaded messages. NULL for top-level messages.",
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on remote.",
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on remote — incremental-sync watermark.",
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "AIAgents",
+            "DisplayName": "AI Agents",
+            "Description": "Reference data for agent definitions on the remote MJ — used to resolve AgentID references on Conversation Details. Read-only; typically small list. Not synced to a destination entity by default.",
+            "Category": "Reference",
+            "APIPath": "AIAgents",
+            "ResponseDataKey": "AIAgents",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,Name,Description,ParentID,TypeID,Status,ExposeAsAction,LogoURL,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ AI Agent primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Agent name (e.g., 'Skip', 'Sage').",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Agent description.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ParentID",
+                  "DisplayName": "Parent Agent ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to AIAgents — parent in the agent hierarchy. NULL for root agents.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TypeID",
+                  "DisplayName": "Type ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to MJ: AI Agent Types on remote (Loop, etc.).",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Agent status on remote: Active / Disabled / Pending.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ExposeAsAction",
+                  "DisplayName": "Expose As Action",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Whether the agent can be invoked as an action by other agents.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LogoURL",
+                  "DisplayName": "Logo URL",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Agent logo URL or data URI.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on remote.",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on remote — watermark candidate.",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "AIAgentRuns",
+            "DisplayName": "AI Agent Runs",
+            "Description": "Execution logs for agent runs on the remote MJ. Inactive by default — enable on CompanyIntegrationObject if the customer wants run-level telemetry. GraphQL query name escapes 'MJ: AI Agent Runs' to 'MJ_AIAgentRuns'. Watermark on __mj_UpdatedAt.",
+            "Category": "Telemetry",
+            "APIPath": "MJ_AIAgentRuns",
+            "ResponseDataKey": "MJ_AIAgentRuns",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,AgentID,ParentRunID,Status,StartedAt,CompletedAt,Success,ErrorMessage,ConversationID,UserID,Result,TotalTokensUsed,TotalCost,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 4,
+            "Status": "Inactive"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ Agent Run primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AgentID",
+                  "DisplayName": "Agent ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "FK to AIAgents.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ParentRunID",
+                  "DisplayName": "Parent Run ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Parent agent run for sub-agent execution hierarchies.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Run status: Running / Completed / Failed / Cancelled / Paused / AwaitingFeedback.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StartedAt",
+                  "DisplayName": "Started At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Timestamp when the agent run began.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CompletedAt",
+                  "DisplayName": "Completed At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp when the agent run completed. NULL for active runs.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Success",
+                  "DisplayName": "Success",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "True/False once complete; NULL while running.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ErrorMessage",
+                  "DisplayName": "Error Message",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Failure message if the run did not succeed.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ConversationID",
+                  "DisplayName": "Conversation ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to Conversations on remote — ties the run to a chat session.",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "UserID",
+                  "DisplayName": "User ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to Users on remote — who triggered the run.",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Result",
+                  "DisplayName": "Result",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Final agent result (JSON or text).",
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TotalTokensUsed",
+                  "DisplayName": "Total Tokens Used",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Total LLM tokens consumed by this run.",
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TotalCost",
+                  "DisplayName": "Total Cost",
+                  "Type": "decimal",
+                  "Precision": 18,
+                  "Scale": 6,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Estimated cost for this agent run.",
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on remote.",
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on remote — watermark.",
+                  "Sequence": 15,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "AIAgentRunSteps",
+            "DisplayName": "AI Agent Run Steps",
+            "Description": "Step-level detail within an AI Agent Run on the remote MJ. Inactive by default — enable when detailed run telemetry is needed. GraphQL query name escapes 'MJ: AI Agent Run Steps' to 'MJ_AIAgentRunSteps'. Watermark on __mj_UpdatedAt. Parent-child of AIAgentRuns via AgentRunID.",
+            "Category": "Telemetry",
+            "APIPath": "MJ_AIAgentRunSteps",
+            "ResponseDataKey": "MJ_AIAgentRunSteps",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,AgentRunID,StepNumber,StepType,StepName,TargetID,Status,StartedAt,CompletedAt,Success,ErrorMessage,InputData,OutputData,ParentID,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 5,
+            "Status": "Inactive"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ Agent Run Step primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AgentRunID",
+                  "DisplayName": "Agent Run ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "FK to AIAgentRuns — the parent run this step belongs to.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StepNumber",
+                  "DisplayName": "Step Number",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "1-based sequential step number within the run.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StepType",
+                  "DisplayName": "Step Type",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "One of: Actions, Chat, Decision, ForEach, Prompt, Sub-Agent, Validation, While.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StepName",
+                  "DisplayName": "Step Name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Human-readable label for the step.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "TargetID",
+                  "DisplayName": "Target ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Polymorphic FK to the target (AIPrompt, AIAction, AIAgent, etc.).",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Running / Completed / Failed / Cancelled.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "StartedAt",
+                  "DisplayName": "Started At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Timestamp when the step began.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "CompletedAt",
+                  "DisplayName": "Completed At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp when the step finished.",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Success",
+                  "DisplayName": "Success",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "True/False when complete.",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ErrorMessage",
+                  "DisplayName": "Error Message",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Failure message if the step failed.",
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "InputData",
+                  "DisplayName": "Input Data",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "JSON serialization of the step input.",
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "OutputData",
+                  "DisplayName": "Output Data",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "JSON serialization of the step output.",
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ParentID",
+                  "DisplayName": "Parent Step ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "FK to AIAgentRunSteps for hierarchical step relationships.",
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on remote.",
+                  "Sequence": 15,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on remote — watermark.",
+                  "Sequence": 16,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Users",
+            "DisplayName": "Users",
+            "Description": "Read-only reference list of Users on the remote MJ — used to resolve UserID on Conversations and Conversation Details. Not synced to a destination entity by default; typically a small list.",
+            "Category": "Reference",
+            "APIPath": "Users",
+            "ResponseDataKey": "Users",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "graphql_fields": "ID,Name,FirstName,LastName,Email,Title,Type,IsActive,__mj_CreatedAt,__mj_UpdatedAt",
+              "watermark_field": "__mj_UpdatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "ID",
+                  "DisplayName": "ID",
+                  "Type": "uniqueidentifier",
+                  "Length": 36,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Remote MJ User primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Full name or account name.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "FirstName",
+                  "DisplayName": "First Name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "User first name.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastName",
+                  "DisplayName": "Last Name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "User last name.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "User email (unique on remote).",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Title",
+                  "DisplayName": "Title",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "User title or salutation.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Type",
+                  "DisplayName": "Type",
+                  "Type": "nchar",
+                  "Length": 15,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "User account type — Owner or User on remote.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsActive",
+                  "DisplayName": "Is Active",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Whether the user account is active on remote.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_CreatedAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Row creation timestamp on remote.",
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "__mj_UpdatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp on remote — watermark.",
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

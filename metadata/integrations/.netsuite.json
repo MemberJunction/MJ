@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "NetSuite",
+      "Description": "NetSuite ERP — ALL record types discovered dynamically via metadata-catalog API. Objects and fields are populated at runtime.",
+      "ClassName": "NetSuiteConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-solid fa-file-invoice-dollar",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=NetSuite TBA"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": []
+    }
+  }
+]

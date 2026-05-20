@@ -1,0 +1,186 @@
+[
+  {
+    "fields": {
+      "Name": "PropFuel",
+      "Description": "PropFuel (re:Members) member-engagement platform connector. Read-only initial cut covering the documented PropFuel domain — Contacts, Campaigns, Conversations, Captures (responses), Segments, and Tags — using the standard Ask / Capture / Act vocabulary. PropFuel does not publish a public developer portal; the endpoint paths and field shapes here are scaffolding that should be confirmed against PropFuel's actual API spec before production use. SupportsCreate/Update/Delete are intentionally false until write endpoints are validated.",
+      "ClassName": "PropFuelConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://app.propfuel.com",
+      "BatchMaxRequestCount": 100,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=PropFuel API Key",
+      "Icon": "fa-solid fa-comments"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contacts",
+            "DisplayName": "Contacts",
+            "Description": "Member / subscriber profile records — PropFuel's primary identity entity for engagement campaigns.",
+            "Category": "Contacts",
+            "APIPath": "/contacts",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "Description": "Contact ID (PropFuel primary key).", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "Description": "Primary email — useful as a natural key for upsert.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "first_name", "DisplayName": "First Name", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "last_name", "DisplayName": "Last Name", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "phone", "DisplayName": "Phone", "Type": "nvarchar", "Length": 50, "Description": "Phone number — required for SMS campaigns.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "created_at", "DisplayName": "Created At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "updated_at", "DisplayName": "Updated At", "Type": "datetime", "Description": "Used as the incremental-sync watermark.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Campaigns",
+            "DisplayName": "Campaigns",
+            "Description": "Engagement campaigns built from PropFuel blueprints (Ask / Capture / Act flows).",
+            "Category": "Campaigns",
+            "APIPath": "/campaigns",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "type", "DisplayName": "Type", "Type": "nvarchar", "Length": 50, "Description": "Campaign type (Ask, Capture, Act, Newsletter, etc.).", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "channel", "DisplayName": "Channel", "Type": "nvarchar", "Length": 50, "Description": "Delivery channel (Email, SMS, Multi).", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "created_at", "DisplayName": "Created At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "updated_at", "DisplayName": "Updated At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Conversations",
+            "DisplayName": "Conversations",
+            "Description": "Two-way member interactions across email and SMS — the parent record for inbound and outbound messages within a campaign.",
+            "Category": "Engagement",
+            "APIPath": "/conversations",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "contact_id", "DisplayName": "Contact ID", "Type": "nvarchar", "Length": 100, "Description": "FK → Contacts", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "campaign_id", "DisplayName": "Campaign ID", "Type": "nvarchar", "Length": 100, "Description": "FK → Campaigns", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "channel", "DisplayName": "Channel", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "created_at", "DisplayName": "Created At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "updated_at", "DisplayName": "Updated At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Captures",
+            "DisplayName": "Captures",
+            "Description": "Member responses to Ask prompts — the structured data PropFuel collects from a campaign (preferences, ratings, NPS, free-text answers).",
+            "Category": "Engagement",
+            "APIPath": "/captures",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "contact_id", "DisplayName": "Contact ID", "Type": "nvarchar", "Length": 100, "Description": "FK → Contacts", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "campaign_id", "DisplayName": "Campaign ID", "Type": "nvarchar", "Length": 100, "Description": "FK → Campaigns", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "question", "DisplayName": "Question", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "response", "DisplayName": "Response", "Type": "nvarchar", "Length": 4000, "Description": "Member's answer / capture value.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "created_at", "DisplayName": "Created At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "updated_at", "DisplayName": "Updated At", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Segments",
+            "DisplayName": "Segments",
+            "Description": "Audience segments used to target campaigns.",
+            "Category": "Audiences",
+            "APIPath": "/segments",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "member_count", "DisplayName": "Member Count", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Tags",
+            "DisplayName": "Tags",
+            "Description": "Tags applied to Contacts for segmentation and targeting.",
+            "Category": "Audiences",
+            "APIPath": "/tags",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "color", "DisplayName": "Color", "Type": "nvarchar", "Length": 20, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

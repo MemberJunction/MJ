@@ -1,0 +1,417 @@
+[
+  {
+    "fields": {
+      "Name": "SharePoint",
+      "Description": "Microsoft SharePoint Online integration via Microsoft Graph v1.0. Supports Sites, Drives, DriveItems (files/folders), Lists, ListItems with list columns, ContentTypes, Pages, Permissions, Subscriptions (webhooks), and Analytics. Authenticates via Azure AD client-credentials flow.",
+      "ClassName": "SharePointConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": 20,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Azure Service Principal",
+      "Icon": "fa-brands fa-microsoft"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Sites",
+            "DisplayName": "Sites",
+            "Description": "SharePoint sites (team, communication, hub). Discovered via /sites?search=* on tenant root. Primary key `id` is a composite of hostname, site-collection GUID, and web GUID, and should be treated as an opaque string.",
+            "Category": "Sites",
+            "APIPath": "/sites?search=*",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "$select": "id,displayName,name,webUrl,createdDateTime,lastModifiedDateTime,description,isPersonalSite"
+            },
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Site ID", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Composite site identifier (hostname,site-collection-guid,web-guid). Opaque — do not parse." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "displayName", "DisplayName": "Display Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Human-readable site name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Site URL-path segment." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Full URL to the site." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Site description." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Site creation timestamp (ISO 8601 UTC)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Most recent modification timestamp (ISO 8601 UTC). Candidate watermark field." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "isPersonalSite", "DisplayName": "Is Personal Site", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "True for OneDrive-backed personal sites." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteLists",
+            "DisplayName": "Site Lists",
+            "Description": "Lists within a SharePoint site. Includes document libraries, custom lists, and calendars. Requires enumeration over sites.",
+            "Category": "Lists",
+            "APIPath": "/sites/{id}/lists",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "DefaultQueryParams": {
+              "$select": "id,name,displayName,description,webUrl,createdDateTime,lastModifiedDateTime,list"
+            },
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "List ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "List GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Internal list name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "displayName", "DisplayName": "Display Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Human-readable list title." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "List description." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "URL to list in the browser." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "List creation timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Most recent list modification timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "template", "DisplayName": "Template", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "List template identifier (documentLibrary, genericList, etc.) — nested in `list.template`." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteListColumns",
+            "DisplayName": "Site List Columns",
+            "Description": "Column definitions on a specific list. Used for custom field discovery — list columns are tenant-defined. IsCustom semantics are applied at runtime.",
+            "Category": "Lists",
+            "APIPath": "/sites/{siteId}/lists/{id}/columns",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Column ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Column GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Internal column name (maps to field key in ListItem.fields)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "displayName", "DisplayName": "Display Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Human-readable column label." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Column description." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "columnGroup", "DisplayName": "Column Group", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Column group name (e.g., `Core Contact`)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "required", "DisplayName": "Required", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Whether the column is required." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "readOnly", "DisplayName": "Read Only", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Whether the column is read-only." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "hidden", "DisplayName": "Hidden", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "Whether the column is hidden from the UI." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "isSealed", "DisplayName": "Is Sealed", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active", "Description": "Built-in system columns are sealed; user-added columns are not." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "type", "DisplayName": "Type", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 10, "Status": "Active", "Description": "Column type (text, number, choice, lookup, etc.)." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteListItems",
+            "DisplayName": "Site List Items",
+            "Description": "Rows within a SharePoint list. `fields` is a dynamic dictionary keyed by list column names. Custom field discovery is live-fetched per list via SiteListColumns. Supports delta sync where available.",
+            "Category": "Lists",
+            "APIPath": "/sites/{siteId}/lists/{id}/items?expand=fields",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Item ID", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Per-list auto-increment integer (serialised as string)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Item creation timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Most recent modification timestamp — used as incremental sync watermark." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Full URL to the item in the browser." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "contentType", "DisplayName": "Content Type", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Content type reference (id + name) — governs the item's schema." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "fields", "DisplayName": "Fields", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Dynamic per-list column values keyed by column name. Expanded via ?expand=fields." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteContentTypes",
+            "DisplayName": "Site Content Types",
+            "Description": "Content type templates defined at the site level — assignable to lists to enforce schema.",
+            "Category": "ContentTypes",
+            "APIPath": "/sites/{id}/contentTypes",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Content Type ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Content type hash identifier (e.g., 0x0100...)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Content type name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Content type description." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "group", "DisplayName": "Group", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Content type group (e.g., Document, List)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "hidden", "DisplayName": "Hidden", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Whether the content type is hidden from the UI." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "isBuiltIn", "DisplayName": "Is Built In", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "True for system content types; false for tenant-customised ones." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "parentId", "DisplayName": "Parent ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Parent content type ID (null for root types)." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteColumns",
+            "DisplayName": "Site Columns",
+            "Description": "Column definitions declared at the site level — shared across lists and content types.",
+            "Category": "Columns",
+            "APIPath": "/sites/{id}/columns",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Column ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Column GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Internal column name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "displayName", "DisplayName": "Display Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Human-readable column label." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Column description." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "columnGroup", "DisplayName": "Column Group", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Column group name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "required", "DisplayName": "Required", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Whether the column is required." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "readOnly", "DisplayName": "Read Only", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Whether the column is read-only." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "hidden", "DisplayName": "Hidden", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "Whether the column is hidden from the UI." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Drives",
+            "DisplayName": "Drives",
+            "Description": "Document libraries (drives) across tenant. One drive per document library + one per OneDrive user.",
+            "Category": "Drives",
+            "APIPath": "/sites/{id}/drives",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "$select": "id,name,driveType,webUrl,createdDateTime,lastModifiedDateTime"
+            },
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Drive ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Drive GUID identifier." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Drive name (e.g., `Documents`)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "driveType", "DisplayName": "Drive Type", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "One of: personal, business, documentLibrary." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "URL to the drive in the browser." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Drive creation timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Most recent drive modification timestamp." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "DriveItems",
+            "DisplayName": "Drive Items",
+            "Description": "Files and folders within a drive. Natural key is path: `/drives/{id}/root:/path/to/file`. Supports delta sync via /delta?token=.",
+            "Category": "Drives",
+            "APIPath": "/drives/{id}/root/children",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "DefaultQueryParams": {
+              "$select": "id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,parentReference"
+            },
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Item ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Drive item GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "File or folder name." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Full URL to the item." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "size", "DisplayName": "Size", "Type": "bigint", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "File size in bytes (0 for folders)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Item creation timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Most recent modification timestamp — incremental watermark." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "cTag", "DisplayName": "C Tag", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Item content change tag." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "eTag", "DisplayName": "E Tag", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "Entity tag for optimistic concurrency." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "file", "DisplayName": "File", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active", "Description": "Populated for files (mimeType, hashes). Null for folders." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "folder", "DisplayName": "Folder", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 10, "Status": "Active", "Description": "Populated for folders (childCount). Null for files." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "parentReference", "DisplayName": "Parent Reference", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 11, "Status": "Active", "Description": "Reference to parent folder — includes driveId, id, path." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SitePages",
+            "DisplayName": "Site Pages",
+            "Description": "Modern pages within a SharePoint site.",
+            "Category": "Pages",
+            "APIPath": "/sites/{id}/pages",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "DefaultQueryParams": {
+              "$select": "id,name,title,webUrl,createdDateTime,lastModifiedDateTime,publishingState"
+            },
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Page ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Page GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Page file name (e.g., Home.aspx)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "title", "DisplayName": "Title", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Page title." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "webUrl", "DisplayName": "Web URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Full URL to the page." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createdDateTime", "DisplayName": "Created Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Page creation timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastModifiedDateTime", "DisplayName": "Last Modified", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Most recent modification timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "publishingState", "DisplayName": "Publishing State", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Page publishing status (published, draft)." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SitePermissions",
+            "DisplayName": "Site Permissions",
+            "Description": "Permission grants at the site level — both inherited and unique.",
+            "Category": "Permissions",
+            "APIPath": "/sites/{id}/permissions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Permission ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Permission identifier." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "roles", "DisplayName": "Roles", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "List of roles granted (read, write, owner)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "grantedToV2", "DisplayName": "Granted To", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Identity the permission was granted to (user / group / application)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "grantedToIdentitiesV2", "DisplayName": "Granted To Identities", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Multiple identities (for sharing links)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "link", "DisplayName": "Link", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Sharing link details (type, scope, webUrl)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "invitation", "DisplayName": "Invitation", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Pending invitation details." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "expirationDateTime", "DisplayName": "Expiration Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Permission/link expiration timestamp." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "hasPassword", "DisplayName": "Has Password", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "True when the sharing link is password-protected." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "shareId", "DisplayName": "Share ID", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active", "Description": "Encoded share identifier for /shares/{shareId} lookups." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteAnalytics",
+            "DisplayName": "Site Analytics",
+            "Description": "Aggregate activity statistics for a site — views, unique viewers.",
+            "Category": "Analytics",
+            "APIPath": "/sites/{id}/analytics",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 1,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Analytics ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Analytics singleton ID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "allTime", "DisplayName": "All-Time Stats", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "All-time activity stats." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastSevenDays", "DisplayName": "Last Seven Days", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Last 7 days activity stats." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "SiteListSubscriptions",
+            "DisplayName": "Site List Subscriptions",
+            "Description": "Graph change notification (webhook) subscriptions registered against a list. Lifetime is 3 days for SharePoint resources; must be renewed.",
+            "Category": "Subscriptions",
+            "APIPath": "/sites/{siteId}/lists/{id}/subscriptions",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": true,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Subscription ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Subscription GUID." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "resource", "DisplayName": "Resource", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active", "Description": "Resource path being watched." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "changeType", "DisplayName": "Change Type", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 3, "Status": "Active", "Description": "Comma-separated change types (created, updated, deleted)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "notificationUrl", "DisplayName": "Notification URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 4, "Status": "Active", "Description": "Webhook callback URL." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "expirationDateTime", "DisplayName": "Expiration Date", "Type": "datetimeoffset", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 5, "Status": "Active", "Description": "Subscription expiration (max 3 days for SharePoint)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "clientState", "DisplayName": "Client State", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Verification secret echoed by Graph in notifications." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "applicationId", "DisplayName": "Application ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active", "Description": "Azure AD app ID that created the subscription." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "creatorId", "DisplayName": "Creator ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active", "Description": "User/principal ID that created the subscription." } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Shares",
+            "DisplayName": "Shares",
+            "Description": "Shared item references. Look up by encoded URL: /shares/{encoded-url}. Primary entry point for accessing externally shared content.",
+            "Category": "Shares",
+            "APIPath": "/shares",
+            "ResponseDataKey": "value",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "Share ID", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Encoded share identifier." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Display name of the shared resource." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "owner", "DisplayName": "Owner", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Identity that owns the shared resource." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "driveItem", "DisplayName": "Drive Item", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "The drive item target of the share (when shared content is a drive item)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "listItem", "DisplayName": "List Item", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "The list item target of the share (when shared content is a list item)." } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "permission", "DisplayName": "Permission", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Permission granted by this share." } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

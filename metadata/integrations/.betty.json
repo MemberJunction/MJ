@@ -1,0 +1,749 @@
+[
+  {
+    "fields": {
+      "Name": "Betty AI",
+      "Description": "Betty AI (Brightfind/Tasio) connector — read-only pull of conversational data (sessions, messages, feedback, knowledge sources) into MJ: Conversations and MJ: Conversation Details. Per-tenant API, no public developer portal; customer onboarding required (tenant URL + API key provisioned by Betty team).",
+      "ClassName": "BettyConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": 50,
+      "BatchRequestWaitTime": 500,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Betty API",
+      "Icon": "fa-solid fa-robot"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Conversations",
+            "DisplayName": "Conversations",
+            "Description": "Betty chat session metadata — one per member<->Betty interaction. Maps to MJ: Conversations. APIPath is a placeholder (/conversations); ResponseDataKey is the connector's best guess and may need per-tenant override. Candidates: 'items', 'data', 'conversations'.",
+            "Category": "Conversations",
+            "APIPath": "/conversations",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "updatedAt,lastMessageAt,createdAt",
+              "mj_target_entity": "MJ: Conversations",
+              "mj_field_map": "{\"id\":\"ExternalID\",\"topic\":\"Name\",\"userId\":\"UserID\",\"status\":\"Status\"}"
+            },
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "Conversation ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Betty conversation primary key. Maps to MJ: Conversations.ExternalID.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "userId",
+                  "DisplayName": "User ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Foreign key to Users — the member or staff who initiated the conversation.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "startedAt",
+                  "DisplayName": "Started At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp when the conversation began.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "endedAt",
+                  "DisplayName": "Ended At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp when the conversation was closed; may be null for open sessions.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "topic",
+                  "DisplayName": "Topic",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Short topic/summary Betty infers for the session. Maps to MJ: Conversations.Name.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Conversation status (open/closed/resolved/etc.). Free-form per tenant — normalize to MJ: Conversations.Status values at mapping time.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "messageCount",
+                  "DisplayName": "Message Count",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Number of messages in the conversation. Useful for quick engagement metrics before full Messages sync.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp — used as the incremental-sync watermark.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Messages",
+            "DisplayName": "Messages",
+            "Description": "Individual turns inside a Betty conversation — user questions + Betty responses with citations. Parent-child of Conversations (APIPath contains {conversationId}). Maps to MJ: Conversation Details.",
+            "Category": "Conversations",
+            "APIPath": "/conversations/{conversationId}/messages",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "updatedAt,createdAt",
+              "mj_target_entity": "MJ: Conversation Details",
+              "mj_field_map": "{\"id\":\"ExternalID\",\"conversationId\":\"ConversationID\",\"role\":\"Role\",\"content\":\"Message\",\"citations\":\"Citations\"}"
+            },
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "Message ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Betty message primary key. Maps to MJ: Conversation Details.ExternalID.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "conversationId",
+                  "DisplayName": "Conversation ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Parent conversation key. Tagged onto each record by the connector during per-parent fetch.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "role",
+                  "DisplayName": "Role",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Speaker role: typically 'user' or 'assistant'. Map at sync time to MJ Role enum ('User'/'AI'/'Error').",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "content",
+                  "DisplayName": "Content",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Message text. Maps to MJ: Conversation Details.Message.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "citations",
+                  "DisplayName": "Citations",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "JSON array of source citations (links to KnowledgeSources) supporting Betty's response. Serialized as a JSON string.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Message creation timestamp.",
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "feedback",
+                  "DisplayName": "Feedback Summary",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Inline feedback summary if Betty's response embeds rating/flag data. Detailed feedback lives in the Feedback object.",
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp.",
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "KnowledgeSources",
+            "DisplayName": "Knowledge Sources",
+            "Description": "Documents Betty has been trained on (PDFs, videos, policies, etc.) — per-customer knowledge base. Read-only reference data; not synced to MJ: Conversations, but useful for resolving message citations.",
+            "Category": "Reference",
+            "APIPath": "/knowledge-sources",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "lastIndexedAt,updatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "Source ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Knowledge source primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "title",
+                  "DisplayName": "Title",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Document title.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "sourceType",
+                  "DisplayName": "Source Type",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Content format (pdf, video, webpage, podcast, presentation, etc.).",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Canonical URL of the source document.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastIndexedAt",
+                  "DisplayName": "Last Indexed At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "When Betty last re-indexed this source. Watermark candidate.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Users",
+            "DisplayName": "Users",
+            "Description": "Members/staff identities Betty tracks for conversation ownership. Read-only; typically small list.",
+            "Category": "Reference",
+            "APIPath": "/users",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "updatedAt,createdAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "User ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "User primary key in Betty.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "User email.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "displayName",
+                  "DisplayName": "Display Name",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Human-readable display name.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createdAt",
+                  "DisplayName": "Created At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "User account creation timestamp.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updatedAt",
+                  "DisplayName": "Updated At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Last modification timestamp — watermark candidate.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Feedback",
+            "DisplayName": "Feedback",
+            "Description": "User ratings/corrections on Betty's responses — critical signal for gap analysis. Parent-child of Messages (APIPath contains {messageId}).",
+            "Category": "Conversations",
+            "APIPath": "/messages/{messageId}/feedback",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "submittedAt,createdAt,updatedAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{\"messageId\":\"ConversationDetailID_lookup\",\"rating\":\"UserRating\",\"correction\":\"UserFeedback\"}"
+            },
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "Feedback ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Feedback record primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "messageId",
+                  "DisplayName": "Message ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Foreign key to Messages.id. Tagged onto each record during per-parent fetch.",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "rating",
+                  "DisplayName": "Rating",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Numeric rating (scale is per-tenant; commonly -1/+1 thumbs or 1-5 stars).",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "correction",
+                  "DisplayName": "Correction",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Free-text correction / comment submitted by the user.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "submittedAt",
+                  "DisplayName": "Submitted At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "When the feedback was submitted — watermark candidate.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContentGaps",
+            "DisplayName": "Content Gaps",
+            "Description": "Questions Betty couldn't answer confidently — direct input for content strategy. Read-only aggregate data.",
+            "Category": "Analytics",
+            "APIPath": "/content-gaps",
+            "ResponseDataKey": "items",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "DefaultQueryParams": {
+              "watermark_field_candidates": "lastSeenAt,firstSeenAt",
+              "mj_target_entity": null,
+              "mj_field_map": "{}"
+            },
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "Gap ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsUniqueKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Description": "Content gap primary key.",
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "query",
+                  "DisplayName": "Query",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "The unanswered question text (de-duplicated across occurrences).",
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "firstSeenAt",
+                  "DisplayName": "First Seen At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp of the first occurrence.",
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "occurrenceCount",
+                  "DisplayName": "Occurrence Count",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "How many times the same question has been asked.",
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastSeenAt",
+                  "DisplayName": "Last Seen At",
+                  "Type": "datetimeoffset",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Description": "Timestamp of the most recent occurrence — watermark candidate.",
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import { Metadata, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -22,6 +22,10 @@ import {
     type CRUDResult,
     type SearchContext,
     type SearchResult,
+    type IntegrationObjectInfo,
+    type ActionGeneratorConfig,
+    type ExternalObjectSchema,
+    type ExternalFieldSchema,
 } from '@memberjunction/integration-engine';
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -225,6 +229,285 @@ function generateWicketJWT(credentials: WicketCredentials): string {
  *
  * @see https://wicketapi.docs.apiary.io/
  */
+// ─── Wicket Object Definitions ───────────────────────────────────────
+const WICKET_OBJECTS: IntegrationObjectInfo[] = [
+    {
+        Name: 'people', DisplayName: 'People',
+        Description: 'People (members, contacts) with personal, professional, and membership information', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'given_name', DisplayName: 'Given Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Given Name' },
+            { Name: 'family_name', DisplayName: 'Family Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Family Name' },
+            { Name: 'additional_name', DisplayName: 'Additional Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Additional Name' },
+            { Name: 'alternate_name', DisplayName: 'Alternate Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Alternate Name' },
+            { Name: 'full_name', DisplayName: 'Full Name', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Full Name' },
+            { Name: 'identifying_number', DisplayName: 'Identifying Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identifying Number' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'gender', DisplayName: 'Gender', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Gender' },
+            { Name: 'birth_date', DisplayName: 'Birth Date', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Birth Date' },
+            { Name: 'language', DisplayName: 'Language', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Language' },
+            { Name: 'preferred_pronoun', DisplayName: 'Preferred Pronoun', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Preferred Pronoun' },
+            { Name: 'job_title', DisplayName: 'Job Title', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Job Title' },
+            { Name: 'honorific_prefix', DisplayName: 'Honorific Prefix', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Honorific Prefix' },
+            { Name: 'honorific_suffix', DisplayName: 'Honorific Suffix', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Honorific Suffix' },
+            { Name: 'languages_spoken', DisplayName: 'Languages Spoken', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Languages Spoken' },
+            { Name: 'languages_written', DisplayName: 'Languages Written', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Languages Written' },
+            { Name: 'membership_number', DisplayName: 'Membership Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Number' },
+            { Name: 'membership_began_on', DisplayName: 'Membership Began On', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Began On' },
+            { Name: 'data_fields', DisplayName: 'Custom Data Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Custom Data Fields' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'organizations', DisplayName: 'Organizations',
+        Description: 'Organizations including companies, chapters, and associations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'type', DisplayName: 'Organization Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization Type' },
+            { Name: 'legal_name', DisplayName: 'Legal Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Legal Name' },
+            { Name: 'alternate_name', DisplayName: 'Alternate Name', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Alternate Name' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'identifying_number', DisplayName: 'Identifying Number', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identifying Number' },
+            { Name: 'data_fields', DisplayName: 'Custom Data Fields', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Custom Data Fields' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'connections', DisplayName: 'Connections',
+        Description: 'Relationships between people and organizations or person-to-person connections', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'type', DisplayName: 'Connection Type', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Connection Type' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'groups', DisplayName: 'Groups',
+        Description: 'Groups for organizing people into collections', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'group_members', DisplayName: 'Group Members',
+        Description: 'Membership records linking people to groups', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'group_id', DisplayName: 'Group ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Group ID' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'memberships', DisplayName: 'Membership Tiers',
+        Description: 'Membership tier definitions (e.g., Gold, Silver, Basic)', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'person_memberships', DisplayName: 'Person Memberships',
+        Description: 'Individual person membership records with start/end dates and tier assignments', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'starts_at', DisplayName: 'Starts At', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Starts At' },
+            { Name: 'ends_at', DisplayName: 'Ends At', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Ends At' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'membership_id', DisplayName: 'Membership Tier ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Tier ID' },
+            { Name: 'organization_membership_id', DisplayName: 'Organization Membership ID', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization Membership ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'organization_memberships', DisplayName: 'Organization Memberships',
+        Description: 'Organizational membership records with start/end dates, tier assignments, and max seat allocations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'starts_at', DisplayName: 'Starts At', Type: 'datetime', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Starts At' },
+            { Name: 'ends_at', DisplayName: 'Ends At', Type: 'datetime', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Ends At' },
+            { Name: 'max_assignments', DisplayName: 'Max Seat Assignments', Type: 'number', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Max Seat Assignments' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'membership_id', DisplayName: 'Membership Tier ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Membership Tier ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'touchpoints', DisplayName: 'Touchpoints',
+        Description: 'Immutable interaction audit trail records (no update/delete supported)', SupportsWrite: false,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'action', DisplayName: 'Action', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Action' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'data', DisplayName: 'Data Payload', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Data Payload' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+        ],
+    },
+    {
+        Name: 'people_emails', DisplayName: 'People Emails',
+        Description: 'Email addresses associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address', DisplayName: 'Email Address', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Address' },
+            { Name: 'type', DisplayName: 'Email Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'people_phones', DisplayName: 'People Phones',
+        Description: 'Phone numbers associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'number', DisplayName: 'Phone Number', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Number' },
+            { Name: 'type', DisplayName: 'Phone Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Type' },
+            { Name: 'extension', DisplayName: 'Extension', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Extension' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'people_addresses', DisplayName: 'People Addresses',
+        Description: 'Physical addresses associated with people', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 1' },
+            { Name: 'address2', DisplayName: 'Address Line 2', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 2' },
+            { Name: 'city', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'state_province', DisplayName: 'State/Province', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'State/Province' },
+            { Name: 'zip_code', DisplayName: 'ZIP/Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'ZIP/Postal Code' },
+            { Name: 'country_code', DisplayName: 'Country Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Country Code' },
+            { Name: 'type', DisplayName: 'Address Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_emails', DisplayName: 'Organization Emails',
+        Description: 'Email addresses associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address', DisplayName: 'Email Address', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Address' },
+            { Name: 'type', DisplayName: 'Email Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Email Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_phones', DisplayName: 'Organization Phones',
+        Description: 'Phone numbers associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'number', DisplayName: 'Phone Number', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Number' },
+            { Name: 'type', DisplayName: 'Phone Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Phone Type' },
+            { Name: 'extension', DisplayName: 'Extension', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Extension' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'org_addresses', DisplayName: 'Organization Addresses',
+        Description: 'Physical addresses associated with organizations', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'address1', DisplayName: 'Address Line 1', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 1' },
+            { Name: 'address2', DisplayName: 'Address Line 2', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Line 2' },
+            { Name: 'city', DisplayName: 'City', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'City' },
+            { Name: 'state_province', DisplayName: 'State/Province', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'State/Province' },
+            { Name: 'zip_code', DisplayName: 'ZIP/Postal Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'ZIP/Postal Code' },
+            { Name: 'country_code', DisplayName: 'Country Code', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Country Code' },
+            { Name: 'type', DisplayName: 'Address Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Address Type' },
+            { Name: 'primary', DisplayName: 'Is Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Is Primary' },
+            { Name: 'organization_id', DisplayName: 'Organization ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Organization ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'roles', DisplayName: 'Roles',
+        Description: 'System and organization-scoped roles for access control', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'description', DisplayName: 'Description', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Description' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'user_identities', DisplayName: 'User Identities',
+        Description: 'SSO and identity provider records linked to people (OAuth, SAML, OpenID)', SupportsWrite: true,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'provider', DisplayName: 'Identity Provider', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Identity Provider' },
+            { Name: 'uid', DisplayName: 'External User ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'External User ID' },
+            { Name: 'person_id', DisplayName: 'Person ID', Type: 'string', IsRequired: true, IsReadOnly: false, IsPrimaryKey: false, Description: 'Person ID' },
+            { Name: 'created_at', DisplayName: 'Created At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Created At' },
+            { Name: 'updated_at', DisplayName: 'Updated At', Type: 'datetime', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Updated At' },
+        ],
+    },
+    {
+        Name: 'resource_tags', DisplayName: 'Resource Tags',
+        Description: 'Tags for categorizing and organizing resources', SupportsWrite: false,
+        Fields: [
+            { Name: 'uuid', DisplayName: 'UUID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'UUID' },
+            { Name: 'name', DisplayName: 'Name', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: false, Description: 'Name' },
+            { Name: 'slug', DisplayName: 'Slug', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Slug' },
+            { Name: 'resource_type', DisplayName: 'Resource Type', Type: 'string', IsRequired: false, IsReadOnly: true, IsPrimaryKey: false, Description: 'Resource Type' },
+        ],
+    },
+
+    // ── Web Addresses (follows same pattern as emails/phones/addresses) ──
+    {
+        Name: 'people_web_addresses', DisplayName: 'Person Web Address',
+        Description: 'URLs and web links for a person', SupportsWrite: true,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Web address record ID' },
+            { Name: 'address', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address URL' },
+            { Name: 'type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address type' },
+            { Name: 'primary', DisplayName: 'Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary web address' },
+        ],
+    },
+    {
+        Name: 'org_web_addresses', DisplayName: 'Organization Web Address',
+        Description: 'URLs and web links for an organization', SupportsWrite: true,
+        Fields: [
+            { Name: 'id', DisplayName: 'ID', Type: 'string', IsRequired: true, IsReadOnly: true, IsPrimaryKey: true, Description: 'Web address record ID' },
+            { Name: 'address', DisplayName: 'URL', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address URL' },
+            { Name: 'type', DisplayName: 'Type', Type: 'string', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Web address type' },
+            { Name: 'primary', DisplayName: 'Primary', Type: 'boolean', IsRequired: false, IsReadOnly: false, IsPrimaryKey: false, Description: 'Primary web address' },
+        ],
+    },
+];
+
 @RegisterClass(BaseIntegrationConnector, 'WicketConnector')
 export class WicketConnector extends BaseRESTIntegrationConnector {
 
@@ -243,6 +526,188 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     public override get SupportsUpdate(): boolean { return true; }
     public override get SupportsDelete(): boolean { return true; }
     public override get SupportsSearch(): boolean { return true; }
+
+    public override get IntegrationName(): string { return 'Wicket'; }
+
+    public override GetIntegrationObjects(): IntegrationObjectInfo[] {
+        return WICKET_OBJECTS;
+    }
+
+    public override GetActionGeneratorConfig(): ActionGeneratorConfig | null {
+        const config = super.GetActionGeneratorConfig();
+        if (!config) return null;
+        config.IconClass = 'fa-solid fa-ticket';
+        return config;
+    }
+
+    public override async DiscoverObjects(
+        _companyIntegration: MJCompanyIntegrationEntity,
+        _contextUser: UserInfo
+    ): Promise<ExternalObjectSchema[]> {
+        return WICKET_OBJECTS.map(obj => ({
+            Name: obj.Name,
+            Label: obj.DisplayName,
+            Description: obj.Description,
+            SupportsIncrementalSync: true,
+            SupportsWrite: obj.SupportsWrite ?? false,
+        }));
+    }
+
+    /**
+     * Discovers fields by fetching one record from the live Wicket API and inferring
+     * field names/types from the flattened JSON:API response. Static metadata from
+     * WICKET_OBJECTS is merged in to preserve PK, FK, description, and constraint
+     * annotations.
+     *
+     * Falls back to the static array if the live API call fails.
+     */
+    public override async DiscoverFields(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const staticObj = WICKET_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+
+        try {
+            const liveFields = await this.DiscoverFieldsFromLiveAPI(companyIntegration, objectName, contextUser);
+            if (liveFields.length > 0) {
+                return this.MergeFieldsWithStaticMetadata(liveFields, staticObj);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[Wicket] Live field discovery failed for "${objectName}", falling back to static: ${msg}`);
+        }
+
+        // Fallback: return static fields
+        if (!staticObj) return [];
+        return staticObj.Fields.map(f => ({
+            Name: f.Name,
+            Label: f.DisplayName,
+            Description: f.Description,
+            DataType: f.Type,
+            IsRequired: f.IsRequired,
+            IsUniqueKey: f.IsPrimaryKey,
+            IsReadOnly: f.IsReadOnly,
+        }));
+    }
+
+    /**
+     * Fetches one record from the Wicket JSON:API endpoint, flattens the
+     * attributes, and infers field schemas from the result.
+     */
+    private async DiscoverFieldsFromLiveAPI(
+        companyIntegration: MJCompanyIntegrationEntity,
+        objectName: string,
+        contextUser: UserInfo
+    ): Promise<ExternalFieldSchema[]> {
+        const auth = await this.Authenticate(companyIntegration, contextUser) as WicketAuthContext;
+        const headers = this.BuildHeaders(auth);
+        const apiPath = this.ResolveObjectAPIPath(objectName);
+        const url = `${auth.BaseURL}${apiPath}?page[size]=1`;
+
+        const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
+        if (response.Status < 200 || response.Status >= 300) return [];
+
+        const body = response.Body as Record<string, unknown>;
+        const data = body['data'];
+        if (!data) return [];
+
+        // Flatten the first JSON:API record into a flat object
+        let sampleRecord: Record<string, unknown> | null = null;
+        if (Array.isArray(data) && data.length > 0) {
+            sampleRecord = this.FlattenJsonApiRecord(data[0] as Record<string, unknown>);
+        } else if (typeof data === 'object' && !Array.isArray(data)) {
+            sampleRecord = this.FlattenJsonApiRecord(data as Record<string, unknown>);
+        }
+
+        if (!sampleRecord) return [];
+        return this.InferFieldsFromRecord(sampleRecord);
+    }
+
+    /**
+     * Infers ExternalFieldSchema[] from a sample record's keys and values.
+     */
+    private InferFieldsFromRecord(record: Record<string, unknown>): ExternalFieldSchema[] {
+        const fields: ExternalFieldSchema[] = [];
+        for (const [key, value] of Object.entries(record)) {
+            // Skip nested objects/arrays — only flat scalar fields
+            if (value !== null && typeof value === 'object' && !Array.isArray(value)) continue;
+            if (Array.isArray(value)) continue;
+
+            fields.push({
+                Name: key,
+                Label: key.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' '),
+                Description: undefined,
+                DataType: this.InferFieldType(value),
+                IsRequired: false,
+                IsUniqueKey: false,
+                IsReadOnly: false,
+            });
+        }
+        return fields;
+    }
+
+    /**
+     * Infer a MJ-compatible type string from a JavaScript value.
+     */
+    private InferFieldType(value: unknown): string {
+        if (value === null || value === undefined) return 'string';
+        if (typeof value === 'boolean') return 'boolean';
+        if (typeof value === 'number') return Number.isInteger(value) ? 'number' : 'decimal';
+        if (typeof value === 'string') {
+            if (/^\d{4}-\d{2}-\d{2}/.test(value)) return 'datetime';
+            return 'string';
+        }
+        return 'string';
+    }
+
+    /**
+     * Merges live-discovered fields with static metadata from WICKET_OBJECTS.
+     * Live fields are the base; static metadata overlays PK, FK, Description,
+     * IsRequired, and IsReadOnly where a matching field name exists.
+     */
+    private MergeFieldsWithStaticMetadata(
+        liveFields: ExternalFieldSchema[],
+        staticObj: IntegrationObjectInfo | undefined
+    ): ExternalFieldSchema[] {
+        if (!staticObj) return liveFields;
+
+        const staticMap = new Map(
+            staticObj.Fields.map(f => [f.Name.toLowerCase(), f])
+        );
+
+        const merged = liveFields.map(lf => {
+            const sf = staticMap.get(lf.Name.toLowerCase());
+            if (sf) {
+                return {
+                    ...lf,
+                    Label: sf.DisplayName || lf.Label,
+                    Description: sf.Description || lf.Description,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                };
+            }
+            return lf;
+        });
+
+        // Add any static fields not found in the live response
+        for (const sf of staticObj.Fields) {
+            if (!merged.some(f => f.Name.toLowerCase() === sf.Name.toLowerCase())) {
+                merged.push({
+                    Name: sf.Name,
+                    Label: sf.DisplayName,
+                    Description: sf.Description,
+                    DataType: sf.Type,
+                    IsRequired: sf.IsRequired,
+                    IsUniqueKey: sf.IsPrimaryKey,
+                    IsReadOnly: sf.IsReadOnly,
+                });
+            }
+        }
+
+        return merged;
+    }
 
     // ─── BaseRESTIntegrationConnector abstract implementations ───────
 
@@ -770,8 +1235,8 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     }
 
     /** Loads credentials from a Credential entity by ID. */
-    private async LoadFromCredentialEntity(credentialID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<WicketCredentials | null> {
-        const md = provider ?? new Metadata();
+    private async LoadFromCredentialEntity(credentialID: string, contextUser?: UserInfo): Promise<WicketCredentials | null> {
+        const md = new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

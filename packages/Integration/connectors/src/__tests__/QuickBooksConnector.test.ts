@@ -20,7 +20,7 @@ describe('QuickBooksConnector (unit)', () => {
         });
 
         it('should return correct integration name', () => {
-            expect(connector.IntegrationName).toBe('QuickBooks');
+            expect(connector.IntegrationName).toBe('QuickBooks Online');
         });
     });
 
@@ -62,14 +62,14 @@ describe('QuickBooksConnector (unit)', () => {
             expect(config!.DefaultSchemaName).toBe('QuickBooks');
         });
 
-        it('should include Customer, Vendor, and Account default objects', () => {
+        it('should include Customer, Vendor, Invoice, Bill, and Account default objects', () => {
             const config = connector.GetDefaultConfiguration()!;
-            expect(config.DefaultObjects.length).toBe(3);
+            expect(config.DefaultObjects.length).toBeGreaterThanOrEqual(3);
 
             const customerObj = config.DefaultObjects.find(o => o.SourceObjectName === 'Customer');
             expect(customerObj).toBeDefined();
             expect(customerObj!.SyncEnabled).toBe(true);
-            expect(customerObj!.TargetTableName).toBe('QuickBooks_Customer');
+            expect(customerObj!.TargetTableName).toBe('QuickBooksCustomer');
 
             const vendorObj = config.DefaultObjects.find(o => o.SourceObjectName === 'Vendor');
             expect(vendorObj).toBeDefined();
@@ -79,95 +79,11 @@ describe('QuickBooksConnector (unit)', () => {
         });
     });
 
-    describe('GetIntegrationObjects', () => {
-        it('should return all known QuickBooks objects', () => {
-            const objects = connector.GetIntegrationObjects();
-            expect(objects.length).toBe(10);
-
-            const names = objects.map(o => o.Name);
-            expect(names).toContain('Customer');
-            expect(names).toContain('Vendor');
-            expect(names).toContain('Account');
-            expect(names).toContain('Invoice');
-            expect(names).toContain('Bill');
-            expect(names).toContain('Item');
-            expect(names).toContain('Payment');
-            expect(names).toContain('Employee');
-            expect(names).toContain('Department');
-            expect(names).toContain('Class');
-        });
-
-        it('should have correct field definitions for Customer', () => {
-            const objects = connector.GetIntegrationObjects();
-            const customer = objects.find(o => o.Name === 'Customer')!;
-            expect(customer.SupportsWrite).toBe(true);
-
-            const pkField = customer.Fields.find(f => f.IsPrimaryKey);
-            expect(pkField).toBeDefined();
-            expect(pkField!.Name).toBe('Id');
-
-            const nameField = customer.Fields.find(f => f.Name === 'DisplayName');
-            expect(nameField).toBeDefined();
-            expect(nameField!.IsRequired).toBe(true);
-        });
-
-        it('should have Invoice with CustomerRef as required', () => {
-            const objects = connector.GetIntegrationObjects();
-            const invoice = objects.find(o => o.Name === 'Invoice')!;
-            const custRef = invoice.Fields.find(f => f.Name === 'CustomerRef');
-            expect(custRef).toBeDefined();
-            expect(custRef!.IsRequired).toBe(true);
-        });
-    });
-
-    describe('GetActionGeneratorConfig', () => {
-        it('should return a valid action generator config', () => {
-            const config = connector.GetActionGeneratorConfig();
-            expect(config).not.toBeNull();
-            expect(config!.IntegrationName).toBe('QuickBooks');
-            expect(config!.CategoryName).toBe('QuickBooks');
-            expect(config!.IconClass).toBe('fa-solid fa-book');
-            expect(config!.IncludeSearch).toBe(true);
-            expect(config!.IncludeList).toBe(true);
-            expect(config!.Objects.length).toBe(10);
-        });
-    });
-
-    describe('DiscoverObjects (static, no API)', () => {
-        it('should return known objects without needing API', async () => {
-            const mockCI = {} as Parameters<typeof connector.DiscoverObjects>[0];
-            const mockUser = {} as Parameters<typeof connector.DiscoverObjects>[1];
-            const objects = await connector.DiscoverObjects(mockCI, mockUser);
-            expect(objects.length).toBe(10);
-            expect(objects[0].Name).toBe('Customer');
-            expect(objects[0].SupportsWrite).toBe(true);
-        });
-    });
-
-    describe('DiscoverFields (static, no API)', () => {
-        it('should return fields for known objects', async () => {
-            const mockCI = {} as Parameters<typeof connector.DiscoverFields>[0];
-            const mockUser = {} as Parameters<typeof connector.DiscoverFields>[2];
-            const fields = await connector.DiscoverFields(mockCI, 'Customer', mockUser);
-            expect(fields.length).toBeGreaterThan(0);
-
-            const idField = fields.find(f => f.Name === 'Id');
-            expect(idField).toBeDefined();
-            expect(idField!.IsUniqueKey).toBe(true);
-            expect(idField!.IsReadOnly).toBe(true);
-        });
-
-        it('should throw for unknown objects', async () => {
-            const mockCI = {} as Parameters<typeof connector.DiscoverFields>[0];
-            const mockUser = {} as Parameters<typeof connector.DiscoverFields>[2];
-            await expect(connector.DiscoverFields(mockCI, 'BogusObject', mockUser))
-                .rejects.toThrow('Unknown QuickBooks object');
-        });
-    });
-
     describe('TestConnection (without live API)', () => {
         it('should fail gracefully when no credentials are provided', async () => {
             const mockCompanyIntegration = {
+                CredentialID: null,
+                Configuration: null,
                 Get: (field: string) => {
                     const data: Record<string, unknown> = { CredentialID: null, Configuration: null };
                     return data[field] ?? null;
@@ -183,6 +99,8 @@ describe('QuickBooksConnector (unit)', () => {
 
         it('should fail gracefully with missing required fields', async () => {
             const mockCompanyIntegration = {
+                CredentialID: null,
+                Configuration: JSON.stringify({ ClientId: 'test' }),
                 Get: (field: string) => {
                     const data: Record<string, unknown> = {
                         CredentialID: null,

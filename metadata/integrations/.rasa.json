@@ -1214,6 +1214,484 @@
             "lastModified": "2026-03-17T00:57:12.892Z",
             "checksum": "4f479b708642e62e25ec917087882bb980e1d48ce5b64f5cdea69e6750876e64"
           }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "person-attributes",
+            "DisplayName": "Person Attributes",
+            "Description": "Flattened per-person custom attributes fetched from GET /v1/persons/{person_id}/attributes. One row per (person_id, attribute_name) pair. Custom attributes in Rasa are free-form — there is no schema discovery endpoint, so attribute names/values are whatever the client has populated.",
+            "Category": "Insights",
+            "APIPath": "/persons/{person_id}/attributes",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "person_id",
+                  "DisplayName": "Person ID",
+                  "Description": "Rasa.io person identifier (part of composite key)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "external_id",
+                  "DisplayName": "External ID",
+                  "Description": "External system identifier for the subscriber",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Description": "Email address of the subscriber",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "attribute_name",
+                  "DisplayName": "Attribute Name",
+                  "Description": "Name of the custom attribute (e.g. company, industry, job_title). Part of composite key.",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "attribute_value",
+                  "DisplayName": "Attribute Value",
+                  "Description": "Value of the custom attribute, stringified for nvarchar storage",
+                  "Type": "nvarchar",
+                  "Length": -1,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "analytics-activities",
+            "DisplayName": "Activities Analytics",
+            "Description": "Email activity analytics (opens, clicks, deliveries, bounces) bucketed by date. Fetched via POST /v1/analytics/activities with a date range and optional interval/segment filters. Supports incremental sync via body-param date_range.start_date/end_date.",
+            "Category": "Analytics",
+            "APIPath": "/analytics/activities",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 100,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "bucket_start",
+                  "DisplayName": "Bucket Start",
+                  "Description": "Start timestamp of the aggregation bucket (part of composite key with metric_name)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "metric_name",
+                  "DisplayName": "Metric Name",
+                  "Description": "Metric name (e.g. opens, clicks, deliveries, bounces). Part of composite key.",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "metric_value",
+                  "DisplayName": "Metric Value",
+                  "Description": "Aggregated count for this metric in the bucket",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_code",
+                  "DisplayName": "Segment Code",
+                  "Description": "Segment code filter (e.g. All, or a specific audience segment)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "interval",
+                  "DisplayName": "Interval",
+                  "Description": "Bucket interval (hour, day, week, month)",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "timezone",
+                  "DisplayName": "Timezone",
+                  "Description": "Timezone used for bucketing (e.g. US/Central)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "analytics-articles",
+            "DisplayName": "Articles Analytics",
+            "Description": "Article click analytics ranked by popularity from POST /v1/analytics/articles. Returns article details with click metrics over a date range.",
+            "Category": "Analytics",
+            "APIPath": "/analytics/articles",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 25,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "article_id",
+                  "DisplayName": "Article ID",
+                  "Description": "Unique identifier for the article (post)",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "title",
+                  "DisplayName": "Title",
+                  "Description": "Article title",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Description": "Article URL",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "click_count",
+                  "DisplayName": "Click Count",
+                  "Description": "Total clicks on the article within the date range",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "unique_click_count",
+                  "DisplayName": "Unique Click Count",
+                  "Description": "Unique clicks on the article within the date range",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "date_range",
+                  "DisplayName": "Date Range",
+                  "Description": "Date range label (e.g. past_week, past_month) or explicit range used for the query",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_code",
+                  "DisplayName": "Segment Code",
+                  "Description": "Segment filter applied to the query",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "analytics-topics",
+            "DisplayName": "Topics Analytics",
+            "Description": "Topic engagement analytics from POST /v1/analytics/topics. Returns topics ranked by total interactions with unique user engagement metrics over a date range.",
+            "Category": "Analytics",
+            "APIPath": "/analytics/topics",
+            "ResponseDataKey": "results",
+            "DefaultPageSize": 50,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "topic",
+                  "DisplayName": "Topic",
+                  "Description": "Topic name (primary key)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "total_interactions",
+                  "DisplayName": "Total Interactions",
+                  "Description": "Total engagement interactions for the topic",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "unique_users",
+                  "DisplayName": "Unique Users",
+                  "Description": "Number of unique users engaged with the topic",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "date_range",
+                  "DisplayName": "Date Range",
+                  "Description": "Date range label or explicit range used for the query",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_code",
+                  "DisplayName": "Segment Code",
+                  "Description": "Segment filter applied to the query",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "timezone",
+                  "DisplayName": "Timezone",
+                  "Description": "Timezone used for bucketing (e.g. US/Central)",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
         }
       ]
     },
