@@ -620,20 +620,41 @@ ${newUserSection}  output: [],
 
     if (!pkg.scripts) return null;
     const portArg = `--port ${explorerPort}`;
+    // Match `ng serve` as a whole-word token so `echo "ng serve"` or
+    // `do-not-ng-serve` don't get falsely patched. The `\b` on the right
+    // accepts space, end-of-string, or any non-word character.
+    const ngServeRe = /\bng\s+serve\b/;
+    // Match `--port <token>` (numeric OR non-numeric) so a script that
+    // already declares any --port (even a typo'd one) is left alone — the
+    // user's explicit choice wins over our override.
+    const explicitPortRe = /--port[\s=]+\S+/;
     let touched = false;
     for (const scriptName of Object.keys(pkg.scripts)) {
       const script = pkg.scripts[scriptName];
       if (typeof script !== 'string') continue;
-      // Only patch ng-serve invocations that don't already declare a port
-      if (!script.includes('ng serve')) continue;
-      if (/--port[\s=]+\d+/.test(script)) continue;
+      if (!ngServeRe.test(script)) continue;
+      if (explicitPortRe.test(script)) continue;
       pkg.scripts[scriptName] = `${script} ${portArg}`;
       touched = true;
     }
     if (!touched) return null;
 
-    await this.fileSystem.WriteText(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    // Preserve the original file's indentation (2-space, 4-space, or tab).
+    // Without this, repeated writes would normalize the file's whitespace.
+    const indent = this.detectJsonIndent(raw);
+    const trailingNewline = raw.endsWith('\n') ? '\n' : '';
+    await this.fileSystem.WriteText(pkgPath, JSON.stringify(pkg, null, indent) + trailingNewline);
     return pkgPath;
+  }
+
+  /**
+   * Detect the indentation a JSON file uses by inspecting the first
+   * indented line. Returns the raw indent string (e.g., `"  "`, `"    "`,
+   * `"\t"`). Falls back to two spaces when no indentation can be detected.
+   */
+  private detectJsonIndent(content: string): string {
+    const match = content.match(/\n([ \t]+)/);
+    return match ? match[1] : '  ';
   }
 
   /** Return the first path in the list that exists on disk, or null. */
