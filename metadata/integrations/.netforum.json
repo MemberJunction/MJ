@@ -9,7 +9,7 @@
       "BatchMaxRequestCount": -1,
       "BatchRequestWaitTime": -1,
       "Icon": "fa-solid fa-network-wired",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Basic Auth"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=NetForum Enterprise Token"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [

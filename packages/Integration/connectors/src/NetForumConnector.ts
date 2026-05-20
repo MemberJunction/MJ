@@ -198,7 +198,8 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
     }
 
     private async ParseConfig(ci: MJCompanyIntegrationEntity, cu?: UserInfo): Promise<NetForumConnectionConfig> {
-        const credentialID = ci.Get('CredentialID') as string | null;
+        // Use typed property — never .Get()/.Set() on entity-typed objects (CLAUDE.md §2b).
+        const credentialID = ci.CredentialID;
         if (credentialID) {
             const md = new Metadata();
             const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', cu);
