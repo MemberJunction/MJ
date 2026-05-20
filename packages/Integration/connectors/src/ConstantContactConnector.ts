@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -529,10 +529,11 @@ export class ConstantContactConnector extends BaseRESTIntegrationConnector {
     private async PersistRotatedRefreshToken(
         credentialID: string,
         contextUser: UserInfo,
-        config: ConstantContactConnectionConfig
+        config: ConstantContactConnectionConfig,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             const loaded = await credential.Load(credentialID);
             if (!loaded || !credential.Values) return;
@@ -575,9 +576,10 @@ export class ConstantContactConnector extends BaseRESTIntegrationConnector {
 
     private async ParseConfigFromCredential(
         credentialID: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<ConstantContactConnectionConfig | null> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

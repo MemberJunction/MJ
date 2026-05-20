@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -1260,9 +1260,10 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
 
     private async loadFromCredential(
         credentialID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<WildApricotConnectionConfig | null> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

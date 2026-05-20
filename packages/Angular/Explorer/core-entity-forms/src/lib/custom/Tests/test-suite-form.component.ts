@@ -2264,7 +2264,7 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     try {
       const ok = await suiteTest.Delete();
       if (ok) {
-        this.suiteTests = this.suiteTests.filter(t => t.ID !== suiteTest.ID);
+        this.suiteTests = this.suiteTests.filter(t => !UUIDsEqual(t.ID, suiteTest.ID));
         SharedService.Instance.CreateSimpleNotification('Test removed from suite', 'success', 2000);
       } else {
         const detail = suiteTest.LatestResult?.CompleteMessage || 'Failed to remove test';

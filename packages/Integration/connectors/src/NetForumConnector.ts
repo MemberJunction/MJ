@@ -40,7 +40,7 @@
  *   - Webhooks (NOT available) — no webhook/CDC support in NetForum
  */
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector, BaseRESTIntegrationConnector,
@@ -263,11 +263,11 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         return { Token: token, TokenType: 'Bearer', Config: config } as NFAuthContext;
     }
 
-    private async ParseConfig(ci: MJCompanyIntegrationEntity, cu?: UserInfo): Promise<NetForumConnectionConfig> {
+    private async ParseConfig(ci: MJCompanyIntegrationEntity, cu?: UserInfo, provider?: IMetadataProvider): Promise<NetForumConnectionConfig> {
         // Use typed property — never .Get()/.Set() on entity-typed objects (CLAUDE.md §2b).
         const credentialID = ci.CredentialID;
         if (credentialID) {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const cred = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', cu);
             if (await cred.Load(credentialID) && cred.Values) {
                 const p = JSON.parse(cred.Values) as Record<string, string>;
