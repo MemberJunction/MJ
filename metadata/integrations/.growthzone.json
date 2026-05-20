@@ -902,7 +902,7 @@
             "IntegrationID": "@parent:ID",
             "Name": "memberships",
             "DisplayName": "Memberships",
-            "Description": "Flat list of memberships across all contacts from /api/memberships/all. Supports OData-style pagination ($skip, $top, $orderby).",
+            "Description": "Flat list of memberships across all contacts from /api/memberships/all. Supports OData-style pagination ($skip, $top, $orderby). Framework research (2026-05) suggests incremental sync may be possible via ChangeEventTypeId; not flipped here without live verification.",
             "Category": "Membership",
             "APIPath": "/api/memberships/all",
             "ResponseDataKey": null,
@@ -3120,6 +3120,111 @@
                 }
               }
             ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "account-info",
+            "DisplayName": "Account Info",
+            "Description": "GrowthZone tenant account record (single object). Useful for surfacing tenant identity in MJ dashboards. Endpoint per framework research at /api/account/items.",
+            "Category": "Account",
+            "APIPath": "/api/account/items",
+            "Sequence": 22
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "account-modules",
+            "DisplayName": "Account Modules",
+            "Description": "List of GrowthZone modules enabled for the tenant. Useful for capability detection per tenant.",
+            "Category": "Account",
+            "APIPath": "/api/account/availablemodules",
+            "Sequence": 23
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "benefit-packages",
+            "DisplayName": "Benefit Packages",
+            "Description": "Membership benefit packages defined by the tenant. Useful for cross-referencing memberships → benefits.",
+            "Category": "Membership",
+            "APIPath": "/api/benefitpackages",
+            "Sequence": 24
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "cms-sites",
+            "DisplayName": "CMS Sites",
+            "Description": "GrowthZone CMS sites configured for the tenant.",
+            "Category": "CMS",
+            "APIPath": "/api/cms/sites",
+            "Sequence": 25
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Status": "Active",
+            "Name": "customfields-all",
+            "DisplayName": "All Custom Field Definitions",
+            "Description": "Tenant-wide custom field definitions across all object types. Used by the connector at DiscoverAndPersistAuthenticatedSchema time to enumerate tenant-specific custom fields and add them as IOF rows with Source=Discovered.",
+            "Category": "Custom Fields",
+            "APIPath": "/api/customfields/getall",
+            "Sequence": 26
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": []
           }
         }
       ]
