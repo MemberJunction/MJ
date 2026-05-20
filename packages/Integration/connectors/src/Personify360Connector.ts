@@ -1,20 +1,50 @@
 /**
- * Personify360Connector — Integration connector for Personify360 AMS (Novus REST APIs).
+ * ⚠️ NEEDS LIVE-TENANT VERIFICATION BEFORE SHIPPING ⚠️
  *
- * API Documentation: https://support.higherlogic.com/hc/en-us/articles/360033048791-Personify-Integration-Guide
+ * 2026-05-20 vendor-truth audit: the architectural foundations of this connector
+ * MAY BE CROSS-WIRED FROM A DIFFERENT VENDOR. The 3-service split documented below
+ * (vault / provisioning / gateway under {tenant}.personifycloud.com) matches the
+ * REST API documented at docs.personify.be — which is **Personify.be**, a Belgian
+ * CIAM / workforce-identity product, NOT Personify360 AMS by Personify Corp /
+ * Higher Logic.
  *
- * Auth: OAuth 2.0 Client Credentials (Bearer token) against the Personify auth service.
- *       Token endpoint: https://{tenant}.personifycloud.com/oauth2/token
+ * Personify Corp's Novus API surface is described in marketing materials as a
+ * single Swagger-documented API; the canonical Swagger is customer-portal gated
+ * and was not reachable during the audit. Without an authenticated tenant, this
+ * connector's foundational claims are NOT verified against actual vendor truth.
  *
- * Multi-Service Architecture:
- *   - Vault service:        https://{tenant}.personifycloud.com/vault/api/v1     — member/contact data
- *   - Provisioning service: https://{tenant}.personifycloud.com/provisioning/api/v1 — security/users
- *   - Gateway service:      https://{tenant}.personifycloud.com/gateway/api/v1   — orders/transactions
+ * What the audit could NOT confirm against any public Personify360 doc:
+ *   - Token endpoint path '/oauth2/token' on personifycloud.com
+ *   - The 3-service split (Vault / Provisioning / Gateway)
+ *   - 'client_credentials' grant for Novus
+ *   - 'pageNumber' + 'pageSize' pagination params
+ *   - 'modifiedAfter' watermark param name
+ *   - 'P360'-prefixed object names appear invented for collision-avoidance,
+ *     not vendor-documented
+ *   - 30+ IOs flagged SupportsIncrementalSync=true but only ~4 carry a
+ *     modifiedOn IOF row to back it (Invariant 1 violation)
  *
- * Pagination: Offset-based (pageNumber + pageSize)
+ * Recommendation: do NOT enable this connector for customers until a real
+ * Personify360 tenant + Novus Swagger can validate the architecture. If it IS
+ * cross-wired, the entire FetchChanges + CRUD surface needs to be rebuilt
+ * against Personify Corp's actual API contract.
+ *
+ * API Documentation (under audit):
+ *   - https://support.higherlogic.com/hc/en-us/articles/360033048791-Personify-Integration-Guide
+ *   - https://personifycorp.com/blog/supercharge-your-data-insights-with-novus-apis/
+ *
+ * Auth (UNVERIFIED): OAuth 2.0 Client Credentials (Bearer token).
+ *       Token endpoint (UNVERIFIED): https://{tenant}.personifycloud.com/oauth2/token
+ *
+ * Multi-Service Architecture (LIKELY MIS-ATTRIBUTED — see warning above):
+ *   - Vault service:        https://{tenant}.personifycloud.com/vault/api/v1
+ *   - Provisioning service: https://{tenant}.personifycloud.com/provisioning/api/v1
+ *   - Gateway service:      https://{tenant}.personifycloud.com/gateway/api/v1
+ *
+ * Pagination: Offset-based (pageNumber + pageSize) (UNVERIFIED)
  * Rate limits: Not documented; conservative 200ms throttle applied
- * Incremental: modifiedAfter timestamp filter on supported endpoints
- * CRUD: Full Create/Read/Update; soft-delete via status update
+ * Incremental: modifiedAfter timestamp filter (UNVERIFIED — name + format)
+ * CRUD: Full Create/Read/Update; soft-delete via status update (UNVERIFIED)
  *
  * API Categories:
  *   - Vault API (implemented) — organizations, individuals, memberships, addresses

@@ -21,7 +21,7 @@ describe('Reach360Connector (smoke)', () => {
     describe('Capability declarations', () => {
         it('declared CRUD flags match expected shape', () => {
         expect(connector.SupportsCreate).toBe(true);
-        expect(connector.SupportsUpdate).toBe(false);
+        expect(connector.SupportsUpdate).toBe(true); // Groups via PUT /groups/{groupId} per vendor docs; UpdateRecord returns 400 for non-Groups
         expect(connector.SupportsDelete).toBe(true);
         });
     });

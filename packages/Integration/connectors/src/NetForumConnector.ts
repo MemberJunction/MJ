@@ -1,10 +1,26 @@
 /**
- * NetForumConnector — Integration connector for NetForum Enterprise (Community Brands / Abila) AMS.
+ * ⚠️ NEEDS REWORK BEFORE SHIPPING — 3 known wire-level gaps ⚠️
  *
- * API Documentation:
+ * 2026-05-20 vendor-truth audit:
+ *
+ *   1. Auth token is returned in the WWW-Authenticate RESPONSE HEADER, not in the
+ *      JSON body. Vendor doc quote: "The token is in the WWW-Authenticate header.
+ *      The value will look like: 'Bearer token = eb5667ab-25ac-45c9-b831-23b43be8f194'".
+ *      Current code (line ~195) parses response.json() expecting `{ Token: string }` —
+ *      will fail to extract the token from every real authenticate call.
+ *   2. `LastModifiedDate` is not a canonical NetForum column. Each facade uses a
+ *      prefixed name (`ind_last_updated_dt` for Individual, `evt_last_updated_dt`
+ *      for Event, etc.). FetchChanges currently emits `szWhereClause=LastModifiedDate
+ *      >= '<wm>'` which yields zero rows or a query error on every object.
+ *   3. `DeleteFacadeObject` is not in any reachable vendor doc snippet. Get/Insert/
+ *      Update facade methods are documented. SupportsDelete=true may need to flip
+ *      false, or use a different method (vendor refers to "soft-deletes" generically).
+ *
+ * Vendor doc URLs:
  *   - xWeb Overview: https://documentation.abila.com/netforum-enterprise/2017.1/Content/xWeb/XWeb_Overview.htm
  *   - JSON over xWeb: http://documentation.abila.com/netforum-enterprise/2017.1/Content/xWeb/JSON_Over_xWeb_Overview.htm
  *   - xWeb Methods: https://nfesupport.zendesk.com/hc/en-us/articles/10639146855565
+ *   - Authenticate: https://nfesupport.zendesk.com/hc/en-us/articles/10639139863309-Authenticate
  *
  * Auth: Two-step token auth.
  *   1. POST /xWeb/Signon.asmx with credentials → returns auth token in SOAP header

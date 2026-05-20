@@ -197,7 +197,7 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
     // ── Capability getters ────────────────────────────────────────────
 
     public override get SupportsCreate(): boolean { return true; }   // Invitations, Completions
-    public override get SupportsUpdate(): boolean { return false; }  // Reach 360 has no general PUT/PATCH on primary resources
+    public override get SupportsUpdate(): boolean { return true; }   // Groups update via PUT /groups/{groupId}; other primary resources still return 400 in UpdateRecord
     public override get SupportsDelete(): boolean { return true; }   // User delete, group membership removal
 
     public override get IntegrationName(): string { return 'Reach360'; }
@@ -547,13 +547,35 @@ export class Reach360Connector extends BaseRESTIntegrationConnector {
     }
 
     /**
-     * Reach 360 does not expose general update (PUT/PATCH) on any primary
-     * resource. UpdateRecord is therefore not implemented.
+     * Reach 360 update endpoints (per vendor docs as of audit):
+     *   - Groups        → PUT /groups/{groupId}     — name, description, tag updates
+     *   - Users         → not supported (no PUT/PATCH on /users/{id})
+     *   - Courses       → not supported (no PUT/PATCH on /courses/{id})
+     *   - Learning Paths → not supported
+     *   - Reports       → not supported
      */
     public override async UpdateRecord(ctx: UpdateRecordContext): Promise<CRUDResult> {
+        const objectLower = ctx.ObjectName.toLowerCase();
+        if (objectLower === 'groups') {
+            const companyIntegration = ctx.CompanyIntegration as MJCompanyIntegrationEntity;
+            const contextUser = ctx.ContextUser as UserInfo;
+            try {
+                const auth = await this.Authenticate(companyIntegration, contextUser) as Reach360AuthContext;
+                const headers = this.BuildHeaders(auth);
+                const url = `${REACH360_BASE_URL}/groups/${encodeURIComponent(ctx.ExternalID)}`;
+                const resp = await this.MakeHTTPRequest(auth, url, 'PUT', headers, ctx.Attributes);
+                if (resp.Status >= 200 && resp.Status < 300) {
+                    return { Success: true, ExternalID: ctx.ExternalID, StatusCode: resp.Status };
+                }
+                return this.buildCRUDError(resp, 'UpdateRecord', ctx.ObjectName);
+            } catch (err: unknown) {
+                const message = err instanceof Error ? err.message : String(err);
+                return { Success: false, ErrorMessage: `Reach360 UpdateRecord failed: ${message}`, StatusCode: 500 };
+            }
+        }
         return {
             Success: false,
-            ErrorMessage: `Reach360 UpdateRecord not supported for "${ctx.ObjectName}" — the API has no update endpoints on primary resources.`,
+            ErrorMessage: `Reach360 UpdateRecord not supported for "${ctx.ObjectName}" — only Groups supports PUT in the vendor API.`,
             StatusCode: 400,
         };
     }

@@ -601,7 +601,10 @@ export class IMISConnector extends BaseRESTIntegrationConnector {
      */
     private ResolveTokenEndpoint(baseUrl: string): string {
         const trimmed = baseUrl.replace(/\/api\/?$/i, '');
-        return `${trimmed}/Token`;
+        // Vendor-canonical path is lowercase '/token/' per developer.imis.com docs.
+        // IIS is normally case-insensitive on URL paths so '/Token' usually works,
+        // but a few customer reverse-proxies enforce case strictness — match docs.
+        return `${trimmed}/token/`;
     }
 
     private BuildTokenRequestBody(config: IMISConnectionConfig): string {
