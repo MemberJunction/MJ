@@ -8,7 +8,7 @@
       "NavigationBaseURL": "https://admin.mailchimp.com",
       "BatchMaxRequestCount": 500,
       "BatchRequestWaitTime": 100,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Mailchimp API Key",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
       "Icon": "fa-brands fa-mailchimp"
     },
     "relatedEntities": {

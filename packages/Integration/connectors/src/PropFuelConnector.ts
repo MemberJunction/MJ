@@ -527,7 +527,11 @@ export class PropFuelConnector extends BaseRESTIntegrationConnector {
             return undefined;
         };
 
-        const baseURL = get('BaseURL', 'BaseUrl', 'base_url');
+        // Accepts vendor-specific PascalCase names AND the field names from the
+        // standard 'API Key with Endpoint' credential schema (endpoint, apiKey)
+        // so the metadata can reference the standard schema rather than a
+        // PropFuel-specific one.
+        const baseURL = get('BaseURL', 'BaseUrl', 'base_url', 'endpoint');
         const apiKey = get('ApiKey', 'apiKey', 'api_key');
         if (!baseURL) throw new Error('PropFuel configuration missing required field: BaseURL');
         if (!apiKey) throw new Error('PropFuel configuration missing required field: ApiKey');

@@ -1267,7 +1267,24 @@ export class WildApricotConnector extends BaseRESTIntegrationConnector {
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
         try {
-            const parsed = JSON.parse(credential.Values) as Partial<WildApricotConnectionConfig>;
+            const raw = JSON.parse(credential.Values) as Record<string, unknown>;
+            // Accept both PascalCase (WildApricot-specific) and the standard
+            // 'API Key' schema field name 'apiKey' (lowercase). AccountId is
+            // optional — auto-discovered via GET /v2/accounts when omitted.
+            const get = (...keys: string[]): string | undefined => {
+                for (const k of keys) {
+                    const hit = Object.entries(raw).find(([key]) => key.toLowerCase() === k.toLowerCase());
+                    if (hit && typeof hit[1] === 'string') return hit[1] as string;
+                }
+                return undefined;
+            };
+            const apiKey = get('ApiKey', 'apiKey', 'api_key');
+            const accountId = get('AccountId', 'accountId', 'account_id');
+            if (!apiKey) return null;
+            const parsed: Partial<WildApricotConnectionConfig> = {
+                ApiKey: apiKey,
+                AccountId: accountId,
+            };
             return this.validateConfig(parsed);
         } catch {
             return null;

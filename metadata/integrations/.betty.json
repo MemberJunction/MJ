@@ -8,7 +8,7 @@
       "NavigationBaseURL": null,
       "BatchMaxRequestCount": 50,
       "BatchRequestWaitTime": 500,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Betty API",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint",
       "Icon": "fa-solid fa-robot"
     },
     "relatedEntities": {
