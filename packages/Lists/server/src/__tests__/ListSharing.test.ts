@@ -12,6 +12,19 @@ const mockGetEntityObject = vi.fn();
 const mockEntities: Array<{ ID: string; Name: string }> = [];
 const mockCreateShareNotification = vi.fn();
 
+// Stand-in UUIDs for the rows the sharing surface looks up by name. The
+// production seed UUIDs aren't relevant here — we just need the
+// `ResourceTypeEngine.ByName` / `AuditLogTypeEngine.ByName` mocks below to
+// return stable values the assertions can compare against.
+const TEST_LIST_RESOURCE_TYPE_ID = '11111111-1111-1111-1111-111111111111';
+const TEST_AUDIT_LOG_TYPE_IDS: Record<string, string> = {
+  'List Shared':              '22222222-2222-2222-2222-222222222221',
+  'List Unshared':            '22222222-2222-2222-2222-222222222222',
+  'List Invitation Sent':     '22222222-2222-2222-2222-222222222223',
+  'List Invitation Accepted': '22222222-2222-2222-2222-222222222224',
+  'List Invitation Revoked':  '22222222-2222-2222-2222-222222222225',
+};
+
 vi.mock('@memberjunction/core', () => {
   class CompositeKey {
     KeyValuePairs: Array<{ FieldName: string; Value: unknown }> = [];
@@ -61,13 +74,27 @@ vi.mock('@memberjunction/core-entities', () => ({
   MJResourcePermissionEntity: class {},
   MJUserEntity: class {},
   CreateShareNotification: (input: unknown) => mockCreateShareNotification(input),
+  // ListSharing resolves resource-type / audit-log-type IDs by name through
+  // these singleton engines. The mocks return test stand-in IDs so
+  // assertions compare against deterministic values without pulling in the
+  // real BaseEngine machinery.
+  ResourceTypeEngine: {
+    Instance: {
+      Config: async () => {},
+      ByName: (name: string) =>
+        name === 'Lists' ? { ID: TEST_LIST_RESOURCE_TYPE_ID, Name: 'Lists' } : undefined,
+    },
+  },
+  AuditLogTypeEngine: {
+    Instance: {
+      Config: async () => {},
+      ByName: (name: string) =>
+        TEST_AUDIT_LOG_TYPE_IDS[name] ? { ID: TEST_AUDIT_LOG_TYPE_IDS[name], Name: name } : undefined,
+    },
+  },
 }));
 
-import {
-  LIST_AUDIT_LOG_TYPES,
-  LIST_RESOURCE_TYPE_ID,
-  ListSharing,
-} from '../ListSharing';
+import { ListSharing } from '../ListSharing';
 
 const CTX_USER = { ID: 'user-grantor', Name: 'Grantor', Email: 'grantor@x', UserRoles: [] };
 const LIST_ENTITY = { ID: 'list-entity-id', Name: 'MJ: Lists' };
@@ -197,13 +224,13 @@ describe('ListSharing', () => {
 
       expect(result.Success).toBe(true);
       expect(result.ResultCode).toBe('SUCCESS');
-      expect(permission._state.ResourceTypeID).toBe(LIST_RESOURCE_TYPE_ID);
+      expect(permission._state.ResourceTypeID).toBe(TEST_LIST_RESOURCE_TYPE_ID);
       expect(permission._state.ResourceRecordID).toBe('list-1');
       expect(permission._state.Type).toBe('User');
       expect(permission._state.UserID).toBe('recipient-user');
       expect(permission._state.PermissionLevel).toBe('Edit');
       expect(permission._state.Status).toBe('Approved');
-      expect(auditLog.AuditLogTypeID).toBe(LIST_AUDIT_LOG_TYPES.ListShared);
+      expect(auditLog.AuditLogTypeID).toBe(TEST_AUDIT_LOG_TYPE_IDS['List Shared']);
       expect(mockCreateShareNotification).toHaveBeenCalledTimes(1);
       expect(mockCreateShareNotification.mock.calls[0][0]).toMatchObject({
         GrantorUserID: CTX_USER.ID,
@@ -216,7 +243,7 @@ describe('ListSharing', () => {
       const auditLog = makeMockAuditLog();
       const existingPermission = makeMockPermission({
         ID: 'perm-existing',
-        ResourceTypeID: LIST_RESOURCE_TYPE_ID,
+        ResourceTypeID: TEST_LIST_RESOURCE_TYPE_ID,
         ResourceRecordID: 'list-1',
         Type: 'User',
         UserID: 'recipient',
@@ -308,7 +335,7 @@ describe('ListSharing', () => {
       const result = await sharing.Unshare('perm-1');
       expect(result.Success).toBe(true);
       expect(permission._state.Status).toBe('Revoked');
-      expect(auditLog.AuditLogTypeID).toBe(LIST_AUDIT_LOG_TYPES.ListUnshared);
+      expect(auditLog.AuditLogTypeID).toBe(TEST_AUDIT_LOG_TYPE_IDS['List Unshared']);
     });
 
     it('returns PERMISSION_NOT_FOUND when load fails', async () => {
@@ -346,7 +373,7 @@ describe('ListSharing', () => {
       expect(invitation._state.Email).toBe('alice@example.com');
       expect(invitation._state.Role).toBe('Editor');
       expect(invitation._state.Status).toBe('Pending');
-      expect(auditLog.AuditLogTypeID).toBe(LIST_AUDIT_LOG_TYPES.ListInvitationSent);
+      expect(auditLog.AuditLogTypeID).toBe(TEST_AUDIT_LOG_TYPE_IDS['List Invitation Sent']);
     });
 
     it('rejects when Email is invalid', async () => {

@@ -4,12 +4,7 @@
 // that want shared types should import directly from @memberjunction/lists-base.
 
 export { ListOperations, type DeltaTarget } from './ListOperations';
-export {
-  ListSharing,
-  LIST_RESOURCE_TYPE_ID,
-  LIST_AUDIT_LOG_TYPES,
-  DEFAULT_INVITATION_TTL_MS,
-} from './ListSharing';
+export { ListSharing, DEFAULT_INVITATION_TTL_MS } from './ListSharing';
 export { AudienceResolver } from './AudienceResolver';
 export {
   ComputeSourceSignature,

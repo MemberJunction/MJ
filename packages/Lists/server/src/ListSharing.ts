@@ -6,12 +6,14 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import {
+  AuditLogTypeEngine,
   CreateShareNotification,
   MJAuditLogEntity,
   MJListEntity,
   MJListInvitationEntity,
   MJResourcePermissionEntity,
   MJUserEntity,
+  ResourceTypeEngine,
 } from '@memberjunction/core-entities';
 import type {
   AcceptInvitationResult,
@@ -39,34 +41,32 @@ import type {
  *      signed token + expiry; `AcceptInvitation` later promotes that
  *      pending invite into a real `MJResourcePermission`.
  *
- * Every mutation also emits an `MJ: Audit Logs` entry — type IDs
- * defined in `LIST_AUDIT_LOG_TYPES` below — so administrators can trace
- * who shared what with whom and when.
+ * Every mutation also emits an `MJ: Audit Logs` entry — type names are
+ * resolved through `AuditLogTypeEngine.ByName(...)` at runtime so the
+ * seed data is the source of truth, not hardcoded UUIDs. Same pattern
+ * (`ResourceTypeEngine.ByName(...)`) for the `MJ: Resource Types` row
+ * that scopes `MJResourcePermission` records to the List resource type.
  */
-
-// ---------------------------------------------------------------------------
-// Constants — UUIDs match the seeded MJ: Audit Log Types and MJ: Resource
-// Types metadata files. Hard-coded here so the runtime doesn't have to do a
-// lookup on every emit, and so the contract is grep-able from code.
-// ---------------------------------------------------------------------------
-
-/** ResourceType.ID for "Lists" (see metadata/resource-types/.resource-types.json). */
-export const LIST_RESOURCE_TYPE_ID = 'E64D433E-F36B-1410-8560-0041FA62858A';
-
-/** AuditLogType IDs for the seven list-sharing events. */
-export const LIST_AUDIT_LOG_TYPES = {
-  ListShared: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F01',
-  ListUnshared: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F02',
-  ListInvitationSent: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F03',
-  ListInvitationAccepted: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F04',
-  ListInvitationRevoked: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F05',
-  ListRefreshed: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F06',
-  ListBulkOperation: '9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F07',
-} as const;
 
 /** Default invitation TTL: 7 days. The plan calls for tunable expiry but
  * keeps the spec simple — overridable at call time. */
 export const DEFAULT_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
+ * Name of the row in `MJ: Resource Types` that scopes List shares.
+ * Centralized so a rename in the seed data is a one-line fix here, not
+ * a grep across the codebase.
+ */
+const LIST_RESOURCE_TYPE_NAME = 'Lists';
+
+/** Names of the rows in `MJ: Audit Log Types` for the seven list-sharing events. */
+const LIST_AUDIT_LOG_TYPE_NAMES = {
+  Shared: 'List Shared',
+  Unshared: 'List Unshared',
+  InvitationSent: 'List Invitation Sent',
+  InvitationAccepted: 'List Invitation Accepted',
+  InvitationRevoked: 'List Invitation Revoked',
+} as const;
 
 // ---------------------------------------------------------------------------
 // ListSharing service
@@ -104,7 +104,7 @@ export class ListSharing {
         (await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', this.contextUser));
       if (!existing) {
         perm.NewRecord();
-        perm.ResourceTypeID = LIST_RESOURCE_TYPE_ID;
+        perm.ResourceTypeID = await this.getListResourceTypeId();
         perm.ResourceRecordID = args.ListID;
         perm.Type = args.Target.kind === 'user' ? 'User' : 'Role';
         if (args.Target.kind === 'user') perm.UserID = args.Target.userId;
@@ -120,7 +120,7 @@ export class ListSharing {
       }
 
       await this.emitAuditLog({
-        TypeID: LIST_AUDIT_LOG_TYPES.ListShared,
+        Type: LIST_AUDIT_LOG_TYPE_NAMES.Shared,
         ListID: args.ListID,
         Description: `${this.contextUser.Name ?? this.contextUser.Email} shared list with ${args.Target.kind} ${this.targetId(args.Target)} as ${args.PermissionLevel}`,
         Details: { TargetKind: args.Target.kind, TargetID: this.targetId(args.Target), Level: args.PermissionLevel },
@@ -164,7 +164,7 @@ export class ListSharing {
       }
 
       await this.emitAuditLog({
-        TypeID: LIST_AUDIT_LOG_TYPES.ListUnshared,
+        Type: LIST_AUDIT_LOG_TYPE_NAMES.Unshared,
         ListID: listId,
         Description: `${this.contextUser.Name ?? this.contextUser.Email} revoked permission ${permissionId}`,
         Details: targetSnapshot,
@@ -215,7 +215,7 @@ export class ListSharing {
       }
 
       await this.emitAuditLog({
-        TypeID: LIST_AUDIT_LOG_TYPES.ListInvitationSent,
+        Type: LIST_AUDIT_LOG_TYPE_NAMES.InvitationSent,
         ListID: args.ListID,
         Description: `${this.contextUser.Name ?? this.contextUser.Email} invited ${args.Email} (${args.Role})`,
         Details: { Email: args.Email, Role: args.Role, InvitationID: inv.ID },
@@ -297,7 +297,7 @@ export class ListSharing {
       await inv.Save();
 
       await this.emitAuditLog({
-        TypeID: LIST_AUDIT_LOG_TYPES.ListInvitationAccepted,
+        Type: LIST_AUDIT_LOG_TYPE_NAMES.InvitationAccepted,
         ListID: inv.ListID,
         Description: `${this.contextUser.Name ?? this.contextUser.Email} accepted invitation ${inv.ID}`,
         Details: { InvitationID: inv.ID, GrantedPermissionID: share.PermissionID },
@@ -339,7 +339,7 @@ export class ListSharing {
         return this.shareFailure('UNEXPECTED_ERROR', `Failed to revoke: ${inv.LatestResult?.CompleteMessage ?? 'unknown'}`);
       }
       await this.emitAuditLog({
-        TypeID: LIST_AUDIT_LOG_TYPES.ListInvitationRevoked,
+        Type: LIST_AUDIT_LOG_TYPE_NAMES.InvitationRevoked,
         ListID: inv.ListID,
         Description: `${this.contextUser.Name ?? this.contextUser.Email} revoked invitation ${inv.ID}`,
         Details: { InvitationID: inv.ID, Email: inv.Email },
@@ -357,10 +357,11 @@ export class ListSharing {
    * role grants, mapped into the canonical `ListShareSummary` shape.
    */
   public async GetSharesForList(listId: string): Promise<ListShareSummary[]> {
+    const resourceTypeId = await this.getListResourceTypeId();
     const rv = this.runView();
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID='${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.escape(listId)}' AND Status<>'Revoked'`,
+      ExtraFilter: `ResourceTypeID='${resourceTypeId}' AND ResourceRecordID='${this.escape(listId)}' AND Status<>'Revoked'`,
       OrderBy: '__mj_CreatedAt DESC',
       ResultType: 'entity_object',
     }, this.contextUser);
@@ -384,10 +385,11 @@ export class ListSharing {
       if (!loaded) return null;
       if (list.UserID === this.contextUser.ID) return 'Owner';
 
+      const resourceTypeId = await this.getListResourceTypeId();
       const rv = this.runView();
       const result = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
-        ExtraFilter: `ResourceTypeID='${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.escape(listId)}' AND Type='User' AND UserID='${this.contextUser.ID}' AND Status='Approved'`,
+        ExtraFilter: `ResourceTypeID='${resourceTypeId}' AND ResourceRecordID='${this.escape(listId)}' AND Type='User' AND UserID='${this.contextUser.ID}' AND Status='Approved'`,
         ResultType: 'entity_object',
       }, this.contextUser);
       if (!result.Success || !result.Results || result.Results.length === 0) return null;
@@ -404,10 +406,11 @@ export class ListSharing {
    * direct user-level shares only.
    */
   public async GetListsSharedWithUser(): Promise<SharedListSummary[]> {
+    const resourceTypeId = await this.getListResourceTypeId();
     const rv = this.runView();
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID='${LIST_RESOURCE_TYPE_ID}' AND Type='User' AND UserID='${this.contextUser.ID}' AND Status='Approved'`,
+      ExtraFilter: `ResourceTypeID='${resourceTypeId}' AND Type='User' AND UserID='${this.contextUser.ID}' AND Status='Approved'`,
       OrderBy: '__mj_CreatedAt DESC',
       ResultType: 'entity_object',
     }, this.contextUser);
@@ -450,9 +453,10 @@ export class ListSharing {
       target.kind === 'user'
         ? `Type='User' AND UserID='${this.escape(target.userId)}'`
         : `Type='Role' AND RoleID='${this.escape(target.roleId)}'`;
+    const resourceTypeId = await this.getListResourceTypeId();
     const result = await rv.RunView<MJResourcePermissionEntity>({
       EntityName: 'MJ: Resource Permissions',
-      ExtraFilter: `ResourceTypeID='${LIST_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.escape(listId)}' AND ${targetClause}`,
+      ExtraFilter: `ResourceTypeID='${resourceTypeId}' AND ResourceRecordID='${this.escape(listId)}' AND ${targetClause}`,
       ResultType: 'entity_object',
     }, this.contextUser);
     if (!result.Success || !result.Results || result.Results.length === 0) return null;
@@ -507,22 +511,63 @@ export class ListSharing {
   }
 
   /**
+   * Resolve the `MJ: Resource Types.ID` for the row named "Lists" via the
+   * shared `ResourceTypeEngine`. Throws if missing — that indicates a
+   * misconfigured environment (seed data never pushed) and we'd rather
+   * fail loud than write `MJResourcePermission` rows with an undefined
+   * `ResourceTypeID`. Engine `Config()` is idempotent.
+   */
+  private async getListResourceTypeId(): Promise<string> {
+    await ResourceTypeEngine.Instance.Config(false, this.contextUser, this.provider);
+    const rt = ResourceTypeEngine.Instance.ByName(LIST_RESOURCE_TYPE_NAME);
+    if (!rt) {
+      throw new Error(
+        `MJ: Resource Types row "${LIST_RESOURCE_TYPE_NAME}" not found. ` +
+          `Seed metadata/resource-types/ via 'mj sync push' before using ListSharing.`,
+      );
+    }
+    return rt.ID;
+  }
+
+  /**
+   * Resolve an `MJ: Audit Log Types.ID` by row name via the shared
+   * `AuditLogTypeEngine`. Same fail-loud contract as
+   * {@link getListResourceTypeId}.
+   */
+  private async getAuditLogTypeId(name: string): Promise<string> {
+    await AuditLogTypeEngine.Instance.Config(false, this.contextUser, this.provider);
+    const t = AuditLogTypeEngine.Instance.ByName(name);
+    if (!t) {
+      throw new Error(
+        `MJ: Audit Log Types row "${name}" not found. ` +
+          `Seed metadata/audit-log-types/ via 'mj sync push' before using ListSharing.`,
+      );
+    }
+    return t.ID;
+  }
+
+  /**
    * Best-effort audit-log emit. We never fail the parent operation on
    * an audit-log failure; instead we LogError so the discrepancy is
    * observable. Cross-cutting reliability concern.
+   *
+   * Takes the audit-log-type by NAME so call sites are grep-able and
+   * resilient to seed-UUID changes. Name → ID resolution goes through the
+   * `AuditLogTypeEngine`.
    */
   private async emitAuditLog(args: {
-    TypeID: string;
+    Type: string;
     ListID: string;
     Description: string;
     Details: Record<string, unknown>;
   }): Promise<void> {
     try {
+      const typeId = await this.getAuditLogTypeId(args.Type);
       const md = this.metadata();
       const log = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', this.contextUser);
       log.NewRecord();
       log.UserID = this.contextUser.ID;
-      log.AuditLogTypeID = args.TypeID;
+      log.AuditLogTypeID = typeId;
       log.Status = 'Success';
       log.Description = args.Description;
       log.Details = JSON.stringify(args.Details);
