@@ -1,11 +1,25 @@
 # MemberJunction Mobile App — React Native Architecture & Phase 1 Plan
 
-**Status:** Approved — Phase 1 implementation in progress
-**Date:** 2026-05-18 (proposal) · 2026-05-19 (implementation kickoff)
+**Status:** Phase 1 feature-complete (code) — pending on-device verification
+**Date:** 2026-05-18 (proposal) · 2026-05-19 (kickoff) · 2026-05-20 (Phase 1 code complete)
 **Branch:** `an-mobile-app-dev`
 **Supersedes:** The earlier PWA-based proposal that lived at `packages/Mobile/ARCHITECTURE.md` (removed via PR #1734)
 
-> **Implementation kickoff note (2026-05-19):** This plan has been approved, the UX direction has been chosen (hybrid — see Part 4), and full-resolution mockups for every Phase 1 screen are committed alongside this document under `html/`. Open `index.html` in this folder for the visual handoff. First concrete tasks: audit shared TS packages for DOM/browser-globals, then refactor `@memberjunction/graphql-dataprovider`'s cache layer behind an `IClientCacheStorage` interface, then bootstrap the Expo project under `packages/MobileApp/`. Open questions in Part 11 will be resolved as we go and recorded back into this document.
+> **Implementation status (2026-05-20):** Phase 1 is **code-complete** in `packages/MobileApp/`. The app boots on the iOS Simulator and renders the conversation list. Remaining before sign-off is **on-device verification of the full data path**, which is gated on adding the `mjmobile://auth` callback URL to the Auth0 dev tenant.
+>
+> **What's built (all wired to MJAPI via the MJ object model — no mocks):**
+> - **Auth** — Auth0 OAuth + PKCE (primary, via `expo-auth-session`), MSAL (Azure AD, ready pending its redirect-URI registration), dev-JWT paste (fallback). Login screen gates the app; silent token refresh; sign-out. Tokens in `expo-secure-store`.
+> - **Chat (read)** — conversation list grouped by recency with multi-agent avatar stacks; chat thread with per-message agent attribution, markdown, `@mention` highlighting, pull-to-refresh.
+> - **Chat (write)** — composer creates a user `Conversation Detail` and triggers an agent via `GraphQLDataProvider.AI.RunAIAgentFromConversationDetail` with live progress; new-conversation flow creates the conversation + first message. Server owns the AI response row.
+> - **Artifacts** — per-conversation artifact list + single-artifact detail rendering by classified kind (json-table / json / markdown / code / text), reading `Conversation Artifact Version` content.
+> - **Data Explorer** — entity picker → records (RunView) → read-only record detail (`GetEntityObject`/`InnerLoad`); query picker → results (`RunQuery`); dashboard picker (best-effort viewer). "Ask Skip about this" bridge on every surface.
+> - **Profile** — identity from `Metadata.CurrentUser`; preference toggles present (Phase 2 wires them).
+>
+> **Notable build/runtime fixes captured along the way:** monorepo hoisting of `expo-router` (babel-preset-expo gating), workspace-wide `react@19.1.0` override (RN renderer mismatch), MMKV `ILocalStorageProvider`, boot timeout + escape hatch.
+>
+> **Deferred to Phase 2** (designed-for, not yet wired): voice STT/TTS pipeline (the voice-mode screen is a visual scaffold), push notifications, biometric lock, record editing, interactive-component artifact rendering via `@memberjunction/react-runtime`, the shared `@memberjunction/markdown-core` extraction (a lightweight inline renderer stands in for now), and real dashboard part rendering.
+>
+> Original kickoff note follows for history. Open `index.html` in this folder for the visual handoff; open questions are in Part 11.
 
 ---
 
