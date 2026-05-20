@@ -7,7 +7,7 @@ import {
   ViewContainerRef,
   Input
 } from '@angular/core';
-import { ViewToggleOption } from '@memberjunction/ng-ui-components';
+import { ViewToggleOption, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { RunView, CompositeKey } from '@memberjunction/core';
@@ -147,7 +147,7 @@ interface TestRunStatRow {
             </mj-view-toggle>
           </div>
         </mj-page-header>
-        <mj-page-body [Flex]="true">
+        <mj-page-body [Flex]="true" [Padding]="false">
           <ng-container *ngTemplateOutlet="content"></ng-container>
         </mj-page-body>
       </mj-page-layout>
@@ -160,74 +160,17 @@ interface TestRunStatRow {
       </div>
     } @else {
       <div class="explorer-layout">
-        <!-- Left Sidebar -->
-        <aside class="sidebar" [class.collapsed]="IsSidebarCollapsed">
-          <div class="sidebar-header">
-            <h3>Explorer</h3>
-            <button class="sidebar-toggle" (click)="ToggleSidebar()">
-              <i class="fa-solid" [class.fa-chevron-left]="!IsSidebarCollapsed" [class.fa-chevron-right]="IsSidebarCollapsed"></i>
-            </button>
-          </div>
-
-          @if (!IsSidebarCollapsed) {
-            <div class="sidebar-content">
-              <!-- Browse Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Browse</div>
-                <div
-                  class="sidebar-item"
-                  [class.active]="SelectedSidebar.Type === 'all'"
-                  (click)="SelectSidebarItem({ Type: 'all', ID: null })"
-                >
-                  <i class="fa-solid fa-layer-group"></i>
-                  <span>All Items</span>
-                  <span class="sidebar-count">{{ TotalItemCount }}</span>
-                </div>
-                <div
-                  class="sidebar-item"
-                  [class.active]="SelectedSidebar.Type === 'standalone'"
-                  (click)="SelectSidebarItem({ Type: 'standalone', ID: null })"
-                >
-                  <i class="fa-solid fa-vial"></i>
-                  <span>Standalone Tests</span>
-                  <span class="sidebar-count">{{ StandaloneTestCount }}</span>
-                </div>
-              </div>
-
-              <!-- Test Suites Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Test Suites</div>
-                @for (node of FilteredSuiteTree; track node.ID) {
-                  <ng-container
-                    *ngTemplateOutlet="suiteTreeTpl; context: { node: node, depth: 0 }"
-                  ></ng-container>
-                }
-                @if (FilteredSuiteTree.length === 0) {
-                  <div class="sidebar-empty">No suites found</div>
-                }
-              </div>
-
-              <!-- Test Types Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Test Types</div>
-                @for (tt of FilteredTestTypes; track tt.ID) {
-                  <div
-                    class="sidebar-item"
-                    [class.active]="SelectedSidebar.Type === 'testType' && IsSidebarSelected(tt.ID)"
-                    (click)="SelectSidebarItem({ Type: 'testType', ID: tt.ID })"
-                  >
-                    <i class="fa-solid fa-tag"></i>
-                    <span>{{ tt.Name }}</span>
-                    <span class="sidebar-count">{{ GetTestCountForType(tt.ID) }}</span>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-        </aside>
+        <!-- Left rail -->
+        <mj-left-nav
+          [Sections]="NavSections"
+          [ActiveId]="ActiveNavId"
+          [ExpandedIds]="ExpandedNavIds"
+          (ItemClicked)="OnNavItemClicked($event)"
+          (ItemToggled)="OnNavItemToggled($event)">
+        </mj-left-nav>
 
         <!-- Main Content -->
-        <main class="main-content">
+        <mj-left-nav-content>
           <!-- Content Area -->
           <div class="content-area">
             <!-- Suites Section -->
@@ -418,35 +361,9 @@ interface TestRunStatRow {
               </div>
             }
           </div>
-        </main>
+        </mj-left-nav-content>
       </div>
     }
-
-    <!-- Template for recursive suite tree rendering -->
-    <ng-template #suiteTreeTpl let-node="node" let-depth="depth">
-      <div
-        class="sidebar-item suite-tree-item"
-        [style.paddingLeft.px]="16 + depth * 14"
-        [class.active]="SelectedSidebar.Type === 'suite' && IsSidebarSelected(node.ID)"
-        (click)="SelectSidebarItem({ Type: 'suite', ID: node.ID })"
-      >
-        @if (node.Children.length > 0) {
-          <button class="tree-toggle" (click)="ToggleSuiteExpand(node, $event)">
-            <i class="fa-solid" [class.fa-chevron-right]="!node.Expanded" [class.fa-chevron-down]="node.Expanded"></i>
-          </button>
-        }
-        <i class="fa-solid fa-folder"></i>
-        <span class="tree-name">{{ node.Name }}</span>
-        <span class="sidebar-count">{{ node.TestCount }}</span>
-      </div>
-      @if (node.Expanded && node.Children.length > 0) {
-        @for (child of node.Children; track child.ID) {
-          <ng-container
-            *ngTemplateOutlet="suiteTreeTpl; context: { node: child, depth: depth + 1 }"
-          ></ng-container>
-        }
-      }
-    </ng-template>
 
     <!-- Slideout Backdrop -->
     @if (SlideoutOpen) {
@@ -664,178 +581,9 @@ interface TestRunStatRow {
     }
 
     /* ==========================================
-       Sidebar
-       ========================================== */
-    .sidebar {
-      width: 280px;
-      min-width: 280px;
-      background: var(--mj-bg-surface);
-      border-right: 1px solid var(--mj-border-default);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transition: width 0.2s ease, min-width 0.2s ease;
-    }
-
-    .sidebar.collapsed {
-      width: 48px;
-      min-width: 48px;
-    }
-
-    .sidebar-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px;
-      border-bottom: 1px solid var(--mj-border-default);
-    }
-
-    .sidebar-header h3 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar.collapsed .sidebar-header h3 {
-      display: none;
-    }
-
-    .sidebar-toggle {
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      font-size: 11px;
-      transition: all 0.15s ease;
-    }
-
-    .sidebar-toggle:hover {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0;
-    }
-
-    .sidebar-section {
-      margin-bottom: 8px;
-    }
-
-    .sidebar-section-title {
-      padding: 8px 16px 4px;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--mj-text-disabled);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-
-    .sidebar-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      font-size: 13px;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .sidebar-item:hover {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar-item.active {
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-      color: var(--mj-brand-primary);
-      font-weight: 600;
-    }
-
-    .sidebar-item i {
-      font-size: 12px;
-      width: 16px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .sidebar-item span:not(.sidebar-count) {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sidebar-count {
-      font-size: 11px;
-      color: var(--mj-text-disabled);
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    .sidebar-item.active .sidebar-count {
-      color: var(--mj-brand-primary);
-    }
-
-    .sidebar-empty {
-      padding: 8px 16px;
-      font-size: 12px;
-      color: var(--mj-text-disabled);
-      font-style: italic;
-    }
-
-    /* Tree nodes */
-    .suite-tree-item {
-      gap: 6px;
-    }
-
-    .tree-toggle {
-      width: 18px;
-      height: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      color: var(--mj-text-disabled);
-      cursor: pointer;
-      font-size: 9px;
-      flex-shrink: 0;
-      border-radius: 4px;
-      padding: 0;
-    }
-
-    .tree-toggle:hover {
-      background: var(--mj-border-default);
-      color: var(--mj-text-muted);
-    }
-
-    .tree-name {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* ==========================================
        Main Content
+       — left rail + content pane handled by <mj-left-nav> + <mj-left-nav-content>
        ========================================== */
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
 
     /* Buttons */
     .btn {
@@ -1520,12 +1268,6 @@ interface TestRunStatRow {
       }
     }
 
-    @media (max-width: 900px) {
-      .sidebar {
-        display: none;
-      }
-    }
-
     @media (max-width: 600px) {
       .content-area {
         padding: 16px;
@@ -1595,7 +1337,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
 
   // Template-bound state
   IsLoading = true;
-  IsSidebarCollapsed = false;
   SearchTerm = '';
   StatusFilters = new Set<string>();
   ViewMode: ViewMode = 'card';
@@ -1757,15 +1498,111 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     this._searchTerm$.next('');
   }
 
-  ToggleSidebar(): void {
-    this.IsSidebarCollapsed = !this.IsSidebarCollapsed;
+  ToggleSuiteExpand(node: SuiteTreeNode): void {
+    node.Expanded = !node.Expanded;
     this.cdr.markForCheck();
   }
 
-  ToggleSuiteExpand(node: SuiteTreeNode, event: MouseEvent): void {
-    event.stopPropagation();
-    node.Expanded = !node.Expanded;
-    this.cdr.markForCheck();
+  // ---------------------------------------------------------------------------
+  // <mj-left-nav> adapters
+  //
+  // The rail is one <mj-left-nav> with three logical sections. Internal state
+  // still lives on SelectedSidebar (typed Type+ID) and on SuiteTreeNode.Expanded
+  // booleans — these getters translate to/from the primitive's flat
+  // string-id interface.
+  // ---------------------------------------------------------------------------
+
+  /** Composite-key sections fed to <mj-left-nav>. */
+  get NavSections(): MJLeftNavSection[] {
+    const suiteItems = this.FilteredSuiteTree.length === 0
+      ? [{ id: '__suites-empty', label: 'No suites found', disabled: true } as MJLeftNavItem]
+      : this.FilteredSuiteTree.map(node => this.suiteNodeToNavItem(node));
+
+    return [
+      {
+        label: 'Browse',
+        items: [
+          { id: 'all', label: 'All Items', icon: 'fa-solid fa-layer-group', badge: this.TotalItemCount },
+          { id: 'standalone', label: 'Standalone Tests', icon: 'fa-solid fa-vial', badge: this.StandaloneTestCount },
+        ]
+      },
+      { label: 'Test Suites', items: suiteItems },
+      {
+        label: 'Test Types',
+        items: this.FilteredTestTypes.map(tt => ({
+          id: `testType:${tt.ID}`,
+          label: tt.Name,
+          icon: 'fa-solid fa-tag',
+          badge: this.GetTestCountForType(tt.ID)
+        }))
+      }
+    ];
+  }
+
+  /** Recursive map SuiteTreeNode -> MJLeftNavItem. Leaves keep `children: []`
+   *  so the primitive renders a placeholder where the chevron would be —
+   *  this keeps siblings vertically aligned. */
+  private suiteNodeToNavItem(node: SuiteTreeNode): MJLeftNavItem {
+    return {
+      id: `suite:${node.ID}`,
+      label: node.Name,
+      icon: 'fa-solid fa-folder',
+      badge: node.TestCount,
+      children: node.Children.map(child => this.suiteNodeToNavItem(child))
+    };
+  }
+
+  /** Translate SelectedSidebar (typed Type+ID) to the rail's composite key. */
+  get ActiveNavId(): string {
+    const sel = this.SelectedSidebar;
+    if (sel.Type === 'suite' || sel.Type === 'testType') {
+      return `${sel.Type}:${sel.ID ?? ''}`;
+    }
+    return sel.Type;
+  }
+
+  /** Suite-node IDs that are currently expanded, walked from FilteredSuiteTree. */
+  get ExpandedNavIds(): string[] {
+    const out: string[] = [];
+    const walk = (nodes: SuiteTreeNode[]): void => {
+      for (const n of nodes) {
+        if (n.Expanded) out.push(`suite:${n.ID}`);
+        walk(n.Children);
+      }
+    };
+    walk(this.FilteredSuiteTree);
+    return out;
+  }
+
+  /** Parse composite id and delegate to the existing SelectSidebarItem path. */
+  OnNavItemClicked(item: MJLeftNavItem): void {
+    const id = item.id;
+    if (id === 'all') {
+      this.SelectSidebarItem({ Type: 'all', ID: null });
+    } else if (id === 'standalone') {
+      this.SelectSidebarItem({ Type: 'standalone', ID: null });
+    } else if (id.startsWith('suite:')) {
+      this.SelectSidebarItem({ Type: 'suite', ID: id.substring('suite:'.length) });
+    } else if (id.startsWith('testType:')) {
+      this.SelectSidebarItem({ Type: 'testType', ID: id.substring('testType:'.length) });
+    }
+  }
+
+  /** Chevron click on a suite item — toggle that node's Expanded flag. */
+  OnNavItemToggled(item: MJLeftNavItem): void {
+    if (!item.id.startsWith('suite:')) return;
+    const suiteId = item.id.substring('suite:'.length);
+    const node = this.findSuiteNode(this.FilteredSuiteTree, suiteId);
+    if (node) this.ToggleSuiteExpand(node);
+  }
+
+  private findSuiteNode(tree: SuiteTreeNode[], id: string): SuiteTreeNode | null {
+    for (const node of tree) {
+      if (UUIDsEqual(node.ID, id)) return node;
+      const found = this.findSuiteNode(node.Children, id);
+      if (found) return found;
+    }
+    return null;
   }
 
   ToggleSortDirection(): void {
