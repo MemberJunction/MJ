@@ -123,9 +123,10 @@ import { Component, Input } from '@angular/core';
 
 
     /* Rows: primary (identity + actions) and toolbar (separate row).
-       Primary row uses align-items:flex-start so that when the identity
-       column grows vertically (title + subtitle + meta), the actions cluster
-       stays anchored to the top of the card instead of vertically re-centering. */
+       Primary row centers actions vertically against the identity column
+       (title → subtitle → optional meta). When meta is present the actions
+       drift down slightly — acceptable trade for the more common no-meta
+       case where flex-start looks top-heavy. */
     .mj-page-header-interior__row {
       display: flex;
       align-items: center;
@@ -134,7 +135,6 @@ import { Component, Input } from '@angular/core';
     }
 
     .mj-page-header-interior__row--primary {
-      align-items: flex-start;
       gap: var(--mj-space-4);
     }
 
