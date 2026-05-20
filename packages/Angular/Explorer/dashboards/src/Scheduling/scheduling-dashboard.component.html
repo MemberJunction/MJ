@@ -27,12 +27,6 @@
       }
     </div>
     <div actions>
-      <mj-tab-nav
-        [Tabs]="Tabs"
-        [ActiveKey]="ActiveTab"
-        (TabChange)="OnTabChange($any($event))">
-      </mj-tab-nav>
-
       @switch (ActiveTab) {
         @case ('dashboard') {
           <mj-refresh-button (Clicked)="overviewCmp?.Refresh()"></mj-refresh-button>
@@ -79,18 +73,21 @@
       }
     </div>
 
-    @switch (ActiveTab) {
-      @case ('jobs') {
-        <div toolbar class="scheduling-toolbar">
+    <div toolbar class="scheduling-toolbar">
+      <mj-tab-nav
+        [Tabs]="Tabs"
+        [ActiveKey]="ActiveTab"
+        (TabChange)="OnTabChange($any($event))">
+      </mj-tab-nav>
+      @switch (ActiveTab) {
+        @case ('jobs') {
           <mj-page-search
             Placeholder="Search jobs..."
             [Value]="jobsCmp?.SearchTerm ?? ''"
             (ValueChange)="jobsCmp?.OnSearchChange($event)">
           </mj-page-search>
-        </div>
-      }
-      @case ('activity') {
-        <div toolbar class="scheduling-toolbar">
+        }
+        @case ('activity') {
           <mj-page-search
             Placeholder="Search executions..."
             [Value]="activityCmp?.SearchTerm ?? ''"
@@ -103,9 +100,9 @@
               (Clicked)="activityCmp?.OnTimeRangeChange(range.value)">
             </mj-filter-chip>
           }
-        </div>
+        }
       }
-    }
+    </div>
   </mj-page-header>
 
   <mj-page-body>
