@@ -67,19 +67,22 @@ Read-only context that sits below the subtitle in the identity column.
 3. **It's worth always-on real estate.** If the user could happily click a
    button to see it, it's not a meta badge — it's a detail panel.
 
-**Three patterns that pass the test:**
+**Four patterns that pass the test:**
 
 | Pattern | Examples | Why it works |
 |---|---|---|
 | **Status callout with variant** | "Unsaved changes" `warning`, "3 alerts" `error`, "Healthy" `success`, "X running" `running` | Genuine condition the user needs to know about; non-default variant draws the eye |
+| **X-of-Y filtered count** | `<mj-stat-badge [Count]="filtered.length" [Total]="all.length" Label="users">` → "8 of 75 users" | Tells the user *how much the filter is narrowing the data* — that's signal at any scale. Earns its spot on every list page that has search or filter UI, regardless of how many rows the page typically holds. Plain `[Count]` without `[Total]` does NOT pass — that's just the visible row count (anti-pattern below). |
 | **Non-trivially derived metric** | "Hit rate 92%", "P95 320ms", "Avg score 87%", "Total spend $1,234" | The user couldn't get this by counting rows — it's aggregation across the dataset |
 | **Hero metric (single, dominant)** | "Total Users: 2,431" *when there's nothing else and the page IS that count* | A solo headline. Only when the count itself is the point. |
+
+> **Note on rule #1 ("info not visible by glancing"):** that test is for *plain* count badges and other derived metrics, where the threshold depends on how many rows fit on screen. X-of-Y filtered counts are **scale-independent** — they earn their spot whether the list has 2 rows or 2,000.
 
 **Three anti-patterns (drop them):**
 
 | Anti-pattern | What it looks like | Fix |
 |---|---|---|
-| **Row count = `.length`** | `total: 12` next to a list of 12 visible rows | Drop. The list shows it. |
+| **Row count = `.length`** (no `[Total]`) | `total: 12` (just `[Count]="filtered.length"`) | Convert to X-of-Y form by adding `[Total]="all.length"` if there's a filter on the page — that *does* pass. If there's no filter to narrow the data, drop. |
 | **Partition mirror** | `active: 8 · inactive: 4` next to Active / Inactive filter chips in the toolbar | Drop. The chips already show the split. |
 | **Zero clutter** | `inactive: 0` / `owners: 0` perpetually rendering | Drop, or wrap in `@if (count > 0)` so it appears only when relevant. |
 

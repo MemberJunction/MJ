@@ -106,9 +106,17 @@ interface TestRunStatRow {
           Title="Test Explorer"
           Icon="fa-solid fa-compass"
           Subtitle="Browse tests and test suites">
-          <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-               FilteredResultCount mirrored the visible card-grid; the
-               left-rail selection + body cards already make that obvious. -->
+          <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+               TotalItemCount and FilteredResultCount are both kept in sync by
+               the component as the rail selection / status chips / search input
+               narrow the data. -->
+          <div meta>
+            <mj-stat-badge
+              [Count]="FilteredResultCount"
+              [Total]="TotalItemCount"
+              Label="results">
+            </mj-stat-badge>
+          </div>
           <div actions>
             <!-- Sort + Direction live in a popover instead of a chrome
                  toggle button so both dimensions surface together (was just

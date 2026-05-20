@@ -5,10 +5,16 @@
   AriaLabel="Filter applications"
   Title="Applications"
   Subtitle="Configure applications and their entity associations">
-  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-       apps/entities/public counts duplicated the Active/Inactive filter
-       chips in [toolbar] below AND the visible row count. `stats`
-       remains computed; only the meta-slot rendering was dropped. -->
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Partition badges (entities/public) stay dropped — Active/Inactive
+       chips in [toolbar] handle the partition signal. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="filteredApplications.length"
+      [Total]="applications.length"
+      Label="applications">
+    </mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search applications by name or description..."

@@ -8,8 +8,16 @@
   AriaLabel="Database Designer"
   Title="Database Designer"
   Subtitle="Browse and create user-defined entities">
-  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-       FilteredEntities.length was just the visible row count. -->
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Material on this page (~300 entities per deployment) makes the
+       narrowing signal valuable. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="FilteredEntities.length"
+      [Total]="TotalEntityCount"
+      Label="entities">
+    </mj-stat-badge>
+  </div>
   <div actions>
     <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
     <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">

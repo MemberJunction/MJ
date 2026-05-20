@@ -8,10 +8,16 @@
   AriaLabel="Filter roles"
   Title="Roles"
   Subtitle="Define system and custom roles for permissions">
-  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-       total/system/custom partition badges duplicated the System/Custom
-       filter chips in [toolbar] below. `stats` remains computed; only
-       the meta-slot rendering was dropped. -->
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Partition badges (system/custom) stay dropped — they mirror the
+       System/Custom filter chips in [toolbar]. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="filteredRoles.length"
+      [Total]="roles.length"
+      Label="roles">
+    </mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search roles by name or description..."

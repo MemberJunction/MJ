@@ -37,7 +37,10 @@ After the page-header / interior-chrome standardization, we have ~65 dashboards 
 - Dev Tools — App State Inspector, Layout Inspector (`[toolbar]`)
 - AI Tags, AI Autotagging Pipeline / KH Classify (`[toolbar]` in per-section interior chrome)
 
-### Task B — `[meta]` audit ✅ COMPLETE (2026-05-20)
+### Task B — `[meta]` audit ✅ COMPLETE (2026-05-20, second pass 2026-05-20)
+
+> **Second pass note** — the first pass over-corrected by dropping plain row-count badges entirely on ~10 list pages. The right fix was to *convert* them to "X of Y" filtered form (which earns its meta spot per the conventions doc — see the new "scale-independent" note in §2). Pages restored in the second pass: Users, Roles, Apps, Entity Permissions, AI Agents / Models / Prompts, Database Designer Entity List, Entity Admin, Lists Browse, Testing Explorer. Partition badges that mirrored filter chips stay dropped on those pages — they were correctly dropped on the first pass. Conventions doc §2 also updated with a 4th passing pattern ("X-of-Y filtered count") and a clarification that the "info not visible by glancing" test is scale-dependent only for plain counts, not for X-of-Y form.
+
 
 **Canonical rule:** see [`plans/explorer-chrome-conventions.md` §2 → `[meta]`](explorer-chrome-conventions.md#meta--what-am-i-looking-at) for the full decision framework. The short version: a badge earns its spot when (1) the info isn't visible by glancing at the page below, AND (2) it carries signal not just inventory, AND (3) it's worth always-on real estate.
 

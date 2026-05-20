@@ -7,8 +7,14 @@
     <mj-page-header
       Title="Models"
       Icon="fa-solid fa-microchip">
-      <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-           "filteredModels.length" was just the visible card-grid row count. -->
+      <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+      <div meta>
+        <mj-stat-badge
+          [Count]="filteredModels.length"
+          [Total]="models.length"
+          Label="models">
+        </mj-stat-badge>
+      </div>
       <div actions>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"

@@ -8,11 +8,17 @@
   AriaLabel="Filter users"
   Title="Users"
   Subtitle="Manage user accounts, roles, and access">
-  <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
-       The total/active/owners count badges duplicated the Active/Inactive
-       filter chips in [toolbar] below AND the visible row count in the
-       list, so they were noise. `stats` stays computed (used elsewhere
-       in the component); only the meta-slot rendering was dropped. -->
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2 —
+       tells the user how the search/filter is narrowing the data, signal at
+       any scale. Partition badges (active/inactive/owners) stay dropped —
+       they 1:1 mirror the filter chips in [toolbar] below. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="filteredUsers.length"
+      [Total]="users.length"
+      Label="users">
+    </mj-stat-badge>
+  </div>
   <div toolbar>
     <mj-page-search
       Placeholder="Search users by name or email..."
