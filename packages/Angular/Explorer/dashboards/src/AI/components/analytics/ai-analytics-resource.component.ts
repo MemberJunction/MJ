@@ -20,7 +20,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AIAnalyticsPreferences, GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
+import { FilterFieldConfig, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 interface NavItem {
     Label?: string;
@@ -77,22 +77,13 @@ interface NavItem {
             }
         </mj-page-header>
         <mj-page-body [Padding]="false" class="analytics-shell">
-            <nav class="analytics-nav">
-                @for (item of NavItems; track item.Key) {
-                    @if (item.Key === 'divider') {
-                        <div class="nav-divider"></div>
-                    } @else {
-                        <button
-                            class="nav-item"
-                            [class.active]="ActiveSection === item.Key"
-                            (click)="OnSectionChange(item.Key)">
-                            <i [class]="item.Icon"></i>
-                            <span>{{ item.Label }}</span>
-                        </button>
-                    }
-                }
-            </nav>
+            <mj-left-nav
+                [Sections]="navSections"
+                [ActiveId]="ActiveSection"
+                (ItemClicked)="onNavItemClicked($event)">
+            </mj-left-nav>
 
+            <mj-left-nav-content>
             <div class="analytics-content">
                 @switch (ActiveSection) {
                     @case ('executive-summary') {
@@ -142,6 +133,7 @@ interface NavItem {
                     }
                 }
             </div>
+            </mj-left-nav-content>
         </mj-page-body>
       </mj-page-layout>
     `,
@@ -160,57 +152,9 @@ interface NavItem {
 
         /* ── Left Navigation ── */
 
-        .analytics-nav {
-            width: 220px;
-            min-width: 220px;
-            background: var(--mj-bg-surface);
-            border-right: 1px solid var(--mj-border-default);
-            display: flex;
-            flex-direction: column;
-            padding: 12px 0;
-            overflow-y: auto;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 10px 18px;
-            border: none;
-            border-left: 3px solid transparent;
-            background: transparent;
-            color: var(--mj-text-secondary);
-            font-size: 13px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-            text-align: left;
-            width: 100%;
-        }
-
-        .nav-item:hover {
-            background: var(--mj-bg-surface-hover);
-            color: var(--mj-text-primary);
-        }
-
-        .nav-item.active {
-            background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            border-left-color: var(--mj-brand-primary);
-            font-weight: 600;
-        }
-
-        .nav-item i {
-            width: 18px;
-            text-align: center;
-            font-size: 14px;
-        }
-
-        .nav-divider {
-            height: 1px;
-            background: var(--mj-border-subtle);
-            margin: 8px 18px;
-        }
+        /* Rail width + nav-item styling now owned by <mj-left-nav>; the
+           divider is expressed as a new MJLeftNavSection rather than a CSS
+           rule. */
 
         /* ── Content Area ── */
 
@@ -255,45 +199,9 @@ interface NavItem {
 
         /* ── Responsive: collapse nav to horizontal strip ── */
 
+        /* Responsive — <mj-left-nav> handles its own collapse-to-row at
+           narrow viewports. We only need to tune the content padding. */
         @media (max-width: 768px) {
-            .analytics-shell {
-                flex-direction: column;
-            }
-
-            .analytics-nav {
-                width: 100%;
-                min-width: unset;
-                flex-direction: row;
-                overflow-x: auto;
-                overflow-y: hidden;
-                border-right: none;
-                border-bottom: 1px solid var(--mj-border-default);
-                padding: 0 8px;
-                gap: 2px;
-            }
-
-            .nav-header {
-                display: none;
-            }
-
-            .nav-divider {
-                width: 1px;
-                height: 28px;
-                margin: auto 4px;
-            }
-
-            .nav-item {
-                white-space: nowrap;
-                border-left: none;
-                border-bottom: 3px solid transparent;
-                padding: 10px 14px;
-            }
-
-            .nav-item.active {
-                border-left-color: transparent;
-                border-bottom-color: var(--mj-brand-primary);
-            }
-
             .analytics-content {
                 padding: 16px;
             }
@@ -532,6 +440,33 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         { Label: 'Error Analysis', Icon: 'fa-solid fa-triangle-exclamation', Key: 'error-analysis' },
         { Label: 'Usage Patterns', Icon: 'fa-solid fa-clock', Key: 'usage-patterns' },
     ];
+
+    /**
+     * Wraps `NavItems` for `<mj-left-nav>`. The `{ Key: 'divider' }` entry
+     * splits the items into two `MJLeftNavSection`s (an unlabeled section per
+     * group) — the rail's natural section break replaces the bespoke
+     * `.nav-divider` line.
+     */
+    get navSections(): MJLeftNavSection[] {
+        const sections: MJLeftNavSection[] = [{ items: [] }];
+        for (const item of this.NavItems) {
+            if (item.Key === 'divider') {
+                sections.push({ items: [] });
+            } else {
+                sections[sections.length - 1].items.push({
+                    id: item.Key,
+                    label: item.Label ?? '',
+                    icon: item.Icon
+                });
+            }
+        }
+        return sections;
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    onNavItemClicked(item: MJLeftNavItem): void {
+        this.OnSectionChange(item.id);
+    }
 
     async ngOnInit(): Promise<void> {
         super.ngOnInit();

@@ -51,16 +51,20 @@ import { Component, HostBinding, Input } from '@angular/core';
       overflow-y: auto;
       overflow-x: hidden;
       -webkit-overflow-scrolling: touch;
-      padding: var(--mj-space-4);
+      /* Top padding is intentionally tighter than sides/bottom — the body is
+         almost always preceded by an <mj-page-header-interior> whose own
+         bottom margin provides the visual breathing room above the body
+         content. Sides + bottom scale responsively for comfortable gutters. */
+      padding: var(--mj-space-2) var(--mj-space-4) var(--mj-space-4);
       background: var(--mj-bg-page);
     }
 
     @media (min-width: 768px) {
-      :host { padding: var(--mj-space-6); }
+      :host { padding: var(--mj-space-2) var(--mj-space-6) var(--mj-space-6); }
     }
 
     @media (min-width: 1024px) {
-      :host { padding: var(--mj-space-8); }
+      :host { padding: var(--mj-space-2) var(--mj-space-8) var(--mj-space-8); }
     }
 
     /* No-padding escape hatch — for sub-pages whose inner content owns the gutter. */

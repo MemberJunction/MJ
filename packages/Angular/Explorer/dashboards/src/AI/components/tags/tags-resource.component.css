@@ -13,98 +13,11 @@
     overflow: hidden;
 }
 
-/* ══════ LEFT NAV ══════ */
-
-.at-left-nav {
-    width: 220px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.at-left-nav-header {
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--mj-border-subtle);
-}
-
-.at-left-nav-header h2 {
-    font-size: 0.95rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    color: var(--mj-text-primary);
-}
-
-.at-left-nav-header h2 i {
-    color: var(--mj-brand-primary);
-}
-
-.at-left-nav-items {
-    flex: 1;
-    padding: 8px;
-    overflow-y: auto;
-}
-
-.at-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    transition: all 0.12s ease;
-    margin-bottom: 2px;
-}
-
-.at-nav-item:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-secondary);
-}
-
-.at-nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 0.8rem;
-}
-
-.at-nav-badge {
-    margin-left: auto;
-    background: var(--mj-bg-surface-sunken);
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-}
-
-.at-nav-item.active .at-nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-}
-
-.at-nav-badge-live {
-    background: var(--mj-status-success-bg) !important;
-    color: var(--mj-status-success-text) !important;
-}
-
-.at-nav-divider {
-    height: 1px;
-    background: var(--mj-border-subtle);
-    margin: 8px 12px;
-}
+/*
+  Left rail now owned by <mj-left-nav> (~50 lines of bespoke .at-left-nav-items
+  / .at-nav-item / .at-nav-badge / .at-nav-divider styles retired). The footer
+  stayed bespoke since it's "Run Pipeline" CTA content, not nav chrome.
+*/
 
 .at-left-nav-footer {
     padding: 12px;

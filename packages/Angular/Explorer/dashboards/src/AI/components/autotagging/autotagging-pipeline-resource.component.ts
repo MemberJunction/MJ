@@ -15,6 +15,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -1081,6 +1082,36 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     // ── Tab switching ──
+
+    /**
+     * Wraps `NavItems` for `<mj-left-nav>`. Hardcoded "Run History" item goes
+     * into a second `MJLeftNavSection` — the rail's natural section break
+     * replaces the bespoke `.at-nav-divider` line.
+     */
+    public get navSections(): MJLeftNavSection[] {
+        return [
+            {
+                items: this.NavItems.map(n => ({
+                    id: n.Tab,
+                    label: n.Label,
+                    icon: n.Icon,
+                    badge: n.BadgeText || undefined
+                }))
+            },
+            {
+                items: [{
+                    id: 'history',
+                    label: 'Run History',
+                    icon: 'fa-solid fa-clock-rotate-left'
+                }]
+            }
+        ];
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        void this.SwitchTab(item.id as TabName);
+    }
 
     public async SwitchTab(tab: TabName): Promise<void> {
         if (tab === this.ActiveTab) return;

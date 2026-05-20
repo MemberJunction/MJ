@@ -18,21 +18,13 @@
   <!-- Tags Dashboard -->
   <div class="at-dashboard">
 
-    <!-- ══════ LEFT NAV ══════ -->
-    <div class="at-left-nav">
-        <div class="at-left-nav-items">
-            @for (item of NavItems; track item.Tab) {
-                <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
-                    <i [class]="item.Icon"></i> {{ item.Label }}
-                    @if (item.BadgeText) {
-                        <span class="at-nav-badge" [class.at-nav-badge-live]="item.BadgeClass === 'nav-badge-live'">{{ item.BadgeText }}</span>
-                    }
-                </div>
-            }
-        </div>
-    </div>
+    <mj-left-nav
+      [Sections]="navSections"
+      [ActiveId]="ActiveTab"
+      (ItemClicked)="onNavItemClicked($event)">
+    </mj-left-nav>
 
-    <!-- ══════ MAIN AREA ══════ -->
+    <mj-left-nav-content>
     <div class="at-main-area">
 
         @if (IsLoading) {
@@ -1169,6 +1161,7 @@
 
     </div>
     <!-- end at-main-area -->
+    </mj-left-nav-content>
 
     <!-- ══════ ITEM DETAIL SLIDE-IN ══════ -->
     @if (ShowItemDetail && SelectedFeedItem) {

@@ -63,10 +63,13 @@ import { CommonModule } from '@angular/common';
        is required because Angular's emulated encapsulation gives the host a scope
        attribute that dynamically-created components do not inherit, so a plain
        direct-child selector would not match them. The :not() filters skip our own
-       error / loading elements which already have their own layout rules. This
-       replaces the bespoke inline-style hack admin shells used to apply via
-       applyHostSizing(). */
-    :host ::ng-deep > *:not(.mj-left-nav-content__error):not(.mj-left-nav-content__loading) {
+       error / loading elements AND the interior chrome primitives, which already
+       self-declare their flex behavior on :host (header-interior is display:block
+       with natural height; body-interior is flex:1 1 auto with overflow-y:auto)
+       and competing with them would break multi-sibling chrome layouts inside a
+       single content pane. This replaces the bespoke inline-style hack admin
+       shells used to apply via applyHostSizing(). */
+    :host ::ng-deep > *:not(.mj-left-nav-content__error):not(.mj-left-nav-content__loading):not(mj-page-header-interior):not(mj-page-body-interior) {
       flex: 1 1 auto;
       min-height: 0;
       height: 100%;
