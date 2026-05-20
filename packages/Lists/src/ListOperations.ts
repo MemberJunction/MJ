@@ -481,7 +481,9 @@ export class ListOperations {
    */
   private resolveEntityNameFromList(list: MJListEntity): string {
     const md = this.metadata();
-    const entity: EntityInfo | undefined = md.Entities.find((e) => e.ID === list.EntityID);
+    // EntityByID is O(1) over the pre-populated entity map; Entities.find
+    // is an O(N) array scan and the documented anti-pattern.
+    const entity: EntityInfo | undefined = md.EntityByID(list.EntityID);
     if (!entity) {
       throw new Error(`List '${list.ID}' references unknown EntityID '${list.EntityID}'`);
     }
@@ -847,7 +849,7 @@ export class ListOperations {
     if (!list.SourceFilterSnapshot) return null;
 
     const md = this.metadata();
-    const entity = md.Entities.find((e) => e.ID === list.EntityID);
+    const entity = md.EntityByID(list.EntityID);
     if (!entity) return null;
 
     let parsed: {

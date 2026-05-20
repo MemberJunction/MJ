@@ -38,6 +38,9 @@ vi.mock('@memberjunction/core', () => {
     EntityByName(name: string) {
       return mockEntities.find((e) => e.Name === name);
     }
+    EntityByID(id: string) {
+      return mockEntities.find((e) => e.ID === id);
+    }
     GetEntityObject(entityName: string) {
       return mockGetEntityObject(entityName);
     }

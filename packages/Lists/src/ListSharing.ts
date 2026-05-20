@@ -635,8 +635,9 @@ export class ListSharing {
       log.Status = 'Success';
       log.Description = args.Description;
       log.Details = JSON.stringify(args.Details);
-      // EntityID for MJ: Lists is looked up lazily — cached on first call.
-      const listEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      // EntityID for MJ: Lists via the O(1) by-name map. Entities.find
+      // is an O(N) scan and the documented anti-pattern.
+      const listEntity = md.EntityByName('MJ: Lists');
       if (listEntity) log.EntityID = listEntity.ID;
       log.RecordID = args.ListID;
       const ok = await log.Save();
