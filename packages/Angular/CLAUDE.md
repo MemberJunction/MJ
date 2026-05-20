@@ -174,11 +174,16 @@ This guide covers:
 - Getter/setter state management pattern
 - User preferences via UserInfoEngine
 - Data loading patterns with RunView and local caching
+- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md).
 - Layout patterns using CSS Flexbox/Grid
 - Permission checking patterns
 - Creating new Engine classes for domain logic
 
 **Read this guide before starting any dashboard work** to ensure consistency with established patterns.
+
+### ⚠️ Page Chrome — exception to be aware of
+
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use a local `.sticky-header` action row instead. This is Section 9b of the chrome conventions; the decision on the long-term pattern (Section 10) is deferred to a future branch.
 
 ---
 

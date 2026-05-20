@@ -2,44 +2,7 @@
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  padding: 1.5rem;
-  height: 100%;
-  overflow-y: auto;
   color: var(--mj-text-primary);
-}
-.execution-monitoring .monitoring-header .header-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-}
-.execution-monitoring .monitoring-header .header-title h3 {
-  margin: 0;
-  font-size: 1.25rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.execution-monitoring .monitoring-header .header-title h3 i {
-  color: var(--mj-brand-primary);
-}
-.execution-monitoring .monitoring-header .header-title .refresh-btn {
-  gap: 0.5rem;
-}
-.execution-monitoring .monitoring-header .filters-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.execution-monitoring .monitoring-header .filters-row .search-container {
-  flex: 1;
-  min-width: 200px;
-}
-.execution-monitoring .monitoring-header .filters-row .filter-group {
-  display: flex;
-  gap: 0.75rem;
 }
 .execution-monitoring .metrics-summary {
   display: grid;

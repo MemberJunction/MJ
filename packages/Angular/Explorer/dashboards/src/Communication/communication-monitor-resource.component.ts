@@ -35,8 +35,19 @@ interface HourlyBucket {
   standalone: false,
     selector: 'mj-communication-monitor-resource',
     template: `
-    <div class="monitor-wrapper">
-      <div class="monitor-container">
+    <mj-page-layout>
+      <mj-page-header
+        Title="Monitor"
+        Icon="fa-solid fa-chart-line"
+        Subtitle="Live delivery health, provider status, and channel breakdown">
+        <div actions>
+          <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
+            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
+          </button>
+        </div>
+      </mj-page-header>
+
+      <mj-page-body>
         <!-- KPI STRIP -->
         <div class="kpi-strip">
           <div class="kpi-card sent">
@@ -195,22 +206,10 @@ interface HourlyBucket {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
     styles: [`
-    .monitor-wrapper {
-        height: 100%;
-        overflow-y: auto;
-        background: var(--mj-bg-surface);
-    }
-    .monitor-container {
-        padding: 24px;
-        min-height: 100%;
-        max-width: 1600px;
-        margin: 0 auto;
-    }
-
     /* KPI STRIP */
     .kpi-strip {
         display: grid;

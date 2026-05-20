@@ -3,6 +3,7 @@ import { ResourceData, MJAuditLogEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
+import { FilterFieldConfig, ViewToggleOption } from '@memberjunction/ng-ui-components';
 // The Credential Access AuditLogType ID from metadata
 const CREDENTIAL_ACCESS_AUDIT_LOG_TYPE_ID = 'E8D4D100-E785-42D3-997F-ECFF3B0BCFC0';
 
@@ -51,6 +52,83 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
     // Chart data
     public hourlyData: { hour: string; success: number; failed: number }[] = [];
     public operationCounts: Map<string, number> = new Map();
+
+    public readonly viewOptions: ViewToggleOption[] = [
+        { key: 'timeline', icon: 'fa-solid fa-timeline', title: 'Timeline view' },
+        { key: 'table', icon: 'fa-solid fa-table', title: 'Table view' }
+    ];
+
+    public get FilterFields(): FilterFieldConfig[] {
+        return [
+            {
+                key: 'status',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-circle-info',
+                placeholder: 'All Statuses',
+                options: [
+                    { text: 'All Statuses', value: '' },
+                    { text: 'Success', value: 'Success' },
+                    { text: 'Failed', value: 'Failed' }
+                ]
+            },
+            {
+                key: 'operation',
+                type: 'dropdown',
+                label: 'Operation',
+                icon: 'fa-solid fa-bolt',
+                placeholder: 'All Operations',
+                filterable: true,
+                options: [
+                    { text: 'All Operations', value: '' },
+                    ...this.getOperationList().map(op => ({ text: op, value: op }))
+                ]
+            },
+            {
+                key: 'dateRange',
+                type: 'dropdown',
+                label: 'Time range',
+                icon: 'fa-solid fa-clock',
+                options: [
+                    { text: 'Last 24 hours', value: '1' },
+                    { text: 'Last 7 days', value: '7' },
+                    { text: 'Last 30 days', value: '30' },
+                    { text: 'Last 90 days', value: '90' }
+                ]
+            }
+        ];
+    }
+    public get FilterValues(): Record<string, unknown> {
+        return {
+            status: this.selectedStatus,
+            operation: this.selectedOperation,
+            dateRange: this.dateRange
+        };
+    }
+    public get ActiveFilterCount(): number {
+        let n = 0;
+        if (this.selectedStatus) n++;
+        if (this.selectedOperation) n++;
+        if (this.dateRange && this.dateRange !== '7') n++;  // 7-day is the default; don't count it
+        return n;
+    }
+    public onFilterValuesChange(v: Record<string, unknown>): void {
+        const next = (v ?? {}) as { status?: string; operation?: string; dateRange?: string };
+        if ((next.status ?? '') !== this.selectedStatus) {
+            this.onStatusFilterChange(next.status ?? '');
+        }
+        if ((next.operation ?? '') !== this.selectedOperation) {
+            this.onOperationFilterChange(next.operation ?? '');
+        }
+        if ((next.dateRange ?? '7') !== this.dateRange) {
+            this.onDateRangeChange(next.dateRange ?? '7');
+        }
+    }
+    public resetFilters(): void {
+        if (this.selectedStatus) this.onStatusFilterChange('');
+        if (this.selectedOperation) this.onOperationFilterChange('');
+        if (this.dateRange !== '7') this.onDateRangeChange('7');
+    }
 
     constructor(private cdr: ChangeDetectorRef) {
         super();

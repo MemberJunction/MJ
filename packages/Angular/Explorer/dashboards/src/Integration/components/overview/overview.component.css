@@ -2,12 +2,13 @@
    Integration Overview - Root
    ========================================================================== */
 .overview {
-  padding: 28px;
+  /* padding + flex/scroll now owned by <mj-page-body>; keep max-width for
+     comfortable reading on ultra-wide displays. */
   max-width: 1440px;
   margin: 0 auto;
-  background: var(--mj-bg-page);
-  min-height: 100%;
 }
+
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
 
 /* ==========================================================================
    Notification Banner
