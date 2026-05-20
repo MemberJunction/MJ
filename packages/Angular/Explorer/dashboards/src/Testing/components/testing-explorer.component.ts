@@ -7,7 +7,7 @@ import {
   ViewContainerRef,
   Input
 } from '@angular/core';
-import { ViewToggleOption, MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
+import { ViewToggleOption, MJLeftNavItem, MJLeftNavSection, FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { RunView, CompositeKey } from '@memberjunction/core';
@@ -110,16 +110,29 @@ interface TestRunStatRow {
                FilteredResultCount mirrored the visible card-grid; the
                left-rail selection + body cards already make that obvious. -->
           <div actions>
+            <!-- Sort + Direction live in a popover instead of a chrome
+                 toggle button so both dimensions surface together (was just
+                 a direction toggle before; the field selection was buried
+                 in code). Pattern matches AI Analytics → Model Performance
+                 where SortBy lives alongside other filter dropdowns. -->
+            <mj-filter-popover
+              Label="Sort"
+              Icon="fa-solid fa-arrow-down-wide-short"
+              [ActiveCount]="ActiveSortFilterCount"
+              [ShowClearAll]="ActiveSortFilterCount > 0"
+              (ClearAllRequested)="resetSortFilters()">
+              <mj-filter-panel
+                [Fields]="sortFilterFields"
+                [Values]="sortFilterValues"
+                (ValuesChange)="onSortFilterChange($event)"
+                (Reset)="resetSortFilters()">
+              </mj-filter-panel>
+            </mj-filter-popover>
             <mj-view-toggle
               [Options]="HeaderViewOptions"
               [ActiveKey]="ViewMode"
               (KeyChange)="SetViewMode($any($event))">
             </mj-view-toggle>
-            <button mjButton variant="secondary" size="sm" (click)="ToggleSortDirection()"
-              [title]="'Sort by ' + SortFieldLabel + ' (' + (SortDirection === 'asc' ? 'ascending' : 'descending') + ')'">
-              <i class="fa-solid fa-arrow-down-short-wide"></i>
-              <i class="fa-solid" [class.fa-arrow-up]="SortDirection === 'asc'" [class.fa-arrow-down]="SortDirection === 'desc'"></i>
-            </button>
             <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
               <i class="fa-solid fa-folder-plus"></i> New Suite
             </button>
@@ -1392,15 +1405,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     return true;
   }
 
-  get SortFieldLabel(): string {
-    switch (this.SortField) {
-      case 'name': return 'Name';
-      case 'updated': return 'Updated';
-      case 'status': return 'Status';
-      default: return 'Name';
-    }
-  }
-
   constructor(
     private cdr: ChangeDetectorRef,
     private viewContainerRef: ViewContainerRef,
@@ -1605,9 +1609,59 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     return null;
   }
 
-  ToggleSortDirection(): void {
-    const newDir = this.SortDirection === 'asc' ? 'desc' : 'asc';
-    this._sortDirection$.next(newDir);
+  // ---------------------------------------------------------------------------
+  // Sort filter-popover wiring
+  //
+  // The chrome surfaces SortField + SortDirection through a <mj-filter-popover>
+  // — same pattern AI Analytics → Model Performance uses for its SortBy
+  // selection. Was previously a single direction-toggle button in chrome
+  // [actions] with no way to change the field from the UI.
+  // ---------------------------------------------------------------------------
+
+  public readonly sortFieldOptions = [
+    { text: 'Name', value: 'name' },
+    { text: 'Updated', value: 'updated' },
+    { text: 'Status', value: 'status' },
+  ];
+
+  public readonly sortDirectionOptions = [
+    { text: 'Ascending', value: 'asc' },
+    { text: 'Descending', value: 'desc' },
+  ];
+
+  public get sortFilterFields(): FilterFieldConfig[] {
+    return [
+      { key: 'SortField', type: 'dropdown', label: 'Sort by',
+        icon: 'fa-solid fa-arrow-down-wide-short', options: this.sortFieldOptions },
+      { key: 'SortDirection', type: 'dropdown', label: 'Direction',
+        icon: 'fa-solid fa-arrow-up-arrow-down', options: this.sortDirectionOptions },
+    ];
+  }
+
+  public get sortFilterValues(): Record<string, unknown> {
+    return { SortField: this.SortField, SortDirection: this.SortDirection };
+  }
+
+  public onSortFilterChange(values: Record<string, unknown>): void {
+    if ('SortField' in values) {
+      this._sortField$.next(values['SortField'] as SortField);
+    }
+    if ('SortDirection' in values) {
+      this._sortDirection$.next(values['SortDirection'] as SortDirection);
+    }
+  }
+
+  public resetSortFilters(): void {
+    this._sortField$.next('name');
+    this._sortDirection$.next('asc');
+  }
+
+  /** Non-zero when the user has changed SortField or SortDirection from defaults — drives the popover badge. */
+  public get ActiveSortFilterCount(): number {
+    let count = 0;
+    if (this.SortField !== 'name') count++;
+    if (this.SortDirection !== 'asc') count++;
+    return count;
   }
 
   RunTest(testId: string): void {

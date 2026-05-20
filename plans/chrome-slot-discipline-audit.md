@@ -125,3 +125,7 @@ These are the rules the audit enforces — not new rules.
 - Branch: `explorer-shell-subpage-chrome`
 - Related: [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md), [`plans/explorer-ia-progress.md`](explorer-ia-progress.md)
 - Memory: `feedback_subtabs_in_chrome_toolbar.md` established the Task A rule
+
+## Natural next phase
+
+This audit settles **slot order and content** (where things go, which trivial badges to drop, button ordering). The natural follow-on — **which controls a list page should have at all** — is captured in [`plans/list-page-standardization.md`](list-page-standardization.md). That work is out of scope for the current branch; queued as the next chrome push.

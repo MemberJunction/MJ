@@ -17,6 +17,9 @@
     </div>
   }
   <div actions>
+    <!-- Order: secondary buttons (Refresh, Discard) → primary CTA (Save) rightmost,
+         per chrome conventions §2 [actions]. -->
+    <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
     @if (HasUnsavedChanges) {
       <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
         <i class="fa-solid fa-rotate-left"></i> Discard
@@ -29,7 +32,6 @@
         }
       </button>
     }
-    <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
   </div>
 </mj-page-header-interior>
 
