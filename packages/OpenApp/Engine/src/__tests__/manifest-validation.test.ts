@@ -158,10 +158,15 @@ describe('Manifest Validation', () => {
         });
     });
 
-    describe('Invalid Schema Name', () => {
-        it('should reject uppercase schema name', () => {
+    describe('Schema Name Validation', () => {
+        it('should accept mixed-case schema name (SQL Server is case-insensitive)', () => {
             const m = { ...minimalManifest(), schema: { name: 'MySchema' } };
-            expect(ValidateManifestObject(m).Success).toBe(false);
+            expect(ValidateManifestObject(m).Success).toBe(true);
+        });
+
+        it('should accept mixed-case schema name with __ prefix (e.g., __mj_BizAppsCommon)', () => {
+            const m = { ...minimalManifest(), schema: { name: '__mj_BizAppsCommon' } };
+            expect(ValidateManifestObject(m).Success).toBe(true);
         });
 
         it('should accept schema name starting with __ (e.g., __bcsaas)', () => {

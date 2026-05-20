@@ -32,7 +32,7 @@ import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-sha
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
-import { ComponentCacheManager } from './component-cache-manager';
+import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -312,6 +312,67 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }, 50);
   }
 
+  /**
+   * Clear cached components matching a predicate. Components that match are
+   * destroyed; others are kept. Use for tenant switching — clear org-scoped
+   * components while keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   *                  If omitted, clears ALL cached components.
+   * @returns Number of components destroyed.
+   */
+  public ClearComponentCache(predicate?: (info: CachedComponentInfo) => boolean): number {
+    if (predicate) {
+      return this.cacheManager.ClearCacheByPredicate(predicate);
+    }
+    const stats = this.cacheManager.getCacheStats();
+    this.cacheManager.clearCache();
+    return stats.total;
+  }
+
+  /**
+   * Destroy all cached components and reload open tabs.
+   *
+   * In single-resource mode: clears the signature to force a reload, then
+   * re-invokes loadSingleResourceContent().
+   *
+   * In multi-tab mode: destroys all cached components, marks all tabs as
+   * not-loaded, then reloads the currently active tab immediately. Other
+   * tabs reload lazily when the user switches to them (onTabShown fires
+   * with isFirstShow=true after MarkTabNotLoaded).
+   *
+   * Use this for tenant switching — tabs stay open but their components
+   * are recreated fresh with the new org context.
+   */
+  public async ReloadAllTabs(): Promise<void> {
+    // Destroy all cached component instances
+    this.cacheManager.clearCache();
+
+    if (this.useSingleResourceMode) {
+      // Force reload by clearing the signature check
+      this.currentSingleResourceSignature = null;
+      this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
+      await this.loadSingleResourceContent();
+    } else {
+      // Mark all tabs as not-loaded so onTabShown will trigger loadTabContent
+      const tabIds = this.layoutManager.GetAllTabIds();
+      for (const tabId of tabIds) {
+        this.layoutManager.MarkTabNotLoaded(tabId);
+      }
+
+      // Reload the currently active tab immediately
+      const activeTabId = this.workspaceManager.GetActiveTabId();
+      if (activeTabId && this.layoutManager.IsInitialized) {
+        const container = this.layoutManager.GetContainer(activeTabId);
+        if (container) {
+          await this.loadTabContent(activeTabId, container);
+          this.layoutManager.MarkTabLoaded(activeTabId);
+        }
+      }
+    }
+  }
+
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
 
@@ -499,9 +560,22 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
 
-      // Restore saved queryParams to the tab config so the URL reflects
-      // the component's preserved state (e.g., selected conversation, collection drill-down).
-      if (cached.savedQueryParams) {
+      // Reconcile the cached component's preserved queryParams with any INCOMING navigation
+      // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
+      // conversation via SwitchToApp before we got here).
+      //
+      // - If the tab has incoming queryParams, those are the source of truth: keep them and
+      //   sync the cache's snapshot to match. The component's reactive query-param subscription
+      //   (alive while detached) delivers them, so it switches to the requested state. Restoring
+      //   savedQueryParams here instead would clobber the navigation intent — the bug where two
+      //   conversation pins both reopened whatever chat was already cached.
+      // - Only when there's NO incoming intent (a plain tab re-focus) do we restore the
+      //   component's own preserved params so the URL reflects its retained state.
+      const incomingQP = activeTab.configuration?.['queryParams'] as Record<string, string> | undefined;
+      const hasIncomingQP = incomingQP != null && Object.keys(incomingQP).length > 0;
+      if (hasIncomingQP) {
+        cached.savedQueryParams = { ...incomingQP };
+      } else if (cached.savedQueryParams) {
         this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
           queryParams: cached.savedQueryParams
         });

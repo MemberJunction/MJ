@@ -23,7 +23,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Actions Components
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
-import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+import { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
 import { CodeManagementComponent } from './Actions/components/code-management.component';
 import { EntityIntegrationComponent } from './Actions/components/entity-integration.component';
@@ -49,7 +49,7 @@ import {
 @NgModule({
   declarations: [
     ActionsOverviewComponent,
-    ActionsExecutionMonitoringComponent,
+    ActionExecutionMonitoringComponent,
     ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
@@ -89,7 +89,7 @@ import {
   ],
   exports: [
     ActionsOverviewComponent,
-    ActionsExecutionMonitoringComponent,
+    ActionExecutionMonitoringComponent,
     ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,

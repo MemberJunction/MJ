@@ -105,6 +105,53 @@ The only exception is `MJExplorerAppComponent` which subscribes to `Router.event
 
 ---
 
+## 🚨 CRITICAL: Query-Param State MUST Round-Trip (Deep Links, Home Pins, Back/Forward) 🚨
+
+Any resource component (`BaseResourceComponent` / `BaseDashboard` subclass) that encodes sub-state in the URL via query params **MUST** be able to restore that state when it changes *after* initial load — not just on first mount. Reading params once in `ngOnInit` / `initDashboard` / a `Data` setter is **not enough**. If you only read on init, deep links, Home pins, and browser back/forward all silently break the moment the tab is **re-focused** instead of freshly created — which is the common case, because Explorer **caches and reuses resource components** (it detaches them from the DOM but keeps the instance alive; see [ComponentCacheManager](Explorer/explorer-core/src/lib/shell/components/tabs/component-cache-manager.ts)).
+
+### The contract: two halves, both required
+
+1. **Read initial params** (first mount): in `ngOnInit` / `initDashboard`, call `this.GetQueryParams()` and apply.
+2. **React to later changes** (tab re-focus, pin click, back/forward, deep link): override `OnQueryParamsChanged(params, source)` and apply the same state.
+
+```typescript
+// 1. Initial read
+protected initDashboard(): void {
+    const p = this.GetQueryParams();
+    if (p['entity']) this.openEntity(p['entity']);
+}
+
+// 2. React to ALL later changes — REQUIRED if you push params to the URL
+protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const entityId = params['entity'] || null;
+    if (entityId && entityId !== this.currentEntityId) {
+        this.openEntity(entityId);          // openEntity may call UpdateQueryParams — safe, auto-suppressed during delivery
+    } else if (!entityId && this.currentEntityId) {
+        this.closeEntity();
+    }
+}
+```
+
+**Rule of thumb:** if you ever call `UpdateQueryParams(...)` / `UpdateActiveTabQueryParams(...)`, you owe a matching `OnQueryParamsChanged` that restores that exact state. The two are a pair.
+
+### How delivery works (and why it's reliable)
+
+`OnQueryParamsChanged` is driven by `BaseResourceComponent` from two sources, both funneled through a de-duplicated delivery:
+- **Reactive** — `NavigationService.ObserveTabQueryParams(tabId)`, backed by the workspace `BehaviorSubject`. It replays the tab's current params on subscribe **and** emits later changes. This is **plain RxJS, independent of Angular change detection**, so it fires even on a cached/detached component. The first meaningful delivery is labeled `'deeplink'`, later ones `'popstate'`.
+- **Explicit** — the shell's popstate path calls `NavigationService.NotifyQueryParamsChanged`.
+
+Because delivery is RxJS-based (not CD-based), you do **not** need the `MJGlobal` event bus for this — the workspace stream already reaches detached components.
+
+### Do NOT use `ActivatedRoute` for this
+
+Some older components inject `ActivatedRoute` and subscribe to `route.queryParams`. This is off-pattern (violates the NavigationService-only rule) **and unreliable for pin clicks**: `UpdateActiveTabQueryParams` updates the tab config and the workspace stream, but does not directly drive the Angular router, so an `ActivatedRoute` subscription may not fire. Use `OnQueryParamsChanged` instead.
+
+### Cached components: navigation intent beats preserved state
+
+When the tab-container reattaches a cached component, an **incoming** navigation's query params (e.g. a Home pin targeting a specific conversation) take precedence over the component's own `savedQueryParams`. For cross-resource navigation that targets specific params, pass them **into** `NavigationService.SwitchToApp(appId, navItem, queryParams)` so they land in the tab config *synchronously* before the cached component reattaches — never via a post-hoc `.then(() => UpdateActiveTabQueryParams(...))`, which races the cache reattach and loses. See [tab-container.component.ts](Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.ts) (`loadSingleResourceContent`, cached branch).
+
+---
+
 ## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
 
 ### Shared Singleton Services Pattern

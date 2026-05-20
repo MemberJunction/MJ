@@ -78,10 +78,10 @@ const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>([
 export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     // -----------------------------------------------------------------------
-    // GetToolList
+    // getSubclassToolList
     // -----------------------------------------------------------------------
 
-    public GetToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'get_tables',
@@ -145,19 +145,14 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                     required: ['table', 'field', 'operation'],
                 },
             },
-            {
-                name: 'get_full',
-                description: 'Returns the parsed DataSnapshot content. Large tables are truncated to the first 100 rows; use get_rows to page through the rest.',
-                inputSchema: { type: 'object', properties: {}, required: [] },
-            },
         ];
     }
 
     // -----------------------------------------------------------------------
-    // InvokeTool — dispatcher
+    // invokeSubclassTool — dispatcher
     // -----------------------------------------------------------------------
 
-    public async InvokeTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer
@@ -191,8 +186,6 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
                 return this.handleSearchRows(payload, input);
             case 'aggregate':
                 return this.handleAggregate(payload, input);
-            case 'get_full':
-                return this.handleGetFull(payload);
             default:
                 return this.errorResult(`Unknown tool: "${toolName}".`);
         }
@@ -284,24 +277,6 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
         const result = this.computeAggregate(table.rows, field, operation as AggregateOperation);
         return this.successResult(result);
-    }
-
-    private handleGetFull(payload: SnapshotPayload): ArtifactToolResult {
-        const MAX_ROWS_PER_TABLE = 100;
-        const truncatedTables = payload.tables.map(t => {
-            if (t.rows.length <= MAX_ROWS_PER_TABLE) return t;
-            return {
-                ...t,
-                rows: t.rows.slice(0, MAX_ROWS_PER_TABLE),
-                metadata: {
-                    ...t.metadata,
-                    rowCount: t.rows.length,
-                    truncated: true,
-                    note: `Showing first ${MAX_ROWS_PER_TABLE} of ${t.rows.length} rows. Use get_rows to page through the rest.`,
-                },
-            };
-        });
-        return this.successResult({ tables: truncatedTables });
     }
 
     // -----------------------------------------------------------------------

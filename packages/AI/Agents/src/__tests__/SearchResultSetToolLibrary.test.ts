@@ -29,9 +29,10 @@ const SAMPLE_SPEC = JSON.stringify({
 describe('SearchResultSetToolLibrary', () => {
     const lib = new SearchResultSetToolLibrary();
 
-    it('registers exactly the five spec-mandated tools', () => {
+    it('registers the five spec-mandated tools plus inherited get_full', () => {
         const tools = lib.GetToolList().map(t => t.name);
         expect(tools).toEqual([
+            'get_full',
             'filterByScore',
             'groupBySourceProvider',
             'getMatchingChunks',
