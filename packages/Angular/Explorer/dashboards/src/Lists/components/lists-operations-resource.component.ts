@@ -4,7 +4,7 @@ import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared'
 import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, MJUserViewEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
-import { ListSetOperationsService, SetOperand, VennData, VennIntersection, SetOperation, SetOperationResult, operandCacheKey } from '../services/list-set-operations.service';
+import { ListSetOperationsService, SetOperand, VennData, VennIntersection, SetOperation, SetOperationResult, OperandCacheKey } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ExportService } from '@memberjunction/ng-export-service';

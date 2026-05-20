@@ -84,7 +84,7 @@ export interface ListCapabilities {
   CanRunOperations: boolean;
 }
 
-export function capabilitiesForLevel(level: SharePermissionLevel | null): ListCapabilities {
+export function CapabilitiesForLevel(level: SharePermissionLevel | null): ListCapabilities {
   if (level === 'Owner') {
     return {
       CanRead: true, CanEdit: true, CanRefresh: true,

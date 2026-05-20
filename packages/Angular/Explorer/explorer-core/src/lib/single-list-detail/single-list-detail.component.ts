@@ -5,7 +5,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import { capabilitiesForLevel, ListSharing, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists';
+import { CapabilitiesForLevel, ListSharing, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
@@ -51,7 +51,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // loads. Capabilities is exposed to the template for `@if` gating; the
   // server-side enforcement remains the source of truth — these flags
   // are a UX convenience so users don't see buttons they'll be rejected on.
-  public capabilities: ListCapabilities = capabilitiesForLevel(null);
+  public capabilities: ListCapabilities = CapabilitiesForLevel(null);
   public currentLevel: SharePermissionLevel | null = null;
 
   // Lineage / refresh-from-source state. `sourceViewName` is loaded after
@@ -261,7 +261,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
    */
   private async loadCapabilities(): Promise<void> {
     if (!this.listRecord) {
-      this.capabilities = capabilitiesForLevel(null);
+      this.capabilities = CapabilitiesForLevel(null);
       this.currentLevel = null;
       return;
     }
@@ -269,10 +269,10 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       const sharing = new ListSharing(this.ProviderToUse.CurrentUser!, this.ProviderToUse);
       const level = await sharing.ResolveEffectivePermission(this.listRecord.ID);
       this.currentLevel = level;
-      this.capabilities = capabilitiesForLevel(level);
+      this.capabilities = CapabilitiesForLevel(level);
     } catch (e) {
       LogError(`loadCapabilities failed: ${e instanceof Error ? e.message : String(e)}`);
-      this.capabilities = capabilitiesForLevel('View');
+      this.capabilities = CapabilitiesForLevel('View');
       this.currentLevel = 'View';
     }
   }

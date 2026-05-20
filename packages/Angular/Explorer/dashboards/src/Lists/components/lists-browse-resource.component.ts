@@ -9,7 +9,7 @@ import { takeUntil } from 'rxjs/operators';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
-import { capabilitiesForLevel, ListSharing, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists';
+import { CapabilitiesForLevel, ListSharing, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -1983,7 +1983,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   // would mean N permission-resolve calls per browse render. The
   // resolved level is cached on the item so re-opening the same menu
   // doesn't refetch.
-  public contextItemCapabilities: ListCapabilities = capabilitiesForLevel('Owner');
+  public contextItemCapabilities: ListCapabilities = CapabilitiesForLevel('Owner');
   private capabilityCache = new Map<string, SharePermissionLevel | null>();
 
   // Tracks whether the in-memory categories list is known-stale
@@ -2581,7 +2581,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     // Fast path: owners always have full capabilities. Avoid an extra
     // permission-resolve round trip for the common case.
     if (item.isOwner) {
-      this.contextItemCapabilities = capabilitiesForLevel('Owner');
+      this.contextItemCapabilities = CapabilitiesForLevel('Owner');
       this.showContextMenu = true;
       return;
     }
@@ -2590,9 +2590,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     // — and viewers/editors stay correctly gated even if resolve fails.
     const cached = this.capabilityCache.get(item.list.ID);
     if (cached !== undefined) {
-      this.contextItemCapabilities = capabilitiesForLevel(cached);
+      this.contextItemCapabilities = CapabilitiesForLevel(cached);
     } else {
-      this.contextItemCapabilities = capabilitiesForLevel('View');
+      this.contextItemCapabilities = CapabilitiesForLevel('View');
       void this.refineContextCapabilities(item.list.ID);
     }
     this.showContextMenu = true;
@@ -2609,7 +2609,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       // Only mutate state if the user is still on this same menu — they
       // may have closed it before resolve finished.
       if (this.showContextMenu && this.selectedContextItem?.list.ID === listId) {
-        this.contextItemCapabilities = capabilitiesForLevel(level);
+        this.contextItemCapabilities = CapabilitiesForLevel(level);
         this.cdr.detectChanges();
       }
     } catch {

@@ -54,7 +54,7 @@ export type OperandKind = 'list' | 'view';
  * a list with the same UUID (extremely unlikely but possible) can't
  * collide in the cache.
  */
-export function operandCacheKey(kind: OperandKind, id: string): string {
+export function OperandCacheKey(kind: OperandKind, id: string): string {
   return `${kind}:${id}`;
 }
 
@@ -62,7 +62,7 @@ export function operandCacheKey(kind: OperandKind, id: string): string {
  * Represents a set (list or view) in the Venn diagram
  */
 export interface VennSet {
-  /** Stable cache key. Use `operandCacheKey()` to construct. */
+  /** Stable cache key. Use `OperandCacheKey()` to construct. */
   operandKey: string;
   /** Discriminator — drives the dashed-vs-solid stroke in the Venn diagram. */
   kind: OperandKind;
@@ -210,7 +210,7 @@ export class ListSetOperationsService {
       // Update cache — namespaced under `list:` so view operands can share
       // the same cache map without collision.
       for (const [listId, records] of setsMap) {
-        this.listDetailsCache.set(operandCacheKey('list', listId), records);
+        this.listDetailsCache.set(OperandCacheKey('list', listId), records);
       }
 
       // Build VennSet objects. We keep the legacy `MJListEntity` overload's
@@ -218,7 +218,7 @@ export class ListSetOperationsService {
       // downstream operations stay consistent regardless of which entry
       // point was used.
       const sets: VennSet[] = lists.map((list, index) => ({
-        operandKey: operandCacheKey('list', list.ID),
+        operandKey: OperandCacheKey('list', list.ID),
         kind: 'list' as const,
         listId: list.ID,
         listName: list.Name,
@@ -259,7 +259,7 @@ export class ListSetOperationsService {
       await this.ensureOperandsLoaded(operands);
 
       const sets: VennSet[] = operands.map((op) => ({
-        operandKey: operandCacheKey(op.kind, op.id),
+        operandKey: OperandCacheKey(op.kind, op.id),
         kind: op.kind,
         listId: op.id,
         listName: op.name,
@@ -279,7 +279,7 @@ export class ListSetOperationsService {
 
   /**
    * Operand-aware sibling of `performOperation`. `operandKeys` are the
-   * `operandCacheKey()` strings produced by `calculateVennDataForOperands`,
+   * `OperandCacheKey()` strings produced by `calculateVennDataForOperands`,
    * so callers can stay in operand-key space end-to-end.
    */
   async performOperationForOperands(
@@ -294,7 +294,7 @@ export class ListSetOperationsService {
       const resultSet = this.computeOperationResult(operation, sets, allOperands);
       return {
         operation,
-        inputSetIds: operands.map((op) => operandCacheKey(op.kind, op.id)),
+        inputSetIds: operands.map((op) => OperandCacheKey(op.kind, op.id)),
         resultRecordIds: Array.from(resultSet),
         resultCount: resultSet.size,
       };
@@ -390,7 +390,7 @@ export class ListSetOperationsService {
       // Ensure we have the list details loaded
       await this.ensureListsLoaded(listIds);
 
-      const sets = listIds.map(id => this.listDetailsCache.get(operandCacheKey('list', id)) || new Set<string>());
+      const sets = listIds.map(id => this.listDetailsCache.get(OperandCacheKey('list', id)) || new Set<string>());
       let resultSet: Set<string>;
 
       switch (operation) {
@@ -423,7 +423,7 @@ export class ListSetOperationsService {
           // Records NOT in any of the selected sets (requires allListIds)
           if (allListIds) {
             await this.ensureListsLoaded(allListIds);
-            const allSets = allListIds.map(id => this.listDetailsCache.get(operandCacheKey('list', id)) || new Set<string>());
+            const allSets = allListIds.map(id => this.listDetailsCache.get(OperandCacheKey('list', id)) || new Set<string>());
             const allRecords = this.unionAll(allSets);
             const selectedRecords = this.unionAll(sets);
             resultSet = this.difference(allRecords, selectedRecords);
@@ -452,7 +452,7 @@ export class ListSetOperationsService {
    * cache map but their entries can't collide thanks to the key namespace.
    */
   private cacheGet(operand: SetOperand): Set<string> | undefined {
-    return this.listDetailsCache.get(operandCacheKey(operand.kind, operand.id));
+    return this.listDetailsCache.get(OperandCacheKey(operand.kind, operand.id));
   }
 
   /**
@@ -486,15 +486,15 @@ export class ListSetOperationsService {
     });
 
     for (const id of listIds) {
-      this.listDetailsCache.set(operandCacheKey('list', id), new Set<string>());
+      this.listDetailsCache.set(OperandCacheKey('list', id), new Set<string>());
     }
     if (result.Success && result.Results) {
       for (const detail of result.Results) {
         // Normalize on the ListID we look up by AND on the RecordID we
         // store — mixed casing on either side would otherwise produce
         // empty intersections between lists that actually share records.
-        const set = this.listDetailsCache.get(operandCacheKey('list', NormalizeUUID(detail.ListID)))
-          ?? this.listDetailsCache.get(operandCacheKey('list', detail.ListID));
+        const set = this.listDetailsCache.get(OperandCacheKey('list', NormalizeUUID(detail.ListID)))
+          ?? this.listDetailsCache.get(OperandCacheKey('list', detail.ListID));
         if (set) set.add(normalizeRecordId(detail.RecordID));
       }
     }
@@ -517,7 +517,7 @@ export class ListSetOperationsService {
     const md = this.Provider;
     const entityInfo = md.EntityByName(operand.entityName);
     if (!entityInfo) {
-      this.listDetailsCache.set(operandCacheKey('view', operand.id), new Set<string>());
+      this.listDetailsCache.set(OperandCacheKey('view', operand.id), new Set<string>());
       return;
     }
     const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
@@ -535,7 +535,7 @@ export class ListSetOperationsService {
         set.add(this.serializeRecordId(entityInfo, row as Record<string, unknown>));
       }
     }
-    this.listDetailsCache.set(operandCacheKey('view', operand.id), set);
+    this.listDetailsCache.set(OperandCacheKey('view', operand.id), set);
   }
 
   /**
@@ -593,7 +593,7 @@ export class ListSetOperationsService {
    * list-only callers go through here without needing to know the format.
    */
   private async ensureListsLoaded(listIds: string[]): Promise<void> {
-    const missingIds = listIds.filter(id => !this.listDetailsCache.has(operandCacheKey('list', id)));
+    const missingIds = listIds.filter(id => !this.listDetailsCache.has(OperandCacheKey('list', id)));
 
     if (missingIds.length === 0) return;
 
@@ -609,12 +609,12 @@ export class ListSetOperationsService {
 
     // Initialize sets for missing lists
     for (const id of missingIds) {
-      this.listDetailsCache.set(operandCacheKey('list', id), new Set());
+      this.listDetailsCache.set(OperandCacheKey('list', id), new Set());
     }
 
     if (result.Success && result.Results) {
       for (const detail of result.Results) {
-        const set = this.listDetailsCache.get(operandCacheKey('list', detail.ListID));
+        const set = this.listDetailsCache.get(OperandCacheKey('list', detail.ListID));
         if (set) {
           set.add(detail.RecordID);
         }
