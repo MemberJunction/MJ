@@ -23,6 +23,7 @@ INNER JOIN ${flyway:defaultSchema}.Entity e ON ep.EntityID = e.ID
 WHERE ep.RoleID = 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E'
   AND ep.CanDelete = 0
   AND e.AllowDeleteAPI = 1
+  AND e.SchemaName = '__mj'
   AND e.Name NOT IN (
       -- Audit / log entities
       'MJ: Action Execution Logs',
