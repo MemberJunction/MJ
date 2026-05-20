@@ -1,0 +1,207 @@
+[
+  {
+    "fields": {
+      "Name": "Materialize List From View",
+      "Description": "Create a new MJ List from a User View. Thin wrapper around ListOperations.MaterializeFromView. Captures lineage when RememberLineage=true. Cannot produce drops (target is new).",
+      "DriverClass": "Materialize List From View",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list-check"
+    },
+    "primaryKey": {
+      "ID": "5B29CE1B-7550-4714-B8F6-000797EEA68F"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.117Z",
+      "checksum": "eb4e58c8ebec0d61918f435d342bfbd515545913d31c68d49f8f34cce43d9a6e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Add View Results To List",
+      "Description": "Append a User View's current results to an existing List. Always additive — never removes existing members. Dedupes silently.",
+      "DriverClass": "Add View Results To List",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-plus"
+    },
+    "primaryKey": {
+      "ID": "B1470C3F-4B23-4FE0-8FF5-C3AC5A1D20D8"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.139Z",
+      "checksum": "2c612188bd8346482bb83e387074ffa869f9590a01ab21d0f8b3de723a7a291d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Refresh List From Source",
+      "Description": "Refresh an existing lineage-bearing List against its captured source view (Additive or Sync mode). Sync-mode refreshes that would remove records require ConfirmDrops=true; otherwise rejected with DROP_NOT_CONFIRMED.",
+      "DriverClass": "Refresh List From Source",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-cloud-arrow-down"
+    },
+    "primaryKey": {
+      "ID": "EB0147A4-5CBE-4FBC-9D49-9F1448E97869"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.162Z",
+      "checksum": "9bba7ad7602eb0d1840eafb05b3e6bd5b879c828319c0af3fa3aab34cbb1d180"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Compose Lists",
+      "Description": "Compose multiple List or View sources into a delta via a set-op (union / intersection / difference). Preview-only by default; supplying a Target projects the result into that list, which can trigger the drop-guard.",
+      "DriverClass": "Compose Lists",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project"
+    },
+    "primaryKey": {
+      "ID": "877422AD-32DF-44A9-B128-FDF5298B91AB"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.183Z",
+      "checksum": "491b29393df1da4501a9a3147c5431552a603e952a13adc0971785b93489b748"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Share List",
+      "Description": "Grant a direct share on a List to a user or role. Idempotent at the (list, target) pair. Writes to ResourcePermission; emits a share-notification when sharing with a user.",
+      "DriverClass": "Share List",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-share-nodes"
+    },
+    "primaryKey": {
+      "ID": "F6B7278E-5602-4A3B-A2E3-A21895FE2644"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.203Z",
+      "checksum": "2199721e88193d64193f4e8627f17d2c4f6419b7e5084910402f2671f84648b5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Invite To List",
+      "Description": "Issue a pending-email invitation to share a List. Returns a generated token + expiry. Caller is expected to deliver an accept link to the recipient.",
+      "DriverClass": "Invite To List",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-envelope"
+    },
+    "primaryKey": {
+      "ID": "7C7A4E3F-BC57-406C-876B-7067D9010312"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.225Z",
+      "checksum": "db681b9a2c442abe88d8923a0aaec70f91687131c7c15f583e44f86a9103ee67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Unshare List",
+      "Description": "Revoke a previously-granted List permission. Soft-revokes (sets Status='Revoked' on ResourcePermission) so the audit trail remains intact.",
+      "DriverClass": "Unshare List",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-user-slash"
+    },
+    "primaryKey": {
+      "ID": "38AE94DA-3D9D-41CF-976D-B219189E27AF"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.243Z",
+      "checksum": "61cf28f1d8c066938666fea0034a48ff57694b3770ba78f2d516c6772ca29046"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revoke List Invitation",
+      "Description": "Revoke a pending List invitation before it has been accepted. Returns INVITATION_ALREADY_USED if the invitation was already consumed — callers should use Unshare List against the resulting permission row in that case.",
+      "DriverClass": "Revoke List Invitation",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-ban"
+    },
+    "primaryKey": {
+      "ID": "36AE0EE3-64CC-4203-ADF8-3F9B531FA681"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.263Z",
+      "checksum": "463bb61a529df24aff90ef7050211203b86aafea38ec8cb89c384e6897039aba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Resolve Audience",
+      "Description": "Resolve an AudienceSource (list / view / ad-hoc filter) to its current record IDs. Read-only — never mutates. Useful for previewing how many records a campaign would hit before sending.",
+      "DriverClass": "Resolve Audience",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-bullseye"
+    },
+    "primaryKey": {
+      "ID": "2B583BA6-8EF9-4D3F-8C1B-5AD708EF99EE"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.283Z",
+      "checksum": "26615efc74ad1fb82bce49cbe87bbaadad496c7f5e1eb23ef8424136570e9626"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Move List Members",
+      "Description": "Move (or copy) a set of records from one list to another. Move mode also removes the records from the source list — requires ConfirmDrops=true to actually delete. Copy mode skips the removal step.",
+      "DriverClass": "Move List Members",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrow-right-arrow-left"
+    },
+    "primaryKey": {
+      "ID": "64E2BF2C-3492-4DDD-8C99-39EE512EBB4D"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.299Z",
+      "checksum": "6e731fded086b2891dfc12ad1f354417e880fba79f571d4c3c469dbd95142f8d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bulk Update List Item Status",
+      "Description": "Bulk-update the Status field on MJ: List Detail rows for a given list. NewStatus must match the MJ: List Detail Status check constraint (Active / Complete / Disabled / Error / Other / Pending / Rejected).",
+      "DriverClass": "Bulk Update List Item Status",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-flag"
+    },
+    "primaryKey": {
+      "ID": "CFDCF1D7-417C-483C-A7B3-57D1D70F836E"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.329Z",
+      "checksum": "44b279a5a8fe48d775cff01b647c42529538bea942757b4708a38aef32a508aa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Send To Audience",
+      "Description": "Send a single message template to every record resolved from an AudienceSource. Wraps SendToAudience() in @memberjunction/communication-engine. Records missing the recipient field are skipped and surfaced in SkippedRecords output.",
+      "DriverClass": "Send To Audience",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-paper-plane",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Communication"
+    },
+    "primaryKey": {
+      "ID": "F6D50EA9-5DC3-4585-89D7-2FB951732921"
+    },
+    "sync": {
+      "lastModified": "2026-05-19T21:07:07.352Z",
+      "checksum": "1273eb9343733113770e1b75a4470a60ac0387d9e7edd8ab1b37dbab83addfa7"
+    }
+  }
+]

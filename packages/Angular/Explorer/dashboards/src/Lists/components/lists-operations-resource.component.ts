@@ -1,15 +1,30 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy } from '@angular/core';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, SharedService } from '@memberjunction/ng-shared';
-import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJListEntity, MJListDetailEntity, MJUserSettingEntity, MJUserViewEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { Metadata, RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
-import { ListSetOperationsService, VennData, VennIntersection, SetOperation, SetOperationResult } from '../services/list-set-operations.service';
+import { ListSetOperationsService, SetOperand, VennData, VennIntersection, SetOperation, SetOperationResult, operandCacheKey } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ExportService } from '@memberjunction/ng-export-service';
+import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
+import type { ListDelta, ListSource } from '@memberjunction/lists';
 interface ListSelection {
   list: MJListEntity;
   entityName: string;
+  color: string;
+}
+
+/**
+ * Parallel structure for view operands. Views resolve to record IDs the
+ * same way lists do (via the operations service's cache), but are tracked
+ * separately in component state so existing list-only flows keep working.
+ */
+interface ViewSelection {
+  view: MJUserViewEntity;
+  entityName: string;
+  entityID: string;
   color: string;
 }
 
@@ -37,30 +52,38 @@ interface EntityOption {
   standalone: false,
   selector: 'mj-lists-operations-resource',
   template: `
-    <mj-page-layout>
-      <mj-page-header
-        Title="List Operations"
-        Icon="fa-solid fa-diagram-project"
-        Subtitle="Visualize overlaps and perform set operations on your lists">
-        @if (selectedLists.length > 0 || selectedEntityId) {
-          <div actions>
-            <button mjButton variant="secondary" size="sm" (click)="clearAllSelections()" title="Clear all selections">
-              <i class="fa-solid fa-xmark"></i> Clear
-            </button>
+    <div class="operations-container">
+      <!-- Header -->
+      <div class="operations-header">
+        <div class="header-top">
+          <div class="header-title">
+            <i class="fa-solid fa-diagram-project"></i>
+            <h2>List Operations</h2>
           </div>
-        }
-      </mj-page-header>
-
-      <mj-page-body [Flex]="true" [Padding]="false">
+          @if (totalOperandCount > 0 || selectedEntityId) {
+            <button
+              class="clear-all-btn"
+              (click)="clearAllSelections()"
+              title="Clear all selections">
+              <i class="fa-solid fa-xmark"></i>
+              Clear
+            </button>
+          }
+        </div>
+        <div class="header-subtitle">
+          Visualize overlaps and perform set operations on your lists
+        </div>
+      </div>
+    
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
         <div class="selection-panel">
           <div class="panel-header">
-            <h3>Selected Lists</h3>
-            @if (selectedLists.length > 0) {
+            <h3>Selected Operands</h3>
+            @if (totalOperandCount > 0) {
               <span class="list-count">
-                {{selectedLists.length}}/{{maxLists}}
+                {{totalOperandCount}}/{{maxLists}}
               </span>
             }
           </div>
@@ -74,7 +97,7 @@ interface EntityOption {
                 (ngModelChange)="onEntityFilterChange()"
                 class="entity-select">
                 <option value="">All Entities</option>
-                @for (entity of entityOptions; track entity) {
+                @for (entity of entityOptions; track entity.id) {
                   <option [value]="entity.id">
                     {{entity.name}} ({{entity.listCount}})
                   </option>
@@ -98,7 +121,7 @@ interface EntityOption {
               </div>
             }
     
-            @if (selectedLists.length < maxLists) {
+            @if (totalOperandCount < maxLists) {
               <div class="add-list-area">
                 <div class="add-list-search">
                   <i class="fa-solid fa-search"></i>
@@ -128,24 +151,78 @@ interface EntityOption {
               </div>
             }
     
-            @if (selectedLists.length >= maxLists) {
+            @if (totalOperandCount >= maxLists) {
               <div class="lists-full">
                 <i class="fa-solid fa-info-circle"></i>
-                Maximum {{maxLists}} lists can be compared
+                Maximum {{maxLists}} operands can be compared
               </div>
             }
           </div>
-    
+
+          <!-- Selected views (Phase 1.8). Tracked separately from lists
+               so the existing list flows stay untouched, but combined at
+               compute time via SetOperand[]. Dashed-style icon flags them
+               as dynamic-at-resolution. -->
+          <div class="selected-views">
+            @for (item of selectedViews; track item; let i = $index) {
+              <div class="selected-item selected-item--view">
+                <div class="item-color item-color--view" [style.border-color]="item.color"></div>
+                <div class="item-info">
+                  <span class="item-name">
+                    <i class="fa-solid fa-eye" [title]="'View'"></i>
+                    {{item.view.Name}}
+                  </span>
+                  <span class="item-entity">{{item.entityName}}</span>
+                </div>
+                <button class="remove-btn" (click)="removeView(i)">
+                  <i class="fa-solid fa-times"></i>
+                </button>
+              </div>
+            }
+
+            @if (totalOperandCount < maxLists) {
+              <div class="add-list-area">
+                <div class="add-list-search">
+                  <i class="fa-solid fa-eye"></i>
+                  <input
+                    type="text"
+                    [(ngModel)]="viewSearchTerm"
+                    (ngModelChange)="filterAvailableViews()"
+                    placeholder="Search views to add..."
+                    (focus)="showViewDropdown = true" />
+                </div>
+                @if (showViewDropdown && filteredAvailableViews.length > 0) {
+                  <div class="list-dropdown">
+                    <div class="dropdown-backdrop" (click)="showViewDropdown = false"></div>
+                    <div class="dropdown-content">
+                      @for (view of filteredAvailableViews; track view) {
+                        <div
+                          class="dropdown-item"
+                          (click)="addView(view)">
+                          <span class="dropdown-name">
+                            <i class="fa-solid fa-eye"></i>
+                            {{view.Name}}
+                          </span>
+                          <span class="dropdown-entity">{{view.Entity}}</span>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
           <!-- Entity consistency note -->
-          @if (selectedLists.length > 0) {
+          @if (totalOperandCount > 0 && lockedEntityName) {
             <div class="entity-note">
               <i class="fa-solid fa-info-circle"></i>
-              <span>Comparing lists of type: <strong>{{selectedLists[0].entityName}}</strong></span>
+              <span>Comparing operands of type: <strong>{{lockedEntityName}}</strong></span>
             </div>
           }
-    
+
           <!-- Quick Operations -->
-          @if (selectedLists.length >= 2) {
+          @if (totalOperandCount >= 2) {
             <div class="quick-operations">
               <h4>Quick Operations</h4>
               <div class="operation-buttons">
@@ -165,24 +242,24 @@ interface EntityOption {
             </div>
           }
         </div>
-    
+
         <!-- Center: Venn Diagram -->
         <div class="venn-panel">
-          @if (selectedLists.length > 0) {
+          @if (totalOperandCount > 0) {
             <mj-venn-diagram
               [data]="vennData"
               [selectedRegion]="selectedRegion"
               (regionClick)="onRegionClick($event)">
             </mj-venn-diagram>
           }
-    
-          @if (selectedLists.length === 0) {
+
+          @if (totalOperandCount === 0) {
             <div class="venn-empty">
               <div class="empty-icon">
                 <i class="fa-solid fa-circle-nodes"></i>
               </div>
-              <h3>Add Lists to Compare</h3>
-              <p>Select 2-4 lists from the same entity to visualize their overlaps and perform set operations.</p>
+              <h3>Add Lists or Views to Compare</h3>
+              <p>Select 2-4 lists or views from the same entity to visualize their overlaps and perform set operations.</p>
             </div>
           }
     
@@ -218,9 +295,9 @@ interface EntityOption {
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
-                <button mjButton (click)="exportToExcel()">
+                <button mjButton (click)="openExportDialog()">
                   <i class="fa-solid fa-file-excel"></i>
-                  Export
+                  Export…
                 </button>
               </div>
               @if (previewRecordsDisplay.length > 0) {
@@ -280,7 +357,224 @@ interface EntityOption {
           }
         </div>
       </div>
-    
+
+      <!-- Compose-into-target panel (Phase 1.10). Lives outside operations-content
+           so it spans the full panel width per mockup 11. Only shows once
+           the user has at least 2 operands selected. -->
+      @if (totalOperandCount >= 2) {
+        <div class="compose-panel">
+          <div class="compose-panel__header">
+            <i class="fa-solid fa-shapes"></i>
+            <h3>Compose into a Target List</h3>
+          </div>
+          <div class="compose-panel__body">
+            <div class="compose-grid">
+              <!-- Sources column (read-only — reflects the chips above) -->
+              <div class="compose-column">
+                <div class="compose-column__label">Sources ({{ totalOperandCount }})</div>
+                <div class="compose-sources">
+                  @for (s of selectedLists; track s.list.ID) {
+                    <div class="compose-source-chip">
+                      <i class="fa-solid fa-list" [style.color]="s.color"></i>
+                      <span class="compose-source-name">{{ s.list.Name }}</span>
+                      <span class="compose-source-badge">List</span>
+                    </div>
+                  }
+                  @for (s of selectedViews; track s.view.ID) {
+                    <div class="compose-source-chip compose-source-chip--view">
+                      <i class="fa-solid fa-eye" [style.color]="s.color"></i>
+                      <span class="compose-source-name">{{ s.view.Name }}</span>
+                      <span class="compose-source-badge compose-source-badge--view">View</span>
+                    </div>
+                  }
+                </div>
+              </div>
+
+              <div class="compose-arrow">→</div>
+
+              <!-- Operation column -->
+              <div class="compose-column">
+                <div class="compose-column__label">Operation</div>
+                <div class="compose-options">
+                  <label class="compose-option" [class.compose-option--selected]="composeOp === 'union'">
+                    <input type="radio" name="composeOp" [checked]="composeOp === 'union'" (change)="composeOp = 'union'" />
+                    <i class="fa-solid fa-layer-group"></i>
+                    <div>
+                      <div class="compose-option__title">Union</div>
+                      <div class="compose-option__desc">Combine all sources, dedupe</div>
+                    </div>
+                  </label>
+                  <label class="compose-option" [class.compose-option--selected]="composeOp === 'intersection'">
+                    <input type="radio" name="composeOp" [checked]="composeOp === 'intersection'" (change)="composeOp = 'intersection'" />
+                    <i class="fa-solid fa-circle-notch"></i>
+                    <div>
+                      <div class="compose-option__title">Intersection</div>
+                      <div class="compose-option__desc">Only records in all sources</div>
+                    </div>
+                  </label>
+                  <label class="compose-option" [class.compose-option--selected]="composeOp === 'difference'">
+                    <input type="radio" name="composeOp" [checked]="composeOp === 'difference'" (change)="composeOp = 'difference'" />
+                    <i class="fa-solid fa-minus-circle"></i>
+                    <div>
+                      <div class="compose-option__title">Difference</div>
+                      <div class="compose-option__desc">First minus the rest</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div class="compose-arrow">→</div>
+
+              <!-- Target column -->
+              <div class="compose-column">
+                <div class="compose-column__label">Target</div>
+                <div class="compose-options">
+                  <label class="compose-option" [class.compose-option--selected]="composeTarget === 'new'">
+                    <input type="radio" name="composeTarget" [checked]="composeTarget === 'new'" (change)="composeTarget = 'new'" />
+                    <div class="compose-option__title">Create New List</div>
+                  </label>
+                  <label class="compose-option" [class.compose-option--selected]="composeTarget === 'existing'">
+                    <input type="radio" name="composeTarget" [checked]="composeTarget === 'existing'" (change)="composeTarget = 'existing'" />
+                    <div class="compose-option__title">Existing List…</div>
+                  </label>
+
+                  @if (composeTarget === 'new') {
+                    <input
+                      class="compose-input"
+                      type="text"
+                      [(ngModel)]="composeNewListName"
+                      placeholder="New list name…" />
+                  } @else {
+                    <div class="compose-target-search">
+                      <input
+                        class="compose-input"
+                        type="text"
+                        [(ngModel)]="composeTargetSearch"
+                        (focus)="showComposeTargetDropdown = true"
+                        placeholder="Search lists…" />
+                      @if (showComposeTargetDropdown && filteredComposeTargets.length > 0) {
+                        <div class="compose-target-dropdown">
+                          <div class="dropdown-backdrop" (click)="showComposeTargetDropdown = false"></div>
+                          <div class="dropdown-content">
+                            @for (l of filteredComposeTargets; track l.ID) {
+                              <div class="dropdown-item" (click)="selectComposeTarget(l)">
+                                <span class="dropdown-name">{{ l.Name }}</span>
+                                <span class="dropdown-entity">{{ l.Entity }}</span>
+                              </div>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+
+            <div class="compose-footer">
+              <button class="op-btn" (click)="previewCompose()" [disabled]="isCalculating || isComposing">
+                <i class="fa-solid fa-eye"></i>
+                <span>Preview Result</span>
+              </button>
+              <button class="op-btn op-btn--primary" (click)="composeAndSave()" [disabled]="!canCompose || isCalculating || isComposing">
+                @if (isComposing) {
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                } @else {
+                  <i class="fa-solid fa-bolt"></i>
+                }
+                <span>{{ isComposing ? 'Composing…' : 'Compute & Save' }}</span>
+              </button>
+              <div class="compose-footer__spacer"></div>
+              @if (lastOperationResult) {
+                <div class="compose-footer__hint">
+                  Expected output: <strong>{{ lastOperationResult.resultCount }} records</strong>
+                  ({{ getOperationLabel(lastOperationResult.operation) }})
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Compose-into-existing-list delta-confirm -->
+      <mj-list-delta-confirm
+        [Visible]="composeConfirmVisible && !!composeDelta"
+        [Delta]="composeDelta"
+        [TargetListName]="composeTargetDisplayName()"
+        [SourceLabel]="'compose result'"
+        (Confirm)="onComposeConfirmCommit($event)"
+        (Cancel)="onComposeConfirmCancel()">
+      </mj-list-delta-confirm>
+
+      <!-- Export Dialog (mockup 26) -->
+      @if (showExportDialog) {
+        <div class="modal-overlay" (click)="closeExportDialog()"></div>
+        <div class="modal-dialog export-dialog">
+          <div class="modal-header">
+            <h3><i class="fa-solid fa-file-excel"></i> Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}</h3>
+            <button class="modal-close" (click)="closeExportDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="export-format-row">
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'excel'"
+                (click)="exportFormat = 'excel'">
+                <input type="radio" name="exportFormat" value="excel" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-excel" style="color: var(--mj-status-success);"></i>
+                <span>Excel (.xlsx)</span>
+              </label>
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'csv'"
+                (click)="exportFormat = 'csv'">
+                <input type="radio" name="exportFormat" value="csv" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-csv" style="color: var(--mj-text-secondary);"></i>
+                <span>CSV</span>
+              </label>
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'json'"
+                (click)="exportFormat = 'json'">
+                <input type="radio" name="exportFormat" value="json" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-code" style="color: var(--mj-brand-primary);"></i>
+                <span>JSON</span>
+              </label>
+            </div>
+
+            <div class="export-section-divider"></div>
+
+            <label class="export-section-label">Columns to include</label>
+            <div class="export-fields-list">
+              @for (f of exportFields; track f.Name) {
+                <label class="export-field-row">
+                  <input type="checkbox" [(ngModel)]="f.Selected">
+                  <span>{{ f.DisplayName }}</span>
+                </label>
+              }
+            </div>
+            <div class="export-field-actions">
+              <a href="#" (click)="selectAllExportFields(); $event.preventDefault()">Select All</a>
+              <a href="#" (click)="selectNoneExportFields(); $event.preventDefault()">Select None</a>
+              <span class="muted">{{ selectedExportFieldCount }} of {{ exportFields.length }} selected</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button mjButton variant="primary"
+              [disabled]="selectedExportFieldCount === 0 || isExporting"
+              (click)="executeExport()">
+              @if (isExporting) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Exporting…
+              } @else {
+                <i class="fa-solid fa-download"></i>
+                Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}
+              }
+            </button>
+            <button mjButton variant="outline" [disabled]="isExporting" (click)="closeExportDialog()">Cancel</button>
+          </div>
+        </div>
+      }
+
       <!-- Create List Dialog -->
       @if (showCreateDialog) {
         <div class="modal-overlay" (click)="cancelCreateDialog()"></div>
@@ -392,14 +686,20 @@ interface EntityOption {
           </div>
         </div>
       }
-      </mj-page-body>
-    </mj-page-layout>
+    </div>
     `,
   styles: [`
     :host {
       display: block;
       width: 100%;
       height: 100%;
+    }
+
+    .operations-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: var(--mj-bg-surface);
     }
 
     .operations-header {
@@ -571,6 +871,12 @@ interface EntityOption {
       padding: 12px;
     }
 
+    /* Selected Views (sibling section) */
+    .selected-views {
+      overflow-y: auto;
+      padding: 0 12px 12px 12px;
+    }
+
     .selected-item {
       display: flex;
       align-items: center;
@@ -581,11 +887,26 @@ interface EntityOption {
       margin-bottom: 8px;
     }
 
+    /* View operands get a dashed outline so they read distinctly from
+       list operands. The fill stays muted because views are dynamic. */
+    .selected-item--view {
+      border: 1px dashed var(--mj-border-default);
+      background: var(--mj-bg-surface);
+    }
+
     .item-color {
       width: 12px;
       height: 12px;
       border-radius: 3px;
       flex-shrink: 0;
+    }
+
+    /* View color swatch is a ring around a hollow centre — mirrors the
+       dashed-stroke convention from the Venn diagram. */
+    .item-color--view {
+      background: transparent !important;
+      border: 2px dashed currentColor;
+      border-radius: 50%;
     }
 
     .item-info {
@@ -1138,6 +1459,70 @@ interface EntityOption {
       overflow-y: auto;
     }
 
+    /* Export dialog (mockup 26) */
+    .export-dialog .modal-body { max-height: 60vh; overflow-y: auto; }
+    .export-format-row { display: flex; gap: 8px; margin-top: 8px; }
+    .export-format-option {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      background: var(--mj-bg-surface);
+    }
+    .export-format-option--selected {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+    }
+    .export-format-option input[type="radio"] { margin: 0; }
+    .export-section-divider {
+      height: 1px;
+      background: var(--mj-border-default);
+      margin: 16px 0;
+    }
+    .export-section-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+    }
+    .export-fields-list {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+    }
+    .export-field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--mj-border-default);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .export-field-row:last-child { border-bottom: none; }
+    .export-field-row:hover { background: var(--mj-bg-surface-hover); }
+    .export-field-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      align-items: center;
+      font-size: 11.5px;
+    }
+    .export-field-actions a { color: var(--mj-text-link); }
+    .export-field-actions .muted {
+      margin-left: auto;
+      color: var(--mj-text-muted);
+    }
+
     .list-search {
       display: flex;
       align-items: center;
@@ -1270,6 +1655,186 @@ interface EntityOption {
         order: 3;
       }
     }
+
+    /* Compose-into-target panel (Phase 1.10) */
+    .compose-panel {
+      margin: 16px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-default);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .compose-panel__header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--mj-bg-surface-card);
+      border-bottom: 1px solid var(--mj-border-default);
+    }
+
+    .compose-panel__header h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--mj-text-primary);
+    }
+
+    .compose-panel__body {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .compose-grid {
+      display: grid;
+      grid-template-columns: 1.2fr auto 1fr auto 1fr;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .compose-arrow {
+      align-self: center;
+      font-size: 24px;
+      color: var(--mj-text-muted);
+    }
+
+    .compose-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .compose-column__label {
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--mj-text-muted);
+    }
+
+    .compose-sources {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .compose-source-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      background: var(--mj-bg-surface-sunken);
+      border-radius: 6px;
+      font-size: 12.5px;
+    }
+
+    .compose-source-chip--view {
+      border: 1px dashed var(--mj-border-default);
+      background: var(--mj-bg-surface);
+    }
+
+    .compose-source-name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .compose-source-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .compose-source-badge--view {
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+    }
+
+    .compose-options {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .compose-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      background: var(--mj-bg-surface);
+      cursor: pointer;
+      font-size: 12.5px;
+    }
+
+    .compose-option--selected {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    }
+
+    .compose-option__title {
+      font-weight: 600;
+    }
+
+    .compose-option__desc {
+      font-size: 11.5px;
+      color: var(--mj-text-muted);
+    }
+
+    .compose-input {
+      width: 100%;
+      padding: 6px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      background: var(--mj-bg-surface);
+      font-size: 12.5px;
+    }
+
+    .compose-target-search {
+      position: relative;
+    }
+
+    .compose-target-dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      z-index: 50;
+    }
+
+    .compose-footer {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--mj-border-default);
+    }
+
+    .compose-footer__spacer { flex: 1; }
+
+    .compose-footer__hint {
+      font-size: 12px;
+      color: var(--mj-text-muted);
+    }
+
+    .op-btn--primary {
+      background: var(--mj-brand-primary);
+      color: var(--mj-text-inverse);
+    }
+
+    .op-btn--primary:hover:not(:disabled) {
+      background: var(--mj-brand-primary-hover);
+    }
   `],
   encapsulation: ViewEncapsulation.None
 })
@@ -1282,6 +1847,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   filteredAvailableLists: MJListEntity[] = [];
   listSearchTerm = '';
   showListDropdown = false;
+
+  // View operands (new in Phase 1.8). Tracked separately from selectedLists
+  // so the existing list-only logic keeps working; the operand-aware
+  // service combines both into a single computation.
+  selectedViews: ViewSelection[] = [];
+  availableViews: MJUserViewEntity[] = [];
+  filteredAvailableViews: MJUserViewEntity[] = [];
+  viewSearchTerm = '';
+  showViewDropdown = false;
 
   // Entity filter
   entityOptions: EntityOption[] = [];
@@ -1309,6 +1883,27 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   filteredAddToListOptions: MJListEntity[] = [];
   selectedTargetListId: string | null = null;
 
+  // Compose-into-target panel (Phase 1.10) — picks an op + target for
+  // committing the result of the selected operands.
+  composeOp: SetOperation = 'union';
+  composeTarget: 'new' | 'existing' = 'new';
+  composeNewListName = '';
+  composeTargetListId: string | null = null;
+  composeTargetSearch = '';
+  showComposeTargetDropdown = false;
+  isComposing = false;
+  composeDelta: ListDelta | null = null;
+  composeConfirmVisible = false;
+
+  // Export dialog (mockup 26). Opens before any export; lets the user
+  // pick format + which entity fields to include. Fields are resolved
+  // from EntityInfo when the dialog opens — no separate fetch.
+  showExportDialog = false;
+  exportFormat: 'excel' | 'csv' | 'json' = 'excel';
+  exportFields: Array<{ Name: string; DisplayName: string; Selected: boolean }> = [];
+  exportRecordCount = 0;
+  isExporting = false;
+
   private entityIdFromSelectedLists: string | null = null;
   private currentEntityInfo: EntityInfo | null = null;
 
@@ -1320,14 +1915,17 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   constructor(
     private cdr: ChangeDetectorRef,
     private setOperationsService: ListSetOperationsService,
-    private notificationService: MJNotificationService
+    private notificationService: MJNotificationService,
+    private exportService: ExportService
   ) {
     super();
   }
 
   get hasMultipleEntities(): boolean {
-    if (this.selectedLists.length < 2) return false;
-    const entities = new Set(this.selectedLists.map(s => s.list.EntityID));
+    if (this.totalOperandCount < 2) return false;
+    const entities = new Set<string>();
+    for (const s of this.selectedLists) entities.add(s.list.EntityID);
+    for (const s of this.selectedViews) entities.add(s.entityID);
     return entities.size > 1;
   }
 
@@ -1354,17 +1952,32 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const md = this.ProviderToUse;
 
-    const result = await rv.RunView<MJListEntity>({
-      EntityName: 'MJ: Lists',
-      ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
-      OrderBy: 'Name',
-      ResultType: 'entity_object'
-    });
+    // RunViews's typed overload doesn't express tuple positions, so we
+    // run them as two parallel single-typed RunView calls — same number
+    // of round trips, cleaner typing.
+    const [listResult, viewResult] = await Promise.all([
+      rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
+        ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
+        OrderBy: 'Name',
+        ResultType: 'entity_object',
+      }),
+      rv.RunView<MJUserViewEntity>({
+        EntityName: 'MJ: User Views',
+        ExtraFilter: `UserID = '${md.CurrentUser?.ID}'`,
+        OrderBy: 'Name',
+        ResultType: 'entity_object',
+      }),
+    ]);
 
-    if (result.Success) {
-      this.availableLists = result.Results || [];
+    if (listResult.Success) {
+      this.availableLists = listResult.Results || [];
       this.buildEntityOptions();
       this.filterAvailableLists();
+    }
+    if (viewResult.Success) {
+      this.availableViews = viewResult.Results || [];
+      this.filterAvailableViews();
     }
   }
 
@@ -1396,19 +2009,20 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    * Handle entity filter change
    */
   onEntityFilterChange(): void {
-    // Clear selected lists if changing entity filter
-    if (this.selectedLists.length > 0) {
-      const firstEntityId = this.selectedLists[0].list.EntityID;
-      if (this.selectedEntityId && this.selectedEntityId !== firstEntityId) {
-        // Entity changed - clear selections
-        this.selectedLists = [];
-        this.vennData = null;
-        this.selectedRegion = null;
-        this.lastOperationResult = null;
-        this.previewRecordsDisplay = [];
-      }
+    // If we're locked to an entity and the filter changes to a different
+    // one, wipe both list AND view selections — the entity invariant
+    // applies to all operands.
+    const lockedEntityId = this.lockedEntityID;
+    if (lockedEntityId && this.selectedEntityId && this.selectedEntityId !== lockedEntityId) {
+      this.selectedLists = [];
+      this.selectedViews = [];
+      this.vennData = null;
+      this.selectedRegion = null;
+      this.lastOperationResult = null;
+      this.previewRecordsDisplay = [];
     }
     this.filterAvailableLists();
+    this.filterAvailableViews();
     this.saveState();
   }
 
@@ -1421,10 +2035,10 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.selectedEntityId));
     }
 
-    // If we have selected lists, restrict to same entity
-    if (this.selectedLists.length > 0) {
-      this.entityIdFromSelectedLists = this.selectedLists[0].list.EntityID;
-      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, this.entityIdFromSelectedLists));
+    // If we have any operands selected (list or view), restrict to same entity.
+    const lockedEntityId = this.lockedEntityID;
+    if (lockedEntityId) {
+      filtered = filtered.filter(l => UUIDsEqual(l.EntityID, lockedEntityId));
     }
 
     if (this.listSearchTerm) {
@@ -1438,8 +2052,58 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.filteredAvailableLists = filtered.slice(0, 10);
   }
 
+  /**
+   * Same logic as `filterAvailableLists` for the view picker. Views are
+   * locked to the same entity as any already-selected list or view.
+   */
+  filterAvailableViews() {
+    const selectedIds = new Set(this.selectedViews.map(s => s.view.ID));
+    let filtered = this.availableViews.filter(v => !selectedIds.has(v.ID));
+
+    if (this.selectedEntityId) {
+      filtered = filtered.filter(v => UUIDsEqual(v.EntityID, this.selectedEntityId));
+    }
+
+    const lockedEntityId = this.lockedEntityID;
+    if (lockedEntityId) {
+      filtered = filtered.filter(v => UUIDsEqual(v.EntityID, lockedEntityId));
+    }
+
+    if (this.viewSearchTerm) {
+      const term = this.viewSearchTerm.toLowerCase();
+      filtered = filtered.filter(v =>
+        v.Name.toLowerCase().includes(term) ||
+        (v.Entity && v.Entity.toLowerCase().includes(term))
+      );
+    }
+
+    this.filteredAvailableViews = filtered.slice(0, 10);
+  }
+
+  /**
+   * Returns the entity ID that operands are currently locked to, or null
+   * if no operands are selected. Lists win over views purely because they
+   * come first in the operand list; either source is authoritative.
+   */
+  private get lockedEntityID(): string | null {
+    if (this.selectedLists.length > 0) return this.selectedLists[0].list.EntityID;
+    if (this.selectedViews.length > 0) return this.selectedViews[0].entityID;
+    return null;
+  }
+
+  /**
+   * Display name of the entity currently locking the picker — drives the
+   * "Comparing operands of type: …" hint in the UI. Falls back to the
+   * first available denormalized name we have.
+   */
+  public get lockedEntityName(): string | null {
+    if (this.selectedLists.length > 0) return this.selectedLists[0].entityName;
+    if (this.selectedViews.length > 0) return this.selectedViews[0].entityName;
+    return null;
+  }
+
   addList(list: MJListEntity) {
-    const color = this.setOperationsService.getColorForIndex(this.selectedLists.length);
+    const color = this.setOperationsService.getColorForIndex(this.totalOperandCount);
 
     this.selectedLists.push({
       list,
@@ -1450,6 +2114,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.listSearchTerm = '';
     this.showListDropdown = false;
     this.filterAvailableLists();
+    this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
   }
@@ -1457,18 +2122,52 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   removeList(index: number) {
     this.selectedLists.splice(index, 1);
 
-    // Reassign colors
-    this.selectedLists.forEach((item, i) => {
-      item.color = this.setOperationsService.getColorForIndex(i);
-    });
+    // Reassign colors across BOTH lists and views so the palette stays in order.
+    this.reassignOperandColors();
 
     this.filterAvailableLists();
+    this.filterAvailableViews();
     this.recalculateVenn();
     this.saveState();
   }
 
+  addView(view: MJUserViewEntity) {
+    const color = this.setOperationsService.getColorForIndex(this.totalOperandCount);
+    this.selectedViews.push({
+      view,
+      entityName: view.Entity || 'Unknown',
+      entityID: view.EntityID,
+      color,
+    });
+    this.viewSearchTerm = '';
+    this.showViewDropdown = false;
+    this.filterAvailableLists();
+    this.filterAvailableViews();
+    this.recalculateVenn();
+    this.saveState();
+  }
+
+  removeView(index: number) {
+    this.selectedViews.splice(index, 1);
+    this.reassignOperandColors();
+    this.filterAvailableLists();
+    this.filterAvailableViews();
+    this.recalculateVenn();
+    this.saveState();
+  }
+
+  private reassignOperandColors(): void {
+    let i = 0;
+    for (const s of this.selectedLists) {
+      s.color = this.setOperationsService.getColorForIndex(i++);
+    }
+    for (const s of this.selectedViews) {
+      s.color = this.setOperationsService.getColorForIndex(i++);
+    }
+  }
+
   async recalculateVenn() {
-    if (this.selectedLists.length === 0) {
+    if (this.totalOperandCount === 0) {
       this.vennData = null;
       this.selectedRegion = null;
       this.lastOperationResult = null;
@@ -1479,8 +2178,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const lists = this.selectedLists.map(s => s.list);
-      this.vennData = await this.setOperationsService.calculateVennData(lists);
+      const operands = this.buildAllOperands();
+      this.vennData = await this.setOperationsService.calculateVennDataForOperands(operands);
       this.selectedRegion = null;
       this.lastOperationResult = null;
     } catch (error) {
@@ -1489,6 +2188,39 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       this.isCalculating = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Combined operand count — drives "≥ 2 operands" checks for showing
+   * operation buttons + the Venn diagram empty-state.
+   */
+  get totalOperandCount(): number {
+    return this.selectedLists.length + this.selectedViews.length;
+  }
+
+  /**
+   * Build the unified `SetOperand[]` for the service. Lists come first
+   * (preserving the existing color order); views follow. Each view's
+   * color is picked sequentially from the same palette.
+   */
+  private buildAllOperands(): SetOperand[] {
+    const fromLists: SetOperand[] = this.selectedLists.map((s) => ({
+      kind: 'list',
+      id: s.list.ID,
+      name: s.list.Name,
+      entityID: s.list.EntityID,
+      entityName: s.entityName,
+      color: s.color,
+    }));
+    const fromViews: SetOperand[] = this.selectedViews.map((s) => ({
+      kind: 'view',
+      id: s.view.ID,
+      name: s.view.Name,
+      entityID: s.entityID,
+      entityName: s.entityName,
+      color: s.color,
+    }));
+    return [...fromLists, ...fromViews];
   }
 
   onRegionClick(event: VennRegionClickEvent) {
@@ -1662,15 +2394,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async performOperation(operation: SetOperation) {
-    if (this.selectedLists.length < 2) return;
+    if (this.totalOperandCount < 2) return;
 
     this.isCalculating = true;
     this.selectedRegion = null;
     this.cdr.detectChanges();
 
     try {
-      const listIds = this.selectedLists.map(s => s.list.ID);
-      this.lastOperationResult = await this.setOperationsService.performOperation(operation, listIds);
+      const operands = this.buildAllOperands();
+      this.lastOperationResult = await this.setOperationsService.performOperationForOperands(operation, operands);
       this.previewRecords = this.lastOperationResult.resultRecordIds.slice(0, 10);
     } catch (error) {
       console.error('Error performing operation:', error);
@@ -1678,6 +2410,196 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       this.isCalculating = false;
       this.cdr.detectChanges();
     }
+  }
+
+  // -------------------------------------------------------------------
+  // Compose-into-target (Phase 1.10)
+  //
+  // The "Compose" panel sits below the Venn diagram. It mirrors the
+  // operand list already chosen above but adds the explicit target step:
+  // either materialize the result into a brand-new List, or merge into an
+  // existing one (which routes through the delta-confirm dialog because
+  // existing-target operations can produce drops).
+  //
+  // The op selector here only supports the three set-ops the server
+  // exposes (union / intersection / difference). The Quick Operations
+  // panel above still has `symmetric_difference` for preview, but that
+  // doesn't map to a server compose op — and a target commit needs the
+  // server side for the delta + drop-guard.
+  // -------------------------------------------------------------------
+
+  /**
+   * Server-side compose preview — builds inputs from the currently selected
+   * operands (lists + views) and calls `ComposeLists`. Returns the signed
+   * delta so `composeAndSave` can route through `ApplyListDelta` when the
+   * target is an existing list.
+   */
+  private buildComposeInputs(): ListSource[] {
+    const inputs: ListSource[] = this.selectedLists.map<ListSource>((s) => ({
+      kind: 'list',
+      listId: s.list.ID,
+    }));
+    for (const s of this.selectedViews) {
+      inputs.push({ kind: 'view', viewId: s.view.ID });
+    }
+    return inputs;
+  }
+
+  public get canCompose(): boolean {
+    if (this.totalOperandCount < 2) return false;
+    if (this.composeTarget === 'new') return this.composeNewListName.trim().length > 0;
+    return !!this.composeTargetListId;
+  }
+
+  /**
+   * "Preview Result" — re-runs the Quick-Operation path with the compose
+   * panel's chosen op so the user can see the expected output count
+   * before committing. We use the local set-op service rather than the
+   * server here because preview is a read-only operation that doesn't
+   * need a delta token (target is null) — staying local keeps it fast.
+   */
+  public async previewCompose(): Promise<void> {
+    if (this.totalOperandCount < 2) return;
+    await this.performOperation(this.composeOp);
+  }
+
+  /**
+   * Commit the compose: either materialize a new list (client-side using
+   * the previewed record IDs) or merge into an existing list via the
+   * server's ComposeLists + ApplyListDelta flow.
+   */
+  public async composeAndSave(): Promise<void> {
+    if (!this.canCompose || this.isComposing) return;
+    this.isComposing = true;
+    this.cdr.detectChanges();
+    try {
+      if (this.composeTarget === 'new') {
+        await this.composeToNewList();
+      } else {
+        await this.composeToExistingList();
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.notificationService.CreateSimpleNotification(`Compose failed: ${message}`, 'error', 5000);
+    } finally {
+      this.isComposing = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * New-list path: ensure preview is fresh, then route through the
+   * existing "create list from selection" machinery using the result's
+   * record IDs. This keeps materialization + naming in one place.
+   */
+  private async composeToNewList(): Promise<void> {
+    // Refresh preview so result reflects the compose-panel's op (the user
+    // may have run a different op via Quick Operations).
+    await this.performOperation(this.composeOp);
+    if (!this.lastOperationResult || this.lastOperationResult.resultCount === 0) {
+      this.notificationService.CreateSimpleNotification(
+        'Compose produced zero records — nothing to save.',
+        'warning',
+        3000,
+      );
+      return;
+    }
+    this.newListName = this.composeNewListName.trim();
+    this.newListDescription = `Composed via ${this.getOperationLabel(this.composeOp)} of ${this.totalOperandCount} source(s).`;
+    this.recordsToAdd = this.lastOperationResult.resultRecordIds;
+    await this.confirmCreateList();
+    // Clear the compose form on success.
+    this.composeNewListName = '';
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Existing-list path: compose server-side to get a signed delta, then
+   * surface the delta-confirm dialog. Sync semantics (replace contents)
+   * apply implicitly — the server returns ToRemove for any records that
+   * are in the target but not in the compose result.
+   */
+  private async composeToExistingList(): Promise<void> {
+    if (!this.composeTargetListId) return;
+    const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+    const client = new GraphQLListsClient(provider);
+    const delta = await client.ComposeLists({
+      Op: this.composeOp as 'union' | 'intersection' | 'difference',
+      Inputs: this.buildComposeInputs(),
+      Target: { kind: 'list', listId: this.composeTargetListId },
+    });
+    this.composeDelta = delta;
+    this.composeConfirmVisible = true;
+  }
+
+  public onComposeConfirmCancel(): void {
+    this.composeConfirmVisible = false;
+    this.composeDelta = null;
+    this.cdr.detectChanges();
+  }
+
+  public async onComposeConfirmCommit(deltaToken: string): Promise<void> {
+    if (!this.composeDelta) return;
+    const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+    const client = new GraphQLListsClient(provider);
+    try {
+      const result = await client.ApplyListDelta({
+        Delta: { ...this.composeDelta, DeltaToken: deltaToken },
+        ConfirmDrops: (this.composeDelta.Counts.Remove ?? 0) > 0,
+      });
+      if (result.Success) {
+        this.composeConfirmVisible = false;
+        this.composeDelta = null;
+        this.notificationService.CreateSimpleNotification(
+          `Target updated: +${result.Counts?.Added ?? 0} / -${result.Counts?.Removed ?? 0}`,
+          'success',
+          3000,
+        );
+      } else {
+        this.notificationService.CreateSimpleNotification(
+          `Compose apply failed: ${result.Message}`,
+          'error',
+          5000,
+        );
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.notificationService.CreateSimpleNotification(`Compose apply failed: ${message}`, 'error', 5000);
+    } finally {
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Filtered list of existing lists eligible as compose targets. We
+   * exclude lists already in the selected operands (committing to a
+   * source list would be a self-referential compose) and lists from
+   * other entities (the entity invariant still applies).
+   */
+  public get filteredComposeTargets(): MJListEntity[] {
+    const operandListIds = new Set(this.selectedLists.map((s) => s.list.ID));
+    const lockedEntityId = this.lockedEntityID;
+    let pool = this.availableLists.filter((l) => !operandListIds.has(l.ID));
+    if (lockedEntityId) {
+      pool = pool.filter((l) => UUIDsEqual(l.EntityID, lockedEntityId));
+    }
+    if (this.composeTargetSearch.trim().length > 0) {
+      const term = this.composeTargetSearch.toLowerCase();
+      pool = pool.filter((l) => l.Name.toLowerCase().includes(term));
+    }
+    return pool.slice(0, 10);
+  }
+
+  public selectComposeTarget(list: MJListEntity): void {
+    this.composeTargetListId = list.ID;
+    this.composeTargetSearch = list.Name;
+    this.showComposeTargetDropdown = false;
+  }
+
+  public composeTargetDisplayName(): string {
+    if (!this.composeTargetListId) return '';
+    const found = this.availableLists.find((l) => UUIDsEqual(l.ID, this.composeTargetListId!));
+    return found?.Name ?? '';
   }
 
   getOperationLabel(operation: SetOperation): string {
@@ -1899,9 +2821,132 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     }
   }
 
-  exportToExcel() {
-    // TODO: Implement Excel export
-    this.notificationService.CreateSimpleNotification('Export to Excel - coming soon', 'info', 2000);
+  /**
+   * Open the export-format-and-columns picker (mockup 26). Resolves the
+   * candidate field list from EntityInfo on the loaded metadata — no
+   * extra RunView. Default selection mirrors what the previous
+   * "export all" behavior produced.
+   */
+  public openExportDialog(): void {
+    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+    if (recordIds.length === 0) {
+      this.notificationService.CreateSimpleNotification('Nothing to export — pick a region first.', 'info', 3000);
+      return;
+    }
+    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    if (!entityName) {
+      this.notificationService.CreateSimpleNotification('Cannot determine entity for export.', 'error', 4000);
+      return;
+    }
+    const md = this.ProviderToUse;
+    const entityInfo = md.EntityByName(entityName);
+    if (!entityInfo) {
+      this.notificationService.CreateSimpleNotification(`Entity '${entityName}' not found.`, 'error', 4000);
+      return;
+    }
+    if (entityInfo.PrimaryKeys.length !== 1) {
+      this.notificationService.CreateSimpleNotification(
+        `Composite-PK entities ('${entityName}') aren't yet supported for Operations export.`,
+        'warning', 5000,
+      );
+      return;
+    }
+    // Build the candidate field list from the loaded EntityInfo. Hide
+    // virtual / not-queryable fields so users can't pick them and get
+    // a confusing empty column. Default-select everything to match the
+    // previous "export all" behavior.
+    this.exportFields = entityInfo.Fields
+      .filter((f) => f.IsVirtual !== true)
+      .map((f) => ({
+        Name: f.Name,
+        DisplayName: f.DisplayName || f.Name,
+        Selected: true,
+      }));
+    this.exportRecordCount = recordIds.length;
+    this.exportFormat = 'excel';
+    this.showExportDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  public closeExportDialog(): void {
+    this.showExportDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  public selectAllExportFields(): void {
+    for (const f of this.exportFields) f.Selected = true;
+  }
+  public selectNoneExportFields(): void {
+    for (const f of this.exportFields) f.Selected = false;
+  }
+  public get selectedExportFieldCount(): number {
+    return this.exportFields.filter((f) => f.Selected).length;
+  }
+
+  /**
+   * Run the export with the user's selected format + columns. Bulk-load
+   * via RunView restricted to the chosen Fields so we don't shuttle
+   * data we'll then throw away.
+   */
+  public async executeExport(): Promise<void> {
+    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+    if (recordIds.length === 0) return;
+    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    if (!entityName) return;
+    const selectedFields = this.exportFields.filter((f) => f.Selected).map((f) => f.Name);
+    if (selectedFields.length === 0) return;
+
+    this.isExporting = true;
+    this.cdr.detectChanges();
+    try {
+      const md = this.ProviderToUse;
+      const entityInfo = md.EntityByName(entityName)!;
+      const pk = entityInfo.PrimaryKeys[0].Name;
+      // Always include the PK in the SELECT — RunView won't filter on
+      // a column it didn't pull, and downstream lookups expect it.
+      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
+      const escaped = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: entityName,
+        ExtraFilter: `${pk} IN (${escaped})`,
+        Fields: fieldsForQuery,
+        ResultType: 'simple',
+      });
+      if (!result.Success) {
+        this.notificationService.CreateSimpleNotification(`Export failed: ${result.ErrorMessage}`, 'error', 5000);
+        return;
+      }
+      // Project rows to exactly the user's selected columns + ordering
+      // so the file matches what they checked. Skips the PK if they
+      // didn't pick it.
+      const rows = (result.Results ?? []).map((row) => {
+        const projected: Record<string, unknown> = {};
+        for (const f of selectedFields) projected[f] = row[f];
+        return projected;
+      });
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const ext = this.exportFormat === 'excel' ? 'xlsx' : this.exportFormat;
+      const fileName = `lists-operations-${dateStamp}.${ext}`;
+      const exportResult = this.exportFormat === 'excel'
+        ? await this.exportService.toExcel(rows, { fileName, includeHeaders: true })
+        : this.exportFormat === 'csv'
+          ? await this.exportService.toCSV(rows, { fileName, includeHeaders: true })
+          : await this.exportService.toJSON(rows, { fileName });
+      if (exportResult.success) {
+        this.exportService.downloadResult(exportResult);
+        this.notificationService.CreateSimpleNotification(`Exported ${rows.length} record(s)`, 'success', 3000);
+        this.showExportDialog = false;
+      } else {
+        this.notificationService.CreateSimpleNotification('Export failed', 'error', 5000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.notificationService.CreateSimpleNotification(`Export error: ${message}`, 'error', 5000);
+    } finally {
+      this.isExporting = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {
@@ -1917,12 +2962,14 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    */
   clearAllSelections(): void {
     this.selectedLists = [];
+    this.selectedViews = [];
     this.selectedEntityId = '';
     this.vennData = null;
     this.selectedRegion = null;
     this.lastOperationResult = null;
     this.previewRecordsDisplay = [];
     this.filterAvailableLists();
+    this.filterAvailableViews();
     this.saveState();
     this.cdr.detectChanges();
   }

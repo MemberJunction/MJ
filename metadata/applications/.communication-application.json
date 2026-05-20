@@ -8,6 +8,12 @@
     "DefaultSequence": 1004,
     "DefaultNavItems": [
       {
+        "Label": "New Message",
+        "Icon": "fa-solid fa-pen-to-square",
+        "ResourceType": "Custom",
+        "DriverClass": "CommunicationsNewMessageResource"
+      },
+      {
         "Label": "Monitor",
         "Icon": "fa-solid fa-chart-line",
         "ResourceType": "Custom",
@@ -47,7 +53,7 @@
     "ID": "6B351216-A44E-4BBE-9461-FC70BE858506"
   },
   "sync": {
-    "lastModified": "2026-02-01T14:16:21.818Z",
-    "checksum": "b951d857ea9f5c9ee4bae6315347b190b05fd87903d7e4e4cd1416c56d912784"
+    "lastModified": "2026-05-17T23:18:46.473Z",
+    "checksum": "e5b8a894738266c93e3bd3ff707008858fc169159c3a3c9442792a32321cc9cc"
   }
 }

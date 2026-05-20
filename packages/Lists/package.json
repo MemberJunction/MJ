@@ -1,0 +1,34 @@
+{
+  "name": "@memberjunction/lists",
+  "type": "module",
+  "version": "5.34.1",
+  "description": "MemberJunction: Lists — pure TypeScript core for list materialization, set algebra, delta computation, lineage tracking, and refresh modes.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@memberjunction/core": "5.34.1",
+    "@memberjunction/core-entities": "5.34.1",
+    "@memberjunction/global": "5.34.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

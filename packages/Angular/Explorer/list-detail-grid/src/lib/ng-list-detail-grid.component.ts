@@ -254,10 +254,24 @@ export class ListDetailGridComponent extends BaseAngularComponent implements OnI
       const schema = listDetailsEntityInfo.SchemaName;
       const extraFilter = this.buildListFilter(entityInfo, schema, list.ID);
 
-      // Create the RunViewParams for the grid
+      // Cache-buster:
+      // The grid filter is a cross-entity subquery into `vwListDetails`, so
+      // the server's RunView cache keys this query under the LIST'S TARGET
+      // entity (e.g. `MJ: Actions`). When the user adds/removes rows the
+      // mutation lands on `MJ: List Details`, which the server-side cache
+      // invalidator has no reason to associate with the cached target-entity
+      // query — so the grid keeps serving stale rows until a server restart.
+      //
+      // `RunViewParams.BypassCache` is not (yet) part of the GraphQL input
+      // type, so it never reaches the server. Until that's wired up, we
+      // append an always-true predicate with a fresh integer on every load
+      // so the literal filter string differs and the server's cache key
+      // misses. SQL comments (`/* */`) get rejected by the ExtraFilter
+      // injection validator, so we use a plain numeric equality instead.
+      const cb = Date.now();
       this.gridParams = {
         EntityName: entityInfo.Name,
-        ExtraFilter: extraFilter,
+        ExtraFilter: `${extraFilter} AND ${cb} = ${cb}`,
         ResultType: 'entity_object'
       };
 
