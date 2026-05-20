@@ -284,7 +284,8 @@ export class NimbleAMSConnector extends BaseRESTIntegrationConnector {
     }
 
     private async ParseConfig(companyIntegration: MJCompanyIntegrationEntity, contextUser?: UserInfo): Promise<NimbleAMSConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        // Use the typed property — never .Get()/.Set() on entity-typed objects (CLAUDE.md §2b).
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const md = new Metadata();
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);

@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "TenantID": {
+      "type": "string",
+      "title": "Tenant ID",
+      "description": "Per-customer Personify360 tenant subdomain. The connector builds URLs as https://{TenantID}.personifycloud.com/ — without this the connector cannot reach the customer's Personify cloud.",
+      "order": 0
+    },
+    "ClientID": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Personify OAuth Client ID provisioned via the Personify admin UI for an Integration application.",
+      "order": 1
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Personify OAuth Client Secret paired with the Client ID.",
+      "isSecret": true,
+      "order": 2
+    }
+  },
+  "required": ["TenantID", "ClientID", "ClientSecret"]
+}

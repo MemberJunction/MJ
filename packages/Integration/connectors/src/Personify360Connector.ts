@@ -482,7 +482,8 @@ export class Personify360Connector extends BaseRESTIntegrationConnector {
     private async ParseConfig(
         companyIntegration: MJCompanyIntegrationEntity, contextUser?: UserInfo
     ): Promise<Personify360ConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        // Use typed properties — never .Get()/.Set() on entity-typed objects (CLAUDE.md §2b).
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const md = new Metadata();
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
@@ -498,7 +499,7 @@ export class Personify360Connector extends BaseRESTIntegrationConnector {
                 }
             }
         }
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
             return {

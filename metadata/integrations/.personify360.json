@@ -9,7 +9,7 @@
       "BatchMaxRequestCount": -1,
       "BatchRequestWaitTime": -1,
       "Icon": "fa-solid fa-building",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Personify360 OAuth"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [

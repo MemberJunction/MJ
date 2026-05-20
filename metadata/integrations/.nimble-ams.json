@@ -9,7 +9,7 @@
       "BatchMaxRequestCount": -1,
       "BatchRequestWaitTime": -1,
       "Icon": "fa-solid fa-id-badge",
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=OAuth2 Client Credentials"
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Nimble AMS OAuth"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [

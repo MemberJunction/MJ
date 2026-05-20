@@ -549,13 +549,13 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         contextUser: UserInfo
     ): Promise<MagnetMailConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const config = await this.LoadFromCredentialEntity(credentialID, contextUser);
             if (config) return config;
         }
 
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Partial<MagnetMailConnectionConfig>;
             return this.ValidateConfig(parsed);

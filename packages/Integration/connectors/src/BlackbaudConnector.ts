@@ -637,7 +637,7 @@ export class BlackbaudConnector extends BaseRESTIntegrationConnector {
     private async ParseConfig(
         companyIntegration: MJCompanyIntegrationEntity, contextUser?: UserInfo
     ): Promise<BlackbaudConnectionConfig> {
-        const credentialID = companyIntegration.Get('CredentialID') as string | null;
+        const credentialID = companyIntegration.CredentialID;
         if (credentialID) {
             const md = new Metadata();
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
@@ -655,7 +655,7 @@ export class BlackbaudConnector extends BaseRESTIntegrationConnector {
                 }
             }
         }
-        const configJson = companyIntegration.Get('Configuration') as string | null;
+        const configJson = companyIntegration.Configuration;
         if (configJson) {
             const parsed = JSON.parse(configJson) as Record<string, string>;
             return {
