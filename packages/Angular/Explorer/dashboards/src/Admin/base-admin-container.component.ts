@@ -137,6 +137,17 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     // ---------- protected ----------
 
     private async selectSection(section: AdminSection, syncUrl: boolean): Promise<void> {
+        // Guard against duplicate calls for the same section. Without this,
+        // ngOnInit's own GetQueryParams read races with the workspace stream's
+        // synchronous replay through OnQueryParamsChanged on first mount —
+        // both call selectSection with the same target, both reach
+        // createComponent, and two instances of the sub-page end up mounted
+        // in the contentHost. OnSectionClick + OnQueryParamsChanged each
+        // guard their own call site, but defense-in-depth here covers any
+        // future caller (and the ngOnInit ↔ stream-replay race specifically).
+        if (section.id === this.ActiveSection) {
+            return;
+        }
         this.ActiveSection = section.id;
         this.IsLoading = true;
         this.LoadError = null;
