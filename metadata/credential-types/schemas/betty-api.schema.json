@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "TenantEndpoint": {
+      "type": "string",
+      "title": "Tenant Endpoint",
+      "description": "Per-tenant Betty AI API base URL (no trailing slash).",
+      "order": 0
+    },
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Betty-provisioned API key for this tenant.",
+      "isSecret": true,
+      "order": 1
+    },
+    "AuthHeader": {
+      "type": "string",
+      "title": "Auth Header Style",
+      "description": "Optional. 'authorization-bearer' (default) or 'x-api-key'.",
+      "enum": [
+        "authorization-bearer",
+        "x-api-key"
+      ],
+      "order": 2
+    }
+  },
+  "required": [
+    "TenantEndpoint",
+    "ApiKey"
+  ]
+}

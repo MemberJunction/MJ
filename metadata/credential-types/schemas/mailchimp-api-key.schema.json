@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Mailchimp Marketing API key (often suffixed with '-us12' or similar datacenter id, e.g. 'abc123-us12').",
+      "isSecret": true,
+      "order": 0
+    },
+    "ServerPrefix": {
+      "type": "string",
+      "title": "Server Prefix",
+      "description": "Optional datacenter prefix override (e.g. 'us12'). Auto-derived from ApiKey if omitted.",
+      "order": 1
+    }
+  },
+  "required": [
+    "ApiKey"
+  ]
+}

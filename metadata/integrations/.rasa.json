@@ -8,7 +8,7 @@
       "NavigationBaseURL": "https://rasa.io",
       "BatchMaxRequestCount": 50,
       "BatchRequestWaitTime": 200,
-      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Rasa.io API",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=rasa.io API",
       "Icon": "fa-solid fa-newspaper"
     },
     "relatedEntities": {

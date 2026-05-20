@@ -277,7 +277,8 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
         console.log(`[Rasa.io] Authenticating...`);
         const config = await this.ParseConfig(companyIntegration, contextUser);
         const token = await this.GetToken(config);
-        console.log(`[Rasa.io] Authenticated successfully, token length: ${token.length}`);
+        // Do NOT log credential-derived info (token length, prefix, etc.) — would leak secret-shape data into MJAPI logs.
+        console.log(`[Rasa.io] Authenticated successfully`);
         const auth: RasaAuthContext = { Token: token, Config: config };
         return auth;
     }

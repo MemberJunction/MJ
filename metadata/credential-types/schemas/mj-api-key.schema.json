@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "GraphQLEndpoint": {
+      "type": "string",
+      "title": "GraphQL Endpoint",
+      "description": "Full URL to the remote MJ's GraphQL endpoint (e.g., https://mj.customer.org/graphql).",
+      "order": 0
+    },
+    "ApiKey": {
+      "type": "string",
+      "title": "API Key",
+      "description": "Read-only API key provisioned by the remote MJ admin.",
+      "isSecret": true,
+      "order": 1
+    },
+    "AuthHeader": {
+      "type": "string",
+      "title": "Auth Header Style",
+      "description": "Optional header style: 'x-api-key' (default) or 'authorization-bearer'.",
+      "enum": [
+        "x-api-key",
+        "authorization-bearer"
+      ],
+      "order": 2
+    }
+  },
+  "required": [
+    "GraphQLEndpoint",
+    "ApiKey"
+  ]
+}
