@@ -1,3 +1,30 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Configuration"
+    Icon="fa-solid fa-cogs"
+    Subtitle="Pipeline, vector store, search, and automation settings">
+    <div meta>
+      @if (HasUnsavedChanges) {
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-exclamation"
+          Label="Unsaved changes"
+          Variant="warning">
+        </mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      @if (HasUnsavedChanges) {
+        <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+        </button>
+        <button mjButton variant="primary" size="sm" (click)="SaveConfiguration()" [disabled]="IsSaving" title="Save all settings">
+          <i class="fa-solid fa-floppy-disk"></i> {{IsSaving ? 'Saving…' : 'Save'}}
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true">
 @if (IsLoading) {
     <div class="config-loading">
         <mj-loading text="Loading configuration..." size="medium"></mj-loading>
@@ -800,7 +827,7 @@
                     <h2 class="config-section-title"><i class="fa-solid fa-clock"></i> Scheduling</h2>
                     <p class="config-section-desc">Manage automated pipeline schedules for content classification and vector sync. Create schedules here or manage all schedules in the dedicated Scheduling app.</p>
                     <div style="margin-top: 16px;">
-                        <app-scheduling-resource></app-scheduling-resource>
+                        <app-scheduling-resource [HideToolbar]="true"></app-scheduling-resource>
                     </div>
                 </div>
             }
@@ -824,3 +851,5 @@
         </div>
     </div>
 }
+  </mj-page-body>
+</mj-page-layout>

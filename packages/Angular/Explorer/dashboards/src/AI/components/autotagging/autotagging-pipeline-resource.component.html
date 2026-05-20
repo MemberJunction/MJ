@@ -1,11 +1,25 @@
-<!-- Content Classification Dashboard -->
-<div class="at-dashboard">
+<mj-page-layout>
+  <mj-page-header
+    Title="Classify"
+    Icon="fa-solid fa-tags"
+    Subtitle="Content classification, taxonomy, and autotagging pipeline">
+    <div actions>
+      <button mjButton variant="primary" size="sm" (click)="RunPipeline()" [disabled]="IsRunning">
+        @if (IsRunning) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+        } @else {
+          <i class="fa-solid fa-play"></i> Run Pipeline
+        }
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
+  <!-- Content Classification Dashboard -->
+  <div class="at-dashboard">
 
     <!-- ══════ LEFT NAV ══════ -->
     <div class="at-left-nav">
-        <div class="at-left-nav-header">
-            <h2><i class="fa-solid fa-tags"></i> Classify</h2>
-        </div>
         <div class="at-left-nav-items">
             @for (item of NavItems; track item.Tab) {
                 <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
@@ -19,15 +33,6 @@
             <div class="at-nav-item" [class.active]="ActiveTab === 'history'" (click)="SwitchTab('history')">
                 <i class="fa-solid fa-clock-rotate-left"></i> Run History
             </div>
-        </div>
-        <div class="at-left-nav-footer">
-            <button class="at-run-pipeline-btn" (click)="RunPipeline()" [disabled]="IsRunning">
-                @if (IsRunning) {
-                    <i class="fa-solid fa-spinner fa-spin"></i> Running...
-                } @else {
-                    <i class="fa-solid fa-play"></i> Run Pipeline
-                }
-            </button>
         </div>
     </div>
 
@@ -2029,4 +2034,6 @@
             </div>
         </div>
     }
-</div>
+  </div>
+  </mj-page-body>
+</mj-page-layout>

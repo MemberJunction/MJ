@@ -1,8 +1,12 @@
-<div class="mapping-workspace">
-  <div class="workspace-header">
-    <h2><i class="fa-solid fa-diagram-project"></i> Mapping Workspace</h2>
-  </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Mapping Workspace"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Build and validate entity field mappings">
+  </mj-page-header>
 
+  <mj-page-body [Flex]="true" [Padding]="false">
+<div class="mapping-workspace">
   @if (IsLoadingIntegrations) {
     <mj-loading text="Loading integrations..." size="medium"></mj-loading>
   } @else {
@@ -837,3 +841,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

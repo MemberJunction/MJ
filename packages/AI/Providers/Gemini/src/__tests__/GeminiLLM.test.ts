@@ -310,4 +310,105 @@ describe('GeminiLLM', () => {
       expect(() => llm.ClassifyText({} as never)).toThrow('Method not implemented.');
     });
   });
+
+  /* ---- processStreamingChunk (protected) ---- */
+  describe('processStreamingChunk', () => {
+    type StreamChunk = {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+        finishReason?: string;
+      }>;
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+    };
+    type StreamResult = { content: string; finishReason?: string; usage?: unknown };
+
+    const callProcessStreamingChunk = (chunk: StreamChunk): StreamResult => {
+      const fn = (llm as unknown as Record<string, (c: StreamChunk) => StreamResult>)['processStreamingChunk']
+        .bind(llm);
+      return fn(chunk);
+    };
+
+    const resetState = () => {
+      const reset = (llm as unknown as Record<string, () => void>)['resetStreamingState'].bind(llm);
+      reset();
+    };
+
+    beforeEach(() => {
+      resetState();
+    });
+
+    it('extracts text from new-SDK content.parts shape', () => {
+      // Regression: legacy code accessed content[0].parts (array shape from
+      // @google/generative-ai). New SDK exposes content as an object with parts[].
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'hello world' }] } }],
+      });
+      expect(result.content).toBe('hello world');
+    });
+
+    it('returns empty content if chunk used the legacy content[0].parts shape', () => {
+      // Construct a chunk shaped like the OLD SDK to prove we don't accidentally
+      // succeed against the wrong shape. content[0] would imply content is an array.
+      const legacyChunk = {
+        candidates: [{
+          // @ts-expect-error -- intentionally legacy shape
+          content: [{ parts: [{ text: 'should-not-extract' }] }],
+        }],
+      } as unknown as StreamChunk;
+      const result = callProcessStreamingChunk(legacyChunk);
+      expect(result.content).toBe('');
+    });
+
+    it('separates thought parts from visible text parts', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{
+          content: {
+            parts: [
+              { text: 'reasoning summary', thought: true },
+              { text: 'visible answer' },
+            ],
+          },
+        }],
+      });
+      expect(result.content).toBe('visible answer');
+      // Thinking is accumulated into streaming state, not emitted in `content`
+      const state = (llm as unknown as Record<string, { accumulatedThinking: string }>)['_streamingState'];
+      expect(state.accumulatedThinking).toBe('reasoning summary');
+    });
+
+    it('accumulates thinking across multiple chunks without emitting content', () => {
+      callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'step 1 ', thought: true }] } }],
+      });
+      const second = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'step 2', thought: true }] } }],
+      });
+      expect(second.content).toBe('');
+      const state = (llm as unknown as Record<string, { accumulatedThinking: string }>)['_streamingState'];
+      expect(state.accumulatedThinking).toBe('step 1 step 2');
+    });
+
+    it('returns finishReason when present on the candidate', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'done' }] }, finishReason: 'STOP' }],
+      });
+      expect(result.finishReason).toBe('STOP');
+    });
+
+    it('returns usage when usageMetadata is on the chunk', () => {
+      const result = callProcessStreamingChunk({
+        candidates: [{ content: { parts: [{ text: 'x' }] } }],
+        usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 34 },
+      });
+      expect(result.usage).toBeDefined();
+      expect((result.usage as { promptTokens: number }).promptTokens).toBe(12);
+      expect((result.usage as { completionTokens: number }).completionTokens).toBe(34);
+    });
+
+    it('handles chunks with no candidates without throwing', () => {
+      const result = callProcessStreamingChunk({});
+      expect(result.content).toBe('');
+      expect(result.finishReason).toBeUndefined();
+    });
+  });
 });

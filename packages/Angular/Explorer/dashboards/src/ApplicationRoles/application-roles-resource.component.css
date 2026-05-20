@@ -1,39 +1,41 @@
+/* Container — flex-column workspace inside Admin's left-nav shell. */
 .app-roles-container {
-  padding: 24px;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-/* Header */
-.header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
 }
 
-.header-left {
+/* Sticky Header — action row only (no title; Admin shell provides it). */
+.sticky-header {
+  flex-shrink: 0;
+  background: var(--mj-bg-surface);
+  border-bottom: 1px solid var(--mj-border-default);
+  box-shadow: var(--mj-shadow-sm);
+  z-index: 10;
+}
+
+.action-buttons {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--mj-space-2);
+  justify-content: flex-end;
+  padding: var(--mj-space-3) var(--mj-space-6);
 }
 
-.header-icon {
-  font-size: 24px;
-  color: var(--mj-brand-primary);
+@media (max-width: 639px) {
+  .action-buttons {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
 }
 
-.header-title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+/* Scrollable Content */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--mj-space-6);
 }
 
 /* Messages */

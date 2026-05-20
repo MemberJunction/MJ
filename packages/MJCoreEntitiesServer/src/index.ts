@@ -1,6 +1,7 @@
 export * from './custom/MJAIPromptEntityServer.server';
 export * from './custom/MJAIPromptRunEntityServer.server';
 export * from './custom/MJConversationDetailEntityServer.server';
+export * from './custom/MJConversationDetailAttachmentEntityServer.server';
 export * from './custom/MJDuplicateRunEntityServer.server';
 export * from './custom/MJQueryEntityServer.server';
 export * from './custom/MJTemplateContentEntityServer.server';
