@@ -536,6 +536,15 @@ export class EntityVectorSyncer extends VectorBase {
             LogError(`Keyset pagination: last record on page ${pageIndex + 1} has null PK; halting iteration.`);
             break;
           }
+          // Safety net: the cursor must strictly advance each page. If it doesn't, the seek
+          // window is repeating (e.g. the query isn't ordered by the PK, or a caching layer
+          // is returning a stale page) and we'd loop forever. Bail with a clear diagnostic.
+          const prevKeyValue = lastSeenKey?.KeyValuePairs?.[0]?.Value;
+          if (prevKeyValue != null && String(prevKeyValue) === String(lastValue)) {
+            LogError(`Keyset cursor did not advance (stuck at ${pkField.Name}=${lastValue}); halting to avoid an infinite loop. ` +
+              `The seek page is repeating — check that the query is ordered by ${pkField.Name} and not served from a stale cache.`);
+            break;
+          }
           lastSeenKey = CompositeKey.FromKeyValuePair(pkField.Name, lastValue);
         } else {
           pageNumber++;
