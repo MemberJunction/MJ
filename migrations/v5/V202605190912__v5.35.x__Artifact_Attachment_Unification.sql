@@ -341,6 +341,82 @@ GO
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+-- Refresh Metadata before next phase of work to ensure updated sequences.
+
+/* SQL text to recompile all views */
+EXEC [${flyway:defaultSchema}].spRecompileAllViews
+
+/* SQL text to update existing entities from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to sync schema info from database schemas */
+EXEC [${flyway:defaultSchema}].spUpdateSchemaInfoFromDatabase @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to delete unneeded entity fields */
+EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to update existing entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to set default column width where needed */
+EXEC [${flyway:defaultSchema}].spSetDefaultColumnWidthWhereNeeded @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to recompile all stored procedures in dependency order */
+EXEC [${flyway:defaultSchema}].spRecompileAllProceduresInDependencyOrder @ExcludedSchemaNames='sys,staging', @LogOutput=0, @ContinueOnError=1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/* CODE GEN RUN */
+
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1380146e-bf7d-4624-803a-45b1e65f0b52' OR (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'AcceptUnregisteredFiles')) BEGIN

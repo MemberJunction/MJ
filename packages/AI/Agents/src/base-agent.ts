@@ -3923,9 +3923,9 @@ The context is now within limits. Please retry your request with the recovered c
  
     /**
      * Executes a batch of artifact tool calls, recording each as its own
-     * `Tool` AIAgentRunStep (parented to the active Prompt step) with full
-     * inputs/outputs captured in InputData/OutputData. Returns the stored
-     * results so the caller can render them into a single recall-friendly
+     * `Tool` AIAgentRunStep (a sibling of the Prompt step that requested them)
+     * with full inputs/outputs captured in InputData/OutputData. Returns the
+     * stored results so the caller can render them into a single recall-friendly
      * message for the next prompt turn.
      *
      * Step naming convention: `Artifact Tool: {toolName}` for log/UI clarity.
@@ -3934,16 +3934,18 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected async executeArtifactToolCallsAsSteps(
         calls: ArtifactToolCall[],
-        parentStep: MJAIAgentRunStepEntityExtended,
         params: ExecuteAgentParams,
     ): Promise<StoredToolResult[]> {
+        // No parentId: artifact tool steps are siblings of the prompt step that
+        // requested them, matching how action steps render. ParentID is reserved
+        // for genuine control-flow nesting (ForEach/While loops, sub-agents), which
+        // artifact tools are never dispatched from.
         const results = await Promise.all(
             calls.map(async (call) => {
                 const toolStep = await this.createStepEntity({
                     stepType: 'Tool',
                     stepName: `Artifact Tool: ${call.tool}`,
                     contextUser: params.contextUser,
-                    parentId: parentStep.ID,
                     inputData: {
                         artifactId: call.artifactId,
                         tool: call.tool,
@@ -5699,8 +5701,8 @@ The context is now within limits. Please retry your request with the recovered c
                 return await this.processSubAgentStep<P, P>(params, previousDecision!, undefined, undefined, stepCount);
             case 'Actions':
                 return await this.executeActionsStep(params, previousDecision, undefined, true, stepCount);
-            // Type assertion required because 'ClientTools' is not yet in the DB StepType value list.
-            // The LoopAgentType.DetermineNextStep() emits this value when the LLM chooses client tools.
+            // Type assertion required because 'ClientTools' is not part of the BaseAgentNextStep
+            // step union — LoopAgentType.DetermineNextStep() emits it when the LLM chooses client tools.
             case 'ClientTools' as typeof previousDecision.step:
                 return await this.executeClientToolsStep(params, config, previousDecision, stepCount);
             case 'Chat':
@@ -6105,7 +6107,6 @@ The context is now within limits. Please retry your request with the recovered c
                 // the previous re-render-every-turn `_ARTIFACT_TOOL_RESULTS` template var.
                 const toolResults = await this.executeArtifactToolCallsAsSteps(
                     artifactToolCalls!,
-                    stepEntity,
                     params,
                 );
                 this.injectArtifactToolResultsMessage(params, toolResults);
@@ -7783,12 +7784,7 @@ The context is now within limits. Please retry your request with the recovered c
         // Execute tools sequentially (client may not support parallel UI operations)
         for (const tool of clientTools) {
             const stepEntity = await this.createStepEntity({
-                // INTENTIONAL: We use 'Actions' as the DB step type because the MJ: AI Agent Run Steps
-                // entity's StepType value list does not yet include 'ClientTools'. A future database
-                // migration will add 'ClientTools' to the allowed values in the StepType CHECK constraint
-                // and CodeGen will regenerate the types. Until then, client tool steps are recorded under
-                // 'Actions' in the run history. The step name ("Client Tool: {name}") distinguishes them.
-                stepType: 'Actions' as MJAIAgentRunStepEntityExtended['StepType'],
+                stepType: 'Tool',
                 stepName: `Client Tool: ${tool.Name}`,
                 inputData: { toolName: tool.Name, params: tool.Params },
                 contextUser: params.contextUser,
