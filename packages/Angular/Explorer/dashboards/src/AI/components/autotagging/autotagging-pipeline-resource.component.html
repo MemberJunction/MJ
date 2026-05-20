@@ -25,6 +25,55 @@
     </mj-left-nav>
 
     <mj-left-nav-content>
+
+    <mj-page-header-interior
+        [Title]="currentTabTitle"
+        [Subtitle]="currentTabSubtitle">
+      <div actions>
+        @switch (ActiveTab) {
+          @case ('pipeline') {
+            <button mjButton variant="secondary" size="sm" (click)="LoadPipelineData()">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+          }
+          @case ('sources') {
+            <button mjButton variant="primary" size="sm" (click)="OpenAddSourceForm()">
+              <i class="fa-solid fa-plus"></i> Add Source
+            </button>
+          }
+          @case ('types') {
+            <button mjButton variant="primary" size="sm" (click)="OpenAddTypeForm()">
+              <i class="fa-solid fa-plus"></i> Add Type
+            </button>
+          }
+          @case ('tags') {
+            <input type="text" class="at-search-input" placeholder="Search tags..."
+                   [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
+          }
+          @case ('taxonomy') {
+            <button mjButton variant="secondary" size="sm" (click)="RefreshTaxonomyData()">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
+          }
+          @case ('history') {
+            <select class="at-filter-select" [(ngModel)]="HistorySourceFilter" (change)="FilterRunHistory()">
+              <option value="">All Sources</option>
+              @for (s of HistorySourceOptions; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+            <select class="at-filter-select" [(ngModel)]="HistoryStatusFilter" (change)="FilterRunHistory()">
+              <option value="">All Status</option>
+              <option value="complete">Complete</option>
+              <option value="failed">Failed</option>
+              <option value="running">Running</option>
+            </select>
+          }
+        }
+      </div>
+    </mj-page-header-interior>
+
+    <mj-page-body-interior [Padding]="false" [Flex]="true">
     <div class="at-main-area">
 
         @if (IsLoading) {
@@ -39,17 +88,6 @@
             <!-- TAB 1: PIPELINE MONITOR -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'pipeline') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Pipeline Monitor</div>
-                        <div class="at-page-subtitle">Real-time processing status and recent activity</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-secondary-btn" (click)="LoadPipelineData()">
-                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-                        </button>
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <!-- KPIs -->
                     <div class="at-kpi-strip">
@@ -350,17 +388,6 @@
             <!-- TAB 2: SOURCES -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'sources') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Content Sources</div>
-                        <div class="at-page-subtitle">Configure where content is ingested from</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-primary-btn" (click)="OpenAddSourceForm()">
-                            <i class="fa-solid fa-plus"></i> Add Source
-                        </button>
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <div class="at-sources-grid">
                         @for (card of SourceCards; track card.ID) {
@@ -488,17 +515,6 @@
             <!-- TAB 3: CONTENT TYPES -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'types') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Content Types</div>
-                        <div class="at-page-subtitle">Configure AI tagging rules per content category</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-primary-btn" (click)="OpenAddTypeForm()">
-                            <i class="fa-solid fa-plus"></i> Add Type
-                        </button>
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <div class="at-ct-grid">
                         @for (card of ContentTypeCards; track card.ID) {
@@ -547,16 +563,6 @@
             <!-- TAB 4: TAG LIBRARY -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'tags') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Tag Library</div>
-                        <div class="at-page-subtitle">{{ TagRows.length }} unique tags across all content sources</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <input type="text" class="at-search-input" placeholder="Search tags..."
-                               [(ngModel)]="TagSearchQuery" (input)="FilterTags()">
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <div class="at-tag-lib-layout">
                         <div class="at-tag-lib-main">
@@ -684,18 +690,6 @@
             <!-- TAB 6: TAXONOMY GOVERNANCE -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'taxonomy') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Taxonomy Governance</div>
-                        <div class="at-page-subtitle">Manage tag hierarchy, resolve duplicates, and monitor taxonomy health &mdash; <strong>{{ TaxHealth.Total }} total tags</strong></div>
-                    </div>
-                    <div class="at-page-actions">
-                        <button class="at-action-btn at-secondary-btn" (click)="RefreshTaxonomyData()">
-                            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Sub-tab strip -->
                 <div class="at-tax-tab-strip">
                     <div class="at-tax-tab" [class.active]="TaxSubTab === 'tree'" (click)="SwitchTaxSubTab('tree')">
@@ -1196,26 +1190,6 @@
             <!-- TAB 7: RUN HISTORY -->
             <!-- ════════════════════════════════════════════ -->
             @if (ActiveTab === 'history') {
-                <div class="at-page-header">
-                    <div>
-                        <div class="at-page-title">Run History</div>
-                        <div class="at-page-subtitle">Processing run log across all content sources</div>
-                    </div>
-                    <div class="at-page-actions">
-                        <select class="at-filter-select" [(ngModel)]="HistorySourceFilter" (change)="FilterRunHistory()">
-                            <option value="">All Sources</option>
-                            @for (s of HistorySourceOptions; track s) {
-                                <option [value]="s">{{ s }}</option>
-                            }
-                        </select>
-                        <select class="at-filter-select" [(ngModel)]="HistoryStatusFilter" (change)="FilterRunHistory()">
-                            <option value="">All Status</option>
-                            <option value="complete">Complete</option>
-                            <option value="failed">Failed</option>
-                            <option value="running">Running</option>
-                        </select>
-                    </div>
-                </div>
                 <div class="at-page-body">
                     <div class="at-card">
                         <div class="at-card-body" style="max-height: 600px; overflow-y: auto;">
@@ -1320,6 +1294,7 @@
             }
         }
     </div>
+    </mj-page-body-interior>
     </mj-left-nav-content>
 
     <!-- ══════ SLIDE-IN FORM OVERLAY ══════ -->

@@ -68,32 +68,11 @@
     height: 100%;
 }
 
-.at-page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-}
-
-.at-page-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-}
-
-.at-page-subtitle {
-    font-size: 0.72rem;
-    color: var(--mj-text-muted);
-    margin-top: 2px;
-}
-
-.at-page-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
+/* .at-page-header / .at-page-title / .at-page-subtitle / .at-page-actions
+   retired — section identity + actions now live in <mj-page-header-interior>
+   (one shared instance at the top of <mj-left-nav-content>, with Title/Subtitle
+   driven by currentTabTitle/currentTabSubtitle getters and per-section action
+   buttons projected via an @switch into the chrome's [actions] slot). */
 
 .at-page-body {
     flex: 1;

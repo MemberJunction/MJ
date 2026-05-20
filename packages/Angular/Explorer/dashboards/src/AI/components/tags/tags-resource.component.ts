@@ -1202,6 +1202,28 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         }];
     }
 
+    /** Title rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabTitle(): string {
+        switch (this.ActiveTab) {
+            case 'tags':        return 'Overview';
+            case 'taxonomy':    return 'Taxonomy Governance';
+            case 'suggestions': return 'Suggestions Inbox';
+            case 'health':      return 'Tag Health';
+        }
+        return '';
+    }
+
+    /** Subtitle rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabSubtitle(): string {
+        switch (this.ActiveTab) {
+            case 'tags':        return `${this.TagRows.length} unique tags across all content sources`;
+            case 'taxonomy':    return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'suggestions': return `${this.SuggestionRows.length} pending · select rows for bulk approve / reject`;
+            case 'health':      return 'Automated signals about taxonomy quality';
+        }
+        return '';
+    }
+
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
     public onNavItemClicked(item: MJLeftNavItem): void {
         void this.SwitchTab(item.id as TabName);

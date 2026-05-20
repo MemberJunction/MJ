@@ -1113,6 +1113,32 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         void this.SwitchTab(item.id as TabName);
     }
 
+    /** Title rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabTitle(): string {
+        switch (this.ActiveTab) {
+            case 'pipeline': return 'Pipeline Monitor';
+            case 'sources':  return 'Content Sources';
+            case 'types':    return 'Content Types';
+            case 'tags':     return 'Tag Library';
+            case 'taxonomy': return 'Taxonomy Governance';
+            case 'history':  return 'Run History';
+        }
+        return '';
+    }
+
+    /** Subtitle rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabSubtitle(): string {
+        switch (this.ActiveTab) {
+            case 'pipeline': return 'Real-time processing status and recent activity';
+            case 'sources':  return 'Configure where content is ingested from';
+            case 'types':    return 'Configure AI tagging rules per content category';
+            case 'tags':     return `${this.TagRows.length} unique tags across all content sources`;
+            case 'taxonomy': return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'history':  return 'Processing run log across all content sources';
+        }
+        return '';
+    }
+
     public async SwitchTab(tab: TabName): Promise<void> {
         if (tab === this.ActiveTab) return;
         this.ActiveTab = tab;
