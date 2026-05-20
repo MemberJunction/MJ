@@ -15,7 +15,7 @@
  *
  * Discovery: DYNAMIC via GET /record/v1/metadata-catalog/
  *   - Enumerates ALL available record types for the account (100+ standard types)
- *   - Field metadata fetched per record type via GET /record/v1/metadata-catalog/nstype/{recordType}
+ *   - Field metadata fetched per record type via GET /record/v1/metadata-catalog/{recordType}
  *   - New record types (including custom records) are picked up automatically
  *
  * API Categories:
@@ -277,9 +277,9 @@ export class NetSuiteConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(companyIntegration, contextUser) as NSAuthContext;
         const recordType = objectName.toLowerCase();
 
-        // Try metadata endpoint first: GET /record/v1/metadata-catalog/nstype/{recordType}
+        // Try metadata endpoint first: GET /record/v1/metadata-catalog/{recordType}
         try {
-            const metaURL = `${auth.RecordBaseURL}/metadata-catalog/nstype/${recordType}`;
+            const metaURL = `${auth.RecordBaseURL}/metadata-catalog/${recordType}`;
             const headers = this.BuildRequestHeaders(auth, metaURL, 'GET');
             headers['Accept'] = 'application/schema+json';
             const response = await this.MakeHTTPRequest(auth, metaURL, 'GET', headers);

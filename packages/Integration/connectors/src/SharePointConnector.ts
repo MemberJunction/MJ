@@ -873,7 +873,13 @@ export class SharePointConnector extends BaseRESTIntegrationConnector {
             Fields: r,
             ModifiedAt: typeof r['lastModifiedDateTime'] === 'string'
                 ? new Date(r['lastModifiedDateTime']) : undefined,
-            IsDeleted: typeof r['@removed'] === 'object' && r['@removed'] !== null,
+            // Microsoft Graph delta deletion semantics: driveItem and listItem use the
+            // `deleted` facet (e.g. `"deleted": { "state": "deleted" }`). The legacy
+            // `@removed` shape applies to directoryObjects (users/groups) only. Check
+            // both so we catch deletions across the resource types this connector reaches.
+            IsDeleted:
+                (typeof r['deleted'] === 'object' && r['deleted'] !== null) ||
+                (typeof r['@removed'] === 'object' && r['@removed'] !== null),
         }));
 
         return {

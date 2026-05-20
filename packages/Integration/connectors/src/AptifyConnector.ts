@@ -691,11 +691,19 @@ export class AptifyConnector extends BaseRESTIntegrationConnector {
 
     private async AcquireToken(config: AptifyConnectionConfig): Promise<AptifyAuthContext> {
         const baseURL = this.StripTrailingSlash(config.BaseURL);
-        const tokenURL = `${baseURL}/authentication`;
+        // Vendor canonical: POST {BaseURL}/Services/Authentication/Login/{Method}
+        // where {Method} is 'Web' (the AuthProvider name is encoded in the URL path,
+        // NOT a body field). Default to 'Web' (Aptify's standard internal provider) —
+        // override via AuthProvider for SSO/SAML providers.
+        const authMethod = config.AuthProvider && config.AuthProvider.trim().length > 0
+            ? config.AuthProvider.trim()
+            : 'Web';
+        const tokenURL = `${baseURL}/Services/Authentication/Login/${encodeURIComponent(authMethod)}`;
+        // Aptify expects 'UserName' (capital N) per the vendor's Web API docs —
+        // 'Username' (lower n) would yield a 400/401.
         const requestBody = {
-            Username: config.Username,
+            UserName: config.Username,
             Password: config.Password,
-            AuthProvider: config.AuthProvider ?? 'AptifyUser',
         };
         const timeoutMs = config.RequestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 

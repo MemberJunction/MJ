@@ -370,11 +370,12 @@
             "ResponseDataKey": "contacts",
             "DefaultPageSize": 200,
             "SupportsPagination": true,
-            "PaginationType": "Offset",
-            "SupportsIncrementalSync": false,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
             "SupportsWrite": true,
             "Sequence": 4,
-            "Status": "Active"
+            "Status": "Active",
+            "DefaultQueryParams": "{\"updated_since\":\"{watermark}\"}"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3069,13 +3070,11 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsIncrementalSync": false,
             "SupportsWrite": false,
             "Sequence": 20,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_last_changed": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -3666,7 +3665,7 @@
                   "Sequence": 9,
                   "Status": "Active",
                   "Length": 500,
-                  "Description": "The currency format for the store. For example: `$`, `\u00a3`, etc."
+                  "Description": "The currency format for the store. For example: `$`, `£`, etc."
                 }
               },
               {
@@ -3841,13 +3840,11 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsIncrementalSync": false,
             "SupportsWrite": true,
             "Sequence": 22,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_last_changed": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4186,13 +4183,11 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsIncrementalSync": false,
             "SupportsWrite": true,
             "Sequence": 24,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_last_changed": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -4414,13 +4409,11 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsIncrementalSync": false,
             "SupportsWrite": true,
             "Sequence": 25,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_last_changed": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -5043,13 +5036,11 @@
             "DefaultPageSize": 200,
             "SupportsPagination": true,
             "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsIncrementalSync": false,
             "SupportsWrite": true,
             "Sequence": 27,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_last_changed": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -6937,15 +6928,13 @@
             "APIPath": "landing-pages",
             "ResponseDataKey": "landing-pages",
             "DefaultPageSize": 200,
-            "SupportsPagination": true,
-            "PaginationType": "Offset",
-            "SupportsIncrementalSync": true,
+            "SupportsPagination": false,
+            "PaginationType": "None",
+            "SupportsIncrementalSync": false,
             "SupportsWrite": true,
             "Sequence": 36,
             "Status": "Active",
-            "DefaultQueryParams": {
-              "since_created_at": "{watermark}"
-            }
+            "DefaultQueryParams": null
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -8458,7 +8447,7 @@
                   "Sequence": 5,
                   "Status": "Active",
                   "Length": 500,
-                  "Description": "Determines how this category\u2019s interests appear on signup forms."
+                  "Description": "Determines how this category’s interests appear on signup forms."
                 }
               },
               {
@@ -8796,7 +8785,7 @@
                   "Sequence": 4,
                   "Status": "Active",
                   "Length": 500,
-                  "Description": "As Mailchimp evolves beyond email, you may eventually have contacts without email addresses. While the `id` is the MD5 hash of their email address, this `contact_id` is agnostic of contact\u2019s inclusion of an email address."
+                  "Description": "As Mailchimp evolves beyond email, you may eventually have contacts without email addresses. While the `id` is the MD5 hash of their email address, this `contact_id` is agnostic of contact’s inclusion of an email address."
                 }
               },
               {
@@ -9755,7 +9744,7 @@
                   "Sequence": 8,
                   "Status": "Active",
                   "Length": 500,
-                  "Description": "As Mailchimp evolves beyond email, you may eventually have contacts without email addresses. While the `email_id` is the MD5 hash of their email address, this `contact_id` is agnostic of contact\u2019s inclusion of an email address."
+                  "Description": "As Mailchimp evolves beyond email, you may eventually have contacts without email addresses. While the `email_id` is the MD5 hash of their email address, this `contact_id` is agnostic of contact’s inclusion of an email address."
                 }
               },
               {
@@ -10072,7 +10061,7 @@
             "Sequence": 54,
             "Status": "Active",
             "DefaultQueryParams": {
-              "since_updated": "{watermark}"
+              "since_updated_at": "{watermark}"
             }
           },
           "relatedEntities": {

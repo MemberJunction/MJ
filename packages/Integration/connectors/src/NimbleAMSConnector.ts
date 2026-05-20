@@ -77,7 +77,9 @@ interface SFQueryResponse {
 // ─── Constants ────────────────────────────────────────────────────────────
 
 const SF_API_VERSION = 'v59.0';
-const SF_PAGE_SIZE = 2000;
+// Salesforce platform restricts SOQL `FIELDS(ALL)` to LIMIT <= 200 per query.
+// nextRecordsUrl cursor pagination chains additional batches.
+const SF_PAGE_SIZE = 200;
 const TOKEN_REFRESH_BUFFER_MS = 60_000;
 const MAX_RETRIES = 3;
 const REQUEST_TIMEOUT_MS = 30_000;
