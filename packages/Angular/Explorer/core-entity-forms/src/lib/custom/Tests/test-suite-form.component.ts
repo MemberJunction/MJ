@@ -93,6 +93,12 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   matrixTestFilter = '';
   private matrixFilterSubject$ = new Subject<string>();
 
+  // Edit state
+  isSaving = false;
+  parentSuiteOptions: MJTestSuiteEntity[] = [];
+  tagDraft = '';
+  readonly statusOptions: readonly string[] = ['Active', 'Pending', 'Disabled'];
+
   // Service injections
   private navigationService = inject(NavigationService);
   public testingDialogService = inject(TestingDialogService);
@@ -103,6 +109,8 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   async ngOnInit() {
     await super.ngOnInit();
     this.loadShortcutsSetting();
+    // Fire-and-forget: parent suite list for the edit form
+    this.loadParentSuiteOptions();
 
     // Subscribe to evaluation preferences
     this.evalPrefsService.preferences$
@@ -150,6 +158,15 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   handleKeyboardShortcut(event: KeyboardEvent) {
     if (!this.keyboardShortcutsEnabled) return;
 
+    // Cmd/Ctrl + S: Save (if dirty)
+    if ((event.metaKey || event.ctrlKey) && event.key === 's' && !event.shiftKey) {
+      if (this.isDirty) {
+        event.preventDefault();
+        this.saveChanges();
+      }
+      return;
+    }
+
     // Cmd/Ctrl + R: Refresh
     if ((event.metaKey || event.ctrlKey) && event.key === 'r' && !event.shiftKey) {
       event.preventDefault();
@@ -164,8 +181,8 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
       return;
     }
 
-    // Number keys for tabs (1-5)
-    if (!event.metaKey && !event.ctrlKey && !event.altKey) {
+    // Number keys for tabs (1-5) — skip when typing into form inputs
+    if (!event.metaKey && !event.ctrlKey && !event.altKey && !this.isTextInputFocused()) {
       switch (event.key) {
         case '1': this.changeTab('overview'); break;
         case '2': this.changeTab('tests'); break;
@@ -174,6 +191,22 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
         case '5': this.changeTab('compare'); break;
       }
     }
+  }
+
+  // Warn before tab close / hard navigation when there are unsaved changes
+  @HostListener('window:beforeunload', ['$event'])
+  handleBeforeUnload(event: BeforeUnloadEvent) {
+    if (this.isDirty) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }
+
+  private isTextInputFocused(): boolean {
+    const el = document.activeElement;
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
   }
 
   changeTab(tab: string) {
@@ -1919,6 +1952,119 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
   /** Case-insensitive UUID check whether a run is the currently selected Run B (compare). */
   public IsCompareRunB(run: MJTestSuiteRunEntity): boolean {
     return UUIDsEqual(this.compareRunB?.ID, run.ID);
+  }
+
+  // ==========================================
+  // Edit / Save Methods
+  // ==========================================
+
+  /** True if the suite record has any unsaved field changes. */
+  get isDirty(): boolean {
+    return this.record?.Dirty === true;
+  }
+
+  /** Names of fields with pending edits, used by the save bar. */
+  get dirtyFieldNames(): string[] {
+    if (!this.record?.Fields) return [];
+    return this.record.Fields.filter(f => f.Dirty).map(f => f.Name);
+  }
+
+  /** Parsed tags as a plain array — derived from record.Tags JSON. */
+  get tags(): string[] {
+    return TagsHelper.parseTags(this.record?.Tags);
+  }
+
+  /**
+   * Load all suites for the Parent Suite dropdown. Excludes the current
+   * suite (a suite cannot be its own parent).
+   */
+  private async loadParentSuiteOptions() {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJTestSuiteEntity>({
+        EntityName: 'MJ: Test Suites',
+        ExtraFilter: this.record?.ID ? `ID <> '${this.record.ID}'` : '',
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      });
+      if (result.Success) {
+        this.parentSuiteOptions = result.Results || [];
+        this.cdr.markForCheck();
+      }
+    } catch (error) {
+      console.warn('Failed to load parent suite options:', error);
+    }
+  }
+
+  /** Save all pending changes on the suite record. */
+  async saveChanges(): Promise<void> {
+    if (!this.isDirty || this.isSaving) return;
+
+    this.isSaving = true;
+    this.cdr.markForCheck();
+    try {
+      const ok = await this.SaveRecord(false);
+      if (ok) {
+        SharedService.Instance.CreateSimpleNotification('Suite saved', 'success', 2000);
+      } else {
+        const detail = this.record?.LatestResult?.CompleteMessage || this.record?.LatestResult?.Message || 'Save failed';
+        SharedService.Instance.CreateSimpleNotification(detail, 'error', 4000);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      SharedService.Instance.CreateSimpleNotification(msg, 'error', 4000);
+    } finally {
+      this.isSaving = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /** Discard all pending field changes on the suite. */
+  discardChanges(): void {
+    if (!this.isDirty) return;
+    if (!confirm('Discard your unsaved changes?')) return;
+    this.record.Revert();
+    this.tagDraft = '';
+    this.cdr.markForCheck();
+  }
+
+  /** Add a tag from tagDraft (called on Enter / comma / blur). */
+  addTagFromDraft(): void {
+    const raw = this.tagDraft.trim();
+    if (!raw) return;
+    // Allow comma-separated entry: "alpha, beta" → two tags
+    const incoming = raw.split(',').map(t => t.trim()).filter(t => t.length > 0);
+    const existing = this.tags;
+    const merged = [...existing];
+    for (const t of incoming) {
+      if (!merged.includes(t)) merged.push(t);
+    }
+    this.record.Tags = TagsHelper.toJson(merged);
+    this.tagDraft = '';
+    this.cdr.markForCheck();
+  }
+
+  /** Remove a single tag. */
+  removeTag(tag: string): void {
+    this.record.Tags = TagsHelper.removeTag(this.record.Tags, tag);
+    this.cdr.markForCheck();
+  }
+
+  /** Handle Enter / comma in the tag input to commit the draft tag. */
+  onTagInputKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ',') {
+      event.preventDefault();
+      this.addTagFromDraft();
+      return;
+    }
+    // Backspace on an empty draft pops the last chip
+    if (event.key === 'Backspace' && !this.tagDraft) {
+      const all = this.tags;
+      if (all.length > 0) {
+        event.preventDefault();
+        this.removeTag(all[all.length - 1]);
+      }
+    }
   }
 }
 

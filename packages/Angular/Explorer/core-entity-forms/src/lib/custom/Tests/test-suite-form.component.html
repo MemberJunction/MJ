@@ -24,7 +24,12 @@
           <i class="fas fa-layer-group"></i>
         </div>
         <div class="suite-info">
-          <h1>{{ record.Name }}</h1>
+          <h1>
+            {{ record.Name }}
+            @if (isDirty) {
+              <span class="dirty-indicator" title="You have unsaved changes" aria-label="Unsaved changes">●</span>
+            }
+          </h1>
           <div class="suite-meta">
             <span class="status-badge" [ngClass]="getStatusClass()">
               <i class="fas" [ngClass]="record.Status === 'Active' ? 'fa-circle-check' : 'fa-circle-pause'"></i>
@@ -34,6 +39,11 @@
               <span class="test-count">
                 <i class="fas fa-flask"></i>
                 {{ suiteTests.length }} tests
+              </span>
+            }
+            @if (isDirty) {
+              <span class="unsaved-pill" title="You have unsaved changes">
+                <i class="fas fa-circle"></i> Unsaved
               </span>
             }
           </div>
@@ -108,47 +118,135 @@
   </div>
 
   <!-- Tab Content -->
-  <div class="tab-content">
+  <div class="tab-content" [class.has-savebar]="isDirty">
     <!-- Overview Tab -->
     @if (activeTab === 'overview') {
       <div class="overview-tab">
-        <div class="info-section">
-          <h3><i class="fas fa-info-circle"></i> Suite Information</h3>
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">Name</div>
-              <div class="info-value">{{ record.Name }}</div>
+        <!-- Editable Details -->
+        <section class="edit-section">
+          <header class="edit-section-header">
+            <h3><i class="fas fa-pen-to-square"></i> Details</h3>
+            <p class="edit-section-sub">Edit any field — changes are saved with the bar at the bottom.</p>
+          </header>
+          <div class="edit-grid">
+            <div class="edit-field edit-field--full">
+              <label for="suite-name">Name <span class="required">*</span></label>
+              <input
+                id="suite-name"
+                type="text"
+                class="config-input"
+                placeholder="e.g., Core Agent Test Suite"
+                [(ngModel)]="record.Name"
+              />
             </div>
-            <div class="info-item">
-              <div class="info-label">Status</div>
-              <div class="info-value">
-                <span class="status-badge-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+
+            <div class="edit-field edit-field--full">
+              <label for="suite-description">Description</label>
+              <textarea
+                id="suite-description"
+                class="config-input config-textarea"
+                rows="3"
+                placeholder="What does this suite cover?"
+                [ngModel]="record.Description"
+                (ngModelChange)="record.Description = $event || null"
+              ></textarea>
+            </div>
+
+            <div class="edit-field">
+              <label for="suite-status">Status</label>
+              <div class="select-wrapper">
+                <select
+                  id="suite-status"
+                  class="config-input"
+                  [(ngModel)]="record.Status"
+                >
+                  @for (opt of statusOptions; track opt) {
+                    <option [ngValue]="opt">{{ opt }}</option>
+                  }
+                </select>
               </div>
             </div>
-            <div class="info-item">
-              <div class="info-label">Created</div>
-              <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+
+            <div class="edit-field">
+              <label for="suite-parent">Parent Suite</label>
+              <select
+                id="suite-parent"
+                class="config-input"
+                [ngModel]="record.ParentID"
+                (ngModelChange)="record.ParentID = $event || null"
+              >
+                <option [ngValue]="null">— None (top-level) —</option>
+                @for (s of parentSuiteOptions; track s.ID) {
+                  <option [ngValue]="s.ID">{{ s.Name }}</option>
+                }
+              </select>
             </div>
-            <div class="info-item">
-              <div class="info-label">Updated</div>
-              <div class="info-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">Max Execution Time</div>
-              <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
+
+            <div class="edit-field edit-field--full">
+              <label for="suite-tags">Tags</label>
+              <div class="tag-editor" (click)="tagInput.focus()">
+                @for (tag of tags; track tag) {
+                  <span class="tag-chip-editable">
+                    {{ tag }}
+                    <button type="button" class="tag-remove" (click)="removeTag(tag); $event.stopPropagation()" [attr.aria-label]="'Remove tag ' + tag">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </span>
+                }
+                <input
+                  #tagInput
+                  id="suite-tags"
+                  type="text"
+                  class="tag-input-inline"
+                  [placeholder]="tags.length === 0 ? 'Add tags, press Enter or comma...' : ''"
+                  [(ngModel)]="tagDraft"
+                  (keydown)="onTagInputKeydown($event)"
+                  (blur)="addTagFromDraft()"
+                />
+              </div>
+              <span class="config-hint">Press Enter or comma to add a tag. Backspace on empty input removes the last tag.</span>
             </div>
           </div>
-        </div>
-        <div class="config-section">
-          <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
-          <div class="config-grid">
-            <div class="config-item">
-              <label>Max Execution Time (ms)</label>
-              <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
-              <span class="config-hint">Default timeout for tests in this suite</span>
+        </section>
+
+        <!-- Execution Settings -->
+        <section class="edit-section">
+          <header class="edit-section-header">
+            <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
+          </header>
+          <div class="edit-grid">
+            <div class="edit-field">
+              <label for="suite-timeout">Max Execution Time (ms)</label>
+              <input
+                id="suite-timeout"
+                type="number"
+                class="config-input"
+                placeholder="Default: 300000 (5 min)"
+                [ngModel]="record.MaxExecutionTimeMS"
+                (ngModelChange)="record.MaxExecutionTimeMS = $event === '' || $event === null ? null : +$event"
+              />
+              <span class="config-hint">Default timeout for tests in this suite. Currently: {{ formatTimeout(record.MaxExecutionTimeMS) }}</span>
             </div>
           </div>
-        </div>
+        </section>
+
+        <!-- Metadata (read-only) -->
+        <section class="meta-section">
+          <div class="meta-grid">
+            <div class="meta-item">
+              <div class="meta-label">Created</div>
+              <div class="meta-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Last updated</div>
+              <div class="meta-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Suite ID</div>
+              <div class="meta-value meta-mono">{{ record.ID }}</div>
+            </div>
+          </div>
+        </section>
       </div>
     }
 
@@ -996,6 +1094,10 @@
       </div>
       <div class="shortcut-list">
         <div class="shortcut-item">
+          <span>Save changes</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>S</kbd></span>
+        </div>
+        <div class="shortcut-item">
           <span>Refresh</span>
           <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
         </div>
@@ -1027,4 +1129,55 @@
       </app-test-run-dialog>
     </mj-slide-panel>
   }
+
+  <!-- Sticky Save Bar — always in the DOM so CSS transitions can fire reliably.
+       Visibility is controlled by the .save-bar--visible class, driven by isDirty. -->
+  <div
+    class="save-bar"
+    [class.save-bar--visible]="isDirty"
+    [attr.aria-hidden]="!isDirty"
+    role="region"
+    aria-label="Unsaved changes"
+  >
+    <div class="save-bar-message">
+      <span class="save-bar-dot" aria-hidden="true">●</span>
+      <span class="save-bar-text">
+        <strong>Unsaved changes</strong>
+        <span class="save-bar-fields">
+          @if (dirtyFieldNames.length === 1) {
+            {{ dirtyFieldNames[0] }} edited
+          } @else if (dirtyFieldNames.length > 1) {
+            {{ dirtyFieldNames.length }} fields edited
+          }
+        </span>
+      </span>
+    </div>
+    <div class="save-bar-actions">
+      <button
+        type="button"
+        class="save-bar-btn save-bar-btn--primary"
+        (click)="saveChanges()"
+        [disabled]="isSaving || !isDirty"
+        [attr.tabindex]="isDirty ? 0 : -1"
+        title="Save changes (⌘S)"
+      >
+        @if (isSaving) {
+          <i class="fas fa-spinner fa-spin"></i> Saving…
+        } @else {
+          <i class="fas fa-check"></i> Save changes
+          <span class="save-bar-kbd"><kbd>⌘</kbd><kbd>S</kbd></span>
+        }
+      </button>
+      <button
+        type="button"
+        class="save-bar-btn save-bar-btn--ghost"
+        (click)="discardChanges()"
+        [disabled]="isSaving || !isDirty"
+        [attr.tabindex]="isDirty ? 0 : -1"
+        title="Discard changes"
+      >
+        <i class="fas fa-undo"></i> Discard
+      </button>
+    </div>
+  </div>
 </div>
