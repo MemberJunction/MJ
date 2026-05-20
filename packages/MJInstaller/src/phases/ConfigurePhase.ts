@@ -202,6 +202,15 @@ export class ConfigurePhase {
     filesWritten.push(...envFilesResult.Written);
     filesPreserved.push(...envFilesResult.Preserved);
 
+    // Step 4b: Explorer ng serve port — patch the start script if ExplorerPort
+    // differs from Angular's default (4200). Without this, `ng serve` ignores
+    // the user's configured port and the dev server collides with anything
+    // else on 4200.
+    const explorerPortPatched = await this.patchExplorerNgServePort(context.Dir, config);
+    if (explorerPortPatched) {
+      filesWritten.push(explorerPortPatched);
+    }
+
     // Auth-not-configured warning — more specific than the generic defaults warning
     if (config.AuthProvider === 'none') {
       emitter.Emit('warn', {
@@ -577,6 +586,62 @@ ${newUserSection}  output: [],
 
     const suffix = content.endsWith('\n') ? '' : '\n';
     return `${content}${suffix}${name}='${value}'\n`;
+  }
+
+  /**
+   * Patch `apps/MJExplorer/package.json` (or `packages/MJExplorer/package.json`)
+   * to inject `--port <ExplorerPort>` into the `start` script when ExplorerPort
+   * differs from Angular's default (4200). Without this patch, `ng serve`
+   * always binds to 4200 regardless of what the user configured.
+   *
+   * Returns the path of the patched file when a write occurred, otherwise null.
+   */
+  private async patchExplorerNgServePort(
+    dir: string,
+    config: PartialInstallConfig
+  ): Promise<string | null> {
+    const explorerPort = config.ExplorerPort;
+    if (explorerPort === undefined || explorerPort === 4200) return null;
+
+    const candidates = [
+      path.join(dir, 'apps', 'MJExplorer', 'package.json'),
+      path.join(dir, 'packages', 'MJExplorer', 'package.json'),
+    ];
+    const pkgPath = await this.firstExisting(candidates);
+    if (!pkgPath) return null;
+
+    const raw = await this.fileSystem.ReadText(pkgPath);
+    let pkg: { scripts?: Record<string, string> };
+    try {
+      pkg = JSON.parse(raw);
+    } catch {
+      return null; // malformed package.json — don't touch
+    }
+
+    if (!pkg.scripts) return null;
+    const portArg = `--port ${explorerPort}`;
+    let touched = false;
+    for (const scriptName of Object.keys(pkg.scripts)) {
+      const script = pkg.scripts[scriptName];
+      if (typeof script !== 'string') continue;
+      // Only patch ng-serve invocations that don't already declare a port
+      if (!script.includes('ng serve')) continue;
+      if (/--port[\s=]+\d+/.test(script)) continue;
+      pkg.scripts[scriptName] = `${script} ${portArg}`;
+      touched = true;
+    }
+    if (!touched) return null;
+
+    await this.fileSystem.WriteText(pkgPath, JSON.stringify(pkg, null, 2) + '\n');
+    return pkgPath;
+  }
+
+  /** Return the first path in the list that exists on disk, or null. */
+  private async firstExisting(candidates: string[]): Promise<string | null> {
+    for (const candidate of candidates) {
+      if (await this.fileSystem.FileExists(candidate)) return candidate;
+    }
+    return null;
   }
 
   /**

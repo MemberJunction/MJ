@@ -501,6 +501,87 @@ describe('ConfigurePhase', () => {
       expect(envTsWritten).toBe(false);
     });
 
+    it('should patch MJExplorer package.json start script with --port when ExplorerPort != 4200 (Bug 7 fix)', async () => {
+      const startScriptBefore = 'cross-env NODE_OPTIONS=--max-old-space-size=16384 ng serve';
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.includes('MJExplorer') && p.endsWith('package.json'));
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJExplorer') && p.endsWith('package.json')) {
+          return JSON.stringify({
+            name: 'mj_explorer',
+            scripts: {
+              start: startScriptBefore,
+              'start:stage': `${startScriptBefore} --configuration staging`,
+              build: 'ng build',
+            },
+          });
+        }
+        return '';
+      });
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4210 },
+        Yes: true,
+      });
+      const result = await phase.Run(ctx);
+
+      const writeCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(writeCall).toBeDefined();
+      const written = JSON.parse(writeCall![1]);
+      expect(written.scripts.start).toContain('--port 4210');
+      expect(written.scripts['start:stage']).toContain('--port 4210');
+      // Non-ng-serve scripts should NOT be touched
+      expect(written.scripts.build).toBe('ng build');
+      expect(result.FilesWritten.some((f: string) => f.includes('MJExplorer') && f.endsWith('package.json'))).toBe(true);
+    });
+
+    it('should NOT patch start script when ExplorerPort is 4200 (default)', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4200 },
+        Yes: true,
+      });
+      await phase.Run(ctx);
+
+      // No package.json should have been written for MJExplorer
+      const explorerPkgWrite = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(explorerPkgWrite).toBeUndefined();
+    });
+
+    it('should NOT patch when start script already declares --port', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(true);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.includes('MJExplorer') && p.endsWith('package.json'));
+      mockFs.ReadText.mockImplementation(async (p: string) => {
+        if (p.includes('MJExplorer') && p.endsWith('package.json')) {
+          return JSON.stringify({
+            name: 'mj_explorer',
+            scripts: { start: 'ng serve --port 9999' },
+          });
+        }
+        return '';
+      });
+      mockFs.ListFiles.mockResolvedValue([]);
+
+      const ctx = makeContext({
+        Config: { ...sampleConfig(), ExplorerPort: 4210 },
+        Yes: true,
+      });
+      await phase.Run(ctx);
+
+      const writeCall = mockFs.WriteText.mock.calls.find(
+        ([p]: [string, string]) => p.includes('MJExplorer') && p.endsWith('package.json')
+      );
+      expect(writeCall).toBeUndefined();
+    });
+
     it('should emit warn when Explorer directory cannot be found', async () => {
       // No MJExplorer/src dir exists in any candidate location
       mockFs.DirectoryExists.mockResolvedValue(false);

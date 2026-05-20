@@ -125,8 +125,13 @@ export class DatabaseProvisionPhase {
       Message: 'Validating database connectivity...',
     });
 
-    const host = config.DatabaseHost ?? 'localhost';
-    const port = config.DatabasePort ?? 1433;
+    // Resolution order matches PreflightPhase.checkSqlConnectivity:
+    //   1. .env in context.Dir (when present) — this is what the app will actually use.
+    //   2. Explicit config.DatabaseHost / DatabasePort.
+    //   3. Defaults (localhost:1433).
+    const envValues = await this.readEnvDbTarget(context.Dir);
+    const host = envValues?.host ?? config.DatabaseHost ?? 'localhost';
+    const port = envValues?.port ?? config.DatabasePort ?? 1433;
     const connectivity = await this.sqlAdapter.CheckConnectivity(host, port);
 
     if (!connectivity.Reachable) {
@@ -334,5 +339,54 @@ PRINT '=== Validation complete ===';
         Resolve: resolve,
       });
     });
+  }
+
+  /**
+   * Best-effort read of `<targetDir>/.env` to extract `DB_HOST` and `DB_PORT`.
+   * Returns null when no `.env` exists or neither key is set, letting the
+   * caller fall back to config / defaults. Errors are swallowed silently —
+   * this is a diagnostic enhancement, not a hard requirement.
+   *
+   * Mirrors {@link PreflightPhase.readEnvDbTarget} — kept duplicated rather
+   * than extracted because the two phases shouldn't coupling through a
+   * shared helper for a small piece of optional logic.
+   */
+  private async readEnvDbTarget(targetDir: string): Promise<{ host?: string; port?: number } | null> {
+    const envPath = `${targetDir}/.env`;
+    try {
+      if (!(await this.fileSystem.FileExists(envPath))) return null;
+      const raw = await this.fileSystem.ReadText(envPath);
+      if (typeof raw !== 'string' || raw.length === 0) return null;
+      const host = this.parseDotenvValue(raw, 'DB_HOST');
+      const portStr = this.parseDotenvValue(raw, 'DB_PORT');
+      const port = portStr ? parseInt(portStr, 10) : undefined;
+
+      if (host || (port !== undefined && Number.isFinite(port))) {
+        return { host: host ?? undefined, port: Number.isFinite(port) ? port : undefined };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Minimal dotenv-style key extractor — handles `KEY=value`, `KEY='value'`,
+   * `KEY="value"`, ignores `#` comments and blank lines.
+   */
+  private parseDotenvValue(content: string, key: string): string | undefined {
+    const lines = content.split(/\r?\n/);
+    const pattern = new RegExp(`^\\s*${key}\\s*=\\s*(.*?)\\s*$`);
+    for (const line of lines) {
+      if (line.trim().startsWith('#')) continue;
+      const match = line.match(pattern);
+      if (!match) continue;
+      let value = match[1];
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+      }
+      return value || undefined;
+    }
+    return undefined;
   }
 }
