@@ -15,15 +15,17 @@ import { Component, Input } from '@angular/core';
  *
  * ## Layout
  *
- * Two-row card. The primary row holds page identity + state badges + actions;
- * the toolbar row holds dense controls (search, tab nav, filter chips) that
- * would compete with the title for space if they shared a row. When `[toolbar]`
- * has no projected content, the row collapses entirely.
+ * Two-row card. The primary row has an identity column on the left (Title →
+ * Subtitle → Meta, stacked) and an actions cluster on the right; the toolbar
+ * row holds dense controls (search, tab nav, filter chips) that would compete
+ * with the title for space if they shared a row. When `[toolbar]` has no
+ * projected content, the row collapses entirely.
  *
  * ```
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ Title  [meta]                       [—— spacer ——]            [actions] │
- * │  subtitle                                                                │
+ * │ Title                                  [—— spacer ——]         [actions] │
+ * │ subtitle                                                                 │
+ * │ [meta]                                                                   │
  * ├─────────────────────────────────────────────────────────────────────────┤
  * │ [ toolbar content … search / tab-nav / filter chips … ]                  │
  * └─────────────────────────────────────────────────────────────────────────┘
@@ -35,9 +37,10 @@ import { Component, Input } from '@angular/core';
  * - **`[Subtitle]`** (input, optional) — short prose explaining what the page
  *   does. Recommended for pages that aren't self-explanatory from the rail
  *   label alone (e.g. Dev Tools inspectors).
- * - **`[meta]`** — top row, **adjacent to the title**: status badges, result
- *   counts, stat pills. Reads as one unit with the title ("Roles · 12 total ·
- *   4 system"). Mirrors the title-adjacent meta slot in `<mj-page-header>`.
+ * - **`[meta]`** — **below the subtitle, inside the identity column**: status
+ *   badges, result counts, stat pills. Reads as supporting info for the
+ *   identity (not a peer of the title), so the title stays the dominant
+ *   visual anchor. Wraps to multiple lines when there are many badges.
  * - **`[toolbar]`** — second row: search, tab nav, filter chips, view toggles
  * - **`[actions]`** — top row, right edge: filter popover, refresh, secondary
  *   buttons, primary CTA
@@ -71,17 +74,15 @@ import { Component, Input } from '@angular/core';
          [attr.aria-label]="AriaLabel">
       <div class="mj-page-header-interior__row mj-page-header-interior__row--primary">
         <div class="mj-page-header-interior__identity">
-          <div class="mj-page-header-interior__title-row">
-            @if (Title) {
-              <div class="mj-page-header-interior__title">{{ Title }}</div>
-            }
-            <div class="mj-page-header-interior__meta">
-              <ng-content select="[meta]"></ng-content>
-            </div>
-          </div>
+          @if (Title) {
+            <div class="mj-page-header-interior__title">{{ Title }}</div>
+          }
           @if (Subtitle) {
             <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
           }
+          <div class="mj-page-header-interior__meta">
+            <ng-content select="[meta]"></ng-content>
+          </div>
         </div>
         <div class="mj-page-header-interior__spacer"></div>
         <div class="mj-page-header-interior__actions">
@@ -121,7 +122,10 @@ import { Component, Input } from '@angular/core';
     }
 
 
-    /* Rows: primary (identity + meta + actions) and toolbar (separate row). */
+    /* Rows: primary (identity + actions) and toolbar (separate row).
+       Primary row uses align-items:flex-start so that when the identity
+       column grows vertically (title + subtitle + meta), the actions cluster
+       stays anchored to the top of the card instead of vertically re-centering. */
     .mj-page-header-interior__row {
       display: flex;
       align-items: center;
@@ -130,6 +134,7 @@ import { Component, Input } from '@angular/core';
     }
 
     .mj-page-header-interior__row--primary {
+      align-items: flex-start;
       gap: var(--mj-space-4);
     }
 
@@ -150,7 +155,11 @@ import { Component, Input } from '@angular/core';
       display: none;
     }
 
-    :host ::ng-deep .mj-page-header-interior__row--toolbar:has(> [toolbar]:has(*)) {
+    /* Nested :has(... :has(...)) is disallowed by browsers (Chromium throws
+       SyntaxError; the rule is silently dropped). Use a single-level :has
+       that walks two generations directly: "toolbar row containing a [toolbar]
+       wrapper that itself has any element child". */
+    :host ::ng-deep .mj-page-header-interior__row--toolbar:has(> [toolbar] > *) {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
@@ -168,16 +177,6 @@ import { Component, Input } from '@angular/core';
       min-width: 0;
     }
 
-    /* Title row — title text + [meta] slot, side by side. Matches the title-row
-       pattern in <mj-page-header>. Meta sits adjacent to the title so "Title (3
-       active)" reads as one unit. */
-    .mj-page-header-interior__title-row {
-      display: flex;
-      align-items: center;
-      gap: var(--mj-space-3);
-      flex-wrap: wrap;
-      min-width: 0;
-    }
     /* Identity typography matches <mj-page-header> exactly — same title size,
        same subtitle size, same colors. One mental model across both chrome
        surfaces. */
@@ -198,16 +197,25 @@ import { Component, Input } from '@angular/core';
       min-width: 0;
     }
 
-    .mj-page-header-interior__meta,
-    .mj-page-header-interior__actions {
-      display: inline-flex;
+    /* Meta lives in the identity column UNDER the subtitle — it's supporting
+       info for the identity, not a peer to the title. Wraps when there are
+       many badges so it doesn't force horizontal overflow. The top margin
+       gives the badge row clear separation from the subtitle so it reads as
+       a distinct band of supporting data rather than a continuation of the
+       prose line above. */
+    .mj-page-header-interior__meta {
+      display: flex;
+      flex-wrap: wrap;
       align-items: center;
       gap: var(--mj-space-2);
-      flex-shrink: 0;
+      margin-top: var(--mj-space-2);
     }
 
     .mj-page-header-interior__actions {
+      display: inline-flex;
+      align-items: center;
       gap: var(--mj-space-3);
+      flex-shrink: 0;
     }
 
     /* Collapse the meta + actions wrappers when there's nothing projected. */
@@ -216,10 +224,10 @@ import { Component, Input } from '@angular/core';
       display: none;
     }
 
-    /* Collapse the identity wrapper when nothing is projected — covers the
-       no-title / no-subtitle / no-meta case. The :empty check is on the
-       title-row sub-element because that's where ng-content lives. */
-    .mj-page-header-interior__identity:has(.mj-page-header-interior__title-row:empty):not(:has(.mj-page-header-interior__subtitle)) {
+    /* Collapse the identity column entirely when title/subtitle aren't set AND
+       no [meta] content is projected — covers the action-band-only sub-pages
+       (Dev Tools inspectors, SQL Logging) where the card is pure actions. */
+    .mj-page-header-interior__identity:not(:has(.mj-page-header-interior__title)):not(:has(.mj-page-header-interior__subtitle)):has(.mj-page-header-interior__meta:empty) {
       display: none;
     }
 
