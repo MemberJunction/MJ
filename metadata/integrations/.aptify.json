@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Aptify",
-      "Description": "Aptify (Community Brands / Momentive Software) Web Services API connector. Provides full CRUD over the standard association management entities — Persons, Companies, Memberships, Events, Orders, Committees, and supporting reference data — via the AptifyServicesAPI REST endpoints. Auth: token-based (POST /authentication returns a TokenId; subsequent calls send `Authorization: Web {TokenId}`). Pagination: OData-style $top/$skip. Incremental sync via $filter on LastModifiedDate.",
+      "Description": "Aptify (Community Brands / Momentive Software) Web Services API connector. Provides full CRUD over the standard association management entities — Persons, Companies, Memberships, Events, Orders, Committees, and supporting reference data — via the Aptif...",
       "ClassName": "AptifyConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": null,

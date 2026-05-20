@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Constant Contact",
-      "Description": "Constant Contact V3 REST API connector for email marketing. Supports contacts, contact lists, custom fields, tags, email campaigns/activities, segments, and async bulk activities. Auth: OAuth2 Authorization Code flow (access tokens valid 24h; refresh tokens rotate on each use).",
+      "Description": "Constant Contact V3 REST API connector for email marketing. Supports contacts, contact lists, custom fields, tags, email campaigns/activities, segments, and async bulk activities. Auth: OAuth2 Authorization Code flow (access tokens valid 24h; refresh t...",
       "ClassName": "ConstantContactConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": "https://app.constantcontact.com",

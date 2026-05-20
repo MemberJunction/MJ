@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "SharePoint",
-      "Description": "Microsoft SharePoint Online integration via Microsoft Graph v1.0. Supports Sites, Drives, DriveItems (files/folders), Lists, ListItems with list columns, ContentTypes, Pages, Permissions, Subscriptions (webhooks), and Analytics. Authenticates via Azure AD client-credentials flow.",
+      "Description": "Microsoft SharePoint Online integration via Microsoft Graph v1.0. Supports Sites, Drives, DriveItems (files/folders), Lists, ListItems with list columns, ContentTypes, Pages, Permissions, Subscriptions (webhooks), and Analytics. Authenticates via Azure...",
       "ClassName": "SharePointConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": null,

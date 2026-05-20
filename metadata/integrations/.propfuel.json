@@ -2,15 +2,14 @@
   {
     "fields": {
       "Name": "PropFuel",
-      "Description": "[SCAFFOLD — DO NOT ENABLE] PropFuel (re:Members) member-engagement platform connector. Read-only initial cut covering the documented PropFuel domain — Contacts, Campaigns, Conversations, Captures (responses), Segments, and Tags — using the standard Ask / Capture / Act vocabulary. PropFuel does not publish a public developer portal; the endpoint paths and field shapes here are scaffolding that should be confirmed against PropFuel's actual API spec before production use. SupportsCreate/Update/Delete are intentionally false until write endpoints are validated. PropFuel does not publish a public developer portal — connector endpoint paths, auth wire form, and field shapes are scaffolding only. Status=Inactive until the vendor publishes API docs or a customer provides partner-developer access.",
+      "Description": "[SCAFFOLD — DO NOT ENABLE] PropFuel (re:Members) member-engagement platform connector. Read-only initial cut covering the documented PropFuel domain — Contacts, Campaigns, Conversations, Captures (responses), Segments, and Tags — using the standard Ask...",
       "ClassName": "PropFuelConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": "https://app.propfuel.com",
       "BatchMaxRequestCount": 100,
       "BatchRequestWaitTime": 250,
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint",
-      "Icon": "fa-solid fa-comments",
-      "Status": "Inactive"
+      "Icon": "fa-solid fa-comments"
     },
     "relatedEntities": {
       "MJ: Integration Objects": [

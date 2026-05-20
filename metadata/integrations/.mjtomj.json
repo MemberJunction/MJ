@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "MJ to MJ",
-      "Description": "Read-only connector that pulls conversational data (Conversations, Conversation Details, optional AI Agent Runs/Steps) from a remote MemberJunction instance via its GraphQL API. Maps to MJ: Conversations and MJ: Conversation Details. Every MJ deployment is self-hosted per customer — GraphQL endpoint URL + read-only API key must be provisioned by the remote MJ admin. Not a full object-model sync; use MJ's native integration surface for that.",
+      "Description": "Read-only connector that pulls conversational data (Conversations, Conversation Details, optional AI Agent Runs/Steps) from a remote MemberJunction instance via its GraphQL API. Maps to MJ: Conversations and MJ: Conversation Details. Every MJ deploymen...",
       "ClassName": "MJToMJConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": null,
@@ -718,7 +718,7 @@
               "mj_field_map": "{}"
             },
             "Sequence": 4,
-            "Status": "Inactive"
+            "Status": "Disabled"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
@@ -982,7 +982,7 @@
               "mj_field_map": "{}"
             },
             "Sequence": 5,
-            "Status": "Inactive"
+            "Status": "Disabled"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [

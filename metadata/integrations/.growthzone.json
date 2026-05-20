@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "GrowthZone",
-      "Description": "GrowthZone association management platform integration for syncing contacts, organizations, memberships, certifications, groups, events, billing, and store data via the GrowthZone REST API. Uses the /api/contacts/delta endpoint for incremental contact sync and iterates per-contact for full detail.",
+      "Description": "GrowthZone association management platform integration for syncing contacts, organizations, memberships, certifications, groups, events, billing, and store data via the GrowthZone REST API. Uses the /api/contacts/delta endpoint for incremental contact ...",
       "ClassName": "GrowthZoneConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": "https://growthzone.com",

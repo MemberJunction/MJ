@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Betty AI",
-      "Description": "Betty AI (Brightfind/Tasio) connector — read-only pull of conversational data (sessions, messages, feedback, knowledge sources) into MJ: Conversations and MJ: Conversation Details. Per-tenant API, no public developer portal; customer onboarding required (tenant URL + API key provisioned by Betty team).",
+      "Description": "Betty AI (Brightfind/Tasio) connector — read-only pull of conversational data (sessions, messages, feedback, knowledge sources) into MJ: Conversations and MJ: Conversation Details. Per-tenant API, no public developer portal; customer onboarding require...",
       "ClassName": "BettyConnector",
       "ImportPath": "@memberjunction/integration-connectors",
       "NavigationBaseURL": null,
