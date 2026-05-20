@@ -1,0 +1,31 @@
+@if (record) {
+<mj-record-form-container
+    [Record]="record"
+    [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    @if (loadError) {
+        <div class="mj-error-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ loadError }}</span>
+        </div>
+    } @else if (componentSpec && formHostProps) {
+        <mj-react-component
+            #reactComponent
+            [component]="componentSpec"
+            [componentProps]="formHostProps"
+            (componentEvent)="OnReactComponentEvent($event)">
+        </mj-react-component>
+    } @else {
+        <div class="mj-loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading form…</span>
+        </div>
+    }
+
+</mj-record-form-container>
+}

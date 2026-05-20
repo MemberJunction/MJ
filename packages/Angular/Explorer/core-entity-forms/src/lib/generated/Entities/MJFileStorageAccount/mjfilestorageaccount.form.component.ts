@@ -22,8 +22,8 @@ export class MJFileStorageAccountFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
             { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
             { sectionKey: 'mJSearchScopeStorageAccounts', sectionName: 'Search Scope Storage Accounts', isExpanded: false },
-            { sectionKey: 'mJAIAgentCategories', sectionName: 'AI Agent Categories', isExpanded: false },
             { sectionKey: 'mJFileStorageAccountPermissions', sectionName: 'File Storage Account Permissions', isExpanded: false },
+            { sectionKey: 'mJAIAgentCategories', sectionName: 'AI Agent Categories', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
         ]);
     }

@@ -660,6 +660,114 @@
             "lastModified": "2026-04-11T04:11:16.191Z",
             "checksum": "2cfdd1fc439e891628490c99ffa1107dd2a176973e347c290ca086205665a23e"
           }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Form Builder",
+            "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+            "Description": "Specialist sub-agent that generates runtime entity forms (Component + EntityFormOverride) from a natural-language requirement plus the target entity's curated schema. Always writes User-scope, Active overrides — never Global or Role. Use when the user asks Sage to build, create, or improve a form for a specific entity. The generated form replaces the default Angular form for the requesting user until they delete the override.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 0,
+            "ModelSelectionMode": "Agent",
+            "ArtifactCreationMode": "Never",
+            "ExposeAsAction": false,
+            "AgentTypePromptParams": {
+              "includeForEachDocs": false,
+              "includeWhileDocs": false,
+              "includeScratchpadDocs": true,
+              "includeMessageExpansionDocs": false
+            }
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:MJ: AI Prompts.Name=Form Builder - System Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7FF14C74-6BE6-4956-90E9-242E81678BFF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-19T17:39:15.752Z",
+                  "checksum": "a147a6406324b4e06485b22fb9bf5fc9aea95bfa67b1d57420722b821f833720"
+                }
+              }
+            ],
+            "MJ: AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Entity Schema For Form",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8BC595DA-FFB1-463D-8781-7769281FB125"
+                },
+                "sync": {
+                  "lastModified": "2026-05-19T17:39:15.773Z",
+                  "checksum": "b4cabc003f6e7752ca94811b9dc396b8c2997c47af457e174b4c8be931424ef5"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Create Interactive Form",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DA59BC7F-BC8B-4983-97A9-1AC7F49A52CD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-19T17:39:15.785Z",
+                  "checksum": "0c305464740d2a349af2d504472025b786237a343dd8f3a11e1250b2bad12840"
+                }
+              }
+            ],
+            "MJ: AI Agent Modalities": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Input",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "1CA308BA-259D-400E-B949-DFEBFDAAA46B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-19T17:39:15.821Z",
+                  "checksum": "9562d0790334b74d9ba63dadcb809c9bd0c51eb124e74f111fc70c4c4160ea16"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+                  "Direction": "Output",
+                  "IsAllowed": true
+                },
+                "primaryKey": {
+                  "ID": "6AE72884-3E77-4E2B-B32B-0D7B1464555E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-19T17:39:15.830Z",
+                  "checksum": "088a80dd45831f2b9ee854cd99940fd9c681c5a7b49d8f2f7721bddb455fcc13"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7270273A-5FFE-4C85-811C-C9189E2B134F"
+          },
+          "sync": {
+            "lastModified": "2026-05-19T17:39:15.641Z",
+            "checksum": "8a8e213daf893dc654da7ac9977139d456d3f9deaa67799aacdd7efb9081cf14"
+          }
         }
       ]
     },

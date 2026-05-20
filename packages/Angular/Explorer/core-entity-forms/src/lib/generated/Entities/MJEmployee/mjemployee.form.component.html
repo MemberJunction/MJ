@@ -175,6 +175,31 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
+    <!-- Direct Reports Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEmployees"
+        SectionName="Direct Reports"
+        Icon="fa-solid fa-users"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEmployees')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Employees','SupervisorID')"
+                [NewRecordValues]="NewRecordValues('MJ: Employees')"
+                [AllowLoad]="IsSectionExpanded('mJEmployees')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEmployees', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Employee Company Integrations Section -->
     <mj-collapsible-panel
         SectionKey="mJEmployeeCompanyIntegrations"
@@ -244,31 +269,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEmployeeSkills', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Direct Reports Section -->
-    <mj-collapsible-panel
-        SectionKey="mJEmployees"
-        SectionName="Direct Reports"
-        Icon="fa-solid fa-users"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJEmployees')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Employees','SupervisorID')"
-                [NewRecordValues]="NewRecordValues('MJ: Employees')"
-                [AllowLoad]="IsSectionExpanded('mJEmployees')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJEmployees', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

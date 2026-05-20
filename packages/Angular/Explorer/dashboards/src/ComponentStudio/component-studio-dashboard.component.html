@@ -197,10 +197,27 @@
       <div class="resize-handle" (mousedown)="OnRightResizeStart($event)"></div>
     }
 
-    <!-- Right Panel: AI Assistant -->
+    <!-- Right Panel: Field palette + property inspector for form-role
+         Components, else AI Assistant. The Form Builder tab in the editor
+         strip is the canvas surface; this panel is its palette/inspector
+         sidekick. Everything non-form falls through to the AI panel. -->
     @if (!state.IsAIPanelCollapsed) {
       <div class="panel panel-right" [style.width.px]="rightPanelWidth">
-        <mj-ai-assistant-panel></mj-ai-assistant-panel>
+        @if (IsFormRoleComponent) {
+          <mj-form-builder-right-panel
+              [Schema]="state.FormSchema"
+              [Canvas]="state.FormCanvas"
+              [SelectedElementId]="state.FormSelectedElementId"
+              [SelectedSectionId]="state.FormSelectedSectionId"
+              (ElementChanged)="OnFormBuilderElementChanged($event)"
+              (SectionChanged)="OnFormBuilderSectionChanged($event)"
+              (ElementDeleted)="OnFormBuilderElementDeleted($event)"
+              (SectionDeleted)="OnFormBuilderSectionDeleted($event)"
+              (FieldAdded)="OnFormBuilderFieldAdded($event)">
+          </mj-form-builder-right-panel>
+        } @else {
+          <mj-ai-assistant-panel></mj-ai-assistant-panel>
+        }
       </div>
     }
   </div>
@@ -283,6 +300,17 @@
       (Cancel)="ShowSaveVersionDialog = false">
     </mj-save-version-dialog>
   }
+
+  <!-- Post-save Override dialog for form-role Components. Fires after a
+       successful version save when the spec declares componentRole='form'
+       and the user has picked a target entity in the Field Binding inspector. -->
+  <mj-form-override-dialog
+    [Visible]="ShowFormOverrideDialog"
+    [ComponentName]="PendingOverrideComponentName"
+    [EntityName]="PendingOverrideEntityName"
+    (confirmed)="OnFormOverrideDialogConfirm($event)"
+    (dismissed)="OnFormOverrideDialogDismiss()">
+  </mj-form-override-dialog>
 
   <!-- Text Import Dialog -->
   @if (ShowTextImportDialog) {

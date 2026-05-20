@@ -18,6 +18,15 @@ import { ComponentStudioStateService, FileLoadedComponent, ComponentError } from
 import { ComponentVersionService } from './services/component-version.service';
 import { SaveVersionResult } from './components/save-version-dialog/save-version-dialog.component';
 import { RunView } from '@memberjunction/core';
+import { FormOverrideDialogResult } from './components/form-override-dialog.component';
+import { EntityFormOverrideService } from './services/entity-form-override.service';
+import {
+  generateCanvasId,
+  type FormCanvasElement,
+  type FormCanvasModel,
+  type FormCanvasSection,
+} from './services/form-canvas-model';
+import { generateCodeFromCanvas } from './services/canvas-to-code';
 
 /**
  * User preferences persisted via UserInfoEngine.
@@ -80,6 +89,14 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public ShowTextImportDialog = false;
   public ShowArtifactLoadDialog = false;
   public ShowArtifactSelectionDialog = false;
+  /** Toggled after a form-role Component is saved (see OnSaveVersionConfirm). */
+  public ShowFormOverrideDialog = false;
+  /** ComponentID of the just-saved Component, set when ShowFormOverrideDialog flips on. */
+  public PendingOverrideComponentID: string | null = null;
+  /** Entity name to seed the override dialog from (mirrors state.FormTargetEntityName). */
+  public PendingOverrideEntityName = '';
+  /** Component name to seed the override Name field. */
+  public PendingOverrideComponentName = '';
 
   // --- Status bar ---
   public LastSavedTime: Date | null = null;
@@ -96,7 +113,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     public state: ComponentStudioStateService,
     public versionService: ComponentVersionService,
     private cdr: ChangeDetectorRef,
-    private notificationService: MJNotificationService
+    private notificationService: MJNotificationService,
+    private entityFormOverrideService: EntityFormOverrideService
   ) {
     super();
   }
@@ -111,6 +129,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Subscribe to state changes for change detection
     this.state.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.cdr.detectChanges();
+    });
+
+    // Form Builder tab "Open in Chat" — relay to NavigationService.
+    this.state.OpenInChatRequested.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.OnOpenFormInChat();
     });
 
     this.loadUserPreferences();
@@ -261,6 +284,17 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   async OnSaveVersionConfirm(result: SaveVersionResult): Promise<void> {
     this.ShowSaveVersionDialog = false;
 
+    // If the Form Builder tab is the active surface and the canvas has
+    // content, serialize it to JSX BEFORE the version save so the canvas
+    // edits actually persist. If the user is in the Code tab instead, the
+    // EditableCode they hand-edited is already the source of truth.
+    if (this.IsFormRoleComponent && this.state.ActiveTab === 5 && this.state.FormCanvas && this.state.FormSchema) {
+      const canvas = this.state.FormCanvas;
+      const schema = this.state.FormSchema;
+      const name = canvas.title?.trim() || schema.displayName;
+      this.state.EditableCode = generateCodeFromCanvas(canvas, schema, name);
+    }
+
     let success: boolean;
     if (result.Mode === 'update') {
       success = await this.versionService.UpdateCurrentVersion(result.Comment || undefined);
@@ -276,12 +310,83 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         3000
       );
       this.state.HasUnsavedChanges = false;
+
+      // For form-role Components, prompt the user to create an
+      // EntityFormOverride so the saved Component actually activates for
+      // someone. Skip silently if the post-save state didn't yield a
+      // ComponentID (loading state, network blip).
+      if (this.IsFormRoleComponent && this.state.FormTargetEntityName) {
+        const spec = this.state.GetCurrentSpec?.();
+        const componentID = (spec as { id?: string } | null)?.id ?? null;
+        if (componentID) {
+          this.PendingOverrideComponentID = componentID;
+          this.PendingOverrideEntityName = this.state.FormTargetEntityName;
+          this.PendingOverrideComponentName = spec?.name ?? '';
+          this.ShowFormOverrideDialog = true;
+        }
+      }
     } else {
       this.notificationService.CreateSimpleNotification(
         'Failed to save version',
         'error'
       );
     }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle the post-save override dialog. Persists an EntityFormOverride
+   * row via {@link EntityFormOverrideService}. Currently surfaces an error
+   * because the underlying write is blocked on the generated
+   * `EntityFormOverrideEntity` class (Task 15) — the UI is wired so the
+   * unblock is one swap of the service stub.
+   */
+  async OnFormOverrideDialogConfirm(result: FormOverrideDialogResult): Promise<void> {
+    this.ShowFormOverrideDialog = false;
+    if (!this.PendingOverrideComponentID) {
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const overrideService = this.entityFormOverrideService;
+    const provider = this.ProviderToUse;
+    const user = provider?.CurrentUser;
+    if (!user) {
+      this.notificationService.CreateSimpleNotification(
+        'No current user — cannot create override.',
+        'error'
+      );
+      this.cdr.detectChanges();
+      return;
+    }
+
+    const writeResult = await overrideService.CreateOverride(
+      this.PendingOverrideComponentID,
+      result,
+      user,
+      provider,
+    );
+
+    if (writeResult.Success) {
+      this.notificationService.CreateSimpleNotification(
+        `Override "${result.Name}" created. Next time you open a ${result.EntityName} record you'll see this form.`,
+        'success',
+        4000,
+      );
+    } else {
+      this.notificationService.CreateSimpleNotification(
+        writeResult.Error || 'Failed to create override.',
+        'warning',
+        6000,
+      );
+    }
+    this.PendingOverrideComponentID = null;
+    this.cdr.detectChanges();
+  }
+
+  OnFormOverrideDialogDismiss(): void {
+    this.ShowFormOverrideDialog = false;
+    this.PendingOverrideComponentID = null;
     this.cdr.detectChanges();
   }
 
@@ -334,6 +439,191 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.cdr.detectChanges();
   }
 
+  /**
+   * True iff the currently-loaded Component declares itself as a form-role
+   * component. Controls whether the right rail renders the field-binding
+   * inspector or the default AI assistant panel.
+   */
+  public get IsFormRoleComponent(): boolean {
+    const spec = this.state.GetCurrentSpec?.();
+    return spec?.componentRole === 'form' || spec?.type === 'form';
+  }
+
+  /**
+   * Forwards a snippet emitted by the field-binding inspector to the code
+   * editor. Inserts at the end of the current code with a leading blank
+   * line so it lands inside the function body but doesn't clobber the
+   * cursor's current position. (Cursor-aware insertion is a follow-up —
+   * it requires plumbing EditorView refs from this component through
+   * EditorTabs → CodeEditorPanel → mj-code-editor.)
+   */
+  public OnFieldSnippetRequested(snippet: string): void {
+    if (!snippet) return;
+    const existing = this.state.EditableCode ?? '';
+    const separator = existing.endsWith('\n') ? '\n' : '\n\n';
+    this.state.EditableCode = existing + separator + snippet + '\n';
+    this.cdr.detectChanges();
+  }
+
+  // ============================================================
+  // FORM BUILDER — right-panel event handlers
+  // (Mirrors what the Form Builder tab does internally, but routed
+  // through here so the right panel works regardless of which editor
+  // tab is currently active.)
+  // ============================================================
+
+  public OnFormBuilderElementChanged(next: FormCanvasElement): void {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) return;
+    const updated: FormCanvasModel = {
+      ...canvas,
+      sections: canvas.sections.map(s => ({
+        ...s,
+        elements: s.elements.map(e => e.id === next.id ? next : e),
+      })),
+    };
+    this.applyCanvasUpdate(updated);
+  }
+
+  public OnFormBuilderSectionChanged(next: FormCanvasSection): void {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) return;
+    const updated: FormCanvasModel = {
+      ...canvas,
+      sections: canvas.sections.map(s => s.id === next.id ? next : s),
+    };
+    this.applyCanvasUpdate(updated);
+  }
+
+  public OnFormBuilderElementDeleted(elementId: string): void {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) return;
+    const updated: FormCanvasModel = {
+      ...canvas,
+      sections: canvas.sections.map(s => ({
+        ...s,
+        elements: s.elements.filter(e => e.id !== elementId),
+      })),
+    };
+    this.state.FormSelectedElementId = null;
+    this.applyCanvasUpdate(updated);
+  }
+
+  public OnFormBuilderSectionDeleted(sectionId: string): void {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) return;
+    const updated: FormCanvasModel = {
+      ...canvas,
+      sections: canvas.sections.filter(s => s.id !== sectionId),
+    };
+    this.state.FormSelectedSectionId = null;
+    this.applyCanvasUpdate(updated);
+  }
+
+  public OnFormBuilderFieldAdded(payload: { fieldName: string }): void {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) return;
+    const targetId = this.state.FormSelectedSectionId
+      ?? canvas.sections.find(s => s.elements.some(e => e.id === this.state.FormSelectedElementId))?.id
+      ?? canvas.sections[0]?.id;
+    if (!targetId) return;
+    const updated: FormCanvasModel = {
+      ...canvas,
+      sections: canvas.sections.map(s => s.id === targetId
+        ? { ...s, elements: [...s.elements, {
+            id: generateCanvasId('field'),
+            type: 'field',
+            fieldName: payload.fieldName,
+            span: 1,
+          }] }
+        : s),
+    };
+    this.applyCanvasUpdate(updated);
+  }
+
+  /**
+   * Persist the canvas mutation, mirror it into code, mark the dashboard
+   * dirty. Centralised so right-panel events and tab events share the same
+   * pipeline.
+   */
+  private applyCanvasUpdate(next: FormCanvasModel): void {
+    this.state.FormCanvas = next;
+    this.state.HasUnsavedChanges = true;
+    this.regenerateFormCodeFromCanvas();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Serialise the canvas → JSX into state.EditableCode. Quietly no-ops if
+   * we don't have both a canvas and a schema (the FormSelected* events
+   * shouldn't fire in that case anyway).
+   */
+  private regenerateFormCodeFromCanvas(): void {
+    const canvas = this.state.FormCanvas;
+    const schema = this.state.FormSchema;
+    if (!canvas || !schema) return;
+    const name = canvas.title?.trim() || schema.displayName;
+    this.state.EditableCode = generateCodeFromCanvas(canvas, schema, name);
+  }
+
+  /**
+   * Bridge the Form Builder tab's "Open in Chat" button to NavigationService.
+   * Publishes the active canvas as agent context and registers an UpdateForm
+   * tool so Sage can mutate the canvas live. Falls back to clipboard if the
+   * navigation service isn't available (e.g. embedded host).
+   */
+  private async OnOpenFormInChat(): Promise<void> {
+    const canvas = this.state.FormCanvas;
+    if (!canvas) {
+      this.notificationService.CreateSimpleNotification(
+        'No active form to send to chat.', 'warning',
+      );
+      return;
+    }
+    try {
+      this.navigationService?.SetAgentContext(this, {
+        activeForm: {
+          entityName: canvas.entityName,
+          title: canvas.title,
+          sections: canvas.sections,
+        },
+      });
+      this.navigationService?.SetAgentClientTools(this, [{
+        Name: 'UpdateForm',
+        Description: 'Replace the canvas model of the active form. Accepts a FormCanvasModel JSON object.',
+        ParameterSchema: {
+          type: 'object',
+          properties: { canvas: { type: 'object', description: 'A FormCanvasModel matching the Form Builder shape.' } },
+          required: ['canvas'],
+        },
+        Handler: async (params: Record<string, unknown>) => {
+          const next = (params['canvas'] as FormCanvasModel | undefined) ?? null;
+          if (next && Array.isArray(next.sections)) {
+            this.applyCanvasUpdate(next);
+            return { Success: true };
+          }
+          return { Success: false, Error: 'Missing or malformed canvas payload.' };
+        },
+      }]);
+      this.notificationService.CreateSimpleNotification(
+        'Form context sent to chat. Open the chat panel to continue.',
+        'info', 4000,
+      );
+    } catch {
+      try {
+        await navigator.clipboard.writeText(JSON.stringify(canvas, null, 2));
+        this.notificationService.CreateSimpleNotification(
+          'Canvas JSON copied to clipboard. Paste it into chat.',
+          'info', 4000,
+        );
+      } catch {
+        this.notificationService.CreateSimpleNotification(
+          'Could not hand off to chat.', 'warning',
+        );
+      }
+    }
+  }
+
   OnNewComponentDialogClose(result: NewComponentResult | null): void {
     this.ShowNewComponentDialog = false;
     if (!result) {
@@ -361,17 +651,26 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   private createComponentFromResult(result: NewComponentResult): void {
+    const isForm = result.type === 'form';
     const newSpec: ComponentSpec = {
       name: result.name,
       title: result.title,
       description: result.description,
       type: result.type,
+      // Form-role components opt in to the FormHostProps contract so the
+      // resolver mounts them via InteractiveFormComponent at runtime and
+      // the linter enforces form-specific shape checks.
+      componentRole: isForm ? 'form' : undefined,
       location: 'embedded',
       exampleUsage: '',
       code: this.getTemplateCode(result.name, result.type),
-      functionalRequirements: '',
+      functionalRequirements: isForm
+        ? 'Renders a single entity record using FormHostProps. Supports view / edit / create modes. Emits BeforeSave with the dirty-field diff and BeforeDelete; the Angular wrapper owns BaseEntity persistence.'
+        : '',
       dataRequirements: { mode: 'views', entities: [], queries: [], description: '' },
-      technicalDesign: ''
+      technicalDesign: isForm
+        ? 'Form-role component. Local React state holds a draft diff that overlays FormHostProps.record. Save dispatches NotifyEvent(\'BeforeSave\', { dirtyFields }) — the host applies the diff to the BaseEntity. Mode flips are requested via EditModeChangeRequested, never set locally.'
+        : ''
     } as ComponentSpec;
 
     const fileComponent: FileLoadedComponent = {
@@ -392,6 +691,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   private getTemplateCode(name: string, type: string): string {
+    if (type === 'form') {
+      return this.getFormTemplateCode(name);
+    }
     return `function Component({ utilities, settings }) {
   const React = utilities.React;
   const { useState } = React;
@@ -403,6 +705,114 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     React.createElement('p', null, 'Start building your ${type || 'component'} here.')
   );
 }`;
+  }
+
+  /**
+   * JSX skeleton for form-role components. Pre-wires destructured
+   * FormHostProps, local `draft` state for the dirty-field diff, and the
+   * three canonical lifecycle events (BeforeSave, BeforeDelete,
+   * EditModeChangeRequested). Authors fill in the field rendering; the
+   * persistence path is already correct.
+   */
+  private getFormTemplateCode(name: string): string {
+    const componentName = this.toIdentifier(name) || 'Form';
+    return `function ${componentName}({
+  // FormHostProps (from the Angular wrapper)
+  entityName,
+  primaryKey,
+  record,
+  entityMetadata,
+  mode,
+  canEdit,
+  canDelete,
+  canCreate,
+  // Standard interactive-component props
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings,
+}) {
+  const [draft, setDraft] = React.useState({});
+
+  // Track latest draft in a ref so the methods we register below always
+  // see the current value without re-registering on every keystroke.
+  const draftRef = React.useRef({});
+  React.useEffect(() => { draftRef.current = draft; }, [draft]);
+
+  const isCreate = mode === "create";
+  const isEdit = mode === "edit";
+  const isView = mode === "view";
+  const editing = isEdit || isCreate;
+
+  // Reset the draft diff whenever a new record loads or we return to view.
+  React.useEffect(() => {
+    setDraft({});
+  }, [primaryKey && JSON.stringify(primaryKey), isView]);
+
+  // Register the host-callable methods exactly once. The wrapper invokes
+  // these when the toolbar (above this component) fires Save / Cancel.
+  React.useEffect(() => {
+    callbacks?.RegisterMethod?.("RequestSave", () => {
+      callbacks?.NotifyEvent?.("BeforeSave", {
+        dirtyFields: { ...draftRef.current },
+        cancel: false,
+        timestamp: new Date(),
+      });
+    });
+    callbacks?.RegisterMethod?.("RequestCancel", () => {
+      setDraft({});
+    });
+  }, []);
+
+  const value = (f) => (f in draft ? draft[f] : record?.[f] ?? "");
+
+  const setField = (f, v) => {
+    setDraft((d) => ({ ...d, [f]: v }));
+    callbacks?.NotifyEvent?.("FieldChanged", {
+      fieldName: f,
+      oldValue: record?.[f],
+      newValue: v,
+      timestamp: new Date(),
+    });
+  };
+
+  if (!record && !isCreate) {
+    return <div style={{ padding: 24 }}>No record loaded.</div>;
+  }
+
+  return (
+    <div style={{
+      padding: 24,
+      background: "var(--mj-bg-surface, #fff)",
+      color: "var(--mj-text-primary, #1f2937)",
+      borderRadius: 8,
+      border: "1px solid var(--mj-border-default, #e0e0e0)",
+    }}>
+      <h2 style={{ margin: 0, marginBottom: 16 }}>
+        {isCreate ? "New " + (entityMetadata?.displayName || entityName) : value(entityMetadata?.nameField || "Name") || "(unnamed)"}
+      </h2>
+
+      {/* TODO: render each entityMetadata.fields entry as an input.
+          Use value(fieldName) to read, setField(fieldName, newValue) to write.
+          See the form-builder template at metadata/prompts/templates/sage/form-builder.template.md
+          for full guidance, or open this component in chat to have the
+          Form Builder agent extend it.
+
+          DO NOT render Save / Cancel / Edit / Delete buttons here — the
+          host toolbar above this component provides all four. Save is
+          wired via the RequestSave method registered above. */}
+    </div>
+  );
+}`;
+  }
+
+  /** Sanitises a human-readable component name into a JS identifier. */
+  private toIdentifier(name: string): string {
+    const cleaned = name.replace(/[^A-Za-z0-9]/g, '');
+    if (!cleaned) return '';
+    return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
 
   // ============================================================

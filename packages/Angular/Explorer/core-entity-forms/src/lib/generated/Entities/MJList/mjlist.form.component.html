@@ -118,31 +118,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Duplicate Runs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJDuplicateRuns"
-        SectionName="Duplicate Runs"
-        Icon="fa fa-search"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJDuplicateRuns')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Runs','SourceListID')"
-                [NewRecordValues]="NewRecordValues('MJ: Duplicate Runs')"
-                [AllowLoad]="IsSectionExpanded('mJDuplicateRuns')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJDuplicateRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Details Section -->
     <mj-collapsible-panel
         SectionKey="mJListDetails"
@@ -168,25 +143,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- List Invitations Section -->
+    <!-- Duplicate Runs Section -->
     <mj-collapsible-panel
-        SectionKey="mJListInvitations"
-        SectionName="List Invitations"
-        Icon="fa fa-user-plus"
+        SectionKey="mJDuplicateRuns"
+        SectionName="Duplicate Runs"
+        Icon="fa fa-search"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJListInvitations')"
+        [BadgeCount]="GetSectionRowCount('mJDuplicateRuns')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
-                [AllowLoad]="IsSectionExpanded('mJListInvitations')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Duplicate Runs','SourceListID')"
+                [NewRecordValues]="NewRecordValues('MJ: Duplicate Runs')"
+                [AllowLoad]="IsSectionExpanded('mJDuplicateRuns')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJDuplicateRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -212,6 +187,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- List Invitations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJListInvitations"
+        SectionName="List Invitations"
+        Icon="fa fa-user-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJListInvitations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Invitations','ListID')"
+                [NewRecordValues]="NewRecordValues('MJ: List Invitations')"
+                [AllowLoad]="IsSectionExpanded('mJListInvitations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

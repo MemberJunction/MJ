@@ -39,3 +39,4 @@ export * from './lib/explorer-entity-data-grid.component';
 export * from './lib/isa-related-panel/isa-hierarchy-utils';
 export * from './lib/isa-related-panel/isa-related-card.component';
 export * from './lib/isa-related-panel/isa-related-panel.component';
+export * from './lib/interactive-form/interactive-form.component';

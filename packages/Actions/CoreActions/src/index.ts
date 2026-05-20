@@ -31,6 +31,9 @@ export * from './custom/utilities/address-services.action';
 // Geo Actions
 export * from './custom/geo/scheduled-geocoding.action';
 
+// Interactive Forms Actions (Phase C: AI authoring of runtime forms)
+export * from './custom/interactive-forms';
+
 // Web Actions
 export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';

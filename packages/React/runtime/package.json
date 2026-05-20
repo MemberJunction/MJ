@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "npm run build:node && npm run build:umd",
-    "build:node": "tsc",
+    "build:node": "tsc && tsc-alias -f",
     "build:umd": "webpack --config webpack.umd.config.cjs",
     "build:clean": "rimraf ./dist && npm run build",
     "watch": "tsc -w",

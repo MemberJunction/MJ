@@ -134,31 +134,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- API Key Applications Section -->
-    <mj-collapsible-panel
-        SectionKey="mJAPIKeyApplications"
-        SectionName="API Key Applications"
-        Icon="fa fa-key"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJAPIKeyApplications')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','APIKeyID')"
-                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
-                [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- API Key Scopes Section -->
     <mj-collapsible-panel
         SectionKey="mJAPIKeyScopes"
@@ -203,6 +178,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAPIKeyUsageLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Key Applications Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIKeyApplications"
+        SectionName="API Key Applications"
+        Icon="fa fa-key"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIKeyApplications')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Applications','APIKeyID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Applications')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeyApplications')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyApplications', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
