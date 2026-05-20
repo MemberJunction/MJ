@@ -15,12 +15,12 @@ import {
   DeltaTokenVerificationError,
   SignDeltaToken,
   VerifyDeltaToken,
-  type DeltaTokenMode,
-  type DeltaTokenPayload,
 } from './deltaToken';
 import type {
   ApplyResult,
   ApplyResultCode,
+  DeltaTokenMode,
+  DeltaTokenPayload,
   ListDelta,
   ListDeltaCounts,
   ListDeltaWarning,
@@ -28,12 +28,12 @@ import type {
   ListSource,
   MaterializeOptions,
   ResolvedRecordSet,
-} from './types';
+  SetOpKind,
+} from '@memberjunction/lists-base';
 
-/** Discriminator for set-operations. */
-export type SetOpKind = 'union' | 'intersection' | 'difference';
-
-/** Target argument shared by `ComputeDelta` / `ComputeSetOp`. */
+/** Target argument shared by `ComputeDelta` / `ComputeSetOp`.
+ *  Server-internal — not exposed on the public type surface because no
+ *  consumer outside this package needs to compose it. */
 export type DeltaTarget = ListSource | 'new';
 
 /**

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, EventEmitter, Input, Output } from '@angular/core';
 
-import type { ListDelta } from '@memberjunction/lists';
+import type { ListDelta } from '@memberjunction/lists-base';
 
 /**
  * Confirmation dialog for any list operation that produced a `ListDelta`

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, Input, inject } 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata } from '@memberjunction/core';
 import type { MJListEntity, MJUserViewEntity } from '@memberjunction/core-entities';
-import type { AudienceSource } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 
 /**
  * Compact, read-only summary of an `AudienceSource`. Resolves names

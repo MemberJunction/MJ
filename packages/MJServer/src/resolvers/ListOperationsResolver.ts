@@ -1,18 +1,17 @@
 import { LogError, UserInfo } from '@memberjunction/core';
-import {
-  ListOperations,
-  ListSharing,
-  type ApplyResult as CoreApplyResult,
-  type ListDelta as CoreListDelta,
-  type ListDeltaWarning as CoreListDeltaWarning,
-  type ListShareSummary,
-  type ListSource as CoreListSource,
-  type MaterializeOptions as CoreMaterializeOptions,
-  type SetOpKind,
-  type SharePermissionLevel,
-  type SharedListSummary,
-  type ShareTarget,
-} from '@memberjunction/lists';
+import { ListOperations, ListSharing } from '@memberjunction/lists';
+import type {
+  ApplyResult as CoreApplyResult,
+  ListDelta as CoreListDelta,
+  ListDeltaWarning as CoreListDeltaWarning,
+  ListShareSummary,
+  ListSource as CoreListSource,
+  MaterializeOptions as CoreMaterializeOptions,
+  SetOpKind,
+  SharePermissionLevel,
+  SharedListSummary,
+  ShareTarget,
+} from '@memberjunction/lists-base';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 
 import { ResolverBase } from '../generic/ResolverBase.js';

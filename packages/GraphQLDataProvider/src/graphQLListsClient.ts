@@ -14,17 +14,17 @@ import type {
   SharedListSummary,
   ShareResult,
   ShareTarget,
-} from '@memberjunction/lists';
+} from '@memberjunction/lists-base';
 import { gql } from 'graphql-request';
 
 import type { GraphQLDataProvider } from './graphQLDataProvider';
 
 /**
- * Typed client for the Lists Operations GraphQL surface. Mirrors
- * `@memberjunction/lists` 1:1 so callers (Angular, Actions, tests) get the
- * same type contract end-to-end. The client owns the wire-format mapping
- * (flat GraphQL inputs ↔ discriminated TypeScript unions) so consumers
- * don't need to learn the GraphQL surface.
+ * Typed client for the Lists Operations GraphQL surface. Mirrors the
+ * `@memberjunction/lists-base` type surface 1:1 so callers (Angular,
+ * Actions, tests) get the same type contract end-to-end. The client owns
+ * the wire-format mapping (flat GraphQL inputs ↔ discriminated TypeScript
+ * unions) so consumers don't need to learn the GraphQL surface.
  */
 export class GraphQLListsClient {
   private readonly dataProvider: GraphQLDataProvider;

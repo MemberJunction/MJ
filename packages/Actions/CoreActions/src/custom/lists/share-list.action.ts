@@ -1,7 +1,8 @@
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { ListSharing, type ShareTarget } from '@memberjunction/lists';
+import { ListSharing } from '@memberjunction/lists';
+import type { ShareTarget } from '@memberjunction/lists-base';
 
 import { addOutputParam, getStringParam, missingParam } from './_action-helpers';
 

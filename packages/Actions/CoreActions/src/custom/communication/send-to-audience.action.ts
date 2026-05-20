@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-bas
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
 import { SendToAudience } from '@memberjunction/communication-engine';
-import type { AudienceSource } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 import type { Message, ProviderCredentialsBase } from '@memberjunction/communication-types';
 
 /**

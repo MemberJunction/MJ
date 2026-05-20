@@ -1,7 +1,8 @@
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { ListOperations, type MaterializeOptions } from '@memberjunction/lists';
+import { ListOperations } from '@memberjunction/lists';
+import type { MaterializeOptions } from '@memberjunction/lists-base';
 
 import {
   addOutputParam,

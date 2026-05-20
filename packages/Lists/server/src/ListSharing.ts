@@ -13,6 +13,16 @@ import {
   MJResourcePermissionEntity,
   MJUserEntity,
 } from '@memberjunction/core-entities';
+import type {
+  AcceptInvitationResult,
+  InviteResult,
+  ListShareSummary,
+  SharePermissionLevel,
+  SharedListSummary,
+  ShareResult,
+  ShareResultCode,
+  ShareTarget,
+} from '@memberjunction/lists-base';
 
 /**
  * @memberjunction/lists — sharing surface.
@@ -57,125 +67,6 @@ export const LIST_AUDIT_LOG_TYPES = {
 /** Default invitation TTL: 7 days. The plan calls for tunable expiry but
  * keeps the spec simple — overridable at call time. */
 export const DEFAULT_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Permission level granted to a share recipient. Mirrors the
- * MJResourcePermission `PermissionLevel` field exactly. */
-export type SharePermissionLevel = 'View' | 'Edit' | 'Owner';
-
-/**
- * Capability flags derived from a permission level. The mapping mirrors
- * the gating rules from mockup 19:
- *   - Viewer: hide Add/Remove/Refresh/Edit/Share/Delete/Operations
- *   - Editor: hide Delete/Share
- *   - Owner: show everything
- * Server-side enforcement remains the source of truth — this is a UX
- * convenience so users don't see buttons they'll be rejected on.
- */
-export interface ListCapabilities {
-  CanRead: boolean;
-  CanEdit: boolean;
-  CanRefresh: boolean;
-  CanShare: boolean;
-  CanDelete: boolean;
-  CanRunOperations: boolean;
-}
-
-export function CapabilitiesForLevel(level: SharePermissionLevel | null): ListCapabilities {
-  if (level === 'Owner') {
-    return {
-      CanRead: true, CanEdit: true, CanRefresh: true,
-      CanShare: true, CanDelete: true, CanRunOperations: true,
-    };
-  }
-  if (level === 'Edit') {
-    return {
-      CanRead: true, CanEdit: true, CanRefresh: true,
-      CanShare: false, CanDelete: false, CanRunOperations: true,
-    };
-  }
-  if (level === 'View') {
-    return {
-      CanRead: true, CanEdit: false, CanRefresh: false,
-      CanShare: false, CanDelete: false, CanRunOperations: false,
-    };
-  }
-  // No access at all — caller should hide the list entirely.
-  return {
-    CanRead: false, CanEdit: false, CanRefresh: false,
-    CanShare: false, CanDelete: false, CanRunOperations: false,
-  };
-}
-
-/**
- * Target of a direct share: either an MJ user or an MJ role. Discriminated
- * union so the type system enforces exactly one of `userId` / `roleId` is
- * provided (mirrors the `ValidateTypeAndRoleOrUserIDExclusive` rule on
- * `MJResourcePermission`).
- */
-export type ShareTarget =
-  | { kind: 'user'; userId: string }
-  | { kind: 'role'; roleId: string };
-
-/** Summary of one share row returned by `GetSharesForList`. */
-export interface ListShareSummary {
-  PermissionID: string;
-  ListID: string;
-  Target: ShareTarget;
-  PermissionLevel: SharePermissionLevel;
-  Status: 'Approved' | 'Requested' | 'Rejected' | 'Revoked';
-  SharedByUserID: string | null;
-  CreatedAt: Date;
-}
-
-/** Summary of one List visible to the current user via shares. */
-export interface SharedListSummary {
-  ListID: string;
-  ListName: string;
-  PermissionLevel: SharePermissionLevel;
-  SharedByUserID: string | null;
-  SharedAt: Date;
-}
-
-/** Status codes returned by sharing operations. */
-export type ShareResultCode =
-  | 'SUCCESS'
-  | 'INVALID_PARAMETER'
-  | 'LIST_NOT_FOUND'
-  | 'INVITATION_NOT_FOUND'
-  | 'INVITATION_EXPIRED'
-  | 'INVITATION_ALREADY_USED'
-  | 'INVITATION_REVOKED'
-  | 'PERMISSION_NOT_FOUND'
-  | 'EMAIL_RECIPIENT_NOT_FOUND'
-  | 'UNEXPECTED_ERROR';
-
-export interface ShareResult {
-  Success: boolean;
-  ResultCode: ShareResultCode;
-  Message: string;
-  PermissionID?: string;
-}
-
-export interface InviteResult {
-  Success: boolean;
-  ResultCode: ShareResultCode;
-  Message: string;
-  InvitationID?: string;
-  Token?: string;
-  ExpiresAt?: Date;
-}
-
-export interface AcceptInvitationResult {
-  Success: boolean;
-  ResultCode: ShareResultCode;
-  Message: string;
-  PermissionID?: string;
-  ListID?: string;
-}
 
 // ---------------------------------------------------------------------------
 // ListSharing service

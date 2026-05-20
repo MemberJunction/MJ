@@ -61,7 +61,7 @@
     "@memberjunction/ng-generic-dialog": "5.34.1",
     "@memberjunction/ng-list-detail-grid": "5.34.1",
     "@memberjunction/ng-list-management": "5.34.1",
-    "@memberjunction/lists": "5.34.1",
+    "@memberjunction/lists-base": "5.34.1",
     "@memberjunction/ng-notifications": "5.34.1",
     "@memberjunction/ng-query-viewer": "5.34.1",
     "@memberjunction/ng-record-changes": "5.34.1",

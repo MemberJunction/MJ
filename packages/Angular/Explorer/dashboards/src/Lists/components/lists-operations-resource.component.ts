@@ -9,7 +9,7 @@ import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import type { ListDelta, ListSource } from '@memberjunction/lists';
+import type { ListDelta, ListSource } from '@memberjunction/lists-base';
 interface ListSelection {
   list: MJListEntity;
   entityName: string;

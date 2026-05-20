@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, On
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import type { SharedListSummary, SharePermissionLevel } from '@memberjunction/lists';
+import type { SharedListSummary, SharePermissionLevel } from '@memberjunction/lists-base';
 
 /**
  * "Shared With Me" view (mockup 17). Lists every `MJ: List` the current

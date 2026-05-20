@@ -1,6 +1,7 @@
 import { Metadata, RunView, UserInfo, type IMetadataProvider, LogError } from '@memberjunction/core';
 import { MessageRecipient, type Message, type MessageResult, type ProviderCredentialsBase } from '@memberjunction/communication-types';
-import { AudienceResolver, type AudienceSource } from '@memberjunction/lists';
+import { AudienceResolver } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 
 import { CommunicationEngine } from './Engine';
 

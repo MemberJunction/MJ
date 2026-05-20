@@ -1,7 +1,8 @@
 import { BaseAction } from '@memberjunction/actions';
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { AudienceResolver, type AudienceSource } from '@memberjunction/lists';
+import { AudienceResolver } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 
 import {
   addOutputParam,

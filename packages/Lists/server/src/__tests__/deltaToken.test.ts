@@ -5,10 +5,9 @@ import {
   DeltaTokenVerificationError,
   SetDeltaTokenSecret,
   SignDeltaToken,
-  TOKEN_TTL_MS,
   VerifyDeltaToken,
-  type DeltaTokenPayload,
 } from '../deltaToken';
+import { TOKEN_TTL_MS, type DeltaTokenPayload } from '@memberjunction/lists-base';
 
 const TEST_SECRET = 'unit-test-delta-secret-do-not-use-in-prod';
 

@@ -3,7 +3,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, EventEmitter, In
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RunView, type EntityInfo } from '@memberjunction/core';
 import type { MJListEntity, MJUserViewEntity } from '@memberjunction/core-entities';
-import type { AudienceSource } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 
 /**
  * Reusable picker for an `AudienceSource` (mockup 20). Three tabs:

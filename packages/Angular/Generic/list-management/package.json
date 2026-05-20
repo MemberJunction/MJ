@@ -37,7 +37,7 @@
     "@memberjunction/core-entities": "5.34.1",
     "@memberjunction/global": "5.34.1",
     "@memberjunction/graphql-dataprovider": "5.34.1",
-    "@memberjunction/lists": "5.34.1",
+    "@memberjunction/lists-base": "5.34.1",
     "@memberjunction/ng-base-types": "5.34.1",
     "@memberjunction/ng-container-directives": "5.34.1",
     "@memberjunction/ng-shared": "5.34.1",

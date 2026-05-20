@@ -5,7 +5,8 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import { CapabilitiesForLevel, ListSharing, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists';
+import { CapabilitiesForLevel, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists-base';
+import { ListSharingService } from '@memberjunction/ng-list-management';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
@@ -175,6 +176,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     private cdr: ChangeDetectorRef,
     private elementRef: ElementRef,
     private exportService: ExportService,
+    private listSharingService: ListSharingService,
   ) {
     super();
     // Debounce search input
@@ -266,8 +268,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       return;
     }
     try {
-      const sharing = new ListSharing(this.ProviderToUse.CurrentUser!, this.ProviderToUse);
-      const level = await sharing.ResolveEffectivePermission(this.listRecord.ID);
+      const currentUserId = this.ProviderToUse.CurrentUser?.ID;
+      if (!currentUserId) {
+        this.capabilities = CapabilitiesForLevel('View');
+        this.currentLevel = 'View';
+        return;
+      }
+      // Route through ListSharingService (GraphQL) — never instantiate the
+      // server-side `ListSharing` class from a browser bundle.
+      const level = (await this.listSharingService.getUserPermissionLevel(this.listRecord.ID, currentUserId)) as SharePermissionLevel | null;
       this.currentLevel = level;
       this.capabilities = CapabilitiesForLevel(level);
     } catch (e) {

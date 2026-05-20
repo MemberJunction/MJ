@@ -62,7 +62,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 import { SetDeltaTokenSecret } from '../deltaToken';
 import { ListOperations } from '../ListOperations';
-import type { ListDelta } from '../types';
+import type { ListDelta } from '@memberjunction/lists-base';
 
 const CTX_USER = { ID: 'u1', Name: 'Test', Email: 't@x', UserRoles: [] };
 

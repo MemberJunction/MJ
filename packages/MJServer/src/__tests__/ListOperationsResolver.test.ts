@@ -17,7 +17,7 @@ import 'reflect-metadata';
 
 import { describe, expect, it } from 'vitest';
 
-import type { ApplyResult, ListDelta } from '@memberjunction/lists';
+import type { ApplyResult, ListDelta } from '@memberjunction/lists-base';
 
 import {
   ApplyDeltaInput,

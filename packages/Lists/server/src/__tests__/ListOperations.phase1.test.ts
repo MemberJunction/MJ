@@ -63,7 +63,7 @@ vi.mock('@memberjunction/core-entities', () => ({
 
 import { SetDeltaTokenSecret } from '../deltaToken';
 import { ListOperations } from '../ListOperations';
-import type { MaterializeOptions } from '../types';
+import type { MaterializeOptions } from '@memberjunction/lists-base';
 
 const CTX_USER = { ID: 'user-1', Name: 'Test', Email: 't@x', UserRoles: [] };
 const CONTACTS_ENTITY = { ID: 'entity-contacts', Name: 'Contacts', PrimaryKeys: [{ Name: 'ID' }] };

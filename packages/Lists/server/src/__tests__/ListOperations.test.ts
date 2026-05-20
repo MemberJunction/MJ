@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SetDeltaTokenSecret } from '../deltaToken';
 import { ListOperations } from '../ListOperations';
-import type { ApplyResult, ListDelta, ListSource, ResolvedRecordSet } from '../types';
+import type { ApplyResult, ListDelta, ListSource, ResolvedRecordSet } from '@memberjunction/lists-base';
 
 const TEST_SECRET = 'unit-test-delta-secret';
 

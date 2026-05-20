@@ -8,7 +8,7 @@ import {
 } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { ActionEngineBase } from '@memberjunction/actions-base';
-import type { AudienceSource } from '@memberjunction/lists';
+import type { AudienceSource } from '@memberjunction/lists-base';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 

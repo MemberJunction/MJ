@@ -9,7 +9,7 @@ import { takeUntil } from 'rxjs/operators';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
-import { CapabilitiesForLevel, ListSharing, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists';
+import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -2603,8 +2603,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
    *  doesn't re-hit the resolver. */
   private async refineContextCapabilities(listId: string): Promise<void> {
     try {
-      const sharing = new ListSharing(this.ProviderToUse.CurrentUser!, this.ProviderToUse);
-      const level = await sharing.ResolveEffectivePermission(listId);
+      const currentUserId = this.ProviderToUse.CurrentUser?.ID;
+      if (!currentUserId) {
+        // No user context — leave the conservative fallback in place.
+        return;
+      }
+      // Go through the Angular sharing service rather than instantiating the
+      // server-side `ListSharing` class directly. The service hits the GraphQL
+      // surface, which is the only sanctioned client→server path; the server
+      // package writes audit logs + permission rows that have no business
+      // running in a browser bundle.
+      const level = (await this.listSharingService.getUserPermissionLevel(listId, currentUserId)) as SharePermissionLevel | null;
       this.capabilityCache.set(listId, level);
       // Only mutate state if the user is still on this same menu — they
       // may have closed it before resolve finished.
