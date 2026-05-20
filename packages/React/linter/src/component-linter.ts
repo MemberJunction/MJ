@@ -11,7 +11,7 @@ import type { EntityFieldInfo } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import { LibraryLintCache } from './library-lint-cache';
-import { ComponentExecutionOptions } from './component-runner';
+import type { LinterOptions } from './linter-options';
 import { TypeContext } from './type-context';
 import { TypeInferenceEngine } from './type-inference-engine';
 import { ControlFlowAnalyzer } from './control-flow-analyzer';
@@ -108,7 +108,7 @@ export class ComponentLinter {
     isRootComponent?: boolean,
     contextUser?: UserInfo,
     debugMode?: boolean,
-    options?: ComponentExecutionOptions,
+    options?: LinterOptions,
     sqlDialect?: SQLParserDialect,
   ): Promise<LintResult> {
     if (sqlDialect) {
@@ -345,7 +345,7 @@ export class ComponentLinter {
     }
   }
 
-  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec, options?: ComponentExecutionOptions): Violation[] {
+  private static validateDataRequirements(ast: t.File, componentSpec: ComponentSpec, options?: LinterOptions): Violation[] {
     const violations: Violation[] = [];
 
     // Extract entity names from dataRequirements

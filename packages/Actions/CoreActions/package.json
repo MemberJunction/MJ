@@ -51,7 +51,7 @@
     "@memberjunction/global": "5.34.1",
     "@memberjunction/integration-engine": "5.34.1",
     "@memberjunction/interactive-component-types": "5.34.1",
-    "@memberjunction/react-test-harness": "5.34.1",
+    "@memberjunction/react-linter": "5.34.1",
     "@memberjunction/search-engine": "5.34.1",
     "@memberjunction/sql-dialect": "5.34.1",
     "@memberjunction/sqlserver-dataprovider": "5.34.1",

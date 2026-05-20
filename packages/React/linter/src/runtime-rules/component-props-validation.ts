@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { ComponentExecutionOptions } from '../component-runner';
+import type { LinterOptions } from '../linter-options';
 
 /**
  * Rule: component-props-validation
@@ -25,7 +25,7 @@ export class ComponentPropsValidationRule extends BaseLintRule {
   get Name() { return 'component-props-validation'; }
   get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, _options?: ComponentExecutionOptions): Violation[] {
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, _options?: LinterOptions): Violation[] {
     const violations: Violation[] = [];
     const standardProps = new Set(['utilities', 'styles', 'components', 'callbacks', 'savedUserSettings', 'onSaveUserSettings']);
 

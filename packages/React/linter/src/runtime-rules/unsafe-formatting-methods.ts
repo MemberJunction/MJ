@@ -4,7 +4,7 @@ import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { ComponentExecutionOptions } from '../component-runner';
+import type { LinterOptions } from '../linter-options';
 import { ControlFlowAnalyzer } from '../control-flow-analyzer';
 import { TypeInferenceEngine } from '../type-inference-engine';
 import type { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
@@ -16,7 +16,7 @@ import type { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
  * values without optional chaining or null checks. Uses control flow analysis and type inference
  * to reduce false positives.
  *
- * Closure dependencies: ControlFlowAnalyzer, TypeInferenceEngine, ComponentExecutionOptions,
+ * Closure dependencies: ControlFlowAnalyzer, TypeInferenceEngine, LinterOptions,
  * EntityInfo, EntityFieldInfo (all instantiated locally within the rule)
  *
  * Severity: medium-high (depends on entity metadata nullability)
@@ -27,7 +27,7 @@ export class UnsafeFormattingMethodsRule extends BaseLintRule {
   get Name() { return 'unsafe-formatting-methods'; }
   get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: ComponentExecutionOptions): Violation[] {
+  Test(ast: t.File, componentName: string, componentSpec?: ComponentSpec, options?: LinterOptions): Violation[] {
     const violations: Violation[] = [];
 
     // Standard props that are always defined (passed by runtime to all components)

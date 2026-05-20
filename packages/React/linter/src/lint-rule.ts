@@ -1,7 +1,7 @@
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { ComponentExecutionOptions } from './component-runner';
+import type { LinterOptions } from './linter-options';
 import { Violation } from './component-linter';
 import { TypeContext } from './type-context';
 
@@ -16,7 +16,7 @@ import { TypeContext } from './type-context';
  *
  * @example
  * ```typescript
- * import { BaseLintRule } from '@memberjunction/react-test-harness';
+ * import { BaseLintRule } from '@memberjunction/react-linter';
  * import { RegisterClass } from '@memberjunction/global';
  *
  * @RegisterClass(BaseLintRule, 'my-custom-rule')
@@ -63,7 +63,7 @@ export abstract class BaseLintRule {
     ast: t.File,
     componentName: string,
     componentSpec?: ComponentSpec,
-    options?: ComponentExecutionOptions,
+    options?: LinterOptions,
     typeContext?: TypeContext
   ): Violation[];
 }
@@ -81,7 +81,7 @@ export interface LintRule {
     ast: t.File,
     componentName: string,
     componentSpec?: ComponentSpec,
-    options?: ComponentExecutionOptions,
+    options?: LinterOptions,
     typeContext?: TypeContext
   ) => Violation[];
 }

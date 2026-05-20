@@ -112,7 +112,7 @@ vi.mock('@memberjunction/interactive-component-types/forms', async () => {
     return actual;
 });
 
-vi.mock('@memberjunction/react-test-harness', () => ({
+vi.mock('@memberjunction/react-linter', () => ({
     ComponentLinter: {
         async lintComponent() {
             if (hoisted.lintShouldThrow) throw hoisted.lintShouldThrow;

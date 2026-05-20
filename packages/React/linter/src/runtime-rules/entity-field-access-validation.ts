@@ -4,7 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { ComponentExecutionOptions } from '../component-runner';
+import type { LinterOptions } from '../linter-options';
 import { TypeContext, FieldTypeInfo } from '../type-context';
 
 /**
@@ -142,7 +142,7 @@ export class EntityFieldAccessValidationRule extends BaseLintRule {
   get Name() { return 'entity-field-access-validation'; }
   get AppliesTo(): 'all' | 'child' | 'root' { return 'all'; }
 
-  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec, _options?: ComponentExecutionOptions, sharedTypeContext?: TypeContext): Violation[] {
+  Test(ast: t.File, _componentName: string, componentSpec?: ComponentSpec, _options?: LinterOptions, sharedTypeContext?: TypeContext): Violation[] {
     const violations: Violation[] = [];
 
     // Use shared TypeContext if available, otherwise create own (backward compat)

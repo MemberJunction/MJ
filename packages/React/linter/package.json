@@ -1,18 +1,14 @@
 {
-  "name": "@memberjunction/react-test-harness",
+  "name": "@memberjunction/react-linter",
   "version": "5.34.1",
-  "description": "React component test harness for MemberJunction using Playwright",
+  "description": "Static-analysis lint engine for MemberJunction interactive React components. Browser-free: Babel AST + TypeScript-based validation only. Safe to depend on from server-side actions, CLI tooling, and (eventually) Component Studio in the browser. The companion package @memberjunction/react-test-harness layers Playwright-based runtime execution on top of these rules.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "bin": {
-    "mj-react-test": "./dist/cli/index.js"
-  },
   "files": [
     "/dist"
   ],
   "scripts": {
-    "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -20,33 +16,19 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
-    "dotenv": "^16.5.0",
-    "mssql": "^11.0.1",
-    "ts-node-dev": "^2.0.0",
-    "vitest": "^4.0.18",
-    "@memberjunction/sqlserver-dataprovider": "5.34.1"
+    "vitest": "^4.0.18"
   },
   "dependencies": {
     "@babel/parser": "^7.29.0",
     "@babel/traverse": "^7.29.0",
     "@babel/types": "^7.29.0",
-    "@memberjunction/ai-vectors-memory": "5.34.1",
-    "@memberjunction/ai-core-plus": "5.34.1",
-    "@memberjunction/aiengine": "5.34.1",
     "@memberjunction/core": "5.34.1",
     "@memberjunction/core-entities": "5.34.1",
-    "@memberjunction/core-entities-server": "5.34.1",
     "@memberjunction/global": "5.34.1",
     "@memberjunction/interactive-component-types": "5.34.1",
-    "@memberjunction/react-linter": "5.34.1",
     "@memberjunction/react-runtime": "5.34.1",
-    "@playwright/test": "^1.58.1",
-    "chalk": "^5.6.2",
-    "commander": "^14.0.3",
     "@memberjunction/sql-dialect": "5.34.1",
     "@memberjunction/sql-parser": "5.34.1",
-    "ora": "^9.3.0",
-    "playwright": "^1.58.1",
     "typescript": "^5.9.3"
   },
   "repository": {

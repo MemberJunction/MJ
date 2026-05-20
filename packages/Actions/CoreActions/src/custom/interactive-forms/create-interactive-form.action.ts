@@ -8,7 +8,7 @@ import {
 import { RegisterClass } from "@memberjunction/global";
 import { ComponentSpec } from "@memberjunction/interactive-component-types";
 import { isFormRole } from "@memberjunction/interactive-component-types/forms";
-import { ComponentLinter } from "@memberjunction/react-test-harness";
+import { ComponentLinter } from "@memberjunction/react-linter";
 
 /**
  * Persists an AI-authored or human-authored runtime form. Lints the
