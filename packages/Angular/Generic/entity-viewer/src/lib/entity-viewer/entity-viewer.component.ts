@@ -197,9 +197,20 @@ export class EntityViewerComponent extends BaseAngularComponent implements OnIni
     return this._viewMode;
   }
   set viewMode(value: EntityViewMode | null) {
+    const previousEffective = this.effectiveViewMode;
     this._viewMode = value;
     if (value !== null) {
       this.internalViewMode = value;
+    }
+    // Map mode uses different RunView params (MaxRows = MAP_MAX_RECORDS, no pagination)
+    // and different field set (includes BoundaryGeoJSON when entity.SupportsGeoCoding=1).
+    // If the parent flips us into/out of map mode via two-way binding we need to reload —
+    // otherwise the map gets the grid's paginated data without per-record geometry.
+    const newEffective = this.effectiveViewMode;
+    if (this._initialized && previousEffective !== newEffective &&
+        (newEffective === 'map' || previousEffective === 'map')) {
+      this.resetPaginationState();
+      this.loadData();
     }
   }
 

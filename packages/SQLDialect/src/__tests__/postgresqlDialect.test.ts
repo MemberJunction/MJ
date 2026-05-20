@@ -79,14 +79,18 @@ describe('PostgreSQLDialect', () => {
     });
 
     describe('ParameterRef', () => {
-        it('converts PascalCase to p_-prefixed snake_case', () => {
+        it('converts PascalCase to p_-prefixed flat lowercase (matching baseline-ported SPs)', () => {
             expect(dialect.ParameterRef('Name')).toBe('p_name');
-            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_user_view_max_rows');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_userviewmaxrows');
             expect(dialect.ParameterRef('ID')).toBe('p_id');
         });
 
         it('handles consecutive capitals correctly', () => {
-            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_full_text_search_enabled');
+            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_fulltextsearchenabled');
+        });
+
+        it('preserves existing underscores (e.g. _Clear companion suffix)', () => {
+            expect(dialect.ParameterRef('CompanyID_Clear')).toBe('p_companyid_clear');
         });
     });
 
@@ -513,6 +517,36 @@ describe('PostgreSQLDialect', () => {
             expect(ddl).toContain("to_tsvector('english'");
             expect(ddl).toContain('CREATE TRIGGER');
             expect(ddl).toContain('BEFORE INSERT OR UPDATE');
+        });
+    });
+
+    describe('QuoteStringLiteral', () => {
+        it('wraps a value in single quotes', () => {
+            expect(dialect.QuoteStringLiteral('hello')).toBe("'hello'");
+        });
+
+        it("doubles internal apostrophes (same convention as SQL Server)", () => {
+            expect(dialect.QuoteStringLiteral("O'Brien")).toBe("'O''Brien'");
+        });
+    });
+
+    describe('QuoteColumnAlias', () => {
+        it('double-quotes the alias to preserve case', () => {
+            expect(dialect.QuoteColumnAlias('EntityName')).toBe('"EntityName"');
+        });
+
+        it('preserves mixed casing exactly (PG would lowercase otherwise)', () => {
+            expect(dialect.QuoteColumnAlias('IDValue')).toBe('"IDValue"');
+        });
+    });
+
+    describe('CastToBoundedString', () => {
+        it('emits CAST AS VARCHAR(450) by default', () => {
+            expect(dialect.CastToBoundedString('src."ID"')).toBe('CAST(src."ID" AS VARCHAR(450))');
+        });
+
+        it('honours an explicit maxLength', () => {
+            expect(dialect.CastToBoundedString('x', 100)).toBe('CAST(x AS VARCHAR(100))');
         });
     });
 });

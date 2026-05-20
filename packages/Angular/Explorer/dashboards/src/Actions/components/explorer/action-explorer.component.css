@@ -1,6 +1,149 @@
+/* ──── Filter popover internals (multi-select Status/Type) ──── */
+.dropdown-section {
+  padding: 8px 12px;
+}
+.dropdown-section:not(:last-child) {
+  border-bottom: 1px solid var(--mj-border-default);
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  letter-spacing: 0.5px;
+}
+.section-header button {
+  font-size: 11px;
+  padding: 2px 6px;
+}
+.filter-options {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.filter-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 13px;
+}
+.filter-option:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.filter-option.selected {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+}
+.filter-option input[type="checkbox"] {
+  display: none;
+}
+.filter-option i {
+  font-size: 13px;
+  width: 18px;
+  color: var(--mj-text-muted);
+}
+.filter-option.selected i {
+  color: var(--mj-brand-primary);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-dot[data-status="Active"]   { background: var(--mj-status-success); }
+.status-dot[data-status="Pending"]  { background: var(--mj-status-warning); }
+.status-dot[data-status="Disabled"] { background: var(--mj-status-error); }
+
+/* ──── Sort dropdown ──── */
+.dropdown-container {
+  position: relative;
+}
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+  min-width: 220px;
+  padding: 8px 0;
+}
+.sort-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.sort-option:hover {
+  background: var(--mj-bg-surface-hover);
+}
+.sort-option.selected {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+.sort-option i:first-child {
+  width: 18px;
+  color: var(--mj-text-muted);
+}
+.sort-option.selected i:first-child {
+  color: var(--mj-brand-primary);
+}
+.sort-option .direction-icon {
+  margin-left: auto;
+  font-size: 11px;
+}
+
+/* ──── Active filter chips (in [toolbar] next to search) ──── */
+.active-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
+  color: var(--mj-text-primary);
+  border-radius: 14px;
+}
+.status-chip.removable {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.status-chip.removable:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
+}
+.status-chip i {
+  font-size: 10px;
+  color: var(--mj-text-muted);
+}
+
 .action-explorer {
   display: flex;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   background: var(--mj-bg-page);
   overflow: hidden;
   position: relative;

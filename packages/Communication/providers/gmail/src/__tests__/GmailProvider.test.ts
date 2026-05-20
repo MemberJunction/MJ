@@ -26,9 +26,13 @@ vi.mock('@memberjunction/communication-types', () => ({
   },
 }));
 
-vi.mock('@memberjunction/global', () => ({
-  RegisterClass: () => (target: unknown) => target,
-}));
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: () => (target: unknown) => target,
+  };
+});
 
 vi.mock('@memberjunction/core', () => ({
   LogError: vi.fn(),

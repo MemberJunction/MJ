@@ -548,9 +548,14 @@ export class AnthropicLLM extends BaseLLM {
     }
     
     /**
-     * Reset streaming state for a new request
+     * Reset streaming state for a new request. Overrides the base-class hook so
+     * `BaseLLM.handleStreamingChatCompletion` calls this both at the start of a
+     * request AND in its `finally` block — the latter releases accumulated
+     * thinking buffers (which can grow to 100k+ chars on extended-thinking
+     * outputs) and prevents state from a prior request bleeding into the next.
+     * See audit R2-C5.
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,

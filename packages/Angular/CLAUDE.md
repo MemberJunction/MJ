@@ -105,6 +105,53 @@ The only exception is `MJExplorerAppComponent` which subscribes to `Router.event
 
 ---
 
+## 🚨 CRITICAL: Query-Param State MUST Round-Trip (Deep Links, Home Pins, Back/Forward) 🚨
+
+Any resource component (`BaseResourceComponent` / `BaseDashboard` subclass) that encodes sub-state in the URL via query params **MUST** be able to restore that state when it changes *after* initial load — not just on first mount. Reading params once in `ngOnInit` / `initDashboard` / a `Data` setter is **not enough**. If you only read on init, deep links, Home pins, and browser back/forward all silently break the moment the tab is **re-focused** instead of freshly created — which is the common case, because Explorer **caches and reuses resource components** (it detaches them from the DOM but keeps the instance alive; see [ComponentCacheManager](Explorer/explorer-core/src/lib/shell/components/tabs/component-cache-manager.ts)).
+
+### The contract: two halves, both required
+
+1. **Read initial params** (first mount): in `ngOnInit` / `initDashboard`, call `this.GetQueryParams()` and apply.
+2. **React to later changes** (tab re-focus, pin click, back/forward, deep link): override `OnQueryParamsChanged(params, source)` and apply the same state.
+
+```typescript
+// 1. Initial read
+protected initDashboard(): void {
+    const p = this.GetQueryParams();
+    if (p['entity']) this.openEntity(p['entity']);
+}
+
+// 2. React to ALL later changes — REQUIRED if you push params to the URL
+protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+    const entityId = params['entity'] || null;
+    if (entityId && entityId !== this.currentEntityId) {
+        this.openEntity(entityId);          // openEntity may call UpdateQueryParams — safe, auto-suppressed during delivery
+    } else if (!entityId && this.currentEntityId) {
+        this.closeEntity();
+    }
+}
+```
+
+**Rule of thumb:** if you ever call `UpdateQueryParams(...)` / `UpdateActiveTabQueryParams(...)`, you owe a matching `OnQueryParamsChanged` that restores that exact state. The two are a pair.
+
+### How delivery works (and why it's reliable)
+
+`OnQueryParamsChanged` is driven by `BaseResourceComponent` from two sources, both funneled through a de-duplicated delivery:
+- **Reactive** — `NavigationService.ObserveTabQueryParams(tabId)`, backed by the workspace `BehaviorSubject`. It replays the tab's current params on subscribe **and** emits later changes. This is **plain RxJS, independent of Angular change detection**, so it fires even on a cached/detached component. The first meaningful delivery is labeled `'deeplink'`, later ones `'popstate'`.
+- **Explicit** — the shell's popstate path calls `NavigationService.NotifyQueryParamsChanged`.
+
+Because delivery is RxJS-based (not CD-based), you do **not** need the `MJGlobal` event bus for this — the workspace stream already reaches detached components.
+
+### Do NOT use `ActivatedRoute` for this
+
+Some older components inject `ActivatedRoute` and subscribe to `route.queryParams`. This is off-pattern (violates the NavigationService-only rule) **and unreliable for pin clicks**: `UpdateActiveTabQueryParams` updates the tab config and the workspace stream, but does not directly drive the Angular router, so an `ActivatedRoute` subscription may not fire. Use `OnQueryParamsChanged` instead.
+
+### Cached components: navigation intent beats preserved state
+
+When the tab-container reattaches a cached component, an **incoming** navigation's query params (e.g. a Home pin targeting a specific conversation) take precedence over the component's own `savedQueryParams`. For cross-resource navigation that targets specific params, pass them **into** `NavigationService.SwitchToApp(appId, navItem, queryParams)` so they land in the tab config *synchronously* before the cached component reattaches — never via a post-hoc `.then(() => UpdateActiveTabQueryParams(...))`, which races the cache reattach and loses. See [tab-container.component.ts](Explorer/explorer-core/src/lib/shell/components/tabs/tab-container.component.ts) (`loadSingleResourceContent`, cached branch).
+
+---
+
 ## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
 
 ### Shared Singleton Services Pattern
@@ -174,11 +221,16 @@ This guide covers:
 - Getter/setter state management pattern
 - User preferences via UserInfoEngine
 - Data loading patterns with RunView and local caching
+- **Page Chrome** — the shared `<mj-page-layout>` / `<mj-page-header>` / `<mj-page-body>` trio used by every MJ Explorer dashboard. Don't roll bespoke headers, gradients, or sidebars; use the trio and project content into the `[meta]`/`[actions]`/`[toolbar]` slots. Full slot rules + exception list in [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md).
 - Layout patterns using CSS Flexbox/Grid
 - Permission checking patterns
 - Creating new Engine classes for domain logic
 
 **Read this guide before starting any dashboard work** to ensure consistency with established patterns.
+
+### ⚠️ Page Chrome — exception to be aware of
+
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use a local `.sticky-header` action row instead. This is Section 9b of the chrome conventions; the decision on the long-term pattern (Section 10) is deferred to a future branch.
 
 ---
 
@@ -192,6 +244,36 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 - **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
 - **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
 - **Use `inject()` function** for DI in new components (not constructor injection)
+
+## 🚨 Dialog Button Placement (MJ Convention) 🚨
+
+**Confirm/Submit buttons go on the LEFT, Cancel buttons go on the RIGHT.** This is the opposite of the Windows convention but matches MemberJunction's design system. Apply to all dialogs, modals, popovers, and action button groups.
+
+```html
+<!-- ✅ CORRECT — Save (primary) on the LEFT, Cancel on the RIGHT -->
+<div class="footer">
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ✅ CORRECT — destructive action far left, then primary, then cancel -->
+<div class="footer">
+  <button class="btn btn--danger">Sign out</button>
+  <span class="spacer"></span>
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ❌ WRONG — Cancel before Save (Windows convention) -->
+<div class="footer">
+  <button class="btn">Cancel</button>
+  <button class="btn btn--primary">Save</button>
+</div>
+```
+
+The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components

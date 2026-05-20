@@ -4,6 +4,7 @@
  * for CodeGen orchestration code.
  */
 import pg from 'pg';
+import { PostgreSQLDialect, SQLDialect } from '@memberjunction/sql-dialect';
 import {
     CodeGenConnection,
     CodeGenQueryResult,
@@ -62,10 +63,16 @@ class PostgreSQLCodeGenTransaction implements CodeGenTransaction {
  * ```
  */
 export class PostgreSQLCodeGenConnection implements CodeGenConnection {
+    private static readonly _dialect: SQLDialect = new PostgreSQLDialect();
     private _pool: pg.Pool;
 
     constructor(pool: pg.Pool) {
         this._pool = pool;
+    }
+
+    /** @inheritdoc */
+    public get Dialect(): SQLDialect {
+        return PostgreSQLCodeGenConnection._dialect;
     }
 
     /**

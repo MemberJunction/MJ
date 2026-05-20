@@ -7,6 +7,7 @@ import {
   ElementRef,
   ApplicationRef,
   EnvironmentInjector,
+  runInInjectionContext,
   createComponent,
   ComponentRef,
   ViewEncapsulation,
@@ -31,7 +32,7 @@ import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-sha
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
-import { ComponentCacheManager } from './component-cache-manager';
+import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -311,6 +312,67 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     }, 50);
   }
 
+  /**
+   * Clear cached components matching a predicate. Components that match are
+   * destroyed; others are kept. Use for tenant switching — clear org-scoped
+   * components while keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   *                  If omitted, clears ALL cached components.
+   * @returns Number of components destroyed.
+   */
+  public ClearComponentCache(predicate?: (info: CachedComponentInfo) => boolean): number {
+    if (predicate) {
+      return this.cacheManager.ClearCacheByPredicate(predicate);
+    }
+    const stats = this.cacheManager.getCacheStats();
+    this.cacheManager.clearCache();
+    return stats.total;
+  }
+
+  /**
+   * Destroy all cached components and reload open tabs.
+   *
+   * In single-resource mode: clears the signature to force a reload, then
+   * re-invokes loadSingleResourceContent().
+   *
+   * In multi-tab mode: destroys all cached components, marks all tabs as
+   * not-loaded, then reloads the currently active tab immediately. Other
+   * tabs reload lazily when the user switches to them (onTabShown fires
+   * with isFirstShow=true after MarkTabNotLoaded).
+   *
+   * Use this for tenant switching — tabs stay open but their components
+   * are recreated fresh with the new org context.
+   */
+  public async ReloadAllTabs(): Promise<void> {
+    // Destroy all cached component instances
+    this.cacheManager.clearCache();
+
+    if (this.useSingleResourceMode) {
+      // Force reload by clearing the signature check
+      this.currentSingleResourceSignature = null;
+      this.singleResourceComponentRef = null;
+      this.singleResourceCacheIdentity = null;
+      await this.loadSingleResourceContent();
+    } else {
+      // Mark all tabs as not-loaded so onTabShown will trigger loadTabContent
+      const tabIds = this.layoutManager.GetAllTabIds();
+      for (const tabId of tabIds) {
+        this.layoutManager.MarkTabNotLoaded(tabId);
+      }
+
+      // Reload the currently active tab immediately
+      const activeTabId = this.workspaceManager.GetActiveTabId();
+      if (activeTabId && this.layoutManager.IsInitialized) {
+        const container = this.layoutManager.GetContainer(activeTabId);
+        if (container) {
+          await this.loadTabContent(activeTabId, container);
+          this.layoutManager.MarkTabLoaded(activeTabId);
+        }
+      }
+    }
+  }
+
   ngOnDestroy(): void {
     this.subscriptions.forEach(sub => sub.unsubscribe());
 
@@ -368,6 +430,11 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           if (this.layoutInitialized) {
             this.layoutManager.Destroy();
             this.layoutInitialized = false;
+            // Reset restoration flag too — otherwise a subsequent flip back to multi-tab
+            // mode will let the Configuration subscription take the "restoration-complete"
+            // branch and try to mutate a non-existent layout, producing
+            // "GoldenLayoutManager: Layout not initialized" on the next AddTab.
+            this.layoutRestorationComplete = false;
           }
           // Load the active tab's content directly (now container will exist)
           this.loadSingleResourceContent();
@@ -406,6 +473,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // Reset layout initialized flag since we're switching from single-resource mode
         // The gl-container is a new DOM element (due to @if), so we need fresh initialization
         this.layoutInitialized = false;
+        // Restoration is also undone — see comment above on the single-resource branch.
+        this.layoutRestorationComplete = false;
 
         // Initialize Golden Layout - use setTimeout to allow the template to update first
         // and ensure the gl-container div exists in the DOM
@@ -491,9 +560,22 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
 
-      // Restore saved queryParams to the tab config so the URL reflects
-      // the component's preserved state (e.g., selected conversation, collection drill-down).
-      if (cached.savedQueryParams) {
+      // Reconcile the cached component's preserved queryParams with any INCOMING navigation
+      // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
+      // conversation via SwitchToApp before we got here).
+      //
+      // - If the tab has incoming queryParams, those are the source of truth: keep them and
+      //   sync the cache's snapshot to match. The component's reactive query-param subscription
+      //   (alive while detached) delivers them, so it switches to the requested state. Restoring
+      //   savedQueryParams here instead would clobber the navigation intent — the bug where two
+      //   conversation pins both reopened whatever chat was already cached.
+      // - Only when there's NO incoming intent (a plain tab re-focus) do we restore the
+      //   component's own preserved params so the URL reflects its retained state.
+      const incomingQP = activeTab.configuration?.['queryParams'] as Record<string, string> | undefined;
+      const hasIncomingQP = incomingQP != null && Object.keys(incomingQP).length > 0;
+      if (hasIncomingQP) {
+        cached.savedQueryParams = { ...incomingQP };
+      } else if (cached.savedQueryParams) {
         this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
           queryParams: cached.savedQueryParams
         });
@@ -518,6 +600,16 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
     if (!resourceReg) {
       LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+      // Show the user something actionable instead of an empty pane, and unblock the
+      // shell's first-load gate so the loading overlay clears.
+      this.cleanupSingleResourceComponent();
+      this.renderMissingResourceError(container, driverClass, {
+        mode: 'single-resource',
+        appId: activeTab.applicationId,
+        tabId: activeTab.id,
+        resourceType: resourceData.ResourceType,
+        recordId: resourceData.ResourceRecordID || null,
+      });
       return;
     }
 
@@ -779,6 +871,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
 
       if (!resourceReg) {
         LogError(`Unable to find resource registration for driver class: ${driverClass}`);
+        // Render an in-tab error instead of leaving the pane blank. The container was
+        // already cleared above on line 754, so we just append the error UI here.
+        this.renderMissingResourceError(glContainer.element, driverClass, {
+          mode: 'multi-tab',
+          appId: tab.applicationId,
+          tabId,
+          resourceType: resourceData.ResourceType,
+          recordId: resourceData.ResourceRecordID || null,
+        });
         return;
       }
 
@@ -873,8 +974,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName
-      const tempInstance = new resourceReg.SubClass() as BaseResourceComponent;
+      // Create a lightweight instance just to call GetResourceDisplayName.
+      // Must run inside an injection context because BaseResourceComponent
+      // uses inject() field initializers (e.g. NavigationService).
+      const tempInstance = runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
@@ -1105,6 +1211,15 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    * Sync tabs with configuration changes
    */
   private syncTabsWithConfiguration(tabs: WorkspaceTab[]): void {
+    // Defense in depth: skip syncing if Golden Layout isn't actually live. This can
+    // happen when the visibility-mode transition has flipped `useSingleResourceMode`
+    // to false and scheduled `initializeGoldenLayout(true)` via setTimeout(0), but the
+    // Configuration subscription fires in the same tick before that init runs. The
+    // deferred init will rebuild tabs from config via forceCreateTabs anyway.
+    if (!this.layoutInitialized || !this.layoutManager.IsInitialized) {
+      return;
+    }
+
     // Get existing tab IDs from Golden Layout
     const existingTabIds = this.layoutManager.GetAllTabIds();
 
@@ -1413,5 +1528,70 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   private emitFirstLoadCompleteOnce(): void {
     this.firstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
+  }
+
+  /**
+   * Render an inline "missing resource component" error into a host element when
+   * ClassFactory has no registration for the requested driver class. Used when a
+   * dashboard / nav item references a component class that isn't built into this
+   * Angular bundle (e.g. an app-specific dashboard defined outside the running app).
+   *
+   * Logs a structured console.error with context for developers, and ensures the
+   * shell's first-resource-load gate is satisfied so the loading overlay clears.
+   */
+  private renderMissingResourceError(host: HTMLElement, driverClass: string, context: Record<string, unknown>): void {
+    console.error(
+      `[TabContainer] No resource component registered for driver class "${driverClass}".\n` +
+        `MemberJunction's ClassFactory has no @RegisterClass(BaseResourceComponent, '${driverClass}') in this build. ` +
+        `Either the package providing this resource is not included in the running Explorer bundle, ` +
+        `the registration manifest is stale (run \`npm run mj:manifest\`), or the driver class name in metadata is wrong.\n` +
+        `Context: ${JSON.stringify(context, null, 2)}`
+    );
+
+    // Clear the host before injecting the error UI.
+    host.innerHTML = '';
+    const wrapper = document.createElement('div');
+    wrapper.className = 'tab-content-wrapper missing-resource-error';
+    wrapper.style.cssText = 'width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 32px; box-sizing: border-box;';
+    wrapper.setAttribute('role', 'alert');
+
+    const card = document.createElement('div');
+    card.style.cssText = [
+      'max-width: 720px',
+      'width: 100%',
+      'padding: 32px',
+      'background: var(--mj-bg-surface)',
+      'border: 1px solid var(--mj-status-warning-border)',
+      'border-radius: 8px',
+      'text-align: center',
+      'color: var(--mj-text-primary)',
+      'font-family: inherit',
+    ].join(';');
+
+    const icon = document.createElement('div');
+    icon.innerHTML = '<i class="fa-solid fa-puzzle-piece"></i>';
+    icon.style.cssText = 'font-size: 32px; color: var(--mj-status-warning); margin-bottom: 12px;';
+
+    const title = document.createElement('h2');
+    title.textContent = 'This view isn’t available in the running build.';
+    title.style.cssText = 'font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--mj-status-warning-text);';
+
+    const detail = document.createElement('p');
+    detail.textContent = `No component is registered for driver class "${driverClass}". The Angular package that provides this view likely isn't bundled into this Explorer build.`;
+    detail.style.cssText = 'font-size: 14px; line-height: 1.5; color: var(--mj-text-secondary); margin: 0 0 12px 0;';
+
+    const hint = document.createElement('p');
+    hint.textContent = 'See browser console for technical details (driver class, application, nav item).';
+    hint.style.cssText = 'font-size: 12px; color: var(--mj-text-muted); margin: 0; font-style: italic;';
+
+    card.appendChild(icon);
+    card.appendChild(title);
+    card.appendChild(detail);
+    card.appendChild(hint);
+    wrapper.appendChild(card);
+    host.appendChild(wrapper);
+
+    // Unblock the shell's first-load gate so the loading overlay clears.
+    this.emitFirstLoadCompleteOnce();
   }
 }

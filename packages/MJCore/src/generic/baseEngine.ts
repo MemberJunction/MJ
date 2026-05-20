@@ -187,13 +187,24 @@ export interface RemoteInvalidatePayload {
     recordData?: string;
 }
 
+/**
+ * Tracks the load state and data for a single engine property (entity or dataset config).
+ */
+export interface EngineDataMapEntry {
+    entityName?: string;
+    datasetName?: string;
+    data: unknown[];
+    loadedSuccessfully: boolean;
+    errorMessage?: string;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[] }> = new Map();
+    private _dataMap: Map<string, EngineDataMapEntry> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
@@ -445,7 +456,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, contextUser);
+                await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
                 this._loaded = true;
@@ -711,11 +722,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
                 this.emitPropertyChange(config.PropertyName);
@@ -759,7 +770,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
                 }
@@ -1035,12 +1046,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
                         currentData[indexByKey] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', entity);
                     } else {
                         // Add the new entity to the array
                         currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', entity);
                     }
                 }
@@ -1054,13 +1065,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', entity);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
                         currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', entity);
                     }
                 }
@@ -1075,7 +1086,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (index >= 0) {
                 currentData.splice(index, 1);
-                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
         }
@@ -1137,8 +1148,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the updated timestamp from the entity
-        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+        // Get the updated timestamp from the entity and normalize to an ISO string.
+        // entity.Get returns Date|string|number|null depending on field hydration and the
+        // storage round-trip. The downstream cache and smart-cache-check protocol require
+        // an ISO string — without this normalization, a Date or numeric ms can leak into
+        // the GraphQL request as `cacheStatus.maxUpdatedAt` and crash the server's
+        // `new Date(...).toISOString()` with `RangeError: Invalid time value`.
+        const rawUpdatedAt = entity.Get('__mj_UpdatedAt') as Date | string | number | null;
+        const updatedAt = rawUpdatedAt
+            ? new Date(rawUpdatedAt).toISOString()
+            : new Date().toISOString();
 
         if (event.type === 'delete') {
             await LocalCacheManager.Instance.RemoveSingleEntity(
@@ -1204,16 +1223,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
+     *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
      */
-    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
-                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -1223,20 +1244,22 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads a single metadata configuration.
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        if (config.Type === 'dataset') 
-            return await this.LoadSingleDatasetConfig(config, contextUser);
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        if (config.Type === 'dataset')
+            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser);
-    }    
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache);
+    }
 
     /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
         const result = await rv.RunView({
@@ -1247,7 +1270,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
@@ -1264,7 +1288,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
             }
-            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results, loadedSuccessfully: true });
 
             // Notify listeners that this property's data has changed
             this.NotifyDataChange(config, result.Results);
@@ -1272,6 +1296,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        } else {
+            // Track the failure so consumers can detect partial load failures
+            this._dataMap.set(config.PropertyName, {
+                entityName: config.EntityName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: result.ErrorMessage
+            });
+            LogError(`BaseEngine: Failed to load ${config.EntityName} into ${config.PropertyName}: ${result.ErrorMessage}`);
         }
     }
 
@@ -1279,8 +1312,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
@@ -1293,7 +1327,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
                     _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
                     CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL
+                    CacheLocalTTL: c.CacheLocalTTL,
+                    BypassCache: bypassCache
                 };
             });
             const results = await rv.RunViews(viewConfigs, contextUser);
@@ -1319,12 +1354,24 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Handles the process of loading a single config of type 'dataset'.
-     * @param config 
-     * @param contextUser 
+     * @param config
+     * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
+     *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
+     *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
      */
-    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        // When bypassing cache, use GetDatasetByName with forceRefresh to skip all cache reads,
+        // then CacheDataset to store the fresh results for subsequent non-forced calls.
+        // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
+        let result: DatasetResultType;
+        if (bypassCache) {
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
+            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+        } else {
+            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        }
         if (!result) {
             LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
             return;
@@ -1354,7 +1401,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                 }
             }
-            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
@@ -1514,6 +1561,38 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     public get Loaded(): boolean {
         return this._loaded;
+    }
+
+    /**
+     * Returns true if the specified property loaded successfully during engine startup.
+     * Returns false if the property failed to load (e.g., RunView error) or was never loaded.
+     * Consumers can use this to detect partial load failures and trigger recovery.
+     */
+    public PropertyLoadedSuccessfully(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully ?? false;
+    }
+
+    /**
+     * Returns true if ALL configured properties loaded successfully.
+     * Useful as a quick health check after engine startup.
+     */
+    public get AllPropertiesLoadedSuccessfully(): boolean {
+        if (this._dataMap.size === 0) return false;
+        for (const entry of this._dataMap.values()) {
+            if (!entry.loadedSuccessfully) return false;
+        }
+        return true;
+    }
+
+    /**
+     * Returns a read-only snapshot of all engine property load states.
+     * Each entry maps a property name to its load status, including entity/dataset name,
+     * row count, success/failure flag, and error message if applicable.
+     * Used by dev tools for diagnostics and health monitoring.
+     */
+    public get DataMapEntries(): ReadonlyMap<string, EngineDataMapEntry> {
+        return this._dataMap;
     }
 
     /**

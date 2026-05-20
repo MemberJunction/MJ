@@ -7,6 +7,7 @@ import {
     FullTextSearchResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { dbDatabase } from '../../../Config/config';
 import { MSSQLConnection } from '../../../Config/db-connection';
@@ -21,9 +22,13 @@ const ssDialect = new SQLServerDialect();
  * Generates SQL Server-native DDL for views, stored procedures, triggers, indexes,
  * full-text search, permissions, and other database objects.
  *
- * This provider extracts the SQL Server-specific generation logic that was previously
- * hardcoded in SQLCodeGenBase, enabling the orchestrator to be database-agnostic.
+ * Registered with `MJGlobal.ClassFactory` against the canonical `'sqlserver'`
+ * platform key — `SQLCodeGenBase` resolves this provider via
+ * `ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)`.
+ * Downstream packages can subclass and re-register with higher priority to
+ * override codegen behavior — same extension hook every other MJ class uses.
  */
+@RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get Dialect(): SQLDialect {
@@ -172,14 +177,16 @@ ${whereClause}GO`;
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
             }
         } else {
-            // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
-            // filters them all out. Add them back manually here so the INSERT is valid. (The
-            // single-PK uniqueidentifier case is already handled by the branch above.)
-            if (entity.PrimaryKeys.length > 1) {
-                for (const k of entity.PrimaryKeys) {
-                    additionalFieldList += ',\n                [' + k.Name + ']';
-                    additionalValueList += ',\n                @' + k.CodeName;
-                }
+            // Composite PKs or single non-UUID PKs (e.g. string `Code` keys): the caller MUST
+            // supply the PK on INSERT (no IDENTITY, no UUID-with-default). Add ALL PKs to the
+            // additionalFieldList so they appear in the INSERT, and call generateInsertFieldString
+            // below with excludePrimaryKey=true so it does NOT also emit them — otherwise the
+            // INSERT would list the PK columns twice and SQL Server raises "The column name 'X'
+            // is specified more than once". This pairs with the excludePrimaryKey=true argument
+            // at the call sites at the bottom of this method.
+            for (const k of entity.PrimaryKeys) {
+                additionalFieldList += ',\n                [' + k.Name + ']';
+                additionalValueList += ',\n                @' + k.CodeName;
             }
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
@@ -207,11 +214,11 @@ BEGIN
     INSERT INTO
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '')}${additionalFieldList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '', true)}${additionalFieldList}
         )
     ${outputCode}VALUES
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '@')}${additionalValueList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}${additionalValueList}
         )`}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
@@ -725,7 +732,7 @@ GO
      * Includes primary key fields and all updateable fields, with proper
      * DECLARE statements, SELECT fields, FETCH INTO variables, and SP parameters.
      */
-    private buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+    private buildUpdateCursorParameters(entity: EntityInfo, fkField: EntityFieldInfo, prefix: string = ''): {
         declarations: string,
         selectFields: string,
         fetchInto: string,
@@ -768,8 +775,14 @@ GO
 
                 if (allParams !== '')
                     allParams += ', ';
-                // Use named parameters: @ParamName = @VariableValue
-                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
+
+                // Use the centralized buildExecParamForField() to generate EXEC
+                // params. For the FK field being cleared, pass clearValue=true so
+                // the tolerant update SP receives @FK_Clear = 1 and actually sets
+                // the column to NULL (instead of treating NULL as "leave unchanged").
+                const isFkBeingCleared = ef.Name === fkField.Name;
+                const paramParts = this.buildExecParamForField(ef, `@${varPrefix}_${ef.CodeName}`, isFkBeingCleared);
+                allParams += paramParts.join(', ');
             }
         }
 
@@ -1327,6 +1340,7 @@ NumberedRows AS (
                                    sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
+      sf.IsComputed,
       e.RelationshipDefaultDisplayType,
       e.Name EntityName,
       re.ID RelatedEntityID,

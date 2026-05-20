@@ -2,7 +2,8 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
-import { fromEvent, Subject, Subscription } from 'rxjs';
+import { fromEvent, Subject, Subscription, Observable } from 'rxjs';
+import { map, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from './base-resource-component';
 
@@ -244,32 +245,27 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Handle temporary tab preservation when forcing new tabs
-   * Rule: Only ONE tab should be temporary at a time
-   * When shift+clicking to force a new tab, pin the current active tab if it's temporary
+   * Returns whether the caller should use OpenTabForced (force-new path) or
+   * OpenTab (replace-temp path).
+   *
+   * Rule: only honor an explicit force-new request — from the user via
+   * shift+click, or from the caller via `options.forceNewTab`. We deliberately
+   * do NOT apply heuristics that auto-switch the workspace out of
+   * single-resource mode on cross-resource navigation. A previous version of
+   * this method tried to do that ("force new if single-resource + different
+   * resource") and it caused a regression: every plain hyperlink click on a
+   * record opened a new tab and dropped the user into multi-tab mode, even
+   * though they didn't ask for it. That violated the principle that mode
+   * transitions are user-driven (shift) or explicitly requested (options).
+   *
+   * If a particular caller really needs the parent context preserved when
+   * creating/navigating to a child resource (e.g. "+New" on a related-entity
+   * grid inside an open record), the caller should pass `forceNewTab: true`
+   * in `NavigationOptions`. That keeps intent explicit at the call site
+   * instead of buried in a global heuristic.
    */
-  private handleSingleResourceModeTransition(forceNew: boolean, newRequest: TabRequest): void {
-    if (!forceNew) {
-      return; // Normal navigation, not forcing new tab
-    }
-
-    const config = this.workspaceManager.GetConfiguration();
-
-    if (!config || !config.tabs || config.tabs.length === 0) {
-      return; // No tabs to preserve
-    }
-
-    // Find the currently active tab
-    const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
-    if (!activeTab) {
-      return; // No active tab
-    }
-
-    // If the active tab is NOT pinned (i.e., it's temporary), pin it to preserve it
-    // This maintains the "only one temporary tab" rule
-    if (!activeTab.isPinned) {
-      this.workspaceManager.TogglePin(activeTab.id);
-    }
+  private handleSingleResourceModeTransition(forceNew: boolean, _newRequest: TabRequest): boolean {
+    return forceNew;
   }
 
   /**
@@ -303,7 +299,7 @@ export class NavigationService implements OnDestroy {
    * Open a navigation item within an app
    */
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     // Get the app to find its name
     const app = this.appManager.GetAppById(appId);
@@ -333,7 +329,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     let tabId: string;
     if (forceNew) {
@@ -364,7 +360,7 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const recordId = recordPkey.ToURLSegment();
     const request: TabRequest = {
@@ -380,7 +376,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     let tabId: string;
     if (forceNew) {
@@ -403,7 +399,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -418,7 +414,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -438,7 +434,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -453,7 +449,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -473,7 +469,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -488,7 +484,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -509,7 +505,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -524,7 +520,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -545,7 +541,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const filterSuffix = extraFilter ? ' (Filtered)' : '';
     const request: TabRequest = {
@@ -563,7 +559,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -583,7 +579,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -598,7 +594,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -620,7 +616,7 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -637,7 +633,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -651,17 +647,17 @@ export class NavigationService implements OnDestroy {
    * This is the primary way to open search results from anywhere in the application.
    *
    * @param query The search query text
-   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param searchOptions Optional search-specific options (e.g., minRelevance, scopeIDs)
    * @param options Navigation options
    */
   public OpenSearch(
     query: string,
-    searchOptions?: { minRelevance?: number },
+    searchOptions?: { minRelevance?: number; scopeIDs?: string[] },
     options?: NavigationOptions
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const config: Record<string, unknown> = {
       resourceType: 'Search Results',
@@ -671,6 +667,9 @@ export class NavigationService implements OnDestroy {
     };
     if (searchOptions?.minRelevance != null) {
       config['MinRelevance'] = searchOptions.minRelevance;
+    }
+    if (searchOptions?.scopeIDs && searchOptions.scopeIDs.length > 0) {
+      config['ScopeIDs'] = searchOptions.scopeIDs;
     }
 
     const request: TabRequest = {
@@ -682,7 +681,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -746,8 +745,13 @@ export class NavigationService implements OnDestroy {
    * If the requested nav item already has an open tab, switches to that tab instead of creating a new one.
    * @param appId The application ID to switch to
    * @param navItemName Optional name of a nav item to open within the app. If provided, opens that nav item.
+   * @param queryParams Optional query params to apply to the target tab. Applied SYNCHRONOUSLY once the
+   *                    target tab is active — critical when navigating (e.g. from a Home pin) to an
+   *                    app whose resource component is cached: the params must be in the tab config
+   *                    BEFORE the tab-container reattaches the cached component, otherwise the cache
+   *                    restores its own (stale) saved params and the navigation intent is lost.
    */
-  async SwitchToApp(appId: string, navItemName?: string): Promise<void> {
+  async SwitchToApp(appId: string, navItemName?: string, queryParams?: Record<string, string | null>): Promise<void> {
     await this.appManager.SetActiveApp(appId);
 
     const app = this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
@@ -774,6 +778,14 @@ export class NavigationService implements OnDestroy {
         } else {
           // Open new tab for this nav item
           this.OpenNavItem(appId, navItem, app.GetColor());
+        }
+        // Apply the requested query params to whichever tab is now active — synchronously,
+        // so they're present before the (possibly cached) resource component reattaches.
+        if (queryParams && Object.keys(queryParams).length > 0) {
+          const targetTabId = this.workspaceManager.GetActiveTabId();
+          if (targetTabId) {
+            this.applyQueryParamsToTab(targetTabId, queryParams);
+          }
         }
         return;
       }
@@ -832,6 +844,39 @@ export class NavigationService implements OnDestroy {
    */
   NotifyQueryParamsChanged(tabId: string, params: Record<string, string>): void {
     this.queryParamChanged$.next({ TabId: tabId, Params: params });
+  }
+
+  /**
+   * Reactively observe the query params for a specific tab.
+   *
+   * Backed by the workspace BehaviorSubject, so a subscriber receives the current
+   * params *immediately* on subscribe AND every subsequent change — including the
+   * deep-link params that the ResourceResolver merges into the tab configuration on
+   * a cold/direct URL load.
+   *
+   * This is the race-free counterpart to {@link NotifyQueryParamsChanged} (a plain
+   * Subject that drops events fired before a component has subscribed). A resource
+   * component that mounts from workspace restoration can subscribe here and still
+   * pick up its initial deep-link state regardless of whether the params landed in
+   * the tab config before or after it mounted.
+   */
+  public ObserveTabQueryParams(tabId: string): Observable<Record<string, string>> {
+    return this.workspaceManager.Configuration.pipe(
+      map(config => {
+        const tab = config?.tabs?.find(t => t.id === tabId);
+        return (tab?.configuration?.['queryParams'] || {}) as Record<string, string>;
+      }),
+      distinctUntilChanged((a, b) => this.shallowParamsEqual(a, b))
+    );
+  }
+
+  private shallowParamsEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) {
+      return false;
+    }
+    return keysA.every(key => a[key] === b[key]);
   }
 
   /**

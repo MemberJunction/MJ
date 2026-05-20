@@ -236,15 +236,26 @@ export class DeclareDmlBlockRule implements IConversionRule {
       }
     }
 
+    // Use a tagged dollar-quote ($mj$) instead of the bare $$ delimiter.
+    // T-SQL Metadata_Sync output regularly stores raw JS source code (React
+    // component bodies, JS template literals) in NVARCHAR(MAX) variables. That
+    // source frequently contains literal `$$` (e.g. `**Total Revenue:** $${X}`
+    // — JS template-literal escape for a literal `$` followed by interpolation).
+    // With a bare $$ DO block, PG's parser sees the inner `$$` and prematurely
+    // terminates the dollar-quote, producing `syntax error at or near "{"` (or
+    // similar) at whatever follows. A tagged delimiter `$mj$` is unique enough
+    // that user-data collision is implausible and matches PG's documented
+    // recommendation for nested-dollar-quote scenarios. The body executes
+    // identically — only the parser sees the difference.
     const out: string[] = [];
-    out.push('DO $$');
+    out.push('DO $mj$');
     if (declareLines.length > 0) {
       out.push('DECLARE');
       out.push(...declareLines);
     }
     out.push('BEGIN');
     out.push(...bodyLines);
-    out.push('END $$;');
+    out.push('END $mj$;');
     return out.join('\n');
   }
 

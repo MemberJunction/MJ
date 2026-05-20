@@ -111,6 +111,15 @@ export class GoldenLayoutManager {
   private layout: GLVirtualLayout | null = null;
   private containerElement: HTMLElement | null = null;
 
+  /**
+   * True when Golden Layout has been initialized and not yet destroyed.
+   * Use this from external callers (e.g. tab-container) to avoid issuing
+   * AddTab/RemoveTab against a torn-down layout.
+   */
+  public get IsInitialized(): boolean {
+    return this.layout !== null;
+  }
+
   // Event subjects
   private tabShown$ = new Subject<TabShownEvent>();
   private tabClosed$ = new Subject<string>();

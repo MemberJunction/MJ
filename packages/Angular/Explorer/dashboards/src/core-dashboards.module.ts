@@ -1,7 +1,24 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDatepickerComponent, MJWindowComponent, MJWindowTitlebarComponent, MJDropdownComponent, MJComboboxComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDatepickerComponent,
+  MJWindowComponent,
+  MJWindowTitlebarComponent,
+  MJDropdownComponent,
+  MJComboboxComponent,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterChipComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -25,6 +42,19 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+// Developer Tools
+import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
+import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
+import { ClassRegistryInspectorComponent } from './DevTools/class-registry.component';
+import { LazyModuleStatusComponent } from './DevTools/lazy-module-status.component';
+import { SettingsExplorerComponent } from './DevTools/settings-explorer.component';
+import { EventMonitorComponent } from './DevTools/event-monitor.component';
+import { GraphQLConsoleComponent } from './DevTools/graphql-console.component';
+// Admin Containers
+import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
+import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
+import { AdminDataSchemaComponent } from './Admin/admin-data-schema.component';
+import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
 import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
@@ -59,6 +89,17 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
+    AppStateInspectorComponent,
+    LayoutInspectorComponent,
+    ClassRegistryInspectorComponent,
+    LazyModuleStatusComponent,
+    SettingsExplorerComponent,
+    EventMonitorComponent,
+    GraphQLConsoleComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminDataSchemaComponent,
+    AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
@@ -92,6 +133,16 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJWindowTitlebarComponent,
     MJDropdownComponent,
     MJComboboxComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterChipComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,
@@ -109,6 +160,17 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
     SystemDiagnosticsComponent,
+    AppStateInspectorComponent,
+    LayoutInspectorComponent,
+    ClassRegistryInspectorComponent,
+    LazyModuleStatusComponent,
+    SettingsExplorerComponent,
+    EventMonitorComponent,
+    GraphQLConsoleComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminDataSchemaComponent,
+    AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,

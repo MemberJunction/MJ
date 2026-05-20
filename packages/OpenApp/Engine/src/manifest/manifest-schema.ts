@@ -14,8 +14,8 @@ const semverRegex = /^\d+\.\d+\.\d+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?(\+[a-zA-Z0-
 /** App name: lowercase alphanumeric + hyphens, 3-64 chars */
 const appNameRegex = /^[a-z][a-z0-9-]{1,62}[a-z0-9]$/;
 
-/** SQL schema name: lowercase alphanumeric + underscores, 3-128 chars */
-const schemaNameRegex = /^_{0,2}[a-z][a-z0-9_]{1,126}[a-z0-9]$/;
+/** SQL schema name: alphanumeric + underscores, 3-128 chars (SQL Server is case-insensitive) */
+const schemaNameRegex = /^_{0,2}[a-zA-Z][a-zA-Z0-9_]{1,126}[a-zA-Z0-9]$/;
 
 /** Hex color: #RRGGBB */
 const hexColorRegex = /^#[0-9a-fA-F]{6}$/;
@@ -67,7 +67,7 @@ const packagesSchema = z.object({
 // ── Database Schema ───────────────────────────────────────
 
 const dbSchemaSchema = z.object({
-    name: z.string().regex(schemaNameRegex, 'Schema name must be lowercase alphanumeric + underscores, 3-128 chars. May start with up to two underscores.'),
+    name: z.string().regex(schemaNameRegex, 'Schema name must be alphanumeric + underscores, 3-128 chars. May start with up to two underscores.'),
     createIfNotExists: z.boolean().optional().default(true),
     /** npm package that exports the generated entity subclasses for this schema.
      *  Used by CodeGen to resolve per-schema imports. If omitted, the install

@@ -941,6 +941,196 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         });
     }
 
+    /** Reset only the popover filters — leave searchTerm (toolbar) untouched. */
+    public resetPopoverFilters(): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus: 'all',
+            connectionStatus: 'all',
+            toolStatus: 'all',
+            logStatus: 'all',
+            toolsServer: 'all',
+            toolsCategory: 'all',
+            favoritesOnly: false,
+            recentOnly: false
+        });
+    }
+
+    /** Tools-tab view-mode options for the shared <mj-view-toggle>. */
+    public readonly toolsViewOptions = [
+        { key: 'card', icon: 'fa-solid fa-grip', title: 'Card View' },
+        { key: 'list', icon: 'fa-solid fa-list', title: 'List View' },
+    ];
+
+    /** Tab config consumed by the centralized <mj-tab-nav>. */
+    public get mcpTabs(): import('@memberjunction/ng-ui-components').TabConfig[] {
+        return [
+            { key: 'servers',     label: 'Servers',     icon: 'fa-solid fa-server',     badge: this.servers.length },
+            { key: 'connections', label: 'Connections', icon: 'fa-solid fa-link',       badge: this.connections.length },
+            { key: 'tools',       label: 'Tools',       icon: 'fa-solid fa-wrench',     badge: this.tools.length },
+            { key: 'logs',        label: 'Logs',        icon: 'fa-solid fa-list-check', badge: this.executionLogs.length, badgeVariant: this.stats.failedExecutions > 0 ? 'error' : 'default' },
+        ];
+    }
+
+    /** Active filter count excluding searchTerm (surfaced separately via toolbar mj-page-search). */
+    public get ActiveFilterCount(): number {
+        const f = this.filters$.value;
+        let n = 0;
+        if (f.serverStatus && f.serverStatus !== 'all') n++;
+        if (f.connectionStatus && f.connectionStatus !== 'all') n++;
+        if (f.toolStatus && f.toolStatus !== 'all') n++;
+        if (f.logStatus && f.logStatus !== 'all') n++;
+        if (f.toolsServer && f.toolsServer !== 'all') n++;
+        if (f.toolsCategory && f.toolsCategory !== 'all') n++;
+        if (f.favoritesOnly) n++;
+        if (f.recentOnly) n++;
+        return n;
+    }
+
+    /** Values record consumed by the centralized <mj-filter-panel>, scoped to the current tab. */
+    public get mcpFilterValues(): Record<string, unknown> {
+        const f = this.filters$.value;
+        return {
+            serverStatus:     f.serverStatus,
+            connectionStatus: f.connectionStatus,
+            toolStatus:       f.toolStatus,
+            logStatus:        f.logStatus,
+            toolsServer:      f.toolsServer,
+            toolsCategory:    f.toolsCategory,
+            favoritesOnly:    f.favoritesOnly,
+            recentOnly:       f.recentOnly,
+        };
+    }
+
+    /** Field config built dynamically based on the active tab. */
+    public get mcpFilterFields(): import('@memberjunction/ng-ui-components').FilterFieldConfig[] {
+        const fields: import('@memberjunction/ng-ui-components').FilterFieldConfig[] = [];
+
+        if (this.ActiveTab === 'tools') {
+            fields.push({
+                key: 'toolsServer',
+                type: 'dropdown',
+                label: 'Server',
+                icon: 'fa-solid fa-server',
+                filterable: this.toolsAvailableServers.length > 10,
+                options: [
+                    { text: 'All Servers', value: 'all' },
+                    ...this.toolsAvailableServers.map(s => ({ text: s.Name, value: s.ID })),
+                ],
+            });
+            fields.push({
+                key: 'toolsCategory',
+                type: 'dropdown',
+                label: 'Category',
+                icon: 'fa-solid fa-tags',
+                filterable: this.toolsAvailableCategories.length > 10,
+                options: [
+                    { text: 'All Categories', value: 'all' },
+                    ...this.toolsAvailableCategories.map(c => ({ text: `${c.category} (${c.count})`, value: c.category })),
+                ],
+            });
+        }
+
+        // Per-tab status filter
+        if (this.ActiveTab === 'servers') {
+            fields.push({
+                key: 'serverStatus',
+                type: 'dropdown',
+                label: 'Server Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Inactive',     value: 'Inactive' },
+                ],
+            });
+        } else if (this.ActiveTab === 'connections') {
+            fields.push({
+                key: 'connectionStatus',
+                type: 'dropdown',
+                label: 'Connection Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Inactive',     value: 'Inactive' },
+                    { text: 'Error',        value: 'Error' },
+                ],
+            });
+        } else if (this.ActiveTab === 'tools') {
+            fields.push({
+                key: 'toolStatus',
+                type: 'dropdown',
+                label: 'Tool Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Active',       value: 'Active' },
+                    { text: 'Deprecated',   value: 'Deprecated' },
+                ],
+            });
+            // Boolean toggles as chips (active = true, all = false)
+            fields.push({
+                key: 'favoritesOnly',
+                type: 'chips',
+                label: 'Favorites',
+                icon: 'fa-solid fa-star',
+                chipOptions: [
+                    { text: 'All',             value: false },
+                    { text: 'Favorites only',  value: true, icon: 'fa-solid fa-star' },
+                ],
+            });
+            fields.push({
+                key: 'recentOnly',
+                type: 'chips',
+                label: 'Recency',
+                icon: 'fa-solid fa-clock-rotate-left',
+                chipOptions: [
+                    { text: 'All',                  value: false },
+                    { text: 'Recently used only',   value: true, icon: 'fa-solid fa-clock-rotate-left' },
+                ],
+            });
+        } else if (this.ActiveTab === 'logs') {
+            fields.push({
+                key: 'logStatus',
+                type: 'dropdown',
+                label: 'Log Status',
+                icon: 'fa-solid fa-circle-check',
+                options: [
+                    { text: 'All Statuses', value: 'all' },
+                    { text: 'Success',      value: 'Success' },
+                    { text: 'Error',        value: 'Error' },
+                    { text: 'Running',      value: 'Running' },
+                ],
+            });
+        }
+
+        return fields;
+    }
+
+    /** Receive updated values from <mj-filter-panel> and propagate to filters$. */
+    public onFilterValuesChange(values: Record<string, unknown>): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus:     (values['serverStatus']     as string) ?? current.serverStatus,
+            connectionStatus: (values['connectionStatus'] as string) ?? current.connectionStatus,
+            toolStatus:       (values['toolStatus']       as string) ?? current.toolStatus,
+            logStatus:        (values['logStatus']        as string) ?? current.logStatus,
+            toolsServer:      (values['toolsServer']      as string) ?? current.toolsServer,
+            toolsCategory:    (values['toolsCategory']    as string) ?? current.toolsCategory,
+            favoritesOnly:    (values['favoritesOnly']    as boolean) ?? false,
+            recentOnly:       (values['recentOnly']       as boolean) ?? false,
+        });
+    }
+
+    /** Update searchTerm from the toolbar mj-page-search. */
+    public onSearchTermChange(value: string): void {
+        const current = this.filters$.value;
+        this.onFiltersChange({ ...current, searchTerm: value ?? '' });
+    }
+
     /**
      * Get the current filtered count based on active tab
      */
@@ -995,6 +1185,23 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         if (this.ActiveTab === tab) return;
 
         this.ActiveTab = tab;
+
+        // Clear filters that belong to OTHER tabs — they're not applicable here
+        // and would otherwise stay stuck in state (counted in the badge, hidden from
+        // the popover form). searchTerm is universal and preserved.
+        const current = this.filters$.value;
+        this.onFiltersChange({
+            ...current,
+            serverStatus:     'all',
+            connectionStatus: 'all',
+            toolStatus:       'all',
+            logStatus:        'all',
+            toolsServer:      'all',
+            toolsCategory:    'all',
+            favoritesOnly:    false,
+            recentOnly:       false,
+        });
+
         this.UpdateQueryParams({ tab: this.ActiveTab });
         this.cdr.detectChanges();
     }

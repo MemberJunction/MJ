@@ -1,59 +1,39 @@
-<div class="agent-requests-container">
+<mj-page-layout>
     <!-- Header -->
-    <div class="requests-header">
-        <div class="header-left">
-            <h2 class="page-title">
-                <i class="fa-solid fa-inbox"></i> Agent Requests
-                @if (PendingCount > 0) {
-                    <span class="pending-badge">{{ PendingCount }}</span>
-                }
-            </h2>
-        </div>
-        <div class="header-right">
-            <div class="search-box">
-                <i class="fa-solid fa-search search-icon"></i>
-                <input
-                    type="text"
-                    class="search-input"
-                    placeholder="Search requests..."
-                    [ngModel]="Filters.SearchTerm"
-                    (ngModelChange)="OnSearchChange($event)">
-            </div>
-        </div>
-    </div>
-
-    <!-- Filters -->
-    <div class="filter-bar">
-        <div class="filter-group">
-            <select class="filter-select" [(ngModel)]="Filters.Status" (ngModelChange)="OnFilterChange()">
-                <option value="">All Statuses</option>
-                @for (status of StatusOptions; track status) {
-                    <option [value]="status">{{ status }}</option>
-                }
-            </select>
-
-            <select class="filter-select" [(ngModel)]="Filters.RequestType" (ngModelChange)="OnFilterChange()">
-                <option value="">All Types</option>
-                @for (type of RequestTypes; track type.ID) {
-                    <option [value]="type.ID">{{ type.Name }}</option>
-                }
-            </select>
-
-            <select class="filter-select" [(ngModel)]="Filters.Priority" (ngModelChange)="OnFilterChange()">
-                <option value="">All Priorities</option>
-                @for (opt of PriorityOptions; track opt.Value) {
-                    <option [value]="opt.Value">{{ opt.Label }}</option>
-                }
-            </select>
-        </div>
-
-        @if (Filters.Status || Filters.RequestType || Filters.Priority || Filters.SearchTerm) {
-            <button class="clear-filters-btn" (click)="ClearFilters()">
-                <i class="fa-solid fa-times"></i> Clear Filters
-            </button>
+    <mj-page-header
+        Title="Agent Requests"
+        Icon="fa-solid fa-inbox">
+        @if (PendingCount > 0) {
+            <mj-stat-badge meta
+                Icon="fa-solid fa-hourglass-half"
+                [Count]="PendingCount"
+                Label="pending"
+                Variant="warning">
+            </mj-stat-badge>
         }
-    </div>
+        <div actions>
+            <mj-filter-popover
+                [ActiveCount]="ActiveFilterCount"
+                [ShowClearAll]="ActiveFilterCount > 0"
+                (ClearAllRequested)="resetPopoverFilters()">
+                <mj-filter-panel
+                    [Fields]="requestFilterFields"
+                    [Values]="requestFilterValues"
+                    (ValuesChange)="onFilterValuesChange($event)"
+                    (Reset)="resetPopoverFilters()">
+                </mj-filter-panel>
+            </mj-filter-popover>
+        </div>
+        <div toolbar>
+            <mj-page-search
+                Placeholder="Search requests..."
+                [Value]="Filters.SearchTerm"
+                (ValueChange)="OnSearchChange($event)">
+            </mj-page-search>
+        </div>
+    </mj-page-header>
 
+    <mj-page-body>
     <!-- Content -->
     @if (IsLoading) {
         <div class="loading-container">
@@ -120,7 +100,8 @@
             }
         </div>
     }
-</div>
+    </mj-page-body>
+</mj-page-layout>
 
 <!-- Agent Request Detail Panel -->
 @if (ShowRequestPanel && SelectedRequest) {

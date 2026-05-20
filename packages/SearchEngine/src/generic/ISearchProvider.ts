@@ -12,8 +12,23 @@
  * @module @memberjunction/search-engine
  */
 
-import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { SearchSource, SearchFilters, SearchResultItem } from './search.types';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints } from './search.types';
+
+/**
+ * Lightweight catalog entry for a registered search provider, returned by
+ * `BaseSearchProvider.GetAvailableProviders()`. Designed for UI dropdown
+ * population on the SearchScope form (P5.5) — a single call gives the form
+ * everything it needs to render selectable options without separately
+ * instantiating each registered class.
+ */
+export interface RegisteredSearchProviderInfo {
+    /** ClassFactory registration key — the SearchProvider.DriverClass column value */
+    DriverClass: string;
+    /** SearchSource the provider implements ('vector' | 'fulltext' | 'entity' | 'storage') */
+    SourceType: SearchSource;
+}
 
 /**
  * Configuration passed to a search provider during initialization.
@@ -102,18 +117,68 @@ export abstract class BaseSearchProvider {
     /**
      * Execute a search and return result items with scores.
      *
+     * When `scopeConstraints` is provided, the provider MUST:
+     * 1. Narrow its retrieval surface to match the constraint (e.g., VectorSearchProvider
+     *    queries only the listed ExternalIndexes with matching IndexType, EntitySearchProvider
+     *    queries only the listed Entities, StorageSearchProvider queries only the listed
+     *    accounts/folders, 3rd-party providers filter by their own IndexType).
+     * 2. Apply any rendered `MetadataFilter` / `ExtraFilter` / `UserSearchString` /
+     *    `FolderPath` values as native filters.
+     * 3. Implement permission push-down (see Section 3.6 of
+     *    plans/search-scopes-rag-plus.md) — never surface results the `contextUser` cannot see.
+     * 4. Honor `scopeConstraints.QueryTransforms` when a per-provider rewrite is supplied —
+     *    look up by your `SourceType` or provider-specific key and use that string in place
+     *    of the raw `query`.
+     *
+     * When `scopeConstraints` is undefined, the provider runs unconstrained (backward
+     * compatible pre-scope behavior).
+     *
      * @param query - The search query text
      * @param topK - Maximum number of results to retrieve
      * @param filters - Optional filters to narrow results
      * @param contextUser - The user performing the search
+     * @param scopeConstraints - Optional per-scope constraint set, pre-rendered with SearchContext values
      * @returns Scored result items from this provider
      */
     abstract Search(
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]>;
+
+    /**
+     * Enumerate every search provider currently registered with ClassFactory under
+     * `BaseSearchProvider`. Designed for the SearchScope form's provider dropdown
+     * (P5.5) — populates the dropdown from this single call rather than hardcoding
+     * a list, so any ClassFactory-registered provider (including third-party ones)
+     * shows up automatically.
+     *
+     * Each entry includes the driver-class registration key (writes into
+     * `SearchProvider.DriverClass`) and the SourceType the provider implements.
+     * Sorted by DriverClass for stable UI ordering.
+     */
+    public static GetAvailableProviders(): RegisteredSearchProviderInfo[] {
+        const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseSearchProvider);
+        const seen = new Set<string>();
+        const out: RegisteredSearchProviderInfo[] = [];
+        for (const reg of registrations) {
+            const key = reg.Key;
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            try {
+                const Ctor = reg.SubClass as unknown as new () => BaseSearchProvider;
+                const instance = new Ctor();
+                out.push({ DriverClass: key, SourceType: instance.SourceType });
+            } catch (err) {
+                LogError(`BaseSearchProvider.GetAvailableProviders: could not introspect "${key}" — ${err instanceof Error ? err.message : String(err)}`);
+                out.push({ DriverClass: key, SourceType: 'entity' });
+            }
+        }
+        out.sort((a, b) => a.DriverClass.localeCompare(b.DriverClass));
+        return out;
+    }
 }
 
 /**

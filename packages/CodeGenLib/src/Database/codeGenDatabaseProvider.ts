@@ -98,6 +98,14 @@ export interface CodeGenTransaction {
  */
 export interface CodeGenConnection {
     /**
+     * The SQL dialect for this connection's platform. Exposes identifier quoting,
+     * timestamp expressions, etc. — used by callers (e.g. validator-function
+     * emission in `EntitySubClassGeneratorBase`) that need to author dialect-aware
+     * SQL but don't have access to a `CodeGenDatabaseProvider` instance.
+     */
+    readonly Dialect: SQLDialect;
+
+    /**
      * Executes a SQL query without parameters.
      * @param sql The SQL statement to execute.
      * @returns The query result with a `recordset` array.
@@ -231,6 +239,41 @@ export abstract class CodeGenDatabaseProvider {
      * The database platform key (e.g., 'sqlserver', 'postgresql').
      */
     abstract get PlatformKey(): DatabasePlatform;
+
+    /**
+     * Whether this dialect can handle a base view that LEFT-JOINs itself to read
+     * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
+     * `RestoredFromID` virtual NameField lookup).
+     *
+     * Default: `false`. No shipped provider currently supports this pattern:
+     * - PostgreSQL: `CREATE OR REPLACE VIEW` resolves view names against catalog
+     *   state at parse time, so a self-reference fails with `42P01
+     *   undefined_table`. A `CREATE OR REPLACE` retry against a NULL-typed stub
+     *   then fails with `cannot change data type of view column ... from text
+     *   to character varying(N)` because PG enforces strict column-type compat.
+     * - SQL Server: the base view emitter uses `DROP VIEW` then `CREATE VIEW`,
+     *   and SQL Server resolves view-body references at parse/bind time — there
+     *   is no deferred name resolution for view bodies the way there is for
+     *   stored procedures. After the DROP, the post-DROP self-reference fails
+     *   with error 208 "Invalid object name".
+     *
+     * With the default of `false`, `sql_codegen.ts` skips the self-virtual-
+     * NameField join entirely for self-FK + virtual-NameField cases. The trade-
+     * off: the corresponding virtual lookup column (e.g. `RestoredFrom` on
+     * `vwRecordChanges`, or `Parent` on a `vwTags`-style view if the Name Field
+     * were computed) is not emitted on the base view. Matches the baseline-
+     * shipped view shapes.
+     *
+     * Subclasses can override to return `true` if a future dialect (or a
+     * provider that switches to a different emit pattern, e.g. stub-then-alter)
+     * can support the self-reference. The fix for the underlying conflation
+     * between SQL Server computed columns and view-only columns under
+     * `IsVirtual = 1` would let the join target the base table instead,
+     * removing the need for this capability flag entirely.
+     */
+    canSelfJoinViewForVirtualNameField(): boolean {
+        return false;
+    }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
@@ -373,6 +416,35 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Builds the EXEC parameter fragment(s) for a single field when calling a
+     * tolerant update SP. Returns an array of `@ParamName = value` strings.
+     *
+     * For most fields this is just `['@FieldName = @variable']`. But when
+     * `clearValue` is true and the field has a `_Clear` companion (see
+     * {@link needsClearCompanion}), an additional `@FieldName_Clear = 1` is
+     * prepended so the tolerant SP actually sets the column to NULL instead
+     * of treating the NULL parameter as "leave unchanged".
+     *
+     * **This is the single source of truth for the calling convention of
+     * tolerant update SPs.** All codepaths that generate EXEC calls to
+     * spUpdate — cascade-update cursors, future SP-to-SP calls, etc. —
+     * should use this method to stay in sync with the SP declaration logic
+     * in {@link generateCRUDParamString}.
+     *
+     * @param ef         The entity field being passed
+     * @param valueExpr  The SQL expression for the value (e.g. `@prefixed_var`)
+     * @param clearValue Whether this field is being explicitly set to NULL
+     */
+    protected buildExecParamForField(ef: EntityFieldInfo, valueExpr: string, clearValue: boolean = false): string[] {
+        const parts: string[] = [];
+        if (clearValue && this.needsClearCompanion(ef)) {
+            parts.push(`@${ef.CodeName}_Clear = 1`);
+        }
+        parts.push(`@${ef.CodeName} = ${valueExpr}`);
+        return parts;
+    }
+
+    /**
      * Returns true when this field should appear in the parameter list of
      * a CRUD routine for the given operation (`isUpdate` true → spUpdate,
      * false → spCreate). Pure decision logic shared across all dialects:
@@ -380,16 +452,15 @@ export abstract class CodeGenDatabaseProvider {
      * on create, etc. Subclasses that need additional dialect-specific
      * exclusion criteria can override.
      */
+    /**
+     * Delegates to {@link EntityFieldInfo.IsSPParameter} — the single source
+     * of truth for whether a field appears as a parameter in `spCreate` /
+     * `spUpdate`. Runtime data providers consume the same predicate so the
+     * SP signature emitted here and the EXEC argument list built at save
+     * time always agree.
+     */
     protected shouldIncludeFieldInParams(ef: EntityFieldInfo, isUpdate: boolean): boolean {
-        const autoGeneratedPrimaryKey = ef.AutoIncrement;
-        if (ef.IsVirtual) return false;
-        if (ef.IsSpecialDateField) return false;
-        if (ef.IsPrimaryKey) {
-            // PK on update: always included. On create: included only if NOT auto-increment.
-            return isUpdate || !autoGeneratedPrimaryKey;
-        }
-        // Non-PK: must be writable via API.
-        return ef.AllowUpdateAPI;
+        return ef.IsSPParameter(isUpdate);
     }
 
     /**
@@ -468,7 +539,7 @@ export abstract class CodeGenDatabaseProvider {
             // _Clear companion is emitted immediately before its main parameter
             // for nullable columns whose database default is non-NULL.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} bit${dialect.ParameterDefault('0')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
             }
 
             const defaultClause = this.isParamRequired(ef, isUpdate) ? '' : nullDefault;
@@ -518,11 +589,19 @@ export abstract class CodeGenDatabaseProvider {
         const usingParameterPrefix = !!prefix && prefix.length > 0;
         const parts: string[] = [];
         for (const ef of entityFields) {
+            // A caller-supplied PK is one the caller MUST provide on INSERT — i.e. a PK
+            // that isn't auto-generated (no IDENTITY, no UUID-with-default) and that the
+            // caller isn't explicitly excluding via excludePrimaryKey=true. This covers
+            // composite PKs and single non-UUID PKs (e.g. string `Code` keys). Without
+            // this exception, the !AllowUpdateAPI clause below silently strips these
+            // out — the metadata discovery query hardcodes `AllowUpdateAPI=0` for every
+            // PK row — and the generated INSERT becomes invalid.
+            const isCallerSuppliedPK = ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !excludePrimaryKey;
             if (
                 (excludePrimaryKey && ef.IsPrimaryKey) ||
                 (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
                 ef.IsVirtual ||
-                !ef.AllowUpdateAPI ||
+                (!ef.AllowUpdateAPI && !isCallerSuppliedPK) ||
                 ef.AutoIncrement
             ) {
                 continue;
@@ -558,7 +637,7 @@ export abstract class CodeGenDatabaseProvider {
                 // Nullable with non-NULL default: _Clear companion CASE
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
+                parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
             } else {
                 // Plain pass-through (PKs, plain nullables, non-defaulted required fields)
                 parts.push(paramRef);
@@ -600,7 +679,7 @@ export abstract class CodeGenDatabaseProvider {
             const paramRef = dialect.ParameterRef(ef.CodeName);
             if (this.needsClearCompanion(ef)) {
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`${colRef} = CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
+                parts.push(`${colRef} = CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
             } else {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }

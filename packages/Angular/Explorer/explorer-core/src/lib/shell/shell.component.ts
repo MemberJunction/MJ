@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -22,8 +22,9 @@ import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
-import { SettingsDialogService } from './services/settings-dialog.service';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
+import { ProfileDialogService } from './services/profile-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -32,6 +33,7 @@ import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entitie
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -81,6 +83,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -112,7 +117,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -158,8 +167,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
-    private settingsDialogService: SettingsDialogService,
     private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
+    private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
@@ -433,6 +443,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
           this.applyUserAvatar(userEntity);
+        }
+      })
+    );
+
+    // Listen for tenant context changes (e.g., BCSaaS org switching).
+    // Two phases:
+    //   'start' (eventCode TenantChanging) — show loading screen immediately
+    //   'complete' (eventCode TenantChanged) — reload tabs and hide loading screen
+    this.subscriptions.push(
+      MJGlobal.Instance.GetEventListener(false).subscribe(async event => {
+        if (event.event === MJEventType.TenantChanged) {
+          if (event.eventCode === 'TenantChanging') {
+            this.currentLoadingText = 'Switching organization...';
+            this.loading = true;
+            this.cdr.detectChanges();
+          } else if (event.eventCode === 'TenantChanged' && this.tabContainerRef) {
+            try {
+              await this.tabContainerRef.ReloadAllTabs();
+            } finally {
+              this.loading = false;
+              this.cdr.detectChanges();
+            }
+          }
         }
       })
     );
@@ -1951,7 +1984,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
       pinService: this.homePinService,
-      openSettings: () => this.openSettingsDialog(),
+      // Legacy hook retained for plugin compatibility — no-op now that the
+      // multi-tab Settings dialog has been replaced by the Identity Card flow.
+      openSettings: () => { /* deprecated; profile menu item now emits 'profile' */ },
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
@@ -2012,12 +2047,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const result = await this.userMenu.HandleItemClick(itemId);
 
     // Handle special signals from menu handlers
-    if (result.message === 'toggle-dev-mode') {
-      await this.developerModeService.Toggle();
-      // Menu will refresh via the subscription above
-      return;
-    }
-
     if (result.message?.startsWith('select-theme-')) {
       const themeId = result.message.substring('select-theme-'.length);
       await this.themeService.SetTheme(themeId);
@@ -2046,8 +2075,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      await this.handlePinToHome();
-      this.hidePinProgress();
+      try {
+        await this.handlePinToHome();
+      } catch (err) {
+        LogError(err);
+      } finally {
+        // Always clear the overlay — otherwise a failure (or a slow thumbnail
+        // capture) would leave the "Pinning..." spinner stuck on screen.
+        this.hidePinProgress();
+      }
       return;
     }
 
@@ -2060,6 +2096,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (result.message === 'submit-feedback') {
       this.userMenuVisible = false;
       this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
+      return;
+    }
+
+    if (result.message === 'profile') {
+      this.userMenuVisible = false;
+      this.profileDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 
@@ -2109,20 +2163,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return element as UserMenuItem;
   }
 
-  /**
-   * Open the settings dialog
-   */
-  private openSettingsDialog(): void {
-    this.settingsDialogService.open(this.viewContainerRef);
-  }
-
-  /**
-   * Open Settings in a full-screen modal dialog
-   */
-  onSettings(): void {
-    this.userMenuVisible = false;
-    this.openSettingsDialog();
-  }
 
   /**
    * Pin the currently active resource to the Home dashboard
@@ -2174,8 +2214,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     });
 
     if (added) {
-      this.showPinProgress(`Capturing preview for "${displayName}"...`);
-      await this.captureAndAttachThumbnail(activeTab, resourceType);
+      // Capture the preview in the BACKGROUND — do not block pin completion (and the
+      // "Pinning..." overlay) on it. The thumbnail is purely decorative, and capture can
+      // be expensive for heavy resources (e.g. the Data Explorer's large grid/map DOM,
+      // where html-to-image clones the whole tree synchronously). The pin already exists
+      // the moment AddPin() returns, so let the overlay clear immediately.
+      void this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${activeTab.title}" is already pinned to Home`, 'info', 3000
@@ -2561,7 +2605,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
           const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
+          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
+          if (minRelevance) opts.minRelevance = minRelevance;
+          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
+          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
       }
   }
 

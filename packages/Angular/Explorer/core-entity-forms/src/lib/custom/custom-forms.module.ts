@@ -1,6 +1,7 @@
 import { NgModule } from "@angular/core";
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { DragDropModule } from '@angular/cdk/drag-drop';
 import { MJButtonDirective, MJAccordionPanelComponent, MJAccordionTitleDirective, MJDropdownComponent, MJComboboxComponent, MJSwitchComponent, MJDialogComponent, MJDialogTitlebarComponent, MJDialogActionsComponent, MJNumericInputComponent, MJWindowComponent, MJWindowTitlebarComponent, MJProgressBarComponent } from '@memberjunction/ng-ui-components';
 import { AngularSplitModule } from 'angular-split';
 import { AgGridModule } from 'ag-grid-angular';
@@ -65,6 +66,9 @@ import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.comp
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
 import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
+import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
+import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
+import { SearchModule } from "@memberjunction/ng-search";
 
 @NgModule({
     declarations: [
@@ -108,11 +112,14 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         EntityLinkPillComponent,
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
     ],
     imports: [
         CommonModule,
         FormsModule,
         ReactiveFormsModule,
+        DragDropModule,
         AgGridModule,
         MJButtonDirective,
         MJAccordionPanelComponent,
@@ -146,7 +153,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MarkdownModule,
         NgTreesModule,
         AngularSplitModule,
-        VersionsModule
+        VersionsModule,
+        SearchModule
     ],
     exports: [
         MJEntityFormComponentExtended,
@@ -174,6 +182,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         EntityLinkPillComponent,
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
         ActionsModule
     ],
     providers: [

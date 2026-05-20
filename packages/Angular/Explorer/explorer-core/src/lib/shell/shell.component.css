@@ -437,13 +437,27 @@ mj-tab-container ::ng-deep .lm_stack {
 }
 
 .shell-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
   padding-bottom: 15vh;
   background: var(--mj-bg-page);
+}
+
+.loading-version {
+  margin-top: var(--mj-space-8, 24px);
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  letter-spacing: 0.4px;
+  opacity: 0.6;
+  user-select: none;
 }
 
 /* Loading Recovery Reset Panel */
