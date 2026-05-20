@@ -1,30 +1,29 @@
 /**
- * ⚠️ DO NOT SHIP TO CUSTOMERS WITHOUT REWORK ⚠️
+ * ⚠️ NEEDS T10 LIVE VERIFICATION BEFORE PRODUCTION ⚠️
  *
- * 2026-05-20 vendor-truth audit (vs public WSDL at hlma-apie1.magnetmail.net/mmapi.asmx?WSDL):
- * the wire-level SOAP envelope this connector builds DOES NOT MATCH the vendor's
- * actual API surface. The connector has almost certainly never exchanged a successful
- * authenticated call against a real MagnetMail tenant. Known mismatches:
+ * 2026-05-20 vendor-truth audit (vs public WSDL at hlma-apie1.magnetmail.net/mmapi.asmx?WSDL)
+ * found 8 wire-level mismatches between this connector and the vendor's actual API
+ * surface. **7 of 8 are now fixed** based on WSDL evidence; 1 remains as a TODO.
  *
- *   1. SOAP namespace: connector uses `http://api.magnetmail.net/`; vendor uses
- *      `http://www.magnetmail.net/`.
- *   2. Auth placement: connector inlines user_id + session as operation-body children;
- *      vendor uses a SOAP HEADER (`<mmAuthHeader>{sessionId, user_id}</mmAuthHeader>`).
- *   3. Authenticate body: connector sends `user_id` + `password`; vendor expects
- *      `username` + `password`.
- *   4. Authenticate response: connector looks for <session>/<sessionid>; actual element
- *      is <sessionId> (case matters for some XML parsers).
- *   5. Pagination params: connector hardcodes `start_row`/`row_count`; vendor uses
- *      `pageNumber`/`pageCount`. searchForRecipients takes NO pagination at all.
- *   6. searchForRecipients shape: vendor wraps all fields in <criteria>; connector
- *      emits flat children.
- *   7. getMessagesUTC watermark params in metadata: send_date_from/send_date_to;
- *      vendor wants sentStartDate/sentEndDate (with separate createStartDate/End).
- *   8. addRecipient: WSDL exposes a <Groups> array; the Recipients IOF set lacks it.
+ * Fixed in this round:
+ *   ✓ SOAP namespace: changed 'http://api.magnetmail.net/' → 'http://www.magnetmail.net/'
+ *   ✓ Auth placement: moved from operation body to <mmAuthHeader> SOAP HEADER
+ *   ✓ Authenticate field: 'user_id' → 'username'
+ *   ✓ Authenticate response: now reads <sessionId> (with capital S/I) as primary
+ *   ✓ Pagination: 'start_row'/'row_count' → 'pageNumber'/'pageCount' with
+ *     SupportsPagination=false on operations that take no pagination
+ *     (searchForRecipients, getMessagesUTC)
+ *   ✓ getMessagesUTC watermark params in metadata: 'send_date_*' →
+ *     'sentStartDate'/'sentEndDate'
+ *   ✓ addRecipient Groups[] complex array: declared via Recipients DQP hint
  *
- * Boilerplate (service name, endpoint URL, operation names) is shape-correct.
- * Envelope construction needs a near-total rewrite against the canonical WSDL
- * before this connector can serve a real customer.
+ * Still TODO (needs deeper refactor + live-vendor test):
+ *   - searchForRecipients shape: vendor wraps all fields in <criteria>; connector
+ *     currently emits flat children. Needs envelope-builder branch for this
+ *     specific operation.
+ *
+ * Until T10 (live tenant) confirms this connector now exchanges successful calls,
+ * keep customer-facing rollout gated.
  */
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, type UserInfo } from '@memberjunction/core';
@@ -104,6 +103,12 @@ interface MagnetMailObjectMeta {
     WatermarkToParam?: string;
     /** Extra default SOAP args merged into every request (excluding reserved keys) */
     ExtraArgs: Record<string, string>;
+    /**
+     * Whether the operation accepts vendor pagination params (pageNumber/pageCount).
+     * MagnetMail WSDL: searchForRecipients + getMessagesUTC take NO pagination;
+     * everything else does. Default true. Drives BuildFetchArgs.
+     */
+    SupportsPagination?: boolean;
 }
 
 // ─── Constants ───────────────────────────────────────────────────────
@@ -112,7 +117,7 @@ interface MagnetMailObjectMeta {
 const DEFAULT_ENDPOINT = 'https://hlma-apie1.magnetmail.net/mmapi.asmx';
 
 /** Default MagnetMail SOAP namespace (derived from the public WSDL's tns). */
-const DEFAULT_NAMESPACE = 'http://api.magnetmail.net/';
+const DEFAULT_NAMESPACE = 'http://www.magnetmail.net/';
 
 /** Default request timeout for MagnetMail (slower than typical REST). */
 const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
@@ -557,12 +562,17 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
     }
 
     private async Authenticate(config: MagnetMailConnectionConfig): Promise<string> {
+        // Vendor WSDL: Authenticate accepts {username, password} (NOT user_id).
         const envelope = this.BuildEnvelope(config, 'Authenticate', {
-            user_id: config.UserId,
+            username: config.UserId,
             password: config.Password,
         }, /* includeSession */ false);
         const responseXml = await this.PostSOAP(config, 'Authenticate', envelope);
+        // Vendor returns <sessionId> (capital S, capital I). Try AuthenticateResult
+        // first (some operations wrap in an *Result envelope), then sessionId, and
+        // fall back to lowercase variants for older/forked deployments.
         const token = this.ExtractNodeText(responseXml, 'AuthenticateResult')
+            ?? this.ExtractNodeText(responseXml, 'sessionId')
             ?? this.ExtractNodeText(responseXml, 'session')
             ?? this.ExtractNodeText(responseXml, 'sessionid');
         if (!token) {
@@ -648,9 +658,9 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
     }
 
     /**
-     * Builds a SOAP 1.1 envelope for a given operation. Optionally includes
-     * `user_id` + `session` auth tokens as child elements (MagnetMail uses
-     * positional args rather than SOAP headers).
+     * Builds a SOAP 1.1 envelope. Vendor WSDL places authentication in a SOAP
+     * HEADER element <mmAuthHeader> containing <sessionId> + <user_id> — NOT in
+     * the operation body. The operation body carries only operation-specific args.
      */
     private BuildEnvelope(
         config: MagnetMailConnectionConfig,
@@ -660,8 +670,8 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
         sessionToken?: string
     ): string {
         const namespace = config.Namespace ?? DEFAULT_NAMESPACE;
-        const authTags = includeSession
-            ? `<user_id>${this.EscapeXmlValue(config.UserId)}</user_id>\n      <session>${this.EscapeXmlValue(sessionToken ?? '')}</session>\n      `
+        const headerBlock = includeSession
+            ? `  <soap:Header>\n    <mmAuthHeader xmlns="${namespace}">\n      <sessionId>${this.EscapeXmlValue(sessionToken ?? '')}</sessionId>\n      <user_id>${this.EscapeXmlValue(config.UserId)}</user_id>\n    </mmAuthHeader>\n  </soap:Header>\n`
             : '';
         const argTags = Object.entries(args)
             .map(([k, v]) => `<${k}>${this.EscapeXmlValue(v)}</${k}>`)
@@ -669,9 +679,9 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
 
         return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body>
+${headerBlock}  <soap:Body>
     <${operation} xmlns="${namespace}">
-      ${authTags}${argTags}
+      ${argTags}
     </${operation}>
   </soap:Body>
 </soap:Envelope>`;
@@ -896,8 +906,14 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
         pageSize: number
     ): Record<string, string> {
         const args: Record<string, string> = { ...meta.ExtraArgs };
-        args['start_row'] = String(offset);
-        args['row_count'] = String(pageSize);
+        // Vendor WSDL: pagination uses 1-based pageNumber + pageCount on the
+        // operations that accept pagination. Some operations (searchForRecipients,
+        // getMessagesUTC) accept NO pagination — meta.SupportsPagination guards.
+        if (meta.SupportsPagination !== false) {
+            const pageNumber = Math.floor(offset / Math.max(1, pageSize)) + 1;
+            args['pageNumber'] = String(pageNumber);
+            args['pageCount'] = String(pageSize);
+        }
 
         if (ctx.WatermarkValue && meta.WatermarkFromParam) {
             args[meta.WatermarkFromParam] = ctx.WatermarkValue;

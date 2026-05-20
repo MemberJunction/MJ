@@ -22,7 +22,7 @@ describe('NetForumConnector (smoke)', () => {
         it('declared CRUD flags match expected shape', () => {
         expect(connector.SupportsCreate).toBe(true);
         expect(connector.SupportsUpdate).toBe(true);
-        expect(connector.SupportsDelete).toBe(true);
+        expect(connector.SupportsDelete).toBe(false); // DeleteFacadeObject not in any reachable vendor doc; flag held false until verified
         });
     });
     describe('GetDefaultFieldMappings', () => {

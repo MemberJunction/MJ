@@ -1,17 +1,36 @@
 /**
- * ⚠️ NEEDS LIVE-TENANT VERIFICATION BEFORE SHIPPING ⚠️
+ * 🚨 DO NOT USE — CROSS-WIRING CONFIRMED. NEEDS COMPLETE REWRITE. 🚨
  *
- * 2026-05-20 vendor-truth audit: the architectural foundations of this connector
- * MAY BE CROSS-WIRED FROM A DIFFERENT VENDOR. The 3-service split documented below
- * (vault / provisioning / gateway under {tenant}.personifycloud.com) matches the
- * REST API documented at docs.personify.be — which is **Personify.be**, a Belgian
- * CIAM / workforce-identity product, NOT Personify360 AMS by Personify Corp /
- * Higher Logic.
+ * 2026-05-20 deep vendor-truth audit (direct 404 probes against real
+ * Personify360 hosts) PROVED this connector's architecture is wrong. The paths
+ * documented below (`/vault/api/v1`, `/oauth2/token`, `/swagger`) all return
+ * 404 against actual Personify360 tenants like sir.personifycloud.com and
+ * asppa.personifycloud.com. Those paths are Personify.be's architecture
+ * (a Belgian CIAM/workforce-identity product), NOT Personify360 AMS.
  *
- * Personify Corp's Novus API surface is described in marketing materials as a
- * single Swagger-documented API; the canonical Swagger is customer-portal gated
- * and was not reachable during the audit. Without an authenticated tenant, this
- * connector's foundational claims are NOT verified against actual vendor truth.
+ * What real Personify360 actually exposes (per direct probing 2026-05-20):
+ *   - Host pattern: https://{tenant}.personifycloud.com/  ✓ (this is correct)
+ *   - Auth: OIDC IdentityServer at https://login.personifygo.com/{tenant}/
+ *     (stage: loginstage.personifygo.com/{tenant}/)
+ *   - OIDC discovery is publicly reachable + returns a valid spec with 200+
+ *     scopes including {TENANT}_EntityAPI and {TENANT}_QueryAPI
+ *   - Legacy data services: /PersonifyDataServices/PersonifyDataSIR.svc
+ *     (WCF/OData/SOAP)
+ *   - Object catalog: subsystem-prefixed UPPER_SNAKE_CASE — CUS_INDIVIDUAL,
+ *     MBR_MEMBERSHIP, ORD_ORDER_HEAD, MTG_EVENT_HEAD, etc.
+ *
+ * The Novus REST resource-server hostname and concrete endpoint paths remain
+ * customer-portal-gated. A complete rewrite needs:
+ *   1. OIDC discovery for runtime endpoint resolution
+ *   2. Default scopes: 'RoleApi {TENANT}_EntityAPI {TENANT}_QueryAPI'
+ *   3. Object catalog sourced from Personify360 7.7 help wiki subsystem schema
+ *   4. Either Novus Swagger from a customer or fall back to legacy
+ *      PersonifyDataServices SOAP/OData surface
+ *
+ * Until rewrite lands, this connector cannot connect to a real Personify360
+ * tenant. Keep customer-facing rollout fully gated.
+ *
+ * ── ORIGINAL (WRONG) ARCHITECTURE — left in source for reference only ──
  *
  * What the audit could NOT confirm against any public Personify360 doc:
  *   - Token endpoint path '/oauth2/token' on personifycloud.com

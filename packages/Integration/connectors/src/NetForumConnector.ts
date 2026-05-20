@@ -139,7 +139,34 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
     public override get IntegrationName(): string { return 'NetForum Enterprise'; }
     public override get SupportsCreate(): boolean { return true; }
     public override get SupportsUpdate(): boolean { return true; }
-    public override get SupportsDelete(): boolean { return true; }
+    // Vendor docs document InsertFacadeObject + UpdateFacadeObject; no DeleteFacadeObject
+    // appears in any reachable doc page. NetForum more commonly uses status flags ("soft
+    // delete") rather than hard delete. Keeping the flag false until DeleteFacadeObject
+    // is confirmed from a real vendor source — DeleteRecord returns a clean error.
+    public override get SupportsDelete(): boolean { return false; }
+
+    /**
+     * Resolves the canonical "last modified" column for a NetForum facade object.
+     * NetForum uses prefixed names (ind_last_updated_dt, evt_last_updated_dt, etc.)
+     * rather than a universal LastModifiedDate column. Falls back to the column
+     * declared in NF_OBJECTS, then to a generic 'last_updated_dt' if no static
+     * entry exists.
+     */
+    private ResolveWatermarkColumn(objectName: string): string {
+        const obj = NF_OBJECTS.find(o => o.Name.toLowerCase() === objectName.toLowerCase());
+        if (obj) {
+            // Look for an explicit timestamp field on the static catalog
+            const timestampField = obj.Fields.find(f =>
+                /datetime/i.test(f.Type) && /last|updated|modified/i.test(f.Name)
+            );
+            if (timestampField) return timestampField.Name;
+        }
+        // Fallback: NetForum's most common naming convention is <prefix>_last_updated_dt.
+        // Without a known prefix per object, return a generic name + warn.
+        console.warn(`[NetForum] No known watermark column for object '${objectName}'; using fallback 'last_updated_dt'`);
+        return 'last_updated_dt';
+    }
+
     public override GetIntegrationObjects(): IntegrationObjectInfo[] { return NF_OBJECTS; }
 
     public override GetActionGeneratorConfig() {
@@ -208,9 +235,32 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
             signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         });
         if (!response.ok) throw new Error(`NetForum auth failed: ${response.status}`);
-        const data = await response.json() as { Token: string };
-        this.tokenCache = { Token: data.Token, ExpiresAt: Date.now() + (3600 * 1000) };
-        return { Token: data.Token, TokenType: 'Bearer', Config: config } as NFAuthContext;
+
+        // Vendor doc canonical: the token is returned in the WWW-Authenticate
+        // RESPONSE HEADER, in the form: 'Bearer token = <guid>'. Older versions
+        // sometimes also place it in a JSON body; fall back to body parsing if
+        // the header isn't present.
+        let token: string | null = null;
+        const wwwAuth = response.headers.get('www-authenticate') || response.headers.get('WWW-Authenticate');
+        if (wwwAuth) {
+            // Match patterns like:  'Bearer token = abcd-1234'  or  'Bearer abcd-1234'
+            const match = wwwAuth.match(/Bearer\s+(?:token\s*=\s*)?([A-Fa-f0-9-]{8,})/i);
+            if (match) token = match[1];
+        }
+        if (!token) {
+            try {
+                const body = await response.json() as Record<string, unknown>;
+                token = (body['Token'] as string | undefined) ?? (body['token'] as string | undefined) ?? null;
+            } catch {
+                /* not JSON */
+            }
+        }
+        if (!token) {
+            throw new Error('NetForum auth response contained no token (checked WWW-Authenticate header and JSON body)');
+        }
+
+        this.tokenCache = { Token: token, ExpiresAt: Date.now() + (3600 * 1000) };
+        return { Token: token, TokenType: 'Bearer', Config: config } as NFAuthContext;
     }
 
     private async ParseConfig(ci: MJCompanyIntegrationEntity, cu?: UserInfo): Promise<NetForumConnectionConfig> {
@@ -262,7 +312,13 @@ export class NetForumConnector extends BaseRESTIntegrationConnector {
         // Use GetQuery for listing records
         let url = `${auth.Config.BaseURL}/xWeb/JSON/GetQuery?szObjectName=${ctx.ObjectName}&szColumnList=*`;
         if (ctx.WatermarkValue) {
-            url += `&szWhereClause=${encodeURIComponent(`LastModifiedDate >= '${ctx.WatermarkValue}'`)}`;
+            // NetForum facades each use their own prefixed last-modified column.
+            // 'LastModifiedDate' is NOT a vendor column. Look it up from the static
+            // catalog (NF_OBJECTS lists e.g. 'ind_last_updated_dt' for Individual,
+            // 'evt_last_updated_dt' for Event, etc.). Fall back to the connector's
+            // earlier-guessed name only when the catalog has no entry.
+            const wmCol = this.ResolveWatermarkColumn(ctx.ObjectName);
+            url += `&szWhereClause=${encodeURIComponent(`${wmCol} >= '${ctx.WatermarkValue}'`)}`;
         }
         const response = await this.MakeHTTPRequest(auth, url, 'GET', headers);
         if (response.Status < 200 || response.Status >= 300) throw new Error(`NetForum ${ctx.ObjectName} error: ${response.Status}`);

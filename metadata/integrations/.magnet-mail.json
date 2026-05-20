@@ -27,42 +27,386 @@
             "PaginationType": "Offset",
             "SupportsIncrementalSync": false,
             "SupportsWrite": true,
-            "DefaultQueryParams": {
-              "create_action": "addRecipient",
-              "update_action": "editRecipient",
-              "delete_action": "unsubscribeRecipients",
-              "detail_action": "getRecipientDetails"
-            },
+            "DefaultQueryParams": "{\"create_action\":\"addRecipient\",\"update_action\":\"editRecipient\",\"delete_action\":\"unsubscribeRecipients\",\"detail_action\":\"getRecipientDetails\",\"create_complex_groups\":\"Groups\"}",
             "Sequence": 1,
             "Status": "Active"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "MagnetMail recipient identifier (integer)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active", "Description": "Email address (de-facto natural key)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "first_name", "DisplayName": "First Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "last_name", "DisplayName": "Last Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Custom_Id", "DisplayName": "Custom ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active", "Description": "Caller-supplied custom identifier for cross-system matching." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "phone", "DisplayName": "Phone", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "fax", "DisplayName": "Fax", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "company", "DisplayName": "Company", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "address", "DisplayName": "Address", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 9, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "address_2", "DisplayName": "Address 2", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 10, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "city", "DisplayName": "City", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 11, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "state", "DisplayName": "State", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 12, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "zip", "DisplayName": "Zip", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 13, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "unsubscribed", "DisplayName": "Unsubscribed", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": true, "Sequence": 14, "Status": "Active", "Description": "Soft-delete flag. Set by unsubscribeRecipients." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email_send_suppress", "DisplayName": "Email Suppress", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": true, "Sequence": 15, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "fax_send_suppress", "DisplayName": "Fax Suppress", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": true, "Sequence": 16, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email_confirm", "DisplayName": "Email Confirmed", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": true, "Sequence": 17, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "text_only", "DisplayName": "Text Only", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": true, "Sequence": 18, "Status": "Active", "Description": "True when recipient prefers text-only emails." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "suppressed", "DisplayName": "Suppressed", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": true, "Sequence": 19, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "suppressed_date", "DisplayName": "Suppressed Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 20, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "custom1", "DisplayName": "Custom 1 (MM_1)", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 21, "Status": "Active", "Description": "MagnetMail custom slot MM_1 (positional)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "custom2", "DisplayName": "Custom 2 (MM_2)", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 22, "Status": "Active", "Description": "MagnetMail custom slot MM_2." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "custom3", "DisplayName": "Custom 3 (MM_3)", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 23, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "custom4", "DisplayName": "Custom 4 (MM_4)", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 24, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "custom5", "DisplayName": "Custom 5 (MM_5)", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 25, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active",
+                  "Description": "MagnetMail recipient identifier (integer)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active",
+                  "Description": "Email address (de-facto natural key)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "first_name",
+                  "DisplayName": "First Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "last_name",
+                  "DisplayName": "Last Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Custom_Id",
+                  "DisplayName": "Custom ID",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active",
+                  "Description": "Caller-supplied custom identifier for cross-system matching."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "phone",
+                  "DisplayName": "Phone",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "fax",
+                  "DisplayName": "Fax",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company",
+                  "DisplayName": "Company",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "address",
+                  "DisplayName": "Address",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "address_2",
+                  "DisplayName": "Address 2",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "city",
+                  "DisplayName": "City",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "state",
+                  "DisplayName": "State",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "zip",
+                  "DisplayName": "Zip",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "unsubscribed",
+                  "DisplayName": "Unsubscribed",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active",
+                  "Description": "Soft-delete flag. Set by unsubscribeRecipients."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_send_suppress",
+                  "DisplayName": "Email Suppress",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "fax_send_suppress",
+                  "DisplayName": "Fax Suppress",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_confirm",
+                  "DisplayName": "Email Confirmed",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 17,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "text_only",
+                  "DisplayName": "Text Only",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 18,
+                  "Status": "Active",
+                  "Description": "True when recipient prefers text-only emails."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "suppressed",
+                  "DisplayName": "Suppressed",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 19,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "suppressed_date",
+                  "DisplayName": "Suppressed Date",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 20,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom1",
+                  "DisplayName": "Custom 1 (MM_1)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 21,
+                  "Status": "Active",
+                  "Description": "MagnetMail custom slot MM_1 (positional)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom2",
+                  "DisplayName": "Custom 2 (MM_2)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 22,
+                  "Status": "Active",
+                  "Description": "MagnetMail custom slot MM_2."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom3",
+                  "DisplayName": "Custom 3 (MM_3)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 23,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom4",
+                  "DisplayName": "Custom 4 (MM_4)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 24,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom5",
+                  "DisplayName": "Custom 5 (MM_5)",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 25,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -90,14 +434,123 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "group_id", "DisplayName": "Group ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "MagnetMail group identifier." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "group_name", "DisplayName": "Group Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_id", "DisplayName": "Category ID", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active", "Description": "Associated group category (see GroupCategories)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "display_status", "DisplayName": "Display Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "subscription_group", "DisplayName": "Subscription Group", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "create_date", "DisplayName": "Create Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "update_date", "DisplayName": "Update Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "group_id",
+                  "DisplayName": "Group ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active",
+                  "Description": "MagnetMail group identifier."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "group_name",
+                  "DisplayName": "Group Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_id",
+                  "DisplayName": "Category ID",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active",
+                  "Description": "Associated group category (see GroupCategories)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "display_status",
+                  "DisplayName": "Display Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "subscription_group",
+                  "DisplayName": "Subscription Group",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "create_date",
+                  "DisplayName": "Create Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "update_date",
+                  "DisplayName": "Update Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -123,9 +576,50 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_id", "DisplayName": "Category ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_name", "DisplayName": "Category Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "parent_category_id", "DisplayName": "Parent Category ID", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active", "Description": "Parent in the category tree (null for roots)." } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_id",
+                  "DisplayName": "Category ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_name",
+                  "DisplayName": "Category Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "parent_category_id",
+                  "DisplayName": "Parent Category ID",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active",
+                  "Description": "Parent in the category tree (null for roots)."
+                }
+              }
             ]
           }
         },
@@ -151,10 +645,63 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "group_id", "DisplayName": "Group ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "added_date", "DisplayName": "Added Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "group_id",
+                  "DisplayName": "Group ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "added_date",
+                  "DisplayName": "Added Date",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -177,27 +724,200 @@
               "update_action": "editMagnetMailMessage",
               "detail_action": "GetMessageDetails",
               "watermark_field": "send_date",
-              "watermark_from_param": "send_date_from",
-              "watermark_to_param": "send_date_to"
+              "watermark_from_param": "sentStartDate",
+              "watermark_to_param": "sentEndDate"
             },
             "Sequence": 5,
             "Status": "Active"
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_name", "DisplayName": "Message Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "subject", "DisplayName": "Subject", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "from_name", "DisplayName": "From Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "from_email", "DisplayName": "From Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "createDate", "DisplayName": "Create Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastSent", "DisplayName": "Last Sent (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "send_date", "DisplayName": "Send Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_id", "DisplayName": "Category ID", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 9, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "archived", "DisplayName": "Archived", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 10, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "hidden", "DisplayName": "Hidden", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 11, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "has_email", "DisplayName": "Has Email", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 12, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "has_fax", "DisplayName": "Has Fax", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 13, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_name",
+                  "DisplayName": "Message Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "subject",
+                  "DisplayName": "Subject",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_name",
+                  "DisplayName": "From Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_email",
+                  "DisplayName": "From Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "createDate",
+                  "DisplayName": "Create Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "lastSent",
+                  "DisplayName": "Last Sent (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "send_date",
+                  "DisplayName": "Send Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_id",
+                  "DisplayName": "Category ID",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "archived",
+                  "DisplayName": "Archived",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "hidden",
+                  "DisplayName": "Hidden",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "has_email",
+                  "DisplayName": "Has Email",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "has_fax",
+                  "DisplayName": "Has Fax",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -220,8 +940,35 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_id", "DisplayName": "Category ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "category_name", "DisplayName": "Category Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_id",
+                  "DisplayName": "Category ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "category_name",
+                  "DisplayName": "Category Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -244,10 +991,63 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "sent_date", "DisplayName": "Sent Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "sent_date",
+                  "DisplayName": "Sent Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -270,10 +1070,62 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "open_date", "DisplayName": "Open Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "open_count", "DisplayName": "Open Count", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "open_date",
+                  "DisplayName": "Open Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "open_count",
+                  "DisplayName": "Open Count",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -296,12 +1148,91 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "link_id", "DisplayName": "Link ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "click_date", "DisplayName": "Click Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "click_count", "DisplayName": "Click Count", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "link_id",
+                  "DisplayName": "Link ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "click_date",
+                  "DisplayName": "Click Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "click_count",
+                  "DisplayName": "Click Count",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -324,9 +1255,49 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "link_id", "DisplayName": "Link ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "link_id",
+                  "DisplayName": "Link ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "url",
+                  "DisplayName": "URL",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -349,12 +1320,90 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "sent_total", "DisplayName": "Sent Total", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "opened_total", "DisplayName": "Opened Total", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "clicked_total", "DisplayName": "Clicked Total", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "bounced_total", "DisplayName": "Bounced Total", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "unsubscribed_total", "DisplayName": "Unsubscribed Total", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "sent_total",
+                  "DisplayName": "Sent Total",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "opened_total",
+                  "DisplayName": "Opened Total",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "clicked_total",
+                  "DisplayName": "Clicked Total",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "bounced_total",
+                  "DisplayName": "Bounced Total",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "unsubscribed_total",
+                  "DisplayName": "Unsubscribed Total",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -382,10 +1431,64 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "event_type", "DisplayName": "Event Type", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 3, "Status": "Active", "Description": "sent / open / click / bounce / unsub" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "event_date", "DisplayName": "Event Date (UTC)", "Type": "datetime", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "event_type",
+                  "DisplayName": "Event Type",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 3,
+                  "Status": "Active",
+                  "Description": "sent / open / click / bounce / unsub"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "event_date",
+                  "DisplayName": "Event Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -413,9 +1516,49 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "unsubscribe_date", "DisplayName": "Unsubscribe Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "unsubscribe_date",
+                  "DisplayName": "Unsubscribe Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -438,9 +1581,48 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "message_id", "DisplayName": "Message ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "complaint_date", "DisplayName": "Complaint Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "message_id",
+                  "DisplayName": "Message ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "complaint_date",
+                  "DisplayName": "Complaint Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -466,10 +1648,64 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "recipient_id", "DisplayName": "Recipient ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "suppressed_date", "DisplayName": "Suppressed Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "reason", "DisplayName": "Reason", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "recipient_id",
+                  "DisplayName": "Recipient ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "suppressed_date",
+                  "DisplayName": "Suppressed Date",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "reason",
+                  "DisplayName": "Reason",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -497,15 +1733,133 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "jobid", "DisplayName": "Job ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "total_rows", "DisplayName": "Total Rows", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "processed_rows", "DisplayName": "Processed Rows", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "inserted_rows", "DisplayName": "Inserted Rows", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "updated_rows", "DisplayName": "Updated Rows", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "error_rows", "DisplayName": "Error Rows", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "created_date", "DisplayName": "Created Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "completed_date", "DisplayName": "Completed Date (UTC)", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "jobid",
+                  "DisplayName": "Job ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "total_rows",
+                  "DisplayName": "Total Rows",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "processed_rows",
+                  "DisplayName": "Processed Rows",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "inserted_rows",
+                  "DisplayName": "Inserted Rows",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_rows",
+                  "DisplayName": "Updated Rows",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "error_rows",
+                  "DisplayName": "Error Rows",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_date",
+                  "DisplayName": "Created Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "completed_date",
+                  "DisplayName": "Completed Date (UTC)",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -531,9 +1885,50 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "search_id", "DisplayName": "Search ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "search_name", "DisplayName": "Search Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "search_id",
+                  "DisplayName": "Search ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "search_name",
+                  "DisplayName": "Search Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -559,8 +1954,38 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "fieldNameText", "DisplayName": "Field Name Text", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active", "Description": "Friendly label of the custom field (e.g., `Membership Level`)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "fieldNameValue", "DisplayName": "Field Name Value", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active", "Description": "Underlying slot identifier (MM_1..42 or enhanced name)." } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "fieldNameText",
+                  "DisplayName": "Field Name Text",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active",
+                  "Description": "Friendly label of the custom field (e.g., `Membership Level`)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "fieldNameValue",
+                  "DisplayName": "Field Name Value",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active",
+                  "Description": "Underlying slot identifier (MM_1..42 or enhanced name)."
+                }
+              }
             ]
           }
         },
@@ -583,10 +2008,65 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "user_id", "DisplayName": "User ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "account_name", "DisplayName": "Account Name", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "timezone", "DisplayName": "Timezone", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "user_id",
+                  "DisplayName": "User ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "account_name",
+                  "DisplayName": "Account Name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "timezone",
+                  "DisplayName": "Timezone",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -609,9 +2089,49 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "mapping_id", "DisplayName": "Mapping ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "personify_subscription_id", "DisplayName": "Personify Subscription ID", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "group_id", "DisplayName": "Group ID", "Type": "int", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 3, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "mapping_id",
+                  "DisplayName": "Mapping ID",
+                  "Type": "int",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "personify_subscription_id",
+                  "DisplayName": "Personify Subscription ID",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "group_id",
+                  "DisplayName": "Group ID",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -634,11 +2154,82 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "errorNumber", "DisplayName": "Error Number", "Type": "decimal", "Precision": 18, "Scale": 0, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "errorCode", "DisplayName": "Error Code", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "errorMessage", "DisplayName": "Error Message", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "errorDetails", "DisplayName": "Error Details", "Type": "nvarchar", "Length": 2000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "errorType", "DisplayName": "Error Type", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "errorNumber",
+                  "DisplayName": "Error Number",
+                  "Type": "decimal",
+                  "Precision": 18,
+                  "Scale": 0,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "errorCode",
+                  "DisplayName": "Error Code",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "errorMessage",
+                  "DisplayName": "Error Message",
+                  "Type": "nvarchar",
+                  "Length": 1000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "errorDetails",
+                  "DisplayName": "Error Details",
+                  "Type": "nvarchar",
+                  "Length": 2000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "errorType",
+                  "DisplayName": "Error Type",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         },
@@ -661,14 +2252,124 @@
           },
           "relatedEntities": {
             "MJ: Integration Object Fields": [
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EventId", "DisplayName": "Event ID", "Type": "decimal", "Precision": 18, "Scale": 0, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LoginId", "DisplayName": "Login ID", "Type": "decimal", "Precision": 18, "Scale": 0, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "IsMultipleRegistration", "DisplayName": "Is Multiple Registration", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 3, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "IsSignupModeLive", "DisplayName": "Is Signup Mode Live", "Type": "bit", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 4, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "UserId", "DisplayName": "User ID", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Registrants", "DisplayName": "Registrants", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active", "Description": "Array of registrants (serialized JSON)." } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PaidItems", "DisplayName": "Paid Items", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
-              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PaymentInfo", "DisplayName": "Payment Info", "Type": "nvarchar", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active" } }
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "EventId",
+                  "DisplayName": "Event ID",
+                  "Type": "decimal",
+                  "Precision": 18,
+                  "Scale": 0,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LoginId",
+                  "DisplayName": "Login ID",
+                  "Type": "decimal",
+                  "Precision": 18,
+                  "Scale": 0,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsMultipleRegistration",
+                  "DisplayName": "Is Multiple Registration",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "IsSignupModeLive",
+                  "DisplayName": "Is Signup Mode Live",
+                  "Type": "bit",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "UserId",
+                  "DisplayName": "User ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Registrants",
+                  "DisplayName": "Registrants",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active",
+                  "Description": "Array of registrants (serialized JSON)."
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaidItems",
+                  "DisplayName": "Paid Items",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "PaymentInfo",
+                  "DisplayName": "Payment Info",
+                  "Type": "nvarchar",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
             ]
           }
         }
