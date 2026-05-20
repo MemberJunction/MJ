@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "NODE_OPTIONS=--max-old-space-size=16384 ng serve --port 4203",
+    "start": "NODE_OPTIONS=--max-old-space-size=16384 ng serve --port 4201",
     "start:stage": "NODE_OPTIONS=--max-old-space-size=16384 ng serve --configuration staging",
     "prestart": "mj codegen manifest --exclude-packages @memberjunction --output ./src/app/generated/class-registrations-manifest.ts",
     "prebuild": "mj codegen manifest --exclude-packages @memberjunction --output ./src/app/generated/class-registrations-manifest.ts || echo 'Warning: mj codegen manifest not available, using existing manifest'",
