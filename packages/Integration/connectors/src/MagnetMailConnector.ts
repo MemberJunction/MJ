@@ -3,7 +3,8 @@
  *
  * 2026-05-20 vendor-truth audit (vs public WSDL at hlma-apie1.magnetmail.net/mmapi.asmx?WSDL)
  * found 8 wire-level mismatches between this connector and the vendor's actual API
- * surface. **7 of 8 are now fixed** based on WSDL evidence; 1 remains as a TODO.
+ * surface. **All 8 are now fixed** based on WSDL evidence. T10 sandbox verification
+ * is still needed before customer rollout.
  *
  * Fixed in this round:
  *   ✓ SOAP namespace: changed 'http://api.magnetmail.net/' → 'http://www.magnetmail.net/'
@@ -16,11 +17,10 @@
  *   ✓ getMessagesUTC watermark params in metadata: 'send_date_*' →
  *     'sentStartDate'/'sentEndDate'
  *   ✓ addRecipient Groups[] complex array: declared via Recipients DQP hint
- *
- * Still TODO (needs deeper refactor + live-vendor test):
- *   - searchForRecipients shape: vendor wraps all fields in <criteria>; connector
- *     currently emits flat children. Needs envelope-builder branch for this
- *     specific operation.
+ *   ✓ searchForRecipients <criteria> wrapper: envelope-builder branches via the
+ *     COMPLEX_WRAPPERS map so the filter args nest inside <criteria> for this
+ *     specific operation. Add entries to that map for any future operation the
+ *     WSDL wraps similarly.
  *
  * Until T10 (live tenant) confirms this connector now exchanges successful calls,
  * keep customer-facing rollout gated.
@@ -673,15 +673,31 @@ export class MagnetMailConnector extends BaseIntegrationConnector {
         const headerBlock = includeSession
             ? `  <soap:Header>\n    <mmAuthHeader xmlns="${namespace}">\n      <sessionId>${this.EscapeXmlValue(sessionToken ?? '')}</sessionId>\n      <user_id>${this.EscapeXmlValue(config.UserId)}</user_id>\n    </mmAuthHeader>\n  </soap:Header>\n`
             : '';
-        const argTags = Object.entries(args)
-            .map(([k, v]) => `<${k}>${this.EscapeXmlValue(v)}</${k}>`)
-            .join('\n      ');
+
+        // Operations whose WSDL wraps all arguments in a single complex element.
+        // searchForRecipients is the canonical one: all filter fields go INSIDE
+        // a <criteria> element rather than as flat children of the operation.
+        const COMPLEX_WRAPPERS: Record<string, string> = {
+            'searchForRecipients': 'criteria',
+        };
+        const wrapper = COMPLEX_WRAPPERS[operation];
+
+        const renderArgs = (entries: [string, string][]): string =>
+            entries.map(([k, v]) => `<${k}>${this.EscapeXmlValue(v)}</${k}>`).join('\n        ');
+
+        let body: string;
+        if (wrapper) {
+            const inner = renderArgs(Object.entries(args));
+            body = `      <${wrapper}>\n        ${inner}\n      </${wrapper}>`;
+        } else {
+            body = `      ${renderArgs(Object.entries(args))}`;
+        }
 
         return `<?xml version="1.0" encoding="utf-8"?>
 <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
 ${headerBlock}  <soap:Body>
     <${operation} xmlns="${namespace}">
-      ${argTags}
+${body}
     </${operation}>
   </soap:Body>
 </soap:Envelope>`;

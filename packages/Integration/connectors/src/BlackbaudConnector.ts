@@ -775,8 +775,32 @@ export class BlackbaudConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const headers = this.BuildHeaders(auth);
         const offset = ctx.CurrentOffset ?? 0;
-        const url = `${endpoint}?limit=${BB_PAGE_SIZE}&offset=${offset}`;
+        let url = `${endpoint}?limit=${BB_PAGE_SIZE}&offset=${offset}`;
+        // Blackbaud SKY API endpoint families that document a `date_modified`
+        // query filter: Constituent API + Gift API + Fundraising API +
+        // Opportunity API. The connector identifies them by URL substring so the
+        // metadata can flip SupportsIncrementalSync=true for IOs in those
+        // families and FetchList will honor the watermark.
+        if (ctx.WatermarkValue && this.SupportsDateModified(endpoint)) {
+            url += `&date_modified=${encodeURIComponent(ctx.WatermarkValue)}`;
+        }
         return this.ExecuteListFetch(auth, headers, url, objectType, 'id', offset, ctx);
+    }
+
+    /**
+     * Returns true if a Blackbaud SKY API endpoint is in a family documented to
+     * accept the `date_modified` query filter. Conservative — only includes
+     * endpoint roots where the SKY API docs surface the filter. Add new prefixes
+     * after verifying against the vendor docs for that endpoint family.
+     */
+    private SupportsDateModified(endpoint: string): boolean {
+        const supportedPrefixes = [
+            '/constituent/v1/',
+            '/gift/v1/',
+            '/fundraising/v1/',
+            '/opportunity/v1/',
+        ];
+        return supportedPrefixes.some(p => endpoint.includes(p));
     }
 
     private async FetchConstituentChildren(
@@ -786,7 +810,12 @@ export class BlackbaudConnector extends BaseRESTIntegrationConnector {
         const auth = await this.Authenticate(ctx.CompanyIntegration, ctx.ContextUser);
         const headers = this.BuildHeaders(auth);
         const offset = ctx.CurrentOffset ?? 0;
-        const url = `${BB_API_BASE}/constituent/v1/constituents/${childEndpoint}?limit=${BB_PAGE_SIZE}&offset=${offset}`;
+        let url = `${BB_API_BASE}/constituent/v1/constituents/${childEndpoint}?limit=${BB_PAGE_SIZE}&offset=${offset}`;
+        // Constituent-child endpoints are in the Constituent API family —
+        // honor the watermark when provided.
+        if (ctx.WatermarkValue) {
+            url += `&date_modified=${encodeURIComponent(ctx.WatermarkValue)}`;
+        }
         return this.ExecuteListFetch(auth, headers, url, objectType, 'id', offset, ctx);
     }
 

@@ -637,11 +637,30 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         contextUser: UserInfo
     ): Promise<GrowthZoneCustomField[]> {
         const auth = (await this.Authenticate(companyIntegration, contextUser)) as GrowthZoneAuthContext;
+        const headers = this.BuildHeaders(auth);
 
-        // Step 1: fetch a single contact from the delta endpoint to obtain an ID
+        // Canonical vendor endpoint: POST /api/customfields/getall returns ALL
+        // tenant-defined custom field definitions across all object types in one
+        // call. Documented at documentation.growthzoneapp.com/CustomField.html.
+        // Previously this method probed per-contact NotesAndFields, which was
+        // both slow and limited to fields actually attached to the probed record.
+        try {
+            const url = `${auth.BaseUrl}/customfields/getall`;
+            const response = await this.MakeHTTPRequest(auth, url, 'POST', headers, {});
+            if (response.Status >= 200 && response.Status < 300) {
+                const body = response.Body as GrowthZoneListEnvelope<GrowthZoneCustomField> | GrowthZoneCustomField[];
+                const items = Array.isArray(body) ? body : (body.Results ?? []);
+                if (items.length > 0) return items;
+            }
+        } catch {
+            // Fall through to legacy per-contact probe if the global endpoint isn't
+            // available on the tenant (e.g., older deployments may not expose it).
+        }
+
+        // Legacy fallback: probe a single contact's NotesAndFields. Kept so older
+        // GrowthZone deployments without /customfields/getall continue to work.
         const since = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
         const listUrl = `${auth.BaseUrl}/contacts/delta?modifiedSince=${encodeURIComponent(since)}&top=1`;
-        const headers = this.BuildHeaders(auth);
         const listResp = await this.MakeHTTPRequest(auth, listUrl, 'GET', headers);
         if (listResp.Status < 200 || listResp.Status >= 300) return [];
 
@@ -649,7 +668,6 @@ export class GrowthZoneConnector extends BaseRESTIntegrationConnector {
         const contacts = Array.isArray(listBody) ? listBody : (listBody.Results ?? []);
         if (contacts.length === 0) return [];
 
-        // Step 2: fetch NotesAndFields for that contact
         const probeId = String(contacts[0].ContactId);
         const fieldsUrl = `${auth.BaseUrl}/contacts/${encodeURIComponent(probeId)}/NotesAndFields`;
         const fieldsResp = await this.MakeHTTPRequest(auth, fieldsUrl, 'GET', headers);
