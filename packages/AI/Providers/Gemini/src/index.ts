@@ -568,29 +568,35 @@ export class GeminiLLM extends BaseLLM {
     } {
         let content = '';
         let finishReason = undefined;
-        
-        // Extract text from the chunk with the new SDK
-        if (chunk.candidates && 
-            chunk.candidates[0] && 
-            chunk.candidates[0].content && 
-            chunk.candidates[0].content[0] && 
-            chunk.candidates[0].content[0].parts) {
-            
-            // Find the text part
-            const textPart = chunk.candidates[0].content[0].parts.find((part: any) => part.text);
-            if (textPart?.text) {
-                const rawContent = textPart.text;
-                
-                // Add raw content to pending content for processing
-                this._streamingState.pendingContent += rawContent;
-                
-                // Process the pending content to extract thinking
+
+        // @google/genai shapes Candidate.content as a Content OBJECT (`{ parts: Part[] }`),
+        // not an array as the legacy @google/generative-ai SDK did. The old `content[0].parts`
+        // access always resolved to undefined on the new SDK, so the guard failed on every
+        // chunk and no text was ever appended -- that's why streaming appeared dead.
+        //
+        // A single chunk's `parts` array can also mix reasoning ({thought:true, text}) and
+        // answer ({text}) parts. Split them the same way the non-streaming path does, so
+        // the reasoning summary never leaks into the user-visible stream.
+        const parts: Array<{ text?: string; thought?: boolean }> | undefined =
+            chunk?.candidates?.[0]?.content?.parts;
+        if (Array.isArray(parts)) {
+            let visibleTextAdded = false;
+            for (const part of parts) {
+                if (!part?.text) continue;
+                if (part.thought) {
+                    this._streamingState.accumulatedThinking += part.text;
+                } else {
+                    this._streamingState.pendingContent += part.text;
+                    visibleTextAdded = true;
+                }
+            }
+            if (visibleTextAdded) {
                 content = this.processThinkingInStreamingContent();
             }
         }
-        
+
         // Check for finish reason if available
-        if (chunk.candidates && chunk.candidates[0] && chunk.candidates[0].finishReason) {
+        if (chunk?.candidates?.[0]?.finishReason) {
             finishReason = chunk.candidates[0].finishReason;
         }
 
