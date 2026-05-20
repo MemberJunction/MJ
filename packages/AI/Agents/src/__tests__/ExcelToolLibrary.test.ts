@@ -9,9 +9,10 @@ describe('ExcelToolLibrary', () => {
   const lib = new ExcelToolLibrary();
 
   describe('GetToolList', () => {
-    it('should return exactly 5 tool definitions', () => {
+    it('should return 5 subclass tools plus inherited get_full (6 total)', () => {
       const tools = lib.GetToolList();
-      expect(tools).toHaveLength(5);
+      expect(tools).toHaveLength(6);
+      expect(tools[0].name).toBe('get_full');
     });
 
     it('should include the expected tool names', () => {
