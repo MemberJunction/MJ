@@ -29,16 +29,3 @@ export type RecentConvoChip = {
     participants: ConversationParticipantAgent[];
     live?: boolean;
 };
-
-/** Inline artifact card props (data-table case shown in mockups). */
-export type InlineArtifactPreviewRow = { name: string; sub: string; amount: string };
-
-export type InlineArtifactCardData = {
-    id: string;
-    type: 'data-table' | 'chart' | 'document' | 'code';
-    typeLabel: string;
-    title: string;
-    meta: string;
-    rows?: InlineArtifactPreviewRow[];
-    producedBy: ConversationParticipantAgent;
-};

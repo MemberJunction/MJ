@@ -1,19 +1,39 @@
 import { router } from 'expo-router';
+import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Metadata } from '@memberjunction/core';
 import { Icons } from '@/components/Icon';
 import { useMJ } from '@/providers/mj-provider';
+import { Env } from '@/config/env';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
  * Profile & settings.
  * Spec: plans/mobile-app-react-native/html/profile.html
  *
- * Some toggles (voice, push, biometric lock) are visible in Phase 1
- * but inert until Phase 2 wires them.
+ * Identity comes from the MJ current user. Some toggles (voice, push,
+ * biometric lock) are visible in Phase 1 but inert until Phase 2 wires them.
  */
 export default function ProfileScreen() {
-    const { signOut, authMethod } = useMJ();
+    const { signOut, authMethod, status } = useMJ();
+
+    const user = useMemo(() => {
+        if (status !== 'ready') return null;
+        return new Metadata().CurrentUser ?? null;
+    }, [status]);
+
+    const displayName = user?.Name || [user?.FirstName, user?.LastName].filter(Boolean).join(' ') || 'MJ User';
+    const email = user?.Email || '—';
+    const title = user?.Title || 'Member';
+    const initials = (() => {
+        const f = user?.FirstName?.charAt(0) ?? '';
+        const l = user?.LastName?.charAt(0) ?? '';
+        const fromName = (user?.Name ?? '').trim().charAt(0);
+        return (f + l).toUpperCase() || fromName.toUpperCase() || 'MJ';
+    })();
+    const workspaceHost = Env.graphqlUrl.replace(/^https?:\/\//, '').replace(/\/graphql\/?$/, '');
+
     const handleSignOut = async () => {
         await signOut();
         router.replace('/login');
@@ -30,12 +50,12 @@ export default function ProfileScreen() {
 
             <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
                 <View style={styles.profileBlock}>
-                    <View style={styles.avBig}><Text style={styles.avBigText}>AN</Text></View>
-                    <Text style={styles.name}>Amith Nagarajan</Text>
-                    <Text style={styles.email}>amith@bluecypress.io</Text>
+                    <View style={styles.avBig}><Text style={styles.avBigText}>{initials}</Text></View>
+                    <Text style={styles.name}>{displayName}</Text>
+                    <Text style={styles.email}>{email}</Text>
                     <View style={styles.orgPill}>
                         <View style={styles.orgDot} />
-                        <Text style={styles.orgText}>MemberJunction · Admin</Text>
+                        <Text style={styles.orgText}>{title}</Text>
                     </View>
                 </View>
 
@@ -50,7 +70,7 @@ export default function ProfileScreen() {
                 <Text style={styles.sectionLabel}>ACCOUNT</Text>
                 <View style={styles.group}>
                     <ToggleRow icon={<Icons.Pin size={16} color={Colors.ink2} />} label="Face ID app lock" sub="Lock when app goes to background" />
-                    <SettingRow icon={<Icons.Database size={16} color={Colors.ink2} strokeWidth={2} />} label="Connected workspace" sub="localhost:4001" arrow />
+                    <SettingRow icon={<Icons.Database size={16} color={Colors.ink2} strokeWidth={2} />} label="Connected workspace" sub={workspaceHost} arrow />
                     <SettingRow icon={<Icons.Search size={16} color={Colors.ink2} strokeWidth={2} />} label="Help & feedback" arrow />
                 </View>
 

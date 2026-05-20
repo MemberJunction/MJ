@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useMJ } from '@/providers/mj-provider';
 import { loadConversations, loadConversation, type ConversationListItem, type ConversationDetailLoad } from '@/data/services/conversations';
+import { loadArtifact, type LoadedArtifact } from '@/data/services/artifacts';
 
 /**
  * Hook for the conversation list screen.
@@ -75,4 +76,34 @@ export function useConversation(conversationId: string | undefined): UseConversa
     useEffect(() => { void refresh(); }, [refresh]);
 
     return { data, loading, error, refresh };
+}
+
+/**
+ * Loads a single artifact (latest version content + classification).
+ */
+export function useArtifact(artifactId: string | undefined) {
+    const { status } = useMJ();
+    const [artifact, setArtifact] = useState<LoadedArtifact | null>(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<Error | null>(null);
+
+    useEffect(() => {
+        if (status !== 'ready' || !artifactId) return;
+        let cancelled = false;
+        setLoading(true);
+        setError(null);
+        (async () => {
+            try {
+                const a = await loadArtifact(artifactId);
+                if (!cancelled) setArtifact(a);
+            } catch (e) {
+                if (!cancelled) setError(e instanceof Error ? e : new Error(String(e)));
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [status, artifactId]);
+
+    return { artifact, loading, error };
 }
