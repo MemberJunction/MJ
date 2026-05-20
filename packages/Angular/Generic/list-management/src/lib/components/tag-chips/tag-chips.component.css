@@ -103,3 +103,13 @@
 .tag-chip-add__suggestion:hover {
   background: var(--mj-bg-surface-card);
 }
+
+/* "Create '<term>'" affordance — visually distinct from existing-tag suggestions */
+.tag-chip-add__suggestion--create {
+  border-top: 1px solid var(--mj-border-default);
+  color: var(--mj-brand-primary);
+  font-weight: 500;
+}
+.tag-chip-add__suggestion--create:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, var(--mj-bg-surface));
+}

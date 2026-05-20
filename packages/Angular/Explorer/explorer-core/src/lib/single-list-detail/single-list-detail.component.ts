@@ -6,6 +6,7 @@ import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunctio
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import { capabilitiesForLevel, ListSharing, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists';
+import { ExportService } from '@memberjunction/ng-export-service';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -84,6 +85,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // enforced at confirm time (mode='move' + ack checkbox).
   public moveDeltaConfirmVisible = false;
   public moveDelta: ListDelta | null = null;
+
+  // Export picker (Phase 5.1, mockup 26). Opens before any export; lets
+  // the user pick format + which entity fields to include. Fields are
+  // resolved from EntityInfo on the loaded provider — no separate fetch.
+  public showExportDialog = false;
+  public exportFormat: 'excel' | 'csv' | 'json' = 'excel';
+  public exportFields: Array<{ Name: string; DisplayName: string; Selected: boolean }> = [];
+  public exportRecordCount = 0;
+  public isExporting = false;
   public refreshMode: ListRefreshMode = 'Additive';
   public isPreviewingRefresh = false;
   public isApplyingRefresh = false;
@@ -163,7 +173,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   constructor(
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef,
-    private elementRef: ElementRef
+    private elementRef: ElementRef,
+    private exportService: ExportService,
   ) {
     super();
     // Debounce search input
@@ -414,9 +425,156 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
 
   onExportClick(): void {
-    // Trigger export on the underlying grid
-    if (this.listDetailGrid) {
-      this.listDetailGrid.export();
+    this.openExportDialog();
+  }
+
+  /**
+   * Open the format + column picker (mockup 26). Resolves the candidate
+   * field list from EntityInfo on the loaded provider — no extra
+   * RunView. Default selection is every non-virtual entity field, which
+   * matches what the underlying grid's "export all" path produced.
+   */
+  public openExportDialog(): void {
+    if (!this.listRecord) {
+      this.sharedService.CreateSimpleNotification('Load a list first before exporting.', 'info', 3000);
+      return;
+    }
+    const md = this.ProviderToUse;
+    const entityInfo = md.EntityByID(this.listRecord.EntityID);
+    if (!entityInfo) {
+      this.sharedService.CreateSimpleNotification(
+        `Entity for this list not found in metadata.`,
+        'error', 4000,
+      );
+      return;
+    }
+    if (entityInfo.PrimaryKeys.length !== 1) {
+      this.sharedService.CreateSimpleNotification(
+        `Composite-PK entities ('${entityInfo.Name}') aren't yet supported for List export.`,
+        'warning', 5000,
+      );
+      return;
+    }
+    this.exportFields = entityInfo.Fields
+      .filter((f) => f.IsVirtual !== true)
+      .map((f) => ({
+        Name: f.Name,
+        DisplayName: f.DisplayName || f.Name,
+        Selected: true,
+      }));
+    this.exportRecordCount = this.rowCount;
+    this.exportFormat = 'excel';
+    this.showExportDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  public closeExportDialog(): void {
+    this.showExportDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  public selectAllExportFields(): void {
+    for (const f of this.exportFields) f.Selected = true;
+  }
+  public selectNoneExportFields(): void {
+    for (const f of this.exportFields) f.Selected = false;
+  }
+  public get selectedExportFieldCount(): number {
+    return this.exportFields.filter((f) => f.Selected).length;
+  }
+
+  /**
+   * Run the export with the user's chosen format + columns. Resolves
+   * the list's member RecordIDs from the in-memory grid when possible
+   * (avoids an extra RunView), then bulk-loads the underlying entity
+   * rows restricted to the chosen Fields. Output is projected to
+   * exactly the user's selected columns + ordering.
+   */
+  public async executeExport(): Promise<void> {
+    if (!this.listRecord) return;
+    const selectedFields = this.exportFields.filter((f) => f.Selected).map((f) => f.Name);
+    if (selectedFields.length === 0) return;
+
+    this.isExporting = true;
+    this.cdr.detectChanges();
+    try {
+      const md = this.ProviderToUse;
+      const entityInfo = md.EntityByID(this.listRecord.EntityID)!;
+      const pk = entityInfo.PrimaryKeys[0].Name;
+
+      // Fetch the list's member record IDs. The grid only holds the
+      // current page, so we hit MJ: List Details directly to get the
+      // full set — same single-PK assumption guarded at dialog open.
+      const rv = RunView.FromMetadataProvider(md);
+      const memberResult = await rv.RunView<{ RecordID: string }>({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: `ListID='${this.listRecord.ID}'`,
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+      });
+      if (!memberResult.Success) {
+        this.sharedService.CreateSimpleNotification(
+          `Export failed loading members: ${memberResult.ErrorMessage}`, 'error', 5000,
+        );
+        return;
+      }
+      const recordIds = (memberResult.Results ?? []).map((r) => String(r.RecordID));
+      if (recordIds.length === 0) {
+        this.sharedService.CreateSimpleNotification(
+          'List is empty — nothing to export.', 'info', 3000,
+        );
+        this.showExportDialog = false;
+        return;
+      }
+
+      // Pull underlying entity rows restricted to the chosen fields.
+      // Always include the PK so the projection round-trips cleanly.
+      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
+      const escaped = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
+      const rowResult = await rv.RunView<Record<string, unknown>>({
+        EntityName: entityInfo.Name,
+        ExtraFilter: `${pk} IN (${escaped})`,
+        Fields: fieldsForQuery,
+        ResultType: 'simple',
+      });
+      if (!rowResult.Success) {
+        this.sharedService.CreateSimpleNotification(
+          `Export failed loading rows: ${rowResult.ErrorMessage}`, 'error', 5000,
+        );
+        return;
+      }
+      // Project rows to exactly the columns + ordering the user picked.
+      const rows = (rowResult.Results ?? []).map((row) => {
+        const projected: Record<string, unknown> = {};
+        for (const f of selectedFields) projected[f] = row[f];
+        return projected;
+      });
+
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const safeName = (this.listRecord.Name || 'list').replace(/[^a-z0-9_-]+/gi, '_');
+      const ext = this.exportFormat === 'excel' ? 'xlsx' : this.exportFormat;
+      const fileName = `${safeName}-${dateStamp}.${ext}`;
+      const exportResult = this.exportFormat === 'excel'
+        ? await this.exportService.toExcel(rows, { fileName, includeHeaders: true })
+        : this.exportFormat === 'csv'
+          ? await this.exportService.toCSV(rows, { fileName, includeHeaders: true })
+          : await this.exportService.toJSON(rows, { fileName });
+
+      if (exportResult.success) {
+        this.exportService.downloadResult(exportResult);
+        this.sharedService.CreateSimpleNotification(
+          `Exported ${rows.length} record(s)`, 'success', 3000,
+        );
+        this.showExportDialog = false;
+      } else {
+        this.sharedService.CreateSimpleNotification('Export failed', 'error', 5000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.sharedService.CreateSimpleNotification(`Export error: ${message}`, 'error', 5000);
+    } finally {
+      this.isExporting = false;
+      this.cdr.detectChanges();
     }
   }
 

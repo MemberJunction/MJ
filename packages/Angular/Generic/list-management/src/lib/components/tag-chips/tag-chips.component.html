@@ -23,13 +23,24 @@
         class="tag-chip-add__input"
         [(ngModel)]="addInput"
         (ngModelChange)="OnAddInputChange($event)"
+        (keydown.enter)="OnAddInputSubmit($event)"
         placeholder="Add tag…" />
-      @if (showSuggestions && suggestions.length > 0) {
+      @if (showSuggestions && (suggestions.length > 0 || canCreateNew)) {
         <div class="tag-chip-add__suggestions">
           @for (s of suggestions; track s.ID) {
             <button class="tag-chip-add__suggestion" (click)="OnAddTag(s)" type="button">
               <i class="fa-solid fa-tag"></i>
               {{ s.Name }}
+            </button>
+          }
+          @if (canCreateNew) {
+            <button
+              class="tag-chip-add__suggestion tag-chip-add__suggestion--create"
+              (click)="OnCreateNew()"
+              type="button"
+              title="Create a new tag with this name">
+              <i class="fa-solid fa-plus"></i>
+              Create "{{ addInput.trim() }}"
             </button>
           }
         </div>

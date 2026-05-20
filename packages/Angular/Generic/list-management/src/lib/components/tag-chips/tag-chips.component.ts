@@ -78,6 +78,9 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   public addInput = '';
   public suggestions: MJTagEntity[] = [];
   public showSuggestions = false;
+  /** True when the trimmed input doesn't exactly match any existing tag —
+   *  drives the "Create '<term>'" affordance at the top of the dropdown. */
+  public canCreateNew = false;
 
   private initialized = false;
   private entityID: string | null = null;
@@ -123,6 +126,7 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
     const term = value.trim();
     if (term.length < 1) {
       this.suggestions = [];
+      this.canCreateNew = false;
       this.showSuggestions = false;
       this.cdr.markForCheck();
       return;
@@ -139,6 +143,14 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
       });
       const alreadyApplied = new Set(this.tags.map((t) => t.TagID));
       this.suggestions = (result.Results ?? []).filter((t) => !alreadyApplied.has(t.ID));
+      // Offer "Create '<term>'" when the typed text doesn't exactly
+      // match any existing tag (case-insensitive). Without this, typing
+      // a brand-new tag name and hitting Enter does nothing — there's
+      // no suggestion to click.
+      const lowerTerm = term.toLowerCase();
+      this.canCreateNew = !this.suggestions.some(
+        (s) => s.Name.toLowerCase() === lowerTerm,
+      );
       this.showSuggestions = true;
     } catch (e) {
       LogError(`tag-chips: suggestion lookup failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -147,28 +159,87 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
     }
   }
 
+  /**
+   * Enter-key handler on the input. If suggestions are showing,
+   * picks the first one (existing tag); otherwise creates a new tag
+   * from the typed text and applies it. Closes the suggestion menu
+   * on either path.
+   */
+  public async OnAddInputSubmit(event?: Event): Promise<void> {
+    event?.preventDefault();
+    const term = this.addInput.trim();
+    if (term.length === 0) return;
+    // Existing tag in suggestions takes priority — Enter selects the
+    // first match (matching most autocomplete UIs).
+    if (this.suggestions.length > 0) {
+      await this.OnAddTag(this.suggestions[0]);
+      return;
+    }
+    if (this.canCreateNew) {
+      await this.CreateAndAddTag(term);
+    }
+  }
+
   public async OnAddTag(tag: MJTagEntity): Promise<void> {
+    if (!this._entityName || !this._recordId) return;
+    await this.applyTagToRecord(tag.ID, tag.Name);
+  }
+
+  /** Click handler for the "Create '<term>'" affordance. Creates the
+   *  `MJ: Tags` row then attaches it via the standard apply path. */
+  public async OnCreateNew(): Promise<void> {
+    const term = this.addInput.trim();
+    if (term.length === 0) return;
+    await this.CreateAndAddTag(term);
+  }
+
+  private async CreateAndAddTag(name: string): Promise<void> {
+    if (!this._entityName || !this._recordId) return;
+    try {
+      const md = this.metadata();
+      const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', this.ProviderToUse.CurrentUser ?? undefined);
+      tag.NewRecord();
+      tag.Name = name;
+      // MJ: Tags requires both Name (canonical) and DisplayName (UI).
+      // Default DisplayName to the same text the user typed — they can
+      // refine it later via the Tags entity editor if needed.
+      tag.DisplayName = name;
+      const ok = await tag.Save();
+      if (!ok) {
+        LogError(`tag-chips: create-tag save failed: ${tag.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        return;
+      }
+      await this.applyTagToRecord(tag.ID, tag.Name);
+    } catch (e) {
+      LogError(`tag-chips: create-and-add failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  private async applyTagToRecord(tagId: string, tagName: string): Promise<void> {
     if (!this._entityName || !this._recordId) return;
     try {
       const md = this.metadata();
       const entity = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', this.ProviderToUse.CurrentUser ?? undefined);
       entity.NewRecord();
-      entity.TagID = tag.ID;
+      entity.TagID = tagId;
       entity.RecordID = this._recordId;
       const entityInfo = md.EntityByName(this._entityName);
       if (entityInfo) entity.EntityID = entityInfo.ID;
       entity.Weight = 1.0;
       const ok = await entity.Save();
-      if (ok) {
-        this.tags = [...this.tags, { TaggedItemID: entity.ID, TagID: tag.ID, Name: tag.Name }];
-        this.addInput = '';
-        this.suggestions = [];
-        this.showSuggestions = false;
-        this.TagsChanged.emit();
-        this.cdr.markForCheck();
+      if (!ok) {
+        LogError(`tag-chips: attach-tag save failed: ${entity.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        return;
       }
+      this.tags = [...this.tags, { TaggedItemID: entity.ID, TagID: tagId, Name: tagName }];
+      this.addInput = '';
+      this.suggestions = [];
+      this.canCreateNew = false;
+      this.showSuggestions = false;
+      this.TagsChanged.emit();
+      this.cdr.markForCheck();
     } catch (e) {
-      LogError(`tag-chips: add failed: ${e instanceof Error ? e.message : String(e)}`);
+      LogError(`tag-chips: apply failed: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 

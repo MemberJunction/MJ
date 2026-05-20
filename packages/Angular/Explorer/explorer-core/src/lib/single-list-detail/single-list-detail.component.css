@@ -479,3 +479,67 @@
   font-size: 14px;
   color: var(--mj-text-primary);
 }
+
+/* Export dialog (Phase 5.1, mockup 26) */
+.export-dialog { display: flex; flex-direction: column; gap: 8px; }
+.export-section-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.export-format-row { display: flex; gap: 8px; }
+.export-format-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  background: var(--mj-bg-surface);
+}
+.export-format-option--selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+.export-format-option input[type="radio"] { margin: 0; }
+.export-section-divider {
+  height: 1px;
+  background: var(--mj-border-default);
+  margin: 16px 0;
+}
+.export-fields-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+.export-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  font-size: 13px;
+  cursor: pointer;
+}
+.export-field-row:last-child { border-bottom: none; }
+.export-field-row:hover { background: var(--mj-bg-surface-hover); }
+.export-field-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.export-field-actions a { color: var(--mj-text-link); }
+.export-field-actions .muted {
+  margin-left: auto;
+  color: var(--mj-text-muted);
+}

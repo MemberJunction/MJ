@@ -467,6 +467,75 @@
   </mj-dialog>
 }
 
+<!-- Export Dialog (mockup 26) — format + column picker -->
+@if (showExportDialog && listRecord) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="'Export ' + exportRecordCount + ' Record' + (exportRecordCount === 1 ? '' : 's')"
+    (Close)="closeExportDialog()"
+    [MinWidth]="520"
+    [Width]="640"
+    [Height]="640">
+    <div class="dialog-content export-dialog">
+      <label class="export-section-label">Format</label>
+      <div class="export-format-row">
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'excel'"
+          (click)="exportFormat = 'excel'">
+          <input type="radio" name="exportFormat" value="excel" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-excel" style="color: var(--mj-status-success);"></i>
+          <span>Excel (.xlsx)</span>
+        </label>
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'csv'"
+          (click)="exportFormat = 'csv'">
+          <input type="radio" name="exportFormat" value="csv" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-csv" style="color: var(--mj-text-secondary);"></i>
+          <span>CSV</span>
+        </label>
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'json'"
+          (click)="exportFormat = 'json'">
+          <input type="radio" name="exportFormat" value="json" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-code" style="color: var(--mj-brand-primary);"></i>
+          <span>JSON</span>
+        </label>
+      </div>
+
+      <div class="export-section-divider"></div>
+
+      <label class="export-section-label">Columns to include</label>
+      <div class="export-fields-list">
+        @for (f of exportFields; track f.Name) {
+          <label class="export-field-row">
+            <input type="checkbox" [(ngModel)]="f.Selected">
+            <span>{{ f.DisplayName }}</span>
+          </label>
+        }
+      </div>
+      <div class="export-field-actions">
+        <a href="#" (click)="selectAllExportFields(); $event.preventDefault()">Select All</a>
+        <a href="#" (click)="selectNoneExportFields(); $event.preventDefault()">Select None</a>
+        <span class="muted">{{ selectedExportFieldCount }} of {{ exportFields.length }} selected</span>
+      </div>
+    </div>
+    <mj-dialog-actions>
+      <button mjButton variant="primary"
+        [disabled]="selectedExportFieldCount === 0 || isExporting"
+        (click)="executeExport()">
+        @if (isExporting) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Exporting…
+        } @else {
+          <i class="fa-solid fa-download"></i>
+          Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}
+        }
+      </button>
+      <button mjButton variant="outline" [disabled]="isExporting" (click)="closeExportDialog()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
+
 <!-- Add From View Dialog -->
 @if (showAddFromViewDialog) {
   <mj-dialog
