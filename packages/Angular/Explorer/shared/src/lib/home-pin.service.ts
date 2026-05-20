@@ -15,6 +15,17 @@ const PINS_SETTING_KEY = 'HomeApp.PinnedItems';
  */
 @Injectable({ providedIn: 'root' })
 export class HomeAppPinService {
+  /** Max time to wait for a thumbnail capture before giving up and pinning without a preview. */
+  private static readonly THUMBNAIL_CAPTURE_TIMEOUT_MS = 4000;
+
+  /**
+   * Max DOM node count we'll attempt to rasterize. Above this, html-to-image's synchronous
+   * clone/inline step blocks the main thread long enough to freeze the UI, so we skip the
+   * (decorative) preview instead. Tuned to comfortably allow typical dashboards/forms while
+   * excluding heavy grid/map views like the Data Explorer.
+   */
+  private static readonly THUMBNAIL_MAX_NODES = 3000;
+
   /** Observable of current pins (for reactive UI) */
   public readonly Pins$ = new BehaviorSubject<HomeAppPinnedItem[]>([]);
 
@@ -174,14 +185,60 @@ export class HomeAppPinService {
       if (element.clientWidth === 0 || element.clientHeight === 0) {
         return undefined;
       }
-      return await toJpeg(element, {
+      // Bail on very large DOM trees. html-to-image clones and inlines the ENTIRE subtree
+      // SYNCHRONOUSLY before it ever yields, so a heavy view (e.g. the Data Explorer's grid
+      // + map) blocks the main thread for seconds — long enough to freeze the UI, and the
+      // timeout below (setTimeout-based) can't even fire while the thread is blocked. A
+      // thumbnail is best-effort decoration, so skip rather than jank the app.
+      const nodeCount = element.getElementsByTagName('*').length;
+      if (nodeCount > HomeAppPinService.THUMBNAIL_MAX_NODES) {
+        return undefined;
+      }
+      // Race against a timeout as a secondary guard for the async portion: toJpeg() can also
+      // hang on content with cross-origin resources it must re-fetch (e.g. Leaflet map tiles),
+      // where the inlining/canvas step never resolves. Don't cacheBust — re-fetching every
+      // image is what tends to stall, and a slightly cached preview is fine.
+      const capture = toJpeg(element, {
         quality: 0.6,
         pixelRatio: 0.2,
-        cacheBust: true,
       });
+      return await this.withTimeout(capture, HomeAppPinService.THUMBNAIL_CAPTURE_TIMEOUT_MS);
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Resolve to `undefined` if the given promise hasn't settled within `ms`.
+   * Note: this does not cancel the underlying work (toJpeg is not cancelable),
+   * it just stops the pin flow from waiting on it.
+   */
+  private withTimeout(promise: Promise<string>, ms: number): Promise<string | undefined> {
+    return new Promise<string | undefined>((resolve) => {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          resolve(undefined);
+        }
+      }, ms);
+      promise.then(
+        (value) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+          }
+        },
+        () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(undefined);
+          }
+        }
+      );
+    });
   }
 
   // =============================================
