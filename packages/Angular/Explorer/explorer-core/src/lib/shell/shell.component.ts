@@ -13,7 +13,7 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
 import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
@@ -2075,8 +2075,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.showPinProgress('Pinning...');
       // Let the UI render the overlay before starting the work
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      await this.handlePinToHome();
-      this.hidePinProgress();
+      try {
+        await this.handlePinToHome();
+      } catch (err) {
+        LogError(err);
+      } finally {
+        // Always clear the overlay — otherwise a failure (or a slow thumbnail
+        // capture) would leave the "Pinning..." spinner stuck on screen.
+        this.hidePinProgress();
+      }
       return;
     }
 
@@ -2207,8 +2214,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     });
 
     if (added) {
-      this.showPinProgress(`Capturing preview for "${displayName}"...`);
-      await this.captureAndAttachThumbnail(activeTab, resourceType);
+      // Capture the preview in the BACKGROUND — do not block pin completion (and the
+      // "Pinning..." overlay) on it. The thumbnail is purely decorative, and capture can
+      // be expensive for heavy resources (e.g. the Data Explorer's large grid/map DOM,
+      // where html-to-image clones the whole tree synchronously). The pin already exists
+      // the moment AddPin() returns, so let the overlay clear immediately.
+      void this.captureAndAttachThumbnail(activeTab, resourceType);
     } else {
       MJNotificationService.Instance.CreateSimpleNotification(
         `"${activeTab.title}" is already pinned to Home`, 'info', 3000

@@ -560,9 +560,22 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       this.singleResourceComponentRef = cached.componentRef;
       this.singleResourceCacheIdentity = { driverClass, recordId: resourceData.ResourceRecordID || '', appId: activeTab.applicationId, tabId: activeTab.id };
 
-      // Restore saved queryParams to the tab config so the URL reflects
-      // the component's preserved state (e.g., selected conversation, collection drill-down).
-      if (cached.savedQueryParams) {
+      // Reconcile the cached component's preserved queryParams with any INCOMING navigation
+      // intent already on the tab config (e.g. a Home pin / deep link that targeted a specific
+      // conversation via SwitchToApp before we got here).
+      //
+      // - If the tab has incoming queryParams, those are the source of truth: keep them and
+      //   sync the cache's snapshot to match. The component's reactive query-param subscription
+      //   (alive while detached) delivers them, so it switches to the requested state. Restoring
+      //   savedQueryParams here instead would clobber the navigation intent — the bug where two
+      //   conversation pins both reopened whatever chat was already cached.
+      // - Only when there's NO incoming intent (a plain tab re-focus) do we restore the
+      //   component's own preserved params so the URL reflects its retained state.
+      const incomingQP = activeTab.configuration?.['queryParams'] as Record<string, string> | undefined;
+      const hasIncomingQP = incomingQP != null && Object.keys(incomingQP).length > 0;
+      if (hasIncomingQP) {
+        cached.savedQueryParams = { ...incomingQP };
+      } else if (cached.savedQueryParams) {
         this.workspaceManager.UpdateTabConfiguration(activeTab.id, {
           queryParams: cached.savedQueryParams
         });

@@ -192,8 +192,15 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
     // Enable URL updates after initialization
     this.initializing = false;
 
-    // Push initial state to URL
-    this.pushStateToUrl();
+    // Push initial state to URL — but only if we actually have state to reflect.
+    // On a cold/direct deep-link load the params may arrive via the reactive
+    // OnQueryParamsChanged delivery slightly after ngOnInit; pushing empty params
+    // here would strip the deep link from the URL before that delivery lands.
+    // Once state is set (synchronously when params are already present, or via the
+    // reactive delivery), subscribeToUrlStateChanges() pushes the normalized URL.
+    if (this.collectionState.activeCollectionId || this.activeArtifactId) {
+      this.pushStateToUrl();
+    }
 
     // Notify load complete after user is set
     setTimeout(() => {
