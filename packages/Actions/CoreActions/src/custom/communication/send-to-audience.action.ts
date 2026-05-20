@@ -78,15 +78,15 @@ export class SendToAudienceAction extends BaseAction {
     if (!providerMessageTypeName) return missing('ProviderMessageTypeName');
     if (!from) return missing('From');
 
-    // Channel-specific message-type lookup happens inside SendToAudience.
-    // We pass a Message stub with the fields it cares about; the engine
-    // fills in the per-recipient `To`. MessageType resolves to the
-    // metadata type by name on the provider — SendToAudience handles
-    // that resolution.
-    const message: Message = {
-      // MessageType will be set inside CommunicationEngine.SendMessages;
-      // SendToAudience itself only reads From / Subject / Body off Message.
-      MessageType: undefined as unknown as Message['MessageType'],
+    // Build a Partial<Message> and cast at the boundary — the engine
+    // resolves the concrete MessageType from `ProviderName` +
+    // `ProviderMessageTypeName` before sending. SendToAudience itself
+    // only reads From / Subject / Body off Message; To gets populated
+    // per recipient inside the engine. Using Partial here avoids the
+    // `undefined as unknown as Message['MessageType']` cast and is the
+    // honest type for what we're constructing (a stub the engine
+    // completes).
+    const messageStub: Partial<Message> = {
       From: from,
       To: '',
       Subject: subject,
@@ -101,7 +101,7 @@ export class SendToAudienceAction extends BaseAction {
         FullNameField: getStr('FullNameField'),
         ProviderName: providerName,
         ProviderMessageTypeName: providerMessageTypeName,
-        Message: message,
+        Message: messageStub as Message,
         Credentials: credentials,
         PreviewOnly: getBool('PreviewOnly', false),
         ContextUser: params.ContextUser,
