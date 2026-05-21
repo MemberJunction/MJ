@@ -1,5 +1,14 @@
 # @memberjunction/ng-agent-client
 
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [32c4a02]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/ai-agent-client@5.35.0
+  - @memberjunction/global@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes
