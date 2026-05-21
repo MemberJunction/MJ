@@ -18,9 +18,9 @@ export class MJUserViewFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'userOwnership', sectionName: 'User & Ownership', isExpanded: true },
             { sectionKey: 'entityContext', sectionName: 'Entity Context', isExpanded: true },
-            { sectionKey: 'viewDefinitionSettings', sectionName: 'View Definition & Settings', isExpanded: false },
-            { sectionKey: 'filteringSmartSearch', sectionName: 'Filtering & Smart Search', isExpanded: false },
-            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: false },
+            { sectionKey: 'viewDefinitionSettings', sectionName: 'View Definition & Settings', isExpanded: true },
+            { sectionKey: 'filteringSmartSearch', sectionName: 'Filtering & Smart Search', isExpanded: true },
+            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJEntityRelationships', sectionName: 'Entity Relationships', isExpanded: false },

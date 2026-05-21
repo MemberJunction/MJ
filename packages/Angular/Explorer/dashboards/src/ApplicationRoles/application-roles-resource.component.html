@@ -1,141 +1,154 @@
-<div class="app-roles-container">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-left">
-      <i class="fa-solid fa-user-shield header-icon"></i>
-      <h2 class="header-title">Application Roles</h2>
+<!--
+  Interior chrome — see Section 10 of explorer-chrome-conventions. Role="toolbar"
+  because this is an action band, not a search/filter region.
+-->
+<mj-page-header-interior
+  Role="toolbar"
+  AriaLabel="Application roles actions"
+  Title="Application Roles"
+  Subtitle="Assign roles per application">
+  @if (HasUnsavedChanges) {
+    <div meta>
+      <mj-stat-badge
+        Icon="fa-solid fa-circle-exclamation"
+        Label="Unsaved changes"
+        Variant="warning">
+      </mj-stat-badge>
     </div>
-    <div class="header-actions">
-      @if (HasUnsavedChanges) {
-        <button mjButton variant="secondary" (click)="DiscardChanges()" [disabled]="IsSaving">
-          <i class="fa-solid fa-rotate-left"></i> Discard
-        </button>
-        <button mjButton variant="primary" (click)="SaveChanges()" [disabled]="IsSaving">
-          @if (IsSaving) {
-            <i class="fa-solid fa-spinner fa-spin"></i> Saving...
-          } @else {
-            <i class="fa-solid fa-floppy-disk"></i> Save Changes
-          }
-        </button>
-      }
-      <button mjButton variant="secondary" (click)="loadData()" [disabled]="IsLoading || IsSaving">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
+  }
+  <div actions>
+    <!-- Order: secondary buttons (Refresh, Discard) → primary CTA (Save) rightmost,
+         per chrome conventions §2 [actions]. -->
+    <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
+    @if (HasUnsavedChanges) {
+      <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
+        <i class="fa-solid fa-rotate-left"></i> Discard
       </button>
-    </div>
+      <button mjButton variant="primary" size="sm" (click)="SaveChanges()" [disabled]="IsSaving">
+        @if (IsSaving) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Saving...
+        } @else {
+          <i class="fa-solid fa-floppy-disk"></i> Save Changes
+        }
+      </button>
+    }
   </div>
+</mj-page-header-interior>
 
-  <!-- Status Messages -->
-  @if (ErrorMessage) {
-    <div class="message error-message">
-      <i class="fa-solid fa-circle-exclamation"></i>
-      {{ ErrorMessage }}
-    </div>
-  }
-  @if (SuccessMessage) {
-    <div class="message success-message">
-      <i class="fa-solid fa-circle-check"></i>
-      {{ SuccessMessage }}
-    </div>
-  }
+<!-- Scrollable Content — owned by <mj-page-body-interior>. -->
+  <mj-page-body-interior>
+    <!-- Status Messages -->
+    @if (ErrorMessage) {
+      <div class="message error-message">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        {{ ErrorMessage }}
+      </div>
+    }
+    @if (SuccessMessage) {
+      <div class="message success-message">
+        <i class="fa-solid fa-circle-check"></i>
+        {{ SuccessMessage }}
+      </div>
+    }
 
-  <!-- Loading State -->
-  @if (IsLoading) {
-    <mj-loading text="Loading application roles..."></mj-loading>
-  }
+    <!-- Loading State -->
+    @if (IsLoading) {
+      <mj-loading text="Loading application roles..."></mj-loading>
+    }
 
-  <!-- Main Content -->
-  @if (!IsLoading) {
-    <p class="description">
-      Configure which roles can access each application. Applications with no role assignments are open to all users (backwards compatible).
-    </p>
+    <!-- Main Content -->
+    @if (!IsLoading) {
+      <p class="description">
+        Configure which roles can access each application. Applications with no role assignments are open to all users (backwards compatible).
+      </p>
 
-    <div class="app-groups">
-      @for (group of ApplicationGroups; track TrackByAppId($index, group)) {
-        <div class="app-group" [class.expanded]="group.Expanded" [class.has-roles]="group.Roles.length > 0">
-          <!-- Application Header Row -->
-          <div class="app-group-header" (click)="ToggleGroup(group)">
-            <div class="app-header-left">
-              <i class="fa-solid" [ngClass]="group.Expanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
-              <span class="app-name">{{ group.ApplicationName }}</span>
-              <span class="role-count-badge" [class.open-access]="group.Roles.length === 0">
-                {{ GetRoleCountLabel(group) }}
-              </span>
-            </div>
-          </div>
-
-          <!-- Expanded Content -->
-          @if (group.Expanded) {
-            <div class="app-group-content">
-              <!-- Existing Role Assignments -->
-              @if (group.Roles.length > 0) {
-                <table class="roles-table">
-                  <thead>
-                    <tr>
-                      <th class="col-role">Role</th>
-                      <th class="col-access">Can Access</th>
-                      <th class="col-admin">Can Admin</th>
-                      <th class="col-actions">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    @for (row of group.Roles; track TrackByRoleRow($index, row)) {
-                      <tr [class.dirty]="row.IsDirty" [class.new-row]="row.IsNew">
-                        <td class="col-role">
-                          <i class="fa-solid fa-shield-halved role-icon"></i>
-                          {{ row.RoleName }}
-                          @if (row.IsNew) {
-                            <span class="new-badge">new</span>
-                          }
-                        </td>
-                        <td class="col-access">
-                          <input type="checkbox"
-                                 class="mj-checkbox"
-                                 [checked]="row.CanAccess"
-                                 (change)="ToggleCanAccess(row)">
-                        </td>
-                        <td class="col-admin">
-                          <input type="checkbox"
-                                 class="mj-checkbox"
-                                 [checked]="row.CanAdmin"
-                                 (change)="ToggleCanAdmin(row)">
-                        </td>
-                        <td class="col-actions">
-                          <button class="remove-btn" (click)="RemoveRole(group, row)" title="Remove role assignment">
-                            <i class="fa-solid fa-trash-can"></i>
-                          </button>
-                        </td>
-                      </tr>
-                    }
-                  </tbody>
-                </table>
-              } @else {
-                <div class="no-roles-message">
-                  <i class="fa-solid fa-unlock"></i>
-                  No role restrictions — all authenticated users can access this application.
-                </div>
-              }
-
-              <!-- Add Role -->
-              <div class="add-role-row">
-                <select class="mj-input add-role-select"
-                        [value]="SelectedRoleIdToAdd.get(group.ApplicationID) || ''"
-                        (change)="OnAddRoleSelect(group, $any($event.target).value)">
-                  <option value="" disabled>Select a role to add...</option>
-                  @for (role of GetUnassignedRoles(group); track role.ID) {
-                    <option [value]="role.ID">{{ role.Name }}</option>
-                  }
-                </select>
-                <button mjButton
-                        variant="secondary"
-                        (click)="AddRole(group)"
-                        [disabled]="!SelectedRoleIdToAdd.get(group.ApplicationID)">
-                  <i class="fa-solid fa-plus"></i> Add Role
-                </button>
+      <div class="app-groups">
+        @for (group of ApplicationGroups; track TrackByAppId($index, group)) {
+          <div class="app-group" [class.expanded]="group.Expanded" [class.has-roles]="group.Roles.length > 0">
+            <!-- Application Header Row -->
+            <div class="app-group-header" (click)="ToggleGroup(group)">
+              <div class="app-header-left">
+                <i class="fa-solid" [ngClass]="group.Expanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i>
+                <span class="app-name">{{ group.ApplicationName }}</span>
+                <span class="role-count-badge" [class.open-access]="group.Roles.length === 0">
+                  {{ GetRoleCountLabel(group) }}
+                </span>
               </div>
             </div>
-          }
-        </div>
-      }
-    </div>
-  }
-</div>
+
+            <!-- Expanded Content -->
+            @if (group.Expanded) {
+              <div class="app-group-content">
+                <!-- Existing Role Assignments -->
+                @if (group.Roles.length > 0) {
+                  <table class="roles-table">
+                    <thead>
+                      <tr>
+                        <th class="col-role">Role</th>
+                        <th class="col-access">Can Access</th>
+                        <th class="col-admin">Can Admin</th>
+                        <th class="col-actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of group.Roles; track TrackByRoleRow($index, row)) {
+                        <tr [class.dirty]="row.IsDirty" [class.new-row]="row.IsNew">
+                          <td class="col-role">
+                            <i class="fa-solid fa-shield-halved role-icon"></i>
+                            {{ row.RoleName }}
+                            @if (row.IsNew) {
+                              <span class="new-badge">new</span>
+                            }
+                          </td>
+                          <td class="col-access">
+                            <input type="checkbox"
+                                   class="mj-checkbox"
+                                   [checked]="row.CanAccess"
+                                   (change)="ToggleCanAccess(row)">
+                          </td>
+                          <td class="col-admin">
+                            <input type="checkbox"
+                                   class="mj-checkbox"
+                                   [checked]="row.CanAdmin"
+                                   (change)="ToggleCanAdmin(row)">
+                          </td>
+                          <td class="col-actions">
+                            <button class="remove-btn" (click)="RemoveRole(group, row)" title="Remove role assignment">
+                              <i class="fa-solid fa-trash-can"></i>
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                } @else {
+                  <div class="no-roles-message">
+                    <i class="fa-solid fa-unlock"></i>
+                    No role restrictions — all authenticated users can access this application.
+                  </div>
+                }
+
+                <!-- Add Role -->
+                <div class="add-role-row">
+                  <select class="mj-input add-role-select"
+                          [value]="SelectedRoleIdToAdd.get(group.ApplicationID) || ''"
+                          (change)="OnAddRoleSelect(group, $any($event.target).value)">
+                    <option value="" disabled>Select a role to add...</option>
+                    @for (role of GetUnassignedRoles(group); track role.ID) {
+                      <option [value]="role.ID">{{ role.Name }}</option>
+                    }
+                  </select>
+                  <button mjButton
+                          variant="secondary"
+                          (click)="AddRole(group)"
+                          [disabled]="!SelectedRoleIdToAdd.get(group.ApplicationID)">
+                    <i class="fa-solid fa-plus"></i> Add Role
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </mj-page-body-interior>

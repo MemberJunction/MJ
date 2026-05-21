@@ -1,189 +1,76 @@
-<div class="model-management-v2">
+<mj-page-layout>
   @if (isLoading) {
     <div class="loading-container">
       <mj-loading [text]="currentLoadingMessage" size="large"></mj-loading>
     </div>
   } @else {
-    <div class="dashboard-header">
-      <div class="header-info">
-        <h2 class="dashboard-title">
-          <i class="fa-solid fa-microchip"></i>
-          AI Models
-        </h2>
-        <button
-          type="button"
-          class="filter-toggle-btn"
-          (click)="toggleFilters()"
-          title="Toggle Filters">
-          <i class="fa-solid fa-filter"></i>
-          @if (showFilters) {
-            Hide Filters
-          } @else {
-            Show Filters
-          }
-        </button>
-        <span class="item-count">{{ filteredModels.length }} models</span>
+    <mj-page-header
+      Title="Models"
+      Icon="fa-solid fa-microchip">
+      <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+      <div meta>
+        <mj-stat-badge
+          [Count]="filteredModels.length"
+          [Total]="models.length"
+          Label="models">
+        </mj-stat-badge>
       </div>
+      <div actions>
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="resetPopoverFilters()">
+          <mj-filter-panel
+            [Fields]="modelFilterFields"
+            [Values]="modelFilterValues"
+            (ValuesChange)="onFilterValuesChange($event)"
+            (Reset)="resetPopoverFilters()">
+            <!-- Custom widget: Power Rank range (min/max number inputs) -->
+            <mj-filter-field Label="Power Rank" Icon="fa-solid fa-bolt">
+              <div class="rank-filter-inputs">
+                <input
+                  type="number"
+                  min="0"
+                  [max]="maxPowerRank"
+                  [(ngModel)]="powerRankRange.min"
+                  (change)="validateAndApplyRankFilters('power')"
+                  class="rank-input"
+                  placeholder="Min" />
+                <span class="rank-separator">-</span>
+                <input
+                  type="number"
+                  min="0"
+                  [max]="maxPowerRank"
+                  [(ngModel)]="powerRankRange.max"
+                  (change)="validateAndApplyRankFilters('power')"
+                  class="rank-input"
+                  placeholder="Max" />
+              </div>
+            </mj-filter-field>
+          </mj-filter-panel>
+        </mj-filter-popover>
 
-      <div class="header-controls">
-        <div class="view-toggle">
-          <button
-            type="button"
-            class="view-btn"
-            [class.active]="viewMode === 'grid'"
-            (click)="setViewMode('grid')"
-            title="Grid View">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          <button
-            type="button"
-            class="view-btn"
-            [class.active]="viewMode === 'list'"
-            (click)="setViewMode('list')"
-            title="List View">
-            <i class="fa-solid fa-list"></i>
-          </button>
-        </div>
+        <mj-view-toggle
+          [Options]="modelViewOptions"
+          [ActiveKey]="viewMode"
+          (KeyChange)="setViewMode($any($event))">
+        </mj-view-toggle>
 
-        <button
-          type="button"
-          class="control-btn primary"
-          (click)="createNewModel()"
-          title="Create New Model">
+        <button mjButton variant="primary" size="sm" (click)="createNewModel()" title="Create New Model">
           <i class="fa-solid fa-plus"></i>
           New Model
         </button>
       </div>
-    </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search models..."
+          [Value]="searchTerm"
+          (ValueChange)="onSearchChange($event)">
+        </mj-page-search>
+      </div>
+    </mj-page-header>
 
-    <as-split direction="horizontal">
-      @if (showFilters) {
-        <as-split-area [size]="20" [minSize]="15" [maxSize]="25">
-          <div class="filter-panel">
-            <div class="filter-panel-header">
-              <h3>Model Filters</h3>
-              <div class="filter-summary-inline">
-                <span class="summary-value">{{ filteredModels.length }}</span>
-                <span class="summary-label">of {{ models.length }}</span>
-              </div>
-              <button class="close-btn" (click)="toggleFilterPanel()">
-                <span class="fa-solid fa-times"></span>
-              </button>
-            </div>
-            
-            <div class="filter-content">
-              <!-- Search Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-search"></span>
-                  Name
-                </label>
-                <input 
-                  type="text"
-                  class="filter-input"
-                  placeholder="Search models..."
-                  [value]="searchTerm"
-                  (input)="onSearchChange($any($event.target).value)"
-                />
-              </div>
-
-              <!-- Sort By Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-sort"></span>
-                  Sort By
-                </label>
-                <select class="filter-select" [value]="sortBy" (change)="onSortChange($any($event.target).value)">
-                  @for (option of sortOptions; track option.value) {
-                    <option [value]="option.value">{{ option.label }}</option>
-                  }
-                </select>
-              </div>
-
-              <!-- Vendor Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-building"></span>
-                  Vendor
-                </label>
-                <select class="filter-select" [value]="selectedVendor" (change)="onVendorChange($any($event.target).value)">
-                  <option value="all">All Vendors</option>
-                  @for (vendor of vendors; track vendor.ID) {
-                    <option [value]="vendor.ID">{{ vendor.Name }}</option>
-                  }
-                </select>
-              </div>
-
-              <!-- Type Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-microchip"></span>
-                  Type
-                </label>
-                <select class="filter-select" [value]="selectedType" (change)="onTypeChange($any($event.target).value)">
-                  <option value="all">All Types</option>
-                  @for (type of modelTypes; track type.ID) {
-                    <option [value]="type.ID">{{ type.Name }}</option>
-                  }
-                </select>
-              </div>
-
-              <!-- Status Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-toggle-on"></span>
-                  Status
-                </label>
-                <select class="filter-select" [value]="selectedStatus" (change)="onStatusChange($any($event.target).value)">
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </select>
-              </div>
-
-              <!-- Power Rank Filter -->
-              <div class="filter-group">
-                <label class="filter-label">
-                  <span class="fa-solid fa-bolt"></span>
-                  Power Rank
-                </label>
-                <div class="rank-filter-inputs">
-                  <input 
-                    type="number" 
-                    min="0" 
-                    [max]="maxPowerRank" 
-                    [(ngModel)]="powerRankRange.min"
-                    (change)="validateAndApplyRankFilters('power')"
-                    class="rank-input"
-                    placeholder="Min"
-                  />
-                  <span class="rank-separator">-</span>
-                  <input 
-                    type="number" 
-                    min="0" 
-                    [max]="maxPowerRank" 
-                    [(ngModel)]="powerRankRange.max"
-                    (change)="validateAndApplyRankFilters('power')"
-                    class="rank-input"
-                    placeholder="Max"
-                  />
-                </div>
-              </div>
-
-              <!-- Reset Button -->
-              <div class="filter-actions">
-                <button class="reset-btn" (click)="clearFilters()" title="Reset all filters">
-                  <span class="fa-solid fa-undo"></span>
-                  Reset Filters
-                </button>
-              </div>
-            </div>
-          </div>
-        </as-split-area>
-      }
-
-      <as-split-area>
-        <div class="content-area">
+    <mj-page-body [Flex]="true">
           @if (filteredModels.length === 0) {
             <div class="empty-state">
               <i class="fa-solid fa-microchip fa-4x"></i>
@@ -406,9 +293,7 @@
               }
             }
           }
-        </div>
-      </as-split-area>
-    </as-split>
+    </mj-page-body>
 
     <!-- Detail Panel Overlay -->
     @if (detailPanelVisible) {
@@ -578,4 +463,4 @@
       }
     </div>
   }
-</div>
+</mj-page-layout>

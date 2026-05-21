@@ -266,6 +266,36 @@ export class ComponentCacheManager {
   }
 
   /**
+   * Selectively clear cached components matching a predicate.
+   * Components that match are destroyed; those that don't are kept.
+   *
+   * Use this for tenant switching: clear org-scoped components while
+   * keeping system/global components alive.
+   *
+   * @param predicate Return true for components that should be destroyed.
+   * @returns Number of components destroyed.
+   */
+  ClearCacheByPredicate(predicate: (info: CachedComponentInfo) => boolean): number {
+    let destroyed = 0;
+    const toRemove: string[] = [];
+
+    this.cache.forEach((info, key) => {
+      if (predicate(info)) {
+        this.appRef.detachView(info.componentRef.hostView);
+        info.componentRef.destroy();
+        toRemove.push(key);
+        destroyed++;
+      }
+    });
+
+    for (const key of toRemove) {
+      this.cache.delete(key);
+    }
+
+    return destroyed;
+  }
+
+  /**
    * Get cache statistics for debugging.
    */
   getCacheStats(): {

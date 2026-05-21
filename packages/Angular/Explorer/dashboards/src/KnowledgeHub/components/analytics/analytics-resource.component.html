@@ -1,31 +1,29 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Analytics"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Pipeline health, trending tags, and content insights">
+    <div meta>
+      <mj-stat-badge
+        [Label]="PipelineStatusText"
+        [Variant]="PipelineStatusOk ? 'success' : 'error'">
+      </mj-stat-badge>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="analytics-loading">
         <mj-loading text="Loading analytics data..." size="medium"></mj-loading>
     </div>
 } @else {
     <div class="analytics-layout">
-        <!-- =============== LEFT SIDEBAR =============== -->
-        <aside class="analytics-sidebar">
-            <div class="sidebar-header">
-                <h2><i class="fa-solid fa-chart-line"></i> Analytics</h2>
-            </div>
-
-            <nav class="sidebar-nav">
-                @for (nav of NavItems; track nav.ID) {
-                    <button
-                        class="nav-item"
-                        [class.active]="ActiveTab === nav.ID"
-                        (click)="SelectTab(nav.ID)"
-                    >
-                        <i [class]="nav.Icon"></i> {{ nav.Label }}
-                    </button>
-                }
-            </nav>
-
-            <div class="sidebar-divider"></div>
-
-            <!-- Trending Tags Cloud -->
-            <div class="trending-section">
+        <mj-left-nav
+            [Sections]="navSections"
+            [ActiveId]="ActiveTab"
+            (ItemClicked)="onNavItemClicked($event)">
+            <!-- Trending Tags Cloud projected into the rail's footer slot. -->
+            <div footer class="trending-section">
                 <h3><i class="fa-solid fa-arrow-trend-up"></i> Trending Tags</h3>
                 <div class="tag-cloud">
                     @for (tag of TrendingTags; track tag.Name) {
@@ -36,15 +34,9 @@
                     }
                 </div>
             </div>
+        </mj-left-nav>
 
-            <!-- Pipeline Status -->
-            <div class="pipeline-status">
-                <span class="status-dot" [class.status-dot-error]="!PipelineStatusOk"></span>
-                {{ PipelineStatusText }}
-            </div>
-        </aside>
-
-        <!-- =============== MAIN CONTENT =============== -->
+        <mj-left-nav-content>
         <div class="main-content">
 
             <!-- ====================================================== -->
@@ -1183,5 +1175,8 @@
             }
 
         </div><!-- /main-content -->
+        </mj-left-nav-content>
     </div><!-- /analytics-layout -->
 }
+  </mj-page-body>
+</mj-page-layout>

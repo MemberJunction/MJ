@@ -1,6 +1,22 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import {
+  MJButtonDirective,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJTabNavComponent,
+  MJFilterChipComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJPageSearchComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent,
+  MJLeftNavComponent,
+  MJLeftNavContentComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
 import { VersionsModule } from '@memberjunction/ng-versions';
@@ -51,6 +67,20 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     CommonModule,
     FormsModule,
     ReactiveFormsModule,
+    MJButtonDirective,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageBodyComponent,
+    MJTabNavComponent,
+    MJFilterChipComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJPageSearchComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
+    MJLeftNavComponent,
+    MJLeftNavContentComponent,
     ContainerDirectivesModule,
     TestingModule,
     VersionsModule,

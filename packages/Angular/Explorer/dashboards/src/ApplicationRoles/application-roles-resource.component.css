@@ -1,39 +1,19 @@
-.app-roles-container {
-  padding: 24px;
-  max-width: 960px;
-  margin: 0 auto;
-}
-
-/* Header */
-.header {
+/* :host is flex-column / 100% height via mj-left-nav-content's ::ng-deep
+   sizing. Interior chrome lives in <mj-page-header-interior> — see Section 10
+   of explorer-chrome-conventions. */
+:host {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-icon {
-  font-size: 24px;
-  color: var(--mj-brand-primary);
-}
-
-.header-title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--mj-text-primary);
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+/* Scrollable Content */
+.scrollable-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--mj-space-6);
 }
 
 /* Messages */

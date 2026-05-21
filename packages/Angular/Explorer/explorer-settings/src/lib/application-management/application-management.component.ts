@@ -198,11 +198,6 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
     this.updateFilter({ status });
   }
@@ -212,6 +207,12 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips) apply immediately. Text search still goes
+    // through the 300ms debounce in setupFilterSubscription.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public toggleAppExpansion(appId: string): void {
