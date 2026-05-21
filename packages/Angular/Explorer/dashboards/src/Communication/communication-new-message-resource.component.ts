@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import {
   ResourceData,
@@ -364,11 +364,11 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
   }
 
   public get selectedProvider(): MJCommunicationProviderEntity | null {
-    return this.providers.find((p) => p.ID === this.selectedProviderID) ?? null;
+    return this.providers.find((p) => UUIDsEqual(p.ID, this.selectedProviderID)) ?? null;
   }
 
   public get selectedMessageType(): MJCommunicationProviderMessageTypeEntity | null {
-    return this.messageTypes.find((mt) => mt.ID === this.selectedMessageTypeID) ?? null;
+    return this.messageTypes.find((mt) => UUIDsEqual(mt.ID, this.selectedMessageTypeID)) ?? null;
   }
 
   public get canPreview(): boolean {

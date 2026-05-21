@@ -2652,7 +2652,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.capabilityCache.set(listId, level);
       // Only mutate state if the user is still on this same menu — they
       // may have closed it before resolve finished.
-      if (this.showContextMenu && this.selectedContextItem?.list.ID === listId) {
+      if (this.showContextMenu && this.selectedContextItem && UUIDsEqual(this.selectedContextItem.list.ID, listId)) {
         this.contextItemCapabilities = CapabilitiesForLevel(level);
         this.cdr.detectChanges();
       }
