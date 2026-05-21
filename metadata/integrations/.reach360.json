@@ -1,0 +1,176 @@
+[
+  {
+    "fields": {
+      "Name": "Reach360",
+      "Description": "Reach 360 is Articulate's lightweight cloud LMS. This integration syncs users, groups, courses, learning paths, reports (sessions/activity), and supports invitations and completion imports via a Bearer token REST API (https://api.reach360.com).",
+      "ClassName": "Reach360Connector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://reach.articulate.com",
+      "BatchMaxRequestCount": 60,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key",
+      "Icon": "fa-solid fa-graduation-cap"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Courses",
+            "DisplayName": "Courses",
+            "Description": "Courses authored in Articulate Rise/Storyline/Microlearning or imported SCORM/xAPI content. Read-only over the API — authoring happens in Articulate apps.",
+            "Category": "Content",
+            "APIPath": "/courses",
+            "ResponseDataKey": "courses",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Description": "Unique identifier of the course.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "IsUniqueKey": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "title", "DisplayName": "Title", "Description": "Course title.", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "contentType", "DisplayName": "Content Type", "Description": "Content source — rise, storyline, microlearning, or imported.", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "coverImageUrl", "DisplayName": "Cover Image URL", "Description": "URL for the course cover image when one is attached.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "authorUrl", "DisplayName": "Author URL", "Description": "HATEOAS URL to fetch the course author user record.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "courseReportUrl", "DisplayName": "Course Report URL", "Description": "HATEOAS URL to fetch the course learner report.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Description": "Canonical URL for this course resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Users",
+            "DisplayName": "Users",
+            "Description": "Reach 360 users with email, role, and activity timestamps. Created via invitation or SSO provisioning (no direct POST).",
+            "Category": "People",
+            "APIPath": "/users",
+            "ResponseDataKey": "users",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Description": "Unique identifier of the user.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "IsUniqueKey": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "email", "DisplayName": "Email", "Description": "User email address — natural key for matching across systems.", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "role", "DisplayName": "Role", "Description": "User role — learner, author, or admin.", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "firstName", "DisplayName": "First Name", "Description": "User first name.", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastName", "DisplayName": "Last Name", "Description": "User last name.", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastActiveAt", "DisplayName": "Last Active At", "Description": "Timestamp of the user's last activity in Reach 360 — usable as an incremental watermark.", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "articulate360User", "DisplayName": "Articulate 360 User", "Description": "Whether the user is managed via the parent Articulate 360 Teams subscription.", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "groupsUrl", "DisplayName": "Groups URL", "Description": "HATEOAS URL to list the user's group memberships.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "learnerReportUrl", "DisplayName": "Learner Report URL", "Description": "HATEOAS URL for this user's learner report.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "favoritesUrl", "DisplayName": "Favorites URL", "Description": "HATEOAS URL for the user's favorites list.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 10, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Description": "Canonical URL for this user resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 11, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Groups",
+            "DisplayName": "Groups",
+            "Description": "Reach 360 groups used as the de-facto tagging/categorization mechanism for users and course assignments. Groups are created in the Reach 360 UI — API supports reading and membership mutations only.",
+            "Category": "People",
+            "APIPath": "/groups",
+            "ResponseDataKey": "groups",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Description": "Unique identifier of the group.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "IsUniqueKey": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "name", "DisplayName": "Name", "Description": "Group name.", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Description": "Group description text.", "Type": "nvarchar", "Length": -1, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "usersUrl", "DisplayName": "Users URL", "Description": "HATEOAS URL to list the group's member users.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "coursesUrl", "DisplayName": "Courses URL", "Description": "HATEOAS URL to list courses assigned to the group.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Description": "Canonical URL for this group resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "LearningPaths",
+            "DisplayName": "Learning Paths",
+            "Description": "Ordered sequences of courses. Created in the Reach 360 UI; enrollment (users and groups) is managed via the API.",
+            "Category": "Content",
+            "APIPath": "/learning-paths",
+            "ResponseDataKey": "learningPaths",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "id", "DisplayName": "ID", "Description": "Unique identifier of the learning path.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "IsUniqueKey": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "title", "DisplayName": "Title", "Description": "Learning path title.", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "description", "DisplayName": "Description", "Description": "Learning path description text.", "Type": "nvarchar", "Length": -1, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "coverImageUrl", "DisplayName": "Cover Image URL", "Description": "URL for the learning path cover image.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "coursesUrl", "DisplayName": "Courses URL", "Description": "HATEOAS URL to list courses in this learning path.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "coursesReportUrl", "DisplayName": "Courses Report URL", "Description": "HATEOAS URL for the learning path courses report.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "learnersReportUrl", "DisplayName": "Learners Report URL", "Description": "HATEOAS URL for the learning path learners report.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "url", "DisplayName": "URL", "Description": "Canonical URL for this learning path resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ActivityReport",
+            "DisplayName": "Activity Report",
+            "Description": "Account-wide session activity report acting as a CDC-style feed. Each row represents one user's interaction with one course, with started/completed timestamps and duration. Primary source for incremental sync — filter client-side by completedAt.",
+            "Category": "Reports",
+            "APIPath": "/reports/activity",
+            "ResponseDataKey": "sessions",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "courseId", "DisplayName": "Course ID", "Description": "Course identifier — composite primary key component.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "userId", "DisplayName": "User ID", "Description": "User identifier — composite primary key component.", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "courseTitle", "DisplayName": "Course Title", "Description": "Denormalized course title at time of session.", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "courseDeleted", "DisplayName": "Course Deleted", "Description": "Whether the originating course has since been deleted.", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "firstName", "DisplayName": "First Name", "Description": "Denormalized learner first name.", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "lastName", "DisplayName": "Last Name", "Description": "Denormalized learner last name.", "Type": "nvarchar", "Length": 255, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "userDeleted", "DisplayName": "User Deleted", "Description": "Whether the learner has since been removed from the account.", "Type": "bit", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "status", "DisplayName": "Status", "Description": "Session status — Not Started, In Progress, or Complete.", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "startedAt", "DisplayName": "Started At", "Description": "Session start timestamp (ISO 8601).", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "completedAt", "DisplayName": "Completed At", "Description": "Session completion timestamp — primary watermark field for incremental sync.", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 10, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "durationSeconds", "DisplayName": "Duration (sec)", "Description": "Session active duration in seconds.", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 11, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "quizScore", "DisplayName": "Quiz Score", "Description": "Quiz/assessment score when the session includes one.", "Type": "decimal", "Precision": 10, "Scale": 2, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 12, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "dueAt", "DisplayName": "Due At", "Description": "Due date when the session is associated with a learning path enrollment.", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 13, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "courseUrl", "DisplayName": "Course URL", "Description": "HATEOAS URL for the originating course resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 14, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "userUrl", "DisplayName": "User URL", "Description": "HATEOAS URL for the learner user resource.", "Type": "nvarchar", "Length": 1000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 15, "Status": "Active" } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
