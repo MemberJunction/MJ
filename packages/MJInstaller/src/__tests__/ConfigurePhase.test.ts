@@ -376,10 +376,10 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const patchedContent = configWriteCall![1];
-      expect(patchedContent).toContain("userName: 'jdoe'");
-      expect(patchedContent).toContain("email: 'jdoe@example.com'");
-      expect(patchedContent).toContain("firstName: 'John'");
-      expect(patchedContent).toContain("lastName: 'Doe'");
+      expect(patchedContent).toContain("UserName: 'jdoe'");
+      expect(patchedContent).toContain("Email: 'jdoe@example.com'");
+      expect(patchedContent).toContain("FirstName: 'John'");
+      expect(patchedContent).toContain("LastName: 'Doe'");
     });
   });
 
@@ -421,8 +421,8 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const content = configWriteCall![1];
-      expect(content).toContain("userName: 'new@example.com'");
-      expect(content).not.toContain("userName: 'old@example.com'");
+      expect(content).toContain("UserName: 'new@example.com'");
+      expect(content).not.toContain("UserName: 'old@example.com'");
     });
 
     it('should insert newUserSetup before closing }; when no existing block', async () => {
@@ -454,7 +454,7 @@ describe('ConfigurePhase', () => {
       );
       expect(configWriteCall).toBeDefined();
       const content = configWriteCall![1];
-      expect(content).toContain("userName: 'inserted@example.com'");
+      expect(content).toContain("UserName: 'inserted@example.com'");
       expect(content).toContain('};'); // closing still present
     });
   });
