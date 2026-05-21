@@ -21885,9 +21885,8 @@ export class MJArtifactUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
     @Field() 
     @MaxLength(100)
@@ -22067,9 +22066,8 @@ export class MJArtifactVersionAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -23718,9 +23716,8 @@ export class MJCollectionArtifact_ {
     @MaxLength(255)
     Collection: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -32690,9 +32687,8 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     ConversationDetail: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -32902,9 +32898,8 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(500)
     File?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int, {nullable: true}) 
+    ArtifactVersion?: number;
         
 }
 
@@ -51945,6 +51940,27 @@ export class MJList_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`}) 
+    @MaxLength(36)
+    SourceViewID?: string;
+        
+    @Field({nullable: true, description: `JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.`}) 
+    SourceFilterSnapshot?: string;
+        
+    @Field({nullable: true, description: `Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`}) 
+    LastRefreshedAt?: Date;
+        
+    @Field({nullable: true, description: `User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`}) 
+    @MaxLength(36)
+    LastRefreshedByUserID?: string;
+        
+    @Field({description: `Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).`}) 
+    @MaxLength(20)
+    RefreshMode: string;
+        
+    @Field(() => Boolean, {description: `When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`}) 
+    UseSnapshot: boolean;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -51960,6 +51976,14 @@ export class MJList_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     CompanyIntegration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    SourceView?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    LastRefreshedByUser?: string;
         
     @Field(() => [MJDuplicateRun_])
     MJDuplicateRuns_SourceListIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
@@ -52004,6 +52028,24 @@ export class CreateMJListInput {
     @Field({ nullable: true })
     CompanyIntegrationID: string | null;
 
+    @Field({ nullable: true })
+    SourceViewID: string | null;
+
+    @Field({ nullable: true })
+    SourceFilterSnapshot: string | null;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastRefreshedByUserID: string | null;
+
+    @Field({ nullable: true })
+    RefreshMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UseSnapshot?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -52037,6 +52079,24 @@ export class UpdateMJListInput {
 
     @Field({ nullable: true })
     CompanyIntegrationID?: string | null;
+
+    @Field({ nullable: true })
+    SourceViewID?: string | null;
+
+    @Field({ nullable: true })
+    SourceFilterSnapshot?: string | null;
+
+    @Field({ nullable: true })
+    LastRefreshedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastRefreshedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    RefreshMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UseSnapshot?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -76926,6 +76986,9 @@ export class MJUserView_ {
     @Field(() => [MJUserViewRun_])
     MJUserViewRuns_UserViewIDArray: MJUserViewRun_[]; // Link to MJUserViewRuns
     
+    @Field(() => [MJList_])
+    MJLists_SourceViewIDArray: MJList_[]; // Link to MJLists
+    
 }
 
 //****************************************************************************
@@ -77170,6 +77233,16 @@ export class MJUserViewResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViewRuns')} WHERE ${provider.QuoteIdentifier('UserViewID')}='${mjuserview_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User View Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJList_])
+    async MJLists_SourceViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Lists', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('SourceViewID')}='${mjuserview_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77578,6 +77651,9 @@ export class MJUser_ {
     
     @Field(() => [MJAIAgent_])
     MJAIAgents_OwnerUserIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
+    @Field(() => [MJList_])
+    MJLists_LastRefreshedByUserIDArray: MJList_[]; // Link to MJLists
     
 }
 
@@ -78711,6 +78787,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('OwnerUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJList_])
+    async MJLists_LastRefreshedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Lists', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('LastRefreshedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

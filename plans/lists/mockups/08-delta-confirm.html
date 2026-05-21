@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset="utf-8"><title>08 — Delta Confirm Component</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="index-shell">
+  <h1><i class="fa-solid fa-shield-halved" style="color: var(--mj-brand-primary)"></i> Delta-Confirm Component</h1>
+  <div class="subtitle">Shared component (<code>&lt;mj-list-delta-confirm&gt;</code>) used by every mutating list operation. The <strong>only</strong> UI path that produces a valid <code>deltaToken</code> for <code>applyListDelta()</code>. Two visual states: safe (no drops) and drop-warning.</div>
+
+  <h2 style="margin-top:24px;">State A — Additive (no row drops)</h2>
+  <div class="modal" style="max-width:720px; margin:16px 0; box-shadow: var(--mj-shadow-lg);">
+    <div class="modal-header"><i class="fa-solid fa-circle-check"></i><h2>Confirm List Update</h2></div>
+    <div class="modal-body">
+      <div style="font-size:13px; color:var(--mj-text-secondary);">You're about to apply this change to <strong>VIP Donors Q4 2026</strong>.</div>
+
+      <div class="delta-summary">
+        <div class="delta-tile add"><div class="count">+128</div><div class="label">To Add</div></div>
+        <div class="delta-tile keep"><div class="count">348</div><div class="label">Unchanged</div></div>
+        <div class="delta-tile remove" style="background:var(--mj-bg-surface-sunken);border-color:var(--mj-border-default);color:var(--mj-text-muted);"><div class="count">0</div><div class="label">To Remove</div></div>
+      </div>
+
+      <div style="padding:10px 12px; background:var(--mj-status-success-bg); border:1px solid var(--mj-status-success-border); color:var(--mj-status-success-text); border-radius:8px; font-size:12.5px;">
+        <i class="fa-solid fa-circle-check"></i> Safe operation — no records will be removed from the list.
+      </div>
+
+      <div class="label mt-16">Preview — records being added (first 5 of 128)</div>
+      <div class="preview-records">
+        <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Greta Olsen</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-44831</span></div>
+        <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Hugo Yamamoto</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-44832</span></div>
+        <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Ines Müller</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-44833</span></div>
+        <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Jamal Ali</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-44834</span></div>
+        <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Kalei Akana</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-44835</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-check"></i> Confirm (Add 128)</button>
+      <button class="mj-btn">Cancel</button>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11px;">Delta token valid for 5 min</span>
+    </div>
+  </div>
+
+  <h2 style="margin-top:36px;">State B — Sync Mode (DROP WARNING)</h2>
+  <div class="modal" style="max-width:720px; margin:16px 0; box-shadow: var(--mj-shadow-lg); border: 2px solid var(--mj-status-error);">
+    <div class="modal-header" style="background: var(--mj-status-error);"><i class="fa-solid fa-triangle-exclamation"></i><h2>Confirm List Update — Records Will Be Removed</h2></div>
+    <div class="modal-body">
+      <div style="font-size:13px; color:var(--mj-text-secondary);">Refreshing <strong>VIP Donors Q4 2026</strong> in Sync mode. Records no longer present in the source view will be removed.</div>
+
+      <div class="delta-summary">
+        <div class="delta-tile add"><div class="count">+128</div><div class="label">To Add</div></div>
+        <div class="delta-tile keep"><div class="count">307</div><div class="label">Unchanged</div></div>
+        <div class="delta-tile remove"><div class="count">−41</div><div class="label">To Remove</div></div>
+      </div>
+
+      <div class="drop-warning">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div style="flex:1;">
+          <div><strong>41 records will be removed from this list.</strong> These records are members of the list today but are no longer matched by the source view <em>"Q4 Donor View"</em>.</div>
+          <div class="confirm-check"><input type="checkbox" id="ack"> <label for="ack" style="font-size:12.5px;">I understand 41 records will be removed</label></div>
+        </div>
+      </div>
+
+      <div class="label mt-16">Preview — records being removed (first 5 of 41)</div>
+      <div class="preview-records">
+        <div class="record"><i class="fa-solid fa-user-minus" style="color:var(--mj-status-error)"></i><span>Marlon Reyes</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-39112 · Last seen in source 2026-03-12</span></div>
+        <div class="record"><i class="fa-solid fa-user-minus" style="color:var(--mj-status-error)"></i><span>Nadia Park</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-39228 · Last seen in source 2026-03-09</span></div>
+        <div class="record"><i class="fa-solid fa-user-minus" style="color:var(--mj-status-error)"></i><span>Omar Ben Salah</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-39245 · Last seen in source 2026-02-28</span></div>
+        <div class="record"><i class="fa-solid fa-user-minus" style="color:var(--mj-status-error)"></i><span>Priya Iyer</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-39301 · Last seen in source 2026-02-21</span></div>
+        <div class="record"><i class="fa-solid fa-user-minus" style="color:var(--mj-status-error)"></i><span>Quentin Bauer</span><span class="muted" style="margin-left:auto; font-size:11px;">CONT-39411 · Last seen in source 2026-02-04</span></div>
+      </div>
+      <div class="muted mt-8" style="font-size:11.5px;"><i class="fa-solid fa-clock-rotate-left"></i> Removed records are logged in the audit log and can be re-added manually if needed.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-danger" disabled style="opacity:0.55;"><i class="fa-solid fa-check"></i> Confirm Removal & Update</button>
+      <button class="mj-btn">Cancel</button>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11px;">Confirm button unlocks after acknowledgment</span>
+    </div>
+  </div>
+
+  <h2 style="margin-top:36px;">Contract</h2>
+  <div class="mj-panel"><div class="mj-panel-body" style="font-size:13px; line-height:1.7;">
+    <div><strong>Input:</strong> <code>ListDelta</code> object from <code>ListOperations.computeDelta()</code> (or any <code>compute*</code> method) including <code>deltaToken</code> (HMAC of source/target/timestamp).</div>
+    <div><strong>Output:</strong> emits <code>confirm</code> with the validated <code>deltaToken</code>, or <code>cancel</code>.</div>
+    <div><strong>Drop guard:</strong> when <code>counts.remove &gt; 0</code> the confirm button is disabled until the acknowledgment checkbox is checked. <code>applyListDelta</code> on the server <em>also</em> rejects the call when <code>confirmDrops !== true</code> — the UI is a convenience, not the source of truth.</div>
+    <div><strong>Staleness:</strong> tokens expire after 5 minutes. If records changed since preview, server returns <code>STALE_DELTA</code> and the component re-runs <code>computeDelta</code> automatically.</div>
+    <div><strong>Used by:</strong> Refresh-from-source, Set-op into existing list, Bulk-move records, any future "replace contents" op.</div>
+  </div></div>
+</div>
+</body></html>
