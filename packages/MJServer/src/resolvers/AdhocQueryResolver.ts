@@ -62,28 +62,46 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
             }
 
-            // 3. Execute with timeout
+            // 3. Build executable SQL. When MaxRows is provided, wrap in a derived table
+            // with outer TOP so the engine can short-circuit at the source instead of
+            // scanning the full result. Skipped for SQL that begins with WITH/CTE — those
+            // can't be nested in a derived table on SQL Server and fall through to the
+            // in-memory slice below.
+            const startRow = input.StartRow ?? 0;
+            const maxRows = input.MaxRows;
+            const canWrap =
+                maxRows != null &&
+                Number.isInteger(maxRows) &&
+                maxRows > 0 &&
+                Number.isInteger(startRow) &&
+                startRow >= 0 &&
+                !/^\s*WITH\b/i.test(input.SQL);
+            const executableSql = canWrap
+                ? `SELECT TOP ${startRow + maxRows} * FROM (\n${input.SQL}\n) AS _adhoc_capped`
+                : input.SQL;
+
+            // 4. Execute with timeout
             const timeoutMs = (input.TimeoutSeconds ?? 30) * 1000;
             const request = new sql.Request(readOnlyDS);
 
             const result = await Promise.race([
-                request.query(input.SQL),
+                request.query(executableSql),
                 new Promise<never>((_, reject) =>
                     setTimeout(() => reject(new Error('Query timeout exceeded')), timeoutMs)
                 )
             ]);
             const executionTimeMs = Date.now() - startTime;
 
-            // 4. Apply in-memory pagination if MaxRows/StartRow provided.
-            // SQL runs unbounded server-side; this just limits what crosses the wire.
+            // 5. Apply in-memory pagination. With the wrap applied this is a no-op for
+            // first-page reads; for StartRow > 0 (or CTE-headed SQL where the wrap was
+            // skipped) it carves out the requested page.
             const fullRecordset = result.recordset ?? [];
             const totalRowCount = fullRecordset.length;
-            const startRow = input.StartRow ?? 0;
             let paginated = fullRecordset;
             if (startRow > 0) paginated = paginated.slice(startRow);
-            if (input.MaxRows != null && input.MaxRows > 0) paginated = paginated.slice(0, input.MaxRows);
+            if (maxRows != null && maxRows > 0) paginated = paginated.slice(0, maxRows);
 
-            // 5. Return as RunQueryResultType
+            // 6. Return as RunQueryResultType
             return {
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
@@ -91,8 +109,8 @@ export class AdhocQueryResolver extends ResolverBase {
                 Results: JSON.stringify(paginated),
                 RowCount: paginated.length,
                 TotalRowCount: totalRowCount,
-                PageNumber: input.MaxRows != null && input.MaxRows > 0 ? Math.floor(startRow / input.MaxRows) + 1 : undefined,
-                PageSize: input.MaxRows ?? undefined,
+                PageNumber: maxRows != null && maxRows > 0 ? Math.floor(startRow / maxRows) + 1 : undefined,
+                PageSize: maxRows ?? undefined,
                 ExecutionTime: executionTimeMs,
                 ErrorMessage: ''
             };
