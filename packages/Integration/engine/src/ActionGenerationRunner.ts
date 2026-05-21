@@ -114,14 +114,14 @@ export class ActionGenerationRunner {
             const result = generator.Generate(config);
             const actionsPath = path.join(actionsDir, fileName);
             const existingActions = readJsonArrayIfExists(actionsPath);
-            const merged = mergeActionRecords(existingActions, result.ActionRecords as MjSyncRecord[]);
+            const merged = mergeActionRecords(existingActions, result.ActionRecords);
             fs.writeFileSync(actionsPath, JSON.stringify(merged, null, 2) + '\n');
 
             onProgress(`${config.IntegrationName}: ${result.ActionRecords.length} action(s) → ${fileName}`);
             totalActions += result.ActionRecords.length;
 
             if (result.CategoryRecords.length > 0) {
-                allCategoryRecords.push(...(result.CategoryRecords as MjSyncRecord[]));
+                allCategoryRecords.push(...result.CategoryRecords);
             }
 
             perConnector.push({

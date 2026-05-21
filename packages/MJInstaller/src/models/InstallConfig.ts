@@ -347,6 +347,7 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
   const newUser: Partial<NonNullable<InstallConfig['CreateNewUser']>> = {};
   let createNewUserOptIn = false;
   let recognized = 0;
+  const unknownKeys: string[] = [];
 
   for (const key of Object.keys(input)) {
     const value = input[key];
@@ -383,6 +384,18 @@ export async function loadConfigFile(filePath: string): Promise<PartialInstallCo
       recognized++;
       continue;
     }
+
+    unknownKeys.push(key);
+  }
+
+  if (unknownKeys.length > 0) {
+    // Surface typos / unsupported keys (e.g. `explorerPort` when only
+    // MJ_INSTALL_EXPLORER_PORT env var is wired up) instead of silently
+    // dropping them — which is the failure mode that bit Bug #7.
+    console.warn(
+      `Config file at ${filePath} has ${unknownKeys.length} unrecognized key(s): ${unknownKeys.join(', ')}. ` +
+      `These will be ignored. Check for typos or consult the supported schema.`
+    );
   }
 
   if (Object.keys(authValues).length > 0) {

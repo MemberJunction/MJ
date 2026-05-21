@@ -198,7 +198,14 @@ function loadLocalPack(
     if (!existsSync(manifestPath)) {
         throw new Error(`Local pack at ${rootDir} has no .claude/mj/MANIFEST.json`);
     }
-    const manifest: Manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    let manifest: Manifest;
+    try {
+        manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    } catch (err) {
+        throw new Error(
+            `Local pack manifest at ${manifestPath} is not valid JSON: ${(err as Error).message}`
+        );
+    }
 
     const files = new Map<string, Uint8Array>();
     if (manifestOnly) {

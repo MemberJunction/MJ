@@ -367,12 +367,30 @@ function collectPackPathsByPrefix(
 }
 
 function writeFile(opts: PackMergeOptions, absPath: string, body: Uint8Array | string): void {
+    assertWithinTarget(opts.TargetDir, absPath);
     if (opts.DryRun) return;
     mkdirSync(path.dirname(absPath), { recursive: true });
     if (typeof body === 'string') {
         writeFileSync(absPath, body, 'utf8');
     } else {
         writeFileSync(absPath, body);
+    }
+}
+
+/**
+ * Defense-in-depth against malicious pack manifests: every write must
+ * resolve to a path inside `targetDir`. A hostile `--from` pack whose
+ * manifest declares `relPath: "../../etc/whatever"` would otherwise
+ * escape the install directory.
+ */
+function assertWithinTarget(targetDir: string, absPath: string): void {
+    const resolvedTarget = path.resolve(targetDir);
+    const resolvedAbs = path.resolve(absPath);
+    const targetWithSep = resolvedTarget.endsWith(path.sep) ? resolvedTarget : resolvedTarget + path.sep;
+    if (resolvedAbs !== resolvedTarget && !resolvedAbs.startsWith(targetWithSep)) {
+        throw new Error(
+            `Pack manifest tried to write outside the target directory: ${absPath} (target: ${targetDir})`
+        );
     }
 }
 
