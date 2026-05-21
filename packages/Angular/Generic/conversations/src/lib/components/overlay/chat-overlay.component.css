@@ -19,14 +19,68 @@
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    z-index: 999;
+    z-index: 2147483647;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     animation: overlayBubbleIn 0.3s ease;
+    /* Required for touch drag: blocks browser pan/zoom so pointermove fires
+       continuously instead of being swallowed by scroll-handling. */
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+/* Subtle, native-feel hover hint that the bubble is also draggable. Stays hidden
+   until the user has lingered for 1s — the delay is a pure-CSS trick: the base
+   rule has no transition-delay (so it fades out instantly), and the :hover rule
+   adds a 1s delay (so it only appears for a deliberate hover). */
+.chat-overlay-bubble-tooltip {
+    position: absolute;
+    top: 50%;
+    right: calc(100% + 0.5rem);
+    transform: translateY(-50%);
+    padding: 0.3rem 0.5rem;
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--mj-text-primary) 88%, transparent);
+    color: var(--mj-bg-surface);
+    font-size: 0.7rem;
+    font-weight: 400;
+    line-height: 1.2;
+    white-space: nowrap;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease 0s;
+}
+
+.chat-overlay-bubble:hover .chat-overlay-bubble-tooltip {
+    opacity: 1;
+    transition-delay: 1s;
 }
 
 .chat-overlay-bubble:hover {
     transform: scale(1.08);
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+
+/* Immediate press feedback — fires on mousedown before the drag threshold is crossed,
+   so the user sees "I'm being held" right away and learns the bubble is draggable. */
+.chat-overlay-bubble.is-pressed {
+    cursor: grabbing;
+    transform: scale(0.94);
+    transition: transform 0.08s ease;
+    box-shadow:
+        0 2px 6px rgba(0, 0, 0, 0.25),
+        0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent);
+}
+
+/* Active drag — overrides the press state once movement passes the threshold. */
+.chat-overlay-bubble.is-dragging {
+    cursor: grabbing;
+    transform: scale(1.04);
+    transition: none;
+    box-shadow:
+        0 8px 28px rgba(0, 0, 0, 0.35),
+        0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 40%, transparent);
 }
 
 @keyframes overlayBubbleIn {
@@ -74,7 +128,7 @@
     box-shadow:
         0 8px 32px rgba(0, 0, 0, 0.3),
         0 2px 8px rgba(0, 0, 0, 0.15);
-    z-index: 999;
+    z-index: 2147483647;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -211,7 +265,7 @@
 
 @media (max-width: 480px) {
     .chat-overlay-panel {
-        bottom: 0;
+        bottom: 0 !important;
         right: 0;
         width: 100% !important;
         height: 100vh !important;
@@ -220,11 +274,16 @@
     }
 
     .chat-overlay-bubble {
-        bottom: 1rem;
+        /* No !important on `bottom` — the inline [style.bottom.px] binding owns it
+           so users can drag the bubble out of the way of underlying app buttons. */
         right: 1rem;
     }
 
     .resize-handle {
+        display: none;
+    }
+
+    .chat-overlay-bubble-tooltip {
         display: none;
     }
 }

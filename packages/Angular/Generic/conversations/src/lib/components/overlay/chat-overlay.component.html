@@ -1,7 +1,12 @@
 @if (IsVisible) {
     <!-- Floating Button (collapsed state) -->
     @if (State === 'collapsed') {
-        <div class="chat-overlay-bubble" (click)="Toggle()" title="Open Chat">
+        <div class="chat-overlay-bubble"
+             [class.is-pressed]="IsBubblePressed"
+             [class.is-dragging]="IsBubbleDragging"
+             [style.bottom.px]="BubbleBottomPx"
+             (pointerdown)="OnBubblePointerDown($event)">
+            <span class="chat-overlay-bubble-tooltip" role="tooltip">Drag up or down to reposition</span>
             <i class="fa-solid fa-comments chat-overlay-bubble-icon"></i>
             @if (UnreadCount > 0) {
                 <span class="chat-overlay-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
@@ -14,7 +19,8 @@
         <div class="chat-overlay-panel"
              [class.maximized]="State === 'maximized'"
              [style.width.px]="State === 'maximized' ? null : PanelWidth"
-             [style.height.px]="State === 'maximized' ? null : PanelHeight">
+             [style.height.px]="State === 'maximized' ? null : PanelHeight"
+             [style.bottom.px]="State === 'maximized' ? null : PanelBottomPx">
 
             <!-- Resize handles (only in expanded, not maximized) -->
             @if (State === 'expanded') {
