@@ -984,6 +984,17 @@ Goal: ship the `/commit`, `/new-branch`, speckit suite, etc.
 | 44 | Add CHANGELOG to `templates/claude-pack/versions/v5/CHANGELOG.md` for the first release | same | Has a 5.1.0 entry |
 | 45 | Tag and ship | n/a | Pack ships in the next MJ release |
 
+### 12.9 Milestones delivered post-M8 (emergent from end-to-end testing)
+
+Two additional milestones were added during the PR after M8, driven by issues that surfaced only during the first true end-to-end `mj install` runs against a fresh workspace. Captured here so the plan reflects what shipped, not just what was designed up front.
+
+- **M9 — Installer hardening**: legacy-alias support + clearer "no recognized keys" error in `install.config.json` loading; configurable migration timeout; preflight + ConfigurePhase honor the actual `.env` target path; declared `unzipper` as a root dependency (caught by dependency-check workflow).
+- **M10 — Bug fixes + boundary validation**:
+  - **Bug #6** — `ConfigurePhase` checkpoint resume corrupted `.env` on restart (resume now reads existing values instead of re-writing empty).
+  - **Bug #7** — `ExplorerPort` from `install.config.json` wasn't propagated to `ng serve` (Explorer was always bound to default port).
+  - **Bug #8** — `CodeGenLib/db-connection.ts` destructured `configInfo` at module load, capturing empty defaults; CodeGen crashed with "config.server is required". Fixed by lazy `buildSqlConfig()` inside `MSSQLConnection()`.
+  - **Boundary-validation pass** — try/catch + descriptive error on user-supplied pack manifest JSON parsing; `assertWithinTarget()` path-traversal guard on `PackMerger.writeFile()` to reject hostile `--from` manifests; `console.warn` for unrecognized keys in `install.config.json` (the same failure mode that bit Bug #7).
+
 ---
 
 ## 13. Open Questions / Decisions Needed
