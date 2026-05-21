@@ -17,7 +17,7 @@ export class MJAIAgentRunMediaFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runContext', sectionName: 'Run Context', isExpanded: true },
             { sectionKey: 'fileAttributes', sectionName: 'File Attributes', isExpanded: true },
-            { sectionKey: 'mediaContent', sectionName: 'Media Content', isExpanded: false },
+            { sectionKey: 'mediaContent', sectionName: 'Media Content', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
