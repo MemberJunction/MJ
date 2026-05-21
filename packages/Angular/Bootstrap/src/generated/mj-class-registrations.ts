@@ -11,40 +11,10 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/actions-base (2 classes)
-import {
-    MJActionEntityExtended,
-    MJEntityActionEntityExtended,
-} from '@memberjunction/actions-base';
-
-// @memberjunction/ai-core-plus (7 classes)
-import {
-    MJAIAgentEntityExtended,
-    MJAIAgentRunEntityExtended,
-    MJAIAgentRunStepEntityExtended,
-    MJAIModelEntityExtended,
-    MJAIPromptCategoryEntityExtended,
-    MJAIPromptEntityExtended,
-    MJAIPromptRunEntityExtended,
-} from '@memberjunction/ai-core-plus';
-
-// @memberjunction/ai-engine-base (4 classes)
-import {
-    MJAICredentialBindingEntityExtended,
-    PerHundredThousandTokensPriceUnitType,
-    PerMillionTokensPriceUnitType,
-    PerThousandTokensPriceUnitType,
-} from '@memberjunction/ai-engine-base';
-
 // @memberjunction/ai-vectors-memory (1 classes)
 import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
-
-// @memberjunction/communication-types (1 classes)
-import {
-    MJCommunicationProviderEntityExtended,
-} from '@memberjunction/communication-types';
 
 // @memberjunction/core-entities (347 classes)
 import {
@@ -397,6 +367,36 @@ import {
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
+// @memberjunction/actions-base (2 classes)
+import {
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
+} from '@memberjunction/actions-base';
+
+// @memberjunction/ai-core-plus (7 classes)
+import {
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIPromptCategoryEntityExtended,
+    MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
+} from '@memberjunction/ai-core-plus';
+
+// @memberjunction/ai-engine-base (4 classes)
+import {
+    MJAICredentialBindingEntityExtended,
+    PerHundredThousandTokensPriceUnitType,
+    PerMillionTokensPriceUnitType,
+    PerThousandTokensPriceUnitType,
+} from '@memberjunction/ai-engine-base';
+
+// @memberjunction/communication-types (1 classes)
+import {
+    MJCommunicationProviderEntityExtended,
+} from '@memberjunction/communication-types';
+
 // @memberjunction/entity-communications-base (1 classes)
 import {
     MJEntityCommunicationMessageTypeEntityExtended,
@@ -457,6 +457,16 @@ import {
     WebURLConfigPanelComponent,
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
+
+// @memberjunction/ng-explorer-settings (6 classes)
+import {
+    ApplicationManagementComponent,
+    EntityPermissionsComponent,
+    RoleManagementComponent,
+    SettingsComponent,
+    SqlLoggingComponent,
+    UserManagementComponent,
+} from '@memberjunction/ng-explorer-settings';
 
 // @memberjunction/ng-dashboards (89 classes)
 import {
@@ -551,6 +561,11 @@ import {
     VersionHistoryRestoreResourceComponent,
 } from '@memberjunction/ng-dashboards';
 
+// @memberjunction/ng-file-storage (1 classes)
+import {
+    FileBrowserResource,
+} from '@memberjunction/ng-file-storage';
+
 // @memberjunction/ng-explorer-core (8 classes)
 import {
     ArtifactResource,
@@ -563,42 +578,13 @@ import {
     UserViewResource,
 } from '@memberjunction/ng-explorer-core';
 
-// @memberjunction/ng-explorer-settings (6 classes)
-import {
-    ApplicationManagementComponent,
-    EntityPermissionsComponent,
-    RoleManagementComponent,
-    SettingsComponent,
-    SqlLoggingComponent,
-    UserManagementComponent,
-} from '@memberjunction/ng-explorer-settings';
-
-// @memberjunction/ng-file-storage (1 classes)
-import {
-    FileBrowserResource,
-} from '@memberjunction/ng-file-storage';
-
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const CLASS_REGISTRATIONS: any[] = [
-    MJActionEntityExtended,
-    MJEntityActionEntityExtended,
-    MJAIAgentEntityExtended,
-    MJAIAgentRunEntityExtended,
-    MJAIAgentRunStepEntityExtended,
-    MJAIModelEntityExtended,
-    MJAIPromptCategoryEntityExtended,
-    MJAIPromptEntityExtended,
-    MJAIPromptRunEntityExtended,
-    MJAICredentialBindingEntityExtended,
-    PerHundredThousandTokensPriceUnitType,
-    PerMillionTokensPriceUnitType,
-    PerThousandTokensPriceUnitType,
     SimpleVectorDatabase,
-    MJCommunicationProviderEntityExtended,
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
@@ -946,6 +932,20 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
     ResourcePermissionProvider,
+    MJActionEntityExtended,
+    MJEntityActionEntityExtended,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIPromptCategoryEntityExtended,
+    MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
+    MJAICredentialBindingEntityExtended,
+    PerHundredThousandTokensPriceUnitType,
+    PerMillionTokensPriceUnitType,
+    PerThousandTokensPriceUnitType,
+    MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
@@ -987,6 +987,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     ViewPartComponent,
     WebURLConfigPanelComponent,
     WebURLPartComponent,
+    ApplicationManagementComponent,
+    EntityPermissionsComponent,
+    RoleManagementComponent,
+    SettingsComponent,
+    SqlLoggingComponent,
+    UserManagementComponent,
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
     APIKeysResourceComponent,
@@ -1076,6 +1082,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     VersionHistoryGraphResourceComponent,
     VersionHistoryLabelsResourceComponent,
     VersionHistoryRestoreResourceComponent,
+    FileBrowserResource,
     ArtifactResource,
     ChatConversationsResource,
     DashboardResource,
@@ -1084,13 +1091,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     QueryResource,
     SearchResultsResource,
     UserViewResource,
-    ApplicationManagementComponent,
-    EntityPermissionsComponent,
-    RoleManagementComponent,
-    SettingsComponent,
-    SqlLoggingComponent,
-    UserManagementComponent,
-    FileBrowserResource,
 ];
 
 /** Marker constant indicating the manifest has been loaded. */
@@ -1101,19 +1101,19 @@ export const CLASS_REGISTRATIONS_COUNT = 507;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
+    '@memberjunction/ai-vectors-memory',
+    '@memberjunction/core-entities',
     '@memberjunction/actions-base',
     '@memberjunction/ai-core-plus',
     '@memberjunction/ai-engine-base',
-    '@memberjunction/ai-vectors-memory',
     '@memberjunction/communication-types',
-    '@memberjunction/core-entities',
     '@memberjunction/entity-communications-base',
     '@memberjunction/ng-artifacts',
     '@memberjunction/ng-auth-services',
     '@memberjunction/ng-core-entity-forms',
     '@memberjunction/ng-dashboard-viewer',
-    '@memberjunction/ng-dashboards',
-    '@memberjunction/ng-explorer-core',
     '@memberjunction/ng-explorer-settings',
+    '@memberjunction/ng-dashboards',
     '@memberjunction/ng-file-storage',
+    '@memberjunction/ng-explorer-core',
 ] as const;

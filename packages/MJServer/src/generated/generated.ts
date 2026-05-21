@@ -21885,9 +21885,8 @@ export class MJArtifactUse_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
     @Field() 
     @MaxLength(100)
@@ -22067,9 +22066,8 @@ export class MJArtifactVersionAttribute_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -23718,9 +23716,8 @@ export class MJCollectionArtifact_ {
     @MaxLength(255)
     Collection: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -32690,9 +32687,8 @@ export class MJConversationDetailArtifact_ {
     @Field() 
     ConversationDetail: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int) 
+    ArtifactVersion: number;
         
 }
 
@@ -32902,9 +32898,8 @@ export class MJConversationDetailAttachment_ {
     @MaxLength(500)
     File?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    ArtifactVersion?: string;
+    @Field(() => Int, {nullable: true}) 
+    ArtifactVersion?: number;
         
 }
 

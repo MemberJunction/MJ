@@ -7990,10 +7990,10 @@ export const MJArtifactUseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.string().nullable().describe(`
+    ArtifactVersion: z.number().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: int`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -8053,10 +8053,10 @@ export const MJArtifactVersionAttributeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.string().nullable().describe(`
+    ArtifactVersion: z.number().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: int`),
 });
 
 export type MJArtifactVersionAttributeEntityType = z.infer<typeof MJArtifactVersionAttributeSchema>;
@@ -8536,10 +8536,10 @@ export const MJCollectionArtifactSchema = z.object({
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactVersion: z.string().nullable().describe(`
+    ArtifactVersion: z.number().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: int`),
 });
 
 export type MJCollectionArtifactEntityType = z.infer<typeof MJCollectionArtifactSchema>;
@@ -11490,10 +11490,10 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Summary
         * * SQL Data Type: nvarchar(MAX)`),
-    ArtifactVersion: z.string().nullable().describe(`
+    ArtifactVersion: z.number().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Summary
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: int`),
 });
 
 export type MJConversationDetailArtifactEntityType = z.infer<typeof MJConversationDetailArtifactSchema>;
@@ -11603,10 +11603,10 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Field Name: File
         * * Display Name: File Record
         * * SQL Data Type: nvarchar(500)`),
-    ArtifactVersion: z.string().nullable().describe(`
+    ArtifactVersion: z.number().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Record
-        * * SQL Data Type: nvarchar(255)`),
+        * * SQL Data Type: int`),
 });
 
 export type MJConversationDetailAttachmentEntityType = z.infer<typeof MJConversationDetailAttachmentSchema>;
@@ -17863,7 +17863,7 @@ export const MJListSchema = z.object({
         * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
     LastRefreshedByUserID: z.string().nullable().describe(`
         * * Field Name: LastRefreshedByUserID
-        * * Display Name: Last Refreshed By
+        * * Display Name: Last Refreshed By User ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
         * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
@@ -17897,7 +17897,7 @@ export const MJListSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Integration Name
+        * * Display Name: Company Integration Name
         * * SQL Data Type: nvarchar(255)`),
     SourceView: z.string().nullable().describe(`
         * * Field Name: SourceView
@@ -48228,9 +48228,9 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: int
     */
-    get ArtifactVersion(): string | null {
+    get ArtifactVersion(): number {
         return this.Get('ArtifactVersion');
     }
 
@@ -48383,9 +48383,9 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: int
     */
-    get ArtifactVersion(): string | null {
+    get ArtifactVersion(): number {
         return this.Get('ArtifactVersion');
     }
 }
@@ -49615,9 +49615,9 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: int
     */
-    get ArtifactVersion(): string | null {
+    get ArtifactVersion(): number {
         return this.Get('ArtifactVersion');
     }
 }
@@ -57375,9 +57375,9 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Summary
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: int
     */
-    get ArtifactVersion(): string | null {
+    get ArtifactVersion(): number {
         return this.Get('ArtifactVersion');
     }
 }
@@ -57696,9 +57696,9 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Record
-    * * SQL Data Type: nvarchar(255)
+    * * SQL Data Type: int
     */
-    get ArtifactVersion(): string | null {
+    get ArtifactVersion(): number | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -73588,7 +73588,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: LastRefreshedByUserID
-    * * Display Name: Last Refreshed By
+    * * Display Name: Last Refreshed By User ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.
@@ -73661,7 +73661,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Integration Name
+    * * Display Name: Company Integration Name
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string | null {
