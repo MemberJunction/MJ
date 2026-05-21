@@ -473,64 +473,54 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**********************************************************************
-     * This section is for handling caching of multiple instances when needed
-     * We use the primary singleton as the instance to store a cache of instances
-     * that are tied to specific providers. This is useful when we have multiple
-     * providers in a given app going to different connections.
+     * This section is for handling caching of multiple instances when needed.
+     * We cache engine instances keyed by the provider they were loaded against,
+     * so that callers asking for "the QueryEngine for this provider" get back
+     * the same instance across calls. This is useful when an app maintains
+     * multiple providers (e.g. multi-tenant) pointing at different connections.
+     *
+     * The cache uses a WeakMap keyed by provider so that when a provider goes
+     * out of scope (e.g. a per-request provider at the end of a GraphQL
+     * request), the cached engine instances tied to it become GC-eligible
+     * automatically. Without this, per-request providers accumulate
+     * indefinitely along with their engine instances and BaseEntity caches.
      *********************************************************************/
-    // private static _providerInstances: Map<{provider: IMetadataProvider, subclassConstructor: any}, any> = new Map();
-    // private static get ProviderInstances(): Map<{provider: IMetadataProvider, subclassConstructor: any}, any> {
-    //     return BaseEngine._providerInstances;
-    // }
-    private static _providerInstances: { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] = [];
-    private static get ProviderInstances(): { provider: IMetadataProvider, subclassConstructor: any, instance: any }[] {
-        return BaseEngine._providerInstances;
-    }    
+    private static _providerInstances: WeakMap<IMetadataProvider, Map<Function, BaseEngine<unknown>>> = new WeakMap();
 
     /**
      * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
      */
     public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === subclassConstructor
-        );
+        const perProviderMap = BaseEngine._providerInstances.get(provider);
+        if (perProviderMap) {
+            const existing = perProviderMap.get(subclassConstructor);
+            if (existing) {
+                return existing as BaseEngine<T>;
+            }
+        }
 
-        if (existingEntry) {
-            return existingEntry.instance;
-        }
-        else {
-            // we don't have an existing instance for this provider, so we need to create one
-            const newInstance = new subclassConstructor(); 
-            newInstance.SetProvider(provider);
-//            BaseEngine.ProviderInstances.set({provider, subclassConstructor}, newInstance);
-            //BaseEngine.ProviderInstances.push({ provider, subclassConstructor, instance: newInstance });
-                    
-            return newInstance;
-        }
+        const newInstance = new subclassConstructor();
+        newInstance.SetProvider(provider); // SetProvider -> CheckAddToProviderInstances handles registration
+        return newInstance;
     }
 
     /**
      * Internal method to set the provider when an engine is loaded
-     * @param provider 
+     * @param provider
      */
     protected SetProvider(provider: IMetadataProvider) {
         this._provider = provider;
-//        BaseEngine.ProviderInstances.set({provider: this.ProviderToUse, subclassConstructor: this.constructor} /*use default provider if one wasn't provided to use*/, <T><any>this);
-
         this.CheckAddToProviderInstances(this.ProviderToUse);
     }
 
     protected CheckAddToProviderInstances(provider: IMetadataProvider) {
-        const existingEntry = BaseEngine.ProviderInstances.find(
-            entry => entry.provider === provider && entry.subclassConstructor === this.constructor
-        );
-
-        if (!existingEntry) {
-            BaseEngine.ProviderInstances.push({
-                provider: provider,
-                subclassConstructor: this.constructor,
-                instance: this
-            });
+        let perProviderMap = BaseEngine._providerInstances.get(provider);
+        if (!perProviderMap) {
+            perProviderMap = new Map();
+            BaseEngine._providerInstances.set(provider, perProviderMap);
+        }
+        if (!perProviderMap.has(this.constructor)) {
+            perProviderMap.set(this.constructor, this);
         }
     }
 
@@ -604,9 +594,10 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const allCanUseImmediate = matchingConfigs.every(config => this.canUseImmediateMutation(config));
 
                 if (allCanUseImmediate) {
-                    // Process immediately without debounce - synchronous array mutations
+                    // Process immediately without debounce - mutation requires await because the
+                    // entity must be cloned (with its provider rebound) before being cached
                     for (const config of matchingConfigs) {
-                        this.applyImmediateMutation(config, event);
+                        await this.applyImmediateMutation(config, event);
                     }
                     return true;
                 } else {
@@ -886,7 +877,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     // Check if we can use immediate array mutation instead of running a view
                     if (this.canUseImmediateMutation(config)) {
                         // LogStatus(`>>> Immediate mutation for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}`);
-                        this.applyImmediateMutation(config, event);
+                        await this.applyImmediateMutation(config, event);
                     } else {
                         // LogStatus(`>>> Refreshing metadata for ${config.PropertyName} due to BaseEntity ${event.type} event for: ${event.baseEntity.EntityInfo.Name}, pkey: ${event.baseEntity.PrimaryKey.ToString()}`);
                         await this.LoadSingleConfig(config, this._contextUser);
@@ -1022,10 +1013,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Applies an immediate array mutation based on the entity event type.
      * This is faster than running a full view refresh for simple add/update/delete operations.
      *
+     * On save, the cached entry is a clone owned by this engine's provider — not the saver's
+     * entity instance. Storing the saver's instance would pin the saver's provider (often a
+     * per-request provider) inside the engine's cache for the engine's full lifetime, which
+     * leaks the provider and all its associated state.
+     *
      * @param config - The configuration for the property being mutated
      * @param event - The entity event containing the affected entity and event type
      */
-    protected applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): void {
+    protected async applyImmediateMutation(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
         const currentData = (this as Record<string, unknown>)[config.PropertyName] as BaseEntity[] | undefined;
         if (!currentData) {
             // No existing array, nothing to mutate
@@ -1035,6 +1031,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const entity = event.baseEntity;
 
         if (event.type === 'save') {
+            // Clone the entity so the cache holds an instance owned by THIS engine's provider,
+            // not the saving provider. Falling back to the original entity here would reintroduce
+            // the leak, so on clone failure we bail and let the next full refresh fix the cache.
+            const cached = await this.cloneEntityForCache(entity, config);
+            if (!cached) {
+                LogError(`BaseEngine.applyImmediateMutation: failed to clone entity for ${config.EntityName}; skipping immediate mutation`);
+                return;
+            }
+
             if (event.saveSubType === 'create') {
                 // For create, first check if the exact object is already in the array
                 const existsByRef = currentData.indexOf(entity) >= 0;
@@ -1045,34 +1050,34 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const indexByKey = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
-                        currentData[indexByKey] = entity;
+                        currentData[indexByKey] = cached;
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Add the new entity to the array
-                        currentData.push(entity);
+                        currentData.push(cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
                 }
             } else {
                 // Update: first check if the exact object is already in the array
                 // if already in the array, we don't do anything but we keep going
-                // in the method so stuff at end can be done 
+                // in the method so stuff at end can be done
                 const existsByRef = currentData.indexOf(entity) >= 0;
                 if (!existsByRef) {
                     // Find by composite primary key and replace
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
-                        currentData[index] = entity;
+                        currentData[index] = cached;
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'update', entity);
+                        this.NotifyDataChange(config, currentData, 'update', cached);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
-                        currentData.push(entity);
+                        currentData.push(cached);
                         this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
-                        this.NotifyDataChange(config, currentData, 'add', entity);
+                        this.NotifyDataChange(config, currentData, 'add', cached);
                     }
                 }
             }
@@ -1101,6 +1106,30 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Log status but don't fail - cache will self-correct on next fetch
                 LogStatus(`BaseEngine: Failed to sync local cache for ${config.EntityName}: ${e}`);
             });
+        }
+    }
+
+    /**
+     * Creates a fresh BaseEntity owned by this engine's provider and populates it from the
+     * given source entity's field values. Used by applyImmediateMutation to avoid pinning
+     * the source entity's provider inside this engine's cache.
+     */
+    protected async cloneEntityForCache(source: BaseEntity, config: BaseEnginePropertyConfig): Promise<BaseEntity | null> {
+        try {
+            const provider = this.ProviderToUse;
+            if (!provider) {
+                return null;
+            }
+            const fresh = await provider.GetEntityObject<BaseEntity>(config.EntityName, this._contextUser);
+            if (!fresh) {
+                return null;
+            }
+            fresh.LoadFromData(source.GetAll());
+            return fresh;
+        }
+        catch (e) {
+            LogError(e);
+            return null;
         }
     }
 
