@@ -1,0 +1,1381 @@
+[
+  {
+    "fields": {
+      "Name": "Constant Contact",
+      "Description": "Constant Contact V3 REST API connector for email marketing. Supports contacts, contact lists, custom fields, tags, email campaigns/activities, segments, and async bulk activities. Auth: OAuth2 Authorization Code flow (access tokens valid 24h; refresh t...",
+      "ClassName": "ConstantContactConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://app.constantcontact.com",
+      "BatchMaxRequestCount": 50,
+      "BatchRequestWaitTime": 300,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Constant Contact OAuth",
+      "Icon": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contacts",
+            "DisplayName": "Contacts",
+            "Description": "Contacts \u2014 the primary contact record with name, email, phones, addresses, custom fields, list memberships, and taggings. Use email_address as the natural key for upsert.",
+            "Category": "Contacts",
+            "APIPath": "/contacts",
+            "ResponseDataKey": "contacts",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "contact_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Unique ID for each contact resource",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_address",
+                  "DisplayName": "email_address",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "first_name",
+                  "DisplayName": "first_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The first name of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "last_name",
+                  "DisplayName": "last_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The last name of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "job_title",
+                  "DisplayName": "job_title",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The job title of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_name",
+                  "DisplayName": "company_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The name of the company where the contact works.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "birthday_month",
+                  "DisplayName": "birthday_month",
+                  "Type": "int",
+                  "Description": "The month value for the contact's birthday. Valid values are from 1 through 12. You must use this property with <code>birthday_month</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "birthday_day",
+                  "DisplayName": "birthday_day",
+                  "Type": "int",
+                  "Description": "The day value for the contact's birthday. Valid values are from 1 through 12. You must use this property with <code>birthday_day</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "anniversary",
+                  "DisplayName": "anniversary",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "Description": "The anniversary date for the contact. For example, this value could be the date when the contact first became a customer of an organization in Constant Contact. Valid date formats are MM/DD/YYYY, M/D/YYYY, YYYY/MM/DD, YYYY/M/D, YYYY-MM-DD, YYYY-M-D,M-D-YYYY, or M-DD-YYYY.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "update_source",
+                  "DisplayName": "update_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies who last updated the contact; valid values are  <code>Contact</code> or <code>Account</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "create_source",
+                  "DisplayName": "create_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Describes who added the contact; valid values are <code>Contact</code> or <code>Account</code>. Your integration must accurately identify <code>create_source</code> for compliance reasons; value is set when contact is created.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was created, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the contact was last updated, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deleted_at",
+                  "DisplayName": "deleted_at",
+                  "Type": "date",
+                  "Description": "For deleted contacts (<code>email_address</code> contains <code>opt_out_source</code> and <code>opt_out_date</code>), shows the date of deletion.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom_fields",
+                  "DisplayName": "custom_fields",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 25 <code>custom_field</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "phone_numbers",
+                  "DisplayName": "phone_numbers",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 3 <code>phone_numbers</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "street_addresses",
+                  "DisplayName": "street_addresses",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 3 <code>street_addresses</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 17,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_memberships",
+                  "DisplayName": "list_memberships",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 50 <code>list_ids</code> to which the contact is subscribed.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 18,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "taggings",
+                  "DisplayName": "taggings",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of tags (<code>tag_id</code>) assigned to the contact, up to a maximum of 50.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 19,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "notes",
+                  "DisplayName": "notes",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "An array of notes about the contact listed by most recent note first.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 20,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactLists",
+            "DisplayName": "ContactLists",
+            "Description": "Contact lists \u2014 subscription lists for sending email campaigns. Contacts can belong to multiple lists.",
+            "Category": "Contacts",
+            "APIPath": "/contact_lists",
+            "ResponseDataKey": "lists",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Unique ID for the contact list",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The name given to the contact list",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "description",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Text describing the list.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "favorite",
+                  "DisplayName": "favorite",
+                  "Type": "bit",
+                  "Description": "Identifies whether or not the account has favorited the contact list.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was created, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "Date and time that the list was last updated, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deleted_at",
+                  "DisplayName": "deleted_at",
+                  "Type": "datetime",
+                  "Description": "If the list was deleted, this property shows the date and time it was deleted, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "membership_count",
+                  "DisplayName": "membership_count",
+                  "Type": "int",
+                  "Description": "The total number of contacts that are members in a list. Does not apply to segment type lists.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactCustomFields",
+            "DisplayName": "ContactCustomFields",
+            "Description": "Account-level custom field definitions. Up to 100 per account. Types include string, date, datetime, currency, text_area, number, boolean, single_select, multi_select (Sept 2025 expansion).",
+            "Category": "Contacts",
+            "APIPath": "/contact_custom_fields",
+            "ResponseDataKey": "custom_fields",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom_field_id",
+                  "DisplayName": "custom_field_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The custom_field's unique ID",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "label",
+                  "DisplayName": "label",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The display name for the custom_field shown in the UI as free-form text",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Unique name for the custom_field constructed from the label by replacing blanks with underscores.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Specifies the type of value the custom_field field accepts: string or date.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was updated, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "Date and time that the resource was created, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactTags",
+            "DisplayName": "ContactTags",
+            "Description": "Tags \u2014 unstructured string labels that can be applied to contacts. Account-unique by name.",
+            "Category": "Contacts",
+            "APIPath": "/contact_tags",
+            "ResponseDataKey": "tags",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "tag_id",
+                  "DisplayName": "tag_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The ID that uniquely identifies a tag (UUID format)",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The unique tag name.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contacts_count",
+                  "DisplayName": "contacts_count",
+                  "Type": "int",
+                  "Description": "The total number of contacts who are assigned this tag.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time when the tag was created (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time when the tag was last updated (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "tag_source",
+                  "DisplayName": "tag_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The source used to tag contacts.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EmailCampaigns",
+            "DisplayName": "EmailCampaigns",
+            "Description": "Email campaign definitions \u2014 top-level campaign with one or more campaign activities. Supports Draft/Scheduled/Executing/Sent statuses.",
+            "Category": "Email Campaigns",
+            "APIPath": "/emails",
+            "ResponseDataKey": "campaigns",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_activities",
+                  "DisplayName": "campaign_activities",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Lists the role and unique activity ID of each campaign activity that is associated with an Email Campaign.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The unique ID used to identify the email campaign (UUID format).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that this email campaign was created. This string is readonly and is in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "current_status",
+                  "DisplayName": "current_status",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The current status of the email campaign. Valid values are: <ul>   <li>Draft \u2014 An email campaign that you have created but have not sent to contacts.</li>   <li>Scheduled \u2014 An email campaign that you have scheduled for Constant Contact to send to contacts.</li>   <li>Executing \u2014 An email campaign that Constant Contact is currently sending to contacts. Email campaign activities are only in this sta",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "Description": "The descriptive name the user provides to identify this campaign. Campaign names must be unique for each account ID.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies the type of campaign that you select when creating the campaign. Newsletter and Custom Code email campaigns are the primary types.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type_code",
+                  "DisplayName": "type_code",
+                  "Type": "int",
+                  "Description": "The code used to identify the email campaign `type`. <ul>   <li> 1  (Default) </li>   <li> 2  (Bulk Email) </li>   <li> 10 (Newsletter) </li>   <li> 11 (Announcement) </li>   <li> 12 (Product/Service News) </li>   <li> 14 (Business Letter) </li>   <li> 15 (Card) </li>   <li> 16 (Press release)</li>   <li> 17 (Flyer) </li>   <li> 18 (Feedback Request) </li>   <li> 19 (Ratings and Reviews) </li>   <",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time showing when the campaign was last updated. This string is read only and is in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EmailCampaignActivities",
+            "DisplayName": "EmailCampaignActivities",
+            "Description": "Email campaign activity \u2014 the sendable email variation tied to a campaign. Contains subject, HTML content, from_name, from_email, list/segment targeting.",
+            "Category": "Email Campaigns",
+            "APIPath": "/emails/activities/{campaign_activity_id}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_activity_id",
+                  "DisplayName": "campaign_activity_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies a campaign activity in the V3 API.",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies a campaign in the V3 API.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "role",
+                  "DisplayName": "role",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The purpose of the individual campaign activity in the larger email campaign effort. Valid values are: <ul>   <li>primary_email \u2014 The main email marketing campaign that you send to contacts. The <code>primary_email</code> contains the complete email content.</li>   <li>permalink \u2014 A permanent link to a web accessible version of the <code>primary_email</code> content without any personalized email ",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_list_ids",
+                  "DisplayName": "contact_list_ids",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "The contacts that Constant Contact sends the email campaign activity to as an array of contact <code>list_id</code> values. You cannot use contact lists and segments at the same time in an email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_ids",
+                  "DisplayName": "segment_ids",
+                  "Type": "int",
+                  "Description": "The contacts that Constant Contact sends the email campaign activity to as an array containing a single <code>segment_id</code> value. Only <code>format_type</code> 3, 4, and 5 email campaign activities support segments. You cannot use contact lists and segments at the same time in an email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "current_status",
+                  "DisplayName": "current_status",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The current status of the email campaign activity. Valid values are: <ul>   <li>DRAFT \u2014 An email campaign activity that you have created but have not sent to contacts.</li>   <li>SCHEDULED \u2014 An email campaign activity that you have scheduled for Constant Contact to send to contacts.</li>   <li>EXECUTING \u2014 An email campaign activity Constant Contact is currently sending to contacts. Email campaign ",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "format_type",
+                  "DisplayName": "format_type",
+                  "Type": "int",
+                  "Description": "Identifies the type of email format. Valid values are: <ul>   <li>1 - A legacy custom code email created using the V2 API, the V3 API, or the legacy UI HTML editor.</li>   <li>2 - An email created using the second generation email editor UI.</li>   <li>3 - An email created using the third generation email editor UI. This email editor features an improved drag and drop UI and mobile responsiveness.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_email",
+                  "DisplayName": "from_email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"From Email\" field for the email campaign activity. You must use a confirmed Constant Contact account email address. Make a GET call to <code>/account/emails</code> to return a collection of account emails and their confirmation status.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 8,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_name",
+                  "DisplayName": "from_name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"From Name\" field for the email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 9,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "reply_to_email",
+                  "DisplayName": "reply_to_email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"Reply To Email\" field for the email campaign activity. You must use a confirmed Constant Contact account email address. Make a GET call to <code>/account/emails</code> to return a collection of account emails and their confirmation status.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 10,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "subject",
+                  "DisplayName": "subject",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"Subject\" field for the email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 11,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "html_content",
+                  "DisplayName": "html_content",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The HTML or XHTML content for the email campaign activity. Only <code>format_type</code> 1 and 5 (legacy custom code emails or modern custom code emails) can contain <code>html_content</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "template_id",
+                  "DisplayName": "template_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies the email layout and design template that the email campaign activity is using as a base.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "permalink_url",
+                  "DisplayName": "permalink_url",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The permanent link to a web accessible version of the email campaign content without any personalized email information. The permalink URL becomes accessible after you send an email campaign to contacts.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "preheader",
+                  "DisplayName": "preheader",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email preheader for the email campaign activity. Only <code>format_type</code> 3, 4, and 5 email campaign activities use the preheader property.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "physical_address_in_footer",
+                  "DisplayName": "physical_address_in_footer",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "document_properties",
+                  "DisplayName": "document_properties",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 17,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Segments",
+            "DisplayName": "Segments",
+            "Description": "Audience segments \u2014 dynamic contact groups based on filter criteria.",
+            "Category": "Segments",
+            "APIPath": "/segments",
+            "ResponseDataKey": "segments",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The segment's unique descriptive name.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_id",
+                  "DisplayName": "segment_id",
+                  "Type": "int",
+                  "Description": "The system generated number that uniquely identifies the segment.",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that the segment was created (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "edited_at",
+                  "DisplayName": "edited_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that the segment's <code>name</code> or <code>segment_criteria</code> was last updated (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Activities",
+            "DisplayName": "Activities",
+            "Description": "Async bulk activity jobs (contact import/export, bulk list/tag add/remove, bulk delete). Use Activities endpoints to create jobs and poll for completion.",
+            "Category": "Bulk Activities",
+            "APIPath": "/activities",
+            "ResponseDataKey": "activities",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "activity_id",
+                  "DisplayName": "activity_id",
+                  "Type": "uniqueidentifier",
+                  "Description": "Unique ID for the bulk activity job (UUID).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "state",
+                  "DisplayName": "state",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Current state: initialized, running, completed, cancelled.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "Activity type (e.g. contacts_json_import, contact_exports, contact_delete, add_list_memberships, remove_list_memberships, contacts_taggings_add, contacts_taggings_remove).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "ISO-8601 creation timestamp.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "ISO-8601 last-updated timestamp.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "percent_done",
+                  "DisplayName": "percent_done",
+                  "Type": "int",
+                  "Description": "Progress percent 0-100.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "activity_errors",
+                  "DisplayName": "activity_errors",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of activity errors (JSON-encoded).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]

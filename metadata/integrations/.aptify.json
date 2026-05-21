@@ -1,0 +1,558 @@
+[
+  {
+    "fields": {
+      "Name": "Aptify",
+      "Description": "Aptify (Community Brands / Momentive Software) Web Services API connector. Provides full CRUD over the standard association management entities — Persons, Companies, Memberships, Events, Orders, Committees, and supporting reference data — via the Aptif...",
+      "ClassName": "AptifyConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": 100,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Aptify Authentication",
+      "Icon": "fa-solid fa-building-columns"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Persons",
+            "DisplayName": "Persons",
+            "Description": "Individual contact / member records — Aptify's primary identity entity. Persons own Memberships, EventRegistrations, Orders, Donations, and most other relationships.",
+            "Category": "Contacts",
+            "APIPath": "/services/Persons",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "Description": "Person record ID (Aptify primary key).", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "FirstName", "DisplayName": "First Name", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastName", "DisplayName": "Last Name", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Email", "DisplayName": "Email", "Type": "nvarchar", "Length": 200, "Description": "Primary email — useful as a natural key for upsert.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Phone", "DisplayName": "Phone", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Title", "DisplayName": "Title", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CompanyId", "DisplayName": "Company ID", "Type": "int", "Description": "FK → Companies (employer / parent organization).", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "DateCreated", "DisplayName": "Date Created", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "Description": "Used as the incremental-sync watermark.", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 9, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Companies",
+            "DisplayName": "Companies",
+            "Description": "Organization records — employers, member orgs, vendors, sponsors.",
+            "Category": "Contacts",
+            "APIPath": "/services/Companies",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "Description": "Company record ID.", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Phone", "DisplayName": "Phone", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Website", "DisplayName": "Website", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "DateCreated", "DisplayName": "Date Created", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Memberships",
+            "DisplayName": "Memberships",
+            "Description": "Membership records linking Persons (or Companies) to MembershipTypes with start/end dates and status.",
+            "Category": "Membership",
+            "APIPath": "/services/Memberships",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CompanyId", "DisplayName": "Company ID", "Type": "int", "Description": "FK → Companies (for corporate memberships)", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "MembershipTypeId", "DisplayName": "Membership Type ID", "Type": "int", "Description": "FK → MembershipTypes", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDate", "DisplayName": "Start Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ExpirationDate", "DisplayName": "Expiration Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 8, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "MembershipTypes",
+            "DisplayName": "Membership Types",
+            "Description": "Reference data — definitions of membership categories (Individual, Corporate, Student, Lifetime, etc.).",
+            "Category": "Membership",
+            "APIPath": "/services/MembershipTypes",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 3, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Events",
+            "DisplayName": "Events",
+            "Description": "Events, meetings, conferences. Parents of EventRegistrations.",
+            "Category": "Events",
+            "APIPath": "/services/Events",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDate", "DisplayName": "Start Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EndDate", "DisplayName": "End Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Location", "DisplayName": "Location", "Type": "nvarchar", "Length": 500, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EventRegistrations",
+            "DisplayName": "Event Registrations",
+            "Description": "Person attendance records for Events.",
+            "Category": "Events",
+            "APIPath": "/services/EventRegistrations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EventId", "DisplayName": "Event ID", "Type": "int", "Description": "FK → Events", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "RegistrationDate", "DisplayName": "Registration Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Orders",
+            "DisplayName": "Orders",
+            "Description": "Sales / fulfillment order headers.",
+            "Category": "Commerce",
+            "APIPath": "/services/Orders",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CompanyId", "DisplayName": "Company ID", "Type": "int", "Description": "FK → Companies", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "OrderDate", "DisplayName": "Order Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "OrderTotal", "DisplayName": "Order Total", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "OrderDetails",
+            "DisplayName": "Order Details",
+            "Description": "Order line items linking Products to Orders with quantity and pricing.",
+            "Category": "Commerce",
+            "APIPath": "/services/OrderDetails",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "OrderId", "DisplayName": "Order ID", "Type": "int", "Description": "FK → Orders", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ProductId", "DisplayName": "Product ID", "Type": "int", "Description": "FK → Products", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Quantity", "DisplayName": "Quantity", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "UnitPrice", "DisplayName": "Unit Price", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ExtendedPrice", "DisplayName": "Extended Price", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Products",
+            "DisplayName": "Products",
+            "Description": "Sellable products / SKUs (publications, dues line items, event registrations, etc.).",
+            "Category": "Commerce",
+            "APIPath": "/services/Products",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Price", "DisplayName": "Price", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 5, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Committees",
+            "DisplayName": "Committees",
+            "Description": "Committees, boards, working groups, councils.",
+            "Category": "Governance",
+            "APIPath": "/services/Committees",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "CommitteeMembers",
+            "DisplayName": "Committee Members",
+            "Description": "Person assignments to Committees, including role and term dates.",
+            "Category": "Governance",
+            "APIPath": "/services/CommitteeMembers",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CommitteeId", "DisplayName": "Committee ID", "Type": "int", "Description": "FK → Committees", "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Role", "DisplayName": "Role", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDate", "DisplayName": "Start Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "EndDate", "DisplayName": "End Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Addresses",
+            "DisplayName": "Addresses",
+            "Description": "Postal addresses linked to Persons or Companies.",
+            "Category": "Contacts",
+            "APIPath": "/services/Addresses",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "CompanyId", "DisplayName": "Company ID", "Type": "int", "Description": "FK → Companies", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Line1", "DisplayName": "Address Line 1", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Line2", "DisplayName": "Address Line 2", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "City", "DisplayName": "City", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "State", "DisplayName": "State / Province", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 7, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PostalCode", "DisplayName": "Postal Code", "Type": "nvarchar", "Length": 20, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 8, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Country", "DisplayName": "Country", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 9, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 10, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Donations",
+            "DisplayName": "Donations",
+            "Description": "Donation and gift records (campaigns, pledges, contributions).",
+            "Category": "Fundraising",
+            "APIPath": "/services/Donations",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Amount", "DisplayName": "Amount", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "DonationDate", "DisplayName": "Donation Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Campaign", "DisplayName": "Campaign", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Certifications",
+            "DisplayName": "Certifications",
+            "Description": "Professional certifications held by Persons.",
+            "Category": "Education",
+            "APIPath": "/services/Certifications",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Certification Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "IssueDate", "DisplayName": "Issue Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ExpirationDate", "DisplayName": "Expiration Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Education",
+            "DisplayName": "Education",
+            "Description": "Education / degree records for Persons (institution, degree, year).",
+            "Category": "Education",
+            "APIPath": "/services/Education",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Institution", "DisplayName": "Institution", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Degree", "DisplayName": "Degree", "Type": "nvarchar", "Length": 100, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "GraduationYear", "DisplayName": "Graduation Year", "Type": "int", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Payments",
+            "DisplayName": "Payments",
+            "Description": "Payment transactions against Orders / Invoices (cash, card, ACH).",
+            "Category": "Commerce",
+            "APIPath": "/services/Payments",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "OrderId", "DisplayName": "Order ID", "Type": "int", "Description": "FK → Orders", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Amount", "DisplayName": "Amount", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PaymentDate", "DisplayName": "Payment Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PaymentMethod", "DisplayName": "Payment Method", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 6, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Invoices",
+            "DisplayName": "Invoices",
+            "Description": "Invoice headers issued for Orders.",
+            "Category": "Commerce",
+            "APIPath": "/services/Invoices",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "OrderId", "DisplayName": "Order ID", "Type": "int", "Description": "FK → Orders", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "InvoiceDate", "DisplayName": "Invoice Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "DueDate", "DisplayName": "Due Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Total", "DisplayName": "Total", "Type": "decimal", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Chapters",
+            "DisplayName": "Chapters",
+            "Description": "Geographic / topical chapters or branches.",
+            "Category": "Governance",
+            "APIPath": "/services/Chapters",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Name", "DisplayName": "Name", "Type": "nvarchar", "Length": 200, "IsPrimaryKey": false, "IsRequired": true, "IsReadOnly": false, "AllowsNull": false, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Description", "DisplayName": "Description", "Type": "nvarchar", "Length": 4000, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 4, "Status": "Active" } }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Subscriptions",
+            "DisplayName": "Subscriptions",
+            "Description": "Publication / content subscription records.",
+            "Category": "Subscriptions",
+            "APIPath": "/services/Subscriptions",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 200,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Id", "DisplayName": "ID", "Type": "int", "IsPrimaryKey": true, "IsRequired": true, "IsReadOnly": true, "AllowsNull": false, "Sequence": 1, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "PersonId", "DisplayName": "Person ID", "Type": "int", "Description": "FK → Persons", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 2, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ProductId", "DisplayName": "Product ID", "Type": "int", "Description": "FK → Products", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 3, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "StartDate", "DisplayName": "Start Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 4, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "ExpirationDate", "DisplayName": "Expiration Date", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 5, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "Status", "DisplayName": "Status", "Type": "nvarchar", "Length": 50, "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": false, "AllowsNull": true, "Sequence": 6, "Status": "Active" } },
+              { "fields": { "IntegrationObjectID": "@parent:ID", "Name": "LastModifiedDate", "DisplayName": "Last Modified", "Type": "datetime", "IsPrimaryKey": false, "IsRequired": false, "IsReadOnly": true, "AllowsNull": true, "Sequence": 7, "Status": "Active" } }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
