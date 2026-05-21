@@ -24,7 +24,8 @@ export class MJUserViewFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDataContextItems', sectionName: 'Data Context Items', isExpanded: false },
             { sectionKey: 'mJEntityRelationships', sectionName: 'Entity Relationships', isExpanded: false },
-            { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false }
+            { sectionKey: 'mJUserViewRuns', sectionName: 'User View Runs', isExpanded: false },
+            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false }
         ]);
     }
 }
