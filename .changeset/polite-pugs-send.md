@@ -1,13 +1,14 @@
 ---
-"@memberjunction/lists": minor
-"@memberjunction/ng-list-management": minor
-"@memberjunction/core-actions": minor
-"@memberjunction/communication-engine": minor
-"@memberjunction/graphql-dataprovider": minor
-"@memberjunction/server": minor
-"@memberjunction/core-entities": minor
-"@memberjunction/ng-dashboards": minor
-"@memberjunction/ng-explorer-core": minor
+"@memberjunction/lists": patch
+"@memberjunction/lists-base": patch
+"@memberjunction/ng-list-management": patch
+"@memberjunction/core-actions": patch
+"@memberjunction/communication-engine": patch
+"@memberjunction/graphql-dataprovider": patch
+"@memberjunction/server": patch
+"@memberjunction/core-entities": patch
+"@memberjunction/ng-dashboards": patch
+"@memberjunction/ng-explorer-core": patch
 "@memberjunction/ng-core-entity-forms": patch
 "@memberjunction/ng-list-detail-grid": patch
 "@memberjunction/ng-bootstrap": patch
