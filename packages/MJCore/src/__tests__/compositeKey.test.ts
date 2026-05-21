@@ -1,5 +1,16 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { CompositeKey, KeyValuePair, FieldValueCollection } from '../generic/compositeKey';
+import type { EntityInfo } from '../generic/entityInfo';
+
+/**
+ * Minimal EntityInfo stand-in for tests that only exercise the
+ * `entity.FirstPrimaryKey.Name` lookup in `CompositeKey.LoadFromURLSegment`.
+ * The cast keeps the test focused on the behavior under test without pulling
+ * in the full EntityInfo construction surface.
+ */
+function mockEntity(pkName: string): EntityInfo {
+  return { FirstPrimaryKey: { Name: pkName } } as unknown as EntityInfo;
+}
 
 describe('KeyValuePair', () => {
   it('should construct with field name and value', () => {
@@ -378,6 +389,126 @@ describe('CompositeKey', () => {
       const loaded = new CompositeKey();
       loaded.SimpleLoadFromURLSegment(segment);
       expect(loaded.Equals(original)).toBe(true);
+    });
+  });
+
+  /**
+   * Entity-aware URL segment parsing.
+   *
+   * These tests guard the contract that callers of
+   * `ToURLSegment` → `LoadFromURLSegment(entity, segment)` get back what they
+   * put in. The dashboard-resource navigation flow depends on this round-trip:
+   * dashboard parts call `compositeKey.ToURLSegment()` to serialize the key
+   * into the `OpenEntityRecordNavRequest.recordId` field, and
+   * `DashboardResourceComponent.handleNavigationRequest` calls
+   * `LoadFromURLSegment` to parse it back before handing off to
+   * `NavigationService.OpenEntityRecord`.
+   *
+   * A regression here previously produced URLs like `Deals/ID|ID|11055` (a
+   * double-serialized segment), which the host URL parser silently mis-read
+   * as `{ FieldName: 'ID', Value: 'ID' }` and dropped the real record ID.
+   */
+  describe('LoadFromURLSegment (entity-aware)', () => {
+    it('round-trips a single integer PK', () => {
+      const entity = mockEntity('ID');
+      const original = CompositeKey.FromKeyValuePairs([
+        new KeyValuePair('ID', 11055),
+      ]);
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, original.ToURLSegment());
+
+      expect(loaded.KeyValuePairs).toHaveLength(1);
+      expect(loaded.KeyValuePairs[0].FieldName).toBe('ID');
+      // Values come back as strings — URL-segment parsing has no type info.
+      expect(String(loaded.KeyValuePairs[0].Value)).toBe('11055');
+    });
+
+    it('round-trips a single UUID PK', () => {
+      const entity = mockEntity('ID');
+      const uuid = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+      const original = CompositeKey.FromKeyValuePairs([
+        new KeyValuePair('ID', uuid),
+      ]);
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, original.ToURLSegment());
+
+      expect(loaded.KeyValuePairs).toEqual([{ FieldName: 'ID', Value: uuid }]);
+    });
+
+    it('round-trips a composite PK', () => {
+      // Composite-PK entity — FirstPrimaryKey is not used in this code path
+      // because the segment contains the '||' field delimiter; the segment
+      // itself carries the field names.
+      const entity = mockEntity('OrgID');
+      const original = CompositeKey.FromKeyValuePairs([
+        new KeyValuePair('OrgID', 'org-1'),
+        new KeyValuePair('UserID', 'user-2'),
+      ]);
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, original.ToURLSegment());
+
+      expect(loaded.KeyValuePairs).toEqual([
+        { FieldName: 'OrgID', Value: 'org-1' },
+        { FieldName: 'UserID', Value: 'user-2' },
+      ]);
+    });
+
+    it('uses entity.FirstPrimaryKey.Name when segment has no delimiter', () => {
+      // Bare value (no '|' in the segment). The parser must consult the
+      // entity to pick a field name; this is the only code path where the
+      // entity argument is actually read.
+      const entity = mockEntity('BCEID');
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, '11055');
+
+      expect(loaded.KeyValuePairs).toEqual([
+        { FieldName: 'BCEID', Value: '11055' },
+      ]);
+    });
+
+    it('preserves the entity PK name even when it differs from "ID"', () => {
+      // Older code paths sometimes hard-coded 'ID'; this guards that
+      // `LoadFromURLSegment` honors the entity's actual PK name on no-pipe
+      // segments. The serialized form already carries the right name on its
+      // own, but this test pins the no-pipe branch.
+      const entity = mockEntity('RecordID');
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, 'rec-42');
+
+      expect(loaded.KeyValuePairs[0].FieldName).toBe('RecordID');
+      expect(loaded.KeyValuePairs[0].Value).toBe('rec-42');
+    });
+
+    it('regression: a single-PK segment must NOT double-serialize on round-trip', () => {
+      // This is the exact shape that produced the `Deals/ID|ID|11055`
+      // navigation bug. We assert two invariants:
+      //   1. ToURLSegment produces `ID|11055` (NOT `ID|ID|11055`)
+      //   2. LoadFromURLSegment parses `ID|11055` back into the original
+      //      single KVP, leaving FieldName='ID' and Value='11055' — not
+      //      FieldName='ID', Value='ID' with the real id silently dropped.
+      const entity = mockEntity('ID');
+      const original = CompositeKey.FromKeyValuePairs([
+        new KeyValuePair('ID', 11055),
+      ]);
+
+      const segment = original.ToURLSegment();
+      expect(segment).toBe('ID|11055');
+
+      const loaded = new CompositeKey();
+      loaded.LoadFromURLSegment(entity, segment);
+
+      expect(loaded.KeyValuePairs).toHaveLength(1);
+      expect(loaded.KeyValuePairs[0].FieldName).toBe('ID');
+      expect(loaded.KeyValuePairs[0].Value).toBe('11055');
+      // And explicitly: the Value must NOT carry the field-name prefix —
+      // that's the symptom the dashboard-resource fix targets.
+      expect(loaded.KeyValuePairs[0].Value).not.toBe('ID|11055');
+      expect(loaded.KeyValuePairs[0].Value).not.toBe('ID');
     });
   });
 });

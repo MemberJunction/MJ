@@ -15,9 +15,14 @@ import {
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJFilterChipComponent,
+  MJPageHeaderInteriorComponent,
+  MJPageBodyInteriorComponent,
   MJViewToggleComponent,
   MJStatBadgeComponent,
-  MJRefreshButtonComponent
+  MJRefreshButtonComponent,
+  MJLeftNavComponent,
+  MJLeftNavContentComponent,
+  MJTabNavComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -140,9 +145,14 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJFilterChipComponent,
+    MJPageHeaderInteriorComponent,
+    MJPageBodyInteriorComponent,
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
+    MJLeftNavComponent,
+    MJLeftNavContentComponent,
+    MJTabNavComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,
