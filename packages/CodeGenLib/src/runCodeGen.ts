@@ -83,10 +83,15 @@ export class RunCodeGenBase {
     const provider: SQLServerDataProvider = await setupSQLServerClient(config);
     const conn: CodeGenConnection = new SQLServerCodeGenConnection(pool);
 
-    let connectionInfo = sqlConfig.server;
-    if (sqlConfig.port) connectionInfo += ':' + sqlConfig.port;
-    if (sqlConfig.options?.instanceName) connectionInfo += '\\' + sqlConfig.options.instanceName;
-    connectionInfo += '/' + sqlConfig.database;
+    // `sqlConfig` is lazily populated by MSSQLConnection() above (it was
+    // previously built at module load and could capture stale empty defaults).
+    // The non-null assertion is safe because the call to MSSQLConnection on
+    // the line above is what guarantees the assignment.
+    const cfg = sqlConfig!;
+    let connectionInfo = cfg.server;
+    if (cfg.port) connectionInfo += ':' + cfg.port;
+    if (cfg.options?.instanceName) connectionInfo += '\\' + cfg.options.instanceName;
+    connectionInfo += '/' + cfg.database;
 
     await UserCache.Instance.Refresh(pool);
     const userMatch = UserCache.Users.find((u) => u?.Type?.trim().toLowerCase() === 'owner');

@@ -461,12 +461,17 @@ ASK_SKIP_ORGANIZATION_ID=1
    * @param config - Fully resolved config.
    */
   private async writeMjConfigCjs(configPath: string, config: InstallConfig): Promise<void> {
+    // codegen-lib's newUserSetupSchema requires PascalCase keys
+    // (UserName/FirstName/LastName/Email). Writing camelCase here causes the
+    // entire mj.config.cjs to fail schema validation in codegen-lib, leaving
+    // configInfo as {} — which then surfaces as "config.server is required"
+    // when codegen tries to build the SQL connection.
     const newUserSection = config.CreateNewUser
       ? `  newUserSetup: {
-    userName: '${config.CreateNewUser.Username}',
-    firstName: '${config.CreateNewUser.FirstName}',
-    lastName: '${config.CreateNewUser.LastName}',
-    email: '${config.CreateNewUser.Email}',
+    UserName: '${config.CreateNewUser.Username}',
+    FirstName: '${config.CreateNewUser.FirstName}',
+    LastName: '${config.CreateNewUser.LastName}',
+    Email: '${config.CreateNewUser.Email}',
   },
 `
       : '';
@@ -508,10 +513,10 @@ ${newUserSection}  output: [],
     newUser: NonNullable<InstallConfig['CreateNewUser']>
   ): string {
     const newUserBlock = `newUserSetup: {
-    userName: '${newUser.Username}',
-    firstName: '${newUser.FirstName}',
-    lastName: '${newUser.LastName}',
-    email: '${newUser.Email}',
+    UserName: '${newUser.Username}',
+    FirstName: '${newUser.FirstName}',
+    LastName: '${newUser.LastName}',
+    Email: '${newUser.Email}',
   }`;
 
     // Try to replace existing newUserSetup block

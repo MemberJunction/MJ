@@ -104,7 +104,7 @@ describe('Config Schema Shapes', () => {
 });
 
 // Import the functions under test
-import { resolveEntityPackageName, getExternalEntitySchemas, ConfigInfo } from '../Config/config';
+import { resolveEntityPackageName, getExternalEntitySchemas, ConfigInfo, normalizeNewUserSetupKeys } from '../Config/config';
 
 /**
  * Helper to build a minimal ConfigInfo-like object with just the entityPackageName field.
@@ -208,6 +208,79 @@ describe('getExternalEntitySchemas', () => {
         // so this should return an empty array.
         const result = getExternalEntitySchemas();
         expect(result).toEqual([]);
+    });
+});
+
+describe('normalizeNewUserSetupKeys', () => {
+    it('renames camelCase keys to PascalCase for legacy mj.config.cjs files', () => {
+        const input = {
+            userName: 'jdoe',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            email: 'jane@example.com',
+        };
+        const result = normalizeNewUserSetupKeys(input) as Record<string, unknown>;
+        expect(result).toEqual({
+            UserName: 'jdoe',
+            FirstName: 'Jane',
+            LastName: 'Doe',
+            Email: 'jane@example.com',
+        });
+    });
+
+    it('leaves PascalCase keys untouched (already-canonical form)', () => {
+        const input = {
+            UserName: 'jdoe',
+            FirstName: 'Jane',
+            LastName: 'Doe',
+            Email: 'jane@example.com',
+        };
+        expect(normalizeNewUserSetupKeys(input)).toBe(input);
+    });
+
+    it('preserves PascalCase keys when both forms are present (canonical wins)', () => {
+        const input = {
+            userName: 'legacy',
+            UserName: 'canonical',
+            firstName: 'legacy',
+            FirstName: 'canonical',
+            lastName: 'Doe',
+            email: 'jane@example.com',
+        };
+        const result = normalizeNewUserSetupKeys(input) as Record<string, unknown>;
+        expect(result.UserName).toBe('canonical');
+        expect(result.FirstName).toBe('canonical');
+        // Legacy keys with no canonical counterpart still get renamed
+        expect(result.LastName).toBe('Doe');
+        expect(result.Email).toBe('jane@example.com');
+    });
+
+    it('preserves extra keys (Roles, CreateUserApplicationRecords, etc.)', () => {
+        const input = {
+            userName: 'jdoe',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            email: 'jane@example.com',
+            Roles: ['Developer'],
+            CreateUserApplicationRecords: true,
+        };
+        const result = normalizeNewUserSetupKeys(input) as Record<string, unknown>;
+        expect(result.UserName).toBe('jdoe');
+        expect(result.Roles).toEqual(['Developer']);
+        expect(result.CreateUserApplicationRecords).toBe(true);
+    });
+
+    it('returns non-object inputs unchanged', () => {
+        expect(normalizeNewUserSetupKeys(null)).toBeNull();
+        expect(normalizeNewUserSetupKeys(undefined)).toBeUndefined();
+        expect(normalizeNewUserSetupKeys('not an object')).toBe('not an object');
+        expect(normalizeNewUserSetupKeys([1, 2, 3])).toEqual([1, 2, 3]);
+    });
+
+    it('returns the same reference when nothing needed renaming', () => {
+        // Optimization: when no legacy keys are present, avoid allocating a new object.
+        const input = { UserName: 'x', FirstName: 'y', LastName: 'z', Email: 'q@r.com' };
+        expect(normalizeNewUserSetupKeys(input)).toBe(input);
     });
 });
 
