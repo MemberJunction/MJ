@@ -474,28 +474,37 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**********************************************************************
      * This section is for handling caching of multiple instances when needed.
-     * We cache engine instances keyed by the provider they were loaded against,
-     * so that callers asking for "the QueryEngine for this provider" get back
-     * the same instance across calls. This is useful when an app maintains
-     * multiple providers (e.g. multi-tenant) pointing at different connections.
+     * We cache engine instances keyed by the **connection** they target — not by
+     * the provider object reference. Multiple per-request providers pointing at
+     * the same database share one cached engine instance.
      *
-     * The cache uses a WeakMap keyed by provider so that when a provider goes
-     * out of scope (e.g. a per-request provider at the end of a GraphQL
-     * request), the cached engine instances tied to it become GC-eligible
-     * automatically. Without this, per-request providers accumulate
-     * indefinitely along with their engine instances and BaseEntity caches.
+     * Keying by IMetadataProvider.InstanceConnectionString (a stable
+     * credential-free identifier like `mssql://host:port/db`) means:
+     *   - Multi-server clients still get separate engine instances per server
+     *     (different connection strings → different cache entries)
+     *   - Per-request providers on the server hit the cache (same connection
+     *     string as the persistent startup provider) instead of allocating a
+     *     fresh engine and running a full DB load every request
+     *   - Transient provider objects never get pinned by the cache, so they're
+     *     GC-eligible at end of request as designed
      *********************************************************************/
-    private static _providerInstances: WeakMap<IMetadataProvider, Map<Function, BaseEngine<unknown>>> = new WeakMap();
+    private static _providerInstances: Map<string, Map<Function, BaseEngine<unknown>>> = new Map();
 
     /**
-     * This method will check for the existence of an instance of this engine class that is tied to a specific provider. If one exists, it will return it, otherwise it will create a new instance
+     * Returns the cached engine instance for this engine subclass on the connection the given
+     * provider points to, creating one if none exists yet. Lookup is keyed by the provider's
+     * `InstanceConnectionString` so multiple provider objects targeting the same connection
+     * share a single cached engine.
      */
     public static GetProviderInstance<T>(provider: IMetadataProvider, subclassConstructor: new () => BaseEngine<T>): BaseEngine<T> {
-        const perProviderMap = BaseEngine._providerInstances.get(provider);
-        if (perProviderMap) {
-            const existing = perProviderMap.get(subclassConstructor);
-            if (existing) {
-                return existing as BaseEngine<T>;
+        const connectionKey = provider?.InstanceConnectionString;
+        if (connectionKey) {
+            const perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+            if (perConnectionMap) {
+                const existing = perConnectionMap.get(subclassConstructor);
+                if (existing) {
+                    return existing as BaseEngine<T>;
+                }
             }
         }
 
@@ -505,22 +514,45 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
-     * Internal method to set the provider when an engine is loaded
-     * @param provider
+     * Removes all cached engine instances for the given connection. Call this when a connection
+     * is being torn down (e.g. multi-tenant client logging out) to release the cached engines'
+     * memory eagerly. For normal server operation this is rarely needed — the cache is bounded
+     * by (distinct connections × engine classes), which is small.
+     */
+    public static RemoveConnectionInstances(connectionKey: string): void {
+        BaseEngine._providerInstances.delete(connectionKey);
+    }
+
+    /**
+     * Internal method to set the provider when an engine is loaded. Once this engine instance has
+     * a provider bound, subsequent calls are no-ops — preventing transient per-request providers
+     * from displacing the persistent provider that first bound to this connection. The cache key
+     * is the connection (not the object), so the first persistent provider to load an engine for
+     * a connection "owns" the engine for that connection's lifetime.
      */
     protected SetProvider(provider: IMetadataProvider) {
-        this._provider = provider;
-        this.CheckAddToProviderInstances(this.ProviderToUse);
+        // First-wins on the persistent _provider binding so transient per-request providers
+        // can't displace the persistent provider that first owned this engine.
+        if (!this._provider && provider) {
+            this._provider = provider;
+        }
+        // Always register under the incoming provider's connection key (or ProviderToUse if
+        // none was passed) so future GetProviderInstance lookups for that connection can find
+        // this engine. Multiple registrations for the same key are idempotent.
+        this.CheckAddToProviderInstances(provider || this.ProviderToUse);
     }
 
     protected CheckAddToProviderInstances(provider: IMetadataProvider) {
-        let perProviderMap = BaseEngine._providerInstances.get(provider);
-        if (!perProviderMap) {
-            perProviderMap = new Map();
-            BaseEngine._providerInstances.set(provider, perProviderMap);
+        if (!provider) return; // no provider available (e.g. global default not yet initialized)
+        const connectionKey = provider.InstanceConnectionString;
+        if (!connectionKey) return; // provider not fully configured yet — skip registration
+        let perConnectionMap = BaseEngine._providerInstances.get(connectionKey);
+        if (!perConnectionMap) {
+            perConnectionMap = new Map();
+            BaseEngine._providerInstances.set(connectionKey, perConnectionMap);
         }
-        if (!perProviderMap.has(this.constructor)) {
-            perProviderMap.set(this.constructor, this);
+        if (!perConnectionMap.has(this.constructor)) {
+            perConnectionMap.set(this.constructor, this);
         }
     }
 
