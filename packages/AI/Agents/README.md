@@ -64,6 +64,61 @@ graph TD
     RR --> BA
 ```
 
+### BaseAgent Modular Inheritance Hierarchy
+
+To maintain clean separation of concerns and avoid a monolithic single file, `BaseAgent` is structured using a linear inheritance chain. Each layer inherits state and behaviors from the previous layer, culminating in the main `BaseAgent` class:
+
+```mermaid
+classDiagram
+    class BaseAgentState {
+        +ProviderToUse: IMetadataProvider
+        +AgentRun: MJAIAgentRunEntityExtended
+        #_executionCounts: Map
+        #_mediaOutputs: MediaOutput[]
+        #_fileOutputs: FileOutputRef[]
+    }
+    class BaseAgentInit {
+        #initializeAgentType()
+        #initializeStartingPayload()
+        #initializeEngines()
+        #getStorageAccountID()
+    }
+    class BaseAgentPrompt {
+        #preparePromptParams()
+        #executePrompt()
+        #attemptContextRecovery()
+        #pruneAndCompactExpiredMessages()
+    }
+    class BaseAgentOperations {
+        #executeForEachLoop()
+        #executeWhileLoop()
+        #ExecuteSubAgent()
+        #executeChatStep()
+    }
+    class BaseAgentActions {
+        #executeActionsStep()
+        #ExecuteSingleAction()
+        #detectFileOutputs()
+    }
+    class BaseAgent {
+        +Execute()
+        +executeAgentInternal()
+        +executeNextStep()
+    }
+    BaseAgentState <|-- BaseAgentInit
+    BaseAgentInit <|-- BaseAgentPrompt
+    BaseAgentPrompt <|-- BaseAgentOperations
+    BaseAgentOperations <|-- BaseAgentActions
+    BaseAgentActions <|-- BaseAgent
+```
+
+1. **`BaseAgentState`**: Manages all private/protected instance variables, properties, getters/setters, step logging, and tracking.
+2. **`BaseAgentInit`**: Coordinates pre-run setup, configuration preloading, engine verification, and starting payload validations.
+3. **`BaseAgentPrompt`**: Compiles hierarchical prompting payloads, executes LLM requests, monitors token limits, and performs context-window recovery/compaction.
+4. **`BaseAgentOperations`**: Handles loops (ForEach, While), sub-agent execution, client-side tools dispatch, and nested template variable resolution.
+5. **`BaseAgentActions`**: Intercepts actions execution, parses input/output parameters, handles large binary/media replacement, and resolves media references.
+6. **`BaseAgent`**: Orchestrates high-level agent execution logic (`Execute()`), guardrails checking, and run finalization.
+
 ## Installation
 
 ```bash

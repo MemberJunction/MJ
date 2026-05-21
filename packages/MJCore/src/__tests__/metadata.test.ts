@@ -35,6 +35,9 @@ describe('Metadata', () => {
     beforeEach(() => {
         globalStore = {};
         vi.spyOn(MJGlobal.Instance, 'GetGlobalObjectStore').mockReturnValue(globalStore);
+        mockProvider.GetEntityObject.mockClear();
+        mockProvider.GetEntityObjectByID.mockClear();
+        mockProvider.Refresh.mockClear();
     });
 
     afterEach(() => {
