@@ -18,6 +18,12 @@ class AdhocQueryInput {
 
     @Field(() => Int, { nullable: true, description: 'Query timeout in seconds. Defaults to 30.' })
     TimeoutSeconds?: number;
+
+    @Field(() => Int, { nullable: true, description: 'Maximum number of rows to return. Applied in-memory after SQL execution; SQL still runs unbounded server-side.' })
+    MaxRows?: number;
+
+    @Field(() => Int, { nullable: true, description: 'Zero-based offset for pagination. Used in conjunction with MaxRows.' })
+    StartRow?: number;
 }
 
 /**
@@ -68,16 +74,25 @@ export class AdhocQueryResolver extends ResolverBase {
             ]);
             const executionTimeMs = Date.now() - startTime;
 
-            // 4. Return as RunQueryResultType
+            // 4. Apply in-memory pagination if MaxRows/StartRow provided.
+            // SQL runs unbounded server-side; this just limits what crosses the wire.
+            const fullRecordset = result.recordset ?? [];
+            const totalRowCount = fullRecordset.length;
+            const startRow = input.StartRow ?? 0;
+            let paginated = fullRecordset;
+            if (startRow > 0) paginated = paginated.slice(startRow);
+            if (input.MaxRows != null && input.MaxRows > 0) paginated = paginated.slice(0, input.MaxRows);
+
+            // 5. Return as RunQueryResultType
             return {
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
                 Success: true,
-                Results: JSON.stringify(result.recordset ?? []),
-                RowCount: result.recordset?.length ?? 0,
-                TotalRowCount: result.recordset?.length ?? 0,
-                PageNumber: undefined,
-                PageSize: undefined,
+                Results: JSON.stringify(paginated),
+                RowCount: paginated.length,
+                TotalRowCount: totalRowCount,
+                PageNumber: input.MaxRows != null && input.MaxRows > 0 ? Math.floor(startRow / input.MaxRows) + 1 : undefined,
+                PageSize: input.MaxRows ?? undefined,
                 ExecutionTime: executionTimeMs,
                 ErrorMessage: ''
             };

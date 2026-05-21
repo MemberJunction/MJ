@@ -238,7 +238,11 @@ If Step 1 found a match >= 0.6, use **Run Stored Query** or composition SQL per 
 - **Set `MaxRows` to 10** when testing — you only need a small sample to verify correctness. The action defaults to 1000 rows if you don't specify, which wastes tokens during development.
 - Verify the columns, data types, and sample values make sense
 - Refine the SQL if results are unexpected
-- **Do NOT modify your SQL with TOP** — the action's `MaxRows` parameter handles row limiting at execution time, keeping your SQL clean for the final result
+- **While testing**, do NOT add `TOP` to the SQL just to limit the sample — rely on the action's `MaxRows` parameter instead. The SQL you write here should match the SQL you intend to ship in the final artifact.
+- **In the final SQL (the one you put in `metadata.sql`):** if the user asked for "top N", "the N most recent", or any explicit row cap, you **MUST** bake `TOP N` into the SQL itself and set `metadata.rowCount` to the same N. Reasons:
+  - The SQL engine can short-circuit (e.g., use an index on the ORDER BY column) instead of fully scanning the source table.
+  - `MaxRows` on the viewer's live re-execution is a wire-payload safety net — it slices the recordset *after* SQL execution. Without `TOP` in the SQL, an unbounded query against a large table will still take seconds to execute even though only N rows reach the client.
+- If the user did **not** specify a cap, leave the SQL unbounded and omit `metadata.rowCount` — the viewer will paginate via `MaxRows`.
 
 ### 6. Return Results as Payload
 

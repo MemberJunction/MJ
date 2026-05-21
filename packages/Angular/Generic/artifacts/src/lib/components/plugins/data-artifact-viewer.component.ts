@@ -212,9 +212,13 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.GridColumnConfigs = this.BuildColumnConfigsForTable(this.ResolvedTables[0]);
       }
 
-      // Initialize paging state for all tables
+      // Initialize paging state for all tables. If the artifact metadata declares a
+      // rowCount cap (e.g. "top 25"), use it so the first page never asks for more
+      // rows than the artifact promised.
       for (let i = 0; i < this.ResolvedTables.length; i++) {
-        this.tablePageState.set(i, { pageNumber: 1, pageSize: 100, totalRowCount: 0 });
+        const cap = this.ResolvedTables[i].metadata?.rowCount;
+        const pageSize = cap != null && cap > 0 ? Math.min(cap, 100) : 100;
+        this.tablePageState.set(i, { pageNumber: 1, pageSize, totalRowCount: 0 });
       }
 
       // Set loading early (synchronously) so hasDisplayContent is true immediately
@@ -326,14 +330,18 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
     try {
       if (table.metadata?.sql) {
-        // Live SQL execution
+        // Live SQL execution. Clamp MaxRows against the artifact's declared rowCount
+        // cap so a "top 25" artifact never re-fetches more rows than it promised,
+        // even if the cached pageSize drifts from the cap.
         const pageState = this.tablePageState.get(tableIndex)!;
         const rq = new RunQuery();
         const startRow = (pageState.pageNumber - 1) * pageState.pageSize;
+        const cap = table.metadata.rowCount;
+        const maxRows = cap != null && cap > 0 ? Math.max(0, Math.min(pageState.pageSize, cap - startRow)) : pageState.pageSize;
         const result = await rq.RunQuery({
           SQL: table.metadata.sql,
           StartRow: startRow,
-          MaxRows: pageState.pageSize
+          MaxRows: maxRows,
         });
 
         if (result.Success) {
@@ -341,7 +349,8 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           this.GridData = result.Results;
           this.IsLive = true;
 
-          pageState.totalRowCount = result.TotalRowCount ?? result.RowCount ?? 0;
+          const serverTotal = result.TotalRowCount ?? result.RowCount ?? 0;
+          pageState.totalRowCount = cap != null && cap > 0 ? Math.min(serverTotal, cap) : serverTotal;
           this.PagerTotalRowCount = pageState.totalRowCount;
           this.PagerPageNumber = pageState.pageNumber;
           this.PagerPageSize = pageState.pageSize;
