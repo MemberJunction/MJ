@@ -477,7 +477,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
@@ -494,7 +494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
      * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
      */
-    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number, startRow?: number): Promise<RunQueryResult> {
         const query = gql`
             query ExecuteAdhocQuery($input: AdhocQueryInput!) {
                 ExecuteAdhocQuery(input: $input) {
@@ -503,9 +503,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         `;
 
-        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        const input: { SQL: string; TimeoutSeconds?: number; MaxRows?: number; StartRow?: number } = { SQL: sql };
         if (timeoutSeconds !== undefined) {
             input.TimeoutSeconds = timeoutSeconds;
+        }
+        if (maxRows !== undefined) {
+            input.MaxRows = maxRows;
+        }
+        if (startRow !== undefined) {
+            input.StartRow = startRow;
         }
 
         const result = await this.ExecuteGQL(query, { input });

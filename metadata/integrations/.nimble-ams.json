@@ -1,0 +1,1083 @@
+[
+  {
+    "fields": {
+      "Name": "Nimble AMS",
+      "Description": "Nimble AMS integration connector for MemberJunction",
+      "ClassName": "NimbleAMSConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": null,
+      "BatchMaxRequestCount": -1,
+      "BatchRequestWaitTime": -1,
+      "Icon": "fa-solid fa-id-badge",
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Nimble AMS OAuth"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Account",
+            "DisplayName": "Account",
+            "Description": "Organization/company accounts",
+            "Category": "Core",
+            "APIPath": "/Account",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastModifiedDate",
+                  "DisplayName": "LastModifiedDate",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contact",
+            "DisplayName": "Contact",
+            "Description": "Individual contacts/members",
+            "Category": "Core",
+            "APIPath": "/Contact",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "AccountId",
+                  "DisplayName": "AccountId",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastModifiedDate",
+                  "DisplayName": "LastModifiedDate",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Membership__c",
+            "DisplayName": "Membership",
+            "Description": "Membership records",
+            "Category": "Core",
+            "APIPath": "/NU__Membership__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Account__c",
+                  "DisplayName": "NU__Account__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastModifiedDate",
+                  "DisplayName": "LastModifiedDate",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__MembershipType__c",
+            "DisplayName": "Membership Type",
+            "Description": "Membership type definitions",
+            "Category": "Core",
+            "APIPath": "/NU__MembershipType__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Event__c",
+            "DisplayName": "Event",
+            "Description": "Events and conferences",
+            "Category": "Core",
+            "APIPath": "/NU__Event__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastModifiedDate",
+                  "DisplayName": "LastModifiedDate",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__EventRegistration__c",
+            "DisplayName": "Event Registration",
+            "Description": "Event registrations",
+            "Category": "Core",
+            "APIPath": "/NU__EventRegistration__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Event__c",
+                  "DisplayName": "NU__Event__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Contact__c",
+                  "DisplayName": "NU__Contact__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Order__c",
+            "DisplayName": "Order",
+            "Description": "Sales orders",
+            "Category": "Core",
+            "APIPath": "/NU__Order__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Account__c",
+                  "DisplayName": "NU__Account__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "LastModifiedDate",
+                  "DisplayName": "LastModifiedDate",
+                  "Type": "datetime",
+                  "Length": null,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__OrderItem__c",
+            "DisplayName": "Order Item",
+            "Description": "Order line items",
+            "Category": "Core",
+            "APIPath": "/NU__OrderItem__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Order__c",
+                  "DisplayName": "NU__Order__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Payment__c",
+            "DisplayName": "Payment",
+            "Description": "Payment records",
+            "Category": "Core",
+            "APIPath": "/NU__Payment__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Order__c",
+                  "DisplayName": "NU__Order__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Invoice__c",
+            "DisplayName": "Invoice",
+            "Description": "Invoices",
+            "Category": "Core",
+            "APIPath": "/NU__Invoice__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Account__c",
+                  "DisplayName": "NU__Account__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Committee__c",
+            "DisplayName": "Committee",
+            "Description": "Committees and boards",
+            "Category": "Core",
+            "APIPath": "/NU__Committee__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__CommitteeMembership__c",
+            "DisplayName": "Committee Member",
+            "Description": "Committee membership records",
+            "Category": "Core",
+            "APIPath": "/NU__CommitteeMembership__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Committee__c",
+                  "DisplayName": "NU__Committee__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Contact__c",
+                  "DisplayName": "NU__Contact__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Donation__c",
+            "DisplayName": "Donation",
+            "Description": "Donation/gift records",
+            "Category": "Core",
+            "APIPath": "/NU__Donation__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Account__c",
+                  "DisplayName": "NU__Account__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Product__c",
+            "DisplayName": "Product",
+            "Description": "Products/items for sale",
+            "Category": "Core",
+            "APIPath": "/NU__Product__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Badge__c",
+            "DisplayName": "Badge",
+            "Description": "Badges/certifications",
+            "Category": "Core",
+            "APIPath": "/NU__Badge__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Subscription__c",
+            "DisplayName": "Subscription",
+            "Description": "Publication subscriptions",
+            "Category": "Core",
+            "APIPath": "/NU__Subscription__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Account__c",
+                  "DisplayName": "NU__Account__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Campaign__c",
+            "DisplayName": "Campaign",
+            "Description": "Fundraising campaigns",
+            "Category": "Core",
+            "APIPath": "/NU__Campaign__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Session__c",
+            "DisplayName": "Session",
+            "Description": "Event sessions",
+            "Category": "Core",
+            "APIPath": "/NU__Session__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Event__c",
+                  "DisplayName": "NU__Event__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Credential__c",
+            "DisplayName": "Credential",
+            "Description": "Professional credentials/certifications",
+            "Category": "Core",
+            "APIPath": "/NU__Credential__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "NU__Contact__c",
+                  "DisplayName": "NU__Contact__c",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "IsUniqueKey": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "NU__Chapter__c",
+            "DisplayName": "Chapter",
+            "Description": "Chapters/branches",
+            "Category": "Core",
+            "APIPath": "/NU__Chapter__c",
+            "ResponseDataKey": "records",
+            "DefaultPageSize": 2000,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "Id",
+                  "DisplayName": "Id",
+                  "Type": "nvarchar",
+                  "Length": 255,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "IsUniqueKey": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+]
