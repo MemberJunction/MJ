@@ -34,8 +34,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   template: `
     <mj-page-layout>
       <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
+        <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
         <div meta>
-          <mj-stat-badge [Count]="filteredLists.length" Label="lists"></mj-stat-badge>
+          <mj-stat-badge
+            [Count]="filteredLists.length"
+            [Total]="allLists.length"
+            Label="lists">
+          </mj-stat-badge>
         </div>
         <div actions>
           <mj-filter-popover

@@ -1,27 +1,33 @@
-<div class="sql-logging-container">
-  <!-- Action Buttons -->
-  <div class="action-buttons" role="toolbar" aria-label="SQL logging actions">
-    <button
-      class="btn-secondary"
-      (click)="loadActiveSessions()"
-      [disabled]="loading"
-      aria-label="Refresh sessions"
-    >
-      <i class="fa-solid fa-refresh" [class.fa-spin]="loading" aria-hidden="true"></i>
-      Refresh
-    </button>
+<!--
+  Interior chrome — sub-page of Admin's Monitoring left-nav shell. Single section
+  (no L2 tab nav) so [toolbar] is empty; actions land in [actions]. See Section 10
+  of plans/explorer-chrome-conventions.md.
+-->
+<mj-page-header-interior
+  Role="region"
+  AriaLabel="SQL logging actions"
+  Title="SQL Logging"
+  Subtitle="Capture and download SQL statements executed by the API">
+  <div actions>
+    <mj-refresh-button
+      [Loading]="loading"
+      (Clicked)="loadActiveSessions()">
+    </mj-refresh-button>
     @if (isOwner && configEnabled) {
-      <button
-        class="btn-primary"
+      <button mjButton
+        variant="primary"
+        size="sm"
         [disabled]="loading || activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5)"
         (click)="openStartSessionDialog()"
-        [attr.aria-label]="'Start new SQL logging session' + (activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5) ? ' (maximum sessions reached)' : '')"
-      >
+        [attr.aria-label]="'Start new SQL logging session' + (activeSessions.length >= (sqlLoggingConfig?.maxActiveSessions || 5) ? ' (maximum sessions reached)' : '')">
         <i class="fa-solid fa-play" aria-hidden="true"></i>
         Start New Session
       </button>
     }
   </div>
+</mj-page-header-interior>
+
+<mj-page-body-interior>
 
   <!-- Stats Cards with Toggle -->
   @if (isOwner && configEnabled) {
@@ -121,7 +127,7 @@
           <i class="fa-solid fa-lock empty-icon" aria-hidden="true"></i>
           <p class="empty-text">Access Denied</p>
           <p class="empty-subtext">SQL logging requires Owner privileges. Please contact your system administrator for access.</p>
-          <button class="btn-secondary" (click)="refreshUserPermissions()" style="margin-top: 1rem" aria-label="Refresh user permissions">
+          <button mjButton variant="secondary" size="md" (click)="refreshUserPermissions()" style="margin-top: 1rem" aria-label="Refresh user permissions">
             <i class="fa-solid fa-sync" aria-hidden="true"></i>
             Refresh Permissions
           </button>
@@ -147,7 +153,7 @@
           <i class="fa-solid fa-file-code empty-icon" aria-hidden="true"></i>
           <p class="empty-text">No Active Sessions</p>
           <p class="empty-subtext">Start a new SQL logging session to begin capturing SQL statements.</p>
-          <button class="btn-primary" (click)="openStartSessionDialog()" style="margin-top: 1rem" aria-label="Start a new SQL logging session">
+          <button mjButton variant="primary" size="md" (click)="openStartSessionDialog()" style="margin-top: 1rem" aria-label="Start a new SQL logging session">
             <i class="fa-solid fa-play" aria-hidden="true"></i>
             Start New Session
           </button>
@@ -160,8 +166,9 @@
             <div class="panel-header">
               <h3 class="panel-title">Active Sessions</h3>
               @if (activeSessions.length > 0) {
-                <button
-                  class="btn-danger btn-small"
+                <button mjButton
+                  variant="danger"
+                  size="sm"
                   (click)="openStopAllSessionsConfirm()"
                   [disabled]="loading"
                   aria-label="Stop all active sessions"
@@ -446,7 +453,7 @@
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-primary" (click)="startNewSession()" [disabled]="loading" aria-label="Start the SQL logging session">
+          <button mjButton variant="primary" size="md" (click)="startNewSession()" [disabled]="loading" aria-label="Start the SQL logging session">
             @if (loading) {
               <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Starting...
@@ -455,7 +462,7 @@
               Start Session
             }
           </button>
-          <button class="btn-secondary" (click)="showStartSessionDialog = false" aria-label="Cancel and close dialog">Cancel</button>
+          <button mjButton variant="secondary" size="md" (click)="showStartSessionDialog = false" aria-label="Cancel and close dialog">Cancel</button>
         </div>
       </div>
     </div>
@@ -493,7 +500,7 @@
           </p>
         </div>
         <div class="confirm-dialog-actions">
-          <button class="btn-danger" (click)="confirmStopSession()" [disabled]="loading" [attr.aria-label]="isStoppingAll ? 'Confirm stop all sessions' : 'Confirm stop session'">
+          <button mjButton variant="danger" size="md" (click)="confirmStopSession()" [disabled]="loading" [attr.aria-label]="isStoppingAll ? 'Confirm stop all sessions' : 'Confirm stop session'">
             @if (loading) {
               <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
               Stopping...
@@ -506,9 +513,9 @@
               }
             }
           </button>
-          <button class="btn-secondary" (click)="cancelStopConfirm()" [disabled]="loading" aria-label="Cancel and keep sessions running">Cancel</button>
+          <button mjButton variant="secondary" size="md" (click)="cancelStopConfirm()" [disabled]="loading" aria-label="Cancel and keep sessions running">Cancel</button>
         </div>
       </div>
     </div>
   }
-</div>
+</mj-page-body-interior>

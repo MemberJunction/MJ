@@ -1,34 +1,12 @@
-/* Container — flex-column workspace inside Admin's left-nav shell. */
-.app-roles-container {
+/* :host is flex-column / 100% height via mj-left-nav-content's ::ng-deep
+   sizing. Interior chrome lives in <mj-page-header-interior> — see Section 10
+   of explorer-chrome-conventions. */
+:host {
   display: flex;
   flex-direction: column;
   height: 100%;
   overflow: hidden;
   background: var(--mj-bg-page);
-}
-
-/* Sticky Header — action row only (no title; Admin shell provides it). */
-.sticky-header {
-  flex-shrink: 0;
-  background: var(--mj-bg-surface);
-  border-bottom: 1px solid var(--mj-border-default);
-  box-shadow: var(--mj-shadow-sm);
-  z-index: 10;
-}
-
-.action-buttons {
-  display: flex;
-  align-items: center;
-  gap: var(--mj-space-2);
-  justify-content: flex-end;
-  padding: var(--mj-space-3) var(--mj-space-6);
-}
-
-@media (max-width: 639px) {
-  .action-buttons {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
 }
 
 /* Scrollable Content */

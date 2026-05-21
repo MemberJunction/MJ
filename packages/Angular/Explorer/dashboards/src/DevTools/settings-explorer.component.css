@@ -225,14 +225,6 @@
     gap: 4px;
     flex-shrink: 0;
 }
-.mj-inspector__btn--ghost {
-    background: transparent !important;
-    border: 1px solid transparent !important;
-}
-.mj-inspector__btn--ghost:hover {
-    background: var(--mj-bg-surface-hover) !important;
-    border-color: var(--mj-border-default) !important;
-}
 
 .se-detail-body {
     flex: 1;

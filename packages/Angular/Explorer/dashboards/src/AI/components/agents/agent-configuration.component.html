@@ -3,8 +3,13 @@
   <mj-page-header
     Title="Agents"
     Icon="fa-solid fa-robot">
+    <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
     <div meta>
-      <mj-stat-badge [Count]="filteredAgents.length" Label="agents"></mj-stat-badge>
+      <mj-stat-badge
+        [Count]="filteredAgents.length"
+        [Total]="agents.length"
+        Label="agents">
+      </mj-stat-badge>
     </div>
     <div actions>
       <mj-filter-popover
