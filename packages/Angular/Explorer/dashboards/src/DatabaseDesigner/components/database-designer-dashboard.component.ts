@@ -171,6 +171,27 @@ export class DatabaseDesignerDashboardComponent extends BaseDashboard {
         this.loadData();
     }
 
+    /**
+     * React to ?entity= changes that arrive after initial load — e.g. clicking a Home pin
+     * for a specific entity, or browser back/forward — when this tab is re-focused rather
+     * than freshly mounted (so initDashboard() does not run again). Without this, the modify
+     * panel would not open for the pinned/linked entity. (initDashboard handles the very
+     * first load via _deepLinkEntityId.)
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        const entityId = params['entity'] || null;
+        if (entityId) {
+            if (entityId !== this.ModifyEntityId) {
+                const target = this.Entities.find(e => e.entityId === entityId);
+                if (target) {
+                    this.openModifyPanel(target);
+                }
+            }
+        } else if (this.ModifyEntityId) {
+            this.OnModifyPanelClosed();
+        }
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────────────
 
     private openModifyPanel(entity: AccessibleEntity): void {

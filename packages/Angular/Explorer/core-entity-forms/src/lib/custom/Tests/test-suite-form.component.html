@@ -24,7 +24,12 @@
           <i class="fas fa-layer-group"></i>
         </div>
         <div class="suite-info">
-          <h1>{{ record.Name }}</h1>
+          <h1>
+            {{ record.Name }}
+            @if (isDirty) {
+              <span class="dirty-indicator" title="You have unsaved changes" aria-label="Unsaved changes">●</span>
+            }
+          </h1>
           <div class="suite-meta">
             <span class="status-badge" [ngClass]="getStatusClass()">
               <i class="fas" [ngClass]="record.Status === 'Active' ? 'fa-circle-check' : 'fa-circle-pause'"></i>
@@ -34,6 +39,11 @@
               <span class="test-count">
                 <i class="fas fa-flask"></i>
                 {{ suiteTests.length }} tests
+              </span>
+            }
+            @if (isDirty) {
+              <span class="unsaved-pill" title="You have unsaved changes">
+                <i class="fas fa-circle"></i> Unsaved
               </span>
             }
           </div>
@@ -108,53 +118,157 @@
   </div>
 
   <!-- Tab Content -->
-  <div class="tab-content">
+  <div class="tab-content" [class.has-savebar]="isDirty">
     <!-- Overview Tab -->
     @if (activeTab === 'overview') {
       <div class="overview-tab">
-        <div class="info-section">
-          <h3><i class="fas fa-info-circle"></i> Suite Information</h3>
-          <div class="info-grid">
-            <div class="info-item">
-              <div class="info-label">Name</div>
-              <div class="info-value">{{ record.Name }}</div>
+        <!-- Editable Details -->
+        <section class="edit-section">
+          <header class="edit-section-header">
+            <h3><i class="fas fa-pen-to-square"></i> Details</h3>
+            <p class="edit-section-sub">Edit any field — changes are saved with the bar at the bottom.</p>
+          </header>
+          <div class="edit-grid">
+            <div class="edit-field edit-field--full">
+              <label for="suite-name">Name <span class="required">*</span></label>
+              <input
+                id="suite-name"
+                type="text"
+                class="config-input"
+                placeholder="e.g., Core Agent Test Suite"
+                [(ngModel)]="record.Name"
+              />
             </div>
-            <div class="info-item">
-              <div class="info-label">Status</div>
-              <div class="info-value">
-                <span class="status-badge-inline" [ngClass]="getStatusClass()">{{ record.Status }}</span>
+
+            <div class="edit-field edit-field--full">
+              <label for="suite-description">Description</label>
+              <textarea
+                id="suite-description"
+                class="config-input config-textarea"
+                rows="3"
+                placeholder="What does this suite cover?"
+                [ngModel]="record.Description"
+                (ngModelChange)="record.Description = $event || null"
+              ></textarea>
+            </div>
+
+            <div class="edit-field">
+              <label for="suite-status">Status</label>
+              <div class="select-wrapper">
+                <select
+                  id="suite-status"
+                  class="config-input"
+                  [(ngModel)]="record.Status"
+                >
+                  @for (opt of statusOptions; track opt) {
+                    <option [ngValue]="opt">{{ opt }}</option>
+                  }
+                </select>
               </div>
             </div>
-            <div class="info-item">
-              <div class="info-label">Created</div>
-              <div class="info-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+
+            <div class="edit-field">
+              <label for="suite-parent">Parent Suite</label>
+              <select
+                id="suite-parent"
+                class="config-input"
+                [ngModel]="record.ParentID"
+                (ngModelChange)="record.ParentID = $event || null"
+              >
+                <option [ngValue]="null">— None (top-level) —</option>
+                @for (s of parentSuiteOptions; track s.ID) {
+                  <option [ngValue]="s.ID">{{ s.Name }}</option>
+                }
+              </select>
             </div>
-            <div class="info-item">
-              <div class="info-label">Updated</div>
-              <div class="info-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
-            </div>
-            <div class="info-item">
-              <div class="info-label">Max Execution Time</div>
-              <div class="info-value">{{ formatTimeout(record.MaxExecutionTimeMS) }}</div>
+
+            <div class="edit-field edit-field--full">
+              <label for="suite-tags">Tags</label>
+              <div class="tag-editor" (click)="tagInput.focus()">
+                @for (tag of tags; track tag) {
+                  <span class="tag-chip-editable">
+                    {{ tag }}
+                    <button type="button" class="tag-remove" (click)="removeTag(tag); $event.stopPropagation()" [attr.aria-label]="'Remove tag ' + tag">
+                      <i class="fas fa-times"></i>
+                    </button>
+                  </span>
+                }
+                <input
+                  #tagInput
+                  id="suite-tags"
+                  type="text"
+                  class="tag-input-inline"
+                  [placeholder]="tags.length === 0 ? 'Add tags, press Enter or comma...' : ''"
+                  [(ngModel)]="tagDraft"
+                  (keydown)="onTagInputKeydown($event)"
+                  (blur)="addTagFromDraft()"
+                />
+              </div>
+              <span class="config-hint">Press Enter or comma to add a tag. Backspace on empty input removes the last tag.</span>
             </div>
           </div>
-        </div>
-        <div class="config-section">
-          <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
-          <div class="config-grid">
-            <div class="config-item">
-              <label>Max Execution Time (ms)</label>
-              <input type="number" [(ngModel)]="record.MaxExecutionTimeMS" class="config-input" placeholder="Default: 300000 (5 min)" />
-              <span class="config-hint">Default timeout for tests in this suite</span>
+        </section>
+
+        <!-- Execution Settings -->
+        <section class="edit-section">
+          <header class="edit-section-header">
+            <h3><i class="fas fa-cogs"></i> Execution Settings</h3>
+          </header>
+          <div class="edit-grid">
+            <div class="edit-field">
+              <label for="suite-timeout">Max Execution Time (ms)</label>
+              <input
+                id="suite-timeout"
+                type="number"
+                class="config-input"
+                placeholder="Default: 300000 (5 min)"
+                [ngModel]="record.MaxExecutionTimeMS"
+                (ngModelChange)="record.MaxExecutionTimeMS = $event === '' || $event === null ? null : +$event"
+              />
+              <span class="config-hint">Default timeout for tests in this suite. Currently: {{ formatTimeout(record.MaxExecutionTimeMS) }}</span>
             </div>
           </div>
-        </div>
+        </section>
+
+        <!-- Metadata (read-only) -->
+        <section class="meta-section">
+          <div class="meta-grid">
+            <div class="meta-item">
+              <div class="meta-label">Created</div>
+              <div class="meta-value">{{ record.__mj_CreatedAt | date:'medium' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Last updated</div>
+              <div class="meta-value">{{ record.__mj_UpdatedAt | date:'medium' }}</div>
+            </div>
+            <div class="meta-item">
+              <div class="meta-label">Suite ID</div>
+              <div class="meta-value meta-mono">{{ record.ID }}</div>
+            </div>
+          </div>
+        </section>
       </div>
     }
 
     <!-- Tests Tab -->
     @if (activeTab === 'tests') {
       <div class="tests-tab">
+        <!-- Header: action bar -->
+        <div class="tests-actionbar">
+          <div class="tests-actionbar-text">
+            <strong>Suite tests</strong>
+            @if (testsLoaded) {
+              <span class="tests-actionbar-count">{{ suiteTests.length }}</span>
+            }
+            <span class="tests-actionbar-hint">Drag to reorder · Hover a row to remove</span>
+          </div>
+          <div class="tests-actionbar-actions">
+            <button mjButton variant="primary" (click)="openAddTestsDialog()" [disabled]="isReorderingTests">
+              <i class="fas fa-plus"></i> Add tests
+            </button>
+          </div>
+        </div>
+
         <!-- Loading State -->
         @if (loadingTests) {
           <div class="loading-state">
@@ -174,12 +288,15 @@
         }
         <!-- Tests List -->
         @if (!loadingTests && suiteTests.length > 0) {
-          <div class="tests-list">
-            @for (test of suiteTests; track test) {
-              <div class="test-item" (click)="openTest(test.TestID)">
+          <div class="tests-list" cdkDropList (cdkDropListDropped)="onTestDrop($event)">
+            @for (test of suiteTests; track test.ID) {
+              <div class="test-item" cdkDrag [cdkDragDisabled]="isReorderingTests || isRemovingTest">
+                <span class="test-drag-handle" cdkDragHandle title="Drag to reorder" aria-label="Drag to reorder">
+                  <i class="fas fa-grip-vertical"></i>
+                </span>
                 <div class="test-sequence">{{ test.Sequence }}</div>
                 <div class="test-icon"><i class="fas fa-flask"></i></div>
-                <div class="test-content">
+                <div class="test-content" (click)="openTest(test.TestID)">
                   <div class="test-name">{{ test.Test }}</div>
                   <div class="test-status">
                     @if (test.Status) {
@@ -187,7 +304,43 @@
                     }
                   </div>
                 </div>
-                <i class="fas fa-chevron-right"></i>
+                <!-- Inline remove confirm OR hover-reveal X -->
+                @if (confirmingRemoveSuiteTestId === test.ID) {
+                  <div class="test-remove-confirm" (click)="$event.stopPropagation()">
+                    <span class="test-remove-confirm-text">Remove from suite?</span>
+                    <button
+                      type="button"
+                      class="test-remove-confirm-btn test-remove-confirm-btn--danger"
+                      (click)="confirmRemoveTest(test, $event)"
+                      [disabled]="isRemovingTest"
+                    >
+                      @if (isRemovingTest) {
+                        <i class="fas fa-spinner fa-spin"></i>
+                      } @else {
+                        Remove
+                      }
+                    </button>
+                    <button
+                      type="button"
+                      class="test-remove-confirm-btn test-remove-confirm-btn--ghost"
+                      (click)="cancelRemoveTest($event)"
+                      [disabled]="isRemovingTest"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                } @else {
+                  <button
+                    type="button"
+                    class="test-remove-btn"
+                    title="Remove from suite"
+                    aria-label="Remove from suite"
+                    (click)="requestRemoveTest(test, $event)"
+                  >
+                    <i class="fas fa-times"></i>
+                  </button>
+                  <i class="fas fa-chevron-right test-chevron" (click)="openTest(test.TestID)"></i>
+                }
               </div>
             }
           </div>
@@ -200,6 +353,9 @@
             </div>
             <h4>No Tests in Suite</h4>
             <p>Add tests to this suite to start running them together.</p>
+            <button mjButton variant="primary" (click)="openAddTestsDialog()">
+              <i class="fas fa-plus"></i> Add tests
+            </button>
           </div>
         }
       </div>
@@ -996,6 +1152,10 @@
       </div>
       <div class="shortcut-list">
         <div class="shortcut-item">
+          <span>Save changes</span>
+          <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>S</kbd></span>
+        </div>
+        <div class="shortcut-item">
           <span>Refresh</span>
           <span class="shortcut-keys"><kbd>Cmd</kbd><kbd>R</kbd></span>
         </div>
@@ -1027,4 +1187,186 @@
       </app-test-run-dialog>
     </mj-slide-panel>
   }
+
+  <!-- Add Tests Picker Dialog -->
+  @if (showAddTestsDialog) {
+    <div class="picker-backdrop" (click)="closeAddTestsDialog()"></div>
+    <div class="picker-dialog" role="dialog" aria-modal="true" aria-labelledby="add-tests-dialog-title" (click)="$event.stopPropagation()">
+      <div class="picker-header">
+        <h2 id="add-tests-dialog-title" class="picker-title">
+          <i class="fas fa-plus-circle"></i> Add tests to suite
+        </h2>
+        <button type="button" class="picker-close" (click)="closeAddTestsDialog()" [disabled]="isAddingTests" aria-label="Close">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+
+      <div class="picker-search">
+        <i class="fas fa-search picker-search-icon"></i>
+        <input
+          #pickerSearch
+          type="text"
+          class="picker-search-input"
+          placeholder="Search tests by name, description, or type..."
+          [(ngModel)]="addTestsSearch"
+          autofocus
+        />
+        @if (addTestsSearch) {
+          <button type="button" class="picker-search-clear" (click)="addTestsSearch = ''" aria-label="Clear search">
+            <i class="fas fa-times"></i>
+          </button>
+        }
+      </div>
+
+      <div class="picker-toolbar">
+        <span class="picker-toolbar-status">
+          @if (selectedTestIdsToAdd.size > 0) {
+            <strong>{{ selectedTestIdsToAdd.size }}</strong> selected
+          } @else if (!loadingAvailableTests) {
+            {{ filteredAvailableTests.length }} test{{ filteredAvailableTests.length === 1 ? '' : 's' }} available
+          }
+        </span>
+        <div class="picker-toolbar-actions">
+          <button type="button" class="picker-link-btn" (click)="selectAllFiltered()" [disabled]="loadingAvailableTests || filteredAvailableTests.length === 0">
+            Select all
+          </button>
+          <button type="button" class="picker-link-btn" (click)="clearAddSelection()" [disabled]="selectedTestIdsToAdd.size === 0">
+            Clear
+          </button>
+        </div>
+      </div>
+
+      <div class="picker-body">
+        @if (loadingAvailableTests) {
+          <div class="picker-loading">
+            <mj-loading text="Loading tests..."></mj-loading>
+          </div>
+        } @else if (filteredAvailableTests.length === 0) {
+          <div class="picker-empty">
+            @if (availableTests.length === 0) {
+              <i class="fas fa-check-circle"></i>
+              <h4>Everything's already in the suite</h4>
+              <p>This suite contains every available test. Create a new test first to add more.</p>
+            } @else {
+              <i class="fas fa-search"></i>
+              <h4>No matches</h4>
+              <p>No tests match "{{ addTestsSearch }}".</p>
+            }
+          </div>
+        } @else {
+          <ul class="picker-list">
+            @for (t of filteredAvailableTests; track t.ID) {
+              <li
+                class="picker-row"
+                [class.picker-row--selected]="isAddSelected(t.ID)"
+                (click)="toggleAddSelection(t.ID)"
+                role="checkbox"
+                [attr.aria-checked]="isAddSelected(t.ID)"
+                tabindex="0"
+              >
+                <span class="picker-check">
+                  @if (isAddSelected(t.ID)) {
+                    <i class="fas fa-check"></i>
+                  }
+                </span>
+                <div class="picker-row-main">
+                  <div class="picker-row-name">{{ t.Name }}</div>
+                  @if (t.Description) {
+                    <div class="picker-row-desc">{{ t.Description }}</div>
+                  }
+                </div>
+                <div class="picker-row-meta">
+                  @if (t.Type) {
+                    <span class="picker-row-pill">{{ t.Type }}</span>
+                  }
+                  <span class="picker-row-pill picker-row-pill--status" [attr.data-status]="t.Status?.toLowerCase()">{{ t.Status }}</span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="picker-footer">
+        <button
+          type="button"
+          class="picker-btn picker-btn--primary"
+          (click)="confirmAddTests()"
+          [disabled]="selectedTestIdsToAdd.size === 0 || isAddingTests"
+        >
+          @if (isAddingTests) {
+            <i class="fas fa-spinner fa-spin"></i> Adding…
+          } @else {
+            <i class="fas fa-check"></i>
+            @if (selectedTestIdsToAdd.size === 0) {
+              Add tests
+            } @else if (selectedTestIdsToAdd.size === 1) {
+              Add 1 test
+            } @else {
+              Add {{ selectedTestIdsToAdd.size }} tests
+            }
+          }
+        </button>
+        <button
+          type="button"
+          class="picker-btn picker-btn--ghost"
+          (click)="closeAddTestsDialog()"
+          [disabled]="isAddingTests"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Sticky Save Bar — always in the DOM so CSS transitions can fire reliably.
+       Visibility is controlled by the .save-bar--visible class, driven by isDirty. -->
+  <div
+    class="save-bar"
+    [class.save-bar--visible]="isDirty"
+    [attr.aria-hidden]="!isDirty"
+    role="region"
+    aria-label="Unsaved changes"
+  >
+    <div class="save-bar-message">
+      <span class="save-bar-dot" aria-hidden="true">●</span>
+      <span class="save-bar-text">
+        <strong>Unsaved changes</strong>
+        <span class="save-bar-fields">
+          @if (dirtyFieldNames.length === 1) {
+            {{ dirtyFieldNames[0] }} edited
+          } @else if (dirtyFieldNames.length > 1) {
+            {{ dirtyFieldNames.length }} fields edited
+          }
+        </span>
+      </span>
+    </div>
+    <div class="save-bar-actions">
+      <button
+        type="button"
+        class="save-bar-btn save-bar-btn--primary"
+        (click)="saveChanges()"
+        [disabled]="isSaving || !isDirty"
+        [attr.tabindex]="isDirty ? 0 : -1"
+        title="Save changes (⌘S)"
+      >
+        @if (isSaving) {
+          <i class="fas fa-spinner fa-spin"></i> Saving…
+        } @else {
+          <i class="fas fa-check"></i> Save changes
+          <span class="save-bar-kbd"><kbd>⌘</kbd><kbd>S</kbd></span>
+        }
+      </button>
+      <button
+        type="button"
+        class="save-bar-btn save-bar-btn--ghost"
+        (click)="discardChanges()"
+        [disabled]="isSaving || !isDirty"
+        [attr.tabindex]="isDirty ? 0 : -1"
+        title="Discard changes"
+      >
+        <i class="fas fa-undo"></i> Discard
+      </button>
+    </div>
+  </div>
 </div>

@@ -583,6 +583,26 @@ export class SearchResultsResource extends BaseResourceComponent {
         }
     }
 
+    /**
+     * React to ?minRelevance= changes that arrive after initial load — e.g. a Home pin or
+     * deep link to a specific relevance threshold, or browser back/forward — when this tab
+     * is re-focused rather than freshly loaded (so loadFromData() does not run again).
+     */
+    protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        const minRelevance = params['minRelevance'];
+        if (minRelevance == null) return;
+        const mr = Number(minRelevance);
+        if (isNaN(mr) || mr < 0 || mr > 100 || mr === this.MinScorePercent) return;
+
+        this.MinScorePercent = mr;
+        if (mr < this.serverMinScorePercent && this.CurrentQuery) {
+            // Below what the server filtered — re-query with the lower threshold.
+            void this.ExecuteSearch(this.CurrentQuery);
+        } else {
+            this.applyClientFilters();
+        }
+    }
+
     OnResultSelected(event: SearchResultSelectedEvent): void {
         this.navigateToResult(event.Result);
     }

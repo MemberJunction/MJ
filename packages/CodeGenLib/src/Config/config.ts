@@ -418,7 +418,7 @@ const newEntityPermissionDefaultsSchema = z.object({
   AutoAddPermissionsForNewEntities: z.boolean().default(true),
   Permissions: entityPermissionSchema.array().default([
     { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
-    { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+    { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
     { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
   ]),
 });
@@ -651,7 +651,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
       AutoAddPermissionsForNewEntities: true,
       Permissions: [
         { RoleName: 'UI', CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false },
-        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: false },
+        { RoleName: 'Developer', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
         { RoleName: 'Integration', CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true },
       ],
     },
