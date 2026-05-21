@@ -1,7 +1,6 @@
 ---
 "@memberjunction/global": minor
 "@memberjunction/ng-explorer-core": minor
-"@memberjunction/open-app": patch
 "@memberjunction/codegen-lib": patch
 "@memberjunction/ng-dashboards": patch
 "@memberjunction/server": patch
