@@ -406,6 +406,14 @@ export class ConfigurePhase {
    */
   private async writeEnvFile(envPath: string, config: InstallConfig): Promise<void> {
     const trustCert = config.DatabaseTrustCert ? 'DB_TRUST_SERVER_CERTIFICATE=1' : '';
+    // Accept both internal-shape (`ClientID`, `TenantID`, ...) and user-facing
+    // shape (`CLIENT_ID`, `TENANT_ID`, ...) keys in AuthProviderValues — see
+    // generateEnvironmentFile() for rationale.
+    const authValues = config.AuthProviderValues ?? {};
+    const clientId = authValues.CLIENT_ID ?? authValues.ClientID ?? '';
+    const tenantId = authValues.TENANT_ID ?? authValues.TenantID ?? '';
+    const clientSecret = authValues.AUTH0_CLIENT_SECRET ?? authValues.ClientSecret ?? '';
+    const auth0Domain = authValues.AUTH0_DOMAIN ?? authValues.Domain ?? '';
 
     const content = `#Database Setup
 DB_HOST='${config.DatabaseHost}'
@@ -437,13 +445,13 @@ UPDATE_USER_CACHE_WHEN_NOT_FOUND=1
 UPDATE_USER_CACHE_WHEN_NOT_FOUND_DELAY=5000
 
 # AUTHENTICATION SECTION
-WEB_CLIENT_ID=${config.AuthProviderValues?.ClientID ?? ''}
-TENANT_ID=${config.AuthProviderValues?.TenantID ?? ''}
+WEB_CLIENT_ID=${clientId}
+TENANT_ID=${tenantId}
 
 # Auth0 Section
-AUTH0_CLIENT_ID=${config.AuthProviderValues?.ClientID ?? ''}
-AUTH0_CLIENT_SECRET=${config.AuthProviderValues?.ClientSecret ?? ''}
-AUTH0_DOMAIN=${config.AuthProviderValues?.Domain ?? ''}
+AUTH0_CLIENT_ID=${clientId}
+AUTH0_CLIENT_SECRET=${clientSecret}
+AUTH0_DOMAIN=${auth0Domain}
 
 # Skip API
 ASK_SKIP_API_URL='http://localhost:8000'
@@ -977,12 +985,16 @@ ${newUserSection}  output: [],
     let content = await this.fileSystem.ReadText(filePath);
     const original = content;
 
-    const clientId = config.AuthProviderValues?.ClientID ?? '';
-    const tenantId = config.AuthProviderValues?.TenantID ?? '';
+    // Accept both internal-shape keys (`ClientID`, `TenantID`, `Domain`) and
+    // user-facing shape keys (`CLIENT_ID`, `TENANT_ID`, `AUTH0_DOMAIN`) — see
+    // generateEnvironmentFile() for the rationale.
+    const values = config.AuthProviderValues ?? {};
+    const clientId = values.CLIENT_ID ?? values.ClientID ?? '';
+    const tenantId = values.TENANT_ID ?? values.TenantID ?? '';
     const authority = tenantId
       ? `https://login.microsoftonline.com/${tenantId}`
       : '';
-    const auth0Domain = config.AuthProviderValues?.Domain ?? '';
+    const auth0Domain = values.AUTH0_DOMAIN ?? values.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
     const explorerPort = config.ExplorerPort ?? 4200;
     const authType = this.mapAuthType(config.AuthProvider);
@@ -1000,15 +1012,42 @@ ${newUserSection}  output: [],
       AUTH0_CLIENTID: clientId,
     };
 
+    // URL fields where the scaffold writes a non-empty default (`localhost:4000`
+    // for GraphQL, `localhost:4200` for the Explorer redirect). When the user
+    // configures a different port, those scaffold defaults need to be
+    // overwritten — not just empty-string patched. Any OTHER existing value
+    // (custom hostname, https://, etc.) is presumed dev-customized and is
+    // preserved.
+    const scaffoldDefaultURLs: Record<string, RegExp> = {
+      GRAPHQL_URI:    /^https?:\/\/localhost:4000\/?$/,
+      GRAPHQL_WS_URI: /^wss?:\/\/localhost:4000\/?$/,
+      REDIRECT_URI:   /^https?:\/\/localhost:4200\/?$/,
+    };
+
     for (const [field, value] of Object.entries(patches)) {
       if (!value) continue;
-      // Match: "FIELD": "" or "FIELD": '' or FIELD: "" or FIELD: ''
-      // Only patches empty values — preserves any dev-customized values.
+
+      // 1. Empty-value patch — fills in fields the scaffold left blank.
       const emptyPattern = new RegExp(
         `(["']?${field}["']?\\s*[:=]\\s*)(?:["']{2}|["']\\s*["'])`,
       );
       if (emptyPattern.test(content)) {
         content = content.replace(emptyPattern, `$1'${value}'`);
+        continue;
+      }
+
+      // 2. Scaffold-default URL overwrite — replaces only the precise
+      //    `localhost:4000` / `localhost:4200` defaults, never user-edited
+      //    URLs (different host, https, etc.).
+      const scaffoldDefault = scaffoldDefaultURLs[field];
+      if (scaffoldDefault) {
+        const valuedPattern = new RegExp(
+          `(["']?${field}["']?\\s*[:=]\\s*["'])([^"']*)(["'])`,
+        );
+        const match = content.match(valuedPattern);
+        if (match && scaffoldDefault.test(match[2])) {
+          content = content.replace(valuedPattern, `$1${value}$3`);
+        }
       }
     }
 
