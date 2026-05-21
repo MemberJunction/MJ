@@ -18,7 +18,7 @@ export class MJTemplateCategoryFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'categoryInformation', sectionName: 'Category Information', isExpanded: true },
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
-            { sectionKey: 'managementAudit', sectionName: 'Management Audit', isExpanded: false },
+            { sectionKey: 'managementAudit', sectionName: 'Management Audit', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTemplateCategories', sectionName: 'Template Categories', isExpanded: false },
             { sectionKey: 'mJTemplates', sectionName: 'Templates', isExpanded: false }
