@@ -1,5 +1,43 @@
 # @memberjunction/ng-conversations
 
+## 5.35.0
+
+### Patch Changes
+
+- 2c905e3: Fix Save-to-Collection dialog so a new collection can be created from the empty state. Previously the "Create new collection…" affordance only rendered inside the collection tree, which is hidden when the user has no editable collections — leaving no way to create the first one.
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ai-agent-client@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/ng-testing@5.35.0
+  - @memberjunction/ng-artifacts@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-code-editor@5.35.0
+  - @memberjunction/ng-container-directives@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-resource-permissions@5.35.0
+  - @memberjunction/ng-shared-generic@5.35.0
+  - @memberjunction/ng-tasks@5.35.0
+  - @memberjunction/ng-forms@5.35.0
+  - @memberjunction/ng-agent-client@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/ng-markdown@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

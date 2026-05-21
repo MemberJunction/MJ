@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.35.0
+
+### Patch Changes
+
+- eb54def: Add an inline save/edit experience to the custom Test and Test Suite forms: editable Name, Description, Status, Parent Suite / Test Type, and tag-chip editor, plus a sticky save bar that slides up from the bottom whenever the record is dirty (Save/Discard, ⌘S shortcut, beforeunload guard, success/error toasts). Test Suite forms also gain in-place membership management — a searchable picker dialog for bulk-adding tests, hover-revealed remove with inline confirm, and drag-to-reorder via CDK with sequence persistence.
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/ng-base-application@5.35.0
+  - @memberjunction/ng-link-directives@5.35.0
+  - @memberjunction/ng-testing@5.35.0
+  - @memberjunction/ng-action-gallery@5.35.0
+  - @memberjunction/ng-actions@5.35.0
+  - @memberjunction/ng-agents@5.35.0
+  - @memberjunction/ng-ai-test-harness@5.35.0
+  - @memberjunction/ng-base-forms@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-code-editor@5.35.0
+  - @memberjunction/ng-deep-diff@5.35.0
+  - @memberjunction/ng-entity-relationship-diagram@5.35.0
+  - @memberjunction/ng-entity-viewer@5.35.0
+  - @memberjunction/ng-flow-editor@5.35.0
+  - @memberjunction/ng-join-grid@5.35.0
+  - @memberjunction/ng-list-management@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-search@5.35.0
+  - @memberjunction/ng-shared-generic@5.35.0
+  - @memberjunction/ng-timeline@5.35.0
+  - @memberjunction/ng-trees@5.35.0
+  - @memberjunction/ng-versions@5.35.0
+  - @memberjunction/templates-base-types@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/ng-tabstrip@5.35.0
+  - @memberjunction/ng-markdown@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

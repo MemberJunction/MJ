@@ -1,5 +1,17 @@
 # @memberjunction/interactive-component-types
 
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ai-vectors-memory@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes
