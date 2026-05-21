@@ -73,6 +73,8 @@
     "@memberjunction/integration-engine": "5.35.0",
     "@memberjunction/integration-schema-builder": "5.35.0",
     "@memberjunction/interactive-component-types": "5.35.0",
+    "@memberjunction/lists": "5.35.0",
+    "@memberjunction/lists-base": "5.35.0",
     "@memberjunction/notifications": "5.35.0",
     "@memberjunction/postgresql-dataprovider": "5.35.0",
     "@memberjunction/queue": "5.35.0",

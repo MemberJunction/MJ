@@ -11,7 +11,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "echo \"No tests configured yet\""
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
@@ -25,6 +26,8 @@
     "@memberjunction/templates": "5.35.0",
     "@memberjunction/core-entities": "5.35.0",
     "@memberjunction/communication-types": "5.35.0",
+    "@memberjunction/lists": "5.35.0",
+    "@memberjunction/lists-base": "5.35.0",
     "rxjs": "^7.8.2"
   },
   "repository": {

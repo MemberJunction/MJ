@@ -105,6 +105,7 @@
     "@memberjunction/graphql-dataprovider": "5.35.0",
     "@memberjunction/integration-engine-base": "5.35.0",
     "@memberjunction/interactive-component-types": "5.35.0",
+    "@memberjunction/lists-base": "5.35.0",
     "@memberjunction/ng-action-gallery": "5.35.0",
     "@memberjunction/ng-actions": "5.35.0",
     "@memberjunction/ng-agent-requests": "5.35.0",
