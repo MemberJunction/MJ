@@ -297,7 +297,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
      * (already used to drive the left rail) keeps section identity DRY.
      */
     public get currentSection(): ConfigSection | undefined {
-        return this.Sections.find(s => s.ID === this.ActiveSection);
+        return this.Sections.find(s => UUIDsEqual(s.ID, this.ActiveSection));
     }
 
     /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
