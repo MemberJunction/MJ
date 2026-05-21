@@ -10,6 +10,7 @@ import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -33,61 +34,37 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
   standalone: false,
   selector: 'mj-lists-browse-resource',
   template: `
-    <div class="lists-browse-container">
-      <!-- Header -->
-      <div class="browse-header">
-        <div class="header-row">
-          <div class="header-title">
-            <i class="fa-solid fa-list-check"></i>
-            <h2>Lists</h2>
-          </div>
-          <button class="btn-create" (click)="createNewList()">
-            <i class="fa-solid fa-plus"></i>
-            <span>New List</span>
-          </button>
+    <mj-page-layout>
+      <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
+        <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
+        <div meta>
+          <mj-stat-badge
+            [Count]="filteredLists.length"
+            [Total]="allLists.length"
+            Label="lists">
+          </mj-stat-badge>
         </div>
-    
-        <div class="header-actions">
-          <div class="search-box">
-            <i class="fa-solid fa-search"></i>
-            <input
-              type="text"
-              placeholder="Search lists..."
-              [(ngModel)]="searchTerm"
-              (ngModelChange)="onSearchChange($event)" />
-            @if (searchTerm) {
-              <button class="clear-search" (click)="clearSearch()">
-                <i class="fa-solid fa-times"></i>
-              </button>
-            }
-          </div>
-    
-          <div class="filter-group">
-            <select
-              [(ngModel)]="selectedOwner"
-              (ngModelChange)="onOwnerFilterChange($event)"
-              class="filter-select"
-              title="Filter by owner">
-              @for (opt of ownerOptions; track opt) {
-                <option [value]="opt.value">{{opt.name}}</option>
-              }
-            </select>
-          </div>
-    
-          <div class="filter-group">
-            <select
-              [(ngModel)]="selectedEntity"
-              (ngModelChange)="onEntityFilterChange($event)"
-              class="filter-select"
-              title="Filter by entity">
-              @for (opt of entityOptions; track opt) {
-                <option [value]="opt.value">{{opt.name}}</option>
-              }
-            </select>
-          </div>
-    
-          <!-- Favorites-only toggle (Phase 5.3). Lives next to the view
-               toggle group so it reads as "filter scope" alongside view mode. -->
+        <div actions>
+          <mj-filter-popover
+            [ActiveCount]="ActiveFilterCount"
+            [ShowClearAll]="ActiveFilterCount > 0"
+            (ClearAllRequested)="resetPopoverFilters()">
+            <mj-filter-panel
+              [Fields]="listFilterFields"
+              [Values]="listFilterValues"
+              (ValuesChange)="onFilterValuesChange($event)"
+              (Reset)="resetPopoverFilters()">
+            </mj-filter-panel>
+          </mj-filter-popover>
+
+          <mj-view-toggle
+            [Options]="listViewOptions"
+            [ActiveKey]="viewMode"
+            (KeyChange)="setViewMode($any($event))">
+          </mj-view-toggle>
+
+          <!-- Favorites-only toggle (Phase 5.3). Sits next to the view toggle
+               so it reads as "filter scope" alongside view mode. -->
           <button
             class="favorite-filter-toggle"
             [class.favorite-filter-toggle--active]="showOnlyFavorites"
@@ -97,31 +74,20 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
             Favorites
           </button>
 
-          <div class="view-toggle-group">
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'table'"
-              (click)="setViewMode('table')"
-              title="Table view">
-              <i class="fa-solid fa-table-list"></i>
-            </button>
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'card'"
-              (click)="setViewMode('card')"
-              title="Card view">
-              <i class="fa-solid fa-grip"></i>
-            </button>
-            <button
-              class="view-toggle"
-              [class.active]="viewMode === 'hierarchy'"
-              (click)="setViewMode('hierarchy')"
-              title="Category view">
-              <i class="fa-solid fa-folder-tree"></i>
-            </button>
-          </div>
+          <button mjButton variant="primary" size="sm" (click)="createNewList()">
+            <i class="fa-solid fa-plus"></i> New List
+          </button>
         </div>
-      </div>
+        <div toolbar>
+          <mj-page-search
+            Placeholder="Search lists..."
+            [Value]="searchTerm"
+            (ValueChange)="onSearchChange($event)">
+          </mj-page-search>
+        </div>
+      </mj-page-header>
+
+      <mj-page-body>
     
       <!-- Active tag filters (Phase 4.3). Renders only when at least one
            tag is active — multi-tag = AND. Clicking a chip's × removes it. -->
@@ -674,7 +640,8 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </div>
         </div>
       }
-    </div>
+      </mj-page-body>
+    </mj-page-layout>
     `,
   styles: [`
     :host {
@@ -2274,7 +2241,65 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.viewMode = mode;
   }
 
-  onSearchChange(_term: string) {
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly listViewOptions = [
+    { key: 'table',     icon: 'fa-solid fa-table-list',  title: 'Table view' },
+    { key: 'card',      icon: 'fa-solid fa-grip',        title: 'Card view' },
+    { key: 'hierarchy', icon: 'fa-solid fa-folder-tree', title: 'Category view' },
+  ];
+
+  /** Values record consumed by the centralized <mj-filter-panel>. */
+  public get listFilterValues(): Record<string, unknown> {
+    return { selectedOwner: this.selectedOwner, selectedEntity: this.selectedEntity };
+  }
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get listFilterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'selectedOwner',
+        type: 'dropdown',
+        label: 'Owner',
+        icon: 'fa-solid fa-user',
+        options: this.ownerOptions.map(o => ({ text: o.name, value: o.value })),
+      },
+      {
+        key: 'selectedEntity',
+        type: 'dropdown',
+        label: 'Entity',
+        icon: 'fa-solid fa-table',
+        filterable: this.entityOptions.length > 10,
+        options: this.entityOptions.map(o => ({ text: o.name, value: o.value })),
+      },
+    ];
+  }
+
+  /** Receive popover updates and apply them. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    this.selectedOwner  = (values['selectedOwner']  as string) ?? 'mine';
+    this.selectedEntity = (values['selectedEntity'] as string) ?? 'all';
+    this.applyFilters();
+    this.buildCategoryTree();
+  }
+
+  /** Reset popover filters to defaults; leaves searchTerm alone. */
+  public resetPopoverFilters(): void {
+    this.selectedOwner = 'mine';
+    this.selectedEntity = 'all';
+    this.applyFilters();
+    this.buildCategoryTree();
+  }
+
+  /** Active filter count for the popover badge (excludes searchTerm). */
+  public get ActiveFilterCount(): number {
+    let n = 0;
+    if (this.selectedOwner  && this.selectedOwner  !== 'mine') n++;
+    if (this.selectedEntity && this.selectedEntity !== 'all')  n++;
+    return n;
+  }
+
+  onSearchChange(term: string) {
+    this.searchTerm = term;
     this.applyFilters();
     this.buildCategoryTree();
   }

@@ -8,6 +8,7 @@ import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, Telem
 import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import * as d3 from 'd3';
 
 /**
@@ -148,7 +149,6 @@ const SYSTEM_DIAGNOSTICS_SETTINGS_KEY = 'SystemDiagnostics.UserPreferences';
  * Interface for persisted user preferences
  */
 export interface SystemDiagnosticsUserPreferences {
-    kpiCardsCollapsed: boolean;
     activeSection: 'engines' | 'redundant' | 'performance' | 'cache';
     perfTab: 'monitor' | 'overview' | 'events' | 'patterns' | 'insights';
     telemetrySource: 'client' | 'server';
@@ -173,153 +173,51 @@ export interface SystemDiagnosticsUserPreferences {
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <!--
-          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell,
-          which owns its own <mj-page-header>. We deliberately do NOT render a
-          <mj-page-header> here to avoid the doubled-header pattern Section 9b
-          defers. Action chrome (auto-refresh toggle + refresh button) lives
-          inline in the .sticky-header below, matching UserManagement /
-          ApplicationRoles. See plans/explorer-chrome-conventions.md Section 10.
+          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell.
+          L1 (outer Admin rail) is owned by the parent shell; here we use
+          <mj-page-header-interior> with [toolbar]=<mj-tab-nav> to render the
+          L2 section nav (Engine Registry / Redundant / Performance / Cache),
+          and [actions]=auto-refresh + refresh button. The Performance section
+          carries its own L3 perf-tabs strip inside its panel.
+          See plans/explorer-chrome-conventions.md Section 10.
         -->
-        <div class="sd-container">
-          <div class="sticky-header">
-            <div class="action-buttons" role="toolbar" aria-label="System diagnostics actions">
-              @if (autoRefresh) {
-                <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
-              }
-              <label class="auto-refresh-toggle">
-                <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                Auto-refresh
-              </label>
-              <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
-            </div>
+        <mj-page-header-interior
+          Role="region"
+          AriaLabel="System diagnostics"
+          Title="System Diagnostics"
+          Subtitle="Engine registry, cache, and performance telemetry">
+          <div meta>
+            <mj-stat-badge [Count]="engineStats?.totalEngines || 0" Label="engines"></mj-stat-badge>
+            <mj-stat-badge [Count]="formatBytes(engineStats?.totalEstimatedMemoryBytes || 0)" Label="memory"></mj-stat-badge>
+            <mj-stat-badge
+              [Count]="redundantLoads.length"
+              Label="redundant"
+              [Variant]="redundantLoads.length > 0 ? 'warning' : 'default'">
+            </mj-stat-badge>
           </div>
+          <div toolbar>
+            <mj-tab-nav
+              [Tabs]="diagnosticsTabs"
+              [ActiveKey]="activeSection"
+              (TabChange)="onSectionTabChange($event)">
+            </mj-tab-nav>
+          </div>
+          <div actions>
+            <label class="auto-refresh-toggle">
+              <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+              Auto-refresh
+            </label>
+            <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
+          </div>
+        </mj-page-header-interior>
 
-          <div class="scrollable-content">
+        <mj-page-body-interior [Padding]="false">
         <div class="system-diagnostics">
 
-          <!-- Overview Cards (Collapsible) -->
-          <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
-            <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
-              <i class="fa-solid" [class.fa-chevron-up]="!kpiCardsCollapsed" [class.fa-chevron-down]="kpiCardsCollapsed"></i>
-            </button>
-        
-            @if (!kpiCardsCollapsed) {
-              <!-- Expanded View -->
-              <div class="overview-cards">
-                <div class="overview-card">
-                  <div class="card-icon card-icon--engines">
-                    <i class="fa-solid fa-cogs"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ engineStats?.totalEngines || 0 }}</div>
-                    <div class="card-label">Registered Engines</div>
-                    <div class="card-subtitle">{{ engineStats?.loadedEngines || 0 }} loaded</div>
-                  </div>
-                </div>
-        
-                <div class="overview-card">
-                  <div class="card-icon card-icon--memory">
-                    <i class="fa-solid fa-microchip"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</div>
-                    <div class="card-label">Engine Memory</div>
-                    <div class="card-subtitle">Estimated total</div>
-                  </div>
-                </div>
-        
-                <div class="overview-card">
-                  <div class="card-icon" [class.card-icon--warning]="redundantLoads.length > 0" [class.card-icon--success]="redundantLoads.length === 0">
-                    <i class="fa-solid fa-copy"></i>
-                  </div>
-                  <div class="card-content">
-                    <div class="card-value">{{ redundantLoads.length }}</div>
-                    <div class="card-label">Redundant Loads</div>
-                    <div class="card-subtitle">
-                      @if (redundantLoads.length === 0) {
-                        No redundant loading detected
-                      } @else {
-                        {{ redundantLoads.length }} entities loaded by multiple engines
-                      }
-                    </div>
-                  </div>
-                </div>
-              </div>
-            } @else {
-              <!-- Collapsed View - Mini KPI bar -->
-              <div class="overview-cards-mini">
-                <div class="mini-kpi" title="Registered Engines">
-                  <i class="fa-solid fa-cogs"></i>
-                  <span class="mini-value">{{ engineStats?.totalEngines || 0 }}</span>
-                  <span class="mini-label">Engines</span>
-                </div>
-                <div class="mini-divider"></div>
-                <div class="mini-kpi" title="Engine Memory">
-                  <i class="fa-solid fa-microchip"></i>
-                  <span class="mini-value">{{ formatBytes(engineStats?.totalEstimatedMemoryBytes || 0) }}</span>
-                  <span class="mini-label">Memory</span>
-                </div>
-                <div class="mini-divider"></div>
-                <div class="mini-kpi" [class.warning]="redundantLoads.length > 0" title="Redundant Loads">
-                  <i class="fa-solid fa-copy"></i>
-                  <span class="mini-value">{{ redundantLoads.length }}</span>
-                  <span class="mini-label">Redundant</span>
-                </div>
-              </div>
-            }
-          </div>
-        
-          <!-- Main Content with Left Nav -->
-          <div class="main-content">
-            <!-- Left Navigation -->
-            <div class="left-nav">
-              <div class="nav-section">
-                <div class="nav-section-title">Diagnostics</div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'engines'"
-                  (click)="setActiveSection('engines')"
-                  >
-                  <i class="fa-solid fa-cogs"></i>
-                  <span>Engine Registry</span>
-                  <span class="nav-badge">{{ engineStats?.totalEngines || 0 }}</span>
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'redundant'"
-                  (click)="setActiveSection('redundant')"
-                  >
-                  <i class="fa-solid fa-copy"></i>
-                  <span>Redundant Loading</span>
-                  @if (redundantLoads.length > 0) {
-                    <span class="nav-badge nav-badge--warning">{{ redundantLoads.length }}</span>
-                  } @else {
-                    <span class="nav-badge nav-badge--success">0</span>
-                  }
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'performance'"
-                  (click)="setActiveSection('performance')"
-                  >
-                  <i class="fa-solid fa-chart-line"></i>
-                  <span>Performance</span>
-                  <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'cache'"
-                  (click)="setActiveSection('cache')"
-                  >
-                  <i class="fa-solid fa-database"></i>
-                  <span>Local Cache</span>
-                  <span class="nav-badge">{{ cacheStats?.totalEntries || 0 }}</span>
-                </div>
-              </div>
-            </div>
-        
-            <!-- Content Area -->
-            <div class="content-area">
+          <!-- KPI overview moved into chrome [meta] slot as <mj-stat-badge>s. -->
+
+          <!-- Section Content (L2 nav is rendered as horizontal tabs in the interior chrome above) -->
+          <div class="content-area">
               <!-- Engine Registry Section -->
               @if (activeSection === 'engines') {
                 <div class="section-panel">
@@ -1180,8 +1078,7 @@ export interface SystemDiagnosticsUserPreferences {
                 </div>
               }
             </div>
-          </div>
-        
+
           <!-- Last Updated -->
           <div class="footer">
             <span class="last-updated">
@@ -1486,8 +1383,7 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
-          </div>
-        </div>
+          </mj-page-body-interior>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })
@@ -1506,7 +1402,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     activeSection: 'engines' | 'redundant' | 'performance' | 'cache' = 'engines';
     lastUpdated = new Date();
     isRefreshingEngines = false;
-    kpiCardsCollapsed = false;
 
     // Data
     engineStats: EngineMemoryStats | null = null;
@@ -1657,6 +1552,52 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.saveUserPreferencesDebounced();
     }
 
+    /**
+     * Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output.
+     * Narrows the emitted key to the typed `activeSection` union before
+     * delegating to `setActiveSection`.
+     */
+    onSectionTabChange(key: string): void {
+        if (key === 'engines' || key === 'redundant' || key === 'performance' || key === 'cache') {
+            this.setActiveSection(key);
+        }
+    }
+
+    /**
+     * L2 section tabs for `<mj-tab-nav>` in the interior chrome's [toolbar] slot.
+     * Badges are dynamic (engine count, redundant-load count w/ warning variant,
+     * telemetry event count, cache entry count).
+     */
+    get diagnosticsTabs(): TabConfig[] {
+        return [
+            {
+                key: 'engines',
+                icon: 'fa-solid fa-cogs',
+                label: 'Engine Registry',
+                badge: this.engineStats?.totalEngines ?? 0
+            },
+            {
+                key: 'redundant',
+                icon: 'fa-solid fa-copy',
+                label: 'Redundant Loading',
+                badge: this.redundantLoads.length,
+                badgeVariant: this.redundantLoads.length > 0 ? 'warning' : 'success'
+            },
+            {
+                key: 'performance',
+                icon: 'fa-solid fa-chart-line',
+                label: 'Performance',
+                badge: this.telemetrySummary?.totalEvents ?? 0
+            },
+            {
+                key: 'cache',
+                icon: 'fa-solid fa-database',
+                label: 'Local Cache',
+                badge: this.cacheStats?.totalEntries ?? 0
+            }
+        ];
+    }
+
     toggleAutoRefresh(): void {
         if (this.autoRefresh) {
             // Start auto-refresh interval
@@ -1671,11 +1612,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         this.saveUserPreferencesDebounced();
     }
 
-    toggleKpiCards(): void {
-        this.kpiCardsCollapsed = !this.kpiCardsCollapsed;
-        this.cdr.markForCheck();
-        this.saveUserPreferencesDebounced();
-    }
 
     async refreshData(): Promise<void> {
         this.isLoading = true;
@@ -4107,10 +4043,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
 
         // KPI cards collapsed: ?kpi=collapsed|expanded
-        if (params['kpi']) {
-            this.kpiCardsCollapsed = params['kpi'] === 'collapsed';
-        }
-
         this.cdr.markForCheck();
     }
 
@@ -4124,8 +4056,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
             tab: this.perfTab !== 'monitor' ? this.perfTab : null,
             source: this.telemetrySource !== 'client' ? this.telemetrySource : null,
             category: this.categoryFilter !== 'all' ? this.categoryFilter : null,
-            search: this.searchQuery.trim() || null,
-            kpi: this.kpiCardsCollapsed ? 'collapsed' : null
+            search: this.searchQuery.trim() || null
         };
 
         // Use NavigationService to update query params properly
@@ -4169,7 +4100,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      * Apply loaded user preferences to component state
      */
     private applyUserPreferences(prefs: Partial<SystemDiagnosticsUserPreferences>): void {
-        if (prefs.kpiCardsCollapsed !== undefined) this.kpiCardsCollapsed = prefs.kpiCardsCollapsed;
         if (prefs.activeSection !== undefined) this.activeSection = prefs.activeSection;
         if (prefs.perfTab !== undefined) this.perfTab = prefs.perfTab;
         if (prefs.telemetrySource !== undefined) this.telemetrySource = prefs.telemetrySource;
@@ -4185,7 +4115,6 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
      */
     private getCurrentPreferences(): SystemDiagnosticsUserPreferences {
         return {
-            kpiCardsCollapsed: this.kpiCardsCollapsed,
             activeSection: this.activeSection,
             perfTab: this.perfTab,
             telemetrySource: this.telemetrySource,

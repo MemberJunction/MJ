@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core-entities
 
+## 5.35.0
+
+### Patch Changes
+
+- 31f2a7f: Add the missing `@deprecated` JSDoc tag to the generated `MJConversationDetailAttachmentEntity` class. This is a CodeGen catch from the attachment-unification work — the entity is deprecated in metadata but the generated class was not regenerated with the corresponding JSDoc. Comment-only change, no runtime impact.
+- c1f1cad: Add pluggable geocoding provider abstraction with Google, Geocod.io, and HERE implementations (expands GeoCodeSource enum and adds provider registry). Polish the Home dashboard pin empty state with a dismissible "Don't show this again" preference persisted via UserInfoEngine, and speed up the Add Pin panel by reading from cached DashboardEngine, UserViewEngine, QueryEngine, and ActionEngineBase singletons instead of firing fresh RunViews on every open, with background pre-warm on home load.
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/interactive-component-types@5.35.0
+  - @memberjunction/ai@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

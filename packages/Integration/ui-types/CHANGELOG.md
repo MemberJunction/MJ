@@ -1,5 +1,7 @@
 # @memberjunction/integration-ui-types
 
+## 5.35.0
+
 ## 5.34.1
 
 ## 5.34.0

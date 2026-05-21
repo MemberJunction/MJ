@@ -14,12 +14,14 @@
       }
     </div>
     <div actions>
+      <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
+    </div>
+    <div toolbar>
       <mj-tab-nav
         [Tabs]="Tabs"
         [ActiveKey]="activeTab"
         (TabChange)="onTabChange($any($event))">
       </mj-tab-nav>
-      <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
     </div>
   </mj-page-header>
 

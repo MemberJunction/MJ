@@ -7,8 +7,13 @@
     <mj-page-header
       Title="Models"
       Icon="fa-solid fa-microchip">
+      <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
       <div meta>
-        <mj-stat-badge [Count]="filteredModels.length" Label="models"></mj-stat-badge>
+        <mj-stat-badge
+          [Count]="filteredModels.length"
+          [Total]="models.length"
+          Label="models">
+        </mj-stat-badge>
       </div>
       <div actions>
         <mj-filter-popover

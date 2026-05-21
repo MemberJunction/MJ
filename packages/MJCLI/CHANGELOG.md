@@ -1,5 +1,33 @@
 # Change Log - @memberjunction/cli
 
+## 5.35.0
+
+### Patch Changes
+
+- 32c4a02: Unify artifact and attachment delivery paths for AI agents. Seperate artifact storage from rendering. Every attachement now creates paired Artifact + ArtifactVersion and routing functions exist to replace hardcoded MIME allowlist. Unregistered file types are rejected at upload time unless the agent opts into AcceptUnregisteredFiles. Adds wildecard MIME resolver. `mj artifacts reclassify` for legacy rows
+- Updated dependencies [6fa8e13]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [39710b1]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/open-app-engine@5.35.0
+  - @memberjunction/codegen-lib@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/ai-cli@5.35.0
+  - @memberjunction/db-auto-doc@5.35.0
+  - @memberjunction/metadata-sync@5.35.0
+  - @memberjunction/query-gen@5.35.0
+  - @memberjunction/testing-cli@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/installer@5.35.0
+  - @memberjunction/sql-converter@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

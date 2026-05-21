@@ -3,12 +3,9 @@
     Title="Execution Monitor"
     Icon="fa-solid fa-chart-line"
     Subtitle="Action execution history, latency, and error rates">
-    <div meta>
-      <mj-stat-badge
-        [Count]="metrics.totalExecutions"
-        Label="executions">
-      </mj-stat-badge>
-    </div>
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         totalExecutions was a single inventory count duplicated by the
+         body's metrics cards. -->
     <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
