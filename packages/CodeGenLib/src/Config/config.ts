@@ -129,52 +129,15 @@ const dbSchemaJSONOutputSchema = z.object({
 });
 
 export type NewUserSetup = z.infer<typeof newUserSetupSchema>;
-/**
- * Pre-process an incoming `newUserSetup` object so legacy camelCase keys
- * (written by `@memberjunction/installer` <= 5.34.1) survive schema
- * validation. The canonical shape is PascalCase
- * (`UserName/FirstName/LastName/Email`); older installs wrote
- * `userName/firstName/lastName/email`. Without this normalizer, an upgrade
- * to 5.34.2+ would cause `configInfo` to fall back to an empty object and
- * trigger the "config.server is required" failure at codegen time (see
- * Bug #9 in PR #2467).
- *
- * Returns the value unchanged when keys are already canonical or when the
- * input isn't an object — zod handles the type errors downstream.
- */
-export function normalizeNewUserSetupKeys(value: unknown): unknown {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const obj = value as Record<string, unknown>;
-  const aliases: Record<string, string> = {
-    userName: 'UserName',
-    firstName: 'FirstName',
-    lastName: 'LastName',
-    email: 'Email',
-  };
-  const out: Record<string, unknown> = { ...obj };
-  let touched = false;
-  for (const [legacy, canonical] of Object.entries(aliases)) {
-    if (legacy in obj && !(canonical in obj)) {
-      out[canonical] = obj[legacy];
-      delete out[legacy];
-      touched = true;
-    }
-  }
-  return touched ? out : value;
-}
-
-const newUserSetupSchema = z.preprocess(
-  normalizeNewUserSetupKeys,
-  z.object({
-    UserName: z.string(),
-    FirstName: z.string(),
-    LastName: z.string(),
-    Email: z.string(),
-    Roles: z.string().array().default(['Developer', 'Integration', 'UI']),
-    CreateUserApplicationRecords: z.boolean().optional().default(false),
-    UserApplications: z.array(z.string()).optional().default([]),
-  })
-);
+const newUserSetupSchema = z.object({
+  UserName: z.string(),
+  FirstName: z.string(),
+  LastName: z.string(),
+  Email: z.string(),
+  Roles: z.string().array().default(['Developer', 'Integration', 'UI']),
+  CreateUserApplicationRecords: z.boolean().optional().default(false),
+  UserApplications: z.array(z.string()).optional().default([]),
+});
 
 /**
  * Configuration option for an advanced generation feature

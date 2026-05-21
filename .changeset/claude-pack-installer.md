@@ -2,6 +2,7 @@
 "@memberjunction/cli": minor
 "@memberjunction/installer": minor
 "@memberjunction/integration-engine": minor
+"@memberjunction/codegen-lib": patch
 ---
 
 Add MJ Claude Pack — a curated bundle of `CLAUDE.md` guidance, slash commands, and skills that ships with every MemberJunction install for users of Claude Code.
@@ -20,3 +21,8 @@ New public API:
 - `@memberjunction/installer` exports `FileSystemAdapter.ReadBytes()` for binary file reads (used by the pack doctor's hash checks).
 
 The pack is shipped via three paths: (1) bundled into the MJ distribution ZIP at release time, (2) installed via `mj install:claude` against a remote fetch from `raw.githubusercontent.com`, (3) refreshed via the SessionStart hook helper that nags when a newer version is available.
+
+`@memberjunction/codegen-lib` bugfixes that surfaced while end-to-end testing `mj install`:
+
+- The mssql config is now built lazily on first `MSSQLConnection()` call instead of at module load. The previous behavior destructured `configInfo` before `initializeConfig()` had a chance to populate it, baking in empty defaults and producing "config.server property is required" at codegen time.
+- Schema-validation failures in `initializeConfig` are surfaced via `LogError` instead of being swallowed, so future misconfiguration produces a visible error rather than a downstream crash.
