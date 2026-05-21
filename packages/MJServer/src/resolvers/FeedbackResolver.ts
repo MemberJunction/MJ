@@ -1,7 +1,13 @@
 import { Resolver, Mutation, Query, Arg, Ctx, Field, InputType, ObjectType } from 'type-graphql';
 import { Octokit } from '@octokit/rest';
 import { createAppAuth } from '@octokit/auth-app';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { MJUserFeedbackSubmissionEntity } from '@memberjunction/core-entities';
+import {
+  sendFeedbackEmail,
+  escapeHtml,
+  getFeedbackAppName,
+} from '../feedback/feedbackEmail.js';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
 import { z } from 'zod';
@@ -309,6 +315,13 @@ export class FeedbackResolver {
       const issue = await this.createGitHubIssue(submission, config);
 
       LogStatus(`Feedback submitted: Issue #${issue.number} created`);
+
+      // Persist a tracking row + send the confirmation email. Fire-and-forget:
+      // the GitHub issue is already created, so a failure here must not roll back
+      // the user-visible success. The helper has its own try/catch and logs errors.
+      if (submission.email) {
+        void this.recordSubmissionAndNotify(submission, issue, config, ctx);
+      }
 
       return {
         Success: true,
@@ -877,6 +890,144 @@ Step 2 — SEVERITY. Strictly follow these rules:
       '```',
       '</details>',
     ].join('\n');
+  }
+
+  // ============================================================================
+  // Notification & tracking — persist the submission and email the submitter
+  // ============================================================================
+
+  /**
+   * Persist a UserFeedbackSubmission tracking row and send the confirmation
+   * email. Best-effort: any failure is logged but never thrown. The caller
+   * intentionally runs this fire-and-forget after the GitHub issue is created.
+   *
+   * The row is what later lets the webhook handler map a GitHub issue event
+   * (status change, new comment) back to the original submitter's email.
+   */
+  private async recordSubmissionAndNotify(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    config: FeedbackConfig,
+    ctx: AppContext
+  ): Promise<void> {
+    try {
+      const contextUser = ctx.userPayload?.userRecord;
+      const saved = await this.saveFeedbackSubmissionRow(submission, issue, config, contextUser);
+      if (!saved) return; // saveFeedbackSubmissionRow already logged the failure
+
+      await this.sendConfirmationEmail(submission, issue, contextUser);
+    } catch (err) {
+      LogError('Feedback follow-up (tracking row + email) failed', undefined, err);
+    }
+  }
+
+  /**
+   * Insert a UserFeedbackSubmission row that maps the GitHub issue back to
+   * the submitter's email address. Returns true if the row saved, false
+   * otherwise (after logging the underlying entity error).
+   */
+  private async saveFeedbackSubmissionRow(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    config: FeedbackConfig,
+    contextUser: UserInfo | undefined
+  ): Promise<boolean> {
+    const md = new Metadata();
+    const row = await md.GetEntityObject<MJUserFeedbackSubmissionEntity>(
+      'MJ: User Feedback Submissions',
+      contextUser
+    );
+    row.UserID = submission.userId ?? null;
+    row.Email = submission.email!;
+    row.Name = submission.name ?? null;
+    row.GitHubOwner = config.owner;
+    row.GitHubRepo = config.repo;
+    row.IssueNumber = issue.number;
+    row.IssueTitle = submission.title;
+    row.IssueURL = issue.html_url;
+    row.Category = submission.category ?? null;
+    row.Severity = submission.severity ?? null;
+
+    if (!(await row.Save())) {
+      LogError(
+        `Failed to save UserFeedbackSubmission for issue #${issue.number}: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`
+      );
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Send the "we got your feedback" confirmation email to the submitter.
+   * Delegates the actual send to the shared sendFeedbackEmail helper so the
+   * webhook handler and this resolver share one code path for provider
+   * lookup, error logging, and config resolution.
+   */
+  private async sendConfirmationEmail(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    contextUser: UserInfo | undefined
+  ): Promise<void> {
+    const appName = getFeedbackAppName(submission.appName);
+    await sendFeedbackEmail({
+      to: submission.email!,
+      subject: `[${appName}] Feedback received: #${issue.number} ${submission.title}`,
+      textBody: this.buildConfirmationEmailText(submission, issue, appName),
+      htmlBody: this.buildConfirmationEmailHtml(submission, issue, appName),
+      contextUser,
+    });
+  }
+
+  /**
+   * Plain-text body for the confirmation email. Self-contained so private-repo
+   * recipients (who cannot view the GitHub issue) have full context from the
+   * email alone.
+   */
+  private buildConfirmationEmailText(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    appName: string
+  ): string {
+    const greeting = submission.name ? `Hi ${submission.name},` : 'Hi,';
+    return [
+      greeting,
+      '',
+      `Thanks for your feedback on ${appName}. We've logged it as issue #${issue.number}:`,
+      '',
+      `    ${submission.title}`,
+      '',
+      `You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.`,
+      '',
+      `— The ${appName} team`,
+    ].join('\n');
+  }
+
+  /**
+   * HTML body for the confirmation email. Inline styles only (most email
+   * clients strip <style> blocks) and no external assets so it renders
+   * consistently across clients.
+   */
+  private buildConfirmationEmailHtml(
+    submission: FeedbackSubmission,
+    issue: { number: number; html_url: string },
+    appName: string
+  ): string {
+    const safeName = submission.name ? escapeHtml(submission.name) : '';
+    const safeTitle = escapeHtml(submission.title);
+    const safeAppName = escapeHtml(appName);
+    const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+
+    return `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #2d3748; max-width: 600px;">
+  <p>${greeting}</p>
+  <p>Thanks for your feedback on <strong>${safeAppName}</strong>. We've logged it as issue <strong>#${issue.number}</strong>:</p>
+  <blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #4299e1; background: #f7fafc; color: #2d3748;">
+    ${safeTitle}
+  </blockquote>
+  <p>You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.</p>
+  <p style="color: #718096; font-size: 14px;">— The ${safeAppName} team</p>
+</div>
+`.trim();
   }
 
   /**

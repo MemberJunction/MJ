@@ -116,7 +116,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJUserFeedbackSubmissions', sectionName: 'User Feedback Submissions', isExpanded: false }
         ]);
     }
 }

@@ -212,6 +212,47 @@ const feedbackGithubSettingsSchema = z.object({
   categoryLabels: z.record(z.string()).optional(),
   severityLabels: z.record(z.string()).optional(),
   assignees: z.array(z.string()).optional(),
+  /**
+   * Shared secret used to verify GitHub webhook signatures (X-Hub-Signature-256).
+   * Required to enable the feedback notification webhook endpoint. Configure the
+   * same value here and in the GitHub repository's webhook settings.
+   * Can also be supplied via the GITHUB_FEEDBACK_WEBHOOK_SECRET env var.
+   */
+  webhookSecret: z.string().optional(),
+});
+
+const feedbackNotificationsSettingsSchema = z.object({
+  /**
+   * Org-level kill switch for outbound feedback emails (confirmation, status
+   * changes, new comments). Defaults to true (enabled). When false the
+   * SubmitFeedback resolver still records tracking rows but skips email sends.
+   */
+  enabled: z.boolean().optional().default(true),
+  /**
+   * Sender address used for all feedback notification emails. Should be a
+   * no-reply address that the recipient cannot meaningfully reply to.
+   * Can be overridden by the FEEDBACK_NOTIFICATIONS_FROM env var.
+   */
+  fromAddress: z.string().optional(),
+  /**
+   * Human-friendly application name used in email subject lines and bodies
+   * (e.g., "Acme Portal"). Lets a deployment brand its notifications without
+   * hardcoding "MemberJunction". Falls back to the submission's appName field,
+   * then to "MemberJunction".
+   */
+  appName: z.string().optional(),
+  /**
+   * Name of the registered CommunicationEngine provider used to send feedback
+   * emails. Must match a provider name in the `MJ: Communication Providers`
+   * entity (e.g., "SendGrid", "MS Graph", "Gmail"). Defaults to "SendGrid".
+   */
+  providerName: z.string().optional().default('SendGrid'),
+  /**
+   * Name of the message type within the chosen provider to use. Must match
+   * a message-type name configured on the provider (e.g., "Standard Email").
+   * Defaults to "Standard Email".
+   */
+  messageTypeName: z.string().optional().default('Standard Email'),
 });
 
 const feedbackSettingsSchema = z.object({
@@ -219,6 +260,12 @@ const feedbackSettingsSchema = z.object({
   enabled: z.boolean().optional().default(true),
   /** Optional GitHub-specific settings used by the feedback resolver. */
   github: feedbackGithubSettingsSchema.optional(),
+  /**
+   * Optional outbound-email settings used to notify submitters about the
+   * status of their feedback. See feedbackNotificationsSettingsSchema for
+   * field-level docs.
+   */
+  notifications: feedbackNotificationsSettingsSchema.optional(),
 });
 
 const configInfoSchema = z.object({
@@ -285,6 +332,7 @@ export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
+export type FeedbackNotificationsSettingsConfig = z.infer<typeof feedbackNotificationsSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 

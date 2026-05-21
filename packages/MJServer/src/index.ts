@@ -31,6 +31,7 @@ import { requireSystemUserDirective, publicDirective } from './directives/index.
 import createMSSQLConfig from './orm.js';
 import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
+import { createFeedbackWebhookRouter } from './feedback/feedbackWebhookRouter.js';
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -776,6 +777,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const allHealthy = results.length === 0 || results.every(r => r.Healthy);
     res.status(allHealthy ? 200 : 503).json({ extensions: results });
   });
+
+  // ─── GitHub feedback webhook (before auth — verifies its own HMAC signature) ─────
+  // Receives 'issues' and 'issue_comment' events from GitHub and emails the
+  // original feedback submitter about status changes and new comments. Must be
+  // registered before the unified auth middleware because GitHub does not send
+  // an MJ bearer token; the router authenticates each request via the
+  // X-Hub-Signature-256 HMAC over the raw request body.
+  app.use('/webhooks/github/feedback', createFeedbackWebhookRouter());
 
   // ─── Unified auth middleware (replaces both REST authMiddleware and contextFunction auth) ─────
   app.use(createUnifiedAuthMiddleware(dataSources));

@@ -25295,6 +25295,83 @@ export const MJUserFavoriteSchema = z.object({
 export type MJUserFavoriteEntityType = z.infer<typeof MJUserFavoriteSchema>;
 
 /**
+ * zod schema definition for the entity MJ: User Feedback Submissions
+ */
+export const MJUserFeedbackSubmissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
+    Email: z.string().describe(`
+        * * Field Name: Email
+        * * Display Name: Email
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Email address of the submitter. All notification emails for this issue are sent here. Required because the row exists solely to drive notifications.`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Optional display name of the submitter, used to personalize notification emails (e.g., "Hi Jane,").`),
+    GitHubOwner: z.string().describe(`
+        * * Field Name: GitHubOwner
+        * * Display Name: GitHub Owner
+        * * SQL Data Type: nvarchar(100)
+        * * Description: GitHub organization or user account that owns the repository where the issue was filed.`),
+    GitHubRepo: z.string().describe(`
+        * * Field Name: GitHubRepo
+        * * Display Name: GitHub Repository
+        * * SQL Data Type: nvarchar(100)
+        * * Description: GitHub repository name where the issue was filed.`),
+    IssueNumber: z.number().describe(`
+        * * Field Name: IssueNumber
+        * * Display Name: Issue Number
+        * * SQL Data Type: int
+        * * Description: GitHub issue number. Together with GitHubOwner and GitHubRepo this uniquely identifies the issue and is the lookup key the webhook handler uses to find the matching submission row.`),
+    IssueTitle: z.string().describe(`
+        * * Field Name: IssueTitle
+        * * Display Name: Issue Title
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Issue title at the time of creation. Cached locally so notification email subject lines do not require a round-trip to the GitHub API.`),
+    IssueURL: z.string().describe(`
+        * * Field Name: IssueURL
+        * * Display Name: Issue URL
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Direct URL to the GitHub issue. Included in notification emails when the repository is publicly visible to the submitter; for private repos the link will not be reachable and emails should rely on inlined content instead.`),
+    Category: z.string().nullable().describe(`
+        * * Field Name: Category
+        * * Display Name: Category
+        * * SQL Data Type: nvarchar(50)
+        * * Description: LLM-classified category of the original submission (e.g., bug, feature, question, other). Mirrors the category label applied to the GitHub issue.`),
+    Severity: z.string().nullable().describe(`
+        * * Field Name: Severity
+        * * Display Name: Severity
+        * * SQL Data Type: nvarchar(50)
+        * * Description: LLM-classified severity of the original submission (e.g., critical, major, minor, trivial). Mirrors the severity label applied to the GitHub issue.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJUserFeedbackSubmissionEntityType = z.infer<typeof MJUserFeedbackSubmissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: User Notification Preferences
  */
 export const MJUserNotificationPreferenceSchema = z.object({
@@ -92970,6 +93047,210 @@ export class MJUserFavoriteEntity extends BaseEntity<MJUserFavoriteEntityType> {
     */
     get EntityBaseView(): string {
         return this.Get('EntityBaseView');
+    }
+}
+
+
+/**
+ * MJ: User Feedback Submissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: UserFeedbackSubmission
+ * * Base View: vwUserFeedbackSubmissions
+ * * @description Records each user feedback submission that was successfully filed as a GitHub issue, mapping the submitter's contact info back to (owner, repo, issueNumber) so MJAPI can send notification emails when GitHub webhooks report status changes or new comments on the issue.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: User Feedback Submissions')
+export class MJUserFeedbackSubmissionEntity extends BaseEntity<MJUserFeedbackSubmissionEntityType> {
+    /**
+    * Loads the MJ: User Feedback Submissions record from the database
+    * @param ID: string - primary key value to load the MJ: User Feedback Submissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJUserFeedbackSubmissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Email address of the submitter. All notification emails for this issue are sent here. Required because the row exists solely to drive notifications.
+    */
+    get Email(): string {
+        return this.Get('Email');
+    }
+    set Email(value: string) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Optional display name of the submitter, used to personalize notification emails (e.g., "Hi Jane,").
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: GitHubOwner
+    * * Display Name: GitHub Owner
+    * * SQL Data Type: nvarchar(100)
+    * * Description: GitHub organization or user account that owns the repository where the issue was filed.
+    */
+    get GitHubOwner(): string {
+        return this.Get('GitHubOwner');
+    }
+    set GitHubOwner(value: string) {
+        this.Set('GitHubOwner', value);
+    }
+
+    /**
+    * * Field Name: GitHubRepo
+    * * Display Name: GitHub Repository
+    * * SQL Data Type: nvarchar(100)
+    * * Description: GitHub repository name where the issue was filed.
+    */
+    get GitHubRepo(): string {
+        return this.Get('GitHubRepo');
+    }
+    set GitHubRepo(value: string) {
+        this.Set('GitHubRepo', value);
+    }
+
+    /**
+    * * Field Name: IssueNumber
+    * * Display Name: Issue Number
+    * * SQL Data Type: int
+    * * Description: GitHub issue number. Together with GitHubOwner and GitHubRepo this uniquely identifies the issue and is the lookup key the webhook handler uses to find the matching submission row.
+    */
+    get IssueNumber(): number {
+        return this.Get('IssueNumber');
+    }
+    set IssueNumber(value: number) {
+        this.Set('IssueNumber', value);
+    }
+
+    /**
+    * * Field Name: IssueTitle
+    * * Display Name: Issue Title
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Issue title at the time of creation. Cached locally so notification email subject lines do not require a round-trip to the GitHub API.
+    */
+    get IssueTitle(): string {
+        return this.Get('IssueTitle');
+    }
+    set IssueTitle(value: string) {
+        this.Set('IssueTitle', value);
+    }
+
+    /**
+    * * Field Name: IssueURL
+    * * Display Name: Issue URL
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Direct URL to the GitHub issue. Included in notification emails when the repository is publicly visible to the submitter; for private repos the link will not be reachable and emails should rely on inlined content instead.
+    */
+    get IssueURL(): string {
+        return this.Get('IssueURL');
+    }
+    set IssueURL(value: string) {
+        this.Set('IssueURL', value);
+    }
+
+    /**
+    * * Field Name: Category
+    * * Display Name: Category
+    * * SQL Data Type: nvarchar(50)
+    * * Description: LLM-classified category of the original submission (e.g., bug, feature, question, other). Mirrors the category label applied to the GitHub issue.
+    */
+    get Category(): string | null {
+        return this.Get('Category');
+    }
+    set Category(value: string | null) {
+        this.Set('Category', value);
+    }
+
+    /**
+    * * Field Name: Severity
+    * * Display Name: Severity
+    * * SQL Data Type: nvarchar(50)
+    * * Description: LLM-classified severity of the original submission (e.g., critical, major, minor, trivial). Mirrors the severity label applied to the GitHub issue.
+    */
+    get Severity(): string | null {
+        return this.Get('Severity');
+    }
+    set Severity(value: string | null) {
+        this.Set('Severity', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
     }
 }
 
