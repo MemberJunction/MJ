@@ -14767,7 +14767,7 @@
       "Name": "Qwen 3.7 Max",
       "PowerRank": 20,
       "Description": "Alibaba Cloud's flagship Qwen 3.7 series 'Deep Thinking' (reasoning) model, made available via Alibaba Cloud Model Studio (snapshot qwen3.7-max-2026-05-20) and announced at the 2026 Alibaba Cloud Summit. Designed for the agent-centric era with strong programming, office and productivity, and long-horizon autonomous execution capabilities. Features a 1M token context window (991K max input standard / 983K in Thinking Mode), 64K max output, text-only input/output, native function calling, prefix continuation, web search, and explicit prompt caching. Structured Output, Batches, and Fine-tuning are not supported. Scores 57 on the Artificial Analysis Intelligence Index (#7 overall).",
-      "AIModelTypeID": "@lookup:AI Model Types.Name=LLM",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 6,
       "CostRank": 7,
