@@ -13,6 +13,7 @@ import { ResourceData, MJVectorDatabaseEntity, MJVectorIndexEntity, MJEntityDocu
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 
@@ -277,6 +278,32 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     // ================================================================
     // Public Methods
     // ================================================================
+
+    /** Wraps `Sections` for `<mj-left-nav>`. Single unlabeled section. */
+    public get navSections(): MJLeftNavSection[] {
+        return [{
+            items: this.Sections.map(s => ({
+                id: s.ID,
+                label: s.Label,
+                icon: s.Icon,
+                description: s.Description
+            }))
+        }];
+    }
+
+    /**
+     * Active section metadata — drives the `<mj-page-header-interior>` Title +
+     * Subtitle for the current section. Reusing the existing Sections array
+     * (already used to drive the left rail) keeps section identity DRY.
+     */
+    public get currentSection(): ConfigSection | undefined {
+        return this.Sections.find(s => s.ID === this.ActiveSection);
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        this.SelectSection(item.id);
+    }
 
     public SelectSection(sectionId: string): void {
         this.ActiveSection = sectionId;

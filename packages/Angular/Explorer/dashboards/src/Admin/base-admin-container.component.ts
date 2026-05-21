@@ -12,6 +12,7 @@ import {
 import { BaseResourceComponent, BaseDashboard } from '@memberjunction/ng-shared';
 import { MJGlobal } from '@memberjunction/global';
 import { DashboardEngine } from '@memberjunction/core-entities';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 /** A single sub-section inside an admin container's left-nav. */
 export interface AdminSection {
@@ -101,6 +102,23 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     public override async GetResourceDisplayName(): Promise<string> { return this.ContainerTitle; }
     public override async GetResourceIconClass(): Promise<string> { return this.ContainerIcon; }
 
+    /**
+     * Single-section view of `Sections` shaped for `<mj-left-nav>`. AdminSection
+     * already has the required id / label / icon / description fields, so it's
+     * structurally compatible with MJLeftNavItem.
+     */
+    public get NavSections(): MJLeftNavSection[] {
+        return [{ items: this.Sections }];
+    }
+
+    /** Adapter from `<mj-left-nav>`'s ItemClicked event back to `selectSection`. */
+    public OnNavItemClicked(item: MJLeftNavItem): void {
+        const section = this.Sections.find(s => s.id === item.id);
+        if (section) {
+            void this.OnSectionClick(section);
+        }
+    }
+
     /** Called by the framework on browser back/forward + deep-link entry. */
     protected override OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
         const section = params['section'];
@@ -119,6 +137,17 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     // ---------- protected ----------
 
     private async selectSection(section: AdminSection, syncUrl: boolean): Promise<void> {
+        // Guard against duplicate calls for the same section. Without this,
+        // ngOnInit's own GetQueryParams read races with the workspace stream's
+        // synchronous replay through OnQueryParamsChanged on first mount —
+        // both call selectSection with the same target, both reach
+        // createComponent, and two instances of the sub-page end up mounted
+        // in the contentHost. OnSectionClick + OnQueryParamsChanged each
+        // guard their own call site, but defense-in-depth here covers any
+        // future caller (and the ngOnInit ↔ stream-replay race specifically).
+        if (section.id === this.ActiveSection) {
+            return;
+        }
         this.ActiveSection = section.id;
         this.IsLoading = true;
         this.LoadError = null;
@@ -157,7 +186,6 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
             : await this.createDashboardRef(section.source.dashboardName);
 
         if (ref) {
-            this.applyHostSizing(ref);
             this.cache.set(section.id, ref);
             this.currentSectionId = section.id;
         }
@@ -208,22 +236,6 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
         instance.Config = { dashboard, userState: undefined };
         instance.Refresh();
         return ref;
-    }
-
-    /**
-     * Force the rendered sub-component's host element to fill the container
-     * cell. Mirrors what `tab-container` does for top-level resources — many
-     * dashboards rely on inline `height: 100%` to bound their internal layout
-     * (so their own `overflow-y: auto` regions actually scroll).
-     */
-    private applyHostSizing(ref: ComponentRef<unknown>): void {
-        const hostEl = (ref.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
-        if (!hostEl || !(hostEl instanceof HTMLElement)) return;
-        hostEl.style.height = '100%';
-        hostEl.style.minHeight = '0';
-        hostEl.style.display = 'flex';
-        hostEl.style.flexDirection = 'column';
-        hostEl.style.flex = '1 1 auto';
     }
 
     private findSection(id: string | undefined | null): AdminSection | undefined {
