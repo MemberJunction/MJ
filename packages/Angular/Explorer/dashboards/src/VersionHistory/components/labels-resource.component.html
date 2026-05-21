@@ -1,33 +1,52 @@
-<div class="labels-container">
+<mj-page-layout>
+  <mj-page-header
+    Title="Version Labels"
+    Icon="fa-solid fa-tags"
+    Subtitle="Manage versioning snapshots across your system">
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredLabels.length"
+        [Total]="Labels.length"
+        Label="labels">
+      </mj-stat-badge>
+    </div>
+    <div actions>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
+      <mj-view-toggle
+        [Options]="viewOptions"
+        [ActiveKey]="ViewMode"
+        (KeyChange)="SetViewMode($any($event))">
+      </mj-view-toggle>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+      <button mjButton variant="primary" size="sm" (click)="OpenCreateDialog()">
+        <i class="fa-solid fa-plus"></i> Create Label
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search labels by name, description, or entity..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
   @if (IsLoading) {
     <mj-loading text="Loading version labels..."></mj-loading>
   }
 
   @if (!IsLoading) {
-    <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">Version Labels</h2>
-        <p class="page-subtitle">Manage versioning snapshots across your system</p>
-      </div>
-      <div class="header-actions">
-        <div class="view-toggle">
-          <button class="toggle-btn" [class.active]="ViewMode === 'card'" (click)="SetViewMode('card')" title="Card view">
-            <i class="fa-solid fa-grip"></i>
-          </button>
-          <button class="toggle-btn" [class.active]="ViewMode === 'list'" (click)="SetViewMode('list')" title="List view">
-            <i class="fa-solid fa-list"></i>
-          </button>
-        </div>
-        <button class="btn-primary" (click)="OpenCreateDialog()">
-          <i class="fa-solid fa-plus"></i>
-          <span>Create Label</span>
-        </button>
-        <button class="btn-icon" (click)="Refresh()" title="Refresh">
-          <i class="fa-solid fa-refresh"></i>
-        </button>
-      </div>
-    </div>
     <!-- KPI Cards -->
     <div class="kpi-row">
       <div class="kpi-card">
@@ -66,41 +85,6 @@
           <div class="kpi-label">Restored</div>
         </div>
       </div>
-    </div>
-    <!-- Scope breakdown -->
-    <div class="scope-chips">
-      @for (stat of ScopeStats; track stat) {
-        <button class="scope-chip"
-          [class.active]="ScopeFilter === stat.Scope"
-          (click)="OnScopeFilterChange(stat.Scope)">
-          <i [class]="stat.Icon"></i>
-          <span>{{stat.Scope}}</span>
-          <span class="chip-count">{{stat.Count}}</span>
-        </button>
-      }
-      @for (stat of StatusStats; track stat) {
-        <button class="scope-chip"
-          [class.active]="StatusFilter === stat.Status"
-          [ngClass]="GetStatusClass(stat.Status)"
-          (click)="OnStatusFilterChange(stat.Status)">
-          <span>{{stat.Status}}</span>
-          <span class="chip-count">{{stat.Count}}</span>
-        </button>
-      }
-    </div>
-    <!-- Search -->
-    <div class="search-bar">
-      <i class="fa-solid fa-search search-icon"></i>
-      <input type="text"
-        class="search-input"
-        placeholder="Search labels by name, description, or entity..."
-        [ngModel]="SearchText"
-        (ngModelChange)="OnSearchChange($event)" />
-      @if (SearchText) {
-        <button class="btn-clear" (click)="OnSearchChange('')">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
-      }
     </div>
     <!-- Labels Card View -->
     @if (FilteredLabels.length > 0 && ViewMode === 'card') {
@@ -282,6 +266,8 @@
     </div>
   }
 
+  </mj-page-body>
+
   <!-- Detail panel -->
   @if (ShowDetailPanel && SelectedLabel) {
     <mj-label-detail-panel
@@ -293,4 +279,4 @@
       (EntityLinkClick)="OnEntityLinkClick($event)">
     </mj-label-detail-panel>
   }
-</div>
+</mj-page-layout>

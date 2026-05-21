@@ -636,3 +636,39 @@ packages/AI/AudioGateway/
 3. **Conversation Persistence**: Same `Conversation` entity or separate?
 4. **Billing/Metering**: Track audio minutes separately?
 5. **Interruption Handling**: Stop immediately, finish sentence, or queue?
+
+---
+
+## Design notes from review
+
+### Streaming as the universal output channel (Amith, 2026-05-17)
+
+While reviewing the artifact-tools observability work in PR #2569, Amith flagged
+that the streaming-response mechanism we've built (but not fully wired) is the
+right substrate for both:
+
+1. **Client tool dispatch** — issue client-tool invocations as streamed events
+   the UI consumes and acts on.
+2. **Audio/video output** — stream tokens (text, audio frames, video frames)
+   so the UI emits each to the appropriate sink: text into the chat surface,
+   audio to the speaker, video to a frame renderer.
+
+Verbatim:
+
+> Speaking of Client Tools — we should consider use our streaming response to
+> issue these, that would be an interesting way to get this back. This
+> streaming response mechanism that we have built in (but not fully wired) is
+> how I think we will need to do audio as I've thought more about it, we can
+> simply stream back audio or text tokens (or video one day) and then the UI
+> simply emits those appropriate — text in the UI, audio via speaker, video
+> via an appropriate UI element for the video frames.
+
+Implication for this plan: the "Real-Time Conversational Layer" should ride
+the existing streaming-response channel rather than introduce a parallel one.
+A single typed stream of `{kind: 'text' | 'audio' | 'video' | 'client-tool-call', payload}`
+events from server → client, with the UI multiplexing on `kind`. Same protocol
+covers chat updates, audio playback, future video, and out-of-band client tool
+dispatch — no new wiring needed per modality.
+
+This is captured here as a design-direction note from the artifact-tools PR
+review; not a commitment to implement on a specific timeline.

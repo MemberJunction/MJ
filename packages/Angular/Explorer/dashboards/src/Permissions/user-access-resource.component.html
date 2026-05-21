@@ -1,19 +1,14 @@
-<div class="permissions-container">
-  <div class="header">
-    <div class="header-left">
-      <i class="fa-solid fa-user header-icon"></i>
-      <h2 class="header-title">User Access Report</h2>
+<mj-page-layout>
+  <mj-page-header
+    Title="User Access Report"
+    Icon="fa-solid fa-user"
+    Subtitle="See every resource a user can access across all registered permission domains">
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoadingUsers" [Disabled]="IsLoadingPermissions" (Clicked)="loadUsers()"></mj-refresh-button>
     </div>
-    <div class="header-actions">
-      <button mjButton variant="secondary" (click)="loadUsers()" [disabled]="IsLoadingUsers || IsLoadingPermissions">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoadingUsers"></i> Refresh
-      </button>
-    </div>
-  </div>
+  </mj-page-header>
 
-  <p class="description">
-    Select a user to see every resource they can access across all registered permission domains.
-  </p>
+  <mj-page-body>
 
   @if (ErrorMessage) {
     <div class="message error-message">
@@ -117,4 +112,5 @@
       }
     </div>
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

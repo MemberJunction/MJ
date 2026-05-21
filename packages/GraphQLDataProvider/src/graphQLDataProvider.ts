@@ -836,6 +836,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
+                // BypassCache instructs the server to skip its RunView cache layer for this
+                // query — used for cross-entity subqueries the cache invalidator can't follow
+                // (e.g. WHERE … IN (SELECT … FROM vwListDetails …)) or for maintenance reads
+                // that need true DB state. Only forward when explicitly set so default behavior
+                // (server caching enabled) is unchanged.
+                if (params.BypassCache !== undefined)
+                    innerParams.BypassCache = params.BypassCache;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1004,6 +1011,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
                         innerParam.AuditLogDescription = param.AuditLogDescription;
+                    }
+                    if (param.BypassCache !== undefined) {
+                        innerParam.BypassCache = param.BypassCache;
                     }
 
                     if (!dynamicView) {
