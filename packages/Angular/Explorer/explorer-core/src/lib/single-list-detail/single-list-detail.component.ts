@@ -140,6 +140,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   public userViewsToAdd: MJUserViewEntityExtended[] = [];
   public addFromViewProgress: number = 0;
   public addFromViewTotal: number = 0;
+  /**
+   * Stored percent (0–100) for the progress bar. Backed instead of computed
+   * via getter because the original getter recomputed on every Angular CD
+   * read and the async save loop mutated addFromViewProgress between the
+   * initial check and dev-mode re-check — producing NG0100
+   * ExpressionChangedAfterItHasBeenCheckedError floods in the console.
+   * Updated via setAddFromViewProgress(...) at controlled points.
+   */
+  public addFromViewProgressPercent: number = 0;
   public fetchingRecordsToSave: boolean = false;
 
   // Dropdown button toggle state
@@ -435,8 +444,14 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     return this.addTotal > 0 ? Math.round((this.addProgress / this.addTotal) * 100) : 0;
   }
 
-  get addFromViewProgressPercent(): number {
-    return this.addFromViewTotal > 0 ? Math.round((this.addFromViewProgress / this.addFromViewTotal) * 100) : 0;
+  /** Update progress + recompute the stored percent atomically. Call this
+   *  from inside the save loop so the bound value is set in lockstep with
+   *  the underlying counter (avoids NG0100). */
+  private setAddFromViewProgress(progress: number): void {
+    this.addFromViewProgress = progress;
+    this.addFromViewProgressPercent = this.addFromViewTotal > 0
+      ? Math.round((progress / this.addFromViewTotal) * 100)
+      : 0;
   }
 
   onRefreshClick(): void {
@@ -1280,8 +1295,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     this.showAddFromViewDialog = false;
     this.userViewsToAdd = [];
     this.showAddFromViewLoader = false;
-    this.addFromViewProgress = 0;
     this.addFromViewTotal = 0;
+    this.setAddFromViewProgress(0);
   }
 
   private async loadEntityViews(): Promise<void> {
@@ -1352,7 +1367,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     const recordsToAdd = [...recordIdSet].filter(id => !this.existingListDetailIds.has(id));
 
     this.addFromViewTotal = recordsToAdd.length;
-    this.addFromViewProgress = 0;
+    this.setAddFromViewProgress(0);
     this.fetchingRecordsToSave = false;
     this.cdr.detectChanges();
     const progressPerRecord = 0.8 / Math.max(recordsToAdd.length, 1); // 80% for individual saves
@@ -1381,17 +1396,23 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
           message: listDetail.LatestResult?.CompleteMessage
         });
       }
-      // Update progress (0-80%)
-      this.addFromViewProgress = Math.round((i + 1) * progressPerRecord * this.addFromViewTotal);
+      // Update progress (0-80%) via the helper so both the counter and the
+      // bound percent move in lockstep, then detectChanges() to close the
+      // CD cycle on this iteration. Without detectChanges() the next await
+      // can yield in the middle of a cycle and Angular's dev-mode re-check
+      // catches the percent changing → NG0100 flood.
+      this.setAddFromViewProgress(Math.round((i + 1) * progressPerRecord * this.addFromViewTotal));
+      this.cdr.detectChanges();
     }
 
     // Show 80% complete before submit
-    this.addFromViewProgress = Math.round(this.addFromViewTotal * 0.8);
+    this.setAddFromViewProgress(Math.round(this.addFromViewTotal * 0.8));
+    this.cdr.detectChanges();
 
     const success = await tg.Submit();
 
     if (success) {
-      this.addFromViewProgress = this.addFromViewTotal;
+      this.setAddFromViewProgress(this.addFromViewTotal);
       this.sharedService.CreateSimpleNotification(
         `Added ${recordsToAdd.length} record${recordsToAdd.length !== 1 ? 's' : ''} to list`,
         'success',

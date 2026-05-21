@@ -457,7 +457,12 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           }
         </div>
       }
-    
+      </mj-page-body>
+
+      <!-- Modals/overlays live outside mj-page-body so its stacking context
+           doesn't trap them. Position:fixed overlays would otherwise render
+           behind a sibling overlay div, which silently closes the dialog on
+           any click. -->
       <!-- Create/Edit Dialog -->
       @if (showCreateDialog) {
         <div class="modal-overlay" (click)="closeCreateDialog()"></div>
@@ -640,7 +645,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </div>
         </div>
       }
-      </mj-page-body>
     </mj-page-layout>
     `,
   styles: [`
@@ -2059,12 +2063,17 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       this.currentUserId = md.CurrentUser?.ID || '';
 
-      // Load all lists, categories, details, and users in parallel
+      // BypassCache on Lists + List Details: after a delete/duplicate, the
+      // RunView cache for these entities doesn't always reflect the latest
+      // state in time (event-driven invalidation races the immediate
+      // refresh). Trading a small perf hit for correctness here is worth
+      // it — categories and users stay cache-warm.
       const [listsResult, categoriesResult, detailsResult, usersResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Lists',
           OrderBy: 'Name',
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
+          BypassCache: true
         },
         {
           EntityName: 'MJ: List Categories',
@@ -2074,7 +2083,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         {
           EntityName: 'MJ: List Details',
           Fields: ['ListID'],
-          ResultType: 'simple'
+          ResultType: 'simple',
+          BypassCache: true
         },
         {
           EntityName: 'MJ: Users',
@@ -2776,7 +2786,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       const md = this.ProviderToUse;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
-      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
+      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
       newList.Name = `${listToDuplicate.Name} (Copy)`;
       newList.Description = listToDuplicate.Description;
       newList.EntityID = listToDuplicate.EntityID;
@@ -2789,29 +2799,54 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         return;
       }
 
+      // BypassCache to avoid any stale RunView cache that might mask members.
+      // High MaxRows to cover large lists; entity_object so we have typed access.
       const itemsResult = await rv.RunView<MJListDetailEntity>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
+        MaxRows: 100000,
+        BypassCache: true
       });
 
-      if (itemsResult.Success && itemsResult.Results.length > 0) {
-        let copiedCount = 0;
-        for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
+      if (!itemsResult.Success) {
+        console.error('Duplicate: failed to load source list members', itemsResult.ErrorMessage);
+        this.notificationService.CreateSimpleNotification(
+          `Could not load source list members: ${itemsResult.ErrorMessage || 'unknown'}`,
+          'error', 6000
+        );
+        return;
+      }
+
+      const sourceItems = itemsResult.Results ?? [];
+      if (sourceItems.length === 0) {
+        this.notificationService.CreateSimpleNotification('List duplicated (source had no records)', 'success', 3000);
+      } else {
+        // Batch all detail inserts into one transaction group so this is
+        // a single round-trip instead of 1-per-row. All-or-nothing: if any
+        // row fails server-side validation the whole group rolls back.
+        const tg = await md.CreateTransactionGroup();
+        for (const item of sourceItems) {
+          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
           newItem.ListID = newList.ID;
           newItem.RecordID = item.RecordID;
           newItem.Sequence = item.Sequence;
-          const itemSaved = await newItem.Save();
-          if (itemSaved) copiedCount++;
+          newItem.TransactionGroup = tg;
+          await newItem.Save(); // queued into tg, not sent yet
         }
-        this.notificationService.CreateSimpleNotification(
-          `List duplicated with ${copiedCount} item${copiedCount !== 1 ? 's' : ''}`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification('List duplicated successfully', 'success', 3000);
+        const submitted = await tg.Submit();
+        if (submitted) {
+          this.notificationService.CreateSimpleNotification(
+            `List duplicated with ${sourceItems.length} item${sourceItems.length !== 1 ? 's' : ''}`,
+            'success', 3000
+          );
+        } else {
+          console.error('Duplicate: transaction group submit failed');
+          this.notificationService.CreateSimpleNotification(
+            `Duplicated list but failed to copy ${sourceItems.length} items — see console`,
+            'error', 6000
+          );
+        }
       }
 
       await this.loadData();
@@ -2883,8 +2918,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
       this.cancelDelete();
-      // Background refresh for authoritative state — don't block the UI
-      // on it. If the optimistic update was wrong (rare), this corrects.
+      // Authoritative refresh — loadData() now sets BypassCache: true on
+      // the 'MJ: Lists' RunView, so this no longer races the optimistic
+      // local removal against a stale cache.
       void this.loadData();
     } catch (error) {
       console.error('Error deleting list:', error);
@@ -2946,7 +2982,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       if (this.editingList) {
         list = this.editingList;
       } else {
-        list = await md.GetEntityObject<MJListEntity>('MJ: Lists');
+        list = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
         list.UserID = md.CurrentUser!.ID;
         list.EntityID = this.selectedEntityId;
       }
