@@ -196,7 +196,8 @@
               [conversationDetailId]="message.ID"
               [currentUser]="currentUser"
               [ratingEntityName]="message.EntityInfo?.Name || 'MJ: Conversation Details'"
-              [ratingsData]="ratings">
+              [ratingsData]="ratings"
+              [canEdit]="isConversationOwner">
             </mj-conversation-message-rating>
             <button
               class="action-bar-btn pin-btn"
@@ -286,7 +287,8 @@
                   <mj-conversation-message-rating
                     [conversationDetailId]="message.ID"
                     [currentUser]="currentUser"
-                    [ratingsData]="ratings">
+                    [ratingsData]="ratings"
+                    [canEdit]="isConversationOwner">
                   </mj-conversation-message-rating>
                   <button
                     class="action-bar-btn pin-btn"

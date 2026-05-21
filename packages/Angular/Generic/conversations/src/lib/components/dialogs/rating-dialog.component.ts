@@ -60,6 +60,29 @@ import { Component, Input } from '@angular/core';
           maxlength="2000">
         </textarea>
       </div>
+
+      <div class="consent-note" [class.requires-consent]="requireConsent">
+        <i class="fa-solid fa-shield-halved"></i>
+        <div class="consent-body">
+          <p class="consent-text">
+            By submitting, you authorize the <strong>Integrations</strong> and
+            <strong>Developer</strong> teams to view this conversation and the
+            rated component so they can improve agent quality.
+          </p>
+          @if (requireConsent) {
+            <label class="consent-checkbox">
+              <input
+                type="checkbox"
+                [(ngModel)]="consentChecked"
+                aria-label="I understand and accept the access authorization above" />
+              <span>I understand and accept this.</span>
+            </label>
+            @if (!consentChecked) {
+              <p class="consent-warning">Required to submit your feedback.</p>
+            }
+          }
+        </div>
+      </div>
     </div>
   `,
   styles: [`
@@ -213,6 +236,54 @@ import { Component, Input } from '@angular/core';
       border-color: var(--rd-brand);
       box-shadow: 0 0 0 2px color-mix(in srgb, var(--rd-brand) 18%, transparent);
     }
+
+    /* ─── Consent note ─── */
+    .consent-note {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px 14px;
+      background: color-mix(in srgb, var(--rd-brand) 6%, var(--rd-surface));
+      border: 1px solid color-mix(in srgb, var(--rd-brand) 22%, var(--rd-border));
+      border-radius: 8px;
+    }
+    .consent-note > i {
+      color: var(--rd-brand);
+      font-size: 14px;
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+    .consent-body { flex: 1; min-width: 0; }
+    .consent-text {
+      margin: 0;
+      font-size: 12.5px;
+      line-height: 1.5;
+      color: var(--rd-text-secondary);
+    }
+    .consent-text strong { color: var(--rd-text-primary); font-weight: 600; }
+    .consent-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--rd-text-primary);
+      font-weight: 500;
+      cursor: pointer;
+      user-select: none;
+    }
+    .consent-checkbox input {
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+      accent-color: var(--rd-brand);
+    }
+    .consent-warning {
+      margin: 6px 0 0 23px;
+      font-size: 11px;
+      color: var(--rd-low);
+      font-weight: 500;
+    }
   `]
 })
 export class RatingDialogComponent {
@@ -220,10 +291,14 @@ export class RatingDialogComponent {
   @Input() initialRating: number | null = null;
   @Input() initialComments: string = '';
 
+  /** When true, the user must check the consent box before submitting. */
+  @Input() requireConsent: boolean = false;
+
   readonly scale: number[] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   selectedRating: number | null = null;
   hoveredRating: number | null = null;
   comments: string = '';
+  consentChecked: boolean = false;
 
   ngOnInit(): void {
     this.selectedRating = this.initialRating;
@@ -276,5 +351,15 @@ export class RatingDialogComponent {
 
   getComments(): string {
     return (this.comments ?? '').trim();
+  }
+
+  /** True if the consent requirement is met (not required, or required and checked). */
+  isConsentValid(): boolean {
+    return !this.requireConsent || this.consentChecked;
+  }
+
+  /** True only when the user *just* acknowledged consent in this dialog session. */
+  wasConsentNewlyAcknowledged(): boolean {
+    return this.requireConsent && this.consentChecked;
   }
 }

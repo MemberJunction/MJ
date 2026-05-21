@@ -1,8 +1,15 @@
 import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
-import { RatingJSON } from '@memberjunction/core-entities';
+import { BaseEntity, CompositeKey, RunView, UserInfo } from '@memberjunction/core';
+import { RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
+
+const FEEDBACK_CONSENT_KEY = 'agent-feedback-share-consent';
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+const FEEDBACK_ROLE_IDS = [
+  'deafccec-6a37-ef11-86d4-000d3a4e707e', // Developer
+  'dfafccec-6a37-ef11-86d4-000d3a4e707e'  // Integration
+];
 
 /** Minimal shape we use against the loaded entity. All MJ entity subclasses
  *  implement `Load(ID)` via codegen but the base `BaseEntity<unknown>` type
@@ -27,21 +34,29 @@ type LoadableEntity = BaseEntity<unknown> & {
   template: `
     <div class="rating-container">
       <div class="user-rating">
-        <button
-          class="rating-button"
-          [class.has-rated]="currentUserRating != null"
-          [disabled]="isSaving"
-          (click)="OpenRatingDialog()"
-          [title]="currentUserRating != null ? 'Edit your rating' : 'Rate this response'"
-          type="button">
-          @if (currentUserRating != null) {
-            <i class="fa-solid fa-pen-to-square"></i>
-            <span class="my-rating">My rating: {{ currentUserRating }}/10</span>
-          } @else {
-            <i class="fa-regular fa-comment-dots"></i>
-            <span>Rate response</span>
-          }
-        </button>
+        @if (canEdit) {
+          <button
+            class="rating-button"
+            [class.has-rated]="currentUserRating != null"
+            [disabled]="isSaving"
+            (click)="OpenRatingDialog()"
+            [title]="currentUserRating != null ? 'Edit your rating' : 'Rate this response'"
+            type="button">
+            @if (currentUserRating != null) {
+              <i class="fa-solid fa-pen-to-square"></i>
+              <span class="my-rating">My rating: {{ currentUserRating }}/10</span>
+            } @else {
+              <i class="fa-regular fa-comment-dots"></i>
+              <span>Rate response</span>
+            }
+          </button>
+        } @else if (currentUserRating != null) {
+          <span class="rating-readonly"
+                title="Rating left by the conversation owner — read-only">
+            <i class="fa-solid fa-comment-dots"></i>
+            <span>Rated {{ currentUserRating }}/10</span>
+          </span>
+        }
       </div>
     </div>
   `,
@@ -93,11 +108,32 @@ type LoadableEntity = BaseEntity<unknown> & {
     .my-rating {
       font-weight: 500;
     }
+
+    .rating-readonly {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
+      cursor: default;
+    }
   `]
 })
 export class ConversationMessageRatingComponent extends BaseAngularComponent implements OnInit {
   @Input() conversationDetailId!: string;
   @Input() currentUser!: UserInfo;
+
+  /**
+   * When false, the rating UI renders as a read-only badge instead of an editable
+   * button. Set by the parent (MessageItemComponent) to `false` when the current
+   * user is not the conversation owner — the rating storage is a single field on
+   * the ConversationDetail row, so only the owner is allowed to mutate it.
+   */
+  @Input() canEdit: boolean = true;
 
   /**
    * Entity name to load/update for the rating. Defaults to MJ's
@@ -136,17 +172,89 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
 
   async OpenRatingDialog(): Promise<void> {
     if (this.isSaving) return;
+    if (!this.canEdit) return;
+
+    let consentAcknowledged = false;
+    try {
+      await UserInfoEngine.Instance.Config();
+      consentAcknowledged = UserInfoEngine.Instance.GetSetting(FEEDBACK_CONSENT_KEY) === 'true';
+    } catch (e) {
+      console.warn('[Rating] Could not read consent flag, will require acknowledgement', e);
+    }
 
     const result = await this.dialogService.rating({
       title: this.currentUserRating != null ? 'Edit your rating' : 'Rate this response',
       message: 'Rate the response on a 1-10 scale and (optionally) describe what was good or bad.',
       initialRating: this.currentUserRating,
       initialComments: this.currentUserComments,
-      okText: 'Submit'
+      okText: 'Submit',
+      requireConsent: !consentAcknowledged
     });
 
     if (result == null) return;
-    await this.saveRating(result.rating, result.comments);
+
+    const conversationID = await this.saveRating(result.rating, result.comments);
+
+    if (result.consentNewlyAcknowledged) {
+      try {
+        const saved = await UserInfoEngine.Instance.SetSetting(FEEDBACK_CONSENT_KEY, 'true');
+        if (!saved) {
+          console.error(
+            `[Rating] Failed to persist consent acknowledgement under key "${FEEDBACK_CONSENT_KEY}" — ` +
+            `the dialog will re-prompt on next rating. Likely cause: the current user lacks ` +
+            `create/update permission on the "MJ: User Settings" entity.`
+          );
+        }
+      } catch (e) {
+        console.error('[Rating] Could not persist consent flag', e);
+      }
+    }
+
+    if (conversationID) {
+      await this.grantConversationAccess(conversationID);
+    }
+  }
+
+  /**
+   * Grants the Integrations and Developer roles View access to the parent
+   * Conversation via `MJ: Resource Permissions`. Idempotent — existing
+   * permissions for the same role are not duplicated. Best-effort; any error
+   * is logged but does not roll back the rating itself.
+   */
+  private async grantConversationAccess(conversationID: string): Promise<void> {
+    try {
+      const md = this.ProviderToUse;
+      const rv = new RunView();
+      const existing = await rv.RunView({
+        EntityName: 'MJ: Resource Permissions',
+        ExtraFilter:
+          `ResourceTypeID='${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ` +
+          `ResourceRecordID='${conversationID}' AND Type='Role' AND ` +
+          `RoleID IN ('${FEEDBACK_ROLE_IDS.join("','")}')`
+      });
+
+      const granted = new Set<string>(
+        (existing.Results || []).map((r: any) => (r.RoleID || '').toLowerCase())
+      );
+
+      for (const roleID of FEEDBACK_ROLE_IDS) {
+        if (granted.has(roleID.toLowerCase())) continue;
+        const perm = await md.GetEntityObject('MJ: Resource Permissions');
+        perm.NewRecord();
+        perm.Set('ResourceTypeID', CONVERSATIONS_RESOURCE_TYPE_ID);
+        perm.Set('ResourceRecordID', conversationID);
+        perm.Set('Type', 'Role');
+        perm.Set('RoleID', roleID);
+        perm.Set('PermissionLevel', 'View');
+        perm.Set('Status', 'Approved');
+        const ok = await perm.Save();
+        if (!ok) {
+          console.warn('[Rating] Failed to create ResourcePermission for role', roleID, (perm as any).LatestResult);
+        }
+      }
+    } catch (e) {
+      console.warn('[Rating] grantConversationAccess failed:', e);
+    }
   }
 
   private async loadRating(): Promise<void> {
@@ -167,15 +275,14 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
     }
   }
 
-  private async saveRating(rating: number, comments: string): Promise<void> {
-    if (this.isSaving) return;
-    if (rating < 1 || rating > 10) return;
-    if (!this.conversationDetailId) return;
+  private async saveRating(rating: number, comments: string): Promise<string | null> {
+    if (this.isSaving) return null;
+    if (rating < 1 || rating > 10) return null;
+    if (!this.conversationDetailId) return null;
 
     const prevRating = this.currentUserRating;
     const prevComments = this.currentUserComments;
 
-    // Optimistic update — UI reflects change instantly.
     this.isSaving = true;
     this.currentUserRating = rating;
     this.currentUserComments = comments;
@@ -190,13 +297,18 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
       }
       entity.Set(this.ratingField, rating);
       entity.Set(this.ratingCommentField, comments || null);
-      await entity.Save();
+      const saveResult = await entity.Save();
+      if (!saveResult) {
+        throw new Error(`Save failed: ${(entity as any).LatestResult?.Message ?? 'unknown'}`);
+      }
+      const conversationID = entity.Get('ConversationID');
+      return typeof conversationID === 'string' ? conversationID : null;
     } catch (error) {
-      console.error('Failed to save rating:', error);
-      // Roll back UI to previous state.
+      console.error('[Rating] save failed:', error);
       this.currentUserRating = prevRating;
       this.currentUserComments = prevComments;
       this.cdr.detectChanges();
+      return null;
     } finally {
       this.isSaving = false;
       this.cdr.detectChanges();

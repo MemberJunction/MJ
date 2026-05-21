@@ -41,11 +41,18 @@ export interface RatingDialogOptions {
   initialComments?: string;
   okText?: string;
   cancelText?: string;
+  /** When true, the rating dialog shows a consent checkbox the user must
+   *  accept before submitting (first-time-only authorization). */
+  requireConsent?: boolean;
 }
 
 export interface RatingDialogResult {
   rating: number;
   comments: string;
+  /** True only when the user *just* acknowledged consent in this dialog —
+   *  i.e. `requireConsent` was true and they checked the box. The caller
+   *  should persist the acknowledgement so consent isn't requested again. */
+  consentNewlyAcknowledged: boolean;
 }
 
 /**
@@ -214,15 +221,20 @@ export class DialogService {
       componentInstance.message = options.message ?? '';
       componentInstance.initialRating = options.initialRating ?? null;
       componentInstance.initialComments = options.initialComments ?? '';
+      componentInstance.requireConsent = options.requireConsent ?? false;
 
       dialogRef.Result.subscribe((result) => {
         const action = result as MJDialogAction | undefined;
         if (action && 'text' in action && action.text === okText) {
           const rating = componentInstance.getRating();
-          if (rating == null) {
+          if (rating == null || !componentInstance.isConsentValid()) {
             resolve(null);
           } else {
-            resolve({ rating, comments: componentInstance.getComments() });
+            resolve({
+              rating,
+              comments: componentInstance.getComments(),
+              consentNewlyAcknowledged: componentInstance.wasConsentNewlyAcknowledged()
+            });
           }
         } else {
           resolve(null);
