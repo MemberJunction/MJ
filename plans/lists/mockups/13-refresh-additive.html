@@ -1,0 +1,68 @@
+<!doctype html><html><head><meta charset="utf-8"><title>13 — Refresh (Additive)</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-rotate-right"></i> Refresh from Source</h1><div class="spacer"></div></div>
+  <div class="muted" style="font-size:12.5px; margin-bottom:16px;">Q4 Donors — Snapshot 2026-05-15 · Source: Q4 Donor View</div>
+  <div class="mj-panel" style="opacity:0.35;"><div class="mj-panel-body" style="height:200px;">[List detail underneath]</div></div>
+</main>
+</div>
+
+<div class="modal-backdrop">
+  <div class="modal modal-large">
+    <div class="modal-header"><i class="fa-solid fa-rotate-right"></i><h2>Refresh from Q4 Donor View — Preview</h2><button class="close"><i class="fa-solid fa-times"></i></button></div>
+    <div class="modal-body">
+
+      <div class="row gap-12 mb-16">
+        <div class="row gap-8" style="padding:8px 12px; border:1px solid var(--mj-border-default); border-radius:8px;">
+          <span class="label" style="margin:0;">Mode:</span>
+          <select class="mj-input mj-btn-sm" style="border:none; padding:4px 24px 4px 0;"><option>Additive (only adds new records)</option><option>Sync (also removes records)</option></select>
+        </div>
+        <span class="badge badge-success"><i class="fa-solid fa-shield-check"></i> Safe — no drops in Additive mode</span>
+      </div>
+
+      <div class="delta-summary">
+        <div class="delta-tile add"><div class="count">+92</div><div class="label">To Add</div></div>
+        <div class="delta-tile keep"><div class="count">435</div><div class="label">Unchanged</div></div>
+        <div class="delta-tile remove" style="background:var(--mj-bg-surface-sunken);border-color:var(--mj-border-default);color:var(--mj-text-muted);"><div class="count">0</div><div class="label">To Remove</div></div>
+      </div>
+
+      <div style="padding:10px 12px; background:var(--mj-status-success-bg); border:1px solid var(--mj-status-success-border); color:var(--mj-status-success-text); border-radius:8px; font-size:12.5px;">
+        <i class="fa-solid fa-circle-check"></i> 92 new records found in source view that aren't in this list yet. No existing members will be removed.
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px;">
+        <div>
+          <div class="label">Records being added (first 8 of 92)</div>
+          <div class="preview-records">
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Greta Olsen</span><span class="muted" style="margin-left:auto;">CONT-44831</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Hugo Yamamoto</span><span class="muted" style="margin-left:auto;">CONT-44832</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Ines Müller</span><span class="muted" style="margin-left:auto;">CONT-44833</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Jamal Ali</span><span class="muted" style="margin-left:auto;">CONT-44834</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Kalei Akana</span><span class="muted" style="margin-left:auto;">CONT-44835</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Liam Donovan</span><span class="muted" style="margin-left:auto;">CONT-44836</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Mei Chang</span><span class="muted" style="margin-left:auto;">CONT-44837</span></div>
+            <div class="record"><i class="fa-solid fa-user-plus" style="color:var(--mj-status-success)"></i><span>Niko Petrov</span><span class="muted" style="margin-left:auto;">CONT-44838</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="label">Audit-relevant — records in list but no longer in source view</div>
+          <div class="preview-records" style="background:var(--mj-bg-surface-sunken); display:flex; align-items:center; justify-content:center; flex-direction:column; padding:30px; color:var(--mj-text-muted);">
+            <i class="fa-solid fa-list-check" style="font-size:32px; margin-bottom:6px;"></i>
+            <div style="font-size:12.5px;">41 records exist in this list but not in the source view.</div>
+            <div style="font-size:11.5px;">In Additive mode they are <strong>retained</strong>. Switch to Sync to remove them.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-check"></i> Confirm (Add 92)</button>
+      <button class="mj-btn">Cancel</button>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11px;">Delta token valid for 5 min</span>
+    </div>
+  </div>
+</div>
+</body></html>

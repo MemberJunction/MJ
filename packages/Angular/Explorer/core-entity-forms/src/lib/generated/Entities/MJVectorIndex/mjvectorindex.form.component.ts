@@ -18,7 +18,7 @@ export class MJVectorIndexFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'indexProfile', sectionName: 'Index Profile', isExpanded: true },
             { sectionKey: 'associatedResources', sectionName: 'Associated Resources', isExpanded: true },
-            { sectionKey: 'indexConfiguration', sectionName: 'Index Configuration', isExpanded: false },
+            { sectionKey: 'indexConfiguration', sectionName: 'Index Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityRecordDocuments', sectionName: 'Entity Record Documents', isExpanded: false },
             { sectionKey: 'mJSearchScopeExternalIndexes', sectionName: 'Search Scope External Indexes', isExpanded: false },

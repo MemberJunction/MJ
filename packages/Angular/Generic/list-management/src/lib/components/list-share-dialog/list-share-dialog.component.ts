@@ -67,6 +67,26 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
    */
   @Output() cancel = new EventEmitter<void>();
 
+  /**
+   * Emitted when the user clicks "Manage Invitations" in the footer.
+   * Phase 2: opens the invitations management UI for this list.
+   */
+  @Output() manageInvitations = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user clicks "View audit log" in the footer.
+   * Phase 2: opens the per-list audit log view.
+   */
+  @Output() viewAuditLog = new EventEmitter<void>();
+
+  /**
+   * When true (the default), newly-added shares fan out as notifications
+   * to the recipient (email + in-app, depending on user preferences).
+   * The state is captured on the dialog so consumers can read it back
+   * via `ListShareDialogResult.notifyByEmail`.
+   */
+  public notifyByEmail = true;
+
   // State
   loading = false;
   saving = false;
@@ -392,7 +412,8 @@ export class ListShareDialogComponent extends BaseAngularComponent implements On
       action: 'apply',
       sharesAdded: this.sharesAdded,
       sharesUpdated: this.sharesUpdated,
-      sharesRemoved: this.sharesRemoved
+      sharesRemoved: this.sharesRemoved,
+      notifyByEmail: this.notifyByEmail
     };
 
     this._visible = false;

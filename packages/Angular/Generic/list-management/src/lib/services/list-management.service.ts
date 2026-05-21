@@ -289,11 +289,6 @@ export class ListManagementService {
     recordIds: string[],
     skipDuplicates: boolean = true
   ): Promise<BatchOperationResult> {
-    console.log(`[ListManagementService] addRecordsToLists called:`);
-    console.log(`  - listIds (${listIds.length}):`, listIds);
-    console.log(`  - recordIds (${recordIds.length}):`, recordIds);
-    console.log(`  - skipDuplicates:`, skipDuplicates);
-
     const result: BatchOperationResult = {
       success: 0,
       failed: 0,
@@ -339,7 +334,6 @@ export class ListManagementService {
     }
 
     if (recordsToAdd.length === 0) {
-      console.log(`[ListManagementService] No records to add (all skipped as duplicates)`);
       return result;
     }
 
@@ -365,24 +359,20 @@ export class ListManagementService {
     }
 
     // Submit the transaction
-    console.log(`[ListManagementService] Submitting transaction with ${recordsToAdd.length} records...`);
     const success = await tg.Submit();
 
     if (success) {
       result.success = recordsToAdd.length - result.errors.length;
       result.failed = result.errors.length;
-      console.log(`[ListManagementService] Transaction succeeded. Added ${result.success} records.`);
     } else {
       result.failed = recordsToAdd.length;
       result.success = 0;
-      console.error(`[ListManagementService] Transaction failed`);
       result.errors.push('Transaction failed to submit');
     }
 
     // Invalidate membership cache
     this.membershipCache.clear();
 
-    console.log(`[ListManagementService] addRecordsToLists final result:`, result);
     return result;
   }
 
