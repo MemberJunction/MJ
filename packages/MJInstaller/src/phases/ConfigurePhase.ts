@@ -841,12 +841,19 @@ ${newUserSection}  output: [],
    */
   private generateEnvironmentFile(config: InstallConfig, production: boolean): string {
     const authType = this.mapAuthType(config.AuthProvider);
-    const clientId = config.AuthProviderValues?.ClientID ?? '';
-    const tenantId = config.AuthProviderValues?.TenantID ?? '';
+    // Accept both internal-shape keys (`ClientID`, `TenantID`, `Domain`) and
+    // user-facing shape keys (`CLIENT_ID`, `TENANT_ID`, `AUTH0_DOMAIN`).
+    // Interactive prompts and env vars populate the internal shape; an
+    // install.config.json author would naturally type the underscored shape
+    // that matches `.env` and `environment.ts` conventions, so we have to
+    // read either.
+    const values = config.AuthProviderValues ?? {};
+    const clientId = values.CLIENT_ID ?? values.ClientID ?? '';
+    const tenantId = values.TENANT_ID ?? values.TenantID ?? '';
     const authority = tenantId
       ? `https://login.microsoftonline.com/${tenantId}`
       : '';
-    const auth0Domain = config.AuthProviderValues?.Domain ?? '';
+    const auth0Domain = values.AUTH0_DOMAIN ?? values.Domain ?? '';
     const apiPort = config.APIPort ?? 4000;
     const explorerPort = config.ExplorerPort ?? 4200;
     const redirectUri = `http://localhost:${explorerPort}`;
