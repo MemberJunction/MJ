@@ -490,10 +490,12 @@ export class ${this.SubModuleBaseName}${moduleNumber} { }
             }
         });
 
-        // Generate plain objects for section initialization
-        const sectionInitEntries = allSections.map((s, index) => {
-            // First 2 sections expanded by default, metadata and related entities collapsed
-            const isExpanded = index < 2 && !s.Name.toLowerCase().includes('metadata') && !s.IsRelatedEntity;
+        // Generate plain objects for section initialization.
+        // Field panels are expanded by default so the record's data is visible on open;
+        // the System Metadata panel and related-entity grids stay collapsed (the grids defer
+        // their data fetch until expanded/scrolled into view — see ExplorerEntityDataGridComponent).
+        const sectionInitEntries = allSections.map((s) => {
+            const isExpanded = !s.IsRelatedEntity && !s.Name.toLowerCase().includes('metadata');
             return `            { sectionKey: '${s.UniqueKey}', sectionName: '${s.Name}', isExpanded: ${isExpanded} }`;
         });
 

@@ -157,6 +157,8 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   @ViewChild('panelContent') private panelContentRef?: ElementRef<HTMLElement>;
   private resizeObserver?: ResizeObserver;
   private resizeDebounceTimer?: ReturnType<typeof setTimeout>;
+  /** ResizeObserver fires once synchronously on observe(); that initial measurement is not a user resize. */
+  private resizeObserverPrimed = false;
 
   /**
    * Persisted panel height for related-entity panels.
@@ -361,6 +363,16 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     // Run outside Angular zone to avoid triggering change detection on every resize frame
     this.ngZone.runOutsideAngular(() => {
       this.resizeObserver = new ResizeObserver((entries) => {
+        // Skip the synchronous initial fire emitted when observe() is called — it's the
+        // panel's own first measurement on load, not a user-initiated resize. Persisting
+        // it would write a spurious panelHeight for every panel on form open.
+        if (!this.resizeObserverPrimed) {
+          this.resizeObserverPrimed = true;
+          return;
+        }
+        // Only a height change while the panel is expanded reflects a genuine user drag of
+        // the resize handle. Ignore reflows while collapsed (e.g. content settling on load).
+        if (!this.Expanded) return;
         const entry = entries[0];
         if (!entry) return;
         const newHeight = Math.round(entry.contentRect.height);
