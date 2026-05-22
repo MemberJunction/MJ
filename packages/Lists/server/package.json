@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/lists",
+  "type": "module",
+  "version": "5.35.0",
+  "description": "MemberJunction: Lists — server-side TypeScript core for list materialization, set algebra, delta computation, lineage tracking, refresh modes, and sharing/invitations. Writes to MJ entities (List Detail, Resource Permission, List Invitation, Audit Log) — not safe to import from browser bundles. UI consumers should depend on @memberjunction/lists-base for type/interface sharing and call the server via GraphQL.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "start": "ts-node-dev src/index.ts",
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@memberjunction/core": "5.35.0",
+    "@memberjunction/core-entities": "5.35.0",
+    "@memberjunction/global": "5.35.0",
+    "@memberjunction/lists-base": "5.35.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

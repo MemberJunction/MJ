@@ -18,6 +18,7 @@ export class MJListFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'listDefinition', sectionName: 'List Definition', isExpanded: true },
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
+            { sectionKey: 'refreshSettings', sectionName: 'Refresh Settings', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJDuplicateRuns', sectionName: 'Duplicate Runs', isExpanded: false },
             { sectionKey: 'mJListDetails', sectionName: 'Details', isExpanded: false },

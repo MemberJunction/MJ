@@ -1,0 +1,57 @@
+<!doctype html><html><head><meta charset="utf-8"><title>24 — Move Records (via Delta)</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main"><div class="app-header"><h1><i class="fa-solid fa-arrow-right-arrow-left"></i> Move 12 Records</h1></div><div class="mj-panel" style="opacity:0.35;"><div class="mj-panel-body" style="height:200px;">[List detail underneath]</div></div></main>
+</div>
+
+<div class="modal-backdrop">
+  <div class="modal modal-large" style="border:2px solid var(--mj-status-warning);">
+    <div class="modal-header" style="background:var(--mj-status-warning);"><i class="fa-solid fa-arrow-right-arrow-left"></i><h2>Move 12 Records — Confirm Removal from Source List</h2><button class="close"><i class="fa-solid fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="row gap-12 mb-16">
+        <div style="flex:1; padding:12px; border:1px solid var(--mj-border-default); border-radius:8px; background:var(--mj-status-error-bg);">
+          <div class="label">FROM (records will be removed)</div>
+          <div class="mt-8 row"><i class="fa-solid fa-list" style="color:var(--mj-status-error)"></i><strong>VIP Donors Q4 2026</strong></div>
+          <div class="muted" style="font-size:11.5px;">348 members · −12</div>
+        </div>
+        <div style="align-self:center; font-size:24px; color:var(--mj-text-muted);">→</div>
+        <div style="flex:1; padding:12px; border:1px solid var(--mj-border-default); border-radius:8px; background:var(--mj-status-success-bg);">
+          <div class="label">TO (records will be added)</div>
+          <div class="mt-8 row"><i class="fa-solid fa-list" style="color:var(--mj-status-success)"></i><strong>Fall Outreach 2026</strong></div>
+          <div class="muted" style="font-size:11.5px;">862 members · +12</div>
+        </div>
+      </div>
+
+      <div class="delta-summary">
+        <div class="delta-tile add"><div class="count">+12</div><div class="label">Add to Target</div></div>
+        <div class="delta-tile keep"><div class="count">336</div><div class="label">Source Unchanged</div></div>
+        <div class="delta-tile remove"><div class="count">−12</div><div class="label">Remove from Source</div></div>
+      </div>
+
+      <div class="drop-warning">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div style="flex:1;">
+          <div><strong>12 records will be removed from "VIP Donors Q4 2026"</strong> as part of the move.</div>
+          <div class="muted mt-8" style="font-size:11.5px;">Tip: Use <strong>Copy to List</strong> instead if you want to keep them in both lists.</div>
+          <div class="confirm-check"><input type="checkbox" id="ack"> <label for="ack" style="font-size:12.5px;">I understand 12 records will be removed from the source list</label></div>
+        </div>
+      </div>
+
+      <div class="label mt-12">Records being moved (12)</div>
+      <div class="preview-records">
+        <div class="record"><i class="fa-solid fa-arrow-right-arrow-left muted"></i><span>Aaron Holt</span><span class="muted" style="margin-left:auto;">CONT-44801</span></div>
+        <div class="record"><i class="fa-solid fa-arrow-right-arrow-left muted"></i><span>Beth Williams</span><span class="muted" style="margin-left:auto;">CONT-44802</span></div>
+        <div class="record"><i class="fa-solid fa-arrow-right-arrow-left muted"></i><span>Carlos Mendez</span><span class="muted" style="margin-left:auto;">CONT-44803</span></div>
+        <div class="record"><i class="fa-solid fa-arrow-right-arrow-left muted"></i><span>Dianne Park</span><span class="muted" style="margin-left:auto;">CONT-44804</span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-warning" disabled style="opacity:0.55;"><i class="fa-solid fa-arrow-right-arrow-left"></i> Confirm Move</button>
+      <button class="mj-btn"><i class="fa-solid fa-copy"></i> Copy Instead</button>
+      <button class="mj-btn mj-btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -6,6 +6,8 @@ import { CompositeKey, Metadata, EntityInfo, RunView } from '@memberjunction/cor
 import { RecordOpenedEvent, ViewGridState, EntityViewerComponent, EntityViewMode } from '@memberjunction/ng-entity-viewer';
 import { ExportService } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
+import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
+import type { SaveViewAsListResult } from '@memberjunction/ng-list-management';
 /**
  * UserViewResource - Resource wrapper for displaying User Views in tabs
  *
@@ -151,6 +153,11 @@ export class UserViewResource extends BaseResourceComponent {
 
     // Export state
     public isExporting: boolean = false;
+
+    // Save-as-list dialog state
+    public saveAsListDialogVisible = false;
+    public saveAsListRecordCount: number | null = null;
+    public isSavingAsList = false;
 
     private dataLoaded = false;
     private get metadata() { return this.ProviderToUse; }
@@ -392,6 +399,65 @@ export class UserViewResource extends BaseResourceComponent {
         }
         finally {
             this.isExporting = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Open the Save-as-List dialog. Only meaningful for saved views (a
+     * ViewID is required to materialize). Dynamic views fall back to a
+     * user-visible notification rather than silently doing nothing.
+     */
+    public onSaveAsList(): void {
+        if (!this.viewEntity?.ID) {
+            this.showNotification('Save as List requires a saved View. Save this view first.', 'info', 4000);
+            return;
+        }
+        // Best-effort record-count hint — the entity-viewer exposes the
+        // grid's row count on its gridState; we surface it so the dialog's
+        // confirm button can say "Save List (476 records)".
+        this.saveAsListRecordCount = this.entityViewerRef?.totalRecordCount ?? null;
+        this.saveAsListDialogVisible = true;
+        this.cdr.detectChanges();
+    }
+
+    public onSaveAsListCancelled(): void {
+        this.saveAsListDialogVisible = false;
+        this.cdr.detectChanges();
+    }
+
+    public async onSaveAsListSubmit(payload: SaveViewAsListResult): Promise<void> {
+        const viewId = this.viewEntity?.ID;
+        if (!viewId) return;
+        this.isSavingAsList = true;
+        this.cdr.detectChanges();
+        try {
+            const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+            const client = new GraphQLListsClient(provider);
+            const result = await client.MaterializeFromView(viewId, {
+                ListName: payload.ListName,
+                Description: payload.Description,
+                CategoryId: payload.CategoryId,
+                RememberLineage: payload.RememberLineage,
+                UseSnapshot: payload.UseSnapshot,
+                RefreshMode: payload.RefreshMode,
+            });
+            if (result.Success && result.CreatedListId) {
+                this.saveAsListDialogVisible = false;
+                this.showNotification(
+                    `List created with ${result.Counts?.Added ?? 0} record(s).`,
+                    'success',
+                    3000,
+                );
+                this.navigationService.OpenEntityRecord('MJ: Lists', new CompositeKey([{ FieldName: 'ID', Value: result.CreatedListId }]));
+            } else {
+                this.showNotification(`Save failed: ${result.Message}`, 'error', 5000);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            this.showNotification(`Save failed: ${message}`, 'error', 5000);
+        } finally {
+            this.isSavingAsList = false;
             this.cdr.detectChanges();
         }
     }

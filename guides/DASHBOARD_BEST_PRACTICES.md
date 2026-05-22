@@ -1032,7 +1032,7 @@ Two documented exceptions:
 
 1. **Single-page exceptions** (Section 9a in the conventions doc) — AI Overview hero, Home, Component Studio, Data Explorer, Query Browser. These have intentionally different layouts (hero landing, workspace shells, etc.) and don't fit the standard chrome.
 
-2. **Sub-pages of a left-nav workspace shell** (Section 9b — currently deferred). If your component is dynamically loaded into another resource's left-nav shell (e.g., the 5 explorer-settings sub-pages inside Admin's "Identity & Access" shell, or `ApplicationRolesResource` / `SystemDiagnosticsResource`), do NOT add `<mj-page-header>` — the parent shell already owns the chrome. Use a local `.sticky-header` action row instead. The pattern for this is documented in Section 9b of the conventions doc.
+2. **Sub-pages of a left-nav workspace shell** (Section 9b → Section 10). If your component is dynamically loaded into another resource's left-nav shell (e.g., the explorer-settings sub-pages inside Admin's "Identity & Access" shell, the Dev Tools inspectors inside "Developer Tools", SystemDiagnostics inside "Monitoring", Database Designer inside "Data & Schema"), do NOT add `<mj-page-header>` — the parent shell already owns the page identity. Use **`<mj-page-header-interior>`** instead — the body-level sibling of `<mj-page-header>`. Two-row card: primary row (Title + Subtitle + meta + actions), toolbar row (search / tab-nav / filter chips, collapses when empty). Same shared primitives as the exterior chrome (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-filter-chip>`, `<mj-refresh-button>`, `mjButton`). The full contract — template, CSS, filter UI decisions, Title/Subtitle guidance — is documented in **Section 10 of the conventions doc**. Reference implementations cover all four Admin shells (~15 sub-pages); copy any of them when migrating a new one.
 
 ### The canonical rulebook
 
@@ -1045,7 +1045,7 @@ The full conventions doc lives at [`plans/explorer-chrome-conventions.md`](../pl
 - **Section 6** — body component (`[Flex]`/`[Padding]` escape hatches)
 - **Section 7** — naming conventions
 - **Section 9** — documented exceptions
-- **Section 10** — TBD shell-with-left-nav decision (deferred)
+- **Section 10** — interior chrome (`<mj-page-header-interior>`) for shell sub-pages — ACTIVE, with Title/Subtitle guidance and reference implementations
 
 Read it before doing any chrome work — especially before deciding to deviate from the standard pattern.
 
