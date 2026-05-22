@@ -17,7 +17,7 @@ export class MJEntityFormOverrideFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'targetingAndResolution', sectionName: 'Targeting and Resolution', isExpanded: true },
             { sectionKey: 'overrideConfiguration', sectionName: 'Override Configuration', isExpanded: true },
-            { sectionKey: 'scopeAssignment', sectionName: 'Scope Assignment', isExpanded: false },
+            { sectionKey: 'scopeAssignment', sectionName: 'Scope Assignment', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (347 classes)
+// @memberjunction/core-entities (348 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -206,6 +206,7 @@ import {
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -468,7 +469,7 @@ import {
     UserManagementComponent,
 } from '@memberjunction/ng-explorer-settings';
 
-// @memberjunction/ng-dashboards (89 classes)
+// @memberjunction/ng-dashboards (91 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -500,6 +501,7 @@ import {
     CommunicationTemplatesResourceComponent,
     CommunicationsNewMessageResource,
     ComponentStudioDashboardComponent,
+    ComponentStudioResourceComponent,
     ConnectionsComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
@@ -515,6 +517,7 @@ import {
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
     HomeDashboardComponent,
@@ -773,6 +776,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -1023,6 +1027,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     CommunicationTemplatesResourceComponent,
     CommunicationsNewMessageResource,
     ComponentStudioDashboardComponent,
+    ComponentStudioResourceComponent,
     ConnectionsComponent,
     CredentialsAuditResourceComponent,
     CredentialsCategoriesResourceComponent,
@@ -1038,6 +1043,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
     EventMonitorComponent,
+    FormBuilderResourceComponent,
     GraphQLConsoleComponent,
     HomeApplication,
     HomeDashboardComponent,
@@ -1097,7 +1103,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 507;
+export const CLASS_REGISTRATIONS_COUNT = 510;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

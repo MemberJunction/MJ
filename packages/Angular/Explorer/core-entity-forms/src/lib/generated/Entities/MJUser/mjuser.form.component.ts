@@ -117,6 +117,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false },
             { sectionKey: 'mJListsLastRefreshedByUserID', sectionName: 'Lists (Last Refreshed By User ID)', isExpanded: false }
         ]);
     }

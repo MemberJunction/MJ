@@ -7990,10 +7990,10 @@ export const MJArtifactUseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -8053,10 +8053,10 @@ export const MJArtifactVersionAttributeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJArtifactVersionAttributeEntityType = z.infer<typeof MJArtifactVersionAttributeSchema>;
@@ -8536,10 +8536,10 @@ export const MJCollectionArtifactSchema = z.object({
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJCollectionArtifactEntityType = z.infer<typeof MJCollectionArtifactSchema>;
@@ -11490,10 +11490,10 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Summary
         * * SQL Data Type: nvarchar(MAX)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Summary
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailArtifactEntityType = z.infer<typeof MJConversationDetailArtifactSchema>;
@@ -11603,10 +11603,10 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Field Name: File
         * * Display Name: File Record
         * * SQL Data Type: nvarchar(500)`),
-    ArtifactVersion: z.number().nullable().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Record
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailAttachmentEntityType = z.infer<typeof MJConversationDetailAttachmentSchema>;
@@ -15474,6 +15474,107 @@ export const MJEntityFieldSchema = z.object({
 });
 
 export type MJEntityFieldEntityType = z.infer<typeof MJEntityFieldSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Form Overrides
+ */
+export const MJEntityFormOverrideSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity — which entity this override is for.`),
+    ComponentID: z.string().describe(`
+        * * Field Name: ComponentID
+        * * Display Name: Component
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+        * * Description: Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Human-readable label for this override (e.g., "CSR Customer Form", "Compact Mobile Variant").`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional longer description of what this override is for and when it applies.`),
+    Scope: z.union([z.literal('Global'), z.literal('Role'), z.literal('User')]).describe(`
+        * * Field Name: Scope
+        * * Display Name: Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+        * * Description: Resolution tier: User (requires UserID), Role (requires RoleID), or Global. The resolver evaluates in that order — a User row beats a Role row beats a Global row.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Required when Scope='User'. The single user this override applies to.`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+        * * Description: Required when Scope='Role'. The role whose members see this override.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Higher value wins within a scope tier. Ties broken by __mj_CreatedAt DESC. No IsDefault — Priority is the only mechanism.`),
+    Status: z.union([z.literal('Active'), z.literal('Inactive'), z.literal('Pending')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+        * * Description: Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)`),
+    Component: z.string().describe(`
+        * * Field Name: Component
+        * * Display Name: Component Name
+        * * SQL Data Type: nvarchar(500)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User Name
+        * * SQL Data Type: nvarchar(100)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFormOverrideEntityType = z.infer<typeof MJEntityFormOverrideSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Organic Key Related Entities
@@ -48228,9 +48329,9 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 
@@ -48383,9 +48484,9 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -49615,9 +49716,9 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -57375,9 +57476,9 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Summary
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -57696,9 +57797,9 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Record
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number | null {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -67465,6 +67566,289 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     */
     get RelatedEntityClassName(): string | null {
         return this.Get('RelatedEntityClassName');
+    }
+}
+
+
+/**
+ * MJ: Entity Form Overrides - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFormOverride
+ * * Base View: vwEntityFormOverrides
+ * * @description Points an Entity at a Component to serve as its form at runtime. Scoped to User > Role > Global with priority-based resolution. When present and Active, takes precedence over the entity's @RegisterClass-registered or CodeGen-generated Angular form.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Form Overrides')
+export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideEntityType> {
+    /**
+    * Loads the MJ: Entity Form Overrides record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Form Overrides record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFormOverrideEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Form Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the record correctly identifies its target based on the selected scope: User-scoped records must have a User but no Role, Role-scoped records must have a Role but no User, and Global records must not have either.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeTargetConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the record correctly identifies its target based on the selected scope: User-scoped records must have a User but no Role, Role-scoped records must have a Role but no User, and Global records must not have either.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeTargetConsistency(result: ValidationResult) {
+    	if (this.Scope === 'User' && (this.UserID == null || this.RoleID != null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"When the scope is set to 'User', a User must be selected and the Role must be empty.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Scope === 'Role' && (this.RoleID == null || this.UserID != null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RoleID",
+    			"When the scope is set to 'Role', a Role must be selected and the User must be empty.",
+    			this.RoleID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Scope === 'Global' && (this.UserID != null || this.RoleID != null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Scope",
+    			"When the scope is set to 'Global', both the User and Role fields must be empty.",
+    			this.Scope,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity — which entity this override is for.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Foreign key to Component — the component that renders the form. Must declare componentRole='form' and implement the FormHostProps contract.
+    */
+    get ComponentID(): string {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this override (e.g., "CSR Customer Form", "Compact Mobile Variant").
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional longer description of what this override is for and when it applies.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Resolution tier: User (requires UserID), Role (requires RoleID), or Global. The resolver evaluates in that order — a User row beats a Role row beats a Global row.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Required when Scope='User'. The single user this override applies to.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Required when Scope='Role'. The role whose members see this override.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Higher value wins within a scope tier. Ties broken by __mj_CreatedAt DESC. No IsDefault — Priority is the only mechanism.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Inactive
+    *   * Pending
+    * * Description: Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).
+    */
+    get Status(): 'Active' | 'Inactive' | 'Pending' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Inactive' | 'Pending') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string {
+        return this.Get('Component');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
     }
 }
 
