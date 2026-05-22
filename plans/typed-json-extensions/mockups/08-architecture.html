@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture & Data Flow</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  .layer { border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-lg); background:var(--mj-bg-surface); padding:16px 18px; margin-bottom:14px; }
+  .layer h3 { margin:0 0 4px; font-size:14px; display:flex; align-items:center; gap:8px; }
+  .layer .sub { color:var(--mj-text-muted); font-size:12px; margin-bottom:10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  .chip { background:var(--mj-bg-surface-sunken); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-md); padding:6px 10px; font-size:12px; }
+  .chip.new { border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, transparent); background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent); color:var(--mj-brand-primary); font-weight:600; }
+  .chip.reuse { border-color: var(--mj-status-success-border); background: var(--mj-status-success-bg); color: var(--mj-status-success-text); }
+  .arrow { text-align:center; color:var(--mj-text-disabled); margin:-6px 0 8px; }
+</style>
+</head>
+<body>
+<div class="index-shell">
+  <h1><i class="fa-solid fa-diagram-project" style="color:var(--mj-brand-primary)"></i> Typed JSON Extensions — Architecture</h1>
+  <div class="subtitle">One reusable engine. Lists are the first consumer; any entity's typed JSON column gets the same treatment. <span class="chip new" style="padding:2px 8px;">new</span> <span class="chip reuse" style="padding:2px 8px;">reuse existing</span></div>
+
+  <div class="layer">
+    <h3><i class="fa-solid fa-microchip"></i> Phase 0 · Runtime engine — <code>@memberjunction/json-schema-forms</code></h3>
+    <div class="sub">Framework-agnostic. Pure TypeScript, fully unit-tested. Shared by server + Angular.</div>
+    <div class="chips">
+      <span class="chip reuse">ajv 8 (already a dep)</span>
+      <span class="chip new">schema parse + validate</span>
+      <span class="chip new">schema → FormQuestion[] mapper</span>
+      <span class="chip new">virtual-field enumerator</span>
+      <span class="chip new">ResolvedSchema abstraction (fixed | polymorphic)</span>
+    </div>
+  </div>
+  <div class="arrow"><i class="fa-solid fa-arrow-down"></i></div>
+
+  <div class="layer">
+    <h3><i class="fa-brands fa-angular"></i> Phase 1 · Reusable Angular components</h3>
+    <div class="sub">Thin. Bind a schema + value, render controls, emit changes.</div>
+    <div class="chips">
+      <span class="chip new">&lt;mj-schema-form&gt;</span>
+      <span class="chip new">&lt;mj-schema-editor&gt;</span>
+      <span class="chip reuse">DynamicFormFieldComponent (14+ controls)</span>
+      <span class="chip reuse">FormQuestion interface</span>
+      <span class="chip reuse">credential-type-edit-panel pattern</span>
+    </div>
+  </div>
+  <div class="arrow"><i class="fa-solid fa-arrow-down"></i></div>
+
+  <div class="layer">
+    <h3><i class="fa-solid fa-database"></i> Phase 2 · Data model (additive only)</h3>
+    <div class="sub">Migrations + CodeGen. Complies with publish-then-no-break policy.</div>
+    <div class="chips">
+      <span class="chip new">MJ: List Types (entity)</span>
+      <span class="chip new">List.ListTypeID</span>
+      <span class="chip new">List.ExtendedData</span>
+      <span class="chip reuse">ListDetail.AdditionalData (reused)</span>
+      <span class="chip new">EntityField.ValueJSONSchema</span>
+    </div>
+  </div>
+  <div class="arrow"><i class="fa-solid fa-arrow-down"></i></div>
+
+  <div class="split-2">
+    <div class="layer">
+      <h3><i class="fa-solid fa-layer-group"></i> Phase 3 · Lists consumer</h3>
+      <div class="sub">Polymorphic binding via ListTypeID.</div>
+      <div class="chips">
+        <span class="chip new">ListEntityServer.ValidateAsync</span>
+        <span class="chip new">ListDetailEntityServer.ValidateAsync</span>
+        <span class="chip new">List form: &lt;mj-schema-form&gt;</span>
+        <span class="chip new">List Detail grid: editable attrs</span>
+      </div>
+    </div>
+    <div class="layer">
+      <h3><i class="fa-solid fa-table-columns"></i> Phase 4 · View virtual columns + filtering</h3>
+      <div class="sub">Fixed binding via EntityField.ValueJSONSchema. Independent ship.</div>
+      <div class="chips">
+        <span class="chip new">ViewGridColumnSetting.jsonPath</span>
+        <span class="chip new">grid valueGetter</span>
+        <span class="chip new">filter virtual fields</span>
+        <span class="chip reuse">SQLDialect.JsonExtract (already exists)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note mt-16">
+    <i class="fa-solid fa-lightbulb"></i>
+    <div><strong>Why this order.</strong> Phases 0–3 deliver the Lists feature the team asked about. Phase 4 is the general "JSON sub-fields as columns" capability and can ship on its own timeline — it only depends on the Phase 0 engine and the additive <code>EntityField.ValueJSONSchema</code> column.</div>
+  </div>
+</div>
+</body>
+</html>

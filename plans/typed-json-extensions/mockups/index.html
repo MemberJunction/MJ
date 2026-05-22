@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Typed JSON Extensions — Mockups</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="index-shell">
+  <h1><i class="fa-solid fa-brackets-curly" style="color:var(--mj-brand-primary)"></i> Typed JSON Extensions</h1>
+  <div class="subtitle">UX mockups for the general "schema → form + virtual columns" capability, with Lists as the first consumer. See <a href="../plan.md">plan.md</a>.</div>
+
+  <div class="index-section">
+    <h2>The Viewing System (centerpiece)</h2>
+    <div class="index-grid">
+      <a class="index-card" href="04-view-virtual-columns.html"><div class="num">04</div><div class="name">JSON sub-fields as view columns</div><div class="desc">A User View grid showing real entity columns alongside virtual columns projected from a typed JSON field.</div><span class="phase phase-p4">Phase 4</span></a>
+      <a class="index-card" href="05-view-filter-virtual-fields.html"><div class="num">05</div><div class="name">Filter on JSON sub-fields</div><div class="desc">Filter builder mixing real + virtual fields; dialect-aware SQL preview (JSON_VALUE / -&gt;&gt;).</div><span class="phase phase-p4">Phase 4</span></a>
+      <a class="index-card" href="06-column-picker-virtual-fields.html"><div class="num">06</div><div class="name">Column picker — JSON paths</div><div class="desc">Choosing which schema-declared JSON paths become columns; single-type guard.</div><span class="phase phase-p4">Phase 4</span></a>
+    </div>
+  </div>
+
+  <div class="index-section">
+    <h2>Lists Consumer</h2>
+    <div class="index-grid">
+      <a class="index-card" href="01-list-type-schema-editor.html"><div class="num">01</div><div class="name">List Type — schema editor</div><div class="desc">Visually author List-level and Detail-level attribute schemas. No hand-written JSON.</div><span class="phase phase-p3">Phase 2–3</span></a>
+      <a class="index-card" href="02-list-form-extended-attributes.html"><div class="num">02</div><div class="name">List form — extended attributes</div><div class="desc">Schema-driven form for List.ExtendedData with a Form/JSON toggle and server validation.</div><span class="phase phase-p3">Phase 3</span></a>
+      <a class="index-card" href="03-list-detail-attributes-grid.html"><div class="num">03</div><div class="name">List Detail — attributes as columns</div><div class="desc">Member grid with inline-editable detail attributes (ListDetail.AdditionalData), typed.</div><span class="phase phase-p3">Phase 3</span></a>
+    </div>
+  </div>
+
+  <div class="index-section">
+    <h2>General Capability & Architecture</h2>
+    <div class="index-grid">
+      <a class="index-card" href="07-entityfield-value-schema.html"><div class="num">07</div><div class="name">Entity Field — Value JSON Schema</div><div class="desc">The general fixed-binding entry point: any entity's JSON column declares a schema.</div><span class="phase phase-p2">Phase 2</span></a>
+      <a class="index-card" href="08-architecture.html"><div class="num">08</div><div class="name">Architecture & data flow</div><div class="desc">The five layers, what's new vs reused, and why the phases ship in this order.</div><span class="phase phase-foundation">Foundation</span></a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

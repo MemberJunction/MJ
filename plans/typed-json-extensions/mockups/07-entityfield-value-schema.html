@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entity Field — Value JSON Schema (general)</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><i class="fa-solid fa-cube"></i> MemberJunction</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item active"><i class="fa-solid fa-gear"></i> Entity Fields</div>
+    <div class="nav-item"><i class="fa-solid fa-shapes"></i> List Types</div>
+  </aside>
+
+  <main class="main">
+    <div class="app-header">
+      <h1><i class="fa-solid fa-gear"></i> Entity Field — Accounts.Enrichment</h1>
+      <span class="badge badge-muted">nvarchar(MAX)</span>
+      <div class="spacer"></div>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+
+    <div class="note mb-16">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>This is the <strong>general (fixed-binding) entry point</strong>: any JSON column on any entity can declare a <code>ValueJSONSchema</code>.
+      Once set, that column gets the schema-driven form on its record page <em>and</em> becomes available as virtual columns/filters in views — Lists are just the first consumer of the same machinery.</div>
+    </div>
+
+    <div class="split-2-wide">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-list-check"></i> Value JSON Schema</h3><span class="badge badge-brand">runtime</span></div>
+        <div class="mj-panel-body">
+          <div class="prop-head"><span></span><span>Property</span><span>Type</span><span>Req</span><span>Options / Format</span><span></span></div>
+          <div class="prop-row"><span class="drag"><i class="fa-solid fa-grip-vertical"></i></span><input class="mj-input mj-btn-sm" value="industry"><span class="type-tag tt-string">string</span><div class="mj-switch on"><div class="knob"></div></div><span class="muted" style="font-size:12px;">—</span><button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button></div>
+          <div class="prop-row"><span class="drag"><i class="fa-solid fa-grip-vertical"></i></span><input class="mj-input mj-btn-sm" value="employees"><span class="type-tag tt-number">number</span><div class="mj-switch"><div class="knob"></div></div><span class="muted" style="font-size:12px;">integer</span><button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button></div>
+          <div class="prop-row"><span class="drag"><i class="fa-solid fa-grip-vertical"></i></span><input class="mj-input mj-btn-sm" value="arrTier"><span class="type-tag tt-enum">enum</span><div class="mj-switch"><div class="knob"></div></div><span class="muted" style="font-size:12px;">Tier 1, Tier 2, Tier 3</span><button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button></div>
+          <div class="prop-row"><span class="drag"><i class="fa-solid fa-grip-vertical"></i></span><input class="mj-input mj-btn-sm" value="hqRegion"><span class="type-tag tt-string">string</span><div class="mj-switch"><div class="knob"></div></div><span class="muted" style="font-size:12px;">—</span><button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button></div>
+          <button class="mj-btn mj-btn-sm mt-8"><i class="fa-solid fa-plus"></i> Add property</button>
+        </div>
+      </div>
+
+      <div class="col" style="gap:16px;">
+        <div class="mj-panel">
+          <div class="mj-panel-header"><h3><i class="fa-solid fa-circle-question"></i> Naming: don't confuse the two</h3></div>
+          <div class="mj-panel-body">
+            <div class="col" style="gap:12px;">
+              <div>
+                <div class="row"><span class="badge badge-brand">ValueJSONSchema</span> <strong>(this feature)</strong></div>
+                <div class="muted" style="font-size:12px;">Runtime, data-driven. Renders forms + powers virtual columns. Editable here by admins.</div>
+              </div>
+              <div class="divider"></div>
+              <div>
+                <div class="row"><span class="badge badge-muted">JSONTypeDefinition</span> <span class="muted">(existing)</span></div>
+                <div class="muted" style="font-size:12px;">Build-time TypeScript baked by CodeGen into the entity's typed <code>…Object</code> accessor. Unchanged by this work.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mj-panel">
+          <div class="mj-panel-header"><h3><i class="fa-solid fa-eye"></i> Effects once saved</h3></div>
+          <div class="mj-panel-body">
+            <div class="col" style="gap:10px; font-size:13px;">
+              <div class="row"><i class="fa-solid fa-check" style="color:var(--mj-status-success)"></i> Record form renders <code>&lt;mj-schema-form&gt;</code> for this column</div>
+              <div class="row"><i class="fa-solid fa-check" style="color:var(--mj-status-success)"></i> Column picker offers each path as a virtual column</div>
+              <div class="row"><i class="fa-solid fa-check" style="color:var(--mj-status-success)"></i> Filter builder lists each path as a filterable field</div>
+              <div class="row"><i class="fa-solid fa-check" style="color:var(--mj-status-success)"></i> Saves validated against the schema (ajv)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

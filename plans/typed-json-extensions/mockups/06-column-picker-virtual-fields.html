@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Column Picker — JSON Paths</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="modal-backdrop" style="position:static; min-height:100vh; background:var(--mj-bg-page);">
+  <div class="modal">
+    <div class="modal-header"><i class="fa-solid fa-table-columns"></i><h2>Choose columns</h2><button class="close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="mj-search mb-16"><i class="fa-solid fa-magnifying-glass icon"></i><input class="mj-input" placeholder="Search fields…"></div>
+
+      <div class="colpick">
+        <div class="group-label"><i class="fa-solid fa-database"></i> Accounts fields</div>
+        <label class="opt"><input type="checkbox" checked><span class="name">Account</span></label>
+        <label class="opt"><input type="checkbox" checked><span class="name">Status</span></label>
+        <label class="opt"><input type="checkbox" checked><span class="name">Owner</span></label>
+        <label class="opt"><input type="checkbox"><span class="name">Created At</span></label>
+
+        <div class="group-label"><i class="fa-solid fa-brackets-curly" style="color:var(--mj-brand-primary)"></i> Enrichment <span class="badge badge-brand">JSON · typed</span></div>
+        <label class="opt json-opt"><input type="checkbox" checked><span class="name">Industry</span><span class="path">$.industry</span></label>
+        <label class="opt json-opt"><input type="checkbox" checked><span class="name">Employees</span><span class="path">$.employees</span></label>
+        <label class="opt json-opt"><input type="checkbox" checked><span class="name">ARR Tier</span><span class="path">$.arrTier</span></label>
+        <label class="opt json-opt"><input type="checkbox" checked><span class="name">HQ Region</span><span class="path">$.hqRegion</span></label>
+        <label class="opt json-opt"><input type="checkbox"><span class="name">Founded Year</span><span class="path">$.foundedYear</span></label>
+      </div>
+
+      <div class="note mt-16">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>JSON paths come from the schema on <code>EntityField.ValueJSONSchema</code> for the <code>Enrichment</code> column. Selecting one adds a virtual column to <code>GridState.columnSettings</code> with <code>{ jsonColumn:"Enrichment", jsonPath:"$.arrTier" }</code>.</div>
+      </div>
+      <div class="note constraint mt-12">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <div><strong>No schema?</strong> If a JSON column has no <code>ValueJSONSchema</code> (or the view mixes polymorphic types), the JSON group is hidden and we explain why — never a silent empty list.</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-check"></i> Apply</button>
+      <button class="mj-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

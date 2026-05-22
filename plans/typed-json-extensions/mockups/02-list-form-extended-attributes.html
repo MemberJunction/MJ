@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>List Form — Extended Attributes</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><i class="fa-solid fa-cube"></i> MemberJunction</div>
+    <div class="nav-section">Explore</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> User Views</div>
+    <div class="nav-item active"><i class="fa-solid fa-layer-group"></i> Lists</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shapes"></i> List Types</div>
+  </aside>
+
+  <main class="main">
+    <div class="app-header">
+      <h1><i class="fa-solid fa-layer-group"></i> Q2 Enterprise Outreach</h1>
+      <span class="lineage-badge"><i class="fa-solid fa-shapes"></i> Sales Outreach Target</span>
+      <div class="spacer"></div>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+
+    <div class="split-2-wide">
+      <div class="col" style="gap:16px;">
+        <!-- core list fields -->
+        <div class="mj-panel">
+          <div class="mj-panel-header"><h3><i class="fa-solid fa-circle-info"></i> List</h3></div>
+          <div class="mj-panel-body">
+            <div class="schema-form">
+              <div class="field col-6"><label>Name <span class="req">*</span></label><input class="mj-input" value="Q2 Enterprise Outreach"></div>
+              <div class="field col-6"><label>Entity</label><input class="mj-input" value="Accounts" disabled></div>
+              <div class="field col-6"><label>List Type</label>
+                <select class="mj-input mj-select"><option>Sales Outreach Target</option><option>Event Attendees</option><option>Do-Not-Contact</option><option>(none)</option></select>
+              </div>
+              <div class="field col-6"><label>Category</label><input class="mj-input" value="Sales / FY26"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SCHEMA-DRIVEN extended attributes -->
+        <div class="mj-panel">
+          <div class="mj-panel-header">
+            <h3><i class="fa-solid fa-sliders"></i> Extended attributes</h3>
+            <span class="badge badge-brand">from List Type schema</span>
+            <div class="spacer" style="flex:1;"></div>
+            <div class="render-toggle">
+              <button class="active"><i class="fa-solid fa-table-cells"></i> Form</button>
+              <button><i class="fa-solid fa-code"></i> JSON</button>
+            </div>
+          </div>
+          <div class="mj-panel-body">
+            <div class="schema-form">
+              <div class="field col-6">
+                <label>Campaign Owner <span class="req">*</span></label>
+                <input class="mj-input" value="Pranav Rao">
+              </div>
+              <div class="field col-6">
+                <label>Budget (USD)</label>
+                <input class="mj-input" value="$120,000">
+                <span class="help">currency · number</span>
+              </div>
+              <div class="field col-6">
+                <label>Region <span class="req">*</span></label>
+                <select class="mj-input mj-select"><option>NA-West</option><option selected>NA-East</option><option>EMEA</option><option>APAC</option></select>
+                <span class="help">dropdown · from enum</span>
+              </div>
+              <div class="field col-6">
+                <label>Kickoff Date</label>
+                <input class="mj-input" type="date" value="2026-06-01">
+              </div>
+            </div>
+            <div class="note mt-16">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+              <div>These controls are rendered by <code>&lt;mj-schema-form&gt;</code> from the List Type's <code>ListExtendedDataSchema</code> — the same engine drives any typed JSON column. Values are saved to <code>List.ExtendedData</code> and validated server-side on <code>Save()</code>.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- JSON view side -->
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-code"></i> Same data, "JSON" toggle</h3></div>
+        <div class="mj-panel-body">
+          <div class="muted mb-8" style="font-size:12px;">Power users can flip to raw JSON; end users never have to. Both edit the same <code>ExtendedData</code> value.</div>
+<pre class="code-block">{
+  <span class="k">"campaignOwner"</span>: <span class="s">"Pranav Rao"</span>,
+  <span class="k">"budget"</span>:        <span class="n">120000</span>,
+  <span class="k">"region"</span>:        <span class="s">"NA-East"</span>,
+  <span class="k">"kickoffDate"</span>:   <span class="s">"2026-06-01"</span>
+}</pre>
+          <div class="divider"></div>
+          <div class="label">Validation</div>
+          <div class="row mt-8"><span class="badge badge-success"><i class="fa-solid fa-check"></i> Valid against schema</span></div>
+          <div class="muted mt-8" style="font-size:11.5px;">On save, <code>ListEntityServer.ValidateAsync</code> runs ajv against the type's schema. A missing <code>region</code> or non-numeric <code>budget</code> blocks the save with a field-level message.</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

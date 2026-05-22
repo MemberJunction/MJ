@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>List Type — Schema Editor</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><i class="fa-solid fa-cube"></i> MemberJunction</div>
+    <div class="nav-section">Explore</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> User Views</div>
+    <div class="nav-item"><i class="fa-solid fa-layer-group"></i> Lists</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item active"><i class="fa-solid fa-shapes"></i> List Types</div>
+    <div class="nav-item"><i class="fa-solid fa-gear"></i> Entity Fields</div>
+  </aside>
+
+  <main class="main">
+    <div class="app-header">
+      <h1><i class="fa-solid fa-shapes"></i> List Type — Sales Outreach Target</h1>
+      <div class="spacer"></div>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+      <button class="mj-btn"><i class="fa-solid fa-xmark"></i> Cancel</button>
+    </div>
+
+    <div class="note mb-16">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>A <strong>List Type</strong> defines extended attributes once; every List of this type — and each of its detail rows — gets a typed form for them.
+      The two schemas below are stored as draft-07 JSON Schema (the same approach as Credential Types). Authoring here is a <strong>visual schema editor</strong>; nobody hand-writes JSON.</div>
+    </div>
+
+    <div class="mj-card mb-16">
+      <div class="schema-form">
+        <div class="field col-6"><label>Name <span class="req">*</span></label><input class="mj-input" value="Sales Outreach Target"></div>
+        <div class="field col-6"><label>Default for new lists</label><div class="row"><div class="mj-switch on"><div class="knob"></div></div> <span class="muted">Yes</span></div></div>
+        <div class="field col-12"><label>Description</label><input class="mj-input" value="Accounts targeted in an outbound sales campaign, with per-account stage tracking."></div>
+      </div>
+    </div>
+
+    <div class="split-2">
+      <!-- LIST-LEVEL SCHEMA -->
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-layer-group"></i> List-level attributes</h3><span class="badge badge-muted">stored in List.ExtendedData</span></div>
+        <div class="mj-panel-body">
+          <div class="prop-head"><span></span><span>Property</span><span>Type</span><span>Req</span><span>Options / Format</span><span></span></div>
+
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Campaign Owner">
+            <span class="type-tag tt-string">string</span>
+            <div class="mj-switch on"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">—</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Budget (USD)">
+            <span class="type-tag tt-number">number</span>
+            <div class="mj-switch"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">currency</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Region">
+            <span class="type-tag tt-enum">enum</span>
+            <div class="mj-switch on"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">NA-West, NA-East, EMEA, APAC</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Kickoff Date">
+            <span class="type-tag tt-date">date</span>
+            <div class="mj-switch"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">date</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+
+          <button class="mj-btn mj-btn-sm mt-8"><i class="fa-solid fa-plus"></i> Add property</button>
+        </div>
+      </div>
+
+      <!-- DETAIL-LEVEL SCHEMA -->
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-list-check"></i> Detail-level attributes</h3><span class="badge badge-muted">stored in ListDetail.AdditionalData</span></div>
+        <div class="mj-panel-body">
+          <div class="prop-head"><span></span><span>Property</span><span>Type</span><span>Req</span><span>Options / Format</span><span></span></div>
+
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Stage">
+            <span class="type-tag tt-enum">enum</span>
+            <div class="mj-switch on"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">New, Contacted, Qualified, Won, Lost</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Priority">
+            <span class="type-tag tt-enum">enum</span>
+            <div class="mj-switch on"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">High, Medium, Low</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Last Contacted">
+            <span class="type-tag tt-date">date</span>
+            <div class="mj-switch"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">date</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+          <div class="prop-row">
+            <span class="drag"><i class="fa-solid fa-grip-vertical"></i></span>
+            <input class="mj-input mj-btn-sm" value="Do Not Contact">
+            <span class="type-tag tt-boolean">boolean</span>
+            <div class="mj-switch"><div class="knob"></div></div>
+            <span class="muted" style="font-size:12px;">—</span>
+            <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+          </div>
+
+          <button class="mj-btn mj-btn-sm mt-8"><i class="fa-solid fa-plus"></i> Add property</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="mj-panel mt-16">
+      <div class="mj-panel-header"><h3><i class="fa-solid fa-code"></i> Generated schema (read-only preview)</h3></div>
+      <div class="mj-panel-body">
+<pre class="code-block"><span class="c">// ListDetailExtendedDataSchema — emitted by the visual editor above</span>
+{
+  <span class="k">"$schema"</span>: <span class="s">"http://json-schema.org/draft-07/schema#"</span>,
+  <span class="k">"type"</span>: <span class="s">"object"</span>,
+  <span class="k">"required"</span>: [<span class="s">"stage"</span>, <span class="s">"priority"</span>],
+  <span class="k">"properties"</span>: {
+    <span class="k">"stage"</span>:        { <span class="k">"type"</span>:<span class="s">"string"</span>, <span class="k">"enum"</span>:[<span class="s">"New"</span>,<span class="s">"Contacted"</span>,<span class="s">"Qualified"</span>,<span class="s">"Won"</span>,<span class="s">"Lost"</span>], <span class="k">"title"</span>:<span class="s">"Stage"</span> },
+    <span class="k">"priority"</span>:     { <span class="k">"type"</span>:<span class="s">"string"</span>, <span class="k">"enum"</span>:[<span class="s">"High"</span>,<span class="s">"Medium"</span>,<span class="s">"Low"</span>], <span class="k">"title"</span>:<span class="s">"Priority"</span> },
+    <span class="k">"lastContacted"</span>:{ <span class="k">"type"</span>:<span class="s">"string"</span>, <span class="k">"format"</span>:<span class="s">"date"</span>, <span class="k">"title"</span>:<span class="s">"Last Contacted"</span> },
+    <span class="k">"doNotContact"</span>: { <span class="k">"type"</span>:<span class="s">"boolean"</span>, <span class="k">"title"</span>:<span class="s">"Do Not Contact"</span> }
+  }
+}</pre>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

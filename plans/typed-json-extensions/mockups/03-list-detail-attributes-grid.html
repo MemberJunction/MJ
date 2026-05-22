@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>List Detail — Attributes as Columns</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><i class="fa-solid fa-cube"></i> MemberJunction</div>
+    <div class="nav-section">Explore</div>
+    <div class="nav-item"><i class="fa-solid fa-table-list"></i> User Views</div>
+    <div class="nav-item active"><i class="fa-solid fa-layer-group"></i> Lists</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-shapes"></i> List Types</div>
+  </aside>
+
+  <main class="main">
+    <div class="app-header">
+      <h1><i class="fa-solid fa-layer-group"></i> Q2 Enterprise Outreach</h1>
+      <span class="lineage-badge"><i class="fa-solid fa-shapes"></i> Sales Outreach Target</span>
+      <span class="badge badge-muted">5 members</span>
+      <div class="spacer"></div>
+      <button class="mj-btn"><i class="fa-solid fa-rotate"></i> Refresh from view</button>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> Add records</button>
+    </div>
+
+    <div class="app-tabs">
+      <div class="tab"><i class="fa-solid fa-circle-info"></i> Details</div>
+      <div class="tab active"><i class="fa-solid fa-list-check"></i> Members <span class="badge">5</span></div>
+      <div class="tab"><i class="fa-solid fa-clock-rotate-left"></i> Lineage</div>
+    </div>
+
+    <div class="note mb-16">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>The member grid shows ordinary record columns (from the Accounts entity) plus the List Type's <strong>detail-level attributes</strong> as inline-editable columns
+      (tinted blue, <i class="fa-solid fa-brackets-curly json-col-flag"></i>). Each cell edits <code>ListDetail.AdditionalData</code> through a typed control. Because this grid is scoped to a single list (one List Type), the schema is unambiguous.</div>
+    </div>
+
+    <table class="mj-table">
+      <thead>
+        <tr>
+          <th style="width:32px;"><input type="checkbox"></th>
+          <th>Account</th>
+          <th>Status</th>
+          <th class="col-json">Stage <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">Priority <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">Last Contacted <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">Do Not Contact <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Acme Robotics</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td class="col-json"><select class="mj-input mj-select mj-btn-sm"><option>New</option><option selected>Qualified</option><option>Won</option></select></td>
+          <td class="col-json"><span class="badge badge-error">High</span></td>
+          <td class="col-json">2026-05-18</td>
+          <td class="col-json"><div class="mj-switch"><div class="knob"></div></div></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Northwind Health</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td class="col-json"><select class="mj-input mj-select mj-btn-sm"><option>New</option><option selected>Contacted</option></select></td>
+          <td class="col-json"><span class="badge badge-error">High</span></td>
+          <td class="col-json">2026-05-20</td>
+          <td class="col-json"><div class="mj-switch"><div class="knob"></div></div></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Globex Logistics</div></td>
+          <td><span class="badge badge-warning">Prospect</span></td>
+          <td class="col-json"><select class="mj-input mj-select mj-btn-sm"><option selected>New</option><option>Contacted</option></select></td>
+          <td class="col-json"><span class="badge badge-warning">Medium</span></td>
+          <td class="col-json muted">—</td>
+          <td class="col-json"><div class="mj-switch on"><div class="knob"></div></div></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Initech Software</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td class="col-json"><select class="mj-input mj-select mj-btn-sm"><option>New</option><option selected>Qualified</option></select></td>
+          <td class="col-json"><span class="badge badge-muted">Low</span></td>
+          <td class="col-json">2026-05-12</td>
+          <td class="col-json"><div class="mj-switch"><div class="knob"></div></div></td>
+        </tr>
+        <tr>
+          <td><input type="checkbox"></td>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Umbrella Foods</div></td>
+          <td><span class="badge badge-warning">Prospect</span></td>
+          <td class="col-json"><select class="mj-input mj-select mj-btn-sm"><option selected>New</option></select></td>
+          <td class="col-json"><span class="badge badge-warning">Medium</span></td>
+          <td class="col-json muted">—</td>
+          <td class="col-json"><div class="mj-switch"><div class="knob"></div></div></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="col-source-key">
+      <span class="k-item"><span class="swatch real"></span> Account record column</span>
+      <span class="k-item"><span class="swatch json"></span> Detail attribute (ListDetail.AdditionalData, typed)</span>
+      <span class="k-item muted"><i class="fa-solid fa-pen"></i> cells edit in place via the schema-driven control</span>
+    </div>
+  </main>
+</div>
+</body>
+</html>

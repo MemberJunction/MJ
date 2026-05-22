@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>View Grid — JSON Sub-Fields as Columns</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="logo"><i class="fa-solid fa-cube"></i> MemberJunction</div>
+    <div class="nav-section">Explore</div>
+    <div class="nav-item"><i class="fa-solid fa-table"></i> Entities</div>
+    <div class="nav-item active"><i class="fa-solid fa-table-list"></i> User Views</div>
+    <div class="nav-item"><i class="fa-solid fa-layer-group"></i> Lists</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-gear"></i> Entity Fields</div>
+    <div class="nav-item"><i class="fa-solid fa-shapes"></i> List Types</div>
+  </aside>
+
+  <main class="main">
+    <div class="app-header">
+      <h1><i class="fa-solid fa-table-list"></i> Accounts — Enterprise Pipeline</h1>
+      <span class="badge badge-muted"><i class="fa-solid fa-database"></i> Accounts</span>
+      <div class="spacer"></div>
+      <button class="mj-btn"><i class="fa-solid fa-filter"></i> Filter</button>
+      <button class="mj-btn"><i class="fa-solid fa-table-columns"></i> Columns</button>
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save View</button>
+    </div>
+
+    <div class="note mb-16">
+      <i class="fa-solid fa-circle-info"></i>
+      <div>This view shows ordinary entity columns alongside <strong>virtual columns sourced from a typed JSON field</strong>
+      (<code>Accounts.Enrichment</code>, whose shape is declared by <code>EntityField.ValueJSONSchema</code>). JSON-sourced columns
+      are tinted blue and flagged with <i class="fa-solid fa-brackets-curly json-col-flag"></i>. They sort, filter and format like any other column.</div>
+    </div>
+
+    <table class="mj-table">
+      <thead>
+        <tr>
+          <th>Account</th>
+          <th>Status</th>
+          <th>Owner</th>
+          <th class="col-json">Industry <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">Employees <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">ARR Tier <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+          <th class="col-json">HQ Region <i class="fa-solid fa-brackets-curly json-col-flag"></i></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Acme Robotics</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td>D. Okafor</td>
+          <td class="col-json">Manufacturing</td>
+          <td class="col-json">2,400</td>
+          <td class="col-json"><span class="badge badge-brand">Tier 1</span></td>
+          <td class="col-json">NA-West</td>
+        </tr>
+        <tr>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Northwind Health</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td>P. Rao</td>
+          <td class="col-json">Healthcare</td>
+          <td class="col-json">11,200</td>
+          <td class="col-json"><span class="badge badge-brand">Tier 1</span></td>
+          <td class="col-json">NA-East</td>
+        </tr>
+        <tr>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Globex Logistics</div></td>
+          <td><span class="badge badge-warning">Prospect</span></td>
+          <td>S. Lindgren</td>
+          <td class="col-json">Transportation</td>
+          <td class="col-json">760</td>
+          <td class="col-json"><span class="badge badge-muted">Tier 3</span></td>
+          <td class="col-json">EMEA</td>
+        </tr>
+        <tr>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Initech Software</div></td>
+          <td><span class="badge badge-success">Active</span></td>
+          <td>D. Okafor</td>
+          <td class="col-json">Technology</td>
+          <td class="col-json">320</td>
+          <td class="col-json"><span class="badge badge-muted">Tier 2</span></td>
+          <td class="col-json">NA-West</td>
+        </tr>
+        <tr>
+          <td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-building"></i></span> Umbrella Foods</div></td>
+          <td><span class="badge badge-warning">Prospect</span></td>
+          <td>P. Rao</td>
+          <td class="col-json">Consumer Goods</td>
+          <td class="col-json">5,050</td>
+          <td class="col-json"><span class="badge badge-brand">Tier 1</span></td>
+          <td class="col-json">APAC</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="col-source-key">
+      <span class="k-item"><span class="swatch real"></span> Entity column (real DB field)</span>
+      <span class="k-item"><span class="swatch json"></span> Virtual column from JSON path</span>
+      <span class="k-item muted"><i class="fa-solid fa-brackets-curly"></i> = sourced from <code>Enrichment</code> via <code>JSON_VALUE / -&gt;&gt;</code></span>
+    </div>
+
+    <div class="split-2 mt-16">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-code"></i> What one row actually stores</h3></div>
+        <div class="mj-panel-body">
+          <div class="muted mb-8" style="font-size:12px;">Real columns + a single <code>Enrichment</code> JSON column. The grid never shows raw JSON — it projects paths into columns.</div>
+<pre class="code-block"><span class="c">// Accounts row — "Acme Robotics"</span>
+{
+  <span class="k">"Name"</span>: <span class="s">"Acme Robotics"</span>,
+  <span class="k">"Status"</span>: <span class="s">"Active"</span>,
+  <span class="k">"OwnerID"</span>: <span class="s">"…"</span>,
+  <span class="k">"Enrichment"</span>: {
+    <span class="k">"industry"</span>:  <span class="s">"Manufacturing"</span>,
+    <span class="k">"employees"</span>: <span class="n">2400</span>,
+    <span class="k">"arrTier"</span>:   <span class="s">"Tier 1"</span>,
+    <span class="k">"hqRegion"</span>:  <span class="s">"NA-West"</span>
+  }
+}</pre>
+        </div>
+      </div>
+
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-diagram-project"></i> How a virtual column resolves</h3></div>
+        <div class="mj-panel-body">
+          <div class="col" style="gap:12px;">
+            <div class="row"><span class="badge badge-brand">1</span> <span><strong>Schema</strong> on <code>EntityField.ValueJSONSchema</code> declares paths + types for <code>Enrichment</code>.</span></div>
+            <div class="row"><span class="badge badge-brand">2</span> <span>Column picker offers each path (e.g. <code>$.arrTier</code>) as a selectable column.</span></div>
+            <div class="row"><span class="badge badge-brand">3</span> <span><strong>Display</strong> — AG Grid <code>valueGetter</code> extracts the path client-side. No server change for viewing.</span></div>
+            <div class="row"><span class="badge badge-brand">4</span> <span><strong>Filter/sort</strong> — server emits <code>dialect.JsonExtract(col, path)</code> → <code>JSON_VALUE</code> (SQL Server) / <code>-&gt;&gt;</code> (Postgres).</span></div>
+          </div>
+          <div class="note constraint mt-16">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div><strong>Polymorphic constraint.</strong> When a JSON column's schema is chosen per-row (e.g. a Lists grid mixing List Types), virtual columns are only offered when the view is scoped to a single type. See <a href="03-list-detail-attributes-grid.html">List Detail grid</a>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

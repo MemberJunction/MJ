@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Filter on JSON Sub-Fields</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+<div class="modal-backdrop" style="position:static; min-height:100vh; background:var(--mj-bg-page);">
+  <div class="modal modal-large">
+    <div class="modal-header"><i class="fa-solid fa-filter"></i><h2>Filter — Accounts: Enterprise Pipeline</h2><button class="close"><i class="fa-solid fa-xmark"></i></button></div>
+    <div class="modal-body">
+      <div class="muted mb-16" style="font-size:12.5px;">Build a filter mixing real entity fields and <strong>virtual fields sourced from the typed JSON column</strong>. Virtual fields appear in the field picker grouped under their source column.</div>
+
+      <div class="filter-row">
+        <span class="logic">WHERE</span>
+        <select class="mj-input mj-select"><option>Status</option></select>
+        <select class="mj-input mj-select"><option>equals</option></select>
+        <input class="mj-input" value="Active">
+        <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+      </div>
+      <div class="filter-row">
+        <span class="logic">AND</span>
+        <select class="mj-input mj-select">
+          <optgroup label="Accounts fields"><option>Owner</option></optgroup>
+          <optgroup label="Enrichment (JSON)"><option selected>↳ ARR Tier</option><option>↳ Employees</option><option>↳ Industry</option><option>↳ HQ Region</option></optgroup>
+        </select>
+        <select class="mj-input mj-select"><option>equals</option></select>
+        <select class="mj-input mj-select"><option>Tier 1</option><option>Tier 2</option><option>Tier 3</option></select>
+        <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+      </div>
+      <div class="filter-row">
+        <span class="logic">AND</span>
+        <select class="mj-input mj-select">
+          <optgroup label="Enrichment (JSON)"><option selected>↳ Employees</option></optgroup>
+        </select>
+        <select class="mj-input mj-select"><option selected>greater than</option></select>
+        <input class="mj-input" value="1000">
+        <button class="mj-btn mj-btn-ghost mj-btn-icon"><i class="fa-solid fa-trash"></i></button>
+      </div>
+
+      <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-plus"></i> Add condition</button>
+
+      <div class="divider"></div>
+      <div class="label">Generated SQL (dialect-aware)</div>
+      <div class="sql-preview">SELECT * FROM vwAccounts
+WHERE Status = 'Active'
+  AND <span class="hl">JSON_VALUE(Enrichment, '$.arrTier')</span> = 'Tier 1'
+  AND TRY_CAST(<span class="hl">JSON_VALUE(Enrichment, '$.employees')</span> AS INT) &gt; 1000</div>
+      <div class="sql-preview" style="margin-top:8px;">-- PostgreSQL
+WHERE "Status" = 'Active'
+  AND <span class="hl">"Enrichment"-&gt;&gt;'arrTier'</span> = 'Tier 1'
+  AND (<span class="hl">"Enrichment"-&gt;&gt;'employees'</span>)::int &gt; 1000</div>
+
+      <div class="note mt-16">
+        <i class="fa-solid fa-bolt"></i>
+        <div><code>convertFilterToSQL</code> detects a virtual field and emits <code>dialect.JsonExtract(col, path)</code> (already implemented for both platforms) with a type cast for numeric/date operators — instead of throwing "unknown field".</div>
+      </div>
+      <div class="note constraint mt-12">
+        <i class="fa-solid fa-gauge-high"></i>
+        <div>JSON-path predicates aren't index-backed. Fine at view scale; if a path gets hot, promote it to a persisted computed column + index (documented escape hatch).</div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-check"></i> Apply</button>
+      <button class="mj-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
