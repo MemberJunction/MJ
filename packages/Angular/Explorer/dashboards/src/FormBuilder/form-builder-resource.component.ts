@@ -10,7 +10,7 @@ import { LogError, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import type { MJComponentEntity, MJEntityFormOverrideEntity } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -256,7 +256,7 @@ export class FormBuilderResourceComponent
         }, this.currentUser ?? undefined);
         const entityID = result.Success ? result.Results?.[0]?.EntityID : null;
         if (!entityID) return null;
-        const entityInfo = provider.Entities?.find(e => e.ID === entityID);
+        const entityInfo = provider.Entities?.find(e => UUIDsEqual(e.ID, entityID));
         return entityInfo?.Name ?? null;
     }
 
