@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "BaseUrl": {
+      "type": "string",
+      "title": "Base URL",
+      "description": "Full base URL to the customer's iMIS API (no trailing slash).",
+      "order": 0
+    },
+    "Username": {
+      "type": "string",
+      "title": "Username",
+      "description": "API username (must hold the iMIS RemoteService role) for Password Grant.",
+      "order": 1
+    },
+    "Password": {
+      "type": "string",
+      "title": "Password",
+      "description": "API password.",
+      "isSecret": true,
+      "order": 2
+    },
+    "ClientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Optional OAuth SSO Client ID (only when using SSO refresh-token flow).",
+      "order": 3
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Optional OAuth SSO Client Secret.",
+      "isSecret": true,
+      "order": 4
+    }
+  },
+  "required": [
+    "BaseUrl",
+    "Username",
+    "Password"
+  ]
+}

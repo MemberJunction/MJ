@@ -3,8 +3,13 @@
   <mj-page-header
     Title="Prompts"
     Icon="fa-solid fa-comment-dots">
+    <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
     <div meta>
-      <mj-stat-badge [Count]="filteredPrompts.length" Label="prompts"></mj-stat-badge>
+      <mj-stat-badge
+        [Count]="filteredPrompts.length"
+        [Total]="prompts.length"
+        Label="prompts">
+      </mj-stat-badge>
     </div>
     <div actions>
       <mj-filter-popover

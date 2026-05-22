@@ -17,7 +17,7 @@ export class MJActionExecutionLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'retentionAudit', sectionName: 'Retention & Audit', isExpanded: true },
             { sectionKey: 'associatedEntities', sectionName: 'Associated Entities', isExpanded: true },
-            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: false },
+            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

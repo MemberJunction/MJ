@@ -788,10 +788,87 @@ function filterToExportedClasses(
  * name and placing it in an exported array, we create a static code path that
  * the bundler cannot eliminate.
  */
+/**
+ * Topologically sort packages so dependencies come BEFORE their dependents.
+ *
+ * Why: classes registered via `@RegisterClass` use auto-incrementing priorities —
+ * the LAST class to register for a given (baseClass, key) pair wins the lookup.
+ * For subclass-overrides-base patterns (e.g. `MJAIPromptEntityExtended` from
+ * `@memberjunction/ai-core-plus` overriding `MJAIPromptEntity` from
+ * `@memberjunction/core-entities`), the base must be imported FIRST so the
+ * subclass registers second and wins. Alphabetical sort happened to put
+ * `ai-core-plus` (a) before `core-entities` (c), giving the base the higher
+ * priority and forcing apps to ship per-app re-registration hacks.
+ *
+ * Algorithm: Kahn's BFS, with alphabetical tiebreak inside each topo tier so
+ * the manifest stays deterministic. Packages outside `packageMap` are ignored
+ * when walking deps (we only care about ordering among the registered set).
+ * If a cycle is detected, the unresolved packages are appended alphabetically
+ * and a warning is logged — manifest is still generated, just at risk of the
+ * same priority-race bug for whichever pair the cycle spans.
+ */
+function topologicallySortPackages(
+    packageMap: Map<string, string[]>,
+    depTree: Map<string, string>,
+    log: (msg: string) => void
+): string[] {
+    const packageNames = Array.from(packageMap.keys());
+    const packageSet = new Set(packageNames);
+
+    // Build adjacency: for each pkg, its @memberjunction-deps that are also registered.
+    const depsOf = new Map<string, Set<string>>();
+    const dependentsOf = new Map<string, string[]>();
+    for (const pkg of packageNames) {
+        depsOf.set(pkg, new Set());
+        dependentsOf.set(pkg, []);
+    }
+    for (const pkg of packageNames) {
+        const pkgDir = depTree.get(pkg);
+        const pkgJson = pkgDir ? readPackageJson(pkgDir) : null;
+        if (!pkgJson) continue;
+        for (const depName of Object.keys(pkgJson.dependencies)) {
+            if (packageSet.has(depName) && depName !== pkg) {
+                depsOf.get(pkg)!.add(depName);
+                dependentsOf.get(depName)!.push(pkg);
+            }
+        }
+    }
+
+    // Kahn's: start with packages whose deps are all outside `packageMap`.
+    const remainingDeps = new Map<string, number>();
+    for (const pkg of packageNames) remainingDeps.set(pkg, depsOf.get(pkg)!.size);
+
+    const ready: string[] = packageNames.filter(p => remainingDeps.get(p) === 0).sort();
+    const result: string[] = [];
+    while (ready.length > 0) {
+        const pkg = ready.shift()!;
+        result.push(pkg);
+        for (const dependent of dependentsOf.get(pkg)!) {
+            const newCount = remainingDeps.get(dependent)! - 1;
+            remainingDeps.set(dependent, newCount);
+            if (newCount === 0) {
+                // Insert maintaining alphabetical order within this tier
+                const insertAt = ready.findIndex(p => p > dependent);
+                if (insertAt === -1) ready.push(dependent);
+                else ready.splice(insertAt, 0, dependent);
+            }
+        }
+    }
+
+    if (result.length < packageNames.length) {
+        const missing = packageNames.filter(p => !result.includes(p)).sort();
+        log(`[class-manifest] WARNING: dependency cycle detected among ${missing.length} package(s); appending alphabetically: ${missing.join(', ')}`);
+        result.push(...missing);
+    }
+    return result;
+}
+
 function generateManifestContent(
     classes: RegisteredClassInfo[],
     appName: string,
     totalDepsWalked: number,
+    depTree: Map<string, string>,
+    log: (msg: string) => void,
     filterBaseClasses?: string[]
 ): string {
     // Filter by base classes if specified
@@ -813,7 +890,12 @@ function generateManifestContent(
         }
     }
 
-    const sortedPackages = Array.from(packageMap.keys()).sort();
+    // Topo-sort packages so dependencies import (and therefore register) BEFORE
+    // their dependents. With ClassFactory's auto-priority semantics ("last
+    // registration wins"), this means subclass-overrides-base scenarios resolve
+    // to the subclass without per-app re-registration hacks. See
+    // {@link topologicallySortPackages} for the contract.
+    const sortedPackages = topologicallySortPackages(packageMap, depTree, log);
 
     // Build alias map: detect cross-package name collisions and assign unique aliases
     const aliasMap = buildAliasMap(packageMap, sortedPackages);
@@ -1773,7 +1855,7 @@ export async function generateClassRegistrationsManifest(
     log(`Verified: ${verifiedClasses.length} exported, ${skipped.length} skipped (not in public API)`);
 
     // Generate manifest using only verified classes
-    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree.size, filterBaseClasses);
+    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree.size, depTree, log, filterBaseClasses);
     const absoluteOutputPath = path.resolve(outputPath);
     let manifestChanged = false;
 

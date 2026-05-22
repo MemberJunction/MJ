@@ -705,11 +705,17 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
+    const section = this.sectionMap.get(sectionKey);
+    // When the caller doesn't pass an explicit default, fall back to the value seeded by
+    // initSections() — related-entity and System Metadata panels are seeded collapsed there.
+    // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
+    // which reports a never-before-visited related-entity panel as expanded and causes its data grid
+    // (bound [AllowLoad]="IsSectionExpanded(key)") to fetch on form open even while the panel is collapsed.
+    const resolvedDefault = defaultExpanded !== undefined ? defaultExpanded : section?.isExpanded;
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
-    const section = this.sectionMap.get(sectionKey);
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 

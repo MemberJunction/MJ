@@ -18,8 +18,8 @@ export class MJResourceTypeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'technicalDetails', sectionName: 'Technical Details', isExpanded: true },
             { sectionKey: 'resourceTypeDefinition', sectionName: 'Resource Type Definition', isExpanded: true },
-            { sectionKey: 'entityAssociations', sectionName: 'Entity Associations', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'entityAssociations', sectionName: 'Entity Associations', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJWorkspaceItems', sectionName: 'Workspace Items', isExpanded: false },
             { sectionKey: 'mJUserNotifications', sectionName: 'User Notifications', isExpanded: false },
