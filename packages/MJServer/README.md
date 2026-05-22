@@ -109,6 +109,7 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_REST_API_EXCLUDE_ENTITIES` | Comma-separated entity exclude list | (optional) |
 | `MJ_TELEMETRY_ENABLED` | Enable server telemetry | `true` |
 | `METADATA_CACHE_REFRESH_INTERVAL` | Metadata refresh interval (ms) | `180000` |
+| `MJ_LOG_GRAPHQL_VARIABLES` | Enable redacted verbose echo of GraphQL variables to stdout — see [Debugging GraphQL requests](#debugging-graphql-requests) | `false` |
 
 ### Configuration File (`mj.config.cjs`)
 
@@ -166,7 +167,73 @@ module.exports = {
     enabled: true,
     level: 'standard',  // 'minimal' | 'standard' | 'verbose' | 'debug'
   },
+
+  // Debugging — see "Debugging GraphQL requests" below
+  loggingSettings: {
+    graphql: {
+      logVariables: false, // env override: MJ_LOG_GRAPHQL_VARIABLES
+    },
+  },
 };
+```
+
+### Debugging GraphQL requests
+
+By default, MJServer logs only the GraphQL `operationName` for each incoming request. The `variables` payload is **never** logged in the default configuration — this protects credentials and other sensitive material from leaking into container logs, cloud log aggregators, or `tail -f` sessions.
+
+For local debugging, you can enable a **redacted verbose echo** of variables via the `loggingSettings.graphql.logVariables` flag (or the `MJ_LOG_GRAPHQL_VARIABLES=true` environment variable). When enabled:
+
+- A second log line is emitted per root resolver call: `{ operation: '<name>', args: { ... } }`
+- Fields on `Create<X>Input` / `Update<X>Input` that map to an entity column with `EntityFieldInfo.Encrypt=true` are redacted automatically (metadata-driven).
+- Fields or parameters explicitly marked with the `@NoLog` decorator are redacted manually (for custom resolvers and non-metadata-bound args).
+- A boot-time audit warns about every custom-resolver `@Arg` that is neither metadata-bound nor `@NoLog`-marked, so authors know which arguments will appear in plaintext while the flag is active.
+- The first call into any such resolver also emits a one-time runtime warning naming the un-decorated args.
+
+**Security notes:**
+
+- This flag is opt-in and defaults to `false` in every environment regardless of `NODE_ENV`. Never set it to `true` in production.
+- It does NOT re-enable the historical variables leak. The default-config log line emits operation name only; the verbose echo is a separate, redaction-aware path.
+- Custom resolvers that accept sensitive arguments (e.g. credential-test mutations) should mark those parameters with `@NoLog` from `@memberjunction/server` so they remain redacted even when verbose logging is on.
+
+**Enabling for a single session:**
+
+```bash
+MJ_LOG_GRAPHQL_VARIABLES=true npm run start
+```
+
+**Enabling persistently via `mj.config.cjs`:**
+
+```javascript
+loggingSettings: {
+  graphql: {
+    logVariables: true,
+  },
+}
+```
+
+**Applying `@NoLog` to a custom resolver:**
+
+```typescript
+import { NoLog } from '@memberjunction/server';
+
+@Mutation(() => Boolean)
+async TestCredential(
+  @Arg('accessToken') @NoLog accessToken: string,
+  @Ctx() ctx: AppContext,
+): Promise<boolean> {
+  // ...
+}
+```
+
+```typescript
+import { InputType, Field } from 'type-graphql';
+import { NoLog } from '@memberjunction/server';
+
+@InputType()
+export class MyInput {
+  @Field(() => String) @NoLog Token: string;
+  @Field(() => String) Description: string;
+}
 ```
 
 ## Usage

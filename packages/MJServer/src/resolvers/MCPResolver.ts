@@ -768,7 +768,11 @@ export class MCPResolver extends ResolverBase {
             if (InputArgs) {
                 try {
                     parsedArgs = JSON.parse(InputArgs);
-                    LogStatus(`MCPResolver: [${ToolName}] Parsed args: ${JSON.stringify(parsedArgs).substring(0, 200)}...`);
+                    if (configInfo.loggingSettings.graphql.logVariables) {
+                        LogStatus(`MCPResolver: [${ToolName}] Parsed args: ${JSON.stringify(parsedArgs)}`);
+                    } else {
+                        LogStatus(`MCPResolver: [${ToolName}] tool invoked`);
+                    }
                 } catch (parseError) {
                     LogError(`MCPResolver: [${ToolName}] Failed to parse InputArgs: ${parseError}`);
                     return {

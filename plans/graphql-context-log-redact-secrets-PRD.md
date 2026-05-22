@@ -658,22 +658,22 @@ local-only design doc.
 
 ### Open questions for the senior reviewer
 
-1. **Module split**: the design extracts the redaction rule into a deep,
-   isolation-testable module (module 1). The other modules are wiring. Does
-   this split match expectations?
-
-2. **Test surface**: dedicated unit tests for modules 1, 2, and 4 (revised
-   after ultrareview). Module 3 is implicitly tested via module 1.
-   Subscription coverage is a single integration test. Acceptable, or extend?
-
-3. **Single-name `@NoLog` decorator vs two-name `@NoLogParam` /
+1. **Single-name `@NoLog` decorator vs two-name `@NoLogParam` /
    `@NoLogField`**: current direction is single-name with arity dispatch.
    Either is workable; one-line change to switch.
 
-4. **`Delete` in the input-type regex**: currently excluded (delete inputs
-   don't carry encrypted values). Acceptable to leave excluded?
+2. **`Delete` in the input-type regex**: currently excluded (delete inputs
+   don't carry encrypted values). Acceptable to leave excluded? Note: this
+   has user-visible impact on the boot audit — with `Delete` excluded, every
+   codegen `DeleteMJ*` resolver flags as "custom" and the audit dumps
+   hundreds of false-positive lines when `logVariables=true`. Including
+   `Delete` (regex `Create|Update|Delete`) makes the redactor walk the
+   top-level keys, find an empty `EncryptedFields` set, and pass through —
+   the audit goes quiet on these. Functionally identical for security
+   (delete inputs carry PK + Options only, no encrypted values either way);
+   the question is purely about audit signal-to-noise.
 
-5. **Unified config namespace** (`loggingSettings.{cache,graphql,telemetry}`):
+3. **Unified config namespace** (`loggingSettings.{cache,graphql,telemetry}`):
    currently deferred to a future config-cleanup PR. Acceptable, or do this
    here?
 
