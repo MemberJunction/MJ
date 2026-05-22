@@ -3,12 +3,9 @@
     Title="Integration Pipelines"
     Icon="fa-solid fa-diagram-project"
     Subtitle="Data transformation and routing pipelines">
-    @if (IntegrationCount > 0) {
-      <div meta>
-        <mj-stat-badge [Count]="IntegrationCount" Label="pipelines"></mj-stat-badge>
-        <mj-stat-badge [Count]="TotalMapCount" Label="entity maps"></mj-stat-badge>
-      </div>
-    }
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         Pipelines count mirrored the visible list; entity-maps count was
+         cross-aggregate reference info that didn't drive action on this page. -->
     <div actions>
       <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand All">
         <i class="fa-solid fa-angles-down"></i>

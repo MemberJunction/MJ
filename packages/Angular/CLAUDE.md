@@ -230,7 +230,7 @@ This guide covers:
 
 ### ⚠️ Page Chrome — exception to be aware of
 
-If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use a local `.sticky-header` action row instead. This is Section 9b of the chrome conventions; the decision on the long-term pattern (Section 10) is deferred to a future branch.
+If you're building an Angular component that gets **dynamically loaded into another resource's left-nav shell** (e.g. the explorer-settings sub-pages inside Admin's `admin-container`, the Dev Tools inspectors, SystemDiagnostics, Database Designer, etc.), do **NOT** wrap it in `<mj-page-layout>` + `<mj-page-header>` — that creates a doubled-header. Use **`<mj-page-header-interior>`** at the top of the body instead: a two-row card with `[Title]` + `[Subtitle]` inputs and `[meta]` / `[actions]` / `[toolbar]` slots (same slot conventions as `<mj-page-header>`, different visual shape). The toolbar row collapses entirely when empty. Full contract in Section 10 of [`plans/explorer-chrome-conventions.md`](/plans/explorer-chrome-conventions.md). Reference implementations cover all four Admin shells (~15 sub-pages).
 
 ---
 
@@ -272,6 +272,40 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 ```
 
 The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
+
+## 🚨 Button Styling: Don't Override `.mj-btn` in Component CSS 🚨
+
+The `mjButton` directive's appearance is owned by **one** stylesheet — `button.scss` in `@memberjunction/ng-ui-components` — and loaded globally by the application. **Don't write component-scoped `.mj-btn` or `.mj-btn-*` rules anywhere else.**
+
+### Why
+
+Angular's emulated encapsulation gives a component-scoped `.mj-btn` rule higher specificity than the global directive's `.mj-btn` rule. The component-scoped override wins inside that component, and the button silently renders differently from how it looks everywhere else in the app — pill instead of rounded, 44px instead of 32px, different padding, whatever the override chose. Two pages with the same `<button mjButton variant="primary" size="sm">` end up looking different. The user-facing symptom is "this button doesn't match the rest of the app."
+
+### How to customize buttons
+
+- **Use the directive's inputs**: `[variant]="..."` (`primary` / `secondary` / `outline` / `flat` / `danger` / `icon` / `success` / `warning`) and `[size]="..."` (`sm` / `md` / `lg`). Together they cover the standard chrome shapes.
+- **Variant not covered?** Extend `button.scss` directly in `ng-ui-components` so the new variant is available app-wide. Don't add a variant by overriding `.mj-btn-secondary` in a component's CSS.
+- **Truly bespoke one-off?** Wrap the button in a wrapper class and target the wrapper, NOT `.mj-btn`. E.g., `.my-special-row > button { ... }` not `.my-special-row .mj-btn { ... }` — the wrapper-scoped descendant selector still leaves directive defaults intact for any other `.mj-btn` in the same component.
+
+### Legacy single-dash classes (`mj-btn-primary`, `mj-btn-icon-mobile`, etc.)
+
+These predate the mjButton directive. They use single-dash naming (`.mj-btn-primary`) where the directive applies BEM-style modifiers (`.mj-btn--primary`). The legacy classes don't match the directive's selectors and never did — they were always a parallel system. When migrating any component, **strip `class="mj-btn-icon-mobile"` / `class="mj-btn-primary"` / etc. from button elements**; the directive's `[variant]` + `[size]` inputs are the canonical way to express what those classes used to mean.
+
+### Anti-pattern (do not do this)
+
+```css
+/* my-component.component.css */
+.mj-btn {                              /* ❌ overrides the directive globally inside this component */
+  border-radius: var(--mj-radius-full);
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;
+}
+.mj-btn-secondary {                    /* ❌ legacy class — doesn't match the directive anyway, just dead code */
+  background: var(--mj-bg-page);
+}
+```
 
 ---
 

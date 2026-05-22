@@ -366,5 +366,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Lists Section -->
+    <mj-collapsible-panel
+        SectionKey="mJLists"
+        SectionName="Lists"
+        Icon="fa fa-list-ul"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJLists')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Lists','SourceViewID')"
+                [NewRecordValues]="NewRecordValues('MJ: Lists')"
+                [AllowLoad]="IsSectionExpanded('mJLists')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJLists', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

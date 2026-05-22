@@ -18,8 +18,8 @@ export class MJUserFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'userIdentity', sectionName: 'User Identity', isExpanded: true },
             { sectionKey: 'accountSettings', sectionName: 'Account Settings', isExpanded: true },
-            { sectionKey: 'entityLinks', sectionName: 'Entity Links', isExpanded: false },
-            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: false },
+            { sectionKey: 'entityLinks', sectionName: 'Entity Links', isExpanded: true },
+            { sectionKey: 'employeeDetails', sectionName: 'Employee Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionExecutionLogs', sectionName: 'Action Execution Logs', isExpanded: false },
             { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
@@ -31,7 +31,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJDataContexts', sectionName: 'Data Contexts', isExpanded: false },
             { sectionKey: 'mJDuplicateRunsStartedByUserID', sectionName: 'Duplicate Runs', isExpanded: false },
-            { sectionKey: 'mJLists', sectionName: 'Lists', isExpanded: false },
+            { sectionKey: 'mJListsUserID', sectionName: 'Lists', isExpanded: false },
             { sectionKey: 'mJQueryCategories', sectionName: 'Query Categories', isExpanded: false },
             { sectionKey: 'mJRecommendationRuns', sectionName: 'Recommendation Runs', isExpanded: false },
             { sectionKey: 'mJRecordChangeReplayRuns', sectionName: 'Record Change Replay Runs', isExpanded: false },
@@ -116,7 +116,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
-            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
+            { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
+            { sectionKey: 'mJListsLastRefreshedByUserID', sectionName: 'Lists (Last Refreshed By User ID)', isExpanded: false }
         ]);
     }
 }

@@ -18,8 +18,8 @@ export class MJEntityRecordDocumentFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identifiers', sectionName: 'Identifiers', isExpanded: true },
             { sectionKey: 'documentDefinitionOutput', sectionName: 'Document Definition & Output', isExpanded: true },
-            { sectionKey: 'vectorEmbedding', sectionName: 'Vector Embedding', isExpanded: false },
-            { sectionKey: 'timestampsAudit', sectionName: 'Timestamps & Audit', isExpanded: false },
+            { sectionKey: 'vectorEmbedding', sectionName: 'Vector Embedding', isExpanded: true },
+            { sectionKey: 'timestampsAudit', sectionName: 'Timestamps & Audit', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentItems', sectionName: 'Content Items', isExpanded: false }
         ]);

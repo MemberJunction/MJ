@@ -1,0 +1,49 @@
+<div class="list-stats">
+  @if (loading) {
+    <div class="list-stats__loading">
+      <mj-loading text="Loading stats..." size="small"></mj-loading>
+    </div>
+  } @else {
+    <div class="list-stats__heading">
+      <i class="fa-solid fa-chart-simple"></i>
+      Usage
+    </div>
+
+    <div class="list-stats__counters">
+      <div class="list-stats__counter">
+        <div class="list-stats__value">{{ memberCount }}</div>
+        <div class="list-stats__label">Members</div>
+      </div>
+      <div class="list-stats__counter">
+        <div class="list-stats__value">+{{ growthThisMonth }}</div>
+        <div class="list-stats__label">This month</div>
+      </div>
+      <div class="list-stats__counter">
+        <div class="list-stats__value">{{ activeShareCount }}</div>
+        <div class="list-stats__label">Active shares</div>
+      </div>
+      <div class="list-stats__counter">
+        <div class="list-stats__value-text">{{ formatRelative(lastActivityAt) }}</div>
+        <div class="list-stats__label">Last activity</div>
+      </div>
+    </div>
+
+    @if (recent.length > 0) {
+      <div class="list-stats__heading list-stats__heading--secondary">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        Recent activity
+      </div>
+      <ul class="list-stats__feed">
+        @for (item of recent; track item.ID) {
+          <li class="list-stats__entry">
+            <span class="list-stats__entry-type">{{ item.EventType }}</span>
+            <span class="list-stats__entry-detail">
+              {{ item.Description }}
+              <span class="list-stats__entry-meta">— {{ item.Who }} · {{ formatRelative(item.When) }}</span>
+            </span>
+          </li>
+        }
+      </ul>
+    }
+  }
+</div>

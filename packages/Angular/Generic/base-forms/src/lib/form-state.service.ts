@@ -111,11 +111,14 @@ export class FormStateService {
     isSectionExpanded(entityName: string, sectionKey: string, defaultExpanded?: boolean): boolean {
         const state = this.getCurrentState(entityName);
         const sectionState = state.sections[sectionKey];
-        if (sectionState) {
+        // Only honor a persisted expansion when it was EXPLICITLY set. A section entry that
+        // exists solely to hold a panelHeight has isExpanded === undefined and must fall through
+        // to the caller's seeded default (collapsed for related-entity panels).
+        if (sectionState && sectionState.isExpanded !== undefined) {
             return sectionState.isExpanded;
         }
-        // No persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
-        return defaultExpanded !== undefined ? defaultExpanded : DEFAULT_SECTION_STATE.isExpanded;
+        // No explicit persisted state - use provided default or fall back to DEFAULT_SECTION_STATE
+        return defaultExpanded !== undefined ? defaultExpanded : (DEFAULT_SECTION_STATE.isExpanded ?? true);
     }
 
     /**
@@ -357,7 +360,9 @@ export class FormStateService {
         const state = this.getCurrentState(entityName);
         return sectionKeys.filter(key => {
             const section = state.sections[key];
-            return section ? section.isExpanded : DEFAULT_SECTION_STATE.isExpanded;
+            // No entry → seeded global default; entry with explicit value → that value;
+            // entry with only a panelHeight (isExpanded undefined) → treat as collapsed.
+            return section ? (section.isExpanded ?? false) : DEFAULT_SECTION_STATE.isExpanded;
         }).length;
     }
 
@@ -381,7 +386,10 @@ export class FormStateService {
     private updateSectionState(entityName: string, sectionKey: string, updates: Partial<FormSectionState>): void {
         const subject = this.getOrCreateSubject(entityName);
         const currentState = subject.value;
-        const currentSection = currentState.sections[sectionKey] || { ...DEFAULT_SECTION_STATE };
+        // Start from the existing entry or an EMPTY object — do NOT seed DEFAULT_SECTION_STATE.
+        // Seeding it would force isExpanded:true onto a section that's only being given a
+        // panelHeight, silently expanding panels the user never opened.
+        const currentSection = currentState.sections[sectionKey] || {};
 
         const newState: FormState = {
             ...currentState,

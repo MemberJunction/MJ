@@ -2,6 +2,7 @@ export * from './generated/action_subclasses.js';
 
 // Communication Actions
 export * from './custom/communication/send-single-message.action';
+export * from './custom/communication/send-to-audience.action';
 export * from './custom/communication/slack-webhook.action';
 export * from './custom/communication/teams-webhook.action';
 

@@ -359,7 +359,8 @@ export class ResolverBase {
           viewInput.Aggregates,
           viewInput.AfterKey
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
-            : undefined
+            : undefined,
+          viewInput.BypassCache
         );
       }
       else {
@@ -400,7 +401,9 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        undefined,
+        viewInput.BypassCache
       );
     } catch (err) {
       console.log(err);
@@ -444,7 +447,9 @@ export class ResolverBase {
         userPayload,
         viewInput.MaxRows,
         viewInput.StartRow,
-        viewInput.Aggregates
+        viewInput.Aggregates,
+        undefined,
+        viewInput.BypassCache
       );
     } catch (err) {
       console.log(err);
@@ -517,6 +522,7 @@ export class ResolverBase {
           resultType: viewInput.ResultType,
           userPayload,
           aggregates: viewInput.Aggregates,
+          bypassCache: viewInput.BypassCache,
         });
       } catch (err) {
         LogError(err);
@@ -693,7 +699,8 @@ export class ResolverBase {
     maxRows: number | undefined,
     startRow: number | undefined,
     aggregates?: AggregateExpression[],
-    afterKey?: CompositeKey
+    afterKey?: CompositeKey,
+    bypassCache?: boolean
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -757,6 +764,7 @@ export class ResolverBase {
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
           Aggregates: aggregates,
+          BypassCache: bypassCache,
         },
         user
       );
@@ -870,6 +878,7 @@ export class ResolverBase {
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,
           Aggregates: param.aggregates,
+          BypassCache: param.bypassCache,
         });
       }
 

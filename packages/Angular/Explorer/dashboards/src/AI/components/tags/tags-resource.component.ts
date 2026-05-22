@@ -26,6 +26,7 @@ import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
 import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { MJLeftNavItem, MJLeftNavSection, TabConfig } from '@memberjunction/ng-ui-components';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -522,7 +523,12 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
         if (raw) {
             try {
                 const prefs = JSON.parse(raw);
-                if (prefs.ActiveTab) this.ActiveTab = prefs.ActiveTab;
+                // Guard against stale persisted state from sibling dashboards
+                // that historically shared this prefs key (e.g. 'pipeline' from
+                // Classify) — only apply tabs the Tags rail actually renders.
+                if (prefs.ActiveTab && TagsResourceComponent.VALID_TABS.includes(prefs.ActiveTab)) {
+                    this.ActiveTab = prefs.ActiveTab;
+                }
                 if (prefs.ShowPipelineConfig != null) this.ShowPipelineConfig = prefs.ShowPipelineConfig;
             } catch { /* ignore */ }
         }
@@ -1043,7 +1049,8 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
 
     // ── Lifecycle ──
 
-    private static readonly PREFS_KEY = 'KH_Classify_Preferences';
+    private static readonly PREFS_KEY = 'KH_Tags_Preferences';
+    private static readonly VALID_TABS: TabName[] = ['tags', 'taxonomy', 'suggestions', 'health'];
 
     async ngAfterViewInit(): Promise<void> {
         await Promise.all([
@@ -1188,6 +1195,45 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     }
 
     // ── Tab switching ──
+
+    /** Wraps `NavItems` for `<mj-left-nav>`. */
+    public get navSections(): MJLeftNavSection[] {
+        return [{
+            items: this.NavItems.map(n => ({
+                id: n.Tab,
+                label: n.Label,
+                icon: n.Icon,
+                badge: n.BadgeText || undefined
+            }))
+        }];
+    }
+
+    /** Title rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabTitle(): string {
+        switch (this.ActiveTab) {
+            case 'tags':        return 'Overview';
+            case 'taxonomy':    return 'Taxonomy Governance';
+            case 'suggestions': return 'Suggestions Inbox';
+            case 'health':      return 'Tag Health';
+        }
+        return '';
+    }
+
+    /** Subtitle rendered in the per-section `<mj-page-header-interior>`. */
+    public get currentTabSubtitle(): string {
+        switch (this.ActiveTab) {
+            case 'tags':        return `${this.TagRows.length} unique tags across all content sources`;
+            case 'taxonomy':    return `Manage tag hierarchy, resolve duplicates, and monitor taxonomy health — ${this.TaxHealth.Total} total tags`;
+            case 'suggestions': return `${this.SuggestionRows.length} pending · select rows for bulk approve / reject`;
+            case 'health':      return 'Automated signals about taxonomy quality';
+        }
+        return '';
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        void this.SwitchTab(item.id as TabName);
+    }
 
     public async SwitchTab(tab: TabName): Promise<void> {
         if (tab === this.ActiveTab) return;
@@ -3325,6 +3371,29 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     // ════════════════════════════════════════════
     // TAXONOMY GOVERNANCE TAB
     // ════════════════════════════════════════════
+
+    /** Taxonomy sub-tabs as `TabConfig[]` for `<mj-tab-nav>`. Counts on
+     *  Duplicates and Orphans surface as warning/error-variant badges. */
+    public get taxSubTabsConfig(): TabConfig[] {
+        return [
+            { key: 'tree',       label: 'Tree View',  icon: 'fa-solid fa-sitemap' },
+            { key: 'duplicates', label: 'Duplicates', icon: 'fa-solid fa-link',
+              badge: this.TaxDuplicates.length > 0 ? this.TaxDuplicates.length : null,
+              badgeVariant: 'warning' },
+            { key: 'orphans',    label: 'Orphans',    icon: 'fa-solid fa-ban',
+              badge: this.TaxOrphans.length > 0 ? this.TaxOrphans.length : null,
+              badgeVariant: 'error' },
+            { key: 'treemap',    label: 'Treemap',    icon: 'fa-solid fa-chart-tree-map' },
+            { key: 'audit',      label: 'Audit Log',  icon: 'fa-solid fa-scroll' }
+        ];
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTaxSubTabChange(key: string): void {
+        if (key === 'tree' || key === 'duplicates' || key === 'orphans' || key === 'treemap' || key === 'audit') {
+            this.SwitchTaxSubTab(key);
+        }
+    }
 
     public SwitchTaxSubTab(sub: TaxonomySubTab): void {
         this.TaxSubTab = sub;

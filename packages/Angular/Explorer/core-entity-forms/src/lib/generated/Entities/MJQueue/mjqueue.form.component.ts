@@ -18,7 +18,7 @@ export class MJQueueFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'queueDefinition', sectionName: 'Queue Definition', isExpanded: true },
             { sectionKey: 'operationalStatus', sectionName: 'Operational Status', isExpanded: true },
-            { sectionKey: 'processEnvironment', sectionName: 'Process Environment', isExpanded: false },
+            { sectionKey: 'processEnvironment', sectionName: 'Process Environment', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJQueueTasks', sectionName: 'Queue Tasks', isExpanded: false }
         ]);

@@ -17,8 +17,14 @@ class TestEngine extends BaseEngine<TestEngine> {
         this.emitPropertyChange(propertyName);
     }
 
-    public ApplyImmediateMutationForTest(config: BaseEnginePropertyConfig, event: BaseEntityEvent): void {
-        this.applyImmediateMutation(config, event);
+    public async ApplyImmediateMutationForTest(config: BaseEnginePropertyConfig, event: BaseEntityEvent): Promise<void> {
+        await this.applyImmediateMutation(config, event);
+    }
+
+    // The real cloneEntityForCache needs a working provider to call GetEntityObject.
+    // The mock entities used in this test aren't backed by metadata, so override to pass-through.
+    protected async cloneEntityForCache(source: BaseEntity): Promise<BaseEntity | null> {
+        return source;
     }
 }
 
@@ -75,7 +81,7 @@ describe('BaseEngine.ObserveProperty', () => {
         expect(received[1]).toEqual([added]);
     });
 
-    it('applyImmediateMutation(create) propagates to ObserveProperty subscribers', () => {
+    it('applyImmediateMutation(create) propagates to ObserveProperty subscribers', async () => {
         const engine = new TestEngine();
         const received: BaseEntity[][] = [];
         const sub = engine.ObserveProperty<BaseEntity>('_items').subscribe(arr => received.push(arr));
@@ -84,7 +90,7 @@ describe('BaseEngine.ObserveProperty', () => {
         const config = new BaseEnginePropertyConfig({ PropertyName: '_items', EntityName: 'Items' });
         const event = { type: 'save', saveSubType: 'create', baseEntity: entity } as BaseEntityEvent;
 
-        engine.ApplyImmediateMutationForTest(config, event);
+        await engine.ApplyImmediateMutationForTest(config, event);
 
         sub.unsubscribe();
         expect(received).toHaveLength(2); // initial [] + create

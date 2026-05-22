@@ -1,0 +1,75 @@
+<!doctype html><html><head><meta charset="utf-8"><title>06 — List Detail</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item"><i class="fa-solid fa-house"></i> Home</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mj-btn mj-btn-ghost"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="entity-icon" style="width:44px; height:44px;"><i class="fa-solid fa-list"></i></div>
+      <div>
+        <h1 style="font-size:20px;">VIP Donors Q4 2026</h1>
+        <div class="muted" style="font-size:12.5px;">Contacts · 348 items · Created by Amith Nagarajan · Updated 2 hours ago</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="mj-btn"><i class="fa-solid fa-share-nodes"></i> Share</button>
+    <button class="mj-btn"><i class="fa-solid fa-ellipsis"></i></button>
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr 280px; gap: 16px;">
+    <div class="mj-panel">
+      <div class="mj-panel-header">
+        <h3><i class="fa-solid fa-users"></i>Members</h3>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <div class="mj-search"><i class="fa-solid fa-search icon"></i><input class="mj-input mj-btn-sm" placeholder="Filter members…" style="padding-left:32px; height:32px;"></div>
+          <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-plus"></i> Add Records</button>
+        </div>
+      </div>
+      <div class="mj-panel-body" style="padding:0;">
+        <table class="mj-table" style="border:none; border-radius:0;">
+          <thead><tr><th style="width:36px;"><input type="checkbox"></th><th>Name</th><th>Email</th><th>Status</th><th>Sequence</th><th>Added</th><th></th></tr></thead>
+          <tbody>
+            <tr><td><input type="checkbox"></td><td>Aaron Holt</td><td>aaron.holt@example.org</td><td><span class="badge badge-success">Active</span></td><td>1</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+            <tr><td><input type="checkbox"></td><td>Beth Williams</td><td>beth.w@example.org</td><td><span class="badge badge-success">Active</span></td><td>2</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+            <tr><td><input type="checkbox"></td><td>Carlos Mendez</td><td>cmendez@example.org</td><td><span class="badge badge-warning">Pending</span></td><td>3</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+            <tr><td><input type="checkbox"></td><td>Dianne Park</td><td>dianne@example.org</td><td><span class="badge badge-success">Active</span></td><td>4</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+            <tr><td><input type="checkbox"></td><td>Emir Khalil</td><td>emir.k@example.org</td><td><span class="badge badge-error">Error</span></td><td>5</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+            <tr><td><input type="checkbox"></td><td>Fatima Reyes</td><td>fatima@example.org</td><td><span class="badge badge-success">Active</span></td><td>6</td><td>2026-04-30</td><td><i class="fa-solid fa-ellipsis-vertical muted"></i></td></tr>
+          </tbody>
+        </table>
+        <div class="muted" style="padding:12px 18px; font-size:12px; border-top: 1px solid var(--mj-border-default);">Showing 6 of 348 members</div>
+      </div>
+    </div>
+
+    <div class="col gap-12">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-info-circle"></i>Details</h3></div>
+        <div class="mj-panel-body">
+          <div class="label">Description</div>
+          <div style="margin-top:4px; font-size:13px;">Top-tier donors flagged for fall outreach campaign.</div>
+          <div class="divider"></div>
+          <div class="label">Category</div>
+          <div class="mt-8"><span class="badge badge-warning"><i class="fa-solid fa-folder"></i> Marketing › Campaigns</span></div>
+          <div class="divider"></div>
+          <div class="label">Owner</div>
+          <div class="mt-8" style="font-size:13px;">Amith Nagarajan</div>
+        </div>
+      </div>
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-users"></i>Sharing</h3></div>
+        <div class="mj-panel-body">
+          <div class="muted" style="font-size:12px;">Shared with 4 people</div>
+          <div class="mt-8 row" style="gap:-6px;">
+            <span style="width:28px;height:28px;border-radius:50%;background:#3b82f6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;">MS</span>
+            <span style="width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;margin-left:-6px;">SL</span>
+            <span style="width:28px;height:28px;border-radius:50%;background:#f59e0b;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;margin-left:-6px;">JK</span>
+            <span style="width:28px;height:28px;border-radius:50%;background:#8b5cf6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:11px;border:2px solid #fff;margin-left:-6px;">RC</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

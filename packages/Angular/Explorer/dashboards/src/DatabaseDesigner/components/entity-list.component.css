@@ -1,3 +1,18 @@
+/*
+  Database Designer entity-list — sub-page of Admin → Data & Schema. Host is a
+  flex column so <mj-page-header-interior> pins at the top and <mj-page-body-interior>
+  fills the rest. The body primitive owns its own flex/scroll/padding — this
+  component just needs the host-level layout. See Section 10 of
+  plans/explorer-chrome-conventions.md.
+*/
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  background: var(--mj-bg-page);
+}
+
 /* Schema filter used in the [toolbar] slot. */
 .schema-filter {
   width: auto;

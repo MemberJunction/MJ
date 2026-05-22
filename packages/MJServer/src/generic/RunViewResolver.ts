@@ -170,6 +170,13 @@ export class RunViewByIDInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -277,6 +284,13 @@ export class RunViewByNameInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -370,6 +384,13 @@ export class RunDynamicViewInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 @InputType()
@@ -492,6 +513,13 @@ export class RunViewGenericInput {
     description: 'Optional aggregate expressions to calculate on the full result set (e.g., SUM, COUNT, AVG). Results are returned in AggregateResults.',
   })
   Aggregates?: AggregateExpressionInput[];
+
+  @Field(() => Boolean, {
+    nullable: true,
+    description:
+      'Optional, when true bypasses ALL server-side caching for this view run — the pre-check cache lookup is skipped and the result is not stored in the cache. Use for maintenance/audit queries that must see true database state, or to force-refresh views whose filters reference rows the server cache invalidator cannot follow (e.g., cross-entity subqueries against vwListDetails).',
+  })
+  BypassCache?: boolean;
 }
 
 //****************************************************************************

@@ -19,13 +19,6 @@
                 </mj-filter-panel>
             </mj-filter-popover>
 
-            <!-- Tab Navigation -->
-            <mj-tab-nav
-                [Tabs]="mcpTabs"
-                [ActiveKey]="ActiveTab"
-                (TabChange)="setActiveTab($any($event))">
-            </mj-tab-nav>
-
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
@@ -63,6 +56,12 @@
             }
         </div>
         <div toolbar>
+            <!-- Tab Navigation -->
+            <mj-tab-nav
+                [Tabs]="mcpTabs"
+                [ActiveKey]="ActiveTab"
+                (TabChange)="setActiveTab($any($event))">
+            </mj-tab-nav>
             <mj-page-search
                 Placeholder="Search…"
                 [Value]="CurrentFilters.searchTerm"

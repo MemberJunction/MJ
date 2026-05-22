@@ -1,9 +1,4 @@
 .mj-inspector--solo { background: var(--mj-bg-page); }
-.gc-toggle--active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent) !important;
-    color: var(--mj-brand-primary) !important;
-    border-color: var(--mj-brand-primary) !important;
-}
 .gc-endpoint {
     font-family: 'SF Mono', Menlo, Consolas, monospace;
     font-size: 11px;
@@ -11,6 +6,13 @@
     padding: 1px 6px;
     border-radius: 4px;
     color: var(--mj-text-secondary);
+}
+.gc-endpoint-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    color: var(--mj-text-muted);
 }
 
 .gc-body {

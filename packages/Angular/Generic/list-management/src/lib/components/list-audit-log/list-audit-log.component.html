@@ -1,0 +1,70 @@
+<div class="audit-log">
+  <div class="audit-log__toolbar">
+    <div class="audit-search">
+      <i class="fa-solid fa-search"></i>
+      <input
+        class="mj-input"
+        type="text"
+        [(ngModel)]="filterText"
+        (ngModelChange)="OnFilterChange()"
+        placeholder="Filter by description or user…" />
+    </div>
+    <select
+      class="mj-input mj-select"
+      [(ngModel)]="filterType"
+      (ngModelChange)="OnFilterChange()"
+      title="Filter by event type">
+      <option value="">All Events</option>
+      @for (t of eventTypes; track t.ID) {
+        <option [value]="t.ID">{{ t.Name }}</option>
+      }
+    </select>
+  </div>
+
+  @if (loading) {
+    <div class="audit-state">
+      <mj-loading text="Loading audit log..." size="medium"></mj-loading>
+    </div>
+  } @else if (errorMessage) {
+    <div class="audit-state audit-state--error">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      {{ errorMessage }}
+    </div>
+  } @else if (visibleEntries.length === 0) {
+    <div class="audit-state audit-state--empty">
+      <i class="fa-solid fa-clock-rotate-left"></i>
+      <span>No audit log entries match the current filters.</span>
+    </div>
+  } @else {
+    <table class="audit-table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Who</th>
+          <th>Event</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of visibleEntries; track entry.ID) {
+          <tr>
+            <td class="audit-cell-date">{{ formatDate(entry.EventDate) }}</td>
+            <td class="audit-cell-user">{{ entry.UserName }}</td>
+            <td>
+              <span class="event-chip">{{ entry.EventType }}</span>
+            </td>
+            <td class="audit-cell-description">
+              {{ entry.Description }}
+              @if (entry.Details) {
+                <details class="details-toggle">
+                  <summary>details</summary>
+                  <pre>{{ formatDetails(entry.Details) }}</pre>
+                </details>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>

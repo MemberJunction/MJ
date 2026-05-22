@@ -1,5 +1,160 @@
 # @memberjunction/ng-dashboards
 
+## 5.36.0
+
+### Patch Changes
+
+- 1c0fce9: Section 10 interior chrome pattern applied to every MJ Explorer left-rail shell (Admin × 4, AI Analytics, Knowledge Hub × 4, Testing Explorer, Database Designer, SQL Logging, Dev Tools inspectors, API Keys, App Roles). New shared primitives — `<mj-left-nav>` with optional tree support, two-row `<mj-page-header-interior>`, paired `<mj-page-body-interior>` — replace bespoke per-shell sidebar and chrome implementations across ~25 sub-pages. Chrome slot discipline audit standardizes tab-nav placement, `[meta]` badge content, and `[actions]` ordering across ~65 dashboards; two pre-existing bugs fixed along the way (nested `:has()` SyntaxError that silently hid the interior toolbar row, and an invisible page-header drop shadow).
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ng-explorer-settings@5.36.0
+  - @memberjunction/ng-entity-viewer@5.36.0
+  - @memberjunction/lists-base@5.36.0
+  - @memberjunction/ng-list-management@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/ng-core-entity-forms@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-testing@5.36.0
+  - @memberjunction/ng-actions@5.36.0
+  - @memberjunction/ng-ai-test-harness@5.36.0
+  - @memberjunction/ng-conversations@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-react@5.36.0
+  - @memberjunction/ng-search@5.36.0
+  - @memberjunction/ng-versions@5.36.0
+  - @memberjunction/ng-action-gallery@5.36.0
+  - @memberjunction/ng-entity-relationship-diagram@5.36.0
+  - @memberjunction/ng-resource-permissions@5.36.0
+  - @memberjunction/ng-scheduling@5.36.0
+  - @memberjunction/ng-dashboard-viewer@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/api-keys-base@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-agent-requests@5.36.0
+  - @memberjunction/ng-agents@5.36.0
+  - @memberjunction/ng-archive-manager@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-code-editor@5.36.0
+  - @memberjunction/ng-credentials@5.36.0
+  - @memberjunction/ng-map-view@5.36.0
+  - @memberjunction/ng-query-viewer@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-trees@5.36.0
+  - @memberjunction/credentials@5.36.0
+  - @memberjunction/integration-engine-base@5.36.0
+  - @memberjunction/templates-base-types@5.36.0
+  - @memberjunction/testing-engine-base@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+  - @memberjunction/ng-filter-builder@5.36.0
+  - @memberjunction/interactive-component-types@5.36.0
+  - @memberjunction/skip-types@5.36.0
+  - @memberjunction/ng-clustering@5.36.0
+  - @memberjunction/ng-export-service@5.36.0
+  - @memberjunction/ng-markdown@5.36.0
+  - @memberjunction/ng-word-cloud@5.36.0
+  - @memberjunction/export-engine@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- ee380f7: Consolidate MJ Explorer's page header chrome onto a shared component library: ~50 dashboards across 14 sections (AI, Knowledge Hub, Admin, Actions, Scheduling, Testing, MCP, Lists, Communication, Credentials, Version History, File Browser, Integrations, Archive) migrated to `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` with design-token-driven styling, replacing ~200 lines of bespoke per-section CSS (including hardcoded brand gradients). Adds the shared chrome components used throughout the migration: `mj-stat-badge`, `mj-refresh-button`, `mj-page-search`, `mj-filter-popover`, `mj-filter-panel`, `mj-filter-field`, `mj-filter-chip`, `mj-tab-nav`, `mj-view-toggle`. Removes two redundant/unused exports from `@memberjunction/ng-ui-components`: `MJFilterToggleComponent` (zero template usages — replaced by `<mj-filter-popover>`) and `MJResultCountComponent` (merged into `<mj-stat-badge>` — pass the optional `[Total]` input for the "X of Y" rendering). External consumers using either removed export must migrate to the noted replacement. Conventions documented in `plans/explorer-chrome-conventions.md`.
+- c1f1cad: Add pluggable geocoding provider abstraction with Google, Geocod.io, and HERE implementations (expands GeoCodeSource enum and adds provider registry). Polish the Home dashboard pin empty state with a dismissible "Don't show this again" preference persisted via UserInfoEngine, and speed up the Add Pin panel by reading from cached DashboardEngine, UserViewEngine, QueryEngine, and ActionEngineBase singletons instead of firing fresh RunViews on every open, with background pre-warm on home load.
+- 383784c: Fix query-param state so it round-trips for deep links, Home pins, and browser back/forward — resource components now restore sub-state when params change after initial load (e.g. clicking a second conversation pin no longer reopens the already-cached chat). Also fixes the "Pinning..." overlay hanging when pinning from the Data Explorer by backgrounding the thumbnail capture and skipping it for very large DOM trees.
+- ac4b9a5: **Multi-tenant switching** (`@memberjunction/global`, `@memberjunction/ng-explorer-core`): Add `TenantChanged` event type to `MJEventType`. Add `clearCacheByPredicate()` on `ComponentCacheManager` for selective tenant-scoped cache clearing. Add `ClearComponentCache()` and `ReloadAllTabs()` on `TabContainerComponent` — destroys cached components and reloads the active tab immediately (inactive tabs reload lazily). Shell subscribes to `TenantChanged` with two-phase protocol: `TenantChanging` shows the loading screen, `TenantChanged` reloads tabs and hides it. Loading screen CSS made `position: fixed` with `z-index: 99999` to fully cover viewport during switches.
+
+  **Open App fixes** (`@memberjunction/open-app-engine`): Make `mj app upgrade` idempotent when already at target version. Allow mixed-case schema names in Open App manifest validation.
+
+  **CodeGen fix** (`@memberjunction/codegen-lib`): Emit `override` modifier on generated `Save()` method to satisfy strict TypeScript when entity subclasses override the base `Save()`.
+
+  **AI Agents dashboard** (`@memberjunction/ng-dashboards`): Fix category filter not filtering results, make category filter extraction defensive, fix Reset Filters button. Rename Actions `ExecutionMonitoringComponent` to avoid name collision with dashboards package.
+
+  **Scheduling** (`@memberjunction/server`): Warn loudly when a scheduled job is configured to run more often than every 5 minutes.
+
+  **Palette** (`@memberjunction/ng-ui-components`): Add ARIA labels to icon-only buttons in dialogs and slides for accessibility compliance.
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [ee380f7]
+- Updated dependencies [2c905e3]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [eb54def]
+- Updated dependencies [77e4782]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [383784c]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/ng-ui-components@5.35.0
+  - @memberjunction/ng-conversations@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ng-core-entity-forms@5.35.0
+  - @memberjunction/graphql-dataprovider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ng-shared@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ai-engine-base@5.35.0
+  - @memberjunction/api-keys-base@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/ng-base-application@5.35.0
+  - @memberjunction/ng-explorer-settings@5.35.0
+  - @memberjunction/ng-testing@5.35.0
+  - @memberjunction/ng-action-gallery@5.35.0
+  - @memberjunction/ng-actions@5.35.0
+  - @memberjunction/ng-agent-requests@5.35.0
+  - @memberjunction/ng-agents@5.35.0
+  - @memberjunction/ng-ai-test-harness@5.35.0
+  - @memberjunction/ng-archive-manager@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-code-editor@5.35.0
+  - @memberjunction/ng-container-directives@5.35.0
+  - @memberjunction/ng-credentials@5.35.0
+  - @memberjunction/ng-dashboard-viewer@5.35.0
+  - @memberjunction/ng-entity-relationship-diagram@5.35.0
+  - @memberjunction/ng-entity-viewer@5.35.0
+  - @memberjunction/ng-filter-builder@5.35.0
+  - @memberjunction/ng-list-management@5.35.0
+  - @memberjunction/ng-map-view@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-query-viewer@5.35.0
+  - @memberjunction/ng-react@5.35.0
+  - @memberjunction/ng-resource-permissions@5.35.0
+  - @memberjunction/ng-scheduling@5.35.0
+  - @memberjunction/ng-search@5.35.0
+  - @memberjunction/ng-shared-generic@5.35.0
+  - @memberjunction/ng-trees@5.35.0
+  - @memberjunction/ng-versions@5.35.0
+  - @memberjunction/credentials@5.35.0
+  - @memberjunction/integration-engine-base@5.35.0
+  - @memberjunction/interactive-component-types@5.35.0
+  - @memberjunction/skip-types@5.35.0
+  - @memberjunction/templates-base-types@5.35.0
+  - @memberjunction/testing-engine-base@5.35.0
+  - @memberjunction/ng-clustering@5.35.0
+  - @memberjunction/ng-export-service@5.35.0
+  - @memberjunction/ng-markdown@5.35.0
+  - @memberjunction/ng-word-cloud@5.35.0
+  - @memberjunction/export-engine@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

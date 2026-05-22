@@ -17,8 +17,8 @@ export class MJAIAgentSearchScopeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'assignmentDetails', sectionName: 'Assignment Details', isExpanded: true },
             { sectionKey: 'executionControl', sectionName: 'Execution Control', isExpanded: true },
-            { sectionKey: 'timeline', sectionName: 'Timeline', isExpanded: false },
-            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: false },
+            { sectionKey: 'timeline', sectionName: 'Timeline', isExpanded: true },
+            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

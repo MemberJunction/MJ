@@ -3,14 +3,9 @@
     Title="Integrations"
     Icon="fa-solid fa-plug"
     Subtitle="Connected systems and data sources">
-    @if (!WizardOpen && !SelectedSummary && Connections.length > 0) {
-      <div meta>
-        <mj-stat-badge
-          [Count]="Connections.length"
-          [Label]="Connections.length === 1 ? 'integration' : 'integrations'">
-        </mj-stat-badge>
-      </div>
-    }
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "Connections.length integrations" badge mirrored the visible card
+         grid row count. -->
     <div actions>
       <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
       @if (!WizardOpen && !SelectedSummary) {

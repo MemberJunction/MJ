@@ -18,7 +18,7 @@ export class MJAIAgentRunStepFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'stepIdentificationHierarchy', sectionName: 'Step Identification & Hierarchy', isExpanded: true },
             { sectionKey: 'executionStatusValidation', sectionName: 'Execution Status & Validation', isExpanded: true },
-            { sectionKey: 'dataPayload', sectionName: 'Data & Payload', isExpanded: false },
+            { sectionKey: 'dataPayload', sectionName: 'Data & Payload', isExpanded: true },
             { sectionKey: 'notesSystemMetadata', sectionName: 'Notes & System Metadata', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentRunSteps', sectionName: 'AI Agent Run Steps', isExpanded: false },

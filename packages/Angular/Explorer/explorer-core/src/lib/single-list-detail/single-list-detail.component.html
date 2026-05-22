@@ -1,26 +1,70 @@
 <div class="list-detail-container">
   <!-- Header with title and Add button -->
   <div class="list-header">
-    <h1>{{ listRecord ? listRecord.Name : "List" }}</h1>
-    <div class="add-dropdown-wrapper">
-      <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
-        <span class="fa-solid fa-plus"></span>
-        Add to List
-        <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
-      </button>
-      @if (showAddDropdown) {
-        <div class="add-dropdown-panel">
-          @for (option of addOptions; track option.Text) {
-            <div class="add-dropdown-item" (click)="onDropdownItemClick(option)">
-              <span class="add-dropdown-item-text">{{ option.Text }}</span>
-              @if (option.Description) {
-                <span class="add-dropdown-item-desc">{{ option.Description }}</span>
-              }
-            </div>
+    <div class="list-header__titleblock">
+      @if (listRecord) {
+        <h1>{{ listRecord.Name }}</h1>
+      } @else {
+        <h1>List</h1>
+      }
+      @if (hasLineage) {
+        <div class="lineage-badge" [title]="'Source view: ' + (sourceViewName ?? 'unknown')">
+          <i class="fa-solid fa-link"></i>
+          <span>
+            @if (listRecord?.UseSnapshot) {
+              Snapshot of: <strong>{{ sourceViewName ?? '(unknown view)' }}</strong>
+            } @else {
+              Live view: <strong>{{ sourceViewName ?? '(unknown view)' }}</strong>
+            }
+          </span>
+          @if (listRecord?.LastRefreshedAt) {
+            <span class="lineage-badge__refreshed">
+              · last refreshed {{ listRecord!.LastRefreshedAt | date:'medium' }}
+            </span>
           }
         </div>
       }
+      @if (listRecord) {
+        <!-- Tags section (Phase 4.2). Editable on the detail view. -->
+        <div class="list-detail__tags">
+          <mj-tag-chips
+            [Provider]="Provider"
+            EntityName="MJ: Lists"
+            [RecordID]="listRecord.ID"
+            [Editable]="capabilities.CanEdit"
+            [MaxDisplay]="20">
+          </mj-tag-chips>
+        </div>
+      }
     </div>
+    @if (capabilities.CanEdit) {
+      <div class="add-dropdown-wrapper">
+        <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
+          <span class="fa-solid fa-plus"></span>
+          Add to List
+          <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
+        </button>
+        @if (showAddDropdown) {
+          <div class="add-dropdown-panel">
+            @for (option of addOptions; track option.Text) {
+              <div class="add-dropdown-item" (click)="onDropdownItemClick(option)">
+                <span class="add-dropdown-item-text">{{ option.Text }}</span>
+                @if (option.Description) {
+                  <span class="add-dropdown-item-desc">{{ option.Description }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    } @else if (currentLevel) {
+      <!-- Viewer-perspective badge so users understand why mutation
+           controls are absent. Mirrors mockup 19. -->
+      <span class="permission-badge permission-badge--viewer">
+        <i class="fa-solid fa-eye"></i>
+        Viewer access
+      </span>
+    }
   </div>
 
   <!-- Custom Toolbar -->
@@ -33,13 +77,82 @@
         }
       </div>
       <div class="toolbar-right">
-        @if (selectedKeys.length > 0) {
+        @if (selectedKeys.length > 0 && capabilities.CanEdit) {
+          <!-- Bulk-edit toolbar (Phase 5.2, mockups 23/24).
+               Move/Copy open the target-list picker. Move then routes
+               through the delta-confirm dialog because the source side
+               drops; Copy is additive and applies directly. -->
+          <button mjButton
+            (click)="openMoveDialog()"
+            variant="flat"
+            class="toolbar-button"
+            title="Move selected records to another list">
+            <span class="fa-solid fa-arrow-right-arrow-left"></span>
+            Move…
+          </button>
+          <button mjButton
+            (click)="openCopyDialog()"
+            variant="flat"
+            class="toolbar-button"
+            title="Copy selected records to another list (keeps them here too)">
+            <span class="fa-solid fa-copy"></span>
+            Copy…
+          </button>
+          <select
+            class="mj-input mj-select bulk-status-select"
+            [(ngModel)]="bulkStatus"
+            [disabled]="isApplyingBulkStatus"
+            title="Set status on selected items">
+            <option value="">Set status…</option>
+            <option value="Active">Active</option>
+            <option value="Complete">Complete</option>
+            <option value="Pending">Pending</option>
+            <option value="Disabled">Disabled</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <button mjButton
+            (click)="applyBulkStatus()"
+            [disabled]="!bulkStatus || isApplyingBulkStatus"
+            variant="flat"
+            class="toolbar-button">
+            @if (isApplyingBulkStatus) {
+              <span class="fa-solid fa-spinner fa-spin"></span>
+              Applying…
+            } @else {
+              <span class="fa-solid fa-pen-to-square"></span>
+              Apply Status
+            }
+          </button>
           <button mjButton
             (click)="openRemoveDialog()"
             variant="flat"
             class="toolbar-button remove-btn">
             <span class="fa-solid fa-trash"></span>
             Remove from List
+          </button>
+        }
+        @if (hasLineage && capabilities.CanRefresh) {
+          <select
+            class="mj-input mj-select refresh-mode-select"
+            [ngModel]="refreshMode"
+            (ngModelChange)="onRefreshModeChange($event)"
+            [disabled]="isPreviewingRefresh || isApplyingRefresh"
+            title="Refresh mode">
+            <option value="Additive">Additive</option>
+            <option value="Sync">Sync</option>
+          </select>
+          <button mjButton
+            (click)="onRefreshFromSource()"
+            [disabled]="isPreviewingRefresh || isApplyingRefresh"
+            variant="flat"
+            class="toolbar-button">
+            @if (isPreviewingRefresh) {
+              <span class="fa-solid fa-spinner fa-spin"></span>
+              Previewing...
+            } @else {
+              <span class="fa-solid fa-cloud-arrow-down"></span>
+              Refresh from Source
+            }
           </button>
         }
         <button mjButton
@@ -67,26 +180,146 @@
     </div>
   }
 
-  <!-- Grid -->
+  <!-- Grid + side stats panel (Phase 5.4). -->
   @if (!showLoader && listRecord) {
-    <div class="grid-container">
-      <mj-list-detail-grid
-        #listDetailGrid
-        [listId]="ListID"
-        [listEntity]="listRecord"
-        [autoNavigate]="true"
-        [height]="'auto'"
-        [showToolbar]="false"
-        [toolbarConfig]="gridToolbarConfig"
-        [selectionMode]="'checkbox'"
-        (rowClicked)="onRowClicked($event)"
-        (rowDoubleClicked)="onRowDoubleClicked($event)"
-        (selectionChange)="onSelectionChange($event)"
-        (dataLoaded)="onDataLoaded($event)">
-      </mj-list-detail-grid>
+    <div class="grid-with-stats">
+      <div class="grid-container">
+        <mj-list-detail-grid
+          #listDetailGrid
+          [listId]="ListID"
+          [listEntity]="listRecord"
+          [autoNavigate]="true"
+          [height]="'auto'"
+          [showToolbar]="false"
+          [toolbarConfig]="gridToolbarConfig"
+          [selectionMode]="'checkbox'"
+          (rowClicked)="onRowClicked($event)"
+          (rowDoubleClicked)="onRowDoubleClicked($event)"
+          (selectionChange)="onSelectionChange($event)"
+          (dataLoaded)="onDataLoaded($event)">
+        </mj-list-detail-grid>
+      </div>
+      <aside class="list-detail__stats">
+        <mj-list-stats [Provider]="Provider" [ListID]="listRecord.ID" [RefreshTrigger]="statsRefreshTrigger"></mj-list-stats>
+      </aside>
     </div>
   }
+
+  <!-- Refresh-from-source delta-confirm dialog -->
+  <mj-list-delta-confirm
+    [Visible]="refreshConfirmVisible && !!refreshDelta"
+    [Delta]="refreshDelta"
+    [TargetListName]="listRecord?.Name ?? null"
+    [SourceLabel]="sourceViewName"
+    (Confirm)="onRefreshConfirmCommit($event)"
+    (Cancel)="onRefreshConfirmCancel()">
+  </mj-list-delta-confirm>
+
+  <!-- Move delta-confirm dialog (mockup 24). Shown only for Move,
+       never for Copy. Drops on the source side require the user to
+       acknowledge before Confirm enables. -->
+  <mj-list-delta-confirm
+    [Visible]="moveDeltaConfirmVisible && !!moveDelta"
+    [Delta]="moveDelta"
+    [TargetListName]="listRecord?.Name ?? null"
+    [SourceLabel]="'Move to ' + (moveCopySelectedTarget?.Name ?? 'target list')"
+    (Confirm)="onMoveConfirmCommit($event)"
+    (Cancel)="onMoveConfirmCancel()">
+  </mj-list-delta-confirm>
 </div>
+
+<!-- Move/Copy target picker (mockup 23). Lists every list owned by /
+     shared with the current user that targets the same entity. -->
+@if (showMoveCopyDialog) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="(moveCopyMode === 'move' ? 'Move ' : 'Copy ') + selectedKeys.length + ' record' + (selectedKeys.length === 1 ? '' : 's') + ' to…'"
+    (Close)="closeMoveCopyDialog()"
+    [MinWidth]="480"
+    [Width]="640"
+    [Height]="560">
+    <div class="dialog-content move-copy-dialog">
+      @if (isApplyingMoveCopy) {
+        <div class="dialog-loading">
+          <mj-loading [text]="(moveCopyMode === 'move' ? 'Moving' : 'Copying') + ' records...'" size="small"></mj-loading>
+          @if (moveCopyTotal > 0) {
+            <mj-progress-bar
+              [Value]="moveCopyProgressPercent"
+              class="progress-bar">
+            </mj-progress-bar>
+          }
+        </div>
+      } @else {
+        <p class="dialog-instruction">
+          Choose the target list. Both lists must hold the same entity ({{ listRecord?.Entity ?? 'records' }}).
+        </p>
+        <div class="search-section">
+          <div class="search-input-wrapper">
+            <span class="fa-solid fa-search search-icon"></span>
+            <input
+              class="mj-input search-input"
+              type="text"
+              placeholder="Filter lists by name…"
+              [(ngModel)]="moveCopyTargetSearch" />
+          </div>
+        </div>
+        @if (moveCopyTargetCandidatesLoading) {
+          <div class="list-loading">
+            <mj-loading text="Loading lists..." size="small"></mj-loading>
+          </div>
+        } @else if (filteredMoveCopyTargets.length === 0) {
+          <div class="empty-results">
+            <span class="fa-solid fa-list empty-icon"></span>
+            <p>No other lists found for this entity.</p>
+            <p class="dialog-note">Create a new list first if you need a new target.</p>
+          </div>
+        } @else {
+          <div class="records-scroll move-copy-targets">
+            @for (target of filteredMoveCopyTargets; track target.ID) {
+              <div class="record-item"
+                [class.selected]="moveCopySelectedTarget?.ID === target.ID"
+                (click)="selectMoveCopyTarget(target)">
+                <div class="record-checkbox">
+                  <input type="radio"
+                    name="moveCopyTarget"
+                    [checked]="moveCopySelectedTarget?.ID === target.ID"
+                    (click)="$event.stopPropagation()"
+                    (change)="selectMoveCopyTarget(target)">
+                </div>
+                <div class="record-name">
+                  <strong>{{ target.Name }}</strong>
+                  @if (target.Description) {
+                    <span class="target-desc"> — {{ target.Description }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+    <mj-dialog-actions>
+      <button mjButton
+        (click)="confirmMoveCopy()"
+        [disabled]="!moveCopySelectedTarget || isApplyingMoveCopy"
+        variant="primary">
+        @if (moveCopyMode === 'move') {
+          <span class="fa-solid fa-arrow-right-arrow-left"></span>
+          Continue
+        } @else {
+          <span class="fa-solid fa-copy"></span>
+          Copy {{ selectedKeys.length }}
+        }
+      </button>
+      <button mjButton
+        (click)="closeMoveCopyDialog()"
+        [disabled]="isApplyingMoveCopy"
+        variant="outline">
+        Cancel
+      </button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
 
 <!-- Remove from List Confirmation Dialog -->
 @if (showRemoveDialog) {
@@ -230,6 +463,75 @@
         variant="outline">
         Cancel
       </button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
+
+<!-- Export Dialog (mockup 26) — format + column picker -->
+@if (showExportDialog && listRecord) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="'Export ' + exportRecordCount + ' Record' + (exportRecordCount === 1 ? '' : 's')"
+    (Close)="closeExportDialog()"
+    [MinWidth]="520"
+    [Width]="640"
+    [Height]="640">
+    <div class="dialog-content export-dialog">
+      <label class="export-section-label">Format</label>
+      <div class="export-format-row">
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'excel'"
+          (click)="exportFormat = 'excel'">
+          <input type="radio" name="exportFormat" value="excel" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-excel" style="color: var(--mj-status-success);"></i>
+          <span>Excel (.xlsx)</span>
+        </label>
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'csv'"
+          (click)="exportFormat = 'csv'">
+          <input type="radio" name="exportFormat" value="csv" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-csv" style="color: var(--mj-text-secondary);"></i>
+          <span>CSV</span>
+        </label>
+        <label class="export-format-option"
+          [class.export-format-option--selected]="exportFormat === 'json'"
+          (click)="exportFormat = 'json'">
+          <input type="radio" name="exportFormat" value="json" [(ngModel)]="exportFormat">
+          <i class="fa-solid fa-file-code" style="color: var(--mj-brand-primary);"></i>
+          <span>JSON</span>
+        </label>
+      </div>
+
+      <div class="export-section-divider"></div>
+
+      <label class="export-section-label">Columns to include</label>
+      <div class="export-fields-list">
+        @for (f of exportFields; track f.Name) {
+          <label class="export-field-row">
+            <input type="checkbox" [(ngModel)]="f.Selected">
+            <span>{{ f.DisplayName }}</span>
+          </label>
+        }
+      </div>
+      <div class="export-field-actions">
+        <a href="#" (click)="selectAllExportFields(); $event.preventDefault()">Select All</a>
+        <a href="#" (click)="selectNoneExportFields(); $event.preventDefault()">Select None</a>
+        <span class="muted">{{ selectedExportFieldCount }} of {{ exportFields.length }} selected</span>
+      </div>
+    </div>
+    <mj-dialog-actions>
+      <button mjButton variant="primary"
+        [disabled]="selectedExportFieldCount === 0 || isExporting"
+        (click)="executeExport()">
+        @if (isExporting) {
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          Exporting…
+        } @else {
+          <i class="fa-solid fa-download"></i>
+          Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}
+        }
+      </button>
+      <button mjButton variant="outline" [disabled]="isExporting" (click)="closeExportDialog()">Cancel</button>
     </mj-dialog-actions>
   </mj-dialog>
 }

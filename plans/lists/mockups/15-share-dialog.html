@@ -1,0 +1,65 @@
+<!doctype html><html><head><meta charset="utf-8"><title>15 — Share Dialog</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main"><div class="app-header"><h1><i class="fa-solid fa-list-check"></i> VIP Donors Q4 2026</h1></div><div class="mj-panel" style="opacity:0.35;"><div class="mj-panel-body" style="height:200px;">[List detail underneath]</div></div></main>
+</div>
+
+<div class="modal-backdrop">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header"><i class="fa-solid fa-share-nodes"></i><h2>Share — VIP Donors Q4 2026</h2><button class="close"><i class="fa-solid fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="label">Add people or roles</div>
+      <div class="row gap-8 mt-8">
+        <div class="mj-search" style="flex:1;"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Search users or roles…"></div>
+        <select class="mj-input mj-select" style="width:130px;"><option>Viewer</option><option>Editor</option><option>Owner</option></select>
+        <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> Share</button>
+      </div>
+      <div class="muted mt-8" style="font-size:11.5px;"><i class="fa-solid fa-circle-info"></i> Not a user yet? Enter an email to send an invitation (see <a href="16-invitations.html">Invitations</a>).</div>
+
+      <div class="divider"></div>
+
+      <div class="label">People & roles with access (4)</div>
+      <div class="mt-8" style="border:1px solid var(--mj-border-default); border-radius:10px; overflow:hidden;">
+        <div class="row" style="padding:10px 12px; border-bottom:1px solid var(--mj-border-default);">
+          <span style="width:32px;height:32px;border-radius:50%;background:var(--mj-brand-primary);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;">AN</span>
+          <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Amith Nagarajan <span class="badge badge-brand">you</span></div><div class="muted" style="font-size:11.5px;">amith@bluecypress.io</div></div>
+          <select class="mj-input mj-btn-sm" disabled><option>Owner</option></select>
+        </div>
+        <div class="row" style="padding:10px 12px; border-bottom:1px solid var(--mj-border-default);">
+          <span style="width:32px;height:32px;border-radius:50%;background:#10b981;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;">MS</span>
+          <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Mike Smith</div><div class="muted" style="font-size:11.5px;">mike@example.org · Shared 2 weeks ago</div></div>
+          <select class="mj-input mj-btn-sm" style="width:110px;"><option>Editor</option><option>Viewer</option><option>Owner</option></select>
+          <button class="mj-btn mj-btn-icon mj-btn-ghost"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="row" style="padding:10px 12px; border-bottom:1px solid var(--mj-border-default);">
+          <span style="width:32px;height:32px;border-radius:50%;background:#f59e0b;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;">SL</span>
+          <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Sara Lee</div><div class="muted" style="font-size:11.5px;">sara@example.org · Shared 1 week ago</div></div>
+          <select class="mj-input mj-btn-sm" style="width:110px;"><option>Viewer</option><option>Editor</option><option>Owner</option></select>
+          <button class="mj-btn mj-btn-icon mj-btn-ghost"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="row" style="padding:10px 12px;">
+          <span style="width:32px;height:32px;border-radius:50%;background:#8b5cf6;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:12px;"><i class="fa-solid fa-users-rectangle"></i></span>
+          <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Role: Marketing Team</div><div class="muted" style="font-size:11.5px;">12 members · Shared today</div></div>
+          <select class="mj-input mj-btn-sm" style="width:110px;"><option>Viewer</option><option>Editor</option></select>
+          <button class="mj-btn mj-btn-icon mj-btn-ghost"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row gap-8">
+        <input type="checkbox" id="notify" checked>
+        <label for="notify" style="font-size:12.5px;">Send email notification to new shares</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary">Done</button>
+      <button class="mj-btn"><i class="fa-solid fa-envelope-open-text"></i> Manage Invitations</button>
+      <div class="spacer"></div>
+      <a href="#" style="font-size:12px;"><i class="fa-solid fa-clock-rotate-left"></i> View audit log</a>
+    </div>
+  </div>
+</div>
+</body></html>

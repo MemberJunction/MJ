@@ -515,6 +515,15 @@ export interface IMetadataProvider {
 
     get DatabaseConnection(): any
 
+    /**
+     * A stable string that uniquely identifies the underlying connection this provider points to
+     * (host/port/database/endpoint — never credentials). Two providers pointing at the same
+     * connection should return the same value. Used by BaseEngine to key its per-connection engine
+     * instance cache so transient per-request providers don't pollute the cache; same-connection
+     * lookups share one cached engine.
+     */
+    get InstanceConnectionString(): string
+
     Config(configData: ProviderConfigDataBase, providerToUse?: IMetadataProvider): Promise<boolean>
 
     get Entities(): EntityInfo[]

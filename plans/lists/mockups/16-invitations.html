@@ -1,0 +1,61 @@
+<!doctype html><html><head><meta charset="utf-8"><title>16 — Invitations</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-envelope-open-text"></i> Invitations — VIP Donors Q4 2026</h1><div class="spacer"></div><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-paper-plane"></i> Send Invitation</button></div>
+
+  <div class="row gap-12 mb-16">
+    <div class="badge badge-info">3 Pending</div>
+    <div class="badge badge-success">8 Accepted</div>
+    <div class="badge badge-error">1 Expired</div>
+    <div class="badge badge-muted">2 Revoked</div>
+  </div>
+
+  <div class="mj-panel">
+    <div class="mj-panel-header"><h3><i class="fa-solid fa-clock"></i>Pending</h3></div>
+    <div class="mj-panel-body" style="padding:0;">
+      <table class="mj-table" style="border:none;">
+        <thead><tr><th>Email</th><th>Permission</th><th>Sent</th><th>Expires</th><th>Sent By</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><div class="cell-icon-row"><i class="fa-solid fa-envelope muted"></i>jane.doe@partner.org</div></td><td><span class="badge badge-brand">Viewer</span></td><td>2 hours ago</td><td>in 6 days</td><td>Amith</td><td><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-rotate-right"></i> Resend</button><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-xmark"></i> Revoke</button></td></tr>
+          <tr><td><div class="cell-icon-row"><i class="fa-solid fa-envelope muted"></i>bob.smith@consulting.com</div></td><td><span class="badge badge-warning">Editor</span></td><td>Yesterday</td><td>in 5 days</td><td>Amith</td><td><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-rotate-right"></i> Resend</button><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-xmark"></i> Revoke</button></td></tr>
+          <tr><td><div class="cell-icon-row"><i class="fa-solid fa-envelope muted"></i>maria@nonprofit.org</div></td><td><span class="badge badge-brand">Viewer</span></td><td>3 days ago</td><td>in 3 days</td><td>Sara Lee</td><td><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-rotate-right"></i> Resend</button><button class="mj-btn mj-btn-sm mj-btn-ghost"><i class="fa-solid fa-xmark"></i> Revoke</button></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mj-panel mt-16">
+    <div class="mj-panel-header"><h3><i class="fa-solid fa-check-circle"></i>Accepted</h3></div>
+    <div class="mj-panel-body" style="padding:0;">
+      <table class="mj-table" style="border:none;">
+        <thead><tr><th>Email</th><th>Now User</th><th>Permission</th><th>Accepted</th></tr></thead>
+        <tbody>
+          <tr><td>mike@example.org</td><td><div class="row gap-8"><span style="width:24px;height:24px;border-radius:50%;background:#10b981;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;">MS</span>Mike Smith</div></td><td><span class="badge badge-warning">Editor</span></td><td>2 weeks ago</td></tr>
+          <tr><td>sara@example.org</td><td><div class="row gap-8"><span style="width:24px;height:24px;border-radius:50%;background:#f59e0b;color:#fff;font-size:10px;display:inline-flex;align-items:center;justify-content:center;">SL</span>Sara Lee</div></td><td><span class="badge badge-brand">Viewer</span></td><td>1 week ago</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- Inline preview of the Send Invitation modal at right edge -->
+<div style="position:fixed; right:24px; bottom:24px; width:380px; background:var(--mj-bg-surface); border:1px solid var(--mj-border-default); border-radius:var(--mj-radius-xl); box-shadow:var(--mj-shadow-lg); overflow:hidden;">
+  <div style="padding:14px 18px; background:var(--mj-brand-primary); color:#fff; display:flex; align-items:center; gap:10px;"><i class="fa-solid fa-paper-plane"></i><strong>Send Invitation</strong></div>
+  <div style="padding:16px 18px;">
+    <div class="label">Email</div>
+    <input class="mj-input mt-8" placeholder="recipient@example.org">
+    <div class="label mt-12">Permission</div>
+    <select class="mj-input mj-select mt-8"><option>Viewer</option><option>Editor</option></select>
+    <div class="label mt-12">Message (optional)</div>
+    <textarea class="mj-input mt-8" rows="3" placeholder="Sharing this list because…"></textarea>
+    <div class="row gap-8 mt-12">
+      <button class="mj-btn mj-btn-primary" style="flex:1;"><i class="fa-solid fa-paper-plane"></i> Send Invitation</button>
+      <button class="mj-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+</body></html>

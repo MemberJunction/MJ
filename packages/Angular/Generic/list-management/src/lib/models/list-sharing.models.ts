@@ -227,4 +227,10 @@ export interface ListShareDialogResult {
    * Shares that were removed
    */
   sharesRemoved: string[];
+
+  /**
+   * Whether the user wants newly-added shares to fan out as notifications
+   * to the recipient (email + in-app, per their preferences). Default true.
+   */
+  notifyByEmail?: boolean;
 }

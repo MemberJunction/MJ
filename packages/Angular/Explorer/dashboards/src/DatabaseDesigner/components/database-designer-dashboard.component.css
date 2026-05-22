@@ -1,25 +1,22 @@
-/* ── Dashboard root ───────────────────────────────────────────────────────── */
-
-.database-designer-dashboard {
+/*
+  Database Designer dashboard root — thin wrapper that hosts the entity-list
+  child + slide-over panels. The entity-list owns its own interior chrome
+  (<mj-page-header-interior>) so this component is a flex column that just
+  lets the child fill the body. See Section 10 of plans/explorer-chrome-conventions.md.
+*/
+:host {
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--mj-bg-page);
   overflow: hidden;
+  background: var(--mj-bg-page);
   position: relative;
 }
 
-/* ── Content area ─────────────────────────────────────────────────────────── */
-
-.database-designer-content {
+mj-database-entity-list {
+  display: block;
   flex: 1;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: var(--mj-bg-surface);
-  border-radius: 8px;
-  margin: 16px;
-  box-shadow: 0 1px 4px color-mix(in srgb, var(--mj-border-strong) 20%, transparent);
+  min-height: 0;
 }
 
 /* ── Placeholder (pre-Phase 5d/5e wiring) ─────────────────────────────────── */

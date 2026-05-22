@@ -35,6 +35,7 @@ interface SkywayConfig {
         BaselineOnMigrate: boolean;
     };
     Placeholders?: Record<string, string>;
+    TransactionMode?: 'per-run' | 'per-migration';
     Provider?: unknown;
 }
 
@@ -213,7 +214,7 @@ function BuildSkywayConfig(
         Migrations: {
             Locations: [absoluteDir],
             DefaultSchema: schemaName,
-            BaselineVersion: '0',
+            BaselineVersion: '1',
             BaselineOnMigrate: true,
         },
         Placeholders: {

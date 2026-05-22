@@ -32,7 +32,8 @@
     "packages/OpenApp/*",
     "packages/Integration/*",
     "packages/Archiving/*",
-    "packages/geo/*"
+    "packages/geo/*",
+    "packages/Lists/*"
 
   ],
   "scripts": {

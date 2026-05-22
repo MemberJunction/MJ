@@ -1622,9 +1622,18 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Rebuild AG Grid column definitions to reflect the new view's settings
       this.buildAgColumnDefs();
 
-      // Load data if auto-refresh is enabled and parent hasn't disabled loading
-      if (this._autoRefreshOnParamsChange && this._allowLoad) {
-        await this.loadData(false);
+      // Load data if auto-refresh is enabled and parent hasn't disabled loading.
+      // Defer the AllowLoad check to a microtask: Angular applies @Input setters synchronously
+      // in template order, and [Params] is commonly bound before [AllowLoad] (see the wrapper in
+      // explorer-entity-data-grid). Reading _allowLoad synchronously here would see its default
+      // (true) before a later [AllowLoad]="false" binding lands, causing collapsed/deferred panels
+      // to fire a RunView anyway. Yielding lets all sibling input setters apply first so the check
+      // reflects the final AllowLoad value.
+      if (this._autoRefreshOnParamsChange) {
+        await Promise.resolve();
+        if (this._allowLoad) {
+          await this.loadData(false);
+        }
       }
     } catch (error) {
       this.errorMessage = error instanceof Error ? error.message : 'Failed to load view';

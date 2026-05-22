@@ -56,7 +56,6 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public showMobileFilters = false;
   public expandedRoleId: string | null = null;
 
   // Role permissions (simplified view)
@@ -173,11 +172,6 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onTypeFilterChange(type: 'all' | 'system' | 'custom'): void {
     this.updateFilter({ type });
   }
@@ -187,6 +181,12 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips) apply immediately. Text search still goes
+    // through the 300ms debounce in setupFilterSubscription.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public toggleRoleExpansion(roleId: string): void {

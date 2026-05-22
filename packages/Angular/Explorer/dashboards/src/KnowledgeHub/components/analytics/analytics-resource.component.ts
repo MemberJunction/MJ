@@ -14,6 +14,7 @@ import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { MJLeftNavItem, MJLeftNavSection } from '@memberjunction/ng-ui-components';
 
 // ================================================================
 // Interfaces
@@ -492,6 +493,18 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
     // Public Methods
     // ================================================================
+
+    /** Wraps `NavItems` for `<mj-left-nav>`. */
+    public get navSections(): MJLeftNavSection[] {
+        return [{
+            items: this.NavItems.map(n => ({ id: n.ID, label: n.Label, icon: n.Icon }))
+        }];
+    }
+
+    /** Adapter for `<mj-left-nav>`'s `(ItemClicked)` output. */
+    public onNavItemClicked(item: MJLeftNavItem): void {
+        this.SelectTab(item.id);
+    }
 
     public SelectTab(tabId: string): void {
         this.ActiveTab = tabId;

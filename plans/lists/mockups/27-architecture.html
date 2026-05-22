@@ -1,0 +1,118 @@
+<!doctype html><html><head><meta charset="utf-8"><title>27 — Architecture Reference</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="index-shell">
+  <h1><i class="fa-solid fa-sitemap" style="color: var(--mj-brand-primary)"></i> Lists — Architecture Reference</h1>
+  <div class="subtitle">Four-layer stack with strict separation. Actions are a <strong>required</strong> parallel consumer (alongside Angular) so AI Agents and Workflows get the same surface as the UI. All flows that mutate go through the preview/commit contract.</div>
+
+  <h2 style="margin-top:24px;">Layer Stack</h2>
+  <div class="mj-panel"><div class="mj-panel-body">
+
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:12px; margin-bottom:16px;">
+      <div style="padding:16px; background:color-mix(in srgb, #ec4899 12%, transparent); border:1px solid #ec4899; border-radius:10px;">
+        <div style="font-weight:700; color:#be185d; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-window-restore"></i> Angular UI</div>
+        <div class="muted mt-8" style="font-size:12px;">Thin components. Bind props, render, call DP helper. No business logic.</div>
+        <div class="mt-8" style="font-size:11px;">@memberjunction/ng-list-management<br>@memberjunction/ng-audience-source</div>
+      </div>
+      <div style="padding:16px; background:color-mix(in srgb, #8b5cf6 12%, transparent); border:1px solid #8b5cf6; border-radius:10px;">
+        <div style="font-weight:700; color:#6d28d9; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-robot"></i> Actions (REQUIRED)</div>
+        <div class="muted mt-8" style="font-size:12px;">Action wrappers around every core method. Used by AI Agents, Workflows, scheduled jobs.</div>
+        <div class="mt-8" style="font-size:11px;">@memberjunction/core-actions/lists</div>
+      </div>
+      <div style="padding:16px; background:color-mix(in srgb, #f59e0b 12%, transparent); border:1px solid #f59e0b; border-radius:10px;">
+        <div style="font-weight:700; color:#92400e; display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-puzzle-piece"></i> DP Helper</div>
+        <div class="muted mt-8" style="font-size:12px;">Typed client (<code>ListsClient</code>) wrapping GraphQL with the same types as core.</div>
+        <div class="mt-8" style="font-size:11px;">@memberjunction/graphql-dataprovider</div>
+      </div>
+    </div>
+
+    <div style="text-align:center; color:var(--mj-text-muted); font-size:20px; margin:6px 0;">↓</div>
+
+    <div style="padding:16px; background:color-mix(in srgb, #2563eb 12%, transparent); border:1px solid var(--mj-brand-primary); border-radius:10px; margin-bottom:16px;">
+      <div style="font-weight:700; color:var(--mj-brand-primary); display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-cloud"></i> GraphQL Resolver Layer</div>
+      <div class="muted mt-8" style="font-size:12px;">Hand-written <code>ListOperationsResolver</code> exposing previewListDelta, applyListDelta, materializeListFromView, refreshListFromSource, composeLists. Auth via <code>contextUser</code> and ResourcePermission.</div>
+      <div class="mt-8" style="font-size:11px;">@memberjunction/server / resolvers/ListOperationsResolver.ts</div>
+    </div>
+
+    <div style="text-align:center; color:var(--mj-text-muted); font-size:20px; margin:6px 0;">↓</div>
+
+    <div style="padding:16px; background:color-mix(in srgb, #16a34a 14%, transparent); border:1px solid var(--mj-status-success); border-radius:10px;">
+      <div style="font-weight:700; color:var(--mj-status-success-text); display:flex; align-items:center; gap:8px;"><i class="fa-solid fa-cube"></i> Core Object Model — <code>@memberjunction/lists</code></div>
+      <div class="muted mt-8" style="font-size:12px;">Pure TypeScript. Owns every rule: list materialization, set algebra, delta computation, lineage tracking, refresh modes, drop guards, deltaToken signing.</div>
+      <div class="mt-8" style="font-size:11px;">Classes: <code>ListOperations</code>, <code>AudienceResolver</code>, types <code>ListDelta</code> / <code>ListSource</code> / <code>ListRefreshMode</code>. Talks to MJ via <code>RunView</code> and <code>BaseEntity</code>. Has no GraphQL, no Angular.</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="label">Data Layer (existing)</div>
+    <div class="mt-8 row gap-8" style="flex-wrap:wrap;">
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: Lists</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: List Details</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: List Categories</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: List Shares</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: List Invitations</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: User Views</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: Resource Permissions</span>
+      <span class="badge badge-muted"><i class="fa-solid fa-table"></i> MJ: Tags / Tagged Items</span>
+    </div>
+  </div></div>
+
+  <h2 style="margin-top:36px;">Why Actions Are Required (Not Optional)</h2>
+  <div class="mj-panel"><div class="mj-panel-body" style="font-size:13.5px; line-height:1.7;">
+    <div>Every public capability that exists in the UI must <strong>also</strong> be exposed via an Action so that:</div>
+    <ul style="margin:10px 0 0; padding-left:20px;">
+      <li><strong>AI Agents</strong> can materialize from views, refresh, compose, and share lists without scraping the UI</li>
+      <li><strong>Workflows</strong> can drive list ops as steps (e.g., "after invoice approved, add to Closed Won list")</li>
+      <li><strong>Scheduled jobs</strong> can run nightly refreshes with audit trail</li>
+      <li><strong>MCP tools</strong> get a first-class API for third-party orchestration</li>
+    </ul>
+    <div class="mt-12">Actions are <em>thin</em> — each one delegates to a single <code>ListOperations</code> method, handling parameter mapping and result shaping only. They MUST honor the same <code>confirmDrops</code> contract: any Action that can produce drops requires an explicit input flag and the agent or workflow must supply it.</div>
+  </div></div>
+
+  <h2 style="margin-top:36px;">Required Actions</h2>
+  <table class="mj-table">
+    <thead><tr><th>Action Name</th><th>Wraps</th><th>Can Drop?</th><th>Phase</th></tr></thead>
+    <tbody>
+      <tr><td>Add Records to List</td><td><code>applyDelta</code> (additive)</td><td>No</td><td>Existing</td></tr>
+      <tr><td>Remove Records from List</td><td><code>applyDelta</code> (remove)</td><td>Yes (explicit)</td><td>Existing</td></tr>
+      <tr><td>Create List</td><td><code>createList</code></td><td>No</td><td>Existing</td></tr>
+      <tr><td>Materialize List from View</td><td><code>materializeFromView</code></td><td>No</td><td>P1</td></tr>
+      <tr><td>Add View Results to List</td><td><code>addViewResultsToList</code></td><td>No</td><td>P1</td></tr>
+      <tr><td>Refresh List from Source</td><td><code>refreshFromSource</code></td><td>Yes (Sync mode)</td><td>P1</td></tr>
+      <tr><td>Compose Lists</td><td><code>computeSetOp</code> + <code>applyDelta</code></td><td>Yes (into existing)</td><td>P1</td></tr>
+      <tr><td>Compute List Delta (preview)</td><td><code>computeDelta</code></td><td>N/A (read-only)</td><td>P0</td></tr>
+      <tr><td>Apply List Delta</td><td><code>applyDelta</code></td><td>Depends on delta</td><td>P0</td></tr>
+      <tr><td>Resolve Audience</td><td><code>resolveSource</code></td><td>No (read-only)</td><td>P3</td></tr>
+      <tr><td>Share List</td><td><code>ListSharing.share</code></td><td>No</td><td>P2</td></tr>
+      <tr><td>Invite to List</td><td><code>ListSharing.invite</code></td><td>No</td><td>P2</td></tr>
+      <tr><td>Get List Members</td><td><code>getListMembers</code></td><td>N/A</td><td>Existing</td></tr>
+      <tr><td>Get Record List Membership</td><td>direct query</td><td>N/A</td><td>Existing</td></tr>
+      <tr><td>Update List Item Status</td><td><code>updateItemStatus</code></td><td>No</td><td>Existing</td></tr>
+    </tbody>
+  </table>
+
+  <h2 style="margin-top:36px;">Drop-Warning Flow (All Layers)</h2>
+  <div class="mj-panel"><div class="mj-panel-body">
+    <pre style="background:var(--mj-bg-surface-sunken); padding:14px; border-radius:8px; font-size:12px; overflow:auto;">
+[Angular | Action | MCP]  ─┐
+                            ├──► ListsClient.computeDelta()  ──► Resolver  ──► ListOperations.computeDelta()
+                            │                                                 ↓ returns ListDelta { add, remove, unchanged, deltaToken }
+                            │
+                            │   [If counts.remove > 0]
+                            │      ┌── Angular: show &lt;mj-list-delta-confirm&gt; with required ack checkbox
+                            │      ├── Action: caller MUST set confirmDrops=true input
+                            │      └── MCP: agent must include confirmDrops in tool args
+                            │
+                            └──► ListsClient.applyDelta(deltaToken, confirmDrops)
+                                    │
+                                    ↓ Server validates:
+                                       1. deltaToken HMAC is valid & not expired
+                                       2. delta has not gone stale (re-compute on server)
+                                       3. if counts.remove &gt; 0 then confirmDrops MUST be true
+                                       4. caller has Editor permission on target list
+                                    ↓
+                                  ApplyResult { added, removed, errors }
+                                  + AuditLog entry (every mutation)</pre>
+  </div></div>
+</div>
+</body></html>

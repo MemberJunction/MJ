@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "BaseURL": {
+      "type": "string",
+      "title": "Base URL",
+      "description": "Aptify Services API root URL (e.g. https://customer.example.com/AptifyServicesAPI/services). No trailing slash.",
+      "order": 0
+    },
+    "Username": {
+      "type": "string",
+      "title": "Username",
+      "description": "Aptify user with API access.",
+      "order": 1
+    },
+    "Password": {
+      "type": "string",
+      "title": "Password",
+      "description": "Password for the Aptify user.",
+      "isSecret": true,
+      "order": 2
+    },
+    "AuthProvider": {
+      "type": "string",
+      "title": "Auth Provider",
+      "description": "Optional. Defaults to 'AptifyUser'.",
+      "order": 3
+    }
+  },
+  "required": [
+    "BaseURL",
+    "Username",
+    "Password"
+  ]
+}

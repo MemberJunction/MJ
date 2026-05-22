@@ -17,7 +17,7 @@ export class MJEntityPermissionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'entityRoleDetails', sectionName: 'Entity & Role Details', isExpanded: true },
             { sectionKey: 'accessRights', sectionName: 'Access Rights', isExpanded: true },
-            { sectionKey: 'securityFilters', sectionName: 'Security Filters', isExpanded: false },
+            { sectionKey: 'securityFilters', sectionName: 'Security Filters', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -41,7 +41,7 @@ interface HubSpotCredentials {
 
 /** Connection configuration parsed from CompanyIntegration.Configuration JSON */
 export interface HubSpotConnectionConfig {
-    /** HubSpot access token (private app key or OAuth token) */
+    /** HubSpot Private App access token (API Key auth — Bearer header). */
     AccessToken: string;
     /** API version string. Default: 'v3' */
     ApiVersion: string;
@@ -991,7 +991,7 @@ const HUBSPOT_OBJECTS: IntegrationObjectInfo[] = [
  * Extends BaseRESTIntegrationConnector to leverage metadata-driven object/field
  * discovery from IntegrationEngineBase cache and generic pagination handling.
  *
- * Uses Bearer token authentication (private app key or OAuth access token).
+ * Uses Bearer token authentication with a HubSpot Private App access token (API Key auth).
  * Supports cursor-based pagination and automatic response flattening.
  *
  * Configuration JSON (on CompanyIntegration) supports optional rate limit overrides:
@@ -1896,7 +1896,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const bodyObj = response.Body as Record<string, unknown> | undefined;
         let message: string;
         if (response.Status === 403) {
-            message = `[HubSpot] 403 Forbidden — OAuth scope missing for ${operation} on '${objectName}'. ` +
+            message = `[HubSpot] 403 Forbidden — required scope missing for ${operation} on '${objectName}'. ` +
                 `Add the required scope to your HubSpot app and reconnect.`;
         } else {
             message = bodyObj?.['message']
@@ -1921,7 +1921,7 @@ export class HubSpotConnector extends BaseRESTIntegrationConnector {
         const credentials = await this.LoadCredentials(companyIntegration, contextUser);
         const config = this.BuildConnectionConfig(credentials, companyIntegration);
         this._config = config;
-        console.log(`[HubSpot] Authenticated, token length: ${credentials.AccessToken?.length ?? 0}`);
+        // Do NOT log credential-derived info (token length, prefix, etc.) — would leak secret-shape data into MJAPI logs.
         const auth: HubSpotAuthContext = {
             Token: credentials.AccessToken,
             Credentials: credentials,

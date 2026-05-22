@@ -34,6 +34,8 @@ export * from './engines/InstanceConfigEngine';
 export * from './engines/SearchEngineBase';
 export * from './engines/GeoDataEngine';
 export * from './engines/PermissionEngine';
+export * from './engines/AuditLogTypeEngine';
+export * from './engines/ResourceTypeEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';

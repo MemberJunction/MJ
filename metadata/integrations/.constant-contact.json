@@ -1,0 +1,1976 @@
+[
+  {
+    "fields": {
+      "Name": "Constant Contact",
+      "Description": "Constant Contact V3 REST API connector for email marketing. Supports contacts, contact lists, custom fields, tags, email campaigns/activities, segments, and async bulk activities. Auth: OAuth2 Authorization Code flow (access tokens valid 24h; refresh t...",
+      "ClassName": "ConstantContactConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://app.constantcontact.com",
+      "BatchMaxRequestCount": 50,
+      "BatchRequestWaitTime": 300,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=Constant Contact OAuth",
+      "Icon": "fa-solid fa-envelope-open-text"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contacts",
+            "DisplayName": "Contacts",
+            "Description": "Contacts — the primary contact record with name, email, phones, addresses, custom fields, list memberships, and taggings. Use email_address as the natural key for upsert.",
+            "Category": "Contacts",
+            "APIPath": "/contacts",
+            "ResponseDataKey": "contacts",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "contact_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Unique ID for each contact resource",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AAD74813-A963-40DB-A3C7-6A1782B1D9DA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:58.908Z",
+                  "checksum": "aaa3754e1e9449cc1af681f1d47f97d26f00db39608ed78fff9e895a0a61aee1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email_address",
+                  "DisplayName": "email_address",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D34F3619-22CF-46A3-AB4B-A8919C639ABD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:58.971Z",
+                  "checksum": "0a59d7e4034285c24d06c2e12996b66b96012f520919771ec3f128f1ac77235e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "first_name",
+                  "DisplayName": "first_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The first name of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "43FFB5E8-AB3F-4D12-B111-B36D174ED0E3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.036Z",
+                  "checksum": "a0a6126f83e91d2ca4ecd3c556d480193aa12f5a8d2e0f3acf487e0ee3a84b97"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "last_name",
+                  "DisplayName": "last_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The last name of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A3BA3FAD-EE2E-41E8-9925-4CCD558FD60F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.099Z",
+                  "checksum": "88cad86696b1fa9c454f652f91bc1073168a1283155fc77b8d687fde8e8f88a7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "job_title",
+                  "DisplayName": "job_title",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The job title of the contact.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E6723DDC-FD63-4EBA-871A-78EE91E24F7C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.163Z",
+                  "checksum": "672dcc88ff649cf3fc0c8bfb6f2ba8e5de15c0336c81ae2000e9de17ba137966"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "company_name",
+                  "DisplayName": "company_name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The name of the company where the contact works.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B82169E8-71A9-44A4-B4E0-55DD0FFC8B44"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.230Z",
+                  "checksum": "7f8bc1e98349334cd8ef1769f47fe4abd9f05c45cb1e3f0e747a92aa681714b8"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "birthday_month",
+                  "DisplayName": "birthday_month",
+                  "Type": "int",
+                  "Description": "The month value for the contact's birthday. Valid values are from 1 through 12. You must use this property with <code>birthday_month</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3AC5B54F-5530-46A2-95BD-81F7EC109749"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.293Z",
+                  "checksum": "c30e9477a7073378c4562ec9cebcca4dd0547e0961d9b49654eeb697369be8fe"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "birthday_day",
+                  "DisplayName": "birthday_day",
+                  "Type": "int",
+                  "Description": "The day value for the contact's birthday. Valid values are from 1 through 12. You must use this property with <code>birthday_day</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "51736799-A313-4931-849B-2AD732E488F0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.361Z",
+                  "checksum": "8e95de7c5316107031e0f8f3cc347ed9ba0365c68240980556013997409b0d37"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "anniversary",
+                  "DisplayName": "anniversary",
+                  "Type": "nvarchar",
+                  "Length": 10,
+                  "Description": "The anniversary date for the contact. For example, this value could be the date when the contact first became a customer of an organization in Constant Contact. Valid date formats are MM/DD/YYYY, M/D/YYYY, YYYY/MM/DD, YYYY/M/D, YYYY-MM-DD, YYYY-M-D,M-D-YYYY, or M-DD-YYYY.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B96AFD46-23BD-4E7A-976B-29911750A2C3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.426Z",
+                  "checksum": "d1211139466bb346fb35b7d028f54c3fa447876cf3b4995e59aea6e0757245d8"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "update_source",
+                  "DisplayName": "update_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies who last updated the contact; valid values are  <code>Contact</code> or <code>Account</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CB20C3E0-A2F1-428F-A9E3-E2E8158D0747"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.490Z",
+                  "checksum": "7f0fbce0dfbea4fb8c99912e37572b5854989ce62aa44151923cf6d558e26933"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "create_source",
+                  "DisplayName": "create_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Describes who added the contact; valid values are <code>Contact</code> or <code>Account</code>. Your integration must accurately identify <code>create_source</code> for compliance reasons; value is set when contact is created.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "ECAD5203-62FA-4C16-BA1E-E40CFFD10313"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.583Z",
+                  "checksum": "e1044cf69ad4d955d0e8303cd8c7973fa3bde9749b81a13f351dc83f67d0359b"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was created, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DB3559B8-F1E1-484B-8C68-07194C287609"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.651Z",
+                  "checksum": "7be134e4cf7e57b8a63c808d144dc3355f64bfcd23580ac589b51f1abc0513fa"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the contact was last updated, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6442DBC0-95A2-48BF-AD79-20345916EA34"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.717Z",
+                  "checksum": "60de1ffcb05cc0b48004b3ef137e90f506b5cea36e8e1f3512c0aed3183c0064"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deleted_at",
+                  "DisplayName": "deleted_at",
+                  "Type": "date",
+                  "Description": "For deleted contacts (<code>email_address</code> contains <code>opt_out_source</code> and <code>opt_out_date</code>), shows the date of deletion.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C7CD8FEB-041C-4CCF-A79F-BDDC755253BF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.784Z",
+                  "checksum": "5f0e6ace5bfe9b97c6d9d21051bc335056fd385c60b544140c4c6dd0d474c94d"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom_fields",
+                  "DisplayName": "custom_fields",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 25 <code>custom_field</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "ACCBE870-7D49-45C2-9995-61607F1A37D0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.847Z",
+                  "checksum": "c624370d4a97eed65abf4c54bfb8130cc72830b7e2ef3baa6d9177c5ab4fa7b9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "phone_numbers",
+                  "DisplayName": "phone_numbers",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 3 <code>phone_numbers</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4CFF9BDD-C989-4870-AA82-A36E386134BD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.917Z",
+                  "checksum": "0f7de6624f89831e7e434c112ff4c80c3fcccdfcb4dbe393dfae54aef6831baf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "street_addresses",
+                  "DisplayName": "street_addresses",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 3 <code>street_addresses</code> subresources.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 17,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5E60D885-1CD9-4EB3-8A9D-4BE84AB75B9A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:27:59.984Z",
+                  "checksum": "0fc2c00e85f505a24b16a3171e49fe1ba4a0d0155a37ed50ac95aff691602701"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_memberships",
+                  "DisplayName": "list_memberships",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of up to 50 <code>list_ids</code> to which the contact is subscribed.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 18,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "99E5FF09-822A-444C-B23A-A4FBE394FB8E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.054Z",
+                  "checksum": "955e4681b0fa9dc8ec2a12ac1a86ca8ac151568cbb113da9fc263ea34bdca257"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "taggings",
+                  "DisplayName": "taggings",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of tags (<code>tag_id</code>) assigned to the contact, up to a maximum of 50.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 19,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CE74A720-554B-4309-A461-CF1BB8D8D11F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.118Z",
+                  "checksum": "0088e518624d564627ffb3eac4295464af7e866a2a3f92db69272971c1003d79"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "notes",
+                  "DisplayName": "notes",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "An array of notes about the contact listed by most recent note first.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 20,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FE6B87A9-F929-4CE4-9392-B239317FF359"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.182Z",
+                  "checksum": "ef1eb65a8329207692dbec3958f917938d2b68fe232b1c6c3d3589613b89efe3"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "52C1F55E-3C8E-4CB5-8C97-34EFC4D1B91C"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.722Z",
+            "checksum": "6f8d96933a3b338639147660af7cd1d71597432b263062b2806ee4434ac82857"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactLists",
+            "DisplayName": "ContactLists",
+            "Description": "Contact lists — subscription lists for sending email campaigns. Contacts can belong to multiple lists.",
+            "Category": "Contacts",
+            "APIPath": "/contact_lists",
+            "ResponseDataKey": "lists",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "list_id",
+                  "DisplayName": "list_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Unique ID for the contact list",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8008C0E1-0637-4BD8-8088-EBEB94C370B6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.278Z",
+                  "checksum": "13202b9b14f228bca208b79f8c2591a08c01e7282ffb83d04fd84d2b9d04b7e5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The name given to the contact list",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F0DAFA85-122C-420C-9F85-D1C8923CDEF5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.348Z",
+                  "checksum": "a111bc44ed4f4fa9cf59df6a65965649add89b150a85e4f61a3e277c01609c73"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "description",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Text describing the list.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DC69C3C3-54C7-4BE9-8DE0-07C6EF1A0E2B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.426Z",
+                  "checksum": "57b6964fe2ad92020a13669d0bb94100d52890cdfba224fb7cd22a49a1312c00"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "favorite",
+                  "DisplayName": "favorite",
+                  "Type": "bit",
+                  "Description": "Identifies whether or not the account has favorited the contact list.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5491FC91-D5B6-4ABF-810D-C1DE640244FD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.495Z",
+                  "checksum": "1cc975daf7cd9c45819c70c8b47398df0d6e1410ef0c9c736e50fe3550f0a851"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was created, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4E51F30B-2794-404E-A95B-8D545018A2FE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.561Z",
+                  "checksum": "b478e4f4008dffbbbbca274bc134928a22600776e17586f8fab086e4eca3f3a3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "Date and time that the list was last updated, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "43D0C4CE-D6AD-4B3E-A6D5-5084289FFD6A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.630Z",
+                  "checksum": "49623d6a88042e0ca5258281233203c9ed5ba59aafb17933072126b4a897984f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "deleted_at",
+                  "DisplayName": "deleted_at",
+                  "Type": "datetime",
+                  "Description": "If the list was deleted, this property shows the date and time it was deleted, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DD80CBC6-19F4-4ADD-9237-A968FF195D10"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.696Z",
+                  "checksum": "1fcc8d56aea0bd41b8f2e33338d12825990661e225ac4a5b6f4eb63f5a759c88"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "membership_count",
+                  "DisplayName": "membership_count",
+                  "Type": "int",
+                  "Description": "The total number of contacts that are members in a list. Does not apply to segment type lists.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F1265A5F-DAC7-43FE-8435-371FCD306762"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.764Z",
+                  "checksum": "b750bcbcae0ccadb9fb041bdb65c55148f0f0daccb19ddae9d119bf4b3279b16"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "46657E78-4C34-46F6-B498-A2196EBA0903"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.741Z",
+            "checksum": "aecf412804c5923b9f778d3ee37d66b17f223a8977238c2a7f5baf73d6839623"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactCustomFields",
+            "DisplayName": "ContactCustomFields",
+            "Description": "Account-level custom field definitions. Up to 100 per account. Types include string, date, datetime, currency, text_area, number, boolean, single_select, multi_select (Sept 2025 expansion).",
+            "Category": "Contacts",
+            "APIPath": "/contact_custom_fields",
+            "ResponseDataKey": "custom_fields",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "custom_field_id",
+                  "DisplayName": "custom_field_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The custom_field's unique ID",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B4AD6A6C-1359-4D79-889A-5EC5C2A86C06"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.829Z",
+                  "checksum": "ef079d4932afaa8f684814ffb20e81887a4b738cb67952e1b31d0bce11d51ad1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "label",
+                  "DisplayName": "label",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "The display name for the custom_field shown in the UI as free-form text",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BFD48852-9E09-4FA9-93A1-A4768F665B45"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.894Z",
+                  "checksum": "b2910e1d7411594367376310c2af6172ef1306ab5db130e5ba07b8fc0aa11e17"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Unique name for the custom_field constructed from the label by replacing blanks with underscores.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B492ACE3-E8FB-41C4-B9FC-6083069363D4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:00.994Z",
+                  "checksum": "29ec321a06f144553c31274a7a673c05d4a51db280179ba7a593d0a182665d7a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Specifies the type of value the custom_field field accepts: string or date.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EE68E940-4BD6-48F5-BB6D-A46E0C40708A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.062Z",
+                  "checksum": "ae213e72efb93989deaa5acfeb5b1b79bd82e31cfdaece930797d619818f8f81"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "System generated date and time that the resource was updated, in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "035AE5D9-A1A3-4E72-8D04-3687C4116DC3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.129Z",
+                  "checksum": "1cce3750d7dd43237bbcd8c8c591a0a36fd5b199d642100d57dabd6814293ede"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "Date and time that the resource was created, in ISO-8601 format. System generated.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F668035C-416D-4EB0-8751-9140A71B9D55"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.196Z",
+                  "checksum": "fef2b6a439ddf85ee20c0a5187b6cf79f3a871aca3a248b6ea2e86ca9f75d75d"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D6F68E46-BF2B-45C8-921A-29203EE46DC0"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.763Z",
+            "checksum": "5affe4368f33376a7f0bdd66b469d32a93721c359fb33edd3a6347de559bd725"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "ContactTags",
+            "DisplayName": "ContactTags",
+            "Description": "Tags — unstructured string labels that can be applied to contacts. Account-unique by name.",
+            "Category": "Contacts",
+            "APIPath": "/contact_tags",
+            "ResponseDataKey": "tags",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "tag_id",
+                  "DisplayName": "tag_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The ID that uniquely identifies a tag (UUID format)",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FEB666E0-E667-409B-9995-6944DB79E5F6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.262Z",
+                  "checksum": "16f42ca71f2cc8067c0de4e36242c9f4fc92487857fc261e322c8255b0349d7e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The unique tag name.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "64784E12-D557-4E87-9FF3-5674C4864670"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.328Z",
+                  "checksum": "1cf01726aaed74a17dca7ca176eb796c5c24d0f8409beb15a0b5be1b4f9724c3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contacts_count",
+                  "DisplayName": "contacts_count",
+                  "Type": "int",
+                  "Description": "The total number of contacts who are assigned this tag.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B388B65B-B104-462E-8E6A-5E8E0EB2C632"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.394Z",
+                  "checksum": "76eb407032b01aebc15bc04cf103a97a597b42d770db689e8945fa59ca74a6b0"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time when the tag was created (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1E733B33-3827-416B-B92C-38148F9F9B2A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.461Z",
+                  "checksum": "d18d4b51e227f0c54ed904819b05378368914dad3f927444e2a9f9c459db6c49"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time when the tag was last updated (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B9F53686-2A40-454C-9EA7-B67A327F1439"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.526Z",
+                  "checksum": "688a1b5bba2a8122e616e6bfd710598675a74a90779814a68a06829a8a9fa6cc"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "tag_source",
+                  "DisplayName": "tag_source",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The source used to tag contacts.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1F48FAEE-4500-489A-A615-4E8F278FAFE2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.591Z",
+                  "checksum": "a5ac7645e956857c2a2d57773e1c8a06ad03a7fede08ab8870446b42e8c896c5"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "83DEFA94-54A8-4570-B476-61F03BF1FB64"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.782Z",
+            "checksum": "873d95cb85031d71bd8938dc52a9623d8c94f55637855f21126e96d0c92c6b57"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EmailCampaigns",
+            "DisplayName": "EmailCampaigns",
+            "Description": "Email campaign definitions — top-level campaign with one or more campaign activities. Supports Draft/Scheduled/Executing/Sent statuses.",
+            "Category": "Email Campaigns",
+            "APIPath": "/emails",
+            "ResponseDataKey": "campaigns",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_activities",
+                  "DisplayName": "campaign_activities",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Lists the role and unique activity ID of each campaign activity that is associated with an Email Campaign.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F2D1E9EA-0715-4369-804F-E08D674CE0CA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.689Z",
+                  "checksum": "e979324022f4785d7c4fc4452a27928f4bb81dc60b4846bace3cd203037a5952"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The unique ID used to identify the email campaign (UUID format).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AC872673-2954-4340-AD8E-4CD47E79A25F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.753Z",
+                  "checksum": "0e41870f8727067f718b1e769079a669be33430845ade2f177b9bf1db9d7be23"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that this email campaign was created. This string is readonly and is in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "64D93E21-29E7-448F-A682-6DB86A961AF7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.820Z",
+                  "checksum": "b2b9ace03866582423f4957ee4ef840719df0e75b0d79490b9acba532a08cbc3"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "current_status",
+                  "DisplayName": "current_status",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The current status of the email campaign. Valid values are: <ul>   <li>Draft — An email campaign that you have created but have not sent to contacts.</li>   <li>Scheduled — An email campaign that you have scheduled for Constant Contact to send to contacts.</li>   <li>Executing — An email campaign that Constant Contact is currently sending to contacts. Email campaign activities are only in this sta",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7FBEE350-7A1B-495A-AB50-075756D4A2E1"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.887Z",
+                  "checksum": "988c27acdd783d16765d2b3988034a6e92374d6acb8aedcc8eca16bc2eec5a1e"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 80,
+                  "Description": "The descriptive name the user provides to identify this campaign. Campaign names must be unique for each account ID.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "416A31F1-A49A-40B5-AB95-41F37980BEEE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:01.953Z",
+                  "checksum": "0c4d0de3b73494a287a90e7b9a5e9d989ccbb83e6d2b582d266941ac303a0890"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies the type of campaign that you select when creating the campaign. Newsletter and Custom Code email campaigns are the primary types.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "901FCFC1-0FF6-40D5-A1EE-0DE92E4FB644"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.021Z",
+                  "checksum": "53afaa7d69426a642ae42fffc63fd3f40fb2c6353df1b2e2bd4ee42b99854531"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type_code",
+                  "DisplayName": "type_code",
+                  "Type": "int",
+                  "Description": "The code used to identify the email campaign `type`. <ul>   <li> 1  (Default) </li>   <li> 2  (Bulk Email) </li>   <li> 10 (Newsletter) </li>   <li> 11 (Announcement) </li>   <li> 12 (Product/Service News) </li>   <li> 14 (Business Letter) </li>   <li> 15 (Card) </li>   <li> 16 (Press release)</li>   <li> 17 (Flyer) </li>   <li> 18 (Feedback Request) </li>   <li> 19 (Ratings and Reviews) </li>   <",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0A4369ED-BE77-493A-9DD8-2C42D84D6DC8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.085Z",
+                  "checksum": "ffd1b9c8310798da53937d4627f5842357df33a870ddefc27740f78429a103b2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time showing when the campaign was last updated. This string is read only and is in ISO-8601 format.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F527D6DF-2FC1-4C83-B050-9A8BD79E0681"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.151Z",
+                  "checksum": "56a51b0715300f36e6a374888bdc169fb0eb0b9433aecb296e59fc966902504d"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "B66E01DE-FE7C-4FB7-90D3-A29AAD2331E0"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.802Z",
+            "checksum": "8b1caa7cb9868fdc7647366228ef2e877416d5074d030ed304769c349acf5e64"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "EmailCampaignActivities",
+            "DisplayName": "EmailCampaignActivities",
+            "Description": "Email campaign activity — the sendable email variation tied to a campaign. Contains subject, HTML content, from_name, from_email, list/segment targeting.",
+            "Category": "Email Campaigns",
+            "APIPath": "/emails/activities/{campaign_activity_id}",
+            "ResponseDataKey": null,
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_activity_id",
+                  "DisplayName": "campaign_activity_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies a campaign activity in the V3 API.",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D59FED49-062B-413C-B88A-0E42834319ED"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.217Z",
+                  "checksum": "c43bd9ab16e622d9e460d60cab7d2a9ebd772deb147af633c3745c61596c6949"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "campaign_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies a campaign in the V3 API.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F7BBF0A2-BDA3-465D-A75D-92F62522EADC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.281Z",
+                  "checksum": "a215294d263a2ca25e899d4c102af3986541d11471a7c4c2aebf8cdae73aed1f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "role",
+                  "DisplayName": "role",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The purpose of the individual campaign activity in the larger email campaign effort. Valid values are: <ul>   <li>primary_email — The main email marketing campaign that you send to contacts. The <code>primary_email</code> contains the complete email content.</li>   <li>permalink — A permanent link to a web accessible version of the <code>primary_email</code> content without any personalized email ",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6533354E-CB63-4328-94DD-89172DD83772"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.382Z",
+                  "checksum": "80dd012541fbc5624a6262f8dc68b8f0842dbb1df260f217c4e669e045d4d61c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_list_ids",
+                  "DisplayName": "contact_list_ids",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "The contacts that Constant Contact sends the email campaign activity to as an array of contact <code>list_id</code> values. You cannot use contact lists and segments at the same time in an email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "309A8542-29A2-44B7-A648-06901FBB68A8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.449Z",
+                  "checksum": "3a26a8256a37e1f8cb2705751282271d9e7fd4f49e370f608acea28ab191cff1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_ids",
+                  "DisplayName": "segment_ids",
+                  "Type": "int",
+                  "Description": "The contacts that Constant Contact sends the email campaign activity to as an array containing a single <code>segment_id</code> value. Only <code>format_type</code> 3, 4, and 5 email campaign activities support segments. You cannot use contact lists and segments at the same time in an email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BFB7859F-F31B-4C52-B182-EA51AE298636"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.515Z",
+                  "checksum": "1bccb45745ad5ad6e39f992da2d5e2704244d84ae791fc869a79fd34b14dea30"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "current_status",
+                  "DisplayName": "current_status",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The current status of the email campaign activity. Valid values are: <ul>   <li>DRAFT — An email campaign activity that you have created but have not sent to contacts.</li>   <li>SCHEDULED — An email campaign activity that you have scheduled for Constant Contact to send to contacts.</li>   <li>EXECUTING — An email campaign activity Constant Contact is currently sending to contacts. Email campaign ",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "277278A8-0C73-4675-A587-A5DCE62B9EF9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.582Z",
+                  "checksum": "8b5cdbfc81b73896f2ea43c73246fedf433edac3902ff3c515b6e48317f2d8f7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "format_type",
+                  "DisplayName": "format_type",
+                  "Type": "int",
+                  "Description": "Identifies the type of email format. Valid values are: <ul>   <li>1 - A legacy custom code email created using the V2 API, the V3 API, or the legacy UI HTML editor.</li>   <li>2 - An email created using the second generation email editor UI.</li>   <li>3 - An email created using the third generation email editor UI. This email editor features an improved drag and drop UI and mobile responsiveness.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6E40AC84-AFC2-47E3-A8D7-066FF2494EE4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.649Z",
+                  "checksum": "0f97dba2276e07385902f07e436bc4d472fc33f3124395a9d7c6a20cd202d521"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_email",
+                  "DisplayName": "from_email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"From Email\" field for the email campaign activity. You must use a confirmed Constant Contact account email address. Make a GET call to <code>/account/emails</code> to return a collection of account emails and their confirmation status.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 8,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0154E763-123A-41C4-A5EE-07C5A1D62D0C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.717Z",
+                  "checksum": "59dca172f2d4dacb9858fb792e614d40f3ab5d751d3f80669f1bf4aa2ff7af45"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "from_name",
+                  "DisplayName": "from_name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"From Name\" field for the email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 9,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A06C47C7-DD2C-4920-927E-8C7AB47640E3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.781Z",
+                  "checksum": "41a9de1720f449fc6da3407a3447b9f404e9fb5b4a8b18dfd5fc1a1b39a8cd7a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "reply_to_email",
+                  "DisplayName": "reply_to_email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"Reply To Email\" field for the email campaign activity. You must use a confirmed Constant Contact account email address. Make a GET call to <code>/account/emails</code> to return a collection of account emails and their confirmation status.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 10,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7D980E7F-58B4-4FC9-A3DD-D21BC63470CC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.848Z",
+                  "checksum": "f0a74f7b9957ed959573c94dc63e7424b0e2171b653dcf76ebcd13de33a72cde"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "subject",
+                  "DisplayName": "subject",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email \"Subject\" field for the email campaign activity.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": false,
+                  "AllowsNull": false,
+                  "Sequence": 11,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "89635222-A98D-4893-95BF-84A9CD953D42"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.914Z",
+                  "checksum": "4659fb5c73443346663d05381af9226f98f75663f2d85f2ceb14ccb9f44e5704"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "html_content",
+                  "DisplayName": "html_content",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The HTML or XHTML content for the email campaign activity. Only <code>format_type</code> 1 and 5 (legacy custom code emails or modern custom code emails) can contain <code>html_content</code>.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 12,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CE5B2FB4-DE96-4DF8-8709-D7DCF0B6833B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:02.979Z",
+                  "checksum": "7b900823bad5bf8fa6b2437ccf49159acbe0455256bd3bddca70f5d903f2a567"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "template_id",
+                  "DisplayName": "template_id",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Identifies the email layout and design template that the email campaign activity is using as a base.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 13,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6B6F0862-D2C0-43A0-AAC7-32AEF049D221"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.077Z",
+                  "checksum": "86191f228fc86879e7caf2ab667cedc66f94963aec9b27058a4afd2b1e80c88a"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "permalink_url",
+                  "DisplayName": "permalink_url",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The permanent link to a web accessible version of the email campaign content without any personalized email information. The permalink URL becomes accessible after you send an email campaign to contacts.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 14,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "12A76FC5-3ACB-4C3B-BCCC-9C5829BC690F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.145Z",
+                  "checksum": "3958afc5fc1f547aacec2f34f1894d2666acc2ee7a8598341857e1ad2fbcea53"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "preheader",
+                  "DisplayName": "preheader",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The email preheader for the email campaign activity. Only <code>format_type</code> 3, 4, and 5 email campaign activities use the preheader property.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 15,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0804510F-A437-4740-819D-491D0803C408"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.212Z",
+                  "checksum": "3c69bdaedbf87ed770609098f39954332ca7de4d04090508c34ac63fbf1cfcd8"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "physical_address_in_footer",
+                  "DisplayName": "physical_address_in_footer",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 16,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "19433D4D-4016-4F5F-AE30-2FDDA610339E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.279Z",
+                  "checksum": "273d0d6bdac0a71b70247c4eba220294d794cb25b5213b7627bc6c95c946467c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "document_properties",
+                  "DisplayName": "document_properties",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 17,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "90244525-6AF6-46A0-8001-1FDA8CC874EA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.344Z",
+                  "checksum": "987ea5103565058f7bab52405c1c05f619e41f44cb968e95f5caed78d7691096"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "242A8EB2-3242-4D55-BE16-53CBFC2ADAA8"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.820Z",
+            "checksum": "bf1ad9a018925a312bd9d3d43b98e2efbfe4ae7b5b81c931736f077230f42e02"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Segments",
+            "DisplayName": "Segments",
+            "Description": "Audience segments — dynamic contact groups based on filter criteria.",
+            "Category": "Segments",
+            "APIPath": "/segments",
+            "ResponseDataKey": "segments",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": true,
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "name",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "The segment's unique descriptive name.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0EC67EB8-CE7A-4879-A9DB-68315480FB67"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.411Z",
+                  "checksum": "358114ec125211d8768345efc5b000e2d09dfec2f96b1e672a6dc2f87ab047df"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "segment_id",
+                  "DisplayName": "segment_id",
+                  "Type": "int",
+                  "Description": "The system generated number that uniquely identifies the segment.",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "45FD10C0-7CCD-4293-8181-13119D06E252"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.477Z",
+                  "checksum": "b69260dbcdc9b291118a3474a328966c0da62c8bb85bf57efdb9c92291fbb636"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that the segment was created (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "ED814843-E99F-4733-9CFA-45AAE45F7833"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.544Z",
+                  "checksum": "0b3b51ed1d5ac3d21272d48e1873be226cdaa1f7af152de51b63fa5b11e405fe"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "edited_at",
+                  "DisplayName": "edited_at",
+                  "Type": "datetime",
+                  "Description": "The system generated date and time that the segment's <code>name</code> or <code>segment_criteria</code> was last updated (ISO-8601 format).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "60F62C0A-B676-4C9E-B478-C7295D12FF56"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.610Z",
+                  "checksum": "afaf72a7b55ab2abed16fc35daa7ded8430982d2ec1b6cecec7f3b651bce3d28"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "B6A74814-3748-4C01-AC97-161A42521935"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.838Z",
+            "checksum": "9b0dff5d35d31392813ba48167a8b62096cca82407a986b41ebf059a27a9bd6f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Activities",
+            "DisplayName": "Activities",
+            "Description": "Async bulk activity jobs (contact import/export, bulk list/tag add/remove, bulk delete). Use Activities endpoints to create jobs and poll for completion.",
+            "Category": "Bulk Activities",
+            "APIPath": "/activities",
+            "ResponseDataKey": "activities",
+            "DefaultPageSize": 50,
+            "SupportsPagination": true,
+            "PaginationType": "Cursor",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "activity_id",
+                  "DisplayName": "activity_id",
+                  "Type": "uniqueidentifier",
+                  "Description": "Unique ID for the bulk activity job (UUID).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F67BD775-F745-48B4-9137-BCFF441A9476"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.675Z",
+                  "checksum": "8a3afdcb5f854f5f43a7c5393dca96bec302514e859b020c4cb7fe6c90df2016"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "state",
+                  "DisplayName": "state",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Current state: initialized, running, completed, cancelled.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F32581E-DCDF-4690-8140-B46B8A8B0EE8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.760Z",
+                  "checksum": "d7a8fcb86792114cf8bd33521bf3aa30ba5343572dcd91210bd0b83121b3d5d2"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "type",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "Activity type (e.g. contacts_json_import, contact_exports, contact_delete, add_list_memberships, remove_list_memberships, contacts_taggings_add, contacts_taggings_remove).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "81B1221D-E123-44D7-95D7-E525B4FD6A7A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.827Z",
+                  "checksum": "7eac7ea0a5378819bc06079c02ff9577da328f29aef5dd33e689e638974dd354"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "created_at",
+                  "Type": "datetime",
+                  "Description": "ISO-8601 creation timestamp.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "28AE7DB9-B75F-4CA4-A18E-CA9B1D3303D3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.893Z",
+                  "checksum": "2f63e35be106f015c5da3e630e3addd7df4a8748863f73ac84a60bd9bac57fa4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "updated_at",
+                  "Type": "datetime",
+                  "Description": "ISO-8601 last-updated timestamp.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E6FD4956-B72A-4E16-89E7-94653397F561"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:03.960Z",
+                  "checksum": "b78f13af8049f4d1250b764e4d459951885225d6a182057ea632e0ddac8d95d9"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "percent_done",
+                  "DisplayName": "percent_done",
+                  "Type": "int",
+                  "Description": "Progress percent 0-100.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9A2933A7-8689-4AA9-BA60-FA589A1ACBCA"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.026Z",
+                  "checksum": "89fe07714431fe523ca5d21616623ce8e23988ad6098b20b70890f9ac4756cad"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "activity_errors",
+                  "DisplayName": "activity_errors",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Array of activity errors (JSON-encoded).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B06B559E-1C4B-4E54-A73D-2F764BC52A2A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:28:04.092Z",
+                  "checksum": "3a8f53591be0dfa39ba812ecace1ba486156bdaebfa4a0460170c6a0d10bafe4"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "7A3578F0-D02F-47B4-BE10-94D14DD5C847"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:27:58.857Z",
+            "checksum": "b7930ac4bf6f62a09da63ce36c34060d829a1add3e0b590e10f129d0c46fa3f4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "16B66076-DFC9-4B01-A3B3-F3A9E1C1CDD5"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:27:58.679Z",
+      "checksum": "b25c6d9742684f3eb9549cce10faaddfe9439d8647dfc8980437416f48ea3818"
+    }
+  }
+]

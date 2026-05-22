@@ -1,0 +1,130 @@
+@if (Visible) {
+  <mj-dialog
+    [Visible]="true"
+    [Width]="560"
+    Title="Save View Results as List"
+    (Close)="OnCancel()">
+    <form class="save-view-form" (submit)="$event.preventDefault(); OnSave()">
+      <div class="info-banner">
+        <i class="fa-solid fa-circle-info"></i>
+        <div>
+          Materializes
+          @if (RecordCount != null) {
+            <strong>{{ RecordCount }} records</strong>
+          } @else {
+            <strong>view results</strong>
+          }
+          @if (ViewName) {
+            from <strong>{{ ViewName }}</strong>
+          }
+          into a static List. The list can be refreshed from this view later if you keep lineage on.
+        </div>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="save-view-list-name">List name</label>
+        <input
+          id="save-view-list-name"
+          class="mj-input"
+          [(ngModel)]="listName"
+          name="listName"
+          required
+          autofocus />
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="save-view-description">Description</label>
+        <textarea
+          id="save-view-description"
+          class="mj-input"
+          [(ngModel)]="description"
+          name="description"
+          rows="2"></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field__label" for="save-view-category">Category</label>
+        <select
+          id="save-view-category"
+          class="mj-input mj-select"
+          [(ngModel)]="categoryId"
+          name="categoryId"
+          [disabled]="loadingCategories">
+          <option [ngValue]="null">(uncategorized)</option>
+          @for (cat of categories; track cat.ID) {
+            <option [ngValue]="cat.ID">{{ cat.Name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="lineage-section">
+        <div class="field__label">Source lineage</div>
+        <label class="lineage-option" [class.lineage-option--selected]="rememberLineage">
+          <input
+            type="radio"
+            name="lineage"
+            [checked]="rememberLineage"
+            (change)="OnLineageChange(true)" />
+          <div>
+            <div class="lineage-option__title">Remember source view (recommended)</div>
+            <div class="lineage-option__desc">
+              Stores <code>SourceViewID</code> and (optionally) the current filter. Enables
+              <strong>Refresh from source</strong> later. You'll choose Additive or Sync each refresh.
+            </div>
+          </div>
+        </label>
+        <label class="lineage-option" [class.lineage-option--selected]="!rememberLineage">
+          <input
+            type="radio"
+            name="lineage"
+            [checked]="!rememberLineage"
+            (change)="OnLineageChange(false)" />
+          <div>
+            <div class="lineage-option__title">One-time snapshot</div>
+            <div class="lineage-option__desc">
+              No lineage stored. List is fully static; later changes to the view do not propagate.
+            </div>
+          </div>
+        </label>
+      </div>
+
+      @if (rememberLineage) {
+        <div class="field--inline">
+          <input
+            id="save-view-freeze"
+            type="checkbox"
+            [(ngModel)]="useSnapshot"
+            name="useSnapshot" />
+          <label for="save-view-freeze">
+            Freeze filter at current value
+            <span class="muted">
+              (<code>UseSnapshot = true</code>) — refresh re-runs the saved filter, even if the view is later edited
+            </span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="save-view-mode">Default refresh mode</label>
+          <select
+            id="save-view-mode"
+            class="mj-input mj-select"
+            [(ngModel)]="refreshMode"
+            name="refreshMode">
+            <option value="Additive">Additive — only adds new records on refresh</option>
+            <option value="Sync">Sync — reconciles in both directions (may remove records)</option>
+          </select>
+        </div>
+      }
+    </form>
+
+    <mj-dialog-actions>
+      <button mjButton variant="primary" type="button" [disabled]="!canSave" (click)="OnSave()">
+        <i class="fa-solid fa-check"></i>
+        {{ confirmButtonLabel }}
+      </button>
+      <button mjButton variant="outline" type="button" (click)="OnCancel()">Cancel</button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}

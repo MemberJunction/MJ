@@ -1,8 +1,4 @@
 .mj-inspector--solo { background: var(--mj-bg-page); }
-.em-paused {
-    color: var(--mj-status-warning) !important;
-    border-color: color-mix(in srgb, var(--mj-status-warning) 30%, var(--mj-border-default)) !important;
-}
 
 /* Stats row */
 .em-stats {

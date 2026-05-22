@@ -17,7 +17,7 @@ export class MJTemplateParamFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'templateAssociation', sectionName: 'Template Association', isExpanded: true },
             { sectionKey: 'parameterSpecification', sectionName: 'Parameter Specification', isExpanded: true },
-            { sectionKey: 'dynamicLinkingFilters', sectionName: 'Dynamic Linking & Filters', isExpanded: false },
+            { sectionKey: 'dynamicLinkingFilters', sectionName: 'Dynamic Linking & Filters', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

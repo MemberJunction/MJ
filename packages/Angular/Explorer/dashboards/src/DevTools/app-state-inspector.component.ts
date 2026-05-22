@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { DevToolsPrefs } from './dev-tools-prefs';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
@@ -67,6 +68,23 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
 
     public override async GetResourceDisplayName(): Promise<string> { return 'App State Inspector'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-magnifying-glass-chart'; }
+
+    /** Sections rendered as horizontal tabs in the chrome's [toolbar] slot. */
+    public get tabsConfig(): TabConfig[] {
+        return this.Sections.map(s => ({
+            key: s.id,
+            label: s.label,
+            icon: s.icon
+        }));
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTabChange(key: string): void {
+        const section = this.Sections.find(s => s.id === key);
+        if (section) {
+            this.OnSectionClick(section);
+        }
+    }
 
     public OnSectionClick(section: InspectorSection): void {
         if (this.ActiveSection === section.id) return;

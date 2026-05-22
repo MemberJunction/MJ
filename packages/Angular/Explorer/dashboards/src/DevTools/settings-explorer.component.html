@@ -1,17 +1,13 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-sliders"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">Settings Explorer</h3>
-            <div class="mj-inspector__header-sub">User settings and instance-level configuration</div>
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Settings explorer"
+        Title="Settings Explorer"
+        Subtitle="User settings and instance-level configuration">
+        <div actions>
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
         </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn" type="button" (click)="refresh()" title="Refresh">
-                <i class="fa-solid fa-rotate"></i> Refresh
-            </button>
-        </div>
-    </div>
+    </mj-page-header-interior>
 
     <div class="se-toolbar">
         <div class="se-tabs">
@@ -101,11 +97,11 @@
                         }
                     </div>
                     <div class="se-detail-actions">
-                        <button class="mj-inspector__btn" (click)="OnCopySelected()" title="Copy value">
-                            <i class="fa-solid fa-clipboard"></i> Copy
+                        <button mjButton variant="secondary" size="sm" (click)="OnCopySelected()" title="Copy value">
+                            <i class="fa-solid fa-clipboard" aria-hidden="true"></i> Copy
                         </button>
-                        <button class="mj-inspector__btn mj-inspector__btn--ghost" (click)="Selected = null" title="Close">
-                            <i class="fa-solid fa-xmark"></i>
+                        <button mjButton variant="flat" size="sm" (click)="Selected = null" title="Close" aria-label="Close detail">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                         </button>
                     </div>
                 </div>

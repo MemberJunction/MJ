@@ -17,7 +17,7 @@ export class MJArtifactVersionAttributeFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'relationshipContext', sectionName: 'Relationship Context', isExpanded: true },
             { sectionKey: 'attributeDefinition', sectionName: 'Attribute Definition', isExpanded: true },
-            { sectionKey: 'extractedValue', sectionName: 'Extracted Value', isExpanded: false },
+            { sectionKey: 'extractedValue', sectionName: 'Extracted Value', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

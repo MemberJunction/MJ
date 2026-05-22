@@ -1,28 +1,26 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-bolt"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">Event Monitor</h3>
-            <div class="mj-inspector__header-sub">Live tail of MJGlobal events with filter and pause</div>
-        </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn"
-                    [class.mj-inspector__btn--success]="!Paused"
-                    [class.em-paused]="Paused"
-                    type="button" (click)="TogglePause()"
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Event monitor"
+        Title="Event Monitor"
+        Subtitle="Live tail of MJGlobal events with filter and pause">
+        <div actions>
+            <button mjButton
+                    variant="secondary"
+                    size="sm"
+                    (click)="TogglePause()"
                     [title]="Paused ? 'Resume capture' : 'Pause capture'">
                 @if (Paused) {
-                    <i class="fa-solid fa-play"></i> Resume
+                    <i class="fa-solid fa-play" aria-hidden="true"></i> Resume
                 } @else {
-                    <i class="fa-solid fa-pause"></i> Pause
+                    <i class="fa-solid fa-pause" aria-hidden="true"></i> Pause
                 }
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="Clear()" title="Clear all captured events">
-                <i class="fa-solid fa-broom"></i> Clear
+            <button mjButton variant="secondary" size="sm" (click)="Clear()" title="Clear all captured events">
+                <i class="fa-solid fa-broom" aria-hidden="true"></i> Clear
             </button>
         </div>
-    </div>
+    </mj-page-header-interior>
 
     <div class="em-stats">
         <div class="em-stat">

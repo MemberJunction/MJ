@@ -1,59 +1,44 @@
-<div class="mj-inspector">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-magnifying-glass-chart"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">App State Inspector</h3>
-            <div class="mj-inspector__header-sub">Read-only snapshot of Explorer runtime state</div>
-        </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn" type="button" (click)="refresh()" title="Refresh">
-                <i class="fa-solid fa-rotate"></i> Refresh
-            </button>
-            <button class="mj-inspector__btn"
-                    [class.mj-inspector__btn--success]="CopyConfirmed"
-                    type="button" (click)="OnCopy()"
+<div class="mj-inspector mj-inspector--solo">
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="App State inspector"
+        Title="App State Inspector"
+        Subtitle="Read-only snapshot of Explorer runtime state">
+        <div actions>
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
+            <button mjButton
+                    [variant]="CopyConfirmed ? 'success' : 'secondary'"
+                    size="sm"
+                    (click)="OnCopy()"
                     [title]="CopyConfirmed ? 'Copied' : 'Copy JSON'">
-                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
+                <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
                 {{ CopyConfirmed ? 'Copied' : 'Copy' }}
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="OnDownload()" title="Download as JSON">
-                <i class="fa-solid fa-download"></i>
+            <button mjButton variant="secondary" size="sm" (click)="OnDownload()" title="Download as JSON" aria-label="Download as JSON">
+                <i class="fa-solid fa-download" aria-hidden="true"></i>
             </button>
         </div>
-    </div>
+        <div toolbar>
+            <mj-tab-nav
+                [Tabs]="tabsConfig"
+                [ActiveKey]="ActiveSection"
+                (TabChange)="onTabChange($event)">
+            </mj-tab-nav>
+        </div>
+    </mj-page-header-interior>
 
-    <div class="mj-inspector__body">
-        <aside class="mj-inspector__sidebar">
-            @for (section of Sections; track section.id) {
-                <button type="button"
-                        class="mj-inspector__nav-item"
-                        [class.mj-inspector__nav-item--active]="ActiveSection === section.id"
-                        (click)="OnSectionClick(section)">
-                    <i class="mj-inspector__nav-icon" [class]="section.icon"></i>
-                    <div class="mj-inspector__nav-text">
-                        <div class="mj-inspector__nav-label">{{ section.label }}</div>
-                        @if (section.description) {
-                            <div class="mj-inspector__nav-desc">{{ section.description }}</div>
-                        }
-                    </div>
-                </button>
-            }
-        </aside>
-
-        <div class="mj-inspector__content">
-            <div class="mj-inspector__content-head">
-                <h4 class="mj-inspector__content-title">{{ SectionLabel }}</h4>
-                <span class="mj-inspector__content-meta">Refreshed {{ LastRefreshedLabel }}</span>
-            </div>
-            <div class="mj-inspector__editor">
-                <mj-code-editor
-                    [(ngModel)]="StateJson"
-                    [language]="'json'"
-                    [readonly]="true"
-                    [lineWrapping]="true">
-                </mj-code-editor>
-            </div>
+    <div class="mj-inspector__content">
+        <div class="mj-inspector__content-head">
+            <h4 class="mj-inspector__content-title">{{ SectionLabel }}</h4>
+            <span class="mj-inspector__content-meta">Refreshed {{ LastRefreshedLabel }}</span>
+        </div>
+        <div class="mj-inspector__editor">
+            <mj-code-editor
+                [(ngModel)]="StateJson"
+                [language]="'json'"
+                [readonly]="true"
+                [lineWrapping]="true">
+            </mj-code-editor>
         </div>
     </div>
 </div>

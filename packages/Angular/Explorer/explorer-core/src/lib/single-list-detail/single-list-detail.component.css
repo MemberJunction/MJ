@@ -12,6 +12,14 @@
   align-items: center;
   padding-bottom: 16px;
   flex-shrink: 0;
+  gap: 16px;
+}
+
+.list-header__titleblock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .list-header h1 {
@@ -19,6 +27,84 @@
   font-size: 24px;
   font-weight: 600;
   color: var(--mj-text-primary);
+}
+
+.lineage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 25%, var(--mj-border-default));
+  color: var(--mj-text-secondary);
+  font-size: 12px;
+  width: fit-content;
+}
+
+.lineage-badge i {
+  color: var(--mj-brand-primary);
+}
+
+.lineage-badge__refreshed {
+  color: var(--mj-text-muted);
+}
+
+.refresh-mode-select {
+  min-width: 100px;
+  font-size: 13px;
+}
+
+.bulk-status-select {
+  min-width: 130px;
+  font-size: 13px;
+}
+
+/* Viewer-perspective badge (mockup 19) — surfaced in the header when the
+   user has read-only access so the missing mutation controls don't feel
+   broken. */
+.permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.permission-badge--viewer {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+/* Tags section on the list detail header (Phase 4.2). */
+.list-detail__tags {
+  margin-top: 8px;
+}
+
+/* Grid + side stats two-column layout (Phase 5.4). Stats hides on
+   narrow screens so the grid keeps its breathing room. */
+.grid-with-stats {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.list-detail__stats {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .grid-with-stats {
+    grid-template-columns: 1fr;
+  }
+  .list-detail__stats {
+    display: none;
+  }
 }
 
 /* Custom Toolbar */
@@ -392,4 +478,68 @@
   flex: 1;
   font-size: 14px;
   color: var(--mj-text-primary);
+}
+
+/* Export dialog (Phase 5.1, mockup 26) */
+.export-dialog { display: flex; flex-direction: column; gap: 8px; }
+.export-section-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 8px;
+}
+.export-format-row { display: flex; gap: 8px; }
+.export-format-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  background: var(--mj-bg-surface);
+}
+.export-format-option--selected {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+}
+.export-format-option input[type="radio"] { margin: 0; }
+.export-section-divider {
+  height: 1px;
+  background: var(--mj-border-default);
+  margin: 16px 0;
+}
+.export-fields-list {
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+}
+.export-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--mj-border-default);
+  font-size: 13px;
+  cursor: pointer;
+}
+.export-field-row:last-child { border-bottom: none; }
+.export-field-row:hover { background: var(--mj-bg-surface-hover); }
+.export-field-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  align-items: center;
+  font-size: 11.5px;
+}
+.export-field-actions a { color: var(--mj-text-link); }
+.export-field-actions .muted {
+  margin-left: auto;
+  color: var(--mj-text-muted);
 }

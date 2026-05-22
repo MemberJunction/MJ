@@ -253,6 +253,23 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
 
   constructor(private cdr: ChangeDetectorRef) {}
 
+  /**
+   * Apply the view-vs-list visual distinction to a circle selection: views
+   * get a dashed colored stroke; lists get nothing extra (fill-only).
+   * Centralized here so all 5 circle-drawing sites stay consistent.
+   */
+  private applyOperandStyle<TElement extends SVGElement>(
+    selection: d3.Selection<TElement, unknown, null, undefined>,
+    set: VennSet,
+  ): void {
+    if (set.kind === 'view') {
+      selection
+        .attr('stroke', set.color)
+        .attr('stroke-width', 3)
+        .attr('stroke-dasharray', '6 4');
+    }
+  }
+
   ngAfterViewInit(): void {
     this.initializeSvg();
     this.setupResizeObserver();
@@ -345,7 +362,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     const radius = Math.min(width, height) * 0.35;
 
     // Draw circle
-    g.append('circle')
+    const circle = g.append('circle')
       .attr('class', 'venn-circle')
       .attr('cx', cx)
       .attr('cy', cy)
@@ -356,6 +373,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
       .on('mouseleave', () => this.hideTooltip())
       .on('click', () => this.onCircleClick(set));
+    this.applyOperandStyle(circle, set);
 
     // Draw label
     g.append('text')
@@ -378,9 +396,21 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     const r1 = radii[0];
     const r2 = radii[1];
 
-    // Calculate overlap to ensure visual intersection
+    // Size the overlap by the **actual** intersection count, not a fixed
+    // fraction. Otherwise the diagram lies: it always draws the circles
+    // overlapping even when the lists share zero records, leading users
+    // to expect a non-zero intersection that the math correctly returns
+    // as 0. Math: as fraction of (r1+r2)/2, scale by share of records
+    // common to both sets vs. the smaller set's size. Clamped so even
+    // big intersections don't make one circle swallow the other.
+    const intersectionSize = this.data?.intersections.find(
+      i => i.setIds.length === 2 && i.setIds.includes(sets[0].listId) && i.setIds.includes(sets[1].listId)
+    )?.size ?? 0;
+    const smallerSize = Math.min(sets[0].size, sets[1].size);
+    const overlapFraction = smallerSize > 0 ? Math.min(0.85, intersectionSize / smallerSize) : 0;
     const avgRadius = (r1 + r2) / 2;
-    const overlap = avgRadius * 0.5;
+    // Visual gap when truly disjoint, so users can see "no overlap = no shared records".
+    const overlap = intersectionSize > 0 ? avgRadius * Math.max(0.1, overlapFraction * 0.7) : -avgRadius * 0.15;
 
     const positions = [
       { cx: width / 2 - r1 + overlap / 2, r: r1, set: sets[0] },
@@ -389,7 +419,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
 
     // Draw circles
     for (const pos of positions) {
-      g.append('circle')
+      const circle = g.append('circle')
         .attr('class', 'venn-circle')
         .attr('cx', pos.cx)
         .attr('cy', cy)
@@ -400,6 +430,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
+      this.applyOperandStyle(circle, pos.set);
     }
 
     // Find intersection data
@@ -591,7 +622,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
 
     // Draw circles
     for (const pos of positions) {
-      g.append('circle')
+      const circle = g.append('circle')
         .attr('class', 'venn-circle')
         .attr('cx', pos.cx)
         .attr('cy', pos.cy)
@@ -602,6 +633,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
+      this.applyOperandStyle(circle, pos.set);
     }
 
     // Draw clickable intersection labels
@@ -688,7 +720,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
 
     // Draw ellipses
     for (const pos of positions) {
-      g.append('ellipse')
+      const ellipse = g.append('ellipse')
         .attr('class', 'venn-circle')
         .attr('cx', pos.cx)
         .attr('cy', pos.cy)
@@ -701,6 +733,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(pos.set));
+      this.applyOperandStyle(ellipse, pos.set);
     }
 
     // Draw clickable intersection labels
@@ -795,7 +828,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
       const cx = cellWidth * col + cellWidth / 2;
       const cy = cellHeight * row + cellHeight / 2;
 
-      g.append('circle')
+      const circle = g.append('circle')
         .attr('class', 'venn-circle')
         .attr('cx', cx)
         .attr('cy', cy)
@@ -806,6 +839,7 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
         .on('mousemove', (event: MouseEvent) => this.moveTooltip(event))
         .on('mouseleave', () => this.hideTooltip())
         .on('click', () => this.onCircleClick(set));
+      this.applyOperandStyle(circle, set);
 
       g.append('text')
         .attr('class', 'venn-label')

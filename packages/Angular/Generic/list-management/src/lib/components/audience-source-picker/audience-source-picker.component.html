@@ -1,0 +1,143 @@
+<div class="audience-picker">
+  <!-- Tab strip -->
+  <div class="audience-picker__tabs">
+    <button
+      class="audience-picker__tab"
+      [class.audience-picker__tab--active]="activeTab === 'list'"
+      (click)="setTab('list')">
+      <i class="fa-solid fa-list"></i>
+      List
+    </button>
+    <button
+      class="audience-picker__tab"
+      [class.audience-picker__tab--active]="activeTab === 'view'"
+      (click)="setTab('view')">
+      <i class="fa-solid fa-eye"></i>
+      View
+    </button>
+    <button
+      class="audience-picker__tab"
+      [class.audience-picker__tab--active]="activeTab === 'adhoc'"
+      (click)="setTab('adhoc')">
+      <i class="fa-solid fa-filter"></i>
+      Ad-hoc Filter
+    </button>
+  </div>
+
+  <!-- Entity selector (shared across tabs) -->
+  <div class="audience-picker__field">
+    <label class="audience-picker__label">Entity</label>
+    <select
+      class="mj-input mj-select audience-picker__entity"
+      [ngModel]="selectedEntityName"
+      (ngModelChange)="OnEntityChange($event)"
+      [disabled]="!!LockedEntityName">
+      @for (e of entityOptions; track e.ID) {
+        <option [ngValue]="e.Name">{{ e.Name }}</option>
+      }
+    </select>
+  </div>
+
+  @if (activeTab === 'list') {
+    <div class="audience-picker__search">
+      <i class="fa-solid fa-search"></i>
+      <input
+        class="mj-input"
+        [(ngModel)]="listSearch"
+        (ngModelChange)="OnListSearchChange()"
+        placeholder="Search lists by name…" />
+    </div>
+    @if (loading) {
+      <div class="audience-picker__state">
+        <mj-loading text="Loading lists..." size="small"></mj-loading>
+      </div>
+    } @else if (filteredLists.length === 0) {
+      <div class="audience-picker__state audience-picker__state--empty">
+        No lists found for this entity.
+      </div>
+    } @else {
+      <div class="audience-picker__items">
+        @for (l of filteredLists; track l.ID) {
+          <div
+            class="audience-picker__item"
+            [class.audience-picker__item--selected]="selectedListId === l.ID"
+            (click)="OnSelectList(l)">
+            <i
+              class="fa-solid"
+              [class.fa-circle-check]="selectedListId === l.ID"
+              [class.fa-circle]="selectedListId !== l.ID"></i>
+            <div class="audience-picker__item-body">
+              <div class="audience-picker__item-name">{{ l.Name }}</div>
+              @if (l.Description) {
+                <div class="audience-picker__item-desc">{{ l.Description }}</div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  } @else if (activeTab === 'view') {
+    <div class="audience-picker__search">
+      <i class="fa-solid fa-search"></i>
+      <input
+        class="mj-input"
+        [(ngModel)]="viewSearch"
+        (ngModelChange)="OnViewSearchChange()"
+        placeholder="Search views by name…" />
+    </div>
+    @if (loading) {
+      <div class="audience-picker__state">
+        <mj-loading text="Loading views..." size="small"></mj-loading>
+      </div>
+    } @else if (filteredViews.length === 0) {
+      <div class="audience-picker__state audience-picker__state--empty">
+        No views found for this entity.
+      </div>
+    } @else {
+      <div class="audience-picker__items">
+        @for (v of filteredViews; track v.ID) {
+          <div
+            class="audience-picker__item"
+            [class.audience-picker__item--selected]="selectedViewId === v.ID"
+            (click)="OnSelectView(v)">
+            <i
+              class="fa-solid"
+              [class.fa-circle-check]="selectedViewId === v.ID"
+              [class.fa-circle]="selectedViewId !== v.ID"></i>
+            <div class="audience-picker__item-body">
+              <div class="audience-picker__item-name">
+                {{ v.Name }}
+                <span class="audience-picker__live-badge">live</span>
+              </div>
+              @if (v.Description) {
+                <div class="audience-picker__item-desc">{{ v.Description }}</div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+      <div class="audience-picker__hint">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        A view is resolved live at execution — the record set may differ from
+        what you see here if data changes.
+      </div>
+    }
+  } @else {
+    <!-- Ad-hoc filter tab -->
+    <div class="audience-picker__field">
+      <label class="audience-picker__label">Filter</label>
+      <textarea
+        class="mj-input audience-picker__filter"
+        rows="3"
+        [(ngModel)]="adhocFilter"
+        (ngModelChange)="OnAdhocFilterChange()"
+        placeholder="e.g. State IN ('CA','NY','TX') AND DonationCount >= 3"></textarea>
+    </div>
+    <div class="audience-picker__hint audience-picker__hint--neutral">
+      <i class="fa-solid fa-circle-info"></i>
+      Ad-hoc filters are evaluated server-side at execution time. Validate the
+      filter on the server (via the resolve-audience action or send preview)
+      before relying on it for production.
+    </div>
+  }
+</div>

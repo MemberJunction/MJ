@@ -1,64 +1,43 @@
-<div class="api-keys-dashboard" [class.panel-open]="ShowCreateDialog || ShowEditPanel" [class.nav-open]="NavOpen">
-  @if (IsLoading) {
-    <mj-loading text="Loading API Keys..."></mj-loading>
-  }
+<!--
+  APIKeysResource is only ever loaded inside Admin → Identity & Access's
+  left-nav shell. Per Section 9b/10 of plans/explorer-chrome-conventions.md,
+  shell sub-pages must NOT render a page-level <mj-page-layout>+<mj-page-header>
+  (that produces a doubled-header). Instead the body opens with an
+  <mj-page-header-interior> card carrying the L2 tab nav and action chrome.
+-->
+<mj-page-header-interior
+  Role="region"
+  AriaLabel="API Keys"
+  [Title]="currentTabTitle"
+  [Subtitle]="currentTabSubtitle">
+  <div toolbar>
+    <mj-tab-nav
+      [Tabs]="tabsConfig"
+      [ActiveKey]="MainTab"
+      (TabChange)="onTabChange($event)">
+    </mj-tab-nav>
+  </div>
+  <div actions>
+    <mj-refresh-button [Loading]="IsLoading" (Clicked)="refresh()"></mj-refresh-button>
+    @if (MainTab === 'keys' && CurrentView === 'overview' && UserCanCreateKeys) {
+      <button mjButton variant="primary" size="sm" (click)="openCreateDialog()" aria-label="Generate a new API key">
+        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+        Generate New Key
+      </button>
+    }
+  </div>
+</mj-page-header-interior>
 
-  @if (!IsLoading) {
-    <!-- Left Navigation Sidebar -->
-    <div class="dashboard-nav">
-      <div class="nav-header">
-        <div class="nav-title">
-          <i class="fa-solid fa-key"></i>
-          <span>API Keys</span>
-        </div>
-      </div>
-      <div class="nav-items">
-        <button class="nav-item" [class.active]="MainTab === 'keys'" (click)="switchTab('keys'); closeNav()">
-          <i class="fa-solid fa-key"></i>
-          <span class="nav-label">API Keys</span>
-          <span class="nav-badge">{{TotalKeys}}</span>
-        </button>
-        <button class="nav-item" [class.active]="MainTab === 'applications'" (click)="switchTab('applications'); closeNav()">
-          <i class="fa-solid fa-cube"></i>
-          <span class="nav-label">Applications</span>
-          <span class="nav-badge">{{ApplicationCount}}</span>
-        </button>
-        <button class="nav-item" [class.active]="MainTab === 'scopes'" (click)="switchTab('scopes'); closeNav()">
-          <i class="fa-solid fa-shield-halved"></i>
-          <span class="nav-label">Scopes</span>
-          <span class="nav-badge">{{ScopeCount}}</span>
-        </button>
-        <button class="nav-item" [class.active]="MainTab === 'usage'" (click)="switchTab('usage'); closeNav()">
-          <i class="fa-solid fa-chart-line"></i>
-          <span class="nav-label">Usage Analytics</span>
-        </button>
-      </div>
-    </div>
-    <!-- Main Content Area -->
-    <div class="dashboard-content">
-      <div class="content-wrapper">
+@if (IsLoading) {
+  <div class="api-keys-loading">
+    <mj-loading text="Loading API Keys..."></mj-loading>
+  </div>
+} @else {
+  <mj-page-body-interior>
         <!-- Keys Tab Content -->
         @if (MainTab === 'keys') {
-          <!-- Overview View -->
+          <!-- Overview View — title + Refresh + Generate New Key now live in the page chrome above. -->
           @if (CurrentView === 'overview') {
-            <!-- Header with Actions -->
-            <div class="overview-header">
-              <div class="header-left">
-                <h2 class="overview-title">API Keys Management</h2>
-                <p class="overview-subtitle">Manage API keys for external integrations and services</p>
-              </div>
-              <div class="header-actions">
-                <button class="btn-refresh" (click)="refresh()" title="Refresh">
-                  <i class="fa-solid fa-refresh"></i>
-                </button>
-                @if (UserCanCreateKeys) {
-                  <button class="btn-primary" (click)="openCreateDialog()">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Generate New Key</span>
-                  </button>
-                }
-              </div>
-            </div>
             <!-- Health Score Banner -->
             <div class="health-banner" [ngClass]="getHealthClass()">
               <div class="health-score-container">
@@ -383,29 +362,21 @@
         @if (MainTab === 'usage') {
           <mj-api-usage-panel></mj-api-usage-panel>
         }
-      </div><!-- /.content-wrapper -->
-    </div><!-- /.dashboard-content -->
-    <!-- Mobile Navigation Toggle -->
-    <button class="mobile-nav-toggle" (click)="toggleNav()">
-      <i class="fa-solid" [class.fa-bars]="!NavOpen" [class.fa-times]="NavOpen"></i>
-    </button>
-    <!-- Mobile Navigation Overlay -->
-    <div class="mobile-nav-overlay" (click)="closeNav()"></div>
-  }
+  </mj-page-body-interior>
+}
 
-  <!-- Create Dialog -->
-  <mj-api-key-create-dialog
-    [Visible]="ShowCreateDialog"
-    (Created)="onKeyCreated($event)"
-    (Closed)="onCreateDialogClosed()">
-  </mj-api-key-create-dialog>
+<!-- Create Dialog -->
+<mj-api-key-create-dialog
+  [Visible]="ShowCreateDialog"
+  (Created)="onKeyCreated($event)"
+  (Closed)="onCreateDialogClosed()">
+</mj-api-key-create-dialog>
 
-  <!-- Edit Panel -->
-  <mj-api-key-edit-panel
-    [Visible]="ShowEditPanel"
-    [KeyId]="SelectedKeyId"
-    (Updated)="onKeyUpdated()"
-    (Revoked)="onKeyRevoked()"
-    (Closed)="onEditPanelClosed()">
-  </mj-api-key-edit-panel>
-</div>
+<!-- Edit Panel -->
+<mj-api-key-edit-panel
+  [Visible]="ShowEditPanel"
+  [KeyId]="SelectedKeyId"
+  (Updated)="onKeyUpdated()"
+  (Revoked)="onKeyRevoked()"
+  (Closed)="onEditPanelClosed()">
+</mj-api-key-edit-panel>

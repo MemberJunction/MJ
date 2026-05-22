@@ -1,39 +1,51 @@
-<mj-page-layout>
-  <mj-page-header
-    Title="Database Designer"
-    Icon="fa-solid fa-table-cells-large"
-    Subtitle="Browse and create user-defined entities">
-    <div meta>
-      <mj-stat-badge [Count]="FilteredEntities.length" Label="entities"></mj-stat-badge>
-    </div>
-    <div actions>
-      <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
-      <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">
-        <i class="fa-solid fa-plus"></i> New Entity
-      </button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search by name, table, or schema..."
-        [Value]="SearchTerm"
-        (ValueChange)="SearchTerm = $event">
-      </mj-page-search>
-      @if (AvailableFilterSchemas.length > 1) {
-        <select
-          class="mj-input schema-filter"
-          [value]="SelectedSchema"
-          (change)="SelectedSchema = $any($event.target).value"
-          aria-label="Filter by schema">
-          <option value="">All Schemas</option>
-          @for (schema of AvailableFilterSchemas; track schema) {
-            <option [value]="schema">{{ schema }}</option>
-          }
-        </select>
-      }
-    </div>
-  </mj-page-header>
+<!--
+  Database Designer is a sub-page of Admin → Data & Schema's left-nav shell, so
+  per Section 9b/10 of plans/explorer-chrome-conventions.md we use the interior
+  chrome pattern instead of <mj-page-layout> + <mj-page-header> (which would
+  produce a doubled-header inside the Admin shell).
+-->
+<mj-page-header-interior
+  AriaLabel="Database Designer"
+  Title="Database Designer"
+  Subtitle="Browse and create user-defined entities">
+  <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+       Material on this page (~300 entities per deployment) makes the
+       narrowing signal valuable. -->
+  <div meta>
+    <mj-stat-badge
+      [Count]="FilteredEntities.length"
+      [Total]="TotalEntityCount"
+      Label="entities">
+    </mj-stat-badge>
+  </div>
+  <div actions>
+    <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+    <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">
+      <i class="fa-solid fa-plus" aria-hidden="true"></i> New Entity
+    </button>
+  </div>
+  <div toolbar>
+    <mj-page-search
+      Placeholder="Search by name, table, or schema..."
+      [Value]="SearchTerm"
+      (ValueChange)="SearchTerm = $event">
+    </mj-page-search>
+    @if (AvailableFilterSchemas.length > 1) {
+      <select
+        class="mj-input schema-filter"
+        [value]="SelectedSchema"
+        (change)="SelectedSchema = $any($event.target).value"
+        aria-label="Filter by schema">
+        <option value="">All Schemas</option>
+        @for (schema of AvailableFilterSchemas; track schema) {
+          <option [value]="schema">{{ schema }}</option>
+        }
+      </select>
+    }
+  </div>
+</mj-page-header-interior>
 
-  <mj-page-body>
+<mj-page-body-interior [Padding]="false">
   <!-- ── Error ──────────────────────────────────────────────────────────── -->
   @if (ErrorMessage) {
     <div class="entity-list-error" role="alert">
@@ -197,5 +209,4 @@
       </div>
     }
   }
-  </mj-page-body>
-</mj-page-layout>
+</mj-page-body-interior>

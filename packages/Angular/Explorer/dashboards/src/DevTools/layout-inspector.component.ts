@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import { WorkspaceStateManager, GoldenLayoutManager } from '@memberjunction/ng-base-application';
 import { DevToolsPrefs } from './dev-tools-prefs';
 
@@ -57,6 +58,23 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
 
     public override async GetResourceDisplayName(): Promise<string> { return 'Layout Inspector'; }
     public override async GetResourceIconClass(): Promise<string> { return 'fa-solid fa-table-columns'; }
+
+    /** Sections rendered as horizontal tabs in the chrome's [toolbar] slot. */
+    public get tabsConfig(): TabConfig[] {
+        return this.Sections.map(s => ({
+            key: s.id,
+            label: s.label,
+            icon: s.icon
+        }));
+    }
+
+    /** Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output. */
+    public onTabChange(key: string): void {
+        const section = this.Sections.find(s => s.id === key);
+        if (section) {
+            this.OnSectionClick(section);
+        }
+    }
 
     public OnSectionClick(section: LayoutSection): void {
         if (this.ActiveSection === section.id) return;

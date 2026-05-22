@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><title>11 — Compose Into Target</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div></div>
+  <div class="app-tabs"><div class="tab"><i class="fa-solid fa-list"></i>Browse</div><div class="tab active"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+
+  <div class="mj-panel mb-16">
+    <div class="mj-panel-header"><h3><i class="fa-solid fa-shapes"></i>Compose Lists & Views Into a Target List</h3></div>
+    <div class="mj-panel-body">
+
+      <div style="display:grid; grid-template-columns: 1fr auto 1fr auto 200px; gap:16px; align-items:flex-start;">
+        <div>
+          <div class="label">Sources (drag to reorder)</div>
+          <div class="col mt-8">
+            <div class="row" style="padding:10px; background:var(--mj-bg-surface-sunken); border-radius:8px;">
+              <i class="fa-solid fa-grip-vertical muted"></i>
+              <i class="fa-solid fa-list" style="color:#3b82f6;"></i>
+              <span style="flex:1; font-size:13px;">VIP Donors Q4 2026</span>
+              <span class="badge badge-muted">List · 348</span>
+            </div>
+            <div class="row" style="padding:10px; background:var(--mj-bg-surface-sunken); border-radius:8px;">
+              <i class="fa-solid fa-grip-vertical muted"></i>
+              <i class="fa-solid fa-eye" style="color:#10b981;"></i>
+              <span style="flex:1; font-size:13px;">Q4 Donor View</span>
+              <span class="badge badge-info">View · 476</span>
+            </div>
+            <div class="row" style="padding:10px; background:var(--mj-bg-surface-sunken); border-radius:8px;">
+              <i class="fa-solid fa-grip-vertical muted"></i>
+              <i class="fa-solid fa-eye" style="color:#f59e0b;"></i>
+              <span style="flex:1; font-size:13px;">Major Gift Prospects</span>
+              <span class="badge badge-info">View · 218</span>
+            </div>
+            <div class="row" style="padding:10px; background:var(--mj-bg-surface-sunken); border-radius:8px;">
+              <i class="fa-solid fa-grip-vertical muted"></i>
+              <i class="fa-solid fa-list" style="color:#8b5cf6;"></i>
+              <span style="flex:1; font-size:13px;">Board Members</span>
+              <span class="badge badge-muted">List · 18</span>
+            </div>
+            <button class="mj-btn mj-btn-sm"><i class="fa-solid fa-plus"></i> Add Source</button>
+          </div>
+        </div>
+
+        <div style="align-self:center; font-size:24px; color:var(--mj-text-muted);">→</div>
+
+        <div>
+          <div class="label">Operation</div>
+          <div class="col mt-8">
+            <label class="row" style="padding:10px; border:1px solid var(--mj-brand-primary); border-radius:8px; background:color-mix(in srgb, var(--mj-brand-primary) 6%, transparent); cursor:pointer;">
+              <input type="radio" checked> <i class="fa-solid fa-layer-group" style="color:var(--mj-brand-primary)"></i>
+              <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Union</div><div class="muted" style="font-size:11.5px;">Combine all sources, dedupe</div></div>
+            </label>
+            <label class="row" style="padding:10px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer;">
+              <input type="radio"> <i class="fa-solid fa-circle-notch"></i>
+              <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Intersection</div><div class="muted" style="font-size:11.5px;">Only records in all sources</div></div>
+            </label>
+            <label class="row" style="padding:10px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer;">
+              <input type="radio"> <i class="fa-solid fa-minus-circle"></i>
+              <div style="flex:1;"><div style="font-weight:600; font-size:13px;">Difference</div><div class="muted" style="font-size:11.5px;">A minus B (minus C, …)</div></div>
+            </label>
+          </div>
+        </div>
+
+        <div style="align-self:center; font-size:24px; color:var(--mj-text-muted);">→</div>
+
+        <div>
+          <div class="label">Target</div>
+          <div class="col mt-8">
+            <label class="row" style="padding:10px; border:1px solid var(--mj-brand-primary); border-radius:8px; background:color-mix(in srgb, var(--mj-brand-primary) 6%, transparent); cursor:pointer;">
+              <input type="radio" checked> <span style="font-weight:600; font-size:13px;">Create New List</span>
+            </label>
+            <label class="row" style="padding:10px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer;">
+              <input type="radio"> <span style="font-weight:600; font-size:13px;">Existing List…</span>
+            </label>
+            <input class="mj-input mj-btn-sm" placeholder="New list name…" value="Fall Outreach 2026" style="margin-top:6px;">
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+      <div class="row gap-12">
+        <button class="mj-btn"><i class="fa-solid fa-eye"></i> Preview Result</button>
+        <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-bolt"></i> Compute & Save</button>
+        <div class="spacer"></div>
+        <div class="muted" style="font-size:12px;">Expected output: <strong style="color:var(--mj-text-primary);">~862 records</strong> (union dedupe of 4 sources)</div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

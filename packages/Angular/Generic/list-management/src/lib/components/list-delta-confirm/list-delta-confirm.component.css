@@ -1,0 +1,177 @@
+:host {
+  display: contents;
+}
+
+.delta-confirm-body {
+  padding: 16px 20px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: var(--mj-text-primary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.delta-confirm-body--danger {
+  border-left: 3px solid var(--mj-status-error);
+  padding-left: 17px;
+}
+
+.delta-confirm-intro {
+  color: var(--mj-text-secondary);
+}
+
+.delta-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.delta-tile {
+  border-radius: 8px;
+  padding: 12px 14px;
+  text-align: center;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+}
+
+.delta-tile__count {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.delta-tile__label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  margin-top: 4px;
+}
+
+.delta-tile--add {
+  background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
+  border-color: var(--mj-status-success-border);
+  color: var(--mj-status-success-text);
+}
+
+.delta-tile--keep {
+  background: var(--mj-bg-surface-card);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-primary);
+}
+
+.delta-tile--remove {
+  background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error-border);
+  color: var(--mj-status-error-text);
+}
+
+.delta-tile--remove-empty {
+  background: var(--mj-bg-surface-sunken);
+  border-color: var(--mj-border-default);
+  color: var(--mj-text-muted);
+}
+
+.delta-banner {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  align-items: flex-start;
+}
+
+.delta-banner__copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.delta-banner--safe {
+  background: var(--mj-status-success-bg);
+  border: 1px solid var(--mj-status-success-border);
+  color: var(--mj-status-success-text);
+  align-items: center;
+}
+
+.delta-banner--danger {
+  background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error-border);
+  color: var(--mj-status-error-text);
+}
+
+.delta-banner__ack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.delta-banner__ack input {
+  cursor: pointer;
+}
+
+.delta-section-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  margin-top: 6px;
+}
+
+.delta-preview {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: 6px;
+  background: var(--mj-bg-surface-sunken);
+  padding: 6px 8px;
+}
+
+.delta-preview__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+
+.delta-preview__row--add i {
+  color: var(--mj-status-success);
+}
+
+.delta-preview__row--remove i {
+  color: var(--mj-status-error);
+}
+
+.delta-preview__id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11.5px;
+  color: var(--mj-text-secondary);
+}
+
+.delta-footnote {
+  font-size: 11.5px;
+  color: var(--mj-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.delta-token-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  align-self: center;
+}

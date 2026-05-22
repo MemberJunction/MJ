@@ -18,7 +18,7 @@ export class MJReportFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'reportDetails', sectionName: 'Report Details', isExpanded: true },
             { sectionKey: 'dataContextRelationships', sectionName: 'Data Context & Relationships', isExpanded: true },
-            { sectionKey: 'outputScheduling', sectionName: 'Output & Scheduling', isExpanded: false },
+            { sectionKey: 'outputScheduling', sectionName: 'Output & Scheduling', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJReportSnapshots', sectionName: 'Report Snapshots', isExpanded: false },
             { sectionKey: 'mJReportVersions', sectionName: 'Report Versions', isExpanded: false },

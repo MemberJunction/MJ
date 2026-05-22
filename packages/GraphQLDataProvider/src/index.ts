@@ -8,6 +8,7 @@ export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
 export * from './graphQLSystemUserClient';
 export { GraphQLActionClient } from './graphQLActionClient';
+export { GraphQLListsClient } from './graphQLListsClient';
 export { GraphQLEncryptionClient } from './graphQLEncryptionClient';
 export type { CreateAPIKeyParams, CreateAPIKeyResult, RevokeAPIKeyResult } from './graphQLEncryptionClient';
 export { GraphQLAIClient } from './graphQLAIClient';

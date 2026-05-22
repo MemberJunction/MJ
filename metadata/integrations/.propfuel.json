@@ -1,0 +1,972 @@
+[
+  {
+    "fields": {
+      "Name": "PropFuel",
+      "Description": "[SCAFFOLD — DO NOT ENABLE] PropFuel (re:Members) member-engagement platform connector. Read-only initial cut covering the documented PropFuel domain — Contacts, Campaigns, Conversations, Captures (responses), Segments, and Tags — using the standard Ask...",
+      "ClassName": "PropFuelConnector",
+      "ImportPath": "@memberjunction/integration-connectors",
+      "NavigationBaseURL": "https://app.propfuel.com",
+      "BatchMaxRequestCount": 100,
+      "BatchRequestWaitTime": 250,
+      "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key with Endpoint",
+      "Icon": "fa-solid fa-comments"
+    },
+    "relatedEntities": {
+      "MJ: Integration Objects": [
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Contacts",
+            "DisplayName": "Contacts",
+            "Description": "Member / subscriber profile records — PropFuel's primary identity entity for engagement campaigns.",
+            "Category": "Contacts",
+            "APIPath": "/contacts",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "Contact ID (PropFuel primary key).",
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1EE5D477-27B1-4C33-99AA-73A1372F3882"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:30.808Z",
+                  "checksum": "b1bf20ac38cb54c72d0cee3693bcc006897b1e41babebde58b7ee3eee745f0d1"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "email",
+                  "DisplayName": "Email",
+                  "Type": "nvarchar",
+                  "Length": 500,
+                  "Description": "Primary email — useful as a natural key for upsert.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "20657D38-1CF6-4EDF-BC97-A9FD02F78353"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:30.877Z",
+                  "checksum": "e6e17d3ff29fdf95e87fce43863e4b90b83162ebd265ea66609eff50528f0efb"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "first_name",
+                  "DisplayName": "First Name",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B11693E2-710D-40A6-B105-BFD239E15FE4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:30.945Z",
+                  "checksum": "d025b452b28833e00ed06bbc96d793410401cef1430bb3c09f64ea081f32a348"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "last_name",
+                  "DisplayName": "Last Name",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E21ECE55-4569-47FD-A696-6EDA0EE36C98"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.013Z",
+                  "checksum": "0a1e784c23c849d68a66b9897c231a084dbb8df5f75ce6ac7e8657653a5c41a5"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "phone",
+                  "DisplayName": "Phone",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Phone number — required for SMS campaigns.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": false,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F1C32B49-E79E-4A99-B79B-1FF3F6BD3B08"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.084Z",
+                  "checksum": "008df131bb57c4786f515a16b51bc38d9f2e8a8752023a7e73cefe14618a93d6"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "80C5A45A-6CD8-4917-ADBF-913A7207AF59"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.154Z",
+                  "checksum": "393eb2374fd583c771cdb261f6734a60f3e21b8acc66d3bb1f0df4afed3240ef"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetime",
+                  "Description": "Used as the incremental-sync watermark.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "44AD762F-E6F2-445D-8113-78031C306CBB"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.227Z",
+                  "checksum": "1d942f5f94d182e7a8305f1fd5d7e7e1f39ed326e28e9c3645e8d95d0b83697a"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D7092FA0-2FFB-4D4F-B95A-D4D64CD331FC"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.651Z",
+            "checksum": "9c6dd5d5e260e3f99e66990ae30573fd88cabdcb8a606abcf74bcece36beffb5"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Campaigns",
+            "DisplayName": "Campaigns",
+            "Description": "Engagement campaigns built from PropFuel blueprints (Ask / Capture / Act flows).",
+            "Category": "Campaigns",
+            "APIPath": "/campaigns",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9AA8217D-C7AD-46E5-ABCF-7965914FB069"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.297Z",
+                  "checksum": "12fc5bdf047c447c49cfacdd4a4e7327ebeaca181eea2a3d06efa36308b3280f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "322C4538-DDA3-4595-A866-C17BF1B5D89F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.370Z",
+                  "checksum": "58acec516f2636c54e244c685dab51bd488d4fd6e03b6f6e9782d5f499aea7a7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "type",
+                  "DisplayName": "Type",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Campaign type (Ask, Capture, Act, Newsletter, etc.).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "97C3410C-9FA6-4385-864C-B214145DBF0A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.435Z",
+                  "checksum": "b6cb03e149e217fe1d6f6716065b019de1ff529fb52fc181b99c61ff9463c9bf"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "channel",
+                  "DisplayName": "Channel",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "Description": "Delivery channel (Email, SMS, Multi).",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3FA838E7-7185-48CC-9B40-2D0CAD93F8CF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.546Z",
+                  "checksum": "ed411192215f965e339dc0147628c752280fb0a5817ea83cd93bb5c46e9d4799"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B1AF33DE-F577-4201-AACF-E967B7BABCA4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.615Z",
+                  "checksum": "69c43ab64658f186eb802c50e4e93175954d676e6cb8d962a89959d9cc3ff23c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C58803B7-EB9A-4FF9-AEB1-C063B0D09939"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.687Z",
+                  "checksum": "393eb2374fd583c771cdb261f6734a60f3e21b8acc66d3bb1f0df4afed3240ef"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BCEAAB57-1BB7-46BE-9FD5-C63A1E30A608"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.757Z",
+                  "checksum": "f0553f7a2748cd28663829e6386a2a626c0a1cfdc49e1399389f90f20bd508e0"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "DBB6F950-A128-43F6-8C95-55D2D093C1A4"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.670Z",
+            "checksum": "0aca6b0c010dcead8386c5454c59ea5619efa275b761a252cde26db362f2e59f"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Conversations",
+            "DisplayName": "Conversations",
+            "Description": "Two-way member interactions across email and SMS — the parent record for inbound and outbound messages within a campaign.",
+            "Category": "Engagement",
+            "APIPath": "/conversations",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0433E816-F1D4-4457-9094-F566370232BD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.825Z",
+                  "checksum": "12fc5bdf047c447c49cfacdd4a4e7327ebeaca181eea2a3d06efa36308b3280f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "FK → Contacts",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "23A54011-B946-49A3-B446-57F17C7AC3E2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.895Z",
+                  "checksum": "0c9e49a2370c1576da867e57c395d58ba5101faaaa833a27794a7bb93eae1a74"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "Campaign ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "FK → Campaigns",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8BF911CA-4996-4313-B259-A408D152094D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:31.968Z",
+                  "checksum": "6f5e236a4d52dc7d03dace66cc12a65da6205b8da958f1deec01c631e02a6a31"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "channel",
+                  "DisplayName": "Channel",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D99F59C5-BD6C-4C3F-84E8-400D98E91A93"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.038Z",
+                  "checksum": "96a23dd7cbe44952ae0faf4a6f17dd30d9215dafdc758d245c01910e51300b98"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "status",
+                  "DisplayName": "Status",
+                  "Type": "nvarchar",
+                  "Length": 50,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6AAE519C-B9B9-4801-BBA6-65B2306460F6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.109Z",
+                  "checksum": "69c43ab64658f186eb802c50e4e93175954d676e6cb8d962a89959d9cc3ff23c"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4E7DB096-3C5A-476F-B7CB-39D31E99CA33"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.180Z",
+                  "checksum": "393eb2374fd583c771cdb261f6734a60f3e21b8acc66d3bb1f0df4afed3240ef"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0E31E1C2-91BF-455C-B2AD-8644259BB524"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.306Z",
+                  "checksum": "f0553f7a2748cd28663829e6386a2a626c0a1cfdc49e1399389f90f20bd508e0"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "D2114E9E-58A6-4A73-8DC6-7989BCC253B9"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.692Z",
+            "checksum": "5af5d48488f315425dffe5780f0d4c06511b31ec78526d6bad8d433b304d8542"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Captures",
+            "DisplayName": "Captures",
+            "Description": "Member responses to Ask prompts — the structured data PropFuel collects from a campaign (preferences, ratings, NPS, free-text answers).",
+            "Category": "Engagement",
+            "APIPath": "/captures",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": true,
+            "SupportsWrite": false,
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "10B0542B-21D7-4F14-8954-72E9C6AC1CB4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.374Z",
+                  "checksum": "12fc5bdf047c447c49cfacdd4a4e7327ebeaca181eea2a3d06efa36308b3280f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "contact_id",
+                  "DisplayName": "Contact ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "FK → Contacts",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8B40EB3B-AFD4-4CBA-B486-2E065FF12BC2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.441Z",
+                  "checksum": "0c9e49a2370c1576da867e57c395d58ba5101faaaa833a27794a7bb93eae1a74"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "campaign_id",
+                  "DisplayName": "Campaign ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "Description": "FK → Campaigns",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A783DF26-9E53-4982-884E-7888D5F158C3"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.510Z",
+                  "checksum": "6f5e236a4d52dc7d03dace66cc12a65da6205b8da958f1deec01c631e02a6a31"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "question",
+                  "DisplayName": "Question",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F3C6917A-6560-4226-8D52-6CA8F3732008"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.578Z",
+                  "checksum": "a885401459341f5dcc6545ab456e2147fb8bcbdaecddc38758cc3a05e8238294"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "response",
+                  "DisplayName": "Response",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "Description": "Member's answer / capture value.",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 5,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5FD9C126-49DE-436B-B37A-BE3049DE799D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.644Z",
+                  "checksum": "57e130ba8b7c3c034be2b29e214f88d8f97874f967323640957d999a544caee4"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "created_at",
+                  "DisplayName": "Created At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 6,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B0BCDD6F-8934-429A-A123-175871F50B1E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.713Z",
+                  "checksum": "393eb2374fd583c771cdb261f6734a60f3e21b8acc66d3bb1f0df4afed3240ef"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "updated_at",
+                  "DisplayName": "Updated At",
+                  "Type": "datetime",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 7,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C6508058-086F-4033-ADC7-474577C07888"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.780Z",
+                  "checksum": "f0553f7a2748cd28663829e6386a2a626c0a1cfdc49e1399389f90f20bd508e0"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "21EEAE95-EB50-48B8-866C-821BF787B116"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.713Z",
+            "checksum": "c51dd6d203cc33228e147c3c57ebf48c518e0e90aafa3e588c8e9dac158f4f17"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Segments",
+            "DisplayName": "Segments",
+            "Description": "Audience segments used to target campaigns.",
+            "Category": "Audiences",
+            "APIPath": "/segments",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B3992EA8-B805-4CFB-BD44-DCEC4063E7E5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.849Z",
+                  "checksum": "12fc5bdf047c447c49cfacdd4a4e7327ebeaca181eea2a3d06efa36308b3280f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "918FC851-6EB7-4137-8B2F-00C309BCF77E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:32.916Z",
+                  "checksum": "58acec516f2636c54e244c685dab51bd488d4fd6e03b6f6e9782d5f499aea7a7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "description",
+                  "DisplayName": "Description",
+                  "Type": "nvarchar",
+                  "Length": 4000,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "23BA6B9A-AA73-4819-9D81-7A93EE0F3496"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:33.006Z",
+                  "checksum": "35121b7246ddb91ce52e201542f17601c5889706f9f5c99e340906446c72a4a0"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "member_count",
+                  "DisplayName": "Member Count",
+                  "Type": "int",
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 4,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "140244FD-856E-4E62-A89D-A9FA135BED9F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:33.076Z",
+                  "checksum": "7a08d4845dab3e5afd98477c898c666475b9935240707ca77cf104c48b3be7b2"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "F1950AEA-8082-4AF8-B05B-B1AABAF9E2DD"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.735Z",
+            "checksum": "afb20052b172d2524732076aefb63118cc0bfc3330bba371e9f751c266c90fa6"
+          }
+        },
+        {
+          "fields": {
+            "IntegrationID": "@parent:ID",
+            "Name": "Tags",
+            "DisplayName": "Tags",
+            "Description": "Tags applied to Contacts for segmentation and targeting.",
+            "Category": "Audiences",
+            "APIPath": "/tags",
+            "ResponseDataKey": "data",
+            "DefaultPageSize": 100,
+            "SupportsPagination": true,
+            "PaginationType": "Offset",
+            "SupportsIncrementalSync": false,
+            "SupportsWrite": false,
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "relatedEntities": {
+            "MJ: Integration Object Fields": [
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "id",
+                  "DisplayName": "ID",
+                  "Type": "nvarchar",
+                  "Length": 100,
+                  "IsPrimaryKey": true,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 1,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "53F003D0-27D4-4CC9-BA8B-A96CAD029124"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:33.154Z",
+                  "checksum": "12fc5bdf047c447c49cfacdd4a4e7327ebeaca181eea2a3d06efa36308b3280f"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "name",
+                  "DisplayName": "Name",
+                  "Type": "nvarchar",
+                  "Length": 200,
+                  "IsPrimaryKey": false,
+                  "IsRequired": true,
+                  "IsReadOnly": true,
+                  "AllowsNull": false,
+                  "Sequence": 2,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5D313EC6-B013-4078-929C-945F326C7546"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:33.225Z",
+                  "checksum": "58acec516f2636c54e244c685dab51bd488d4fd6e03b6f6e9782d5f499aea7a7"
+                }
+              },
+              {
+                "fields": {
+                  "IntegrationObjectID": "@parent:ID",
+                  "Name": "color",
+                  "DisplayName": "Color",
+                  "Type": "nvarchar",
+                  "Length": 20,
+                  "IsPrimaryKey": false,
+                  "IsRequired": false,
+                  "IsReadOnly": true,
+                  "AllowsNull": true,
+                  "Sequence": 3,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "796F5C64-A8F5-49FE-B948-99FC9EE88EAD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:33.296Z",
+                  "checksum": "3f39e5524429323303bffd8fc44d3019669adc8b468ccad5d96c3acbb5666cc5"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "07DC54B5-2F7C-41F8-8BD6-736CC2A033DA"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:30.752Z",
+            "checksum": "0a72385cd8793251d5e5e0f62e9d5f2130b0ae8d2954c4a101e91744c7903f91"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "BE217E30-59DB-4208-9C41-2104F135BB8D"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:30:30.612Z",
+      "checksum": "2488582101f71e4439dcd782b87418bcf19d773eba58f060d01bcd51457b2aad"
+    }
+  }
+]

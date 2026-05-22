@@ -17,7 +17,7 @@ export class MJAIAgentLearningCycleFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'agentReference', sectionName: 'Agent Reference', isExpanded: true },
             { sectionKey: 'cycleTimingStatus', sectionName: 'Cycle Timing & Status', isExpanded: true },
-            { sectionKey: 'learningDetailsAudit', sectionName: 'Learning Details & Audit', isExpanded: false },
+            { sectionKey: 'learningDetailsAudit', sectionName: 'Learning Details & Audit', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

@@ -17,7 +17,7 @@ export class MJAIAgentPermissionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'administrativeMetadata', sectionName: 'Administrative Metadata', isExpanded: false },
             { sectionKey: 'assignmentTargets', sectionName: 'Assignment Targets', isExpanded: true },
-            { sectionKey: 'permissionLevels', sectionName: 'Permission Levels', isExpanded: false },
+            { sectionKey: 'permissionLevels', sectionName: 'Permission Levels', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

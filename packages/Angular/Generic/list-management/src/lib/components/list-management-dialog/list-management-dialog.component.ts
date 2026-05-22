@@ -516,17 +516,11 @@ export class ListManagementDialogComponent extends BaseAngularComponent implemen
     try {
       // Process additions
       if (this.addedToLists.size > 0) {
-        console.log(`[ListManagementDialog] Processing additions:`);
-        console.log(`  - Lists to add to:`, [...this.addedToLists]);
-        console.log(`  - Record IDs:`, this.config.recordIds);
-
         const addResult = await this.listService.addRecordsToLists(
           [...this.addedToLists],
           this.config.recordIds,
           true // Skip duplicates
         );
-
-        console.log(`[ListManagementDialog] Add result:`, addResult);
 
         for (const listId of this.addedToLists) {
           const vm = this.allLists.find(l => UUIDsEqual(l.list.ID, listId));

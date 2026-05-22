@@ -1,29 +1,31 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-code"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">GraphQL Console</h3>
-            <div class="mj-inspector__header-sub">
-                @if (ApiUrl) {
-                    Connected to <code class="gc-endpoint">{{ ApiUrl }}</code>
-                } @else {
-                    Run queries against the connected MJ API
-                }
-            </div>
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="GraphQL console"
+        Title="GraphQL Console"
+        Subtitle="Run queries against the connected MJ API">
+        <div meta>
+            @if (ApiUrl) {
+                <span class="gc-endpoint-meta">
+                    <i class="fa-solid fa-plug" aria-hidden="true"></i>
+                    <code class="gc-endpoint">{{ ApiUrl }}</code>
+                </span>
+            }
         </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn"
-                    [class.gc-toggle--active]="ShowHistory"
-                    type="button" (click)="ToggleHistoryPanel()"
+        <div actions>
+            <button mjButton
+                    variant="secondary"
+                    size="sm"
+                    [toggleable]="true"
+                    [(selected)]="ShowHistory"
                     title="Toggle history sidebar">
-                <i class="fa-solid fa-clock-rotate-left"></i> History
+                <i class="fa-solid fa-clock-rotate-left" aria-hidden="true"></i> History
             </button>
-            <button class="mj-inspector__btn" type="button" (click)="OnCopyAsCurl()" title="Copy as cURL command">
-                <i class="fa-solid fa-terminal"></i> Copy cURL
+            <button mjButton variant="secondary" size="sm" (click)="OnCopyAsCurl()" title="Copy as cURL command">
+                <i class="fa-solid fa-terminal" aria-hidden="true"></i> Copy cURL
             </button>
         </div>
-    </div>
+    </mj-page-header-interior>
 
     <div class="gc-body">
         @if (ShowHistory) {
@@ -372,11 +374,11 @@
                 }
                 <span class="gc-spacer"></span>
                 @if (ResponseJson) {
-                    <button class="mj-inspector__btn"
-                            [class.mj-inspector__btn--success]="CopyConfirmed"
-                            type="button"
+                    <button mjButton
+                            [variant]="CopyConfirmed ? 'success' : 'secondary'"
+                            size="sm"
                             (click)="OnCopyResponse()">
-                        <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
+                        <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed" aria-hidden="true"></i>
                         {{ CopyConfirmed ? 'Copied' : 'Copy' }}
                     </button>
                 }

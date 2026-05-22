@@ -3,21 +3,17 @@
     Title="Integration Schedules"
     Icon="fa-solid fa-calendar-check"
     Subtitle="When and how often integrations sync">
-    @if (!IsLoading && Schedules.length > 0) {
+    <!-- [meta] retains the conditional "running" status pill (genuine
+         signal); integrations/scheduled count badges dropped per chrome
+         slot discipline audit Task B — both mirrored the visible list. -->
+    @if (LockedCount > 0) {
       <div meta>
         <mj-stat-badge
-          [Count]="Schedules.length"
-          [Label]="Schedules.length === 1 ? 'integration' : 'integrations'">
+          Icon="fa-solid fa-spinner fa-spin"
+          [Count]="LockedCount"
+          Label="running"
+          Variant="running">
         </mj-stat-badge>
-        <mj-stat-badge [Count]="ScheduledCount" Label="scheduled"></mj-stat-badge>
-        @if (LockedCount > 0) {
-          <mj-stat-badge
-            Icon="fa-solid fa-spinner fa-spin"
-            [Count]="LockedCount"
-            Label="running"
-            Variant="running">
-          </mj-stat-badge>
-        }
       </div>
     }
     <div actions>

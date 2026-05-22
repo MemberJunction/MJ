@@ -17,7 +17,7 @@ export class MJAccessControlRuleFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'accessTarget', sectionName: 'Access Target', isExpanded: true },
             { sectionKey: 'granteePermissions', sectionName: 'Grantee & Permissions', isExpanded: true },
-            { sectionKey: 'validityAdministration', sectionName: 'Validity & Administration', isExpanded: false },
+            { sectionKey: 'validityAdministration', sectionName: 'Validity & Administration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
