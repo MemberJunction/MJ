@@ -110,6 +110,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   @Output() messageSent = new EventEmitter<MJConversationDetailEntity>();
+  /** Emits when an optimistic-UI message fails to persist server-side. Parents
+   *  should mark the corresponding rendered message as errored and offer retry. */
+  @Output() messageSendFailed = new EventEmitter<MJConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: MJConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
@@ -498,6 +501,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         detail.ParentID = this.parentMessageId;
       }
 
+      // OPTIMISTIC UI: pre-assign a stable client-side UUID and emit `messageSent` BEFORE
+      // awaiting the server save. The user's message appears in the thread instantly
+      // (eliminating the multi-second wait that was perceived as "click send, then nothing").
+      // BaseEntity.Save() accepts a pre-set ID (the generated spCreate uses the supplied
+      // value rather than the DB's NEWSEQUENTIALID default), so the optimistic identity
+      // matches the persisted identity exactly — no swap-after-save flicker.
+      detail.ID = crypto.randomUUID().toUpperCase();
+      this.messageSent.emit(detail);
+
       const saved = await detail.Save();
 
       if (saved) {
@@ -535,6 +547,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
             } catch (rollbackErr) {
               console.error('Failed to roll back conversation detail after attachment rejection:', rollbackErr);
             }
+            // The optimistic emit above already placed this message in the parent's
+            // thread. We just deleted the server-side row, so we MUST notify the parent
+            // to pull the message back out — otherwise the user sees a ghost message
+            // that no longer exists in the DB. This is the safety wire for the
+            // optimistic-UI pattern under the attachment-rejection race.
+            this.messageSendFailed.emit(detail);
             this.isSending = false;
             return;
           }
@@ -543,13 +561,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Clear pending attachments after successful send
         this.pendingAttachments = [];
 
-        this.messageSent.emit(detail);
+        // NOTE: messageSent was already emitted optimistically BEFORE save (see above).
+        // We deliberately do NOT emit it again here — the entity is the same in-memory
+        // reference that the parent already holds; its persisted fields (ID confirmed, timestamps populated)
+        // are visible to the parent without re-emit.
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);
         const isFirstMessage = this.conversationHistory.length === 0;
         await this.routeMessage(detail, mentionResult, isFirstMessage);
       } else {
+        // Persist failure path. The optimistic message is already in the parent's thread
+        // — tell the parent it didn't actually save so it can mark/remove and offer retry.
         this.handleSendFailure(detail);
+        this.messageSendFailed.emit(detail);
       }
     } catch (error) {
       this.handleSendError(error);

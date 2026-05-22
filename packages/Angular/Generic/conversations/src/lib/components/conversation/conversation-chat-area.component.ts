@@ -558,14 +558,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         });
       }
 
-      // Only show loading spinner if the engine doesn't have cached data for this conversation.
-      // This prevents the "no messages" flash when switching between conversations.
-      const hasCachedMessages = this.engine.HasCachedDetails(conversationId);
-      if (!hasCachedMessages) {
-        this.isLoadingConversation = true;
-        this.messages = [];
-        this.cdr.detectChanges();
-      }
+      // Paradigm: switch to a clean state IMMEDIATELY on every conversation change.
+      // The old approach only cleared when no cache existed for the target conversation
+      // — that left the previous conversation's messages on screen during a "fast" switch
+      // (the "shows the same chat it came from" bug). Always clear the display first;
+      // loadMessages() below repopulates from cache (fast) or DB (slower), and the user
+      // sees a clean "loading new conversation" state in either case rather than stale
+      // messages from the conversation they just left.
+      this.isLoadingConversation = true;
+      this.messages = [];
+      this.cdr.detectChanges();
 
       try {
         await this.loadMessages(conversationId);

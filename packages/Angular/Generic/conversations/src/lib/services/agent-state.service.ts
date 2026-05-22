@@ -1,9 +1,10 @@
-import { Injectable, OnDestroy } from '@angular/core';
+import { Injectable, OnDestroy, inject } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
 import { LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
+import { ConversationStreamingService } from './conversation-streaming.service';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
 
@@ -23,8 +24,15 @@ export interface AgentWithStatus {
 export class AgentStateService implements OnDestroy {
   private _activeAgents$ = new BehaviorSubject<AgentWithStatus[]>([]);
   private pollSubscription?: Subscription;
+  /** Subscription to ConversationStreamingService completion-event push stream. Drives primary state. */
+  private completionSubscription?: Subscription;
   private currentUser?: UserInfo;
-  private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
+  /** Track the active conversation filter so completion-driven refreshes apply the same scope. */
+  private currentConversationId?: string;
+  /** Fallback poll cadence — 5 min. Primary state is driven by push events. Polling exists only
+   *  to recover from missed push events (WebSocket disconnects, server-side state changes that
+   *  bypass the push channel). */
+  private pollInterval: number = 300000;
   private pollCycleCount = 0;
   /** Minimum poll cycles before allowing auto-stop. Prevents premature shutdown
    *  when fire-and-forget ACK returns before the server creates the agent run record. */
@@ -34,6 +42,10 @@ export class AgentStateService implements OnDestroy {
   public readonly activeAgents$ = this._activeAgents$.asObservable();
 
   private _provider: IMetadataProvider | null = null;
+
+  /** Injected push-event service. Used to subscribe to completion events as the
+   *  primary state-change signal (replaces previous tight polling cadence). */
+  private streamingService = inject(ConversationStreamingService);
 
   constructor() {}
 
@@ -53,32 +65,84 @@ export class AgentStateService implements OnDestroy {
   }
 
   /**
-   * Starts polling for active agents
+   * Starts tracking active agents.
+   *
+   * Despite the legacy name, this is NOT a tight polling loop anymore. Behavior:
+   *   1. Initial `loadActiveAgents` to bootstrap state from the database
+   *   2. Subscribe to {@link ConversationStreamingService.completionEvents$} — this is the
+   *      PRIMARY source of state changes. When an agent finishes server-side, the push
+   *      arrives in milliseconds and we update state immediately.
+   *   3. A long-interval safety-net poll (5 min by default — see {@link pollInterval}) that
+   *      reconciles state in case a push event was missed (WebSocket disconnect, missed broadcast).
+   *
    * @param currentUser The current user context
    * @param conversationId Optional conversation ID to filter by
    */
   startPolling(currentUser: UserInfo, conversationId?: string): void {
     this.currentUser = currentUser;
+    this.currentConversationId = conversationId;
     this.stopPolling();
     this.pollCycleCount = 0;
 
-    // Initial load
+    // Initial load — bootstraps state from DB (catches agents that were already running
+    // when this service started, e.g. user reloaded the page mid-conversation).
     this.loadActiveAgents(conversationId);
 
-    // Start polling
+    // Primary state signal: subscribe to push-driven completion events.
+    // The server publishes via PUSH_STATUS_UPDATES_TOPIC; ConversationStreamingService
+    // normalizes those into completionEvents$. When an agent finishes, we reconcile
+    // immediately rather than waiting for the next poll tick.
+    this.completionSubscription = this.streamingService.completionEvents$.subscribe(event => {
+      this.handleCompletionEvent(event);
+    });
+
+    // Safety-net poll — 5 min interval. Recovers from missed push events.
+    // Cheap because: (a) it's 10× less frequent than before, (b) the auto-stop-after-N-idle-cycles
+    // logic in loadActiveAgents still runs.
     this.pollSubscription = interval(this.pollInterval)
       .pipe(switchMap(() => this.loadActiveAgents(conversationId)))
       .subscribe();
   }
 
   /**
-   * Stops polling for active agents
+   * Stops tracking. Unsubscribes from both the push stream and the safety-net poll.
    */
   stopPolling(): void {
     if (this.pollSubscription) {
       this.pollSubscription.unsubscribe();
       this.pollSubscription = undefined;
     }
+    if (this.completionSubscription) {
+      this.completionSubscription.unsubscribe();
+      this.completionSubscription = undefined;
+    }
+  }
+
+  /**
+   * Handle a push-driven completion event. Removes the completed agent from active state
+   * immediately (no waiting for poll), then triggers a confirmation refresh to catch any
+   * sibling agents that may have transitioned concurrently.
+   */
+  private handleCompletionEvent(event: { agentRunId: string; conversationDetailId: string }): void {
+    if (!event?.agentRunId) return;
+
+    const current = this._activeAgents$.value;
+    const idx = current.findIndex(a => UUIDsEqual(a.run.ID, event.agentRunId));
+    if (idx === -1) {
+      // We weren't tracking this agent — nothing to remove. Could happen if the agent started
+      // before we subscribed, or if this completion belongs to a different conversation scope.
+      return;
+    }
+
+    // Optimistic local removal — UI reflects "agent done" instantly.
+    const updated = current.filter((_, i) => i !== idx);
+    this._activeAgents$.next(updated);
+
+    // Reconcile with DB. Catches:
+    //   - Sibling agents that transitioned in parallel
+    //   - The completed agent having actually transitioned to e.g. Failed instead of Completed
+    // Cheap: one RunView call, fired only on real completion events.
+    this.loadActiveAgents(this.currentConversationId);
   }
 
   /**

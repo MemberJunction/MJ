@@ -28,6 +28,17 @@ export class WorkspaceStateManager {
   private initialized = false;
 
   /**
+   * Tracks the most recent successfully-persisted Configuration JSON. Used by
+   * persistConfiguration() to short-circuit redundant saves — the 500ms debounce
+   * above merges bursts, but distinct same-value re-emits (tab focus events that
+   * publish the existing state, parent re-renders that re-push, etc.) still call
+   * requestSave and would fire a network round-trip without this guard.
+   *
+   * Set after loadWorkspace and after every successful workspace.Save().
+   */
+  private lastPersistedConfigJson: string | null = null;
+
+  /**
    * Optional explicit metadata provider. When set, used instead of falling back
    * to `Metadata.Provider`. The shell calls `setProvider(this.ProviderToUse)`
    * after acquiring this manager from DI.
@@ -149,6 +160,9 @@ export class WorkspaceStateManager {
         : createDefaultWorkspaceConfiguration();
 
       this.configuration$.next(config);
+      // Seed the diff tracker with what we just loaded — so a same-state re-emit
+      // before any user mutation doesn't trigger a redundant write.
+      this.lastPersistedConfigJson = JSON.stringify(config);
     }
     else {
       // Create new workspace for user
@@ -156,13 +170,16 @@ export class WorkspaceStateManager {
       const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces', md.CurrentUser);
       workspace.UserID = userId;
       workspace.Name = 'Default';
-      workspace.Configuration = JSON.stringify(createDefaultWorkspaceConfiguration());
+      const defaultConfigJson = JSON.stringify(createDefaultWorkspaceConfiguration());
+      workspace.Configuration = defaultConfigJson;
 
       const saveResult = await workspace.Save();
 
       if (saveResult) {
         this.workspace$.next(workspace);
         this.configuration$.next(createDefaultWorkspaceConfiguration());
+        // Seed the diff tracker with the just-persisted default.
+        this.lastPersistedConfigJson = defaultConfigJson;
       } else {
         console.error('[WorkspaceStateManager.loadWorkspace] Failed to save workspace');
         throw new Error('Failed to create default workspace');
@@ -171,15 +188,30 @@ export class WorkspaceStateManager {
   }
 
   /**
-   * Persist configuration to database (debounced)
+   * Persist configuration to database (debounced + diff-gated).
+   *
+   * The 500ms debounceTime above merges bursts of requestSave() calls into a single
+   * persist. But distinct same-value re-emits (tab focus events that publish the
+   * existing state, parent re-renders that re-push, etc.) can still arrive >500ms
+   * apart and each trigger a save round-trip. The diff check against
+   * lastPersistedConfigJson short-circuits those — no network call when nothing
+   * actually changed since the last successful write.
    */
   private async persistConfiguration(): Promise<void> {
     const workspace = this.workspace$.value;
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      workspace.Configuration = JSON.stringify(config);
-      await workspace.Save();
+      const configJson = JSON.stringify(config);
+      // Skip the save when nothing changed since last persist.
+      if (configJson === this.lastPersistedConfigJson) {
+        return;
+      }
+      workspace.Configuration = configJson;
+      const saved = await workspace.Save();
+      if (saved) {
+        this.lastPersistedConfigJson = configJson;
+      }
     }
   }
 

@@ -378,8 +378,16 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
         this.processLinksData(collectionsResult, convDetailResult)
       ]);
 
-      // Load version attributes (depends on selected version being set)
-      await this.loadVersionAttributes();
+      // Version attributes are used only to populate the Display tab (displayMarkdown /
+      // displayHtml). Fire async so the spinner clears immediately and the artifact body
+      // is interactive — the Display tab appears a moment later when attributes arrive.
+      // loadVersionAttributes() already invokes cdr.detectChanges() in its finally block,
+      // so the UI re-renders on its own when the data lands. hasDisplayTab is false until
+      // the attributes are populated, so the tab is simply hidden in the interim (no flash
+      // of empty content).
+      this.loadVersionAttributes().catch(err => {
+        console.error('Background load of version attributes failed:', err);
+      });
     } catch (err) {
       console.error('Error loading artifact:', err);
       this.error = 'Error loading artifact: ' + (err as Error).message;
