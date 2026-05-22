@@ -3,9 +3,6 @@
 .mj-inspector--solo {
     background: var(--mj-bg-page);
 }
-.mj-inspector--solo .mj-inspector__header {
-    background: var(--mj-bg-surface);
-}
 
 /* Stats row */
 .cr-stats-row {

@@ -22,7 +22,7 @@ const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/
 // --- @memberjunction/ng-dashboards → ./ai-dashboards.module (15 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 entries) ---
+// --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
@@ -40,7 +40,7 @@ const loadDataExplorerDashboardsModule = featureLoader(() => import('@memberjunc
 // --- @memberjunction/ng-dashboards → ./integration.module (6 entries) ---
 const loadIntegrationModule = featureLoader(() => import('@memberjunction/ng-dashboards/integration.module'));
 
-// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (4 entries) ---
+// --- @memberjunction/ng-dashboards → ./lists-dashboards.module (5 entries) ---
 const loadListsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/lists-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./mcp.module (2 entries) ---
@@ -101,6 +101,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::CommunicationMonitorResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationProvidersResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationRunsResource': loadCommunicationDashboardsModule,
+  'BaseResourceComponent::CommunicationsNewMessageResource': loadCommunicationDashboardsModule,
   'BaseResourceComponent::CommunicationTemplatesResource': loadCommunicationDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
@@ -161,6 +162,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::ListsCategoriesResource': loadListsDashboardsModule,
   'BaseResourceComponent::ListsMyListsResource': loadListsDashboardsModule,
   'BaseResourceComponent::ListsOperationsResource': loadListsDashboardsModule,
+  'BaseResourceComponent::ListsSharedWithMeResource': loadListsDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./mcp.module
   'BaseDashboard::MCPDashboard': loadMcpModule,

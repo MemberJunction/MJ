@@ -237,6 +237,14 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     /** Expiration time of the cached auth context */
     private cachedAuthExpiresAt = 0;
 
+    // ─── Identity ────────────────────────────────────────────────────
+
+    // Required for the three-way invariant (metadata.Name = connector
+    // IntegrationName = @RegisterClass tag). Base class default
+    // (this.constructor.name) would return 'WicketConnector' which would
+    // miss the metadata lookup for 'Wicket'.
+    public override get IntegrationName(): string { return 'Wicket'; }
+
     // ─── Capability Getters ──────────────────────────────────────────
 
     public override get SupportsCreate(): boolean { return true; }

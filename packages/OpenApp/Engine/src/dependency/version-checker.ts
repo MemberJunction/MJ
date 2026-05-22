@@ -13,6 +13,8 @@ import semver from 'semver';
 export interface VersionCheckResult {
     /** Whether the version is compatible */
     Compatible: boolean;
+    /** True when target version equals the installed version — no work needed */
+    AlreadyAtTarget?: boolean;
     /** Human-readable explanation if incompatible */
     Message?: string;
 }
@@ -106,8 +108,9 @@ export function IsValidUpgrade(currentVersion: string, targetVersion: string): V
 
     if (semver.eq(targetVersion, currentVersion)) {
         return {
-            Compatible: false,
-            Message: `Target version ${targetVersion} is the same as the installed version`
+            Compatible: true,
+            AlreadyAtTarget: true,
+            Message: `Already at version ${targetVersion} — nothing to upgrade`
         };
     }
 

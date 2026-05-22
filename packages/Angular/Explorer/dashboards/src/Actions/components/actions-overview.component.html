@@ -3,12 +3,9 @@
     Title="Actions Overview"
     Icon="fa-solid fa-bolt"
     Subtitle="Health and activity for all configured actions">
-    <div meta>
-      <mj-stat-badge
-        [Count]="metrics.totalActions"
-        Label="actions">
-      </mj-stat-badge>
-    </div>
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         totalActions was a single inventory count; the body's KPI cards
+         surface this and other metrics in their proper place. -->
     <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
