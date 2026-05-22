@@ -1,5 +1,67 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.36.0
+
+### Patch Changes
+
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- 4d16916: Fix dashboard resource navigation to parse OpenEntityRecord recordId as a URL segment so single-PK composite keys round-trip correctly (was producing malformed `ID|ID|<value>` URLs and dropping the record ID), plus add regression tests for `CompositeKey.LoadFromURLSegment`.
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ng-dashboards@5.36.0
+  - @memberjunction/ng-explorer-settings@5.36.0
+  - @memberjunction/ng-base-forms@5.36.0
+  - @memberjunction/ng-entity-viewer@5.36.0
+  - @memberjunction/lists-base@5.36.0
+  - @memberjunction/ng-list-management@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/ng-list-detail-grid@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-ai-test-harness@5.36.0
+  - @memberjunction/ng-artifacts@5.36.0
+  - @memberjunction/ng-conversations@5.36.0
+  - @memberjunction/ng-feedback@5.36.0
+  - @memberjunction/ng-file-storage@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-record-tags@5.36.0
+  - @memberjunction/ng-search@5.36.0
+  - @memberjunction/entity-communications-client@5.36.0
+  - @memberjunction/ng-entity-form-dialog@5.36.0
+  - @memberjunction/ng-entity-permissions@5.36.0
+  - @memberjunction/ng-generic-dialog@5.36.0
+  - @memberjunction/ng-record-selector@5.36.0
+  - @memberjunction/ng-resource-permissions@5.36.0
+  - @memberjunction/ng-dashboard-viewer@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-query-viewer@5.36.0
+  - @memberjunction/ng-record-changes@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-user-avatar@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/templates-base-types@5.36.0
+  - @memberjunction/ng-auth-services@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+  - @memberjunction/ng-export-service@5.36.0
+  - @memberjunction/ng-word-cloud@5.36.0
+  - @memberjunction/export-engine@5.36.0
+  - @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Minor Changes

@@ -1,5 +1,36 @@
 # @memberjunction/ng-conversations
 
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-client@5.36.0
+  - @memberjunction/ng-testing@5.36.0
+  - @memberjunction/ng-artifacts@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-forms@5.36.0
+  - @memberjunction/ng-resource-permissions@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-code-editor@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-tasks@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+  - @memberjunction/ng-agent-client@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/ng-markdown@5.36.0
+  - @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes
