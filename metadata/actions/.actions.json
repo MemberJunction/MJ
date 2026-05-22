@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Autotag and Vectorize Content",
-      "Description": "Autotag Content and create vectors of the content items that are created.",
+      "Description": "Runs MJ's Content Autotagging and/or Vector Embedding pipeline over Content Items. Either step can be toggled independently via the Autotag and Vectorize boolean parameters (both default ON). Operates on the Content Items entity by default. For vectorizing OTHER entities (not Content Items), use Vectorize Entity instead.",
       "DriverClass": "__AutotagAndVectorizeContent",
       "Type": "Custom",
       "Status": "Active",
@@ -18,15 +18,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "A bit, to indicate if we autotag or not. 1 indicates we should autotag, 0 we should not",
+            "Description": "When '1' (default), runs the autotagger over the content items to assign category/topic tags. When '0', skips the autotag step.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "B2A953B5-9C76-EF11-9C36-000D3A9EBD44"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.549Z",
-            "checksum": "1099ea8a4e9fce87acda04e56c736ebba8ce35f59be698cef63d8a85f0ddc184"
+            "lastModified": "2026-05-19T18:03:04.952Z",
+            "checksum": "bbc7834c9b1efa5b4dfdffc66533e9f91385ff7057181c39d299d3b25eaa7eb1"
           }
         },
         {
@@ -37,15 +37,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "A bit to indicate if we vectorize the content items or not. 1 indicates we should vectorize, 0 we should not",
+            "Description": "When '1' (default), creates vector embeddings for the content items to enable semantic search. When '0', skips the vectorize step.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "0E7EF5C0-9C76-EF11-9C36-000D3A9EBD44"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.550Z",
-            "checksum": "2cc20eaa78070daaa2fc840fd484ba569f42a566d96f614c50835075ffd4325b"
+            "lastModified": "2026-05-19T18:03:04.989Z",
+            "checksum": "b34aa32d8f516344b91334ebca807d7dfcabc102747d58c2017b6989419e27b4"
           }
         },
         {
@@ -56,15 +56,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": true,
-            "Description": "Name of the entity to vectorize",
+            "Description": "Array of entity names to process. Defaults to ['Content Items']. Only entities holding content suitable for autotagging should be supplied.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "3A8EC430-A076-EF11-9C36-000D3A9EBD44"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.552Z",
-            "checksum": "98754d2a44bb90585c5e289ecc57f8c3d27a318fe620fb4029c268ca830963ce"
+            "lastModified": "2026-05-19T18:03:05.023Z",
+            "checksum": "91d0106633068775761b8b383211aab0d345846021752ad486282ef748981e99"
           }
         }
       ],
@@ -105,14 +105,14 @@
       "ID": "D8781B41-9C76-EF11-9C36-000D3A9EBD44"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.018Z",
-      "checksum": "19d4b09b1cc4ab9ead098e2edab399121ec44a04731dad143734c6cde81a88c6"
+      "lastModified": "2026-05-19T18:03:04.363Z",
+      "checksum": "d65514a7fed5e11e9d4cd120d6516783a2dc46be38e050bd49f76bec7cbc7a5f"
     }
   },
   {
     "fields": {
       "Name": "Vectorize Entity",
-      "Description": "Action that vectorizes entities by creating and storing vector embeddings for entity documents.",
+      "Description": "Creates and stores vector embeddings for records in one or more MJ entities. Use to enable semantic search over arbitrary entity data. For Content Items specifically, prefer Autotag and Vectorize Content which also assigns tags. Vectors are stored per the entity's configured vector database and embedding model.",
       "DriverClass": "__VectorizeEntity",
       "Type": "Custom",
       "Status": "Active"
@@ -126,15 +126,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": true,
-            "Description": "Names of entities to vectorize. Can be a single entity name, comma-separated list, or array of entity names",
+            "Description": "Names of one or more MJ entities to vectorize. Accepts a single entity name, a comma-separated string, or an array. Each entity must have a configured vector database and embedding model in its metadata.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "14D98181-76EE-4732-ABDD-F675F095236A"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.557Z",
-            "checksum": "88e6c3a87e97d77d92edb3842b077ac9f83b5c4e6d1dab2d90354d9cc60fc8f1"
+            "lastModified": "2026-05-19T18:03:05.058Z",
+            "checksum": "fdfe80297a3785821fdb9e88203aae1d65aa89c8ab391e4201ad399675c6ea87"
           }
         }
       ],
@@ -175,14 +175,14 @@
       "ID": "1D4A644B-7356-403F-B726-77A1D4DA8EDB"
     },
     "sync": {
-      "lastModified": "2025-12-30T23:06:47.019Z",
-      "checksum": "0e658f58759849fdb0a327e17d759e433c92e72b480f95b4122fcd20c46a645d"
+      "lastModified": "2026-05-19T18:03:04.395Z",
+      "checksum": "b7d57f5ef12059c20f61ed391a0111d9e5ca49da38be500c586b0b93126213e3"
     }
   },
   {
     "fields": {
       "Name": "Send Single Message",
-      "Description": "Sends a single message via the MJ Communication Framework",
+      "Description": "Sends one outbound message (email, SMS, push notification, etc.) via the MJ Communication Framework. The actual channel is determined by the Provider + MessageType parameters — this single action handles all message types the configured provider supports. For bulk send, use a Run View to gather recipients then loop, or use a provider-specific bulk action if available.",
       "DriverClass": "__SendSingleMessage",
       "Type": "Custom",
       "Status": "Active",
@@ -198,15 +198,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The subject of the message",
+            "Description": "The message subject. Required for email-style providers; ignored by SMS/push providers.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "2D23517C-3057-4DB0-8BE7-7A546E8A2956"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.703Z",
-            "checksum": "f477e273e63354c2a3690fdc80df71d688c3e87b49e58139dceb268f76acbcf0"
+            "lastModified": "2026-05-19T18:03:05.092Z",
+            "checksum": "d9a9be0971488f1329bd6f9c6fecb843332c7e42f076f079efa4796cb145401a"
           }
         },
         {
@@ -216,15 +216,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The body of the message",
+            "Description": "The message body content. Can be plain text or HTML depending on the provider and MessageType.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "81B9DA22-3E63-4E50-8BC2-3F6218872B45"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.705Z",
-            "checksum": "26f501485cb27fe8a694a3b3efed8ba474b97ee86ccc51559f981306253e1f89"
+            "lastModified": "2026-05-19T18:03:05.127Z",
+            "checksum": "e421d7a0a4d6b63b17b7cbeeb0c390cd9b1afa4d84370ea059f42e7896aa4cb9"
           }
         },
         {
@@ -234,15 +234,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The recipient of the message",
+            "Description": "The recipient address in the format the provider expects, e.g. 'user@example.com' for an email provider, or a phone number like '+15551234567' for SMS.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "B540CF4F-2F70-49AD-9C6B-BACE7B8F49E6"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.706Z",
-            "checksum": "020ba175b862850334434e5e7932e553bc9ea89456a60f032791ab7a0e14a006"
+            "lastModified": "2026-05-19T18:03:05.252Z",
+            "checksum": "8aceaf57fca7b35d9459ccb1fd2eadea5ef1165ca79d961c48987c2ba53af523"
           }
         },
         {
@@ -252,15 +252,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The sender of the message",
+            "Description": "The sender address in the format the provider expects. Must be a verified/authorized sender for the chosen provider.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "BD056F50-DEB8-44F1-AE73-6B39F418EF10"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.708Z",
-            "checksum": "441ba47608f40be26096e193b017679dd3a0caf5de9fd1662d79fa51d1b30ff9"
+            "lastModified": "2026-05-19T18:03:05.285Z",
+            "checksum": "719701789b60dea5f21f812871c069722f42a94d067bc4fd48e00c36e903eb9e"
           }
         },
         {
@@ -270,15 +270,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the Communication Provider to use to send the message",
+            "Description": "The name of the configured Communication Provider, e.g. 'SendGrid', 'Twilio', 'Microsoft Graph'. Must match a registered provider in the Communication Providers entity.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "5560E691-EDE3-4090-960F-FC3D2A97F58E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.710Z",
-            "checksum": "cf335b02e9a0a022e3aa7822d42f3c68e8be5f33315bd240609bd20b45c64907"
+            "lastModified": "2026-05-19T18:03:05.318Z",
+            "checksum": "c1d6a916b4641a9ed7f541984cebb5241e4ea426a6a10a305ae8a45ab03b2dd7"
           }
         },
         {
@@ -288,15 +288,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the Message Type (within the provider) to use to send the message",
+            "Description": "The name of a MessageType registered within the chosen Provider, e.g. 'Transactional Email', 'SMS'. Determines how Subject/Body are interpreted.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "E338FA62-5310-4E4E-869A-EA1EA5AF3C8E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.711Z",
-            "checksum": "e402229c738392ffe6b3a97081061f4a4eda75403b1cf3f68ebbe005263d04de"
+            "lastModified": "2026-05-19T18:03:05.350Z",
+            "checksum": "e37fcce5443c86cf4a4093c77fbbcbe87a46a8df113c27c87bd9c9717aa81a8a"
           }
         }
       ],
@@ -337,14 +337,14 @@
       "ID": "DC4C7E64-2D93-43E4-9F02-F5D7E702784A"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.316Z",
-      "checksum": "4faf9353db8a663acbcfc7eb9083b8c76690bff91356910ba283aefbd9b41f0c"
+      "lastModified": "2026-05-19T18:03:04.413Z",
+      "checksum": "f7345380be5c0541ed50c003db64925a26241d0e85fc5bea9e34f4cab8e81d32"
     }
   },
   {
     "fields": {
       "Name": "Get Weather",
-      "Description": "Retrieves current weather information for a specified location using free public weather APIs",
+      "Description": "Looks up the current weather for a single location, either by city name or by latitude/longitude. Returns current conditions and temperature for a single point in time.",
       "DriverClass": "__GetWeather",
       "Type": "Custom",
       "Status": "Active",
@@ -360,15 +360,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "City name or location to get weather for (e.g., 'New York', 'London'). **JUST CITY NAME, NO STATE OR COUNTRY** Either this or Latitude/Longitude must be provided",
+            "Description": "City name only, e.g. 'New York', 'London', 'Tokyo'. The underlying API rejects qualifiers like state or country. Either this OR Latitude/Longitude must be provided.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "8F49FD17-4832-4E55-B880-01336A37D894"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:47.716Z",
-            "checksum": "ab2a99c131978794d258bb823cff06de5e8f7d99fea111eb15767517154acb71"
+            "lastModified": "2026-05-19T18:03:05.382Z",
+            "checksum": "685a56c6884d182498d3f2ca17990b1e0fdac0f8cce78f3514e98389241ff2bd"
           }
         },
         {
@@ -509,14 +509,14 @@
       "ID": "6C88FED2-679A-4FDD-A31A-7F38D0457F22"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.317Z",
-      "checksum": "c599dec3863eeea0db87c52bbfbeeaad1beacd6ce90e771f289d92e2030a10cd"
+      "lastModified": "2026-05-19T18:03:04.432Z",
+      "checksum": "01d45db27ee6d7fe1f229d99271eaaf148fc54ed59c5512103925452f88b0dcf"
     }
   },
   {
     "fields": {
       "Name": "Get Stock Price",
-      "Description": "Retrieves current stock price and related information for a specified ticker symbol",
+      "Description": "Looks up the current price and trading data for a single publicly-traded stock by ticker symbol. US/major-exchange tickers only. Returns the latest price snapshot.",
       "DriverClass": "__GetStockPrice",
       "Type": "Custom",
       "Status": "Active",
@@ -645,8 +645,8 @@
       "ID": "296E03AE-6EDC-4C5E-9506-BC98ACCDA2E1"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.318Z",
-      "checksum": "abf896269188141727f567fb5b316124650af4936b390316a9cc146a4033d472"
+      "lastModified": "2026-05-19T18:03:04.447Z",
+      "checksum": "c0597a296ab91f2cc8a33c10b23baad3252083bd4188dd8860437aead711cf85"
     }
   },
   {
@@ -1640,7 +1640,7 @@
   {
     "fields": {
       "Name": "Web Search",
-      "Description": "Performs web search using DuckDuckGo's search API and returns search results with titles, URLs, and snippets",
+      "Description": "Searches the open web via DuckDuckGo and returns a ranked list of result URLs with titles and snippets. Use when you need to discover relevant pages but do not yet know specific URLs. To fetch the actual content of a known URL, use Web Page Content. Rate-limited; supports queueing.",
       "DriverClass": "__WebSearch",
       "Type": "Custom",
       "Status": "Active",
@@ -1922,14 +1922,14 @@
       "ID": "82169F64-8566-4AE7-9C87-190A885C98A9"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.517Z",
-      "checksum": "b4b2c52e822bad801c324cdc26e5242e302d1312c152492df806099c8c8d6536"
+      "lastModified": "2026-05-19T18:03:04.640Z",
+      "checksum": "57890264ac318862177ec6f2005859e2c250edc8f0852cd745c829dea3cdfd1a"
     }
   },
   {
     "fields": {
       "Name": "Web Page Content",
-      "Description": "Retrieves and processes web content in various formats including JSON APIs, PDF documents, DOCX files, XML, CSV, HTML and more - with intelligent content type detection and format conversion",
+      "Description": "Fetches the content of a specific URL and converts it to text/markdown/JSON. Use when you already have a URL (from Web Search, a user-supplied link, or an API endpoint) and need its content. Handles HTML, PDF, DOCX, XML, CSV, and JSON automatically with format detection.",
       "DriverClass": "__WebPageContent",
       "Type": "Custom",
       "Status": "Active",
@@ -2160,8 +2160,8 @@
       "ID": "81F96534-03F5-49E9-81B0-D8902A7645A3"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.518Z",
-      "checksum": "bde17a4f06c902f9d998cfd7cac02e4d6712d778d83ea599b6c4e5d1d46dac6c"
+      "lastModified": "2026-05-19T18:03:04.660Z",
+      "checksum": "2257ff669f609d46612f9db6075e9a4c10dd500164778fec197f71a4b37b4647"
     }
   },
   {
@@ -2876,7 +2876,7 @@
   {
     "fields": {
       "Name": "Create Record",
-      "Description": "Generic action for creating new entity records in the database. Accepts entity name and field values as parameters.",
+      "Description": "Inserts a NEW record into an MJ entity. Use when the record does not yet exist and you need a generated primary key returned. To modify an existing record, use Update Record. To read existing records, use Get Record (single) or Run View (multiple). Accepts any entity in the MJ metadata; respects entity validation and permissions.",
       "DriverClass": "CreateRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
@@ -2891,15 +2891,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the entity to create",
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "30328853-ABC4-4141-A8A0-3A1835B831E5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.705Z",
-            "checksum": "d869fe1c03aa492c9182b6afab026fd445bbf14117b589ddd4846fa2be78b525"
+            "lastModified": "2026-05-19T19:43:53.688Z",
+            "checksum": "30f857ba8961b797e67d9c857af36396d1c889290b04adcfdbd7fddcc15cc234"
           }
         },
         {
@@ -2909,15 +2909,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Object containing field names and values to set on the new record",
+            "Description": "Object mapping field names to values, e.g. { \"Name\": \"My Agent\", \"Status\": \"Active\" }. Only writable fields are accepted; primary keys, computed fields, and timestamps (__mj_CreatedAt, __mj_UpdatedAt) are managed automatically and should be omitted.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "9BFC66D9-2270-42EF-8CF9-A528F6B36646"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.707Z",
-            "checksum": "2a6d430a2e3efd31f5ed3daccf363bcde6ce2adb10072934c9d8e03f5b1e7785"
+            "lastModified": "2026-05-19T18:03:06.525Z",
+            "checksum": "278d8fb9f26480bd6b1034784558c9a0f006bcd64f85862e5bb47335df152083"
           }
         },
         {
@@ -3021,14 +3021,14 @@
       "ID": "2504E288-ADF7-4913-A627-AA14276BAA55"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.524Z",
-      "checksum": "39de4431631e4b98808df1777878fd9e82a24a3c4b0124ae810a7625619e0d19"
+      "lastModified": "2026-05-19T18:03:04.679Z",
+      "checksum": "90d5012220e7c819b3f215c5401d91f671ba28c2feda8bade74da1bf22d9eef9"
     }
   },
   {
     "fields": {
       "Name": "Get Record",
-      "Description": "Generic action for retrieving entity records from the database. Accepts entity name and primary key values as parameters.",
+      "Description": "Retrieves a SINGLE record from an MJ entity by primary key. Use when you already know the exact record's primary key. To find records by other criteria (status, name, date range), use Run View with a filter. To execute a stored, named query, use Run Query. Returns the full record with all fields the user has read permission on.",
       "DriverClass": "GetRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
@@ -3043,15 +3043,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the entity to retrieve",
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "2EC5B4DB-53D9-458A-AE23-46402A83A4E0"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.836Z",
-            "checksum": "12449b04ff2e15d70f31de87a75ef07480a4d2529ec5735caff88be891b5c689"
+            "lastModified": "2026-05-19T19:43:53.719Z",
+            "checksum": "30f857ba8961b797e67d9c857af36396d1c889290b04adcfdbd7fddcc15cc234"
           }
         },
         {
@@ -3061,15 +3061,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Object containing primary key field(s) and value(s)",
+            "Description": "Object identifying the existing record, e.g. { \"ID\": \"...\" }. Most MJ entities use a single ID field; composite keys are supported via multiple key/value pairs (e.g. { \"EntityID\": \"...\", \"FieldName\": \"...\" } for EntityField).",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "76B42B5D-A9C4-4D1D-B189-B4C8C32B89AF"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.837Z",
-            "checksum": "05c68391ac1f700175a98dcb0b1cf199c2118385996a0d81ce5f623543abaaad"
+            "lastModified": "2026-05-19T18:03:06.591Z",
+            "checksum": "b104a8383febf40e21cbfa4dae3778d0818c187e633babec4f3a2286ad884ad0"
           }
         },
         {
@@ -3079,15 +3079,15 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "The retrieved entity record data",
+            "Description": "The full retrieved record as a flat object mapping field names to values. Returns null if no record matches the primary key.",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "25934540-6F4D-48F5-8CA1-69DEB83BFAD5"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.839Z",
-            "checksum": "aa0104f543db668f8602a9a78a756385c8a099985cb862a103e8eaeb61aecf2f"
+            "lastModified": "2026-05-19T18:03:06.723Z",
+            "checksum": "2c0ca79c235435384af7b6ae2225376e92ba1888471de1e035f206a335babb01"
           }
         }
       ],
@@ -3188,14 +3188,14 @@
       "ID": "49E30665-1A90-45CA-9129-C33959A51B4F"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.525Z",
-      "checksum": "a1cd772ecb74c715a2933bf7b566b526e420ca7cbb3ce26e7dad6af8443cb24d"
+      "lastModified": "2026-05-19T18:03:04.698Z",
+      "checksum": "2f11ea2c1cc92d60cc39bf5040d9843b2e6d8098c43a2c38b451b3392af9973e"
     }
   },
   {
     "fields": {
       "Name": "Update Record",
-      "Description": "Generic action for updating existing entity records in the database. Accepts entity name, primary key, and field values as parameters.",
+      "Description": "Modifies an EXISTING record in an MJ entity. Use when the record already exists and you know its primary key. To insert a new record, use Create Record. To remove a record, use Delete Record. Only the supplied fields are changed; all other fields are preserved. Respects entity validation, permissions, and audit trails (Record Changes).",
       "DriverClass": "UpdateRecordAction",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
       "Type": "Custom",
@@ -3210,15 +3210,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the entity to update",
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "F7537CB2-3583-4CD0-A7F9-729C2404396E"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.974Z",
-            "checksum": "5d929869937f24fc8fec3d55042624cf42e2a2ef04cb95eecc9cc28e8e190a14"
+            "lastModified": "2026-05-19T19:43:53.829Z",
+            "checksum": "30f857ba8961b797e67d9c857af36396d1c889290b04adcfdbd7fddcc15cc234"
           }
         },
         {
@@ -3228,15 +3228,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Object containing primary key field(s) and value(s)",
+            "Description": "Object identifying the existing record, e.g. { \"ID\": \"...\" }. Most MJ entities use a single ID field; composite keys are supported via multiple key/value pairs (e.g. { \"EntityID\": \"...\", \"FieldName\": \"...\" } for EntityField).",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "2AF41949-1EA3-45F8-89B6-C5AC6D9A25B4"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.976Z",
-            "checksum": "05c68391ac1f700175a98dcb0b1cf199c2118385996a0d81ce5f623543abaaad"
+            "lastModified": "2026-05-19T18:03:06.791Z",
+            "checksum": "b104a8383febf40e21cbfa4dae3778d0818c187e633babec4f3a2286ad884ad0"
           }
         },
         {
@@ -3246,15 +3246,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Object containing field names and values to update",
+            "Description": "Object containing only the fields to change, e.g. { \"Status\": \"Inactive\" }. Fields not included are left unchanged. The primary key belongs in the PrimaryKey parameter — omit it here.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "7D8B81D2-74A0-4F22-B1B0-8A2A8DAC9560"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:49.977Z",
-            "checksum": "2b00420b959746decd2daf214bcc37e65350207a7cd4b43c1c1cf8b1489b3d90"
+            "lastModified": "2026-05-19T18:03:06.821Z",
+            "checksum": "f685b1c864ae5936a3a5ffb152b201a86776fb3a487b6ed201218d1eea54ed26"
           }
         },
         {
@@ -3403,14 +3403,14 @@
       "ID": "FCAAD325-0D33-4E48-BC25-49C0E3587062"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.610Z",
-      "checksum": "f86dcf4c348cb76a479bb8465ff3aa07fa4a45f7d82a5b4ce2b9893107268b89"
+      "lastModified": "2026-05-19T18:03:04.715Z",
+      "checksum": "db2b0a0099980d10020c2cce6a9ad4f5ecea00c7a24e50dba98a8e6997ee4133"
     }
   },
   {
     "fields": {
       "Name": "Delete Record",
-      "Description": "Generic action for deleting entity records from the database. Accepts entity name and primary key values as parameters.",
+      "Description": "Permanently removes a record from an MJ entity. Hard delete — irreversible. For entities that support soft deletes (e.g. setting Status='Archived'), prefer Update Record. To confirm a record exists before deletion, call Get Record first. Respects cascade rules defined in entity metadata.",
       "DriverClass": "DeleteRecordAction",
       "Type": "Custom",
       "CategoryID": "@lookup:MJ: Action Categories.Name=Data&Parent=System",
@@ -3425,15 +3425,15 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "The name of the entity to delete",
+            "Description": "The MJ entity name as registered in the metadata. Built-in MJ entities all use the 'MJ: ' prefix, e.g. 'MJ: AI Agents', 'MJ: Users', 'MJ: AI Prompt Runs'. Custom entities added by an MJ deployment may or may not use the prefix. Case-insensitive. Look up via Metadata.EntityByName if uncertain.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "C61E622E-D1F6-4CB1-8701-58F2502B0943"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.124Z",
-            "checksum": "5bfb2e33054a5b4dd67e1f9286cb0cd12f61071b283d4f73554bdb53fe709286"
+            "lastModified": "2026-05-19T19:43:53.936Z",
+            "checksum": "30f857ba8961b797e67d9c857af36396d1c889290b04adcfdbd7fddcc15cc234"
           }
         },
         {
@@ -3443,15 +3443,15 @@
             "Type": "Input",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Object containing primary key field(s) and value(s)",
+            "Description": "Object identifying the existing record, e.g. { \"ID\": \"...\" }. Most MJ entities use a single ID field; composite keys are supported via multiple key/value pairs (e.g. { \"EntityID\": \"...\", \"FieldName\": \"...\" } for EntityField).",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "9AC131EE-A120-4092-BBBF-A6D94B22F255"
           },
           "sync": {
-            "lastModified": "2025-12-30T23:06:50.125Z",
-            "checksum": "05c68391ac1f700175a98dcb0b1cf199c2118385996a0d81ce5f623543abaaad"
+            "lastModified": "2026-05-19T18:03:07.040Z",
+            "checksum": "b104a8383febf40e21cbfa4dae3778d0818c187e633babec4f3a2286ad884ad0"
           }
         },
         {
@@ -3600,8 +3600,8 @@
       "ID": "C03F2547-5154-4627-8E12-FBDEB7580346"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:08:34.611Z",
-      "checksum": "72cdcf1e06513f8fb08fa6cb13b9774a140144b16a08965f220aa3081c4097c1"
+      "lastModified": "2026-05-19T18:03:04.810Z",
+      "checksum": "57c42e1a0c790c03309aeea2a6d784dddebcecd7b9e6fee9f8c3bec48e0ea6ac"
     }
   },
   {
