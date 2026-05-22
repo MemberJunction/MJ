@@ -1,13 +1,23 @@
 import express, { Router, Request, Response } from 'express';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJUserFeedbackSubmissionEntity } from '@memberjunction/core-entities';
+import { Marked } from 'marked';
+import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { configInfo } from '../config.js';
 import {
   sendFeedbackEmail,
   escapeHtml,
   getFeedbackAppName,
+  getFeedbackAccentColor,
+  wrapInEmailShell,
+  buildIssueTitleCard,
 } from './feedbackEmail.js';
+
+// Scoped marked instance configured to render GitHub-flavored markdown the
+// way GitHub does in its issue comment UI: GFM tables/strikethrough + soft
+// line breaks become <br>. Kept module-local (vs `marked.setOptions(...)`)
+// so we don't mutate global state any other MJServer code might rely on.
+const githubMarkdown = new Marked({ gfm: true, breaks: true });
 
 /**
  * Internal extension of express.Request that exposes the raw request body
@@ -54,6 +64,21 @@ interface BuiltEmail {
 }
 
 /**
+ * Narrowed shape of a UserFeedbackSubmission row, containing only the columns
+ * the webhook handler actually needs (recipient email + display fields for
+ * the message body). Kept as a separate interface so RunView can pull just
+ * these fields via `ResultType: 'simple'` + `Fields`, per the MJ read-only
+ * lookup convention (see PermissionEngine.GetAuditTimeline for the canonical
+ * pattern).
+ */
+interface SubmissionRow {
+  Email: string;
+  Name: string | null;
+  IssueNumber: number;
+  IssueTitle: string;
+}
+
+/**
  * Create the express Router that handles incoming GitHub webhook events
  * for the user-feedback notification system.
  *
@@ -91,6 +116,35 @@ function getWebhookSecret(): string | null {
     ?? configInfo.feedbackSettings?.github?.webhookSecret
     ?? null
   );
+}
+
+/**
+ * Resolve the system user used for all database operations performed by the
+ * webhook handler. Webhook requests are unauthenticated from MJ's perspective
+ * (GitHub doesn't send an MJ bearer token), so every server-side operation
+ * inside the handler — RunView lookups, CommunicationEngine.Config calls,
+ * Save operations — needs an explicit contextUser per MJ's server-side rules.
+ *
+ * We reuse the convention established by the scheduled-jobs subsystem: a
+ * single configured "system user" email (`scheduledJobs.systemUserEmail`)
+ * identifies the unattended-operations user. The user is looked up from
+ * UserCache (the same cache NotificationEngine uses), so no DB roundtrip
+ * happens per webhook event.
+ *
+ * Returns null if no system user is configured or the configured email
+ * doesn't match a real row in the Users table. Callers must treat null as
+ * "service not ready" and reject the request rather than silently degrading.
+ */
+function getSystemUser(): UserInfo | null {
+  const systemEmail = configInfo.scheduledJobs?.systemUserEmail;
+  if (!systemEmail || systemEmail === 'not.set@nowhere.com') {
+    return null;
+  }
+  const lowerEmail = systemEmail.toLowerCase();
+  const user = UserCache.Instance.Users.find(
+    (u) => u.Email?.toLowerCase() === lowerEmail
+  );
+  return user ?? null;
 }
 
 /**
@@ -159,13 +213,29 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       return;
     }
 
+    // Resolve the system user used for all DB + email operations triggered by
+    // this webhook. Without one, MJ's server-side rules reject any RunView /
+    // CommunicationEngine call (and rightly so). Return 503 to signal "service
+    // not configured" rather than 204 — operators need to see this in logs.
+    const systemUser = getSystemUser();
+    if (!systemUser) {
+      LogError(
+        `Feedback webhook handler cannot run: no system user available. ` +
+        `Configure scheduledJobs.systemUserEmail in mj.config.cjs and ensure ` +
+        `that email matches an existing row in the Users table.`
+      );
+      res.status(503).json({ error: 'System user not configured' });
+      return;
+    }
+
     // Look up the tracking row. If we don't have one, this isn't an issue
     // that originated from our feedback flow (could be a manually-filed
     // issue in the same repo) — respond 204 so GitHub doesn't retry.
     const row = await findSubmission(
       payload.repository.owner.login,
       payload.repository.name,
-      payload.issue.number
+      payload.issue.number,
+      systemUser
     );
     if (!row) {
       res.status(204).send();
@@ -186,6 +256,7 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       subject: built.subject,
       htmlBody: built.htmlBody,
       textBody: built.textBody,
+      contextUser: systemUser,
     });
 
     LogStatus(
@@ -228,21 +299,26 @@ function isHandledEvent(event: string, action: string): boolean {
 async function findSubmission(
   owner: string,
   repo: string,
-  issueNumber: number
-): Promise<MJUserFeedbackSubmissionEntity | null> {
+  issueNumber: number,
+  contextUser: UserInfo
+): Promise<SubmissionRow | null> {
   // Escape single quotes for defensive filter construction. GitHub org/repo
   // names cannot contain quotes per platform rules, but we trust nothing
   // arriving over a public HTTP endpoint.
   const safeOwner = owner.replace(/'/g, "''");
   const safeRepo = repo.replace(/'/g, "''");
 
+  // Read-only lookup: ResultType 'simple' + narrowed Fields avoids the
+  // overhead of materializing a full BaseEntity instance we'd never mutate.
+  // Matches the pattern used by PermissionEngine.GetAuditTimeline.
   const rv = new RunView();
-  const result = await rv.RunView<MJUserFeedbackSubmissionEntity>({
+  const result = await rv.RunView<SubmissionRow>({
     EntityName: 'MJ: User Feedback Submissions',
     ExtraFilter: `GitHubOwner='${safeOwner}' AND GitHubRepo='${safeRepo}' AND IssueNumber=${issueNumber}`,
+    Fields: ['Email', 'Name', 'IssueNumber', 'IssueTitle'],
     MaxRows: 1,
-    ResultType: 'entity_object',
-  });
+    ResultType: 'simple',
+  }, contextUser);
   if (!result.Success) {
     LogError(`Feedback webhook submission lookup failed: ${result.ErrorMessage}`);
     return null;
@@ -253,7 +329,7 @@ async function findSubmission(
 function buildEmailForEvent(
   event: string,
   payload: GitHubWebhookPayload,
-  row: MJUserFeedbackSubmissionEntity
+  row: SubmissionRow
 ): BuiltEmail | null {
   const appName = getFeedbackAppName(null);
 
@@ -273,13 +349,11 @@ function buildEmailForEvent(
  */
 function buildStatusChangeEmail(
   payload: GitHubWebhookPayload,
-  row: MJUserFeedbackSubmissionEntity,
+  row: SubmissionRow,
   appName: string
 ): BuiltEmail {
   const greeting = row.Name ? `Hi ${row.Name},` : 'Hi,';
   const safeGreeting = row.Name ? `Hi ${escapeHtml(row.Name)},` : 'Hi,';
-  const safeTitle = escapeHtml(row.IssueTitle);
-  const safeAppName = escapeHtml(appName);
 
   let textSummary: string;
   let htmlSummary: string;
@@ -320,16 +394,18 @@ function buildStatusChangeEmail(
     `— The ${appName} team`,
   ].join('\n');
 
-  const htmlBody = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #2d3748; max-width: 600px;">
-  <p>${safeGreeting}</p>
-  <p>${htmlSummary}</p>
-  <blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #4299e1; background: #f7fafc; color: #2d3748;">
-    ${safeTitle}
-  </blockquote>
-  <p style="color: #718096; font-size: 14px;">— The ${safeAppName} team</p>
-</div>
-`.trim();
+  const accentColor = getFeedbackAccentColor();
+  const titleCard = buildIssueTitleCard({
+    issueNumber: row.IssueNumber,
+    title: row.IssueTitle,
+    accentColor,
+  });
+  const bodyHtml = `
+<p style="margin: 0 0 16px 0;">${safeGreeting}</p>
+<p style="margin: 0 0 8px 0;">${htmlSummary}</p>
+${titleCard}`.trim();
+
+  const htmlBody = wrapInEmailShell({ appName, accentColor, bodyHtml });
 
   return { subject, htmlBody, textBody };
 }
@@ -340,20 +416,22 @@ function buildStatusChangeEmail(
  * the conversation in their inbox.
  */
 function buildCommentEmail(
-  comment: { body: string; user: { login: string }; html_url: string },
-  row: MJUserFeedbackSubmissionEntity,
+  comment: { body: string; user: { login: string } },
+  row: SubmissionRow,
   appName: string
 ): BuiltEmail {
   const greeting = row.Name ? `Hi ${row.Name},` : 'Hi,';
   const safeGreeting = row.Name ? `Hi ${escapeHtml(row.Name)},` : 'Hi,';
   const safeCommenter = escapeHtml(comment.user.login);
-  const safeTitle = escapeHtml(row.IssueTitle);
-  const safeAppName = escapeHtml(appName);
-  // Convert newlines in the comment body to <br> for HTML rendering while
-  // escaping everything else. GitHub comments are markdown but rendering
-  // markdown to HTML server-side would be a bigger lift; plain-text-with-
-  // line-breaks is a reasonable v1.
-  const safeCommentHtml = escapeHtml(comment.body).replace(/\n/g, '<br>\n');
+  // Render the GitHub comment's markdown source the same way GitHub does:
+  // GFM (tables, strikethrough, autolinks) + soft line breaks. Trust GitHub's
+  // input sanitization (and the email client's output sanitization) as the
+  // defense against pathological HTML in the source — adding a server-side
+  // sanitizer would be defense-in-depth worth doing later, not v1.
+  // `as string` is the standard workaround for marked's overloaded return
+  // type: parse() returns string in sync mode (our case) but TypeScript can't
+  // narrow because marked exposes a string | Promise<string> union.
+  const commentHtml = githubMarkdown.parse(comment.body) as string;
 
   const subject = `[${appName}] ${comment.user.login} commented on your feedback: #${row.IssueNumber} ${row.IssueTitle}`;
 
@@ -371,19 +449,21 @@ function buildCommentEmail(
     `— The ${appName} team`,
   ].join('\n');
 
-  const htmlBody = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #2d3748; max-width: 600px;">
-  <p>${safeGreeting}</p>
-  <p><strong>${safeCommenter}</strong> commented on your feedback (issue <strong>#${row.IssueNumber}</strong>):</p>
-  <blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #4299e1; background: #f7fafc; color: #2d3748;">
-    ${safeTitle}
-  </blockquote>
-  <div style="margin: 16px 0; padding: 12px 16px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 4px;">
-    ${safeCommentHtml}
-  </div>
-  <p style="color: #718096; font-size: 14px;">— The ${safeAppName} team</p>
-</div>
-`.trim();
+  const accentColor = getFeedbackAccentColor();
+  const titleCard = buildIssueTitleCard({
+    issueNumber: row.IssueNumber,
+    title: row.IssueTitle,
+    accentColor,
+  });
+  const bodyHtml = `
+<p style="margin: 0 0 16px 0;">${safeGreeting}</p>
+<p style="margin: 0 0 8px 0;"><strong>${safeCommenter}</strong> commented on your feedback (issue <strong>#${row.IssueNumber}</strong>):</p>
+${titleCard}
+<div style="margin: 24px 0 0 0; padding: 16px 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 14px; line-height: 1.6; color: #2d3748;">
+  ${commentHtml}
+</div>`.trim();
+
+  const htmlBody = wrapInEmailShell({ appName, accentColor, bodyHtml });
 
   return { subject, htmlBody, textBody };
 }

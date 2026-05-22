@@ -221,26 +221,35 @@ const feedbackGithubSettingsSchema = z.object({
   webhookSecret: z.string().optional(),
 });
 
-const feedbackNotificationsSettingsSchema = z.object({
+const feedbackEmailsSettingsSchema = z.object({
   /**
-   * Org-level kill switch for outbound feedback emails (confirmation, status
-   * changes, new comments). Defaults to true (enabled). When false the
-   * SubmitFeedback resolver still records tracking rows but skips email sends.
+   * Master switch for outbound feedback emails (confirmation, status
+   * changes, new comments). Defaults to FALSE so apps that adopt the
+   * feedback component aren't forced into the email subsystem — they
+   * must opt in by setting this to true and configuring a provider.
+   * When false the SubmitFeedback resolver still records tracking rows
+   * but skips email sends, and the webhook handler short-circuits.
    */
-  enabled: z.boolean().optional().default(true),
+  enabled: z.boolean().optional().default(false),
   /**
-   * Sender address used for all feedback notification emails. Should be a
-   * no-reply address that the recipient cannot meaningfully reply to.
-   * Can be overridden by the FEEDBACK_NOTIFICATIONS_FROM env var.
+   * Sender address used for all feedback emails. Should be an address
+   * that has been verified with the configured provider (e.g., a SendGrid
+   * Sender Identity). Can be overridden by the FEEDBACK_EMAIL_FROM env var.
    */
   fromAddress: z.string().optional(),
   /**
-   * Human-friendly application name used in email subject lines and bodies
-   * (e.g., "Acme Portal"). Lets a deployment brand its notifications without
-   * hardcoding "MemberJunction". Falls back to the submission's appName field,
-   * then to "MemberJunction".
+   * Human-friendly application name used in email subject lines, the
+   * header bar, and the footer (e.g., "Acme Portal"). Lets a deployment
+   * brand its notifications without hardcoding "MemberJunction". Falls
+   * back to the submission's appName field, then to "MemberJunction".
    */
   appName: z.string().optional(),
+  /**
+   * CSS hex color used for the email's header bar, the title-card accent
+   * border, and other branded touches. Lets each deploying app theme
+   * emails to match its own brand. Defaults to MJ brand blue.
+   */
+  accentColor: z.string().optional().default('#264FAF'),
   /**
    * Name of the registered CommunicationEngine provider used to send feedback
    * emails. Must match a provider name in the `MJ: Communication Providers`
@@ -263,10 +272,12 @@ const feedbackSettingsSchema = z.object({
   github: feedbackGithubSettingsSchema.optional(),
   /**
    * Optional outbound-email settings used to notify submitters about the
-   * status of their feedback. See feedbackNotificationsSettingsSchema for
-   * field-level docs.
+   * status of their feedback (confirmation on creation, status changes,
+   * new comments). See feedbackEmailsSettingsSchema for field-level docs.
+   * Opt-in: defaults to disabled so apps adopting the feedback component
+   * aren't forced into the email subsystem.
    */
-  notifications: feedbackNotificationsSettingsSchema.optional(),
+  emails: feedbackEmailsSettingsSchema.optional(),
 });
 
 const configInfoSchema = z.object({
@@ -333,7 +344,7 @@ export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
 export type ServerExtensionConfig = z.infer<typeof serverExtensionSchema>;
 export type CacheSettingsConfig = z.infer<typeof cacheSettingsSchema>;
 export type FeedbackGithubSettingsConfig = z.infer<typeof feedbackGithubSettingsSchema>;
-export type FeedbackNotificationsSettingsConfig = z.infer<typeof feedbackNotificationsSettingsSchema>;
+export type FeedbackEmailsSettingsConfig = z.infer<typeof feedbackEmailsSettingsSchema>;
 export type FeedbackSettingsConfig = z.infer<typeof feedbackSettingsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 

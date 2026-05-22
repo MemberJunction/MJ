@@ -7,6 +7,9 @@ import {
   sendFeedbackEmail,
   escapeHtml,
   getFeedbackAppName,
+  getFeedbackAccentColor,
+  wrapInEmailShell,
+  buildIssueTitleCard,
 } from '../feedback/feedbackEmail.js';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
@@ -1003,9 +1006,9 @@ Step 2 — SEVERITY. Strictly follow these rules:
   }
 
   /**
-   * HTML body for the confirmation email. Inline styles only (most email
-   * clients strip <style> blocks) and no external assets so it renders
-   * consistently across clients.
+   * HTML body for the confirmation email. Wraps the content in the shared
+   * branded email shell so layout/colors stay consistent across confirmation,
+   * status-change, and new-comment emails.
    */
   private buildConfirmationEmailHtml(
     submission: FeedbackSubmission,
@@ -1013,21 +1016,22 @@ Step 2 — SEVERITY. Strictly follow these rules:
     appName: string
   ): string {
     const safeName = submission.name ? escapeHtml(submission.name) : '';
-    const safeTitle = escapeHtml(submission.title);
     const safeAppName = escapeHtml(appName);
     const greeting = safeName ? `Hi ${safeName},` : 'Hi,';
+    const accentColor = getFeedbackAccentColor();
+    const titleCard = buildIssueTitleCard({
+      issueNumber: issue.number,
+      title: submission.title,
+      accentColor,
+    });
 
-    return `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #2d3748; max-width: 600px;">
-  <p>${greeting}</p>
-  <p>Thanks for your feedback on <strong>${safeAppName}</strong>. We've logged it as issue <strong>#${issue.number}</strong>:</p>
-  <blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #4299e1; background: #f7fafc; color: #2d3748;">
-    ${safeTitle}
-  </blockquote>
-  <p>You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.</p>
-  <p style="color: #718096; font-size: 14px;">— The ${safeAppName} team</p>
-</div>
-`.trim();
+    const bodyHtml = `
+<p style="margin: 0 0 16px 0;">${greeting}</p>
+<p style="margin: 0 0 8px 0;">Thanks for your feedback on <strong>${safeAppName}</strong>. We've logged it as issue <strong>#${issue.number}</strong>:</p>
+${titleCard}
+<p style="margin: 24px 0 0 0;">You'll get follow-up emails from this address whenever the issue's status changes or a maintainer comments. There's nothing more to do on your end — we just wanted you to know it's being tracked.</p>`.trim();
+
+    return wrapInEmailShell({ appName, accentColor, bodyHtml });
   }
 
   /**
