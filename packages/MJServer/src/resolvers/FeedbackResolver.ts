@@ -100,7 +100,11 @@ export class SubmitFeedbackInput {
 }
 
 /**
- * Response type for feedback submission
+ * Response type for feedback submission. Includes both the GitHub issue
+ * reference and the email-notification state so the client's success dialog
+ * can tailor its messaging:
+ *   - If EmailWillBeSent, show "You'll get email updates at {EmailSentTo}".
+ *   - Otherwise, optionally surface FallbackContact ("For questions, contact …").
  */
 @ObjectType()
 export class FeedbackResponseType {
@@ -115,6 +119,32 @@ export class FeedbackResponseType {
 
   @Field({ nullable: true })
   Error?: string;
+
+  /**
+   * True when the resolver has queued a confirmation email to the submitter
+   * (emails subsystem enabled AND submitter provided a non-empty email). The
+   * client uses this to decide whether to show the "you'll get an email"
+   * message in the success dialog.
+   */
+  @Field({ nullable: true })
+  EmailWillBeSent?: boolean;
+
+  /**
+   * The address the confirmation email was queued to. Echoed back so the
+   * dialog can display it to the submitter ("...at jane@example.com").
+   * Null when no email will be sent.
+   */
+  @Field({ nullable: true })
+  EmailSentTo?: string;
+
+  /**
+   * Optional support/contact handle (typically an email address) configured
+   * via feedbackSettings.fallbackContact. Shown by the success dialog when
+   * no email notification will be sent, giving the submitter a way to
+   * follow up out-of-band. Null when no fallback is configured.
+   */
+  @Field({ nullable: true })
+  FallbackContact?: string;
 }
 
 /**
@@ -326,10 +356,21 @@ export class FeedbackResolver {
         void this.recordSubmissionAndNotify(submission, issue, config, ctx);
       }
 
+      // Reflect the email-notification state back to the client so the success
+      // dialog can show "you'll get an email" vs. the fallback messaging. We
+      // know an email will be queued iff the emails subsystem is enabled AND
+      // the submitter provided one — match the same gate the helper uses.
+      const emailsEnabled = configInfo.feedbackSettings?.emails?.enabled === true;
+      const emailWillBeSent = emailsEnabled && !!submission.email;
+      const fallbackContact = configInfo.feedbackSettings?.fallbackContact ?? null;
+
       return {
         Success: true,
         IssueNumber: issue.number,
         IssueUrl: issue.html_url,
+        EmailWillBeSent: emailWillBeSent,
+        EmailSentTo: emailWillBeSent ? submission.email : null,
+        FallbackContact: emailWillBeSent ? null : fallbackContact,
       };
     } catch (error) {
       LogError('Error submitting feedback', undefined, error);

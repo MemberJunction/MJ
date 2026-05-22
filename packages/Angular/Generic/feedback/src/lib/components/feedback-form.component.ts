@@ -231,6 +231,15 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
         <div class="feedback-success">
           <i class="fas fa-check-circle fa-3x"></i>
           <h3>{{ config.successMessage || 'Thank you! Your feedback has been submitted.' }}</h3>
+          @if (EmailWillBeSent && EmailSentTo) {
+            <p class="feedback-success-message">
+              You'll receive an email at <strong>{{ EmailSentTo }}</strong> when there are updates.
+            </p>
+          } @else if (FallbackContact) {
+            <p class="feedback-success-message">
+              For questions, contact <strong>{{ FallbackContact }}</strong>.
+            </p>
+          }
           @if (IssueUrl && (config.showIssueLink !== false)) {
             <p>
               <a [href]="IssueUrl" target="_blank" rel="noopener noreferrer">
@@ -543,6 +552,16 @@ export class FeedbackFormComponent implements OnInit {
   private lastClassifiedDescription = '';
   IssueNumber?: number;
   IssueUrl?: string;
+  /**
+   * Email-notification state echoed back from the server, used to tailor
+   * the success-dialog message:
+   *   - EmailWillBeSent + EmailSentTo → "You'll get email updates at …"
+   *   - Otherwise + FallbackContact   → "For questions, contact …"
+   *   - Otherwise                     → bare-bones confirmation
+   */
+  EmailWillBeSent = false;
+  EmailSentTo?: string;
+  FallbackContact?: string;
   ScreenshotDataUrl?: string;
   ScreenshotIncluded = false;
   IsCapturingScreenshot = true;
@@ -691,6 +710,9 @@ export class FeedbackFormComponent implements OnInit {
           this.SubmissionSuccess = true;
           this.IssueNumber = response.issueNumber;
           this.IssueUrl = response.issueUrl;
+          this.EmailWillBeSent = response.emailWillBeSent === true;
+          this.EmailSentTo = response.emailSentTo;
+          this.FallbackContact = response.fallbackContact;
           this.Success.emit(response);
         } else {
           const message = response.error || 'Submission failed. Please try again.';

@@ -278,6 +278,14 @@ const feedbackSettingsSchema = z.object({
    * aren't forced into the email subsystem.
    */
   emails: feedbackEmailsSettingsSchema.optional(),
+  /**
+   * Optional fallback contact (typically a support email address) surfaced
+   * in the feedback success dialog when the emails subsystem is disabled or
+   * the submitter didn't provide an email. Gives submitters a way to follow
+   * up when they have no automatic notification channel. Leave unset to show
+   * only the bare-bones "issue logged" confirmation in those cases.
+   */
+  fallbackContact: z.string().optional(),
 });
 
 const configInfoSchema = z.object({

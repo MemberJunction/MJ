@@ -55,7 +55,10 @@ export interface FeedbackSubmission {
 }
 
 /**
- * Response returned after feedback submission
+ * Response returned after feedback submission. The `email*` and
+ * `fallbackContact` fields let the success dialog adapt its messaging:
+ *   - If `emailWillBeSent`, show "you'll get an email at {emailSentTo}".
+ *   - Otherwise, optionally show `fallbackContact` as a follow-up channel.
  */
 export interface FeedbackResponse {
   success: boolean;
@@ -63,6 +66,22 @@ export interface FeedbackResponse {
   issueUrl?: string;
   error?: string;
   details?: unknown;
+  /**
+   * True when the server has queued a confirmation email to the submitter.
+   * Drives the "we'll email you" message in the success dialog.
+   */
+  emailWillBeSent?: boolean;
+  /**
+   * The email address the confirmation was queued to (echoed back from
+   * the server so the dialog can display it).
+   */
+  emailSentTo?: string;
+  /**
+   * Optional support/contact handle surfaced in the success dialog when no
+   * email notification will be sent. Comes from feedbackSettings.fallbackContact
+   * on the server. Null/undefined when no fallback is configured.
+   */
+  fallbackContact?: string;
 }
 
 /**
