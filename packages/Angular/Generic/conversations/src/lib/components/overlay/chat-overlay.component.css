@@ -29,32 +29,44 @@
     -webkit-user-select: none;
 }
 
-/* Subtle, native-feel hover hint that the bubble is also draggable. Stays hidden
-   until the user has lingered for 1s — the delay is a pure-CSS trick: the base
-   rule has no transition-delay (so it fades out instantly), and the :hover rule
-   adds a 1s delay (so it only appears for a deliberate hover). */
-.chat-overlay-bubble-tooltip {
+/* Subtle up/down chevrons just outside the bubble, hinting that it can be
+   dragged vertically. On hover-capable devices (mouse/pen) they stay hidden
+   in the resting state and reveal on hover/press/drag — keeps the corner
+   visually clean. On touch-only devices (no hover) they're always visible at
+   low opacity so the affordance is discoverable without needing a hover. */
+.chat-overlay-bubble-arrow {
     position: absolute;
-    top: 50%;
-    right: calc(100% + 0.5rem);
-    transform: translateY(-50%);
-    padding: 0.3rem 0.5rem;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--mj-text-primary) 88%, transparent);
-    color: var(--mj-bg-surface);
-    font-size: 0.7rem;
-    font-weight: 400;
-    line-height: 1.2;
-    white-space: nowrap;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--mj-text-muted);
+    font-size: 0.65rem;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.15s ease 0s;
+    transition: opacity 0.18s ease;
 }
 
-.chat-overlay-bubble:hover .chat-overlay-bubble-tooltip {
-    opacity: 1;
-    transition-delay: 1s;
+.chat-overlay-bubble-arrow-up {
+    top: -0.85rem;
+}
+
+.chat-overlay-bubble-arrow-down {
+    bottom: -0.85rem;
+}
+
+/* Hover-capable devices: reveal on hover, press, or active drag. */
+.chat-overlay-bubble:hover .chat-overlay-bubble-arrow,
+.chat-overlay-bubble.is-pressed .chat-overlay-bubble-arrow,
+.chat-overlay-bubble.is-dragging .chat-overlay-bubble-arrow {
+    opacity: 0.85;
+}
+
+/* Touch-only devices (no hover): always show at subtle opacity. The
+   :hover/.is-pressed/.is-dragging rules above still apply via higher
+   specificity, so touching the bubble briefly bumps them to 0.85. */
+@media (hover: none) {
+    .chat-overlay-bubble-arrow {
+        opacity: 0.5;
+    }
 }
 
 .chat-overlay-bubble:hover {
@@ -261,9 +273,12 @@
     height: 100%;
 }
 
-/* --- Mobile Responsive --- */
+/* --- Mobile / Small-Screen Responsive ---
+   640px = small-screen cutoff (covers all phones in both orientations). Tablets
+   in portrait (≥768px) keep the floating-panel treatment because they have the
+   real estate for it. */
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
     .chat-overlay-panel {
         bottom: 0 !important;
         right: 0;
@@ -275,15 +290,27 @@
 
     .chat-overlay-bubble {
         /* No !important on `bottom` — the inline [style.bottom.px] binding owns it
-           so users can drag the bubble out of the way of underlying app buttons. */
+           so users can drag the bubble out of the way of underlying app buttons.
+           Smaller diameter on small screens: 2.75rem (44px) hits the WCAG minimum
+           touch target while ~38% less occluding than the desktop 3.5rem. */
+        width: 2.75rem;
+        height: 2.75rem;
         right: 1rem;
     }
 
-    .resize-handle {
-        display: none;
+    .chat-overlay-bubble-icon {
+        font-size: 1.1rem;
     }
 
-    .chat-overlay-bubble-tooltip {
+    .chat-overlay-badge {
+        min-width: 1rem;
+        height: 1rem;
+        font-size: 0.6rem;
+        top: -3px;
+        right: -3px;
+    }
+
+    .resize-handle {
         display: none;
     }
 }

@@ -6,7 +6,8 @@
              [class.is-dragging]="IsBubbleDragging"
              [style.bottom.px]="BubbleBottomPx"
              (pointerdown)="OnBubblePointerDown($event)">
-            <span class="chat-overlay-bubble-tooltip" role="tooltip">Drag up or down to reposition</span>
+            <i class="fa-solid fa-chevron-up chat-overlay-bubble-arrow chat-overlay-bubble-arrow-up" aria-hidden="true"></i>
+            <i class="fa-solid fa-chevron-down chat-overlay-bubble-arrow chat-overlay-bubble-arrow-down" aria-hidden="true"></i>
             <i class="fa-solid fa-comments chat-overlay-bubble-icon"></i>
             @if (UnreadCount > 0) {
                 <span class="chat-overlay-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
