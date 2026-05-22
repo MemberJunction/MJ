@@ -233,6 +233,22 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       return;
     }
 
+    // Suppress comments that maintainers have flagged as internal. The marker
+    // (default "[internal]", configurable per deployment) lets maintainers
+    // discuss implementation details, triage decisions, etc. on the feedback
+    // issue without those comments landing in the submitter's inbox.
+    if (
+      event === 'issue_comment' &&
+      payload.comment &&
+      isInternalComment(payload.comment.body)
+    ) {
+      LogStatus(
+        `Suppressing internal-marked comment on issue #${payload.issue.number}`
+      );
+      res.status(204).send();
+      return;
+    }
+
     // Resolve the system user used for all DB + email operations triggered by
     // this webhook. Without one, MJ's server-side rules reject any RunView /
     // CommunicationEngine call (and rightly so). Return 503 to signal "service
@@ -287,6 +303,19 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
     LogError('GitHub feedback webhook handler crashed', undefined, err);
     res.status(500).json({ error: 'Internal error' });
   }
+}
+
+/**
+ * True when a maintainer has flagged a comment as internal-only by prefixing
+ * it with the configured marker (default "[internal]"). The marker is
+ * matched case-insensitively against the comment's leading non-whitespace
+ * text, so `[Internal]`, ` [INTERNAL]`, and `[internal] thoughts here` all
+ * suppress. An empty/unset marker disables the feature entirely.
+ */
+function isInternalComment(commentBody: string): boolean {
+  const marker = configInfo.feedbackSettings?.emails?.internalCommentMarker;
+  if (!marker) return false;
+  return commentBody.trimStart().toLowerCase().startsWith(marker.toLowerCase());
 }
 
 /**

@@ -263,6 +263,16 @@ const feedbackEmailsSettingsSchema = z.object({
    * caller in MJ) and the message type registered by default in MJ databases.
    */
   messageTypeName: z.string().optional().default('Email'),
+  /**
+   * Marker that maintainers can prefix a GitHub issue comment with to keep
+   * that specific comment out of the submitter's inbox. Useful for
+   * maintainer-to-maintainer discussion on a feedback issue (implementation
+   * notes, triage debate, etc.) without leaking it via the notification
+   * email. Matched case-insensitively against the comment's leading
+   * non-whitespace text. Defaults to "[internal]" — set to an empty string
+   * to disable the feature.
+   */
+  internalCommentMarker: z.string().optional().default('[internal]'),
 });
 
 const feedbackSettingsSchema = z.object({
