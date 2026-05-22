@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "ClientId": {
+      "type": "string",
+      "title": "Client ID",
+      "description": "Constant Contact OAuth 2.0 Client ID (also called API Key).",
+      "order": 0
+    },
+    "ClientSecret": {
+      "type": "string",
+      "title": "Client Secret",
+      "description": "Constant Contact OAuth 2.0 Client Secret (also called App Secret).",
+      "isSecret": true,
+      "order": 1
+    },
+    "AccessToken": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "Current OAuth access token. Refreshed automatically when expired.",
+      "isSecret": true,
+      "order": 2
+    },
+    "RefreshToken": {
+      "type": "string",
+      "title": "Refresh Token",
+      "description": "OAuth refresh token. Rotates on every refresh.",
+      "isSecret": true,
+      "order": 3
+    }
+  },
+  "required": [
+    "ClientId",
+    "ClientSecret",
+    "RefreshToken"
+  ]
+}

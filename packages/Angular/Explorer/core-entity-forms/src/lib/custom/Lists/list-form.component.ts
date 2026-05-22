@@ -118,6 +118,10 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public showShareDialog = false;
     public shareDialogConfig: ListShareDialogConfig | null = null;
 
+    // Invitations / audit log dialogs — opened from the share dialog.
+    public showInvitationsDialog = false;
+    public showAuditLogDialog = false;
+
     private destroy$ = new Subject<void>();
     private get metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
@@ -830,6 +834,35 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public onShareDialogCancel(): void {
         this.showShareDialog = false;
         this.shareDialogConfig = null;
+        this.cdr.markForCheck();
+    }
+
+    // ==========================================
+    // Invitations / Audit Log dialogs (mockups 16, 18)
+    // ==========================================
+
+    public openInvitationsDialog(): void {
+        // Closing share dialog so it doesn't stack visually. User can
+        // reopen via toolbar; the share dialog isn't stateful enough to
+        // need preservation across this transition.
+        this.showShareDialog = false;
+        this.showInvitationsDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeInvitationsDialog(): void {
+        this.showInvitationsDialog = false;
+        this.cdr.markForCheck();
+    }
+
+    public openAuditLogDialog(): void {
+        this.showShareDialog = false;
+        this.showAuditLogDialog = true;
+        this.cdr.markForCheck();
+    }
+
+    public closeAuditLogDialog(): void {
+        this.showAuditLogDialog = false;
         this.cdr.markForCheck();
     }
 }

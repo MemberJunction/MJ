@@ -1,0 +1,4006 @@
+{
+  "generated": "2026-05-20T01:31:33.001Z",
+  "description": "Fictional historical weather data for 20 cities across 20 dates",
+  "records": [
+    {
+      "city": "New York",
+      "date": "2024-01-01",
+      "highTempF": 89,
+      "lowTempF": 45.1,
+      "precipitationInches": 1.9,
+      "humidityPercent": 88.6,
+      "windSpeedMph": 8.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-01-08",
+      "highTempF": 45.7,
+      "lowTempF": 3.2,
+      "precipitationInches": 0.5,
+      "humidityPercent": 43.5,
+      "windSpeedMph": 29.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-01-15",
+      "highTempF": 30.3,
+      "lowTempF": 0.9,
+      "precipitationInches": 2.6,
+      "humidityPercent": 72.6,
+      "windSpeedMph": 30.5,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "New York",
+      "date": "2024-01-22",
+      "highTempF": 29.1,
+      "lowTempF": 53.5,
+      "precipitationInches": 1.3,
+      "humidityPercent": 63.5,
+      "windSpeedMph": 3.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-01-29",
+      "highTempF": 91.4,
+      "lowTempF": 25.5,
+      "precipitationInches": 0.4,
+      "humidityPercent": 45.7,
+      "windSpeedMph": 4.8,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-02-05",
+      "highTempF": 31.4,
+      "lowTempF": 60.2,
+      "precipitationInches": 0.8,
+      "humidityPercent": 53.3,
+      "windSpeedMph": 17,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-02-12",
+      "highTempF": 23,
+      "lowTempF": 33.1,
+      "precipitationInches": 1.6,
+      "humidityPercent": 65.4,
+      "windSpeedMph": 11.4,
+      "conditions": "Clear"
+    },
+    {
+      "city": "New York",
+      "date": "2024-02-19",
+      "highTempF": 34.2,
+      "lowTempF": 29.3,
+      "precipitationInches": 1.4,
+      "humidityPercent": 22.6,
+      "windSpeedMph": 21.1,
+      "conditions": "Windy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-02-26",
+      "highTempF": 89.1,
+      "lowTempF": 4.1,
+      "precipitationInches": 0.3,
+      "humidityPercent": 64.6,
+      "windSpeedMph": 18.5,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-03-04",
+      "highTempF": 66.5,
+      "lowTempF": 49.7,
+      "precipitationInches": 1.7,
+      "humidityPercent": 91.5,
+      "windSpeedMph": 12.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "New York",
+      "date": "2024-03-10",
+      "highTempF": 61.4,
+      "lowTempF": 15.3,
+      "precipitationInches": 0.7,
+      "humidityPercent": 85.7,
+      "windSpeedMph": 3.5,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-03-17",
+      "highTempF": 45.4,
+      "lowTempF": 24.9,
+      "precipitationInches": 2.7,
+      "humidityPercent": 56.7,
+      "windSpeedMph": 25.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-03-24",
+      "highTempF": 26.7,
+      "lowTempF": 35.3,
+      "precipitationInches": 0.3,
+      "humidityPercent": 42.3,
+      "windSpeedMph": 34.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "New York",
+      "date": "2024-03-31",
+      "highTempF": 96.6,
+      "lowTempF": 53.8,
+      "precipitationInches": 1.4,
+      "humidityPercent": 93.4,
+      "windSpeedMph": 11.7,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-04-07",
+      "highTempF": 55.9,
+      "lowTempF": 37,
+      "precipitationInches": 0.2,
+      "humidityPercent": 49.9,
+      "windSpeedMph": 9.3,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-04-14",
+      "highTempF": 24.5,
+      "lowTempF": 51.3,
+      "precipitationInches": 2.5,
+      "humidityPercent": 52.5,
+      "windSpeedMph": 28.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "New York",
+      "date": "2024-04-21",
+      "highTempF": 61,
+      "lowTempF": 50.1,
+      "precipitationInches": 2.8,
+      "humidityPercent": 58.8,
+      "windSpeedMph": 24,
+      "conditions": "Windy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-04-28",
+      "highTempF": 80.7,
+      "lowTempF": 18.8,
+      "precipitationInches": 2.3,
+      "humidityPercent": 21.2,
+      "windSpeedMph": 10.4,
+      "conditions": "Windy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-05-05",
+      "highTempF": 39.3,
+      "lowTempF": 32.2,
+      "precipitationInches": 1.2,
+      "humidityPercent": 31,
+      "windSpeedMph": 19.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "New York",
+      "date": "2024-05-12",
+      "highTempF": 87.9,
+      "lowTempF": 3.3,
+      "precipitationInches": 0.1,
+      "humidityPercent": 68.6,
+      "windSpeedMph": 19.2,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-01-01",
+      "highTempF": 28.7,
+      "lowTempF": 46.4,
+      "precipitationInches": 0.9,
+      "humidityPercent": 41.1,
+      "windSpeedMph": 33.3,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-01-08",
+      "highTempF": 85.4,
+      "lowTempF": 17.4,
+      "precipitationInches": 1.9,
+      "humidityPercent": 84.9,
+      "windSpeedMph": 26,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-01-15",
+      "highTempF": 82.7,
+      "lowTempF": 50.1,
+      "precipitationInches": 2.3,
+      "humidityPercent": 44.9,
+      "windSpeedMph": 17.6,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-01-22",
+      "highTempF": 69.9,
+      "lowTempF": 29.3,
+      "precipitationInches": 2.3,
+      "humidityPercent": 84.1,
+      "windSpeedMph": 31.5,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-01-29",
+      "highTempF": 42.5,
+      "lowTempF": 69.9,
+      "precipitationInches": 0.3,
+      "humidityPercent": 54.4,
+      "windSpeedMph": 30.8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-02-05",
+      "highTempF": 80,
+      "lowTempF": 51.6,
+      "precipitationInches": 0.8,
+      "humidityPercent": 27,
+      "windSpeedMph": 22.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-02-12",
+      "highTempF": 65.6,
+      "lowTempF": 61.4,
+      "precipitationInches": 0.8,
+      "humidityPercent": 70,
+      "windSpeedMph": 21.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-02-19",
+      "highTempF": 79,
+      "lowTempF": 37,
+      "precipitationInches": 1.6,
+      "humidityPercent": 51.4,
+      "windSpeedMph": 16,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-02-26",
+      "highTempF": 40.3,
+      "lowTempF": 52.3,
+      "precipitationInches": 0.7,
+      "humidityPercent": 85.7,
+      "windSpeedMph": 22.6,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-03-04",
+      "highTempF": 25.1,
+      "lowTempF": 48.9,
+      "precipitationInches": 1.5,
+      "humidityPercent": 72.6,
+      "windSpeedMph": 33.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-03-10",
+      "highTempF": 63.7,
+      "lowTempF": 32.3,
+      "precipitationInches": 2.9,
+      "humidityPercent": 62.8,
+      "windSpeedMph": 13.8,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-03-17",
+      "highTempF": 95.3,
+      "lowTempF": 40.3,
+      "precipitationInches": 0.6,
+      "humidityPercent": 36.7,
+      "windSpeedMph": 17.8,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-03-24",
+      "highTempF": 73.4,
+      "lowTempF": 66.9,
+      "precipitationInches": 0.1,
+      "humidityPercent": 76.2,
+      "windSpeedMph": 19.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-03-31",
+      "highTempF": 60.6,
+      "lowTempF": 19.7,
+      "precipitationInches": 1.8,
+      "humidityPercent": 45.7,
+      "windSpeedMph": 2.7,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-04-07",
+      "highTempF": 83.2,
+      "lowTempF": 61.9,
+      "precipitationInches": 1.5,
+      "humidityPercent": 85,
+      "windSpeedMph": 15.5,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-04-14",
+      "highTempF": 99.2,
+      "lowTempF": 59.4,
+      "precipitationInches": 2.5,
+      "humidityPercent": 55.3,
+      "windSpeedMph": 17.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-04-21",
+      "highTempF": 70.2,
+      "lowTempF": 36.7,
+      "precipitationInches": 0.9,
+      "humidityPercent": 67.8,
+      "windSpeedMph": 10,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-04-28",
+      "highTempF": 31.9,
+      "lowTempF": 58.6,
+      "precipitationInches": 1.4,
+      "humidityPercent": 35.6,
+      "windSpeedMph": 10.1,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-05-05",
+      "highTempF": 57.7,
+      "lowTempF": 58.5,
+      "precipitationInches": 2.4,
+      "humidityPercent": 74.9,
+      "windSpeedMph": 8.4,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Los Angeles",
+      "date": "2024-05-12",
+      "highTempF": 49.7,
+      "lowTempF": 51.1,
+      "precipitationInches": 0,
+      "humidityPercent": 37.4,
+      "windSpeedMph": 26.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-01-01",
+      "highTempF": 43.4,
+      "lowTempF": 28.4,
+      "precipitationInches": 0.1,
+      "humidityPercent": 60.9,
+      "windSpeedMph": 6.2,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-01-08",
+      "highTempF": 49.4,
+      "lowTempF": 14.9,
+      "precipitationInches": 0.1,
+      "humidityPercent": 29.1,
+      "windSpeedMph": 17.1,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-01-15",
+      "highTempF": 39.5,
+      "lowTempF": 39,
+      "precipitationInches": 2.7,
+      "humidityPercent": 85.7,
+      "windSpeedMph": 1.9,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-01-22",
+      "highTempF": 26.4,
+      "lowTempF": 11.3,
+      "precipitationInches": 2,
+      "humidityPercent": 40,
+      "windSpeedMph": 15.9,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-01-29",
+      "highTempF": 21.3,
+      "lowTempF": 62.7,
+      "precipitationInches": 1.3,
+      "humidityPercent": 43.3,
+      "windSpeedMph": 33.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-02-05",
+      "highTempF": 87.7,
+      "lowTempF": 3.8,
+      "precipitationInches": 2.5,
+      "humidityPercent": 54.9,
+      "windSpeedMph": 27.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-02-12",
+      "highTempF": 28.3,
+      "lowTempF": 48.3,
+      "precipitationInches": 0,
+      "humidityPercent": 89.2,
+      "windSpeedMph": 19.7,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-02-19",
+      "highTempF": 23.3,
+      "lowTempF": 17.8,
+      "precipitationInches": 1.1,
+      "humidityPercent": 62.4,
+      "windSpeedMph": 8.8,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-02-26",
+      "highTempF": 92,
+      "lowTempF": 32.1,
+      "precipitationInches": 2.1,
+      "humidityPercent": 54.7,
+      "windSpeedMph": 11.2,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-03-04",
+      "highTempF": 61.1,
+      "lowTempF": 49.5,
+      "precipitationInches": 0.4,
+      "humidityPercent": 23.8,
+      "windSpeedMph": 16.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-03-10",
+      "highTempF": 36.9,
+      "lowTempF": 9,
+      "precipitationInches": 2.9,
+      "humidityPercent": 64.2,
+      "windSpeedMph": 19.4,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-03-17",
+      "highTempF": 60.9,
+      "lowTempF": 5.8,
+      "precipitationInches": 1.9,
+      "humidityPercent": 29.5,
+      "windSpeedMph": 31.9,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-03-24",
+      "highTempF": 24.4,
+      "lowTempF": 47.3,
+      "precipitationInches": 2.1,
+      "humidityPercent": 59,
+      "windSpeedMph": 12.9,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-03-31",
+      "highTempF": 94.6,
+      "lowTempF": 23.6,
+      "precipitationInches": 0.9,
+      "humidityPercent": 55.1,
+      "windSpeedMph": 21,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-04-07",
+      "highTempF": 62.8,
+      "lowTempF": 23.2,
+      "precipitationInches": 2.4,
+      "humidityPercent": 93.8,
+      "windSpeedMph": 6.5,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-04-14",
+      "highTempF": 25.9,
+      "lowTempF": 60.7,
+      "precipitationInches": 0.3,
+      "humidityPercent": 64.2,
+      "windSpeedMph": 18.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-04-21",
+      "highTempF": 94.2,
+      "lowTempF": 14.5,
+      "precipitationInches": 2.5,
+      "humidityPercent": 76.8,
+      "windSpeedMph": 27.6,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-04-28",
+      "highTempF": 85.9,
+      "lowTempF": 43.9,
+      "precipitationInches": 2.1,
+      "humidityPercent": 66.9,
+      "windSpeedMph": 13.5,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-05-05",
+      "highTempF": 27.3,
+      "lowTempF": 49,
+      "precipitationInches": 2.4,
+      "humidityPercent": 85.6,
+      "windSpeedMph": 16.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Chicago",
+      "date": "2024-05-12",
+      "highTempF": 63.6,
+      "lowTempF": 54.1,
+      "precipitationInches": 2.7,
+      "humidityPercent": 22.8,
+      "windSpeedMph": 6.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-01-01",
+      "highTempF": 52.3,
+      "lowTempF": 59,
+      "precipitationInches": 2.7,
+      "humidityPercent": 73,
+      "windSpeedMph": 10.5,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-01-08",
+      "highTempF": 65.1,
+      "lowTempF": 56.8,
+      "precipitationInches": 0.1,
+      "humidityPercent": 25.2,
+      "windSpeedMph": 30.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-01-15",
+      "highTempF": 58.7,
+      "lowTempF": 68.6,
+      "precipitationInches": 2.7,
+      "humidityPercent": 71.5,
+      "windSpeedMph": 12.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-01-22",
+      "highTempF": 53.8,
+      "lowTempF": 2,
+      "precipitationInches": 0,
+      "humidityPercent": 24.5,
+      "windSpeedMph": 33,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-01-29",
+      "highTempF": 82.3,
+      "lowTempF": 19.7,
+      "precipitationInches": 2.7,
+      "humidityPercent": 32.3,
+      "windSpeedMph": 25.6,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-02-05",
+      "highTempF": 95.9,
+      "lowTempF": 14.2,
+      "precipitationInches": 0.3,
+      "humidityPercent": 56.8,
+      "windSpeedMph": 31.8,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-02-12",
+      "highTempF": 22.6,
+      "lowTempF": 40.6,
+      "precipitationInches": 1.3,
+      "humidityPercent": 73.1,
+      "windSpeedMph": 34.7,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-02-19",
+      "highTempF": 22,
+      "lowTempF": 48.4,
+      "precipitationInches": 2.8,
+      "humidityPercent": 83.8,
+      "windSpeedMph": 34.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-02-26",
+      "highTempF": 92.9,
+      "lowTempF": 52.3,
+      "precipitationInches": 1.6,
+      "humidityPercent": 63.9,
+      "windSpeedMph": 19.6,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-03-04",
+      "highTempF": 65.1,
+      "lowTempF": 35.1,
+      "precipitationInches": 2.2,
+      "humidityPercent": 46.3,
+      "windSpeedMph": 11.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-03-10",
+      "highTempF": 39.4,
+      "lowTempF": 43.4,
+      "precipitationInches": 1.1,
+      "humidityPercent": 82.9,
+      "windSpeedMph": 31.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-03-17",
+      "highTempF": 81.6,
+      "lowTempF": 19.6,
+      "precipitationInches": 2.6,
+      "humidityPercent": 65.1,
+      "windSpeedMph": 11.1,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-03-24",
+      "highTempF": 70.8,
+      "lowTempF": 42.9,
+      "precipitationInches": 2,
+      "humidityPercent": 78.7,
+      "windSpeedMph": 29.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-03-31",
+      "highTempF": 35,
+      "lowTempF": 36.3,
+      "precipitationInches": 0.8,
+      "humidityPercent": 46.5,
+      "windSpeedMph": 18.9,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-04-07",
+      "highTempF": 95.3,
+      "lowTempF": 36.1,
+      "precipitationInches": 2.8,
+      "humidityPercent": 84.2,
+      "windSpeedMph": 16.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-04-14",
+      "highTempF": 66.4,
+      "lowTempF": 32.4,
+      "precipitationInches": 0.3,
+      "humidityPercent": 59.8,
+      "windSpeedMph": 18.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-04-21",
+      "highTempF": 59.1,
+      "lowTempF": 6.2,
+      "precipitationInches": 2,
+      "humidityPercent": 35,
+      "windSpeedMph": 30,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-04-28",
+      "highTempF": 23.4,
+      "lowTempF": 57.1,
+      "precipitationInches": 2.1,
+      "humidityPercent": 29.6,
+      "windSpeedMph": 9.1,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-05-05",
+      "highTempF": 46.1,
+      "lowTempF": 57.3,
+      "precipitationInches": 2.6,
+      "humidityPercent": 20.8,
+      "windSpeedMph": 33.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Houston",
+      "date": "2024-05-12",
+      "highTempF": 94.8,
+      "lowTempF": 25.6,
+      "precipitationInches": 2.3,
+      "humidityPercent": 68.2,
+      "windSpeedMph": 27.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-01-01",
+      "highTempF": 21,
+      "lowTempF": 60.5,
+      "precipitationInches": 1.4,
+      "humidityPercent": 38.5,
+      "windSpeedMph": 31.8,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-01-08",
+      "highTempF": 61.8,
+      "lowTempF": 60.8,
+      "precipitationInches": 0.5,
+      "humidityPercent": 63.7,
+      "windSpeedMph": 25,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-01-15",
+      "highTempF": 76.6,
+      "lowTempF": 39.6,
+      "precipitationInches": 1.9,
+      "humidityPercent": 66.8,
+      "windSpeedMph": 19.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-01-22",
+      "highTempF": 86.3,
+      "lowTempF": 15.6,
+      "precipitationInches": 2.3,
+      "humidityPercent": 90.3,
+      "windSpeedMph": 26.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-01-29",
+      "highTempF": 47.1,
+      "lowTempF": 0.8,
+      "precipitationInches": 0.6,
+      "humidityPercent": 30.4,
+      "windSpeedMph": 32.6,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-02-05",
+      "highTempF": 23.6,
+      "lowTempF": 35.3,
+      "precipitationInches": 1,
+      "humidityPercent": 83.6,
+      "windSpeedMph": 19.5,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-02-12",
+      "highTempF": 95.1,
+      "lowTempF": 63.3,
+      "precipitationInches": 1.7,
+      "humidityPercent": 79.4,
+      "windSpeedMph": 17.3,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-02-19",
+      "highTempF": 70.9,
+      "lowTempF": 43.8,
+      "precipitationInches": 1.3,
+      "humidityPercent": 58.6,
+      "windSpeedMph": 25.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-02-26",
+      "highTempF": 23.3,
+      "lowTempF": 25.7,
+      "precipitationInches": 0.2,
+      "humidityPercent": 36.1,
+      "windSpeedMph": 32.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-03-04",
+      "highTempF": 38.3,
+      "lowTempF": 56.1,
+      "precipitationInches": 1,
+      "humidityPercent": 36,
+      "windSpeedMph": 19.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-03-10",
+      "highTempF": 91.8,
+      "lowTempF": 8.8,
+      "precipitationInches": 1.1,
+      "humidityPercent": 89.1,
+      "windSpeedMph": 33.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-03-17",
+      "highTempF": 47.9,
+      "lowTempF": 23.4,
+      "precipitationInches": 1.1,
+      "humidityPercent": 35.6,
+      "windSpeedMph": 25.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-03-24",
+      "highTempF": 94.7,
+      "lowTempF": 58.1,
+      "precipitationInches": 1.2,
+      "humidityPercent": 32.7,
+      "windSpeedMph": 27.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-03-31",
+      "highTempF": 51.1,
+      "lowTempF": 20.3,
+      "precipitationInches": 0.7,
+      "humidityPercent": 79.6,
+      "windSpeedMph": 4.6,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-04-07",
+      "highTempF": 69.9,
+      "lowTempF": 7.5,
+      "precipitationInches": 0.5,
+      "humidityPercent": 25.1,
+      "windSpeedMph": 22.6,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-04-14",
+      "highTempF": 58.9,
+      "lowTempF": 34.2,
+      "precipitationInches": 1.3,
+      "humidityPercent": 37.1,
+      "windSpeedMph": 12.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-04-21",
+      "highTempF": 48.1,
+      "lowTempF": 55.1,
+      "precipitationInches": 2,
+      "humidityPercent": 35.8,
+      "windSpeedMph": 2.3,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-04-28",
+      "highTempF": 38.7,
+      "lowTempF": 47.3,
+      "precipitationInches": 2.3,
+      "humidityPercent": 22.7,
+      "windSpeedMph": 23.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-05-05",
+      "highTempF": 88.6,
+      "lowTempF": 22.1,
+      "precipitationInches": 3,
+      "humidityPercent": 22.3,
+      "windSpeedMph": 32.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Phoenix",
+      "date": "2024-05-12",
+      "highTempF": 69.7,
+      "lowTempF": 42.7,
+      "precipitationInches": 1.9,
+      "humidityPercent": 70.6,
+      "windSpeedMph": 18.5,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-01-01",
+      "highTempF": 95.7,
+      "lowTempF": 17.4,
+      "precipitationInches": 2.4,
+      "humidityPercent": 56,
+      "windSpeedMph": 19.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-01-08",
+      "highTempF": 29.9,
+      "lowTempF": 55.3,
+      "precipitationInches": 1.4,
+      "humidityPercent": 64.4,
+      "windSpeedMph": 9.4,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-01-15",
+      "highTempF": 97.6,
+      "lowTempF": 15.3,
+      "precipitationInches": 1.6,
+      "humidityPercent": 79.5,
+      "windSpeedMph": 19.7,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-01-22",
+      "highTempF": 89.7,
+      "lowTempF": 51.2,
+      "precipitationInches": 0.2,
+      "humidityPercent": 52.8,
+      "windSpeedMph": 7,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-01-29",
+      "highTempF": 20.6,
+      "lowTempF": 52.9,
+      "precipitationInches": 1.4,
+      "humidityPercent": 37.6,
+      "windSpeedMph": 30.1,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-02-05",
+      "highTempF": 90.4,
+      "lowTempF": 48.7,
+      "precipitationInches": 0.3,
+      "humidityPercent": 53.3,
+      "windSpeedMph": 6.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-02-12",
+      "highTempF": 58.1,
+      "lowTempF": 46.9,
+      "precipitationInches": 0.5,
+      "humidityPercent": 81.5,
+      "windSpeedMph": 1.6,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-02-19",
+      "highTempF": 53.4,
+      "lowTempF": 65.5,
+      "precipitationInches": 0.9,
+      "humidityPercent": 83,
+      "windSpeedMph": 33.6,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-02-26",
+      "highTempF": 97.2,
+      "lowTempF": 45.2,
+      "precipitationInches": 2.6,
+      "humidityPercent": 41.1,
+      "windSpeedMph": 31.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-03-04",
+      "highTempF": 89.7,
+      "lowTempF": 46,
+      "precipitationInches": 2.5,
+      "humidityPercent": 43.3,
+      "windSpeedMph": 29.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-03-10",
+      "highTempF": 56.2,
+      "lowTempF": 10.5,
+      "precipitationInches": 1.6,
+      "humidityPercent": 75.8,
+      "windSpeedMph": 29.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-03-17",
+      "highTempF": 23.8,
+      "lowTempF": 60.8,
+      "precipitationInches": 1.1,
+      "humidityPercent": 43,
+      "windSpeedMph": 30.6,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-03-24",
+      "highTempF": 24.9,
+      "lowTempF": 52.9,
+      "precipitationInches": 2.6,
+      "humidityPercent": 58.3,
+      "windSpeedMph": 22.6,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-03-31",
+      "highTempF": 77.3,
+      "lowTempF": 3.5,
+      "precipitationInches": 2.6,
+      "humidityPercent": 94.8,
+      "windSpeedMph": 23.2,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-04-07",
+      "highTempF": 67.5,
+      "lowTempF": 38.3,
+      "precipitationInches": 2.3,
+      "humidityPercent": 83.2,
+      "windSpeedMph": 6.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-04-14",
+      "highTempF": 87.4,
+      "lowTempF": 67.5,
+      "precipitationInches": 0.8,
+      "humidityPercent": 37.3,
+      "windSpeedMph": 32.7,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-04-21",
+      "highTempF": 76.9,
+      "lowTempF": 14.3,
+      "precipitationInches": 1.2,
+      "humidityPercent": 29.2,
+      "windSpeedMph": 29.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-04-28",
+      "highTempF": 43,
+      "lowTempF": 49,
+      "precipitationInches": 1.8,
+      "humidityPercent": 68.5,
+      "windSpeedMph": 5.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-05-05",
+      "highTempF": 80.8,
+      "lowTempF": 23,
+      "precipitationInches": 1.2,
+      "humidityPercent": 60.9,
+      "windSpeedMph": 1.5,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Philadelphia",
+      "date": "2024-05-12",
+      "highTempF": 91.3,
+      "lowTempF": 46.8,
+      "precipitationInches": 1.3,
+      "humidityPercent": 68.2,
+      "windSpeedMph": 26,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-01-01",
+      "highTempF": 78,
+      "lowTempF": 51.4,
+      "precipitationInches": 2.8,
+      "humidityPercent": 79.5,
+      "windSpeedMph": 0.8,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-01-08",
+      "highTempF": 28.6,
+      "lowTempF": 2.2,
+      "precipitationInches": 1.4,
+      "humidityPercent": 78.7,
+      "windSpeedMph": 33.6,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-01-15",
+      "highTempF": 95.3,
+      "lowTempF": 69.4,
+      "precipitationInches": 1,
+      "humidityPercent": 88,
+      "windSpeedMph": 0.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-01-22",
+      "highTempF": 92.5,
+      "lowTempF": 26.2,
+      "precipitationInches": 0.2,
+      "humidityPercent": 84.9,
+      "windSpeedMph": 12.8,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-01-29",
+      "highTempF": 92.2,
+      "lowTempF": 43.4,
+      "precipitationInches": 3,
+      "humidityPercent": 24.2,
+      "windSpeedMph": 22.6,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-02-05",
+      "highTempF": 51.5,
+      "lowTempF": 25.1,
+      "precipitationInches": 0.4,
+      "humidityPercent": 49,
+      "windSpeedMph": 25.6,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-02-12",
+      "highTempF": 36,
+      "lowTempF": 19.7,
+      "precipitationInches": 2.4,
+      "humidityPercent": 54.4,
+      "windSpeedMph": 16.8,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-02-19",
+      "highTempF": 38.8,
+      "lowTempF": 7.2,
+      "precipitationInches": 0.7,
+      "humidityPercent": 50.7,
+      "windSpeedMph": 31.5,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-02-26",
+      "highTempF": 75.2,
+      "lowTempF": 66.1,
+      "precipitationInches": 1.6,
+      "humidityPercent": 33,
+      "windSpeedMph": 22.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-03-04",
+      "highTempF": 95,
+      "lowTempF": 28.9,
+      "precipitationInches": 0.2,
+      "humidityPercent": 25.8,
+      "windSpeedMph": 0.6,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-03-10",
+      "highTempF": 59.7,
+      "lowTempF": 0.8,
+      "precipitationInches": 0.6,
+      "humidityPercent": 82.4,
+      "windSpeedMph": 13.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-03-17",
+      "highTempF": 43.1,
+      "lowTempF": 39.1,
+      "precipitationInches": 1.1,
+      "humidityPercent": 81.2,
+      "windSpeedMph": 30.3,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-03-24",
+      "highTempF": 43.1,
+      "lowTempF": 19.3,
+      "precipitationInches": 0.3,
+      "humidityPercent": 43.7,
+      "windSpeedMph": 28.8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-03-31",
+      "highTempF": 70.3,
+      "lowTempF": 32.3,
+      "precipitationInches": 0.1,
+      "humidityPercent": 22.5,
+      "windSpeedMph": 3.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-04-07",
+      "highTempF": 28.1,
+      "lowTempF": 59.6,
+      "precipitationInches": 1.1,
+      "humidityPercent": 45.2,
+      "windSpeedMph": 18.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-04-14",
+      "highTempF": 47.3,
+      "lowTempF": 56.3,
+      "precipitationInches": 1.5,
+      "humidityPercent": 34.5,
+      "windSpeedMph": 9,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-04-21",
+      "highTempF": 62.3,
+      "lowTempF": 34.1,
+      "precipitationInches": 2.8,
+      "humidityPercent": 68.2,
+      "windSpeedMph": 2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-04-28",
+      "highTempF": 97.6,
+      "lowTempF": 40.5,
+      "precipitationInches": 1.6,
+      "humidityPercent": 39.2,
+      "windSpeedMph": 6.6,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-05-05",
+      "highTempF": 25.4,
+      "lowTempF": 11.8,
+      "precipitationInches": 1.1,
+      "humidityPercent": 66.6,
+      "windSpeedMph": 29.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Antonio",
+      "date": "2024-05-12",
+      "highTempF": 55,
+      "lowTempF": 42.9,
+      "precipitationInches": 1.5,
+      "humidityPercent": 45.8,
+      "windSpeedMph": 6.1,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-01-01",
+      "highTempF": 58.5,
+      "lowTempF": 26.3,
+      "precipitationInches": 1.5,
+      "humidityPercent": 67.5,
+      "windSpeedMph": 17.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-01-08",
+      "highTempF": 95,
+      "lowTempF": 33.5,
+      "precipitationInches": 1.3,
+      "humidityPercent": 58.6,
+      "windSpeedMph": 5.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-01-15",
+      "highTempF": 92,
+      "lowTempF": 18.1,
+      "precipitationInches": 2.6,
+      "humidityPercent": 72.8,
+      "windSpeedMph": 3.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-01-22",
+      "highTempF": 44.3,
+      "lowTempF": 30.5,
+      "precipitationInches": 1.1,
+      "humidityPercent": 40.6,
+      "windSpeedMph": 27.8,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-01-29",
+      "highTempF": 52.6,
+      "lowTempF": 46.8,
+      "precipitationInches": 2.3,
+      "humidityPercent": 83.9,
+      "windSpeedMph": 29.9,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-02-05",
+      "highTempF": 71.2,
+      "lowTempF": 36,
+      "precipitationInches": 2,
+      "humidityPercent": 89.7,
+      "windSpeedMph": 15.6,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-02-12",
+      "highTempF": 88.5,
+      "lowTempF": 31.9,
+      "precipitationInches": 2.3,
+      "humidityPercent": 24.6,
+      "windSpeedMph": 17.5,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-02-19",
+      "highTempF": 47.3,
+      "lowTempF": 64.7,
+      "precipitationInches": 1.9,
+      "humidityPercent": 74.5,
+      "windSpeedMph": 15.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-02-26",
+      "highTempF": 38.7,
+      "lowTempF": 38.5,
+      "precipitationInches": 2.5,
+      "humidityPercent": 69,
+      "windSpeedMph": 16.5,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-03-04",
+      "highTempF": 33.1,
+      "lowTempF": 7.5,
+      "precipitationInches": 0.1,
+      "humidityPercent": 65.2,
+      "windSpeedMph": 7.1,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-03-10",
+      "highTempF": 25.1,
+      "lowTempF": 34,
+      "precipitationInches": 0.7,
+      "humidityPercent": 79,
+      "windSpeedMph": 1.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-03-17",
+      "highTempF": 49.2,
+      "lowTempF": 5.5,
+      "precipitationInches": 2.3,
+      "humidityPercent": 57.5,
+      "windSpeedMph": 21.9,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-03-24",
+      "highTempF": 82,
+      "lowTempF": 14.8,
+      "precipitationInches": 0.2,
+      "humidityPercent": 80.8,
+      "windSpeedMph": 4.4,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-03-31",
+      "highTempF": 83.8,
+      "lowTempF": 1.1,
+      "precipitationInches": 1.2,
+      "humidityPercent": 91.3,
+      "windSpeedMph": 17.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-04-07",
+      "highTempF": 42.4,
+      "lowTempF": 53.4,
+      "precipitationInches": 2.7,
+      "humidityPercent": 22.6,
+      "windSpeedMph": 28.8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-04-14",
+      "highTempF": 37.5,
+      "lowTempF": 41.3,
+      "precipitationInches": 1.7,
+      "humidityPercent": 53.6,
+      "windSpeedMph": 22.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-04-21",
+      "highTempF": 70.5,
+      "lowTempF": 51.3,
+      "precipitationInches": 1.6,
+      "humidityPercent": 62.1,
+      "windSpeedMph": 21.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-04-28",
+      "highTempF": 29.5,
+      "lowTempF": 64.1,
+      "precipitationInches": 0.2,
+      "humidityPercent": 45.4,
+      "windSpeedMph": 16.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-05-05",
+      "highTempF": 55.7,
+      "lowTempF": 15.8,
+      "precipitationInches": 2.9,
+      "humidityPercent": 53.3,
+      "windSpeedMph": 8.3,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Diego",
+      "date": "2024-05-12",
+      "highTempF": 73.1,
+      "lowTempF": 14,
+      "precipitationInches": 0.1,
+      "humidityPercent": 56.1,
+      "windSpeedMph": 11.4,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-01-01",
+      "highTempF": 38.8,
+      "lowTempF": 4.3,
+      "precipitationInches": 2.2,
+      "humidityPercent": 82.2,
+      "windSpeedMph": 19.1,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-01-08",
+      "highTempF": 33.7,
+      "lowTempF": 31.6,
+      "precipitationInches": 1.6,
+      "humidityPercent": 28.7,
+      "windSpeedMph": 21.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-01-15",
+      "highTempF": 33.1,
+      "lowTempF": 17.8,
+      "precipitationInches": 2.8,
+      "humidityPercent": 21.6,
+      "windSpeedMph": 16.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-01-22",
+      "highTempF": 64.4,
+      "lowTempF": 5.7,
+      "precipitationInches": 0.7,
+      "humidityPercent": 37,
+      "windSpeedMph": 2.8,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-01-29",
+      "highTempF": 43.3,
+      "lowTempF": 28.8,
+      "precipitationInches": 1.6,
+      "humidityPercent": 33.8,
+      "windSpeedMph": 24.4,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-02-05",
+      "highTempF": 61.4,
+      "lowTempF": 54.3,
+      "precipitationInches": 2.6,
+      "humidityPercent": 29.8,
+      "windSpeedMph": 33.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-02-12",
+      "highTempF": 80.2,
+      "lowTempF": 19.1,
+      "precipitationInches": 0.7,
+      "humidityPercent": 81.3,
+      "windSpeedMph": 0.9,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-02-19",
+      "highTempF": 96.9,
+      "lowTempF": 59.6,
+      "precipitationInches": 1.2,
+      "humidityPercent": 73.5,
+      "windSpeedMph": 5.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-02-26",
+      "highTempF": 59,
+      "lowTempF": 42.7,
+      "precipitationInches": 1.9,
+      "humidityPercent": 93.9,
+      "windSpeedMph": 17.7,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-03-04",
+      "highTempF": 30.8,
+      "lowTempF": 44.9,
+      "precipitationInches": 2.6,
+      "humidityPercent": 48.9,
+      "windSpeedMph": 26.5,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-03-10",
+      "highTempF": 32.5,
+      "lowTempF": 40,
+      "precipitationInches": 2.8,
+      "humidityPercent": 78,
+      "windSpeedMph": 23.2,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-03-17",
+      "highTempF": 34.5,
+      "lowTempF": 44.9,
+      "precipitationInches": 1.2,
+      "humidityPercent": 37.5,
+      "windSpeedMph": 29.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-03-24",
+      "highTempF": 79.9,
+      "lowTempF": 30.7,
+      "precipitationInches": 1.1,
+      "humidityPercent": 85.5,
+      "windSpeedMph": 2,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-03-31",
+      "highTempF": 88.5,
+      "lowTempF": 6.4,
+      "precipitationInches": 1,
+      "humidityPercent": 32.9,
+      "windSpeedMph": 15.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-04-07",
+      "highTempF": 93.6,
+      "lowTempF": 44.9,
+      "precipitationInches": 0.1,
+      "humidityPercent": 47.7,
+      "windSpeedMph": 10.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-04-14",
+      "highTempF": 70.9,
+      "lowTempF": 36.2,
+      "precipitationInches": 0.1,
+      "humidityPercent": 51.7,
+      "windSpeedMph": 15.5,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-04-21",
+      "highTempF": 67.4,
+      "lowTempF": 7.7,
+      "precipitationInches": 2.1,
+      "humidityPercent": 82.5,
+      "windSpeedMph": 14.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-04-28",
+      "highTempF": 83.6,
+      "lowTempF": 24.9,
+      "precipitationInches": 0.6,
+      "humidityPercent": 38.2,
+      "windSpeedMph": 11.7,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-05-05",
+      "highTempF": 88.4,
+      "lowTempF": 54.6,
+      "precipitationInches": 2.5,
+      "humidityPercent": 29.9,
+      "windSpeedMph": 29.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Dallas",
+      "date": "2024-05-12",
+      "highTempF": 53.4,
+      "lowTempF": 66.3,
+      "precipitationInches": 1.6,
+      "humidityPercent": 84.3,
+      "windSpeedMph": 14.5,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-01-01",
+      "highTempF": 45.1,
+      "lowTempF": 45.9,
+      "precipitationInches": 0.2,
+      "humidityPercent": 49.2,
+      "windSpeedMph": 19.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-01-08",
+      "highTempF": 68.9,
+      "lowTempF": 39.7,
+      "precipitationInches": 1.2,
+      "humidityPercent": 72.6,
+      "windSpeedMph": 31.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-01-15",
+      "highTempF": 87.8,
+      "lowTempF": 26.2,
+      "precipitationInches": 2.6,
+      "humidityPercent": 92.4,
+      "windSpeedMph": 25.3,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-01-22",
+      "highTempF": 82.4,
+      "lowTempF": 63.5,
+      "precipitationInches": 0.7,
+      "humidityPercent": 24.6,
+      "windSpeedMph": 17.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-01-29",
+      "highTempF": 91.7,
+      "lowTempF": 62.8,
+      "precipitationInches": 0.2,
+      "humidityPercent": 45.2,
+      "windSpeedMph": 15.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-02-05",
+      "highTempF": 46.6,
+      "lowTempF": 54.5,
+      "precipitationInches": 2.4,
+      "humidityPercent": 37,
+      "windSpeedMph": 3.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-02-12",
+      "highTempF": 48.1,
+      "lowTempF": 67.4,
+      "precipitationInches": 0.8,
+      "humidityPercent": 24.1,
+      "windSpeedMph": 29.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-02-19",
+      "highTempF": 98.6,
+      "lowTempF": 45.7,
+      "precipitationInches": 0.5,
+      "humidityPercent": 62.5,
+      "windSpeedMph": 19.3,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-02-26",
+      "highTempF": 39.5,
+      "lowTempF": 49.7,
+      "precipitationInches": 1.1,
+      "humidityPercent": 28.1,
+      "windSpeedMph": 11.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-03-04",
+      "highTempF": 53.8,
+      "lowTempF": 49.4,
+      "precipitationInches": 3,
+      "humidityPercent": 43.8,
+      "windSpeedMph": 13.8,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-03-10",
+      "highTempF": 46,
+      "lowTempF": 9.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 34.7,
+      "windSpeedMph": 5,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-03-17",
+      "highTempF": 94,
+      "lowTempF": 51.7,
+      "precipitationInches": 2.9,
+      "humidityPercent": 55.4,
+      "windSpeedMph": 32.8,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-03-24",
+      "highTempF": 41.1,
+      "lowTempF": 52.7,
+      "precipitationInches": 0.4,
+      "humidityPercent": 86.6,
+      "windSpeedMph": 29.4,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-03-31",
+      "highTempF": 79.1,
+      "lowTempF": 9.5,
+      "precipitationInches": 1.2,
+      "humidityPercent": 88.6,
+      "windSpeedMph": 24.9,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-04-07",
+      "highTempF": 45.7,
+      "lowTempF": 4.5,
+      "precipitationInches": 0.2,
+      "humidityPercent": 91.1,
+      "windSpeedMph": 18.5,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-04-14",
+      "highTempF": 40.1,
+      "lowTempF": 16.3,
+      "precipitationInches": 0.7,
+      "humidityPercent": 46.5,
+      "windSpeedMph": 21.9,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-04-21",
+      "highTempF": 41.3,
+      "lowTempF": 2.5,
+      "precipitationInches": 1.5,
+      "humidityPercent": 45.6,
+      "windSpeedMph": 33.1,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-04-28",
+      "highTempF": 89.2,
+      "lowTempF": 23.4,
+      "precipitationInches": 1.2,
+      "humidityPercent": 68.5,
+      "windSpeedMph": 34.6,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-05-05",
+      "highTempF": 92.8,
+      "lowTempF": 2.7,
+      "precipitationInches": 1.7,
+      "humidityPercent": 86.5,
+      "windSpeedMph": 1.8,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "San Jose",
+      "date": "2024-05-12",
+      "highTempF": 47.4,
+      "lowTempF": 39.9,
+      "precipitationInches": 1.2,
+      "humidityPercent": 28.5,
+      "windSpeedMph": 9.8,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-01-01",
+      "highTempF": 80.3,
+      "lowTempF": 50,
+      "precipitationInches": 0.7,
+      "humidityPercent": 92.5,
+      "windSpeedMph": 34.6,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-01-08",
+      "highTempF": 46.2,
+      "lowTempF": 18.4,
+      "precipitationInches": 1.6,
+      "humidityPercent": 24.8,
+      "windSpeedMph": 35,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-01-15",
+      "highTempF": 58.2,
+      "lowTempF": 19.2,
+      "precipitationInches": 2.5,
+      "humidityPercent": 82.8,
+      "windSpeedMph": 26.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-01-22",
+      "highTempF": 63.6,
+      "lowTempF": 7.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 76.4,
+      "windSpeedMph": 6.7,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-01-29",
+      "highTempF": 54,
+      "lowTempF": 19.3,
+      "precipitationInches": 1.5,
+      "humidityPercent": 24.9,
+      "windSpeedMph": 15.7,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-02-05",
+      "highTempF": 88.5,
+      "lowTempF": 50.1,
+      "precipitationInches": 0.6,
+      "humidityPercent": 70.8,
+      "windSpeedMph": 17.4,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-02-12",
+      "highTempF": 60.5,
+      "lowTempF": 2.1,
+      "precipitationInches": 0.5,
+      "humidityPercent": 28.3,
+      "windSpeedMph": 5.8,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-02-19",
+      "highTempF": 88.4,
+      "lowTempF": 58.5,
+      "precipitationInches": 2.4,
+      "humidityPercent": 73.5,
+      "windSpeedMph": 14.3,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-02-26",
+      "highTempF": 80.7,
+      "lowTempF": 56.1,
+      "precipitationInches": 1.8,
+      "humidityPercent": 76.4,
+      "windSpeedMph": 8.8,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-03-04",
+      "highTempF": 88.8,
+      "lowTempF": 6.5,
+      "precipitationInches": 1.8,
+      "humidityPercent": 79.9,
+      "windSpeedMph": 27,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-03-10",
+      "highTempF": 66,
+      "lowTempF": 54.5,
+      "precipitationInches": 1.2,
+      "humidityPercent": 63.4,
+      "windSpeedMph": 20.3,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-03-17",
+      "highTempF": 30.4,
+      "lowTempF": 22.3,
+      "precipitationInches": 2.3,
+      "humidityPercent": 79.2,
+      "windSpeedMph": 23.6,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-03-24",
+      "highTempF": 97.5,
+      "lowTempF": 35.7,
+      "precipitationInches": 1.1,
+      "humidityPercent": 63.8,
+      "windSpeedMph": 11.2,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-03-31",
+      "highTempF": 56,
+      "lowTempF": 39.7,
+      "precipitationInches": 1.8,
+      "humidityPercent": 45.1,
+      "windSpeedMph": 33.5,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-04-07",
+      "highTempF": 44.7,
+      "lowTempF": 50.8,
+      "precipitationInches": 2.2,
+      "humidityPercent": 80.7,
+      "windSpeedMph": 8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-04-14",
+      "highTempF": 92.2,
+      "lowTempF": 7.4,
+      "precipitationInches": 2.9,
+      "humidityPercent": 91.1,
+      "windSpeedMph": 28,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-04-21",
+      "highTempF": 37,
+      "lowTempF": 16.7,
+      "precipitationInches": 0.1,
+      "humidityPercent": 27.3,
+      "windSpeedMph": 21.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-04-28",
+      "highTempF": 44.3,
+      "lowTempF": 60.9,
+      "precipitationInches": 2.4,
+      "humidityPercent": 27.4,
+      "windSpeedMph": 23.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-05-05",
+      "highTempF": 37.4,
+      "lowTempF": 25.6,
+      "precipitationInches": 1.2,
+      "humidityPercent": 36.2,
+      "windSpeedMph": 33.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Austin",
+      "date": "2024-05-12",
+      "highTempF": 60.5,
+      "lowTempF": 45.7,
+      "precipitationInches": 0.1,
+      "humidityPercent": 54.3,
+      "windSpeedMph": 11.1,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-01-01",
+      "highTempF": 23.2,
+      "lowTempF": 58.3,
+      "precipitationInches": 2.3,
+      "humidityPercent": 84.7,
+      "windSpeedMph": 25.6,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-01-08",
+      "highTempF": 70.6,
+      "lowTempF": 63,
+      "precipitationInches": 0.4,
+      "humidityPercent": 43.6,
+      "windSpeedMph": 15.9,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-01-15",
+      "highTempF": 92.7,
+      "lowTempF": 7,
+      "precipitationInches": 0.1,
+      "humidityPercent": 94,
+      "windSpeedMph": 8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-01-22",
+      "highTempF": 88.3,
+      "lowTempF": 68.5,
+      "precipitationInches": 1,
+      "humidityPercent": 80.3,
+      "windSpeedMph": 8.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-01-29",
+      "highTempF": 51.4,
+      "lowTempF": 24.4,
+      "precipitationInches": 0.5,
+      "humidityPercent": 31.2,
+      "windSpeedMph": 0.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-02-05",
+      "highTempF": 61,
+      "lowTempF": 8.6,
+      "precipitationInches": 0.5,
+      "humidityPercent": 90.4,
+      "windSpeedMph": 26.5,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-02-12",
+      "highTempF": 81.5,
+      "lowTempF": 56.5,
+      "precipitationInches": 0.2,
+      "humidityPercent": 88.3,
+      "windSpeedMph": 24.8,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-02-19",
+      "highTempF": 21.4,
+      "lowTempF": 17.9,
+      "precipitationInches": 1.9,
+      "humidityPercent": 79.9,
+      "windSpeedMph": 9.7,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-02-26",
+      "highTempF": 85.3,
+      "lowTempF": 25.6,
+      "precipitationInches": 1.4,
+      "humidityPercent": 64.2,
+      "windSpeedMph": 11.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-03-04",
+      "highTempF": 59.2,
+      "lowTempF": 33.2,
+      "precipitationInches": 0.4,
+      "humidityPercent": 36.5,
+      "windSpeedMph": 11.3,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-03-10",
+      "highTempF": 49.6,
+      "lowTempF": 7.2,
+      "precipitationInches": 2.9,
+      "humidityPercent": 22.2,
+      "windSpeedMph": 25.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-03-17",
+      "highTempF": 44.1,
+      "lowTempF": 58.1,
+      "precipitationInches": 1.9,
+      "humidityPercent": 74.9,
+      "windSpeedMph": 33.6,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-03-24",
+      "highTempF": 86,
+      "lowTempF": 68.8,
+      "precipitationInches": 2.2,
+      "humidityPercent": 45.6,
+      "windSpeedMph": 22.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-03-31",
+      "highTempF": 49.6,
+      "lowTempF": 1.7,
+      "precipitationInches": 2.8,
+      "humidityPercent": 84.3,
+      "windSpeedMph": 20.6,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-04-07",
+      "highTempF": 22.8,
+      "lowTempF": 20.7,
+      "precipitationInches": 0.4,
+      "humidityPercent": 36,
+      "windSpeedMph": 25.9,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-04-14",
+      "highTempF": 89.7,
+      "lowTempF": 56.9,
+      "precipitationInches": 2.6,
+      "humidityPercent": 35.2,
+      "windSpeedMph": 13.9,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-04-21",
+      "highTempF": 30.3,
+      "lowTempF": 31.1,
+      "precipitationInches": 0.3,
+      "humidityPercent": 34.5,
+      "windSpeedMph": 3.2,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-04-28",
+      "highTempF": 96.5,
+      "lowTempF": 13.3,
+      "precipitationInches": 0.4,
+      "humidityPercent": 51.4,
+      "windSpeedMph": 30.4,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-05-05",
+      "highTempF": 96.7,
+      "lowTempF": 12.5,
+      "precipitationInches": 2.6,
+      "humidityPercent": 47.6,
+      "windSpeedMph": 9.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Jacksonville",
+      "date": "2024-05-12",
+      "highTempF": 72.3,
+      "lowTempF": 39.2,
+      "precipitationInches": 1.1,
+      "humidityPercent": 74.8,
+      "windSpeedMph": 27.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-01-01",
+      "highTempF": 96.6,
+      "lowTempF": 14.1,
+      "precipitationInches": 1.4,
+      "humidityPercent": 85.2,
+      "windSpeedMph": 34.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-01-08",
+      "highTempF": 45.6,
+      "lowTempF": 67.2,
+      "precipitationInches": 0,
+      "humidityPercent": 72.3,
+      "windSpeedMph": 14.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-01-15",
+      "highTempF": 94.5,
+      "lowTempF": 48.7,
+      "precipitationInches": 1.7,
+      "humidityPercent": 24.8,
+      "windSpeedMph": 17.9,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-01-22",
+      "highTempF": 85.5,
+      "lowTempF": 59.3,
+      "precipitationInches": 3,
+      "humidityPercent": 46.8,
+      "windSpeedMph": 3.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-01-29",
+      "highTempF": 96.3,
+      "lowTempF": 31.1,
+      "precipitationInches": 2.2,
+      "humidityPercent": 28.3,
+      "windSpeedMph": 17,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-02-05",
+      "highTempF": 22.2,
+      "lowTempF": 65.8,
+      "precipitationInches": 1.4,
+      "humidityPercent": 91.6,
+      "windSpeedMph": 13.2,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-02-12",
+      "highTempF": 72.4,
+      "lowTempF": 66.5,
+      "precipitationInches": 0.1,
+      "humidityPercent": 64.7,
+      "windSpeedMph": 2.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-02-19",
+      "highTempF": 58.3,
+      "lowTempF": 62.9,
+      "precipitationInches": 2.8,
+      "humidityPercent": 74.4,
+      "windSpeedMph": 8.5,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-02-26",
+      "highTempF": 77.4,
+      "lowTempF": 29.7,
+      "precipitationInches": 2.7,
+      "humidityPercent": 66.8,
+      "windSpeedMph": 24.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-03-04",
+      "highTempF": 87.6,
+      "lowTempF": 27.1,
+      "precipitationInches": 1.8,
+      "humidityPercent": 88.4,
+      "windSpeedMph": 31.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-03-10",
+      "highTempF": 92.3,
+      "lowTempF": 65.3,
+      "precipitationInches": 0.9,
+      "humidityPercent": 28.1,
+      "windSpeedMph": 3.1,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-03-17",
+      "highTempF": 86.4,
+      "lowTempF": 27.3,
+      "precipitationInches": 1.3,
+      "humidityPercent": 66.4,
+      "windSpeedMph": 12.6,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-03-24",
+      "highTempF": 64.1,
+      "lowTempF": 36.7,
+      "precipitationInches": 0.3,
+      "humidityPercent": 32.5,
+      "windSpeedMph": 25.9,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-03-31",
+      "highTempF": 49.8,
+      "lowTempF": 7.9,
+      "precipitationInches": 2.2,
+      "humidityPercent": 66.3,
+      "windSpeedMph": 2.9,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-04-07",
+      "highTempF": 49.8,
+      "lowTempF": 49.6,
+      "precipitationInches": 1,
+      "humidityPercent": 73.4,
+      "windSpeedMph": 2.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-04-14",
+      "highTempF": 48.9,
+      "lowTempF": 45.1,
+      "precipitationInches": 1.2,
+      "humidityPercent": 52.4,
+      "windSpeedMph": 3,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-04-21",
+      "highTempF": 77.3,
+      "lowTempF": 13.2,
+      "precipitationInches": 1.3,
+      "humidityPercent": 86.7,
+      "windSpeedMph": 7.8,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-04-28",
+      "highTempF": 54.8,
+      "lowTempF": 67.4,
+      "precipitationInches": 2.9,
+      "humidityPercent": 58,
+      "windSpeedMph": 1.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-05-05",
+      "highTempF": 91.1,
+      "lowTempF": 30.9,
+      "precipitationInches": 0.4,
+      "humidityPercent": 87.7,
+      "windSpeedMph": 28.2,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Fort Worth",
+      "date": "2024-05-12",
+      "highTempF": 99.4,
+      "lowTempF": 58.1,
+      "precipitationInches": 0.7,
+      "humidityPercent": 64.6,
+      "windSpeedMph": 21.4,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-01-01",
+      "highTempF": 73.8,
+      "lowTempF": 13.8,
+      "precipitationInches": 0.4,
+      "humidityPercent": 92.3,
+      "windSpeedMph": 22.6,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-01-08",
+      "highTempF": 83.5,
+      "lowTempF": 7.5,
+      "precipitationInches": 1.5,
+      "humidityPercent": 85.4,
+      "windSpeedMph": 30.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-01-15",
+      "highTempF": 72.5,
+      "lowTempF": 55.4,
+      "precipitationInches": 1.5,
+      "humidityPercent": 24.3,
+      "windSpeedMph": 0.7,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-01-22",
+      "highTempF": 23.7,
+      "lowTempF": 69,
+      "precipitationInches": 0.6,
+      "humidityPercent": 35.3,
+      "windSpeedMph": 28.3,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-01-29",
+      "highTempF": 32.8,
+      "lowTempF": 30.5,
+      "precipitationInches": 2.4,
+      "humidityPercent": 25.4,
+      "windSpeedMph": 0.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-02-05",
+      "highTempF": 95.4,
+      "lowTempF": 14.6,
+      "precipitationInches": 2.7,
+      "humidityPercent": 86.2,
+      "windSpeedMph": 16.2,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-02-12",
+      "highTempF": 25.2,
+      "lowTempF": 36.6,
+      "precipitationInches": 0.6,
+      "humidityPercent": 89.4,
+      "windSpeedMph": 12.2,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-02-19",
+      "highTempF": 84.1,
+      "lowTempF": 56.4,
+      "precipitationInches": 2.1,
+      "humidityPercent": 70.8,
+      "windSpeedMph": 4.3,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-02-26",
+      "highTempF": 29.8,
+      "lowTempF": 64.9,
+      "precipitationInches": 2,
+      "humidityPercent": 43.6,
+      "windSpeedMph": 20.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-03-04",
+      "highTempF": 78.7,
+      "lowTempF": 55.3,
+      "precipitationInches": 0.3,
+      "humidityPercent": 43.2,
+      "windSpeedMph": 18.5,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-03-10",
+      "highTempF": 33.3,
+      "lowTempF": 49.5,
+      "precipitationInches": 2.2,
+      "humidityPercent": 88.5,
+      "windSpeedMph": 28.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-03-17",
+      "highTempF": 44.2,
+      "lowTempF": 11.5,
+      "precipitationInches": 0.7,
+      "humidityPercent": 69.7,
+      "windSpeedMph": 0.6,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-03-24",
+      "highTempF": 39.7,
+      "lowTempF": 37.3,
+      "precipitationInches": 2.4,
+      "humidityPercent": 77.1,
+      "windSpeedMph": 23.6,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-03-31",
+      "highTempF": 87.9,
+      "lowTempF": 23.7,
+      "precipitationInches": 2.6,
+      "humidityPercent": 21.5,
+      "windSpeedMph": 24.8,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-04-07",
+      "highTempF": 80.2,
+      "lowTempF": 60.7,
+      "precipitationInches": 2.7,
+      "humidityPercent": 71.5,
+      "windSpeedMph": 24.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-04-14",
+      "highTempF": 32.9,
+      "lowTempF": 9.8,
+      "precipitationInches": 0,
+      "humidityPercent": 26.4,
+      "windSpeedMph": 27.3,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-04-21",
+      "highTempF": 56.8,
+      "lowTempF": 28.4,
+      "precipitationInches": 0.7,
+      "humidityPercent": 87.4,
+      "windSpeedMph": 21.8,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-04-28",
+      "highTempF": 72.3,
+      "lowTempF": 46.1,
+      "precipitationInches": 1,
+      "humidityPercent": 38.7,
+      "windSpeedMph": 8.7,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-05-05",
+      "highTempF": 33.8,
+      "lowTempF": 63.1,
+      "precipitationInches": 1.6,
+      "humidityPercent": 66.9,
+      "windSpeedMph": 2.9,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Columbus",
+      "date": "2024-05-12",
+      "highTempF": 26.5,
+      "lowTempF": 33.7,
+      "precipitationInches": 0.6,
+      "humidityPercent": 45.6,
+      "windSpeedMph": 34.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-01-01",
+      "highTempF": 40.5,
+      "lowTempF": 22.1,
+      "precipitationInches": 1.2,
+      "humidityPercent": 61.1,
+      "windSpeedMph": 7,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-01-08",
+      "highTempF": 87,
+      "lowTempF": 32.1,
+      "precipitationInches": 1.6,
+      "humidityPercent": 91.9,
+      "windSpeedMph": 6.7,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-01-15",
+      "highTempF": 46.3,
+      "lowTempF": 68.5,
+      "precipitationInches": 0,
+      "humidityPercent": 25,
+      "windSpeedMph": 32,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-01-22",
+      "highTempF": 37,
+      "lowTempF": 61.5,
+      "precipitationInches": 2.5,
+      "humidityPercent": 52.4,
+      "windSpeedMph": 13.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-01-29",
+      "highTempF": 84.1,
+      "lowTempF": 44.3,
+      "precipitationInches": 2.1,
+      "humidityPercent": 76.5,
+      "windSpeedMph": 15.7,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-02-05",
+      "highTempF": 52.3,
+      "lowTempF": 29.4,
+      "precipitationInches": 2.1,
+      "humidityPercent": 82.9,
+      "windSpeedMph": 25.9,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-02-12",
+      "highTempF": 39.8,
+      "lowTempF": 44.8,
+      "precipitationInches": 0,
+      "humidityPercent": 36.2,
+      "windSpeedMph": 1.8,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-02-19",
+      "highTempF": 66.4,
+      "lowTempF": 8.9,
+      "precipitationInches": 0.6,
+      "humidityPercent": 92.5,
+      "windSpeedMph": 13.5,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-02-26",
+      "highTempF": 36.4,
+      "lowTempF": 58.1,
+      "precipitationInches": 0.4,
+      "humidityPercent": 56.3,
+      "windSpeedMph": 29.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-03-04",
+      "highTempF": 57.8,
+      "lowTempF": 64.1,
+      "precipitationInches": 1.3,
+      "humidityPercent": 85.1,
+      "windSpeedMph": 30.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-03-10",
+      "highTempF": 92.7,
+      "lowTempF": 43,
+      "precipitationInches": 1.5,
+      "humidityPercent": 74.7,
+      "windSpeedMph": 11.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-03-17",
+      "highTempF": 43.1,
+      "lowTempF": 49.6,
+      "precipitationInches": 3,
+      "humidityPercent": 88.5,
+      "windSpeedMph": 0.2,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-03-24",
+      "highTempF": 45.1,
+      "lowTempF": 8.4,
+      "precipitationInches": 0.4,
+      "humidityPercent": 43.5,
+      "windSpeedMph": 12,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-03-31",
+      "highTempF": 22.1,
+      "lowTempF": 18.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 50.4,
+      "windSpeedMph": 31.3,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-04-07",
+      "highTempF": 32.9,
+      "lowTempF": 63.8,
+      "precipitationInches": 0.7,
+      "humidityPercent": 73.5,
+      "windSpeedMph": 18.9,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-04-14",
+      "highTempF": 34.3,
+      "lowTempF": 17.6,
+      "precipitationInches": 2.7,
+      "humidityPercent": 67.1,
+      "windSpeedMph": 30.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-04-21",
+      "highTempF": 64.4,
+      "lowTempF": 29.3,
+      "precipitationInches": 0.2,
+      "humidityPercent": 35.9,
+      "windSpeedMph": 10.1,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-04-28",
+      "highTempF": 71.1,
+      "lowTempF": 14.5,
+      "precipitationInches": 0.9,
+      "humidityPercent": 21.2,
+      "windSpeedMph": 17.5,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-05-05",
+      "highTempF": 58,
+      "lowTempF": 1.7,
+      "precipitationInches": 1.6,
+      "humidityPercent": 34.4,
+      "windSpeedMph": 1.3,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Charlotte",
+      "date": "2024-05-12",
+      "highTempF": 64.3,
+      "lowTempF": 61.2,
+      "precipitationInches": 2.3,
+      "humidityPercent": 91.5,
+      "windSpeedMph": 21.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-01-01",
+      "highTempF": 44.4,
+      "lowTempF": 27.9,
+      "precipitationInches": 2.3,
+      "humidityPercent": 85.8,
+      "windSpeedMph": 3.3,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-01-08",
+      "highTempF": 62.2,
+      "lowTempF": 53.7,
+      "precipitationInches": 2.7,
+      "humidityPercent": 56.8,
+      "windSpeedMph": 5.9,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-01-15",
+      "highTempF": 84,
+      "lowTempF": 51.7,
+      "precipitationInches": 2.7,
+      "humidityPercent": 76.5,
+      "windSpeedMph": 11.3,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-01-22",
+      "highTempF": 82.2,
+      "lowTempF": 63.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 35.7,
+      "windSpeedMph": 15.3,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-01-29",
+      "highTempF": 96.9,
+      "lowTempF": 9.2,
+      "precipitationInches": 2,
+      "humidityPercent": 85,
+      "windSpeedMph": 13.1,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-02-05",
+      "highTempF": 85.1,
+      "lowTempF": 45.4,
+      "precipitationInches": 2.8,
+      "humidityPercent": 67.4,
+      "windSpeedMph": 34.5,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-02-12",
+      "highTempF": 31.8,
+      "lowTempF": 38.6,
+      "precipitationInches": 1.4,
+      "humidityPercent": 73.7,
+      "windSpeedMph": 3.3,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-02-19",
+      "highTempF": 98.2,
+      "lowTempF": 26.2,
+      "precipitationInches": 1.9,
+      "humidityPercent": 37.2,
+      "windSpeedMph": 0.5,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-02-26",
+      "highTempF": 25,
+      "lowTempF": 2.8,
+      "precipitationInches": 1,
+      "humidityPercent": 32,
+      "windSpeedMph": 31,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-03-04",
+      "highTempF": 61.7,
+      "lowTempF": 47.9,
+      "precipitationInches": 0.7,
+      "humidityPercent": 24,
+      "windSpeedMph": 8.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-03-10",
+      "highTempF": 45.3,
+      "lowTempF": 8.7,
+      "precipitationInches": 1,
+      "humidityPercent": 44.4,
+      "windSpeedMph": 19.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-03-17",
+      "highTempF": 71,
+      "lowTempF": 14.6,
+      "precipitationInches": 1.5,
+      "humidityPercent": 88.7,
+      "windSpeedMph": 30.8,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-03-24",
+      "highTempF": 51.6,
+      "lowTempF": 60.3,
+      "precipitationInches": 1.6,
+      "humidityPercent": 68.4,
+      "windSpeedMph": 29.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-03-31",
+      "highTempF": 35.2,
+      "lowTempF": 55.5,
+      "precipitationInches": 2.1,
+      "humidityPercent": 47.2,
+      "windSpeedMph": 6.7,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-04-07",
+      "highTempF": 38.7,
+      "lowTempF": 23.8,
+      "precipitationInches": 0.9,
+      "humidityPercent": 75.4,
+      "windSpeedMph": 28,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-04-14",
+      "highTempF": 75.5,
+      "lowTempF": 8.3,
+      "precipitationInches": 1.3,
+      "humidityPercent": 32.9,
+      "windSpeedMph": 29.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-04-21",
+      "highTempF": 47.2,
+      "lowTempF": 15.6,
+      "precipitationInches": 1.6,
+      "humidityPercent": 65.3,
+      "windSpeedMph": 33.9,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-04-28",
+      "highTempF": 65.8,
+      "lowTempF": 22.5,
+      "precipitationInches": 2.1,
+      "humidityPercent": 91.5,
+      "windSpeedMph": 10.1,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-05-05",
+      "highTempF": 26.1,
+      "lowTempF": 6.6,
+      "precipitationInches": 1.7,
+      "humidityPercent": 92.5,
+      "windSpeedMph": 22.5,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Indianapolis",
+      "date": "2024-05-12",
+      "highTempF": 70.4,
+      "lowTempF": 18.9,
+      "precipitationInches": 1.2,
+      "humidityPercent": 35.6,
+      "windSpeedMph": 8.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-01-01",
+      "highTempF": 89.3,
+      "lowTempF": 6.4,
+      "precipitationInches": 2.7,
+      "humidityPercent": 66.1,
+      "windSpeedMph": 24.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-01-08",
+      "highTempF": 70.6,
+      "lowTempF": 20.8,
+      "precipitationInches": 2.7,
+      "humidityPercent": 60.8,
+      "windSpeedMph": 21.4,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-01-15",
+      "highTempF": 20.5,
+      "lowTempF": 3.6,
+      "precipitationInches": 0.8,
+      "humidityPercent": 35.4,
+      "windSpeedMph": 20.4,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-01-22",
+      "highTempF": 24,
+      "lowTempF": 27.4,
+      "precipitationInches": 2,
+      "humidityPercent": 92.6,
+      "windSpeedMph": 20.1,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-01-29",
+      "highTempF": 30.2,
+      "lowTempF": 59.7,
+      "precipitationInches": 2.6,
+      "humidityPercent": 82.8,
+      "windSpeedMph": 33.7,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-02-05",
+      "highTempF": 95.6,
+      "lowTempF": 0.5,
+      "precipitationInches": 2.9,
+      "humidityPercent": 94.7,
+      "windSpeedMph": 19,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-02-12",
+      "highTempF": 89.6,
+      "lowTempF": 25.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 76.9,
+      "windSpeedMph": 2,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-02-19",
+      "highTempF": 91.8,
+      "lowTempF": 49.5,
+      "precipitationInches": 2.7,
+      "humidityPercent": 22.7,
+      "windSpeedMph": 10.9,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-02-26",
+      "highTempF": 55.3,
+      "lowTempF": 51.9,
+      "precipitationInches": 0.9,
+      "humidityPercent": 32.3,
+      "windSpeedMph": 26.4,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-03-04",
+      "highTempF": 65.8,
+      "lowTempF": 42.3,
+      "precipitationInches": 1.8,
+      "humidityPercent": 91.8,
+      "windSpeedMph": 22.8,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-03-10",
+      "highTempF": 73,
+      "lowTempF": 15.5,
+      "precipitationInches": 2.2,
+      "humidityPercent": 61.9,
+      "windSpeedMph": 25.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-03-17",
+      "highTempF": 32.4,
+      "lowTempF": 21.1,
+      "precipitationInches": 1.7,
+      "humidityPercent": 51.9,
+      "windSpeedMph": 21.7,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-03-24",
+      "highTempF": 97.3,
+      "lowTempF": 48.6,
+      "precipitationInches": 2.3,
+      "humidityPercent": 49.3,
+      "windSpeedMph": 25,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-03-31",
+      "highTempF": 54.7,
+      "lowTempF": 43.2,
+      "precipitationInches": 2.7,
+      "humidityPercent": 74.5,
+      "windSpeedMph": 7.9,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-04-07",
+      "highTempF": 32,
+      "lowTempF": 8.5,
+      "precipitationInches": 0,
+      "humidityPercent": 77.5,
+      "windSpeedMph": 17.4,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-04-14",
+      "highTempF": 79.8,
+      "lowTempF": 69.6,
+      "precipitationInches": 1.5,
+      "humidityPercent": 44.2,
+      "windSpeedMph": 23.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-04-21",
+      "highTempF": 43.1,
+      "lowTempF": 12.5,
+      "precipitationInches": 1,
+      "humidityPercent": 71.8,
+      "windSpeedMph": 33.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-04-28",
+      "highTempF": 83.9,
+      "lowTempF": 5,
+      "precipitationInches": 1.9,
+      "humidityPercent": 88.9,
+      "windSpeedMph": 0.6,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-05-05",
+      "highTempF": 95.3,
+      "lowTempF": 39.5,
+      "precipitationInches": 1.9,
+      "humidityPercent": 38.8,
+      "windSpeedMph": 20.9,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Seattle",
+      "date": "2024-05-12",
+      "highTempF": 79.2,
+      "lowTempF": 64.5,
+      "precipitationInches": 0.7,
+      "humidityPercent": 50.4,
+      "windSpeedMph": 23.4,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-01-01",
+      "highTempF": 59.9,
+      "lowTempF": 6,
+      "precipitationInches": 0.8,
+      "humidityPercent": 68.6,
+      "windSpeedMph": 29.8,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-01-08",
+      "highTempF": 37.7,
+      "lowTempF": 15.4,
+      "precipitationInches": 2,
+      "humidityPercent": 41.6,
+      "windSpeedMph": 9.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-01-15",
+      "highTempF": 70.2,
+      "lowTempF": 50.9,
+      "precipitationInches": 0.9,
+      "humidityPercent": 22.5,
+      "windSpeedMph": 19.5,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-01-22",
+      "highTempF": 62.2,
+      "lowTempF": 3.9,
+      "precipitationInches": 2.3,
+      "humidityPercent": 44.6,
+      "windSpeedMph": 3.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-01-29",
+      "highTempF": 97.4,
+      "lowTempF": 5.6,
+      "precipitationInches": 2.7,
+      "humidityPercent": 93,
+      "windSpeedMph": 19.1,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-02-05",
+      "highTempF": 73,
+      "lowTempF": 50.6,
+      "precipitationInches": 0.2,
+      "humidityPercent": 43,
+      "windSpeedMph": 2.6,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-02-12",
+      "highTempF": 71.5,
+      "lowTempF": 16.2,
+      "precipitationInches": 2.8,
+      "humidityPercent": 34.6,
+      "windSpeedMph": 9.4,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-02-19",
+      "highTempF": 48.2,
+      "lowTempF": 29.6,
+      "precipitationInches": 1,
+      "humidityPercent": 21.4,
+      "windSpeedMph": 19,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-02-26",
+      "highTempF": 52,
+      "lowTempF": 45.9,
+      "precipitationInches": 0.2,
+      "humidityPercent": 31.8,
+      "windSpeedMph": 16.7,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-03-04",
+      "highTempF": 60.2,
+      "lowTempF": 29.4,
+      "precipitationInches": 0,
+      "humidityPercent": 60.5,
+      "windSpeedMph": 20.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-03-10",
+      "highTempF": 47.5,
+      "lowTempF": 2.8,
+      "precipitationInches": 0.8,
+      "humidityPercent": 22.7,
+      "windSpeedMph": 7.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-03-17",
+      "highTempF": 70.1,
+      "lowTempF": 19,
+      "precipitationInches": 1.1,
+      "humidityPercent": 36.4,
+      "windSpeedMph": 31,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-03-24",
+      "highTempF": 40.8,
+      "lowTempF": 10.6,
+      "precipitationInches": 2.9,
+      "humidityPercent": 64.3,
+      "windSpeedMph": 17.2,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-03-31",
+      "highTempF": 32.3,
+      "lowTempF": 15.5,
+      "precipitationInches": 2.5,
+      "humidityPercent": 62.1,
+      "windSpeedMph": 31.5,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-04-07",
+      "highTempF": 69,
+      "lowTempF": 48.1,
+      "precipitationInches": 2.1,
+      "humidityPercent": 59.4,
+      "windSpeedMph": 5.9,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-04-14",
+      "highTempF": 87,
+      "lowTempF": 45.8,
+      "precipitationInches": 2.3,
+      "humidityPercent": 33,
+      "windSpeedMph": 23.7,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-04-21",
+      "highTempF": 87.1,
+      "lowTempF": 62.7,
+      "precipitationInches": 1.4,
+      "humidityPercent": 40.9,
+      "windSpeedMph": 32.4,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-04-28",
+      "highTempF": 49.1,
+      "lowTempF": 11.9,
+      "precipitationInches": 1.2,
+      "humidityPercent": 74.5,
+      "windSpeedMph": 3.3,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-05-05",
+      "highTempF": 78.3,
+      "lowTempF": 8.5,
+      "precipitationInches": 1.6,
+      "humidityPercent": 35,
+      "windSpeedMph": 5.5,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Denver",
+      "date": "2024-05-12",
+      "highTempF": 93.2,
+      "lowTempF": 32,
+      "precipitationInches": 0.2,
+      "humidityPercent": 91.7,
+      "windSpeedMph": 13.3,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-01-01",
+      "highTempF": 64.9,
+      "lowTempF": 57.9,
+      "precipitationInches": 2,
+      "humidityPercent": 55.6,
+      "windSpeedMph": 4.4,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-01-08",
+      "highTempF": 36.4,
+      "lowTempF": 20.6,
+      "precipitationInches": 2.2,
+      "humidityPercent": 55,
+      "windSpeedMph": 20.9,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-01-15",
+      "highTempF": 71.1,
+      "lowTempF": 30.9,
+      "precipitationInches": 1.1,
+      "humidityPercent": 69.8,
+      "windSpeedMph": 4.6,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-01-22",
+      "highTempF": 74,
+      "lowTempF": 62.4,
+      "precipitationInches": 0.2,
+      "humidityPercent": 84.6,
+      "windSpeedMph": 14.7,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-01-29",
+      "highTempF": 94.9,
+      "lowTempF": 21.2,
+      "precipitationInches": 2.3,
+      "humidityPercent": 73.5,
+      "windSpeedMph": 18.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-02-05",
+      "highTempF": 47.4,
+      "lowTempF": 42,
+      "precipitationInches": 2.2,
+      "humidityPercent": 35.2,
+      "windSpeedMph": 19.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-02-12",
+      "highTempF": 21.4,
+      "lowTempF": 12.4,
+      "precipitationInches": 1.4,
+      "humidityPercent": 20.6,
+      "windSpeedMph": 8.6,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-02-19",
+      "highTempF": 79.5,
+      "lowTempF": 46.5,
+      "precipitationInches": 2.7,
+      "humidityPercent": 39.3,
+      "windSpeedMph": 34.4,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-02-26",
+      "highTempF": 61,
+      "lowTempF": 14.6,
+      "precipitationInches": 0.1,
+      "humidityPercent": 80,
+      "windSpeedMph": 3.9,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-03-04",
+      "highTempF": 65,
+      "lowTempF": 57.4,
+      "precipitationInches": 2.7,
+      "humidityPercent": 75.9,
+      "windSpeedMph": 22.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-03-10",
+      "highTempF": 68.9,
+      "lowTempF": 6.6,
+      "precipitationInches": 2.7,
+      "humidityPercent": 52.4,
+      "windSpeedMph": 30.3,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-03-17",
+      "highTempF": 58.2,
+      "lowTempF": 14.8,
+      "precipitationInches": 1.3,
+      "humidityPercent": 67.9,
+      "windSpeedMph": 32.4,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-03-24",
+      "highTempF": 28.5,
+      "lowTempF": 16.7,
+      "precipitationInches": 1.7,
+      "humidityPercent": 69,
+      "windSpeedMph": 20,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-03-31",
+      "highTempF": 62.8,
+      "lowTempF": 24.9,
+      "precipitationInches": 2.1,
+      "humidityPercent": 62.2,
+      "windSpeedMph": 8.3,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-04-07",
+      "highTempF": 86.4,
+      "lowTempF": 27.4,
+      "precipitationInches": 1.6,
+      "humidityPercent": 21.2,
+      "windSpeedMph": 25.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-04-14",
+      "highTempF": 70.6,
+      "lowTempF": 59,
+      "precipitationInches": 0.1,
+      "humidityPercent": 91.7,
+      "windSpeedMph": 32.6,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-04-21",
+      "highTempF": 22.5,
+      "lowTempF": 10.1,
+      "precipitationInches": 0.6,
+      "humidityPercent": 52.8,
+      "windSpeedMph": 9.4,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-04-28",
+      "highTempF": 74.9,
+      "lowTempF": 3.4,
+      "precipitationInches": 1.8,
+      "humidityPercent": 78.1,
+      "windSpeedMph": 12.2,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-05-05",
+      "highTempF": 51.5,
+      "lowTempF": 42.9,
+      "precipitationInches": 0.3,
+      "humidityPercent": 67.9,
+      "windSpeedMph": 31.4,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Boston",
+      "date": "2024-05-12",
+      "highTempF": 99.8,
+      "lowTempF": 30.5,
+      "precipitationInches": 2.7,
+      "humidityPercent": 85.8,
+      "windSpeedMph": 14.2,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-01-01",
+      "highTempF": 81.1,
+      "lowTempF": 41.1,
+      "precipitationInches": 1.9,
+      "humidityPercent": 48.3,
+      "windSpeedMph": 31,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-01-08",
+      "highTempF": 40.6,
+      "lowTempF": 24.2,
+      "precipitationInches": 0.1,
+      "humidityPercent": 90.9,
+      "windSpeedMph": 19.9,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-01-15",
+      "highTempF": 51.6,
+      "lowTempF": 44.2,
+      "precipitationInches": 1.5,
+      "humidityPercent": 90.5,
+      "windSpeedMph": 26.9,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-01-22",
+      "highTempF": 70.7,
+      "lowTempF": 8.5,
+      "precipitationInches": 0.5,
+      "humidityPercent": 84.3,
+      "windSpeedMph": 8.8,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-01-29",
+      "highTempF": 70.2,
+      "lowTempF": 5,
+      "precipitationInches": 0.3,
+      "humidityPercent": 67.9,
+      "windSpeedMph": 31.7,
+      "conditions": "Clear"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-02-05",
+      "highTempF": 78.3,
+      "lowTempF": 20.4,
+      "precipitationInches": 0.5,
+      "humidityPercent": 36.5,
+      "windSpeedMph": 20.2,
+      "conditions": "Stormy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-02-12",
+      "highTempF": 78.4,
+      "lowTempF": 22.1,
+      "precipitationInches": 0.2,
+      "humidityPercent": 59.6,
+      "windSpeedMph": 18,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-02-19",
+      "highTempF": 58.2,
+      "lowTempF": 19,
+      "precipitationInches": 0.1,
+      "humidityPercent": 67.1,
+      "windSpeedMph": 24.2,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-02-26",
+      "highTempF": 52.4,
+      "lowTempF": 49.9,
+      "precipitationInches": 2.4,
+      "humidityPercent": 66.7,
+      "windSpeedMph": 17.1,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-03-04",
+      "highTempF": 32.2,
+      "lowTempF": 64,
+      "precipitationInches": 1.9,
+      "humidityPercent": 62.3,
+      "windSpeedMph": 2.9,
+      "conditions": "Partly Cloudy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-03-10",
+      "highTempF": 42.4,
+      "lowTempF": 50.1,
+      "precipitationInches": 1.7,
+      "humidityPercent": 61.2,
+      "windSpeedMph": 13.1,
+      "conditions": "Snowy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-03-17",
+      "highTempF": 84.9,
+      "lowTempF": 44.7,
+      "precipitationInches": 2.2,
+      "humidityPercent": 67.4,
+      "windSpeedMph": 32.5,
+      "conditions": "Foggy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-03-24",
+      "highTempF": 42,
+      "lowTempF": 43.4,
+      "precipitationInches": 2.1,
+      "humidityPercent": 59,
+      "windSpeedMph": 11.3,
+      "conditions": "Rainy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-03-31",
+      "highTempF": 61.7,
+      "lowTempF": 59.3,
+      "precipitationInches": 0.3,
+      "humidityPercent": 34.7,
+      "windSpeedMph": 22.5,
+      "conditions": "Cloudy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-04-07",
+      "highTempF": 55.3,
+      "lowTempF": 43.8,
+      "precipitationInches": 0.4,
+      "humidityPercent": 34.5,
+      "windSpeedMph": 29.4,
+      "conditions": "Hazy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-04-14",
+      "highTempF": 47.9,
+      "lowTempF": 13.6,
+      "precipitationInches": 1.1,
+      "humidityPercent": 22.9,
+      "windSpeedMph": 10.2,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-04-21",
+      "highTempF": 82.4,
+      "lowTempF": 34.8,
+      "precipitationInches": 2,
+      "humidityPercent": 52.7,
+      "windSpeedMph": 17.7,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-04-28",
+      "highTempF": 35.8,
+      "lowTempF": 1.5,
+      "precipitationInches": 2.1,
+      "humidityPercent": 68.5,
+      "windSpeedMph": 8.6,
+      "conditions": "Windy"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-05-05",
+      "highTempF": 82.9,
+      "lowTempF": 47.7,
+      "precipitationInches": 1.4,
+      "humidityPercent": 34.7,
+      "windSpeedMph": 33.8,
+      "conditions": "Sunny"
+    },
+    {
+      "city": "Miami",
+      "date": "2024-05-12",
+      "highTempF": 91.2,
+      "lowTempF": 16.9,
+      "precipitationInches": 1.4,
+      "humidityPercent": 21.6,
+      "windSpeedMph": 22.7,
+      "conditions": "Windy"
+    }
+  ]
+}

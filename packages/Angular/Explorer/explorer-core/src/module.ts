@@ -24,6 +24,7 @@ import { RecordSelectorModule } from '@memberjunction/ng-record-selector';
 import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { ListDetailGridModule } from '@memberjunction/ng-list-detail-grid';
+import { ListManagementModule } from '@memberjunction/ng-list-management';
 
 // Local Components
 import { ConversationsModule } from '@memberjunction/ng-conversations';
@@ -118,6 +119,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedGenericModule,
     EntityViewerModule,
     ListDetailGridModule,
+    ListManagementModule,
     SearchModule,
     MJWordCloudComponent,
     MJButtonDirective,

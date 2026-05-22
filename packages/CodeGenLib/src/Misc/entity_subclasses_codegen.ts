@@ -385,7 +385,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.
     */
-    public async Save(options?: EntitySaveOptions) : Promise<boolean> {
+    public override async Save(options?: EntitySaveOptions) : Promise<boolean> {
         throw new Error('Save is not allowed for ${entity.Name}, to enable it set AllowCreateAPI and/or AllowUpdateAPI to 1 in the database.');
     }`;
 

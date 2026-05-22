@@ -1,0 +1,59 @@
+<!doctype html><html><head><meta charset="utf-8"><title>09 — Save View as List</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-table-list"></i> Data Explorer</div><div class="nav-item"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header">
+    <h1><i class="fa-solid fa-eye"></i> Q4 Donor View <span class="badge badge-brand" style="margin-left:6px;">User View</span></h1>
+    <div class="spacer"></div>
+    <button class="mj-btn"><i class="fa-solid fa-filter"></i> Edit Filter</button>
+    <button class="mj-btn"><i class="fa-solid fa-rotate-right"></i> Run</button>
+    <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save as List <i class="fa-solid fa-chevron-down"></i></button>
+  </div>
+  <div class="muted" style="font-size:12.5px; margin-bottom:16px;">Contacts where <code>Donation_Total &gt;= 5000 AND LastGiftDate &gt;= '2026-01-01'</code> · 476 results</div>
+  <div class="mj-panel" style="opacity:0.4;"><div class="mj-panel-body" style="height:240px;">[View results grid]</div></div>
+</main>
+</div>
+
+<div class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-header"><i class="fa-solid fa-floppy-disk"></i><h2>Save View Results as List</h2><button class="close"><i class="fa-solid fa-times"></i></button></div>
+    <div class="modal-body">
+      <div style="font-size:13px; color:var(--mj-text-secondary); padding:10px 12px; background:var(--mj-status-info-bg); border:1px solid var(--mj-status-info-border); border-radius:8px;">
+        <i class="fa-solid fa-circle-info"></i> Materializes <strong>476 records</strong> from <strong>Q4 Donor View</strong> into a static List. The list can be refreshed from this view later if you keep lineage on.
+      </div>
+
+      <div class="mt-16"><div class="label">List name</div><input class="mj-input" value="Q4 Donors — Snapshot 2026-05-15"></div>
+      <div class="mt-12"><div class="label">Description</div><textarea class="mj-input" rows="2">Materialized from Q4 Donor View for fall outreach.</textarea></div>
+      <div class="mt-12"><div class="label">Category</div><select class="mj-input mj-select"><option>Marketing › Campaigns</option><option>Marketing › Newsletter Segments</option><option>(uncategorized)</option></select></div>
+
+      <div class="divider"></div>
+
+      <div class="label">Source lineage</div>
+      <div class="col mt-8">
+        <label style="display:flex; align-items:flex-start; gap:10px; padding:10px; border:1px solid var(--mj-brand-primary); border-radius:8px; background:color-mix(in srgb, var(--mj-brand-primary) 6%, transparent); cursor:pointer;">
+          <input type="radio" checked style="margin-top:3px;">
+          <div><div style="font-weight:600; font-size:13px;">Remember source view (recommended)</div>
+          <div class="muted" style="font-size:12px;">Stores <code>SourceViewID</code> and current filter. Enables <strong>"Refresh from source"</strong> later. You'll choose Additive or Sync each refresh.</div></div>
+        </label>
+        <label style="display:flex; align-items:flex-start; gap:10px; padding:10px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer;">
+          <input type="radio" style="margin-top:3px;">
+          <div><div style="font-weight:600; font-size:13px;">One-time snapshot</div>
+          <div class="muted" style="font-size:12px;">No lineage stored. List is fully static; later changes to the view do not propagate.</div></div>
+        </label>
+      </div>
+
+      <div class="divider"></div>
+      <div class="row gap-8">
+        <input type="checkbox" id="snap" checked>
+        <label for="snap" style="font-size:12.5px;">Freeze filter at current value <span class="muted">(<code>UseSnapshot = true</code>) — refresh re-runs the saved filter, even if the view is later edited</span></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-check"></i> Save List (476 records)</button>
+      <button class="mj-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+</body></html>

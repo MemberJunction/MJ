@@ -72,28 +72,31 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       display: inline-flex;
     }
 
+    /* Trigger button — visually aligned with mjButton size="sm" variant="secondary"
+       (same height, padding, font-size, font-weight, background) so it sits
+       cleanly next to Refresh/Export/+Add in chrome and filter-card rows. */
     .mj-filter-popover-trigger {
       display: inline-flex;
       align-items: center;
-      gap: var(--mj-space-2);
-      padding: var(--mj-space-2) var(--mj-space-3-5);
-      background: var(--mj-bg-surface-card);
+      gap: 6px;
+      padding: 6px 12px;
+      min-height: 32px;
+      background: var(--mj-bg-surface-sunken);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
-      color: var(--mj-text-secondary);
+      color: var(--mj-text-primary);
       font-family: inherit;
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 1.2;
+      font-size: 0.8125rem;
+      font-weight: var(--mj-font-semibold);
+      line-height: 1.5;
       cursor: pointer;
       transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
       white-space: nowrap;
     }
 
     .mj-filter-popover-trigger:hover {
-      background: var(--mj-bg-surface-sunken);
+      background: var(--mj-bg-surface-active);
       border-color: var(--mj-border-strong);
-      color: var(--mj-text-primary);
     }
 
     .mj-filter-popover-trigger--active {

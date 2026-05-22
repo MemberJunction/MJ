@@ -5,6 +5,7 @@ import { RunView, Metadata } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { UserDialogData, UserDialogResult } from './user-dialog/user-dialog.component';
 
 interface UserStats {
@@ -28,7 +29,7 @@ interface FilterOptions {
 })
 @RegisterClass(BaseDashboard, 'UserManagement')
 export class UserManagementComponent extends BaseDashboard implements OnDestroy {
-  
+
   // State management
   public users: MJUserEntity[] = [];
   public filteredUsers: MJUserEntity[] = [];
@@ -69,7 +70,6 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public showCreateDialog = false;
   public showEditDialog = false;
   public showDeleteConfirm = false;
-  public showMobileFilters = false;
 
   // Mobile expansion state
   private expandedUserIds = new Set<string>();
@@ -241,24 +241,22 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   // Public methods for template
-  public onSearchChange(event: Event): void {
-    const value = (event.target as HTMLInputElement).value;
-    this.updateFilter({ search: value });
-  }
-  
   public onStatusFilterChange(status: 'all' | 'active' | 'inactive'): void {
     this.updateFilter({ status });
   }
-  
-  public onRoleFilterChange(role: string): void {
-    this.updateFilter({ role });
-  }
-  
+
   public updateFilter(partial: Partial<FilterOptions>): void {
     this.filters$.next({
       ...this.filters$.value,
       ...partial
     });
+    // Discrete changes (chips, popover dropdowns) apply immediately. Text search
+    // still goes through the 300ms debounce in setupFilterSubscription so we
+    // don't re-filter on every keystroke.
+    if (!('search' in partial)) {
+      this.applyFilters();
+      this.cdr.markForCheck();
+    }
   }
   
   public selectUser(user: MJUserEntity): void {
@@ -464,7 +462,55 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
       status: 'all',
       role: ''
     });
-    this.showMobileFilters = false;
+    this.applyFilters();
+    this.cdr.markForCheck();
+  }
+
+  // -- Filter panel binding (mj-filter-panel inside the popover) -------------
+  //
+  // Only Role lives inside the popover — Status is exposed as visible chips
+  // in the filter card alongside search (the standardized "quick toggle"
+  // pattern used by Scheduling's exterior chrome). The popover badge counts
+  // only popover-resident filters (Role), so Status changes don't ghost
+  // the badge.
+
+  /**
+   * FilterFieldConfig[] describing the popover's Role field. Driven off
+   * `roles[]` so the dropdown stays in sync as roles load.
+   */
+  public get filterFields(): FilterFieldConfig[] {
+    return [
+      {
+        key: 'role',
+        type: 'dropdown',
+        label: 'Role',
+        icon: 'fa-solid fa-user-shield',
+        placeholder: 'All Roles',
+        filterable: this.roles.length > 10,
+        options: [
+          { text: 'All Roles', value: '' },
+          ...this.roles.map(r => ({ text: r.Name ?? '', value: r.ID }))
+        ]
+      }
+    ];
+  }
+
+  /** Current popover field values keyed by FilterFieldConfig.key. */
+  public get filterValues(): Record<string, unknown> {
+    return { role: this.filters$.value.role };
+  }
+
+  /** Number of active filters INSIDE the popover only — drives the popover badge. */
+  public get popoverActiveFilterCount(): number {
+    return this.filters$.value.role !== '' ? 1 : 0;
+  }
+
+  /** Apply a value change from <mj-filter-panel>. */
+  public onFilterPanelChange(values: Record<string, unknown>): void {
+    const role = (values['role'] as string) ?? '';
+    this.filters$.next({ ...this.filters$.value, role });
+    this.applyFilters();
+    this.cdr.markForCheck();
   }
 
   public toggleSelectAll(): void {

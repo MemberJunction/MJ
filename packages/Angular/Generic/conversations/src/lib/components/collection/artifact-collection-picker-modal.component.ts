@@ -113,7 +113,36 @@ interface SaveResult {
                   } @else {
                     <i class="fa-solid fa-folder-open"></i>
                     <p>No editable collections yet</p>
-                    <p class="hint">Create one to get started</p>
+                    @if (showCreateForm) {
+                      <div class="empty-create-form">
+                        <input #newNameInput type="text"
+                               class="create-input"
+                               [(ngModel)]="newCollectionName"
+                               (keydown.enter)="createCollection()"
+                               (keydown.escape)="cancelCreate()"
+                               placeholder="Collection name"
+                               [disabled]="isCreatingCollection" />
+                        <div class="empty-create-actions">
+                          <button mjButton variant="primary" size="sm"
+                                  (click)="createCollection()"
+                                  [disabled]="isCreatingCollection || !newCollectionName.trim()">
+                            @if (isCreatingCollection) {
+                              <i class="fa-solid fa-spinner fa-spin"></i>
+                            } @else {
+                              Create
+                            }
+                          </button>
+                          <button mjButton size="sm" (click)="cancelCreate()" [disabled]="isCreatingCollection">
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    } @else {
+                      <p class="hint">Create one to get started</p>
+                      <button mjButton variant="primary" size="sm" (click)="openCreateForm()">
+                        <i class="fa-solid fa-plus"></i> New collection
+                      </button>
+                    }
                   }
                 </div>
               } @else {
@@ -499,6 +528,13 @@ interface SaveResult {
     }
     .state-block .link-btn:hover { color: var(--mj-text-link-hover); text-decoration: underline; }
     .state-block p { margin: 0; font-size: 13.5px; }
+    /* Buttons inside state blocks: keep their icons at button scale, not the 28px empty-state glyph size */
+    .state-block button i { font-size: inherit; opacity: 1; }
+    .empty-create-form {
+      display: flex; flex-direction: column; gap: 8px;
+      width: 100%; max-width: 280px; margin-top: 4px;
+    }
+    .empty-create-actions { display: flex; gap: 8px; justify-content: center; }
 
     /* ===== Right pane ===== */
     .preview-block { padding: 16px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
