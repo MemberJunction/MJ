@@ -41,7 +41,7 @@ export async function sendFeedbackEmail(opts: SendFeedbackEmailOptions): Promise
 
   const fromAddress = getFeedbackFromAddress();
   const providerName = notifSettings?.providerName ?? 'SendGrid';
-  const messageTypeName = notifSettings?.messageTypeName ?? 'Standard Email';
+  const messageTypeName = notifSettings?.messageTypeName ?? 'Email';
 
   await CommunicationEngine.Instance.Config(false, opts.contextUser);
 

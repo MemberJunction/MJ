@@ -249,10 +249,11 @@ const feedbackNotificationsSettingsSchema = z.object({
   providerName: z.string().optional().default('SendGrid'),
   /**
    * Name of the message type within the chosen provider to use. Must match
-   * a message-type name configured on the provider (e.g., "Standard Email").
-   * Defaults to "Standard Email".
+   * a message-type name configured on the provider. Defaults to "Email" to
+   * match the convention used by NotificationEngine (the canonical email
+   * caller in MJ) and the message type registered by default in MJ databases.
    */
-  messageTypeName: z.string().optional().default('Standard Email'),
+  messageTypeName: z.string().optional().default('Email'),
 });
 
 const feedbackSettingsSchema = z.object({
