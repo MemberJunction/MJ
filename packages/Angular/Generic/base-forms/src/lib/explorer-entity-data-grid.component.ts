@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef, NgZone, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { RunViewParams } from '@memberjunction/core';
 import {
     EntityDataGridComponent,
@@ -26,7 +26,7 @@ import { FormNavigationEvent } from './types/navigation-events';
             #innerGrid
             [Params]="Params"
             [NewRecordValues]="NewRecordValues"
-            [AllowLoad]="AllowLoad"
+            [AllowLoad]="EffectiveAllowLoad"
             [ShowToolbar]="ShowToolbar"
             [Height]="Height"
             [ToolbarConfig]="ToolbarConfig"
@@ -45,8 +45,12 @@ import { FormNavigationEvent } from './types/navigation-events';
         }
     `]
 })
-export class ExplorerEntityDataGridComponent {
+export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy {
     @ViewChild('innerGrid') innerGrid!: EntityDataGridComponent;
+
+    private elementRef = inject(ElementRef);
+    private cdr = inject(ChangeDetectorRef);
+    private ngZone = inject(NgZone);
 
     // Pass-through inputs from EntityDataGridComponent
     @Input() Params: RunViewParams | null = null;
@@ -56,6 +60,71 @@ export class ExplorerEntityDataGridComponent {
     @Input() Height: number | 'auto' | 'fit-content' = 'auto';
     @Input() ToolbarConfig: GridToolbarConfig = {};
     @Input() SelectionMode: GridSelectionMode = 'single';
+
+    /**
+     * When true (default), the inner grid does not fetch until this component's host
+     * element first scrolls into the viewport. This prevents related-entity grids on a
+     * form — which are always rendered in the DOM (the collapsible panel hides them via
+     * CSS, not @if) — from firing a RunView on form open while they're collapsed or below
+     * the fold. The first time the panel becomes visible (scrolled into view and expanded,
+     * giving the host non-zero area), the grid loads with its normal spinner.
+     * Set to false to restore eager loading for consumers that always want immediate data.
+     */
+    @Input() DeferLoadUntilVisible: boolean = true;
+
+    /** True once the host has first intersected the viewport (or deferral is disabled / unsupported). */
+    private _hasBeenVisible = false;
+    private _visibilityObserver?: IntersectionObserver;
+
+    /**
+     * Effective AllowLoad passed to the inner grid: the form's AllowLoad AND
+     * (deferral disabled OR the panel has been seen at least once).
+     */
+    get EffectiveAllowLoad(): boolean {
+        return this.AllowLoad && (!this.DeferLoadUntilVisible || this._hasBeenVisible);
+    }
+
+    ngAfterViewInit(): void {
+        if (!this.DeferLoadUntilVisible || typeof IntersectionObserver === 'undefined') {
+            // Deferral off or unsupported environment — preserve eager-load behavior.
+            this._hasBeenVisible = true;
+            return;
+        }
+
+        // Observe outside Angular so scroll churn doesn't trigger change detection;
+        // we re-enter the zone only on the one-shot "became visible" transition.
+        this.ngZone.runOutsideAngular(() => {
+            this._visibilityObserver = new IntersectionObserver(
+                (entries) => {
+                    if (entries.some(e => e.isIntersecting)) {
+                        this.onBecameVisible();
+                    }
+                },
+                // Small positive rootMargin pre-loads just before the panel scrolls fully into view.
+                { root: null, rootMargin: '200px', threshold: 0 }
+            );
+            this._visibilityObserver.observe(this.elementRef.nativeElement);
+        });
+    }
+
+    ngOnDestroy(): void {
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = undefined;
+    }
+
+    private onBecameVisible(): void {
+        if (this._hasBeenVisible) {
+            return;
+        }
+        // One-shot: once loaded we never need to observe again.
+        this._visibilityObserver?.disconnect();
+        this._visibilityObserver = undefined;
+        this.ngZone.run(() => {
+            this._hasBeenVisible = true;
+            // Flip EffectiveAllowLoad → true, which drives the inner grid's AllowLoad setter to load.
+            this.cdr.detectChanges();
+        });
+    }
 
     /**
      * When true, double-clicking a row emits a Navigate event.

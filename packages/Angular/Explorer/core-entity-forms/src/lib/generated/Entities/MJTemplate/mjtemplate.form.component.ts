@@ -18,7 +18,7 @@ export class MJTemplateFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'templateContent', sectionName: 'Template Content', isExpanded: true },
             { sectionKey: 'associations', sectionName: 'Associations', isExpanded: true },
-            { sectionKey: 'availabilityStatus', sectionName: 'Availability & Status', isExpanded: false },
+            { sectionKey: 'availabilityStatus', sectionName: 'Availability & Status', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTemplateContents', sectionName: 'Template Contents', isExpanded: false },
             { sectionKey: 'mJTemplateParams', sectionName: 'Template Params', isExpanded: false },
