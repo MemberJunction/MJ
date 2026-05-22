@@ -1,5 +1,92 @@
 # Change Log - @memberjunction/server
 
+## 5.36.0
+
+### Patch Changes
+
+- f29b7c0: Fix `ExecuteAdhocQuery` to honor `MaxRows` and `StartRow` end-to-end. Previously the client's `RunAdhocQuery` accepted `maxRows` as a function argument but silently dropped it from the GraphQL request payload, and the server's `AdhocQueryInput` schema didn't declare the field — so callers (including the data artifact viewer's live re-execution) had no way to cap the recordset and every ad-hoc query returned the full underlying result set. `AdhocQueryInput` now exposes `MaxRows` and `StartRow`. When provided and the SQL doesn't begin with a `WITH` clause, the resolver wraps the query as `SELECT TOP (startRow + maxRows) * FROM (<sql>) AS _adhoc_capped` so the SQL engine can short-circuit at the source instead of scanning the full result. In-memory pagination still applies as a fallback (CTE-headed SQL, page > 1 carve-out) and ensures `RowCount` / `TotalRowCount` reflect the returned page correctly.
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/codegen-lib@5.36.0
+  - @memberjunction/lists@5.36.0
+  - @memberjunction/lists-base@5.36.0
+  - @memberjunction/core-actions@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/entity-communications-server@5.36.0
+  - @memberjunction/notifications@5.36.0
+  - @memberjunction/ai-agent-manager-actions@5.36.0
+  - @memberjunction/ai-agent-manager@5.36.0
+  - @memberjunction/ai-agents@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/tag-engine@5.36.0
+  - @memberjunction/tag-engine-base@5.36.0
+  - @memberjunction/ai-mcp-client@5.36.0
+  - @memberjunction/computer-use-engine@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/ai-vector-sync@5.36.0
+  - @memberjunction/api-keys@5.36.0
+  - @memberjunction/actions-apollo@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions-bizapps-accounting@5.36.0
+  - @memberjunction/actions-bizapps-crm@5.36.0
+  - @memberjunction/actions-bizapps-formbuilders@5.36.0
+  - @memberjunction/actions-bizapps-lms@5.36.0
+  - @memberjunction/actions-bizapps-social@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/entity-communications-base@5.36.0
+  - @memberjunction/communication-ms-graph@5.36.0
+  - @memberjunction/communication-sendgrid@5.36.0
+  - @memberjunction/doc-utils@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/external-change-detection@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/integration-engine@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/data-context@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/scheduling-actions@5.36.0
+  - @memberjunction/scheduling-engine-base@5.36.0
+  - @memberjunction/scheduling-engine@5.36.0
+  - @memberjunction/search-engine@5.36.0
+  - @memberjunction/templates@5.36.0
+  - @memberjunction/testing-engine@5.36.0
+  - @memberjunction/testing-engine-base@5.36.0
+  - @memberjunction/version-history@5.36.0
+  - @memberjunction/ai-vectordb@5.36.0
+  - @memberjunction/ai-vectors-pinecone@5.36.0
+  - @memberjunction/auth-providers@5.36.0
+  - @memberjunction/component-registry-client-sdk@5.36.0
+  - @memberjunction/integration-schema-builder@5.36.0
+  - @memberjunction/interactive-component-types@5.36.0
+  - @memberjunction/data-context-server@5.36.0
+  - @memberjunction/postgresql-dataprovider@5.36.0
+  - @memberjunction/redis-provider@5.36.0
+  - @memberjunction/schema-engine@5.36.0
+  - @memberjunction/server-extensions-core@5.36.0
+  - @memberjunction/skip-types@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/scheduling-base-types@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

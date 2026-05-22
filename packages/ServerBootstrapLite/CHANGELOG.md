@@ -1,5 +1,76 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.36.0
+
+### Patch Changes
+
+- 1c0fce9: Section 10 interior chrome pattern applied to every MJ Explorer left-rail shell (Admin × 4, AI Analytics, Knowledge Hub × 4, Testing Explorer, Database Designer, SQL Logging, Dev Tools inspectors, API Keys, App Roles). New shared primitives — `<mj-left-nav>` with optional tree support, two-row `<mj-page-header-interior>`, paired `<mj-page-body-interior>` — replace bespoke per-shell sidebar and chrome implementations across ~25 sub-pages. Chrome slot discipline audit standardizes tab-nav placement, `[meta]` badge content, and `[actions]` ordering across ~65 dashboards; two pre-existing bugs fixed along the way (nested `:has()` SyntaxError that silently hid the interior toolbar row, and an invisible page-header drop shadow).
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-actions@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agent-manager@5.36.0
+  - @memberjunction/ai-agents@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/tag-engine-base@5.36.0
+  - @memberjunction/ai-recommendations-rex@5.36.0
+  - @memberjunction/ai-reranker@5.36.0
+  - @memberjunction/actions-apollo@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions-bizapps-accounting@5.36.0
+  - @memberjunction/actions-bizapps-crm@5.36.0
+  - @memberjunction/actions-bizapps-formbuilders@5.36.0
+  - @memberjunction/actions-bizapps-lms@5.36.0
+  - @memberjunction/actions-bizapps-social@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/communication-types@5.36.0
+  - @memberjunction/content-autotagging@5.36.0
+  - @memberjunction/doc-utils@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/storage@5.36.0
+  - @memberjunction/scheduling-actions@5.36.0
+  - @memberjunction/scheduling-engine-base@5.36.0
+  - @memberjunction/scheduling-engine@5.36.0
+  - @memberjunction/search-engine@5.36.0
+  - @memberjunction/templates@5.36.0
+  - @memberjunction/testing-engine@5.36.0
+  - @memberjunction/geo-core@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/ai-vectors-pinecone@5.36.0
+  - @memberjunction/ai-vectors-qdrant@5.36.0
+  - @memberjunction/ai-vectors-pgvector@5.36.0
+  - @memberjunction/data-context-server@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai-anthropic@5.36.0
+  - @memberjunction/ai-azure@5.36.0
+  - @memberjunction/ai-bedrock@5.36.0
+  - @memberjunction/ai-betty-bot@5.36.0
+  - @memberjunction/ai-blackforestlabs@5.36.0
+  - @memberjunction/ai-cerebras@5.36.0
+  - @memberjunction/ai-cohere@5.36.0
+  - @memberjunction/ai-elevenlabs@5.36.0
+  - @memberjunction/ai-fireworks@5.36.0
+  - @memberjunction/ai-gemini@5.36.0
+  - @memberjunction/ai-groq@5.36.0
+  - @memberjunction/ai-heygen@5.36.0
+  - @memberjunction/ai-inception@5.36.0
+  - @memberjunction/ai-lmstudio@5.36.0
+  - @memberjunction/ai-llamacpp@5.36.0
+  - @memberjunction/ai-local-embeddings@5.36.0
+  - @memberjunction/ai-minimax@5.36.0
+  - @memberjunction/ai-mistral@5.36.0
+  - @memberjunction/ai-ollama@5.36.0
+  - @memberjunction/ai-openai@5.36.0
+  - @memberjunction/ai-openrouter@5.36.0
+  - @memberjunction/ai-vertex@5.36.0
+  - @memberjunction/ai-zhipu@5.36.0
+  - @memberjunction/ai-xai@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

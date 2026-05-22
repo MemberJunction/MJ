@@ -788,15 +788,31 @@ import {
     RunSyncAction,
 } from '@memberjunction/integration-actions';
 
-// @memberjunction/integration-connectors (8 classes)
+// @memberjunction/integration-connectors (24 classes)
 import {
+    AptifyConnector,
+    BettyConnector,
+    BlackbaudConnector,
+    ConstantContactConnector,
     FileFeedConnector,
+    GrowthZoneConnector,
     HubSpotConnector,
+    IMISConnector,
+    MJToMJConnector,
+    MagnetMailConnector,
+    MailchimpConnector,
+    NetForumConnector,
+    NetSuiteConnector,
+    NimbleAMSConnector,
+    PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
+    Reach360Connector,
     SageIntacctConnector,
     SalesforceConnector,
+    SharePointConnector,
     WicketConnector,
+    WildApricotConnector,
     YourMembershipConnector,
 } from '@memberjunction/integration-connectors';
 
@@ -1670,13 +1686,29 @@ export const CLASS_REGISTRATIONS: any[] = [
     GoogleGeocodingProvider,
     HereGeocodingProvider,
     RunSyncAction,
+    AptifyConnector,
+    BettyConnector,
+    BlackbaudConnector,
+    ConstantContactConnector,
     FileFeedConnector,
+    GrowthZoneConnector,
     HubSpotConnector,
+    IMISConnector,
+    MJToMJConnector,
+    MagnetMailConnector,
+    MailchimpConnector,
+    NetForumConnector,
+    NetSuiteConnector,
+    NimbleAMSConnector,
+    PropFuelConnector,
     QuickBooksConnector,
     RasaConnector,
+    Reach360Connector,
     SageIntacctConnector,
     SalesforceConnector,
+    SharePointConnector,
     WicketConnector,
+    WildApricotConnector,
     YourMembershipConnector,
     AIActionQueue,
     EntityAIActionQueue,
@@ -1891,7 +1923,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 784;
+export const CLASS_REGISTRATIONS_COUNT = 800;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
