@@ -45,6 +45,9 @@ interface GitHubWebhookPayload {
     title: string;
     html_url: string;
     state: string;
+    /** ISO 8601 timestamps from GitHub. Used to detect creation-time label events. */
+    created_at?: string;
+    updated_at?: string;
   };
   /** Populated for issue_comment events. */
   comment?: {
@@ -213,6 +216,23 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
       return;
     }
 
+    // Suppress label events emitted as part of issue creation. The resolver
+    // applies labels (category + severity + defaults) in the same API call
+    // that creates the issue, and GitHub fires a separate `labeled` event
+    // for each — without this guard a single submission would generate the
+    // confirmation email plus one "label added" email per label.
+    if (
+      event === 'issues' &&
+      (payload.action === 'labeled' || payload.action === 'unlabeled') &&
+      isCreationTimeLabelEvent(payload)
+    ) {
+      LogStatus(
+        `Suppressing creation-time ${payload.action} event for issue #${payload.issue.number}`
+      );
+      res.status(204).send();
+      return;
+    }
+
     // Resolve the system user used for all DB + email operations triggered by
     // this webhook. Without one, MJ's server-side rules reject any RunView /
     // CommunicationEngine call (and rightly so). Return 503 to signal "service
@@ -267,6 +287,27 @@ async function handleWebhook(req: RequestWithRawBody, res: Response): Promise<vo
     LogError('GitHub feedback webhook handler crashed', undefined, err);
     res.status(500).json({ error: 'Internal error' });
   }
+}
+
+/**
+ * True when a `labeled`/`unlabeled` event was emitted as part of issue
+ * creation rather than a real after-the-fact change. When the SubmitFeedback
+ * resolver creates an issue with labels in the same API call, GitHub fires
+ * a separate `labeled` event for each label with `updated_at` bumped to ~ms
+ * after `created_at`. Without this guard, every label at creation time would
+ * produce a duplicate notification on top of the confirmation email — so a
+ * single submission could yield 3+ emails (confirmation + one per label).
+ *
+ * The 30-second window is generous enough to cover network jitter when the
+ * resolver applies multiple labels in sequence and tight enough that real
+ * post-creation label edits (minutes/hours later) clearly differ.
+ */
+function isCreationTimeLabelEvent(payload: GitHubWebhookPayload): boolean {
+  if (!payload.issue.created_at || !payload.issue.updated_at) return false;
+  const created = new Date(payload.issue.created_at).getTime();
+  const updated = new Date(payload.issue.updated_at).getTime();
+  if (isNaN(created) || isNaN(updated)) return false;
+  return updated - created < 30_000;
 }
 
 /**
