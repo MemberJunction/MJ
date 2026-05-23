@@ -11,22 +11,26 @@
         }
       </div>
       <div class="panel-header-right">
-        <div class="version-selector"
-             [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
-             (click)="viewContext !== 'collection' && toggleVersionDropdown()">
+        <div
+          class="version-selector"
+          [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
+          (click)="viewContext !== 'collection' && toggleVersionDropdown()"
+        >
           <i class="fas fa-history"></i>
           <span class="version-label">v{{ selectedVersionNumber }}</span>
-          @if (allVersions.length > 1 && viewContext !== 'collection') {
+          @if (allVersions.length > 1 && viewContext !== "collection") {
             <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
           }
           @if (showVersionDropdown) {
             <div class="version-dropdown" (click)="$event.stopPropagation()">
               @for (version of allVersions; track version.ID) {
-                <div class="version-option"
-                     [class.selected]="version.VersionNumber === selectedVersionNumber"
-                     (click)="selectVersion(version); $event.stopPropagation()">
+                <div
+                  class="version-option"
+                  [class.selected]="version.VersionNumber === selectedVersionNumber"
+                  (click)="selectVersion(version); $event.stopPropagation()"
+                >
                   <span class="version-number">v{{ version.VersionNumber }}</span>
-                  <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+                  <span class="version-date">{{ version.__mj_CreatedAt | date: "short" }}</span>
                   @if (version.VersionNumber === selectedVersionNumber) {
                     <i class="fas fa-check"></i>
                   }
@@ -36,41 +40,41 @@
           }
         </div>
         @if (pluginViewer?.SupportsFeedback) {
-          <button class="feedback-btn"
-                  (click)="pluginViewer?.AskUserForFeedback()"
-                  title="Inspect & rate components">
+          <button class="feedback-btn" (click)="pluginViewer?.AskUserForFeedback()" title="Inspect & rate components" aria-label="Inspect and rate components">
             <i class="fas fa-star-half-stroke"></i>
           </button>
         }
         @if (showSaveToCollection) {
-          <button class="save-to-collection-btn"
-                  [class.in-collection]="isInCollection"
-                  (click)="onSaveToLibrary()"
-                  [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
+          <button
+            class="save-to-collection-btn"
+            [class.in-collection]="isInCollection"
+            (click)="onSaveToLibrary()"
+            [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'"
+            [attr.aria-label]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'"
+          >
             <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
           </button>
         }
         @if (canShare) {
-          <button class="share-btn"
-                  (click)="onShare()"
-                  title="Share">
+          <button class="share-btn" (click)="onShare()" title="Share" aria-label="Share">
             <i class="fas fa-share-nodes"></i>
           </button>
         }
-        <button class="analyze-btn"
-                (click)="OnAnalyze()"
-                title="Analyze this artifact with AI">
+        <button class="analyze-btn" (click)="OnAnalyze()" title="Analyze this artifact with AI" aria-label="Analyze this artifact with AI">
           <i class="fas fa-magnifying-glass-chart"></i>
         </button>
         @if (showMaximizeButton) {
-          <button class="maximize-btn"
-                  (click)="onMaximizeToggle()"
-                  [title]="isMaximized ? 'Restore Width' : 'Maximize Width'">
+          <button
+            class="maximize-btn"
+            (click)="onMaximizeToggle()"
+            [title]="isMaximized ? 'Restore Width' : 'Maximize Width'"
+            [attr.aria-label]="isMaximized ? 'Restore Width' : 'Maximize Width'"
+          >
             <i class="fas" [ngClass]="isMaximized ? 'fa-compress-arrows-alt' : 'fa-arrows-left-right'"></i>
           </button>
         }
         @if (showCloseButton) {
-          <button class="close-btn" (click)="onClose()" title="Close">
+          <button class="close-btn" (click)="onClose()" title="Close" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         }
@@ -99,9 +103,7 @@
         @if (showTabs) {
           <div class="tab-navigation">
             @for (tab of allTabs; track tab) {
-              <button class="tab-btn"
-                      [class.active]="activeTab === tab.toLowerCase()"
-                      (click)="SetActiveTab(tab)">
+              <button class="tab-btn" [class.active]="activeTab === tab.toLowerCase()" (click)="SetActiveTab(tab)">
                 @if (GetTabIcon(tab)) {
                   <i [class]="GetTabIcon(tab)!"></i>
                 }
@@ -124,31 +126,30 @@
                 (openEntityRecord)="onOpenEntityRecord($event)"
                 (navigationRequest)="onNavigationRequest($event)"
                 (pluginLoaded)="onPluginLoaded()"
-                (tabsChanged)="onTabsChanged()">
+                (tabsChanged)="onTabsChanged()"
+              >
               </mj-artifact-type-plugin-viewer>
             </div>
           }
 
           <!-- Display Tab - Fallback content when no plugin -->
-          @if (activeTab === 'display' && (!hasPlugin || !artifactVersion)) {
+          @if (activeTab === "display" && (!hasPlugin || !artifactVersion)) {
             <div class="display-content">
               @if (displayMarkdown || displayHtml) {
                 <!-- Fallback to extracted markdown/HTML attributes -->
                 <div class="display-toolbar">
-                  <button class="btn-icon" title="Print" (click)="onPrintDisplayContent()">
-                    <i class="fas fa-print"></i> Print
-                  </button>
-                  <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
-                    <i class="fas fa-copy"></i> Copy
-                  </button>
+                  <button class="btn-icon" title="Print" (click)="onPrintDisplayContent()"><i class="fas fa-print"></i> Print</button>
+                  <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()"><i class="fas fa-copy"></i> Copy</button>
                 </div>
                 @if (displayMarkdown) {
                   <div class="markdown-content">
-                    <mj-markdown [data]="displayMarkdown"
-                                 [enableCollapsibleHeadings]="true"
-                                 [enableLineNumbers]="true"
-                                 [enableSmartypants]="true"
-                                 [enableHtml]="true"></mj-markdown>
+                    <mj-markdown
+                      [data]="displayMarkdown"
+                      [enableCollapsibleHeadings]="true"
+                      [enableLineNumbers]="true"
+                      [enableSmartypants]="true"
+                      [enableHtml]="true"
+                    ></mj-markdown>
                   </div>
                 } @else if (displayHtml) {
                   <div class="html-content" [innerHTML]="displayHtml"></div>
@@ -159,69 +160,71 @@
 
           <!-- Details Tab - Artifact metadata (always in DOM, hidden with CSS) -->
           <div class="details-content" [class.tab-hidden]="activeTab !== 'details'">
-              <div class="artifact-meta">
-                <div class="meta-item">
-                  <label>Type</label>
-                  <span>{{ artifact.Type }}</span>
-                </div>
-                <div class="meta-item">
-                  <label>Version</label>
-                  <span>{{ artifactVersion?.VersionNumber || 1 }}</span>
-                </div>
-                <div class="meta-item">
-                  <label>Created</label>
-                  <span>{{ artifact.__mj_CreatedAt | date:'short' }}</span>
-                </div>
-                <div class="meta-item">
-                  <label>Updated</label>
-                  <span>{{ artifactVersion?.__mj_UpdatedAt | date:'short' }}</span>
-                </div>
-                @if (artifact.Description) {
-                  <div class="meta-item full-width">
-                    <label>Artifact Description</label>
-                    <span>{{ artifact.Description }}</span>
-                  </div>
-                }
-                @if (artifactVersion?.Description && artifact.Description && artifactVersion?.Description !== artifact.Description) {
-                  <div class="meta-item full-width">
-                    <label>Version Description</label>
-                    <span>{{ artifactVersion?.Description }}</span>
-                  </div>
-                }
+            <div class="artifact-meta">
+              <div class="meta-item">
+                <label>Type</label>
+                <span>{{ artifact.Type }}</span>
               </div>
-
-              <!-- Version Attributes -->
-              @if (filteredAttributes.length > 0) {
-                <div class="attributes-section">
-                  <h4>Version Attributes</h4>
-                  <div class="attributes-list">
-                    @for (attr of filteredAttributes; track attr.ID) {
-                      <div class="attribute-item">
-                        <label>{{ attr.Name }}</label>
-                        @if (attr.Value) {
-                          <span>{{ attr.Value }}</span>
-                        } @else {
-                          <span class="attribute-empty-pill">Empty</span>
-                        }
-                      </div>
-                    }
-                  </div>
+              <div class="meta-item">
+                <label>Version</label>
+                <span>{{ artifactVersion?.VersionNumber || 1 }}</span>
+              </div>
+              <div class="meta-item">
+                <label>Created</label>
+                <span>{{ artifact.__mj_CreatedAt | date: "short" }}</span>
+              </div>
+              <div class="meta-item">
+                <label>Updated</label>
+                <span>{{ artifactVersion?.__mj_UpdatedAt | date: "short" }}</span>
+              </div>
+              @if (artifact.Description) {
+                <div class="meta-item full-width">
+                  <label>Artifact Description</label>
+                  <span>{{ artifact.Description }}</span>
+                </div>
+              }
+              @if (artifactVersion?.Description && artifact.Description && artifactVersion?.Description !== artifact.Description) {
+                <div class="meta-item full-width">
+                  <label>Version Description</label>
+                  <span>{{ artifactVersion?.Description }}</span>
                 </div>
               }
             </div>
+
+            <!-- Version Attributes -->
+            @if (filteredAttributes.length > 0) {
+              <div class="attributes-section">
+                <h4>Version Attributes</h4>
+                <div class="attributes-list">
+                  @for (attr of filteredAttributes; track attr.ID) {
+                    <div class="attribute-item">
+                      <label>{{ attr.Name }}</label>
+                      @if (attr.Value) {
+                        <span>{{ attr.Value }}</span>
+                      } @else {
+                        <span class="attribute-empty-pill">Empty</span>
+                      }
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
 
           <!-- Links Tab - Conversations and Collections (always in DOM, hidden with CSS) -->
           <div class="links-container" [class.tab-hidden]="activeTab !== 'links'">
             @if (linksToShow.length > 0) {
               <div class="links-section">
                 @for (link of linksToShow; track link.id) {
-                  <div class="link-item"
-                       [class.disabled]="!link.hasAccess"
-                       [class.clickable]="link.hasAccess"
-                       (click)="link.hasAccess ? onNavigateToLink(link) : null"
-                       [title]="link.hasAccess ? 'Click to open' : 'No access'">
+                  <div
+                    class="link-item"
+                    [class.disabled]="!link.hasAccess"
+                    [class.clickable]="link.hasAccess"
+                    (click)="link.hasAccess ? onNavigateToLink(link) : null"
+                    [title]="link.hasAccess ? 'Click to open' : 'No access'"
+                  >
                     <div class="link-icon">
-                      @if (link.type === 'conversation') {
+                      @if (link.type === "conversation") {
                         <i class="fas fa-comments"></i>
                       } @else {
                         <i class="fas fa-folder"></i>
@@ -229,7 +232,7 @@
                     </div>
                     <div class="link-content">
                       <div class="link-name">{{ link.name }}</div>
-                      <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
+                      <div class="link-type">{{ link.type === "conversation" ? "Conversation" : "Collection" }}</div>
                     </div>
                     <div class="link-actions">
                       <i class="fas fa-arrow-right"></i>
@@ -246,7 +249,7 @@
           </div>
 
           <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
-          @if (activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
+          @if (activeTab !== "display" && activeTab !== "details" && activeTab !== "links") {
             <!-- Check if this is a component tab -->
             @if (GetComponentTabType(activeTab); as componentType) {
               <div class="component-tab-content">
@@ -256,21 +259,21 @@
               @if (GetTabContent(activeTab); as tabData) {
                 <div class="dynamic-tab-content">
                   @switch (tabData.type) {
-                    @case ('markdown') {
+                    @case ("markdown") {
                       <div class="markdown-viewer">
-                        <mj-markdown [data]="tabData.content"
-                                     [enableCollapsibleHeadings]="true"
-                                     [enableLineNumbers]="true"
-                                     [enableSmartypants]="true"
-                                     [enableHtml]="true"></mj-markdown>
+                        <mj-markdown
+                          [data]="tabData.content"
+                          [enableCollapsibleHeadings]="true"
+                          [enableLineNumbers]="true"
+                          [enableSmartypants]="true"
+                          [enableHtml]="true"
+                        ></mj-markdown>
                       </div>
                     }
-                    @case ('json') {
+                    @case ("json") {
                       <div class="json-viewer">
                         <div class="json-toolbar">
-                          <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-                            <i class="fas fa-copy"></i> Copy
-                          </button>
+                          <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()"><i class="fas fa-copy"></i> Copy</button>
                         </div>
                         <div class="json-editor-container">
                           <mj-code-editor
@@ -278,17 +281,16 @@
                             [language]="'json'"
                             [readonly]="true"
                             [lineWrapping]="true"
-                            style="width: 100%; height: 100%;">
+                            style="width: 100%; height: 100%"
+                          >
                           </mj-code-editor>
                         </div>
                       </div>
                     }
-                    @case ('code') {
+                    @case ("code") {
                       <div class="code-viewer">
                         <div class="code-toolbar">
-                          <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()">
-                            <i class="fas fa-copy"></i> Copy
-                          </button>
+                          <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()"><i class="fas fa-copy"></i> Copy</button>
                         </div>
                         <div class="code-editor-container">
                           <mj-code-editor
@@ -296,15 +298,16 @@
                             [language]="tabData.language || 'typescript'"
                             [readonly]="true"
                             [lineWrapping]="true"
-                            style="width: 100%; height: 100%;">
+                            style="width: 100%; height: 100%"
+                          >
                           </mj-code-editor>
                         </div>
                       </div>
                     }
-                    @case ('html') {
+                    @case ("html") {
                       <div class="html-viewer" [innerHTML]="tabData.content"></div>
                     }
-                    @case ('plaintext') {
+                    @case ("plaintext") {
                       <pre class="plaintext-viewer">{{ tabData.content }}</pre>
                     }
                   }
@@ -317,4 +320,3 @@
     }
   </div>
 </div>
-
