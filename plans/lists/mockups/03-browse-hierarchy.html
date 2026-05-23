@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset="utf-8"><title>03 — Browse Hierarchy</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item"><i class="fa-solid fa-house"></i> Home</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div><div class="nav-item"><i class="fa-solid fa-table-list"></i> Data Explorer</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-plus"></i> New List</button></div>
+  <div class="app-tabs"><div class="tab active"><i class="fa-solid fa-list"></i>Browse <span class="badge">142</span></div><div class="tab"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+  <div class="toolbar"><div class="mj-search" style="flex: 1; max-width: 360px;"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Search lists…"></div><div class="spacer"></div><div class="view-toggle"><button title="Table"><i class="fa-solid fa-table-list"></i></button><button title="Cards"><i class="fa-solid fa-grip"></i></button><button class="active" title="Hierarchy"><i class="fa-solid fa-folder-tree"></i></button></div></div>
+
+  <div class="mj-panel">
+    <div class="mj-panel-body">
+      <div class="tree">
+        <div class="tree-node"><i class="fa-solid fa-chevron-down chevron"></i><i class="fa-solid fa-folder-open" style="color:var(--mj-status-warning)"></i><span><strong>Marketing</strong></span><span class="count-badge">24</span></div>
+        <div class="tree-children">
+          <div class="tree-node"><i class="fa-solid fa-chevron-down chevron"></i><i class="fa-solid fa-folder-open" style="color:var(--mj-status-warning)"></i><span>Campaigns</span><span class="count-badge">12</span></div>
+          <div class="tree-children">
+            <div class="tree-node"><span class="chevron"></span><i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i><span>VIP Donors Q4 2026</span><span class="count-badge">348</span></div>
+            <div class="tree-node"><span class="chevron"></span><i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i><span>Lapsed Members — 90 days</span><span class="count-badge">1204</span></div>
+            <div class="tree-node"><span class="chevron"></span><i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i><span>Welcome Series Cohort</span><span class="count-badge">487</span></div>
+          </div>
+          <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span>Newsletter Segments</span><span class="count-badge">8</span></div>
+          <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span>Event Audiences</span><span class="count-badge">4</span></div>
+        </div>
+        <div class="tree-node"><i class="fa-solid fa-chevron-down chevron"></i><i class="fa-solid fa-folder-open" style="color:var(--mj-status-warning)"></i><span><strong>Finance</strong></span><span class="count-badge">9</span></div>
+        <div class="tree-children">
+          <div class="tree-node"><span class="chevron"></span><i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i><span>Outstanding Invoices &gt; $1,000</span><span class="count-badge">62</span></div>
+          <div class="tree-node"><span class="chevron"></span><i class="fa-solid fa-list" style="color:var(--mj-brand-primary)"></i><span>Renewals Due 30 Days</span><span class="count-badge">218</span></div>
+        </div>
+        <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span><strong>Operations</strong></span><span class="count-badge">38</span></div>
+        <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span><strong>Data Quality</strong></span><span class="count-badge">15</span></div>
+        <div class="tree-node selected"><span class="chevron"></span><i class="fa-solid fa-folder-minus muted"></i><span><em>Uncategorized</em></span><span class="count-badge">56</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

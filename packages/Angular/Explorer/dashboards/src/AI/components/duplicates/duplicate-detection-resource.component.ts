@@ -206,8 +206,11 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         }
     }
 
-    /** Whether this component is embedded inside the Knowledge Hub shell */
-    @Input() EmbeddedMode = false;
+    /**
+     * When true, renders only the body content (no chrome). Set by parent shells
+     * that embed this resource. See plans/explorer-chrome-conventions.md Section 5.
+     */
+    @Input() HideToolbar = false;
 
     /** View mode: 'kanban' (card board) or 'table' (paged grid) */
     public DisplayMode: 'kanban' | 'table' = 'kanban';

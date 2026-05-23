@@ -13,10 +13,11 @@ This guide covers patterns and best practices for building dashboards in MemberJ
 7. [User Preferences](#user-preferences)
 8. [Data Loading Patterns](#data-loading-patterns)
 9. [Local Caching with RunView](#local-caching-with-runview)
-10. [Layout Patterns](#layout-patterns)
-11. [Template Patterns](#template-patterns)
-12. [Permission Checking](#permission-checking)
-13. [Creating New Engines](#creating-new-engines)
+10. [Page Chrome](#page-chrome)
+11. [Layout Patterns](#layout-patterns)
+12. [Template Patterns](#template-patterns)
+13. [Permission Checking](#permission-checking)
+14. [Creating New Engines](#creating-new-engines)
 
 ---
 
@@ -946,6 +947,107 @@ async SavePrompt(prompt: AIPromptEntity): Promise<boolean> {
   return saved;
 }
 ```
+
+---
+
+## Page Chrome
+
+**Every new MJ Explorer dashboard MUST use the shared chrome trio from
+`@memberjunction/ng-ui-components`. Do not roll bespoke headers, gradients,
+or sidebars.**
+
+The trio is:
+
+| Component | Purpose |
+|---|---|
+| `<mj-page-layout>` | Outer flex-column shell. `--mj-bg-page` background, `overflow: hidden`, full-height. Replaces every bespoke `.{name}-container` wrapper. |
+| `<mj-page-header>` | Title row with typed `Title`/`Icon`/`Subtitle` inputs and three projection slots: `[meta]`, `[actions]`, `[toolbar]`. Icon uses `--mj-brand-primary` (NOT a per-app accent). |
+| `<mj-page-body>` | Scrollable region. Inputs: `[Padding]` (defaults `true` — 24px gutter), `[Flex]` (defaults `false` — enable for sidebar+content layouts where a child needs `flex: 1`). |
+
+### Standard template skeleton
+
+```html
+<mj-page-layout>
+  <mj-page-header
+    Title="Agents"
+    Icon="fa-solid fa-robot"
+    Subtitle="Configure and manage AI agents">
+
+    <!-- [meta] — read-only state next to the title (counts, status pills).
+         Never anything actionable. -->
+    <div meta>
+      <mj-stat-badge [Count]="filteredAgents.length" Label="agents" />
+    </div>
+
+    <!-- [actions] — verbs. Right-aligned. Order: secondary (Refresh, Filters,
+         view-toggle), then primary (+ New X). -->
+    <div actions>
+      <mj-filter-popover [ActiveCount]="activeFilterCount" (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel [Fields]="filterFields" [Values]="filterValues"
+                         (ValuesChange)="onFilterValuesChange($event)" />
+      </mj-filter-popover>
+      <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()" />
+      <button mjButton variant="primary" size="sm" (click)="createNew()">
+        <i class="fa-solid fa-plus"></i> New Agent
+      </button>
+    </div>
+
+    <!-- [toolbar] — secondary control row. Search + filter chips. Sits BELOW
+         the primary row inside the same header card. -->
+    <div toolbar>
+      <mj-page-search Placeholder="Search agents..." [Value]="searchTerm"
+                      (ValueChange)="onSearchChange($event)" />
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    <!-- card grid, table, etc. -->
+  </mj-page-body>
+</mj-page-layout>
+```
+
+### Slot rules
+
+- **`[meta]`** — state, not verbs. Stat pills, status badges, "Unsaved changes". Never buttons / dropdowns / search.
+- **`[actions]`** — verbs. Buttons, view-toggles, popover triggers. The primary action button (`+ New X`) is always rightmost.
+- **`[toolbar]`** — secondary row for dense controls (search, filter chips, time-range selectors). Wraps; not for primary actions.
+
+### Other shared chrome components
+
+| Component | Use for |
+|---|---|
+| `<mj-stat-badge>` | Count / status pills (`[meta]` slot). `[Count]`, `[Total]?`, `Label`, `Icon?`, `Variant?` (`success`/`error`/`warning`/`running`/`info`). For "X of Y" rendering, pass `[Total]`. |
+| `<mj-refresh-button>` | Refresh button in `[actions]`. `[Loading]` drives both spinner and disabled state. |
+| `<mj-page-search>` | In-page search input for `[toolbar]`. |
+| `<mj-tab-nav>` | Tab navigation (e.g., parent dashboards with sub-sections). |
+| `<mj-view-toggle>` | Compact icon-only segmented control for view modes (grid / list / tree). |
+| `<mj-filter-popover>` | Filter trigger + CDK Overlay popover. Replaces inline filter rails. |
+| `<mj-filter-panel>` | Config-driven filter field list inside the popover. |
+| `<mj-filter-field>` | Labeled wrapper for a custom widget (tree-dropdown, date range, etc.) inside `<mj-filter-panel>`. |
+| `<mj-filter-chip>` | Quick-filter pill (status filters, time ranges). |
+
+### When NOT to use the shared chrome
+
+Two documented exceptions:
+
+1. **Single-page exceptions** (Section 9a in the conventions doc) — AI Overview hero, Home, Component Studio, Data Explorer, Query Browser. These have intentionally different layouts (hero landing, workspace shells, etc.) and don't fit the standard chrome.
+
+2. **Sub-pages of a left-nav workspace shell** (Section 9b → Section 10). If your component is dynamically loaded into another resource's left-nav shell (e.g., the explorer-settings sub-pages inside Admin's "Identity & Access" shell, the Dev Tools inspectors inside "Developer Tools", SystemDiagnostics inside "Monitoring", Database Designer inside "Data & Schema"), do NOT add `<mj-page-header>` — the parent shell already owns the page identity. Use **`<mj-page-header-interior>`** instead — the body-level sibling of `<mj-page-header>`. Two-row card: primary row (Title + Subtitle + meta + actions), toolbar row (search / tab-nav / filter chips, collapses when empty). Same shared primitives as the exterior chrome (`<mj-page-search>`, `<mj-filter-popover>` + `<mj-filter-panel>`, `<mj-filter-chip>`, `<mj-refresh-button>`, `mjButton`). The full contract — template, CSS, filter UI decisions, Title/Subtitle guidance — is documented in **Section 10 of the conventions doc**. Reference implementations cover all four Admin shells (~15 sub-pages); copy any of them when migrating a new one.
+
+### The canonical rulebook
+
+The full conventions doc lives at [`plans/explorer-chrome-conventions.md`](../plans/explorer-chrome-conventions.md). It covers:
+
+- **Section 2** — slot rules with do/don't lists
+- **Section 3** — filter UI decision tree (when popover vs. inline chips vs. dropdown)
+- **Section 4** — no second control row inside the body
+- **Section 5** — tabbed-parent vs. standalone components (`HideToolbar` gate)
+- **Section 6** — body component (`[Flex]`/`[Padding]` escape hatches)
+- **Section 7** — naming conventions
+- **Section 9** — documented exceptions
+- **Section 10** — interior chrome (`<mj-page-header-interior>`) for shell sub-pages — ACTIVE, with Title/Subtitle guidance and reference implementations
+
+Read it before doing any chrome work — especially before deciding to deviate from the standard pattern.
 
 ---
 

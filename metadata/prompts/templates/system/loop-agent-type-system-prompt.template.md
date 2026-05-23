@@ -599,14 +599,17 @@ Your private working memory. Manage via `scratchpad` in your response.
 ## Artifact Tools
 Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
 Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
-Results appear in the next turn. Multiple calls can be batched in one response.
+Multiple calls can be batched in one response.
+
+**How results reach you:** the result of each tool call is delivered as a regular
+conversation message on your next turn (header `Artifact tool result:` /
+`Artifact tool results (...)`), not via this system prompt. Recent tool results
+are present verbatim in your conversation history. Older results may be
+compacted to a short preview to preserve context — if you need the full data
+back, re-call the tool. Don't re-call a tool whose result is still present in
+your visible history; just read it.
 
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
-
-{% if _ARTIFACT_TOOL_RESULTS %}
-### Previous Results
-{{ _ARTIFACT_TOOL_RESULTS | safe }}
-{% endif %}
 {% endif %}

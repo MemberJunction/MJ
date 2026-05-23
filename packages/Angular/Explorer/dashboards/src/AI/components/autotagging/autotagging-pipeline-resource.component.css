@@ -8,102 +8,18 @@
 
 .at-dashboard {
     display: flex;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
 }
 
-/* ══════ LEFT NAV ══════ */
-
-.at-left-nav {
-    width: 220px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.at-left-nav-header {
-    padding: 16px 16px 12px;
-    border-bottom: 1px solid var(--mj-border-subtle);
-}
-
-.at-left-nav-header h2 {
-    font-size: 0.95rem;
-    font-weight: 700;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0;
-    color: var(--mj-text-primary);
-}
-
-.at-left-nav-header h2 i {
-    color: var(--mj-brand-primary);
-}
-
-.at-left-nav-items {
-    flex: 1;
-    padding: 8px;
-    overflow-y: auto;
-}
-
-.at-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 8px;
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    transition: all 0.12s ease;
-    margin-bottom: 2px;
-}
-
-.at-nav-item:hover {
-    background: var(--mj-bg-surface-hover);
-    color: var(--mj-text-secondary);
-}
-
-.at-nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 0.8rem;
-}
-
-.at-nav-badge {
-    margin-left: auto;
-    background: var(--mj-bg-surface-sunken);
-    padding: 1px 7px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-}
-
-.at-nav-item.active .at-nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 18%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-}
-
-.at-nav-badge-live {
-    background: var(--mj-status-success-bg) !important;
-    color: var(--mj-status-success-text) !important;
-}
-
-.at-nav-divider {
-    height: 1px;
-    background: var(--mj-border-subtle);
-    margin: 8px 12px;
-}
+/*
+  Left rail now owned by <mj-left-nav> (~95 lines of bespoke .at-left-nav /
+  .at-left-nav-items / .at-nav-item / .at-nav-badge / .at-nav-divider styles
+  retired). The "Run History" item below the divider is expressed as a second
+  MJLeftNavSection in the navSections getter — the rail's natural section
+  break replaces the bespoke divider line.
+*/
 
 .at-left-nav-footer {
     padding: 12px;
@@ -152,32 +68,11 @@
     height: 100%;
 }
 
-.at-page-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-}
-
-.at-page-title {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-}
-
-.at-page-subtitle {
-    font-size: 0.72rem;
-    color: var(--mj-text-muted);
-    margin-top: 2px;
-}
-
-.at-page-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-}
+/* .at-page-header / .at-page-title / .at-page-subtitle / .at-page-actions
+   retired — section identity + actions now live in <mj-page-header-interior>
+   (one shared instance at the top of <mj-left-nav-content>, with Title/Subtitle
+   driven by currentTabTitle/currentTabSubtitle getters and per-section action
+   buttons projected via an @switch into the chrome's [actions] slot). */
 
 .at-page-body {
     flex: 1;
@@ -2085,56 +1980,9 @@
    TAXONOMY GOVERNANCE TAB
    ════════════════════════════════════════════ */
 
-/* ── Sub-tab strip ── */
-
-.at-tax-tab-strip {
-    display: flex;
-    border-bottom: 2px solid var(--mj-border-default);
-    padding: 0 20px;
-    gap: 0;
-    flex-shrink: 0;
-}
-
-.at-tax-tab {
-    padding: 10px 20px;
-    font-size: 0.78rem;
-    font-weight: 500;
-    color: var(--mj-text-muted);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    margin-bottom: -2px;
-    transition: all 0.15s;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.at-tax-tab:hover {
-    color: var(--mj-text-secondary);
-}
-
-.at-tax-tab.active {
-    color: var(--mj-brand-primary);
-    border-bottom-color: var(--mj-brand-primary);
-    font-weight: 600;
-}
-
-.at-tax-tab-badge {
-    font-size: 0.62rem;
-    font-weight: 600;
-    padding: 1px 7px;
-    border-radius: 10px;
-}
-
-.at-tax-badge-warning {
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-warning);
-}
-
-.at-tax-badge-error {
-    background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-    color: var(--mj-status-error);
-}
+/* Sub-tab strip + badges retired — taxonomy sub-tabs now driven by <mj-tab-nav>
+   in the [toolbar] slot of the taxonomy section, with TabConfig badges
+   (warning variant for duplicates, error variant for orphans). */
 
 /* ── Tree View: Split layout ── */
 

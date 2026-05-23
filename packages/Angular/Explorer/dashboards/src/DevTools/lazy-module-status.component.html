@@ -1,17 +1,13 @@
 <div class="mj-inspector mj-inspector--solo">
-    <div class="mj-inspector__header">
-        <div class="mj-inspector__header-icon"><i class="fa-solid fa-puzzle-piece"></i></div>
-        <div>
-            <h3 class="mj-inspector__header-title">Lazy Loading</h3>
-            <div class="mj-inspector__header-sub">Code-split chunks: registered, loaded, and on-demand</div>
+    <mj-page-header-interior
+        Role="region"
+        AriaLabel="Lazy loading inspector"
+        Title="Lazy Loading"
+        Subtitle="Code-split chunks: registered, loaded, and on-demand">
+        <div actions>
+            <mj-refresh-button [Loading]="false" (Clicked)="refresh()"></mj-refresh-button>
         </div>
-        <span class="mj-inspector__header-spacer"></span>
-        <div class="mj-inspector__header-actions">
-            <button class="mj-inspector__btn" type="button" (click)="refresh()" title="Refresh">
-                <i class="fa-solid fa-rotate"></i> Refresh
-            </button>
-        </div>
-    </div>
+    </mj-page-header-interior>
 
     @if (!Available) {
         <div class="lz-unavailable">

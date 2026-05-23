@@ -18,7 +18,7 @@ export class MJEntityOrganicKeyFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'keyIdentity', sectionName: 'Key Identity', isExpanded: true },
             { sectionKey: 'matchingLogic', sectionName: 'Matching Logic', isExpanded: true },
-            { sectionKey: 'configurationPriority', sectionName: 'Configuration & Priority', isExpanded: false },
+            { sectionKey: 'configurationPriority', sectionName: 'Configuration & Priority', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityOrganicKeyRelatedEntities', sectionName: 'Entity Organic Key Related Entities', isExpanded: false }
         ]);

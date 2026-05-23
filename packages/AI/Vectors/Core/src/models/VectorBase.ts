@@ -70,6 +70,12 @@ export class VectorBase {
             EntityName: entity.Name,
             ResultType: params.ResultType,
             MaxRows: params.PageSize,
+            // Vectorization sweeps the entire entity one page at a time; each page is read
+            // exactly once. Caching these bulk pages is pure downside — it pollutes the local
+            // cache with single-use results and pulls in the dedup/linger layer (which keyed
+            // sequential keyset pages identically and froze the seek cursor). Bypass all caching
+            // so every page is a fresh DB read.
+            BypassCache: true,
             ...(useKeyset
                 ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name }
                 : { StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize) }),

@@ -19,6 +19,8 @@ export * from './custom/ResourcePermissions/ResourceData';
 export * from './engines/component-metadata';
 export * from './engines/TypeTablesCache';
 export * from './engines/artifacts';
+export * from './engines/artifact-mime-resolver';
+export * from './engines/artifact-content-storage';
 export * from './engines/dashboards';
 export * from './engines/EncryptionEngineBase';
 export * from './engines/UserInfoEngine';
@@ -32,6 +34,8 @@ export * from './engines/InstanceConfigEngine';
 export * from './engines/SearchEngineBase';
 export * from './engines/GeoDataEngine';
 export * from './engines/PermissionEngine';
+export * from './engines/AuditLogTypeEngine';
+export * from './engines/ResourceTypeEngine';
 
 export * from './custom/PermissionProviders';
 export * from './custom/Permissions';

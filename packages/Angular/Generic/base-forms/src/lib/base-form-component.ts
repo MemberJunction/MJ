@@ -705,11 +705,24 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public IsSectionExpanded(sectionKey: string, defaultExpanded?: boolean): boolean {
+    const section = this.sectionMap.get(sectionKey);
+    // When the caller doesn't pass an explicit default, fall back to the value seeded by
+    // initSections() — related-entity and System Metadata panels are seeded collapsed there.
+    // Without this, FormStateService falls back to its global DEFAULT_SECTION_STATE (isExpanded=true),
+    // which reports a never-before-visited related-entity panel as expanded and causes its data grid
+    // (bound [AllowLoad]="IsSectionExpanded(key)") to fetch on form open even while the panel is collapsed.
+    // When the caller passes no explicit default, fall back to the value seeded by initSections().
+    // If the section isn't in sectionMap yet — which happens during the window before the form's
+    // async ngOnInit calls initSections(), e.g. when a record is opened already-loaded via an
+    // in-app double-click so the grids render in the first change-detection pass — coalesce to
+    // FALSE rather than letting FormStateService fall through to its global expanded default. A
+    // missing section must NOT report as expanded, or its data grid (bound [AllowLoad]="IsSectionExpanded(key)")
+    // fires a RunView on open before the seeded collapsed default is applied.
+    const resolvedDefault = defaultExpanded !== undefined ? defaultExpanded : (section?.isExpanded ?? false);
     const entityName = this.getEntityName();
     if (entityName) {
-      return this.formStateService.isSectionExpanded(entityName, sectionKey, defaultExpanded);
+      return this.formStateService.isSectionExpanded(entityName, sectionKey, resolvedDefault);
     }
-    const section = this.sectionMap.get(sectionKey);
     return section ? section.isExpanded : (defaultExpanded !== undefined ? defaultExpanded : true);
   }
 

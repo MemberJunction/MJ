@@ -18,7 +18,7 @@ export class MJCollectionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'collectionBasics', sectionName: 'Collection Basics', isExpanded: true },
             { sectionKey: 'structuralHierarchy', sectionName: 'Structural Hierarchy', isExpanded: true },
-            { sectionKey: 'ownershipAccess', sectionName: 'Ownership & Access', isExpanded: false },
+            { sectionKey: 'ownershipAccess', sectionName: 'Ownership & Access', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCollectionArtifacts', sectionName: 'Collection Artifacts', isExpanded: false },
             { sectionKey: 'mJCollectionPermissions', sectionName: 'Collection Permissions', isExpanded: false },

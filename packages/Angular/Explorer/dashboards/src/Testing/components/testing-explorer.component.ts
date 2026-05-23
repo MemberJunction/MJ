@@ -4,8 +4,10 @@ import {
   OnDestroy,
   ChangeDetectorRef,
   ChangeDetectionStrategy,
-  ViewContainerRef
+  ViewContainerRef,
+  Input
 } from '@angular/core';
+import { ViewToggleOption, MJLeftNavItem, MJLeftNavSection, FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
 import { RunView, CompositeKey } from '@memberjunction/core';
@@ -96,169 +98,100 @@ interface TestRunStatRow {
   selector: 'app-testing-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Test Explorer"
+          Icon="fa-solid fa-compass"
+          Subtitle="Browse tests and test suites">
+          <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2.
+               TotalItemCount and FilteredResultCount are both kept in sync by
+               the component as the rail selection / status chips / search input
+               narrow the data. -->
+          <div meta>
+            <mj-stat-badge
+              [Count]="FilteredResultCount"
+              [Total]="TotalItemCount"
+              Label="results">
+            </mj-stat-badge>
+          </div>
+          <div actions>
+            <!-- Sort + Direction live in a popover instead of a chrome
+                 toggle button so both dimensions surface together (was just
+                 a direction toggle before; the field selection was buried
+                 in code). Pattern matches AI Analytics → Model Performance
+                 where SortBy lives alongside other filter dropdowns. -->
+            <mj-filter-popover
+              Label="Sort"
+              Icon="fa-solid fa-arrow-down-wide-short"
+              [ActiveCount]="ActiveSortFilterCount"
+              [ShowClearAll]="ActiveSortFilterCount > 0"
+              (ClearAllRequested)="resetSortFilters()">
+              <mj-filter-panel
+                [Fields]="sortFilterFields"
+                [Values]="sortFilterValues"
+                (ValuesChange)="onSortFilterChange($event)"
+                (Reset)="resetSortFilters()">
+              </mj-filter-panel>
+            </mj-filter-popover>
+            <mj-view-toggle
+              [Options]="HeaderViewOptions"
+              [ActiveKey]="ViewMode"
+              (KeyChange)="SetViewMode($any($event))">
+            </mj-view-toggle>
+            <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
+              <i class="fa-solid fa-folder-plus"></i> New Suite
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
+              <i class="fa-solid fa-plus"></i> New Test
+            </button>
+          </div>
+          <div toolbar>
+            <mj-page-search
+              Placeholder="Search tests and suites..."
+              [Value]="SearchTerm"
+              (ValueChange)="OnSearchInputValue($event)">
+            </mj-page-search>
+            @for (status of StatusOptions; track status) {
+              <mj-filter-chip
+                [Label]="status"
+                [Active]="IsStatusActive(status)"
+                (Clicked)="ToggleStatus(status)">
+              </mj-filter-chip>
+            }
+            <mj-view-toggle
+              [Options]="DisplayModeOptions"
+              [ActiveKey]="DisplayMode"
+              (KeyChange)="SetDisplayMode($any($event))">
+            </mj-view-toggle>
+          </div>
+        </mj-page-header>
+        <mj-page-body [Flex]="true" [Padding]="false">
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
     @if (IsLoading) {
       <div class="explorer-loading">
         <mj-loading text="Loading test explorer..."></mj-loading>
       </div>
     } @else {
       <div class="explorer-layout">
-        <!-- Left Sidebar -->
-        <aside class="sidebar" [class.collapsed]="IsSidebarCollapsed">
-          <div class="sidebar-header">
-            <h3>Explorer</h3>
-            <button class="sidebar-toggle" (click)="ToggleSidebar()">
-              <i class="fa-solid" [class.fa-chevron-left]="!IsSidebarCollapsed" [class.fa-chevron-right]="IsSidebarCollapsed"></i>
-            </button>
-          </div>
-
-          @if (!IsSidebarCollapsed) {
-            <div class="sidebar-content">
-              <!-- Browse Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Browse</div>
-                <div
-                  class="sidebar-item"
-                  [class.active]="SelectedSidebar.Type === 'all'"
-                  (click)="SelectSidebarItem({ Type: 'all', ID: null })"
-                >
-                  <i class="fa-solid fa-layer-group"></i>
-                  <span>All Items</span>
-                  <span class="sidebar-count">{{ TotalItemCount }}</span>
-                </div>
-                <div
-                  class="sidebar-item"
-                  [class.active]="SelectedSidebar.Type === 'standalone'"
-                  (click)="SelectSidebarItem({ Type: 'standalone', ID: null })"
-                >
-                  <i class="fa-solid fa-vial"></i>
-                  <span>Standalone Tests</span>
-                  <span class="sidebar-count">{{ StandaloneTestCount }}</span>
-                </div>
-              </div>
-
-              <!-- Test Suites Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Test Suites</div>
-                @for (node of FilteredSuiteTree; track node.ID) {
-                  <ng-container
-                    *ngTemplateOutlet="suiteTreeTpl; context: { node: node, depth: 0 }"
-                  ></ng-container>
-                }
-                @if (FilteredSuiteTree.length === 0) {
-                  <div class="sidebar-empty">No suites found</div>
-                }
-              </div>
-
-              <!-- Test Types Section -->
-              <div class="sidebar-section">
-                <div class="sidebar-section-title">Test Types</div>
-                @for (tt of FilteredTestTypes; track tt.ID) {
-                  <div
-                    class="sidebar-item"
-                    [class.active]="SelectedSidebar.Type === 'testType' && IsSidebarSelected(tt.ID)"
-                    (click)="SelectSidebarItem({ Type: 'testType', ID: tt.ID })"
-                  >
-                    <i class="fa-solid fa-tag"></i>
-                    <span>{{ tt.Name }}</span>
-                    <span class="sidebar-count">{{ GetTestCountForType(tt.ID) }}</span>
-                  </div>
-                }
-              </div>
-            </div>
-          }
-        </aside>
+        <!-- Left rail -->
+        <mj-left-nav
+          [Sections]="NavSections"
+          [ActiveId]="ActiveNavId"
+          [ExpandedIds]="ExpandedNavIds"
+          (ItemClicked)="OnNavItemClicked($event)"
+          (ItemToggled)="OnNavItemToggled($event)">
+        </mj-left-nav>
 
         <!-- Main Content -->
-        <main class="main-content">
-          <!-- Toolbar -->
-          <div class="toolbar">
-            <div class="toolbar-left">
-              <div class="toolbar-search-box">
-                <i class="fa-solid fa-search"></i>
-                <input
-                  type="text"
-                  placeholder="Search tests and suites..."
-                  [value]="SearchTerm"
-                  (input)="OnSearchInput($event)"
-                />
-                @if (SearchTerm) {
-                  <button class="clear-search" (click)="ClearSearch()">
-                    <i class="fa-solid fa-times"></i>
-                  </button>
-                }
-              </div>
-              <div class="status-chips">
-                @for (status of StatusOptions; track status) {
-                  <button
-                    class="chip"
-                    [class.active]="IsStatusActive(status)"
-                    [attr.data-status]="status.toLowerCase()"
-                    (click)="ToggleStatus(status)"
-                  >
-                    {{ status }}
-                  </button>
-                }
-              </div>
-            </div>
-            <div class="toolbar-right">
-              <span class="result-count">{{ FilteredResultCount }} results</span>
-              <div class="view-toggle">
-                <button
-                  class="view-btn"
-                  [class.active]="ViewMode === 'card'"
-                  (click)="SetViewMode('card')"
-                  title="Card View"
-                >
-                  <i class="fa-solid fa-grip"></i>
-                </button>
-                <button
-                  class="view-btn"
-                  [class.active]="ViewMode === 'list'"
-                  (click)="SetViewMode('list')"
-                  title="List View"
-                >
-                  <i class="fa-solid fa-list"></i>
-                </button>
-              </div>
-              <button class="btn btn-secondary" (click)="OnNewSuite()">
-                <i class="fa-solid fa-folder-plus"></i>
-                New Suite
-              </button>
-              <button class="btn btn-primary" (click)="OnNewTest()">
-                <i class="fa-solid fa-plus"></i>
-                New Test
-              </button>
-            </div>
-          </div>
-
-          <!-- Toggle Bar -->
-          <div class="toggle-bar">
-            <div class="toggle-group">
-              <button
-                class="toggle-btn"
-                [class.active]="DisplayMode === 'all'"
-                (click)="SetDisplayMode('all')"
-              >All</button>
-              <button
-                class="toggle-btn"
-                [class.active]="DisplayMode === 'suites'"
-                (click)="SetDisplayMode('suites')"
-              >Suites Only</button>
-              <button
-                class="toggle-btn"
-                [class.active]="DisplayMode === 'tests'"
-                (click)="SetDisplayMode('tests')"
-              >Tests Only</button>
-            </div>
-            <div class="sort-indicator">
-              <button class="sort-btn" (click)="ToggleSortDirection()">
-                <i class="fa-solid fa-arrow-down-short-wide"></i>
-                {{ SortFieldLabel }}
-                <i class="fa-solid" [class.fa-arrow-up]="SortDirection === 'asc'" [class.fa-arrow-down]="SortDirection === 'desc'"></i>
-              </button>
-            </div>
-          </div>
-
+        <mj-left-nav-content>
           <!-- Content Area -->
           <div class="content-area">
             <!-- Suites Section -->
@@ -449,35 +382,9 @@ interface TestRunStatRow {
               </div>
             }
           </div>
-        </main>
+        </mj-left-nav-content>
       </div>
     }
-
-    <!-- Template for recursive suite tree rendering -->
-    <ng-template #suiteTreeTpl let-node="node" let-depth="depth">
-      <div
-        class="sidebar-item suite-tree-item"
-        [style.paddingLeft.px]="16 + depth * 14"
-        [class.active]="SelectedSidebar.Type === 'suite' && IsSidebarSelected(node.ID)"
-        (click)="SelectSidebarItem({ Type: 'suite', ID: node.ID })"
-      >
-        @if (node.Children.length > 0) {
-          <button class="tree-toggle" (click)="ToggleSuiteExpand(node, $event)">
-            <i class="fa-solid" [class.fa-chevron-right]="!node.Expanded" [class.fa-chevron-down]="node.Expanded"></i>
-          </button>
-        }
-        <i class="fa-solid fa-folder"></i>
-        <span class="tree-name">{{ node.Name }}</span>
-        <span class="sidebar-count">{{ node.TestCount }}</span>
-      </div>
-      @if (node.Expanded && node.Children.length > 0) {
-        @for (child of node.Children; track child.ID) {
-          <ng-container
-            *ngTemplateOutlet="suiteTreeTpl; context: { node: child, depth: depth + 1 }"
-          ></ng-container>
-        }
-      }
-    </ng-template>
 
     <!-- Slideout Backdrop -->
     @if (SlideoutOpen) {
@@ -663,6 +570,7 @@ interface TestRunStatRow {
         </app-test-run-dialog>
       </mj-slide-panel>
     }
+    </ng-template>
   `,
   styles: [`
     /* ==========================================
@@ -694,340 +602,9 @@ interface TestRunStatRow {
     }
 
     /* ==========================================
-       Sidebar
-       ========================================== */
-    .sidebar {
-      width: 280px;
-      min-width: 280px;
-      background: var(--mj-bg-surface);
-      border-right: 1px solid var(--mj-border-default);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      transition: width 0.2s ease, min-width 0.2s ease;
-    }
-
-    .sidebar.collapsed {
-      width: 48px;
-      min-width: 48px;
-    }
-
-    .sidebar-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px;
-      border-bottom: 1px solid var(--mj-border-default);
-    }
-
-    .sidebar-header h3 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 700;
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar.collapsed .sidebar-header h3 {
-      display: none;
-    }
-
-    .sidebar-toggle {
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      font-size: 11px;
-      transition: all 0.15s ease;
-    }
-
-    .sidebar-toggle:hover {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 0;
-    }
-
-    .sidebar-section {
-      margin-bottom: 8px;
-    }
-
-    .sidebar-section-title {
-      padding: 8px 16px 4px;
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--mj-text-disabled);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-
-    .sidebar-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 16px;
-      font-size: 13px;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-      white-space: nowrap;
-      overflow: hidden;
-    }
-
-    .sidebar-item:hover {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-primary);
-    }
-
-    .sidebar-item.active {
-      background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-      color: var(--mj-brand-primary);
-      font-weight: 600;
-    }
-
-    .sidebar-item i {
-      font-size: 12px;
-      width: 16px;
-      text-align: center;
-      flex-shrink: 0;
-    }
-
-    .sidebar-item span:not(.sidebar-count) {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .sidebar-count {
-      font-size: 11px;
-      color: var(--mj-text-disabled);
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    .sidebar-item.active .sidebar-count {
-      color: var(--mj-brand-primary);
-    }
-
-    .sidebar-empty {
-      padding: 8px 16px;
-      font-size: 12px;
-      color: var(--mj-text-disabled);
-      font-style: italic;
-    }
-
-    /* Tree nodes */
-    .suite-tree-item {
-      gap: 6px;
-    }
-
-    .tree-toggle {
-      width: 18px;
-      height: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: transparent;
-      border: none;
-      color: var(--mj-text-disabled);
-      cursor: pointer;
-      font-size: 9px;
-      flex-shrink: 0;
-      border-radius: 4px;
-      padding: 0;
-    }
-
-    .tree-toggle:hover {
-      background: var(--mj-border-default);
-      color: var(--mj-text-muted);
-    }
-
-    .tree-name {
-      flex: 1;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    /* ==========================================
        Main Content
+       — left rail + content pane handled by <mj-left-nav> + <mj-left-nav-content>
        ========================================== */
-    .main-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    /* Toolbar */
-    .toolbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      padding: 16px 24px;
-      background: var(--mj-bg-surface);
-      border-bottom: 1px solid var(--mj-border-default);
-      flex-shrink: 0;
-    }
-
-    .toolbar-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex: 1;
-      min-width: 0;
-    }
-
-    .toolbar-search-box {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
-      background: var(--mj-bg-surface-sunken);
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      min-width: 240px;
-      max-width: 360px;
-      flex: 1;
-      transition: border-color 0.2s ease;
-    }
-
-    .toolbar-search-box:focus-within {
-      border-color: var(--mj-brand-primary);
-      background: var(--mj-bg-surface);
-    }
-
-    .toolbar-search-box i {
-      color: var(--mj-text-disabled);
-      font-size: 13px;
-    }
-
-    .toolbar-search-box input {
-      flex: 1;
-      border: none;
-      background: transparent;
-      outline: none;
-      font-size: 13px;
-      color: var(--mj-text-primary);
-    }
-
-    .toolbar-search-box input::placeholder {
-      color: var(--mj-text-disabled);
-    }
-
-    .clear-search {
-      border: none;
-      background: transparent;
-      color: var(--mj-text-disabled);
-      cursor: pointer;
-      padding: 2px 4px;
-      border-radius: 4px;
-    }
-
-    .clear-search:hover {
-      color: var(--mj-text-muted);
-      background: var(--mj-border-default);
-    }
-
-    .status-chips {
-      display: flex;
-      gap: 6px;
-    }
-
-    .chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 6px 14px;
-      background: var(--mj-bg-surface-sunken);
-      border: 1px solid transparent;
-      border-radius: 16px;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .chip:hover {
-      background: var(--mj-border-default);
-    }
-
-    .chip.active {
-      color: var(--mj-text-inverse);
-    }
-
-    .chip.active[data-status="active"] {
-      background: var(--mj-status-success);
-      border-color: var(--mj-status-success);
-    }
-
-    .chip.active[data-status="pending"] {
-      background: var(--mj-status-warning);
-      border-color: var(--mj-status-warning);
-    }
-
-    .chip.active[data-status="disabled"] {
-      background: var(--mj-text-muted);
-      border-color: var(--mj-text-muted);
-    }
-
-    .toolbar-right {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-shrink: 0;
-    }
-
-    .result-count {
-      font-size: 12px;
-      color: var(--mj-text-disabled);
-      font-weight: 500;
-      white-space: nowrap;
-    }
-
-    .view-toggle {
-      display: flex;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-
-    .view-btn {
-      width: 34px;
-      height: 34px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--mj-bg-surface);
-      border: none;
-      color: var(--mj-text-disabled);
-      cursor: pointer;
-      font-size: 13px;
-      transition: all 0.15s ease;
-    }
-
-    .view-btn:not(:last-child) {
-      border-right: 1px solid var(--mj-border-default);
-    }
-
-    .view-btn:hover {
-      background: var(--mj-bg-surface-sunken);
-      color: var(--mj-text-muted);
-    }
-
-    .view-btn.active {
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-    }
 
     /* Buttons */
     .btn {
@@ -1068,75 +645,6 @@ interface TestRunStatRow {
     .btn-sm {
       padding: 6px 12px;
       font-size: 12px;
-    }
-
-    /* Toggle Bar */
-    .toggle-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 24px;
-      background: var(--mj-bg-surface-card);
-      border-bottom: 1px solid var(--mj-border-default);
-      flex-shrink: 0;
-    }
-
-    .toggle-group {
-      display: flex;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      overflow: hidden;
-    }
-
-    .toggle-btn {
-      padding: 6px 16px;
-      background: var(--mj-bg-surface);
-      border: none;
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-      transition: all 0.15s ease;
-    }
-
-    .toggle-btn:not(:last-child) {
-      border-right: 1px solid var(--mj-border-default);
-    }
-
-    .toggle-btn.active {
-      background: var(--mj-brand-primary);
-      color: var(--mj-text-inverse);
-    }
-
-    .toggle-btn:hover:not(.active) {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .sort-indicator {
-      display: flex;
-      align-items: center;
-    }
-
-    .sort-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      background: transparent;
-      border: 1px solid var(--mj-border-default);
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--mj-text-muted);
-      cursor: pointer;
-    }
-
-    .sort-btn:hover {
-      background: var(--mj-bg-surface-sunken);
-    }
-
-    .sort-btn i {
-      font-size: 11px;
     }
 
     /* Content Area */
@@ -1781,22 +1289,6 @@ interface TestRunStatRow {
       }
     }
 
-    @media (max-width: 900px) {
-      .sidebar {
-        display: none;
-      }
-
-      .toolbar {
-        flex-direction: column;
-        align-items: stretch;
-      }
-
-      .toolbar-left, .toolbar-right {
-        flex-wrap: wrap;
-        justify-content: center;
-      }
-    }
-
     @media (max-width: 600px) {
       .content-area {
         padding: 16px;
@@ -1822,6 +1314,26 @@ interface TestRunStatRow {
 })
 export class TestingExplorerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
+  public readonly HeaderViewOptions: ViewToggleOption[] = [
+    { key: 'card', icon: 'fa-solid fa-grip', title: 'Card view' },
+    { key: 'list', icon: 'fa-solid fa-list', title: 'List view' }
+  ];
+
+  public readonly DisplayModeOptions: ViewToggleOption[] = [
+    { key: 'all', label: 'All' },
+    { key: 'suites', label: 'Suites' },
+    { key: 'tests', label: 'Tests' }
+  ];
+
+  /** mj-page-search emits a string; bridge it to the inner's Event-based OnSearchInput. */
+  public OnSearchInputValue(value: string): void {
+    const fakeEvent = { target: { value } } as unknown as Event;
+    this.OnSearchInput(fakeEvent);
+  }
+
+  /** When true, the inner bespoke .toolbar is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
+
   private destroy$ = new Subject<void>();
 
   // Raw cached data
@@ -1846,7 +1358,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
 
   // Template-bound state
   IsLoading = true;
-  IsSidebarCollapsed = false;
   SearchTerm = '';
   StatusFilters = new Set<string>();
   ViewMode: ViewMode = 'card';
@@ -1900,15 +1411,6 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     if (!this.FormName.trim()) return false;
     if (this.SlideoutCreateType === 'test' && !this.FormTypeID) return false;
     return true;
-  }
-
-  get SortFieldLabel(): string {
-    switch (this.SortField) {
-      case 'name': return 'Name';
-      case 'updated': return 'Updated';
-      case 'status': return 'Status';
-      default: return 'Name';
-    }
   }
 
   constructor(
@@ -2008,20 +1510,166 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     this._searchTerm$.next('');
   }
 
-  ToggleSidebar(): void {
-    this.IsSidebarCollapsed = !this.IsSidebarCollapsed;
-    this.cdr.markForCheck();
-  }
-
-  ToggleSuiteExpand(node: SuiteTreeNode, event: MouseEvent): void {
-    event.stopPropagation();
+  ToggleSuiteExpand(node: SuiteTreeNode): void {
     node.Expanded = !node.Expanded;
     this.cdr.markForCheck();
   }
 
-  ToggleSortDirection(): void {
-    const newDir = this.SortDirection === 'asc' ? 'desc' : 'asc';
-    this._sortDirection$.next(newDir);
+  // ---------------------------------------------------------------------------
+  // <mj-left-nav> adapters
+  //
+  // The rail is one <mj-left-nav> with three logical sections. Internal state
+  // still lives on SelectedSidebar (typed Type+ID) and on SuiteTreeNode.Expanded
+  // booleans — these getters translate to/from the primitive's flat
+  // string-id interface.
+  // ---------------------------------------------------------------------------
+
+  /** Composite-key sections fed to <mj-left-nav>. */
+  get NavSections(): MJLeftNavSection[] {
+    const suiteItems = this.FilteredSuiteTree.length === 0
+      ? [{ id: '__suites-empty', label: 'No suites found', disabled: true } as MJLeftNavItem]
+      : this.FilteredSuiteTree.map(node => this.suiteNodeToNavItem(node));
+
+    return [
+      {
+        label: 'Browse',
+        items: [
+          { id: 'all', label: 'All Items', icon: 'fa-solid fa-layer-group', badge: this.TotalItemCount },
+          { id: 'standalone', label: 'Standalone Tests', icon: 'fa-solid fa-vial', badge: this.StandaloneTestCount },
+        ]
+      },
+      { label: 'Test Suites', items: suiteItems },
+      {
+        label: 'Test Types',
+        items: this.FilteredTestTypes.map(tt => ({
+          id: `testType:${tt.ID}`,
+          label: tt.Name,
+          icon: 'fa-solid fa-tag',
+          badge: this.GetTestCountForType(tt.ID)
+        }))
+      }
+    ];
+  }
+
+  /** Recursive map SuiteTreeNode -> MJLeftNavItem. Leaves keep `children: []`
+   *  so the primitive renders a placeholder where the chevron would be —
+   *  this keeps siblings vertically aligned. */
+  private suiteNodeToNavItem(node: SuiteTreeNode): MJLeftNavItem {
+    return {
+      id: `suite:${node.ID}`,
+      label: node.Name,
+      icon: 'fa-solid fa-folder',
+      badge: node.TestCount,
+      children: node.Children.map(child => this.suiteNodeToNavItem(child))
+    };
+  }
+
+  /** Translate SelectedSidebar (typed Type+ID) to the rail's composite key. */
+  get ActiveNavId(): string {
+    const sel = this.SelectedSidebar;
+    if (sel.Type === 'suite' || sel.Type === 'testType') {
+      return `${sel.Type}:${sel.ID ?? ''}`;
+    }
+    return sel.Type;
+  }
+
+  /** Suite-node IDs that are currently expanded, walked from FilteredSuiteTree. */
+  get ExpandedNavIds(): string[] {
+    const out: string[] = [];
+    const walk = (nodes: SuiteTreeNode[]): void => {
+      for (const n of nodes) {
+        if (n.Expanded) out.push(`suite:${n.ID}`);
+        walk(n.Children);
+      }
+    };
+    walk(this.FilteredSuiteTree);
+    return out;
+  }
+
+  /** Parse composite id and delegate to the existing SelectSidebarItem path. */
+  OnNavItemClicked(item: MJLeftNavItem): void {
+    const id = item.id;
+    if (id === 'all') {
+      this.SelectSidebarItem({ Type: 'all', ID: null });
+    } else if (id === 'standalone') {
+      this.SelectSidebarItem({ Type: 'standalone', ID: null });
+    } else if (id.startsWith('suite:')) {
+      this.SelectSidebarItem({ Type: 'suite', ID: id.substring('suite:'.length) });
+    } else if (id.startsWith('testType:')) {
+      this.SelectSidebarItem({ Type: 'testType', ID: id.substring('testType:'.length) });
+    }
+  }
+
+  /** Chevron click on a suite item — toggle that node's Expanded flag. */
+  OnNavItemToggled(item: MJLeftNavItem): void {
+    if (!item.id.startsWith('suite:')) return;
+    const suiteId = item.id.substring('suite:'.length);
+    const node = this.findSuiteNode(this.FilteredSuiteTree, suiteId);
+    if (node) this.ToggleSuiteExpand(node);
+  }
+
+  private findSuiteNode(tree: SuiteTreeNode[], id: string): SuiteTreeNode | null {
+    for (const node of tree) {
+      if (UUIDsEqual(node.ID, id)) return node;
+      const found = this.findSuiteNode(node.Children, id);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sort filter-popover wiring
+  //
+  // The chrome surfaces SortField + SortDirection through a <mj-filter-popover>
+  // — same pattern AI Analytics → Model Performance uses for its SortBy
+  // selection. Was previously a single direction-toggle button in chrome
+  // [actions] with no way to change the field from the UI.
+  // ---------------------------------------------------------------------------
+
+  public readonly sortFieldOptions = [
+    { text: 'Name', value: 'name' },
+    { text: 'Updated', value: 'updated' },
+    { text: 'Status', value: 'status' },
+  ];
+
+  public readonly sortDirectionOptions = [
+    { text: 'Ascending', value: 'asc' },
+    { text: 'Descending', value: 'desc' },
+  ];
+
+  public get sortFilterFields(): FilterFieldConfig[] {
+    return [
+      { key: 'SortField', type: 'dropdown', label: 'Sort by',
+        icon: 'fa-solid fa-arrow-down-wide-short', options: this.sortFieldOptions },
+      { key: 'SortDirection', type: 'dropdown', label: 'Direction',
+        icon: 'fa-solid fa-arrow-up-arrow-down', options: this.sortDirectionOptions },
+    ];
+  }
+
+  public get sortFilterValues(): Record<string, unknown> {
+    return { SortField: this.SortField, SortDirection: this.SortDirection };
+  }
+
+  public onSortFilterChange(values: Record<string, unknown>): void {
+    if ('SortField' in values) {
+      this._sortField$.next(values['SortField'] as SortField);
+    }
+    if ('SortDirection' in values) {
+      this._sortDirection$.next(values['SortDirection'] as SortDirection);
+    }
+  }
+
+  public resetSortFilters(): void {
+    this._sortField$.next('name');
+    this._sortDirection$.next('asc');
+  }
+
+  /** Non-zero when the user has changed SortField or SortDirection from defaults — drives the popover badge. */
+  public get ActiveSortFilterCount(): number {
+    let count = 0;
+    if (this.SortField !== 'name') count++;
+    if (this.SortDirection !== 'asc') count++;
+    return count;
   }
 
   RunTest(testId: string): void {

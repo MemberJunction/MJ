@@ -1,0 +1,23 @@
+@if (Source && label) {
+  <div class="audience-summary">
+    <i [class]="icon"></i>
+    <div class="audience-summary__body">
+      <div class="audience-summary__name">
+        Audience: <strong>{{ label }}</strong>
+      </div>
+      <div class="audience-summary__detail">
+        <span class="audience-summary__kind">{{ kindLabel }}</span>
+        @if (RecordCount != null) {
+          · resolves to <strong>{{ RecordCount }} record(s)</strong>
+        } @else {
+          · resolves at execution time
+        }
+      </div>
+    </div>
+  </div>
+} @else {
+  <div class="audience-summary audience-summary--empty">
+    <i class="fa-solid fa-bullseye"></i>
+    <span>No audience selected.</span>
+  </div>
+}

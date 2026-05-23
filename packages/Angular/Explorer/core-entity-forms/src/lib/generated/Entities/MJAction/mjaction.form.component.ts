@@ -18,8 +18,8 @@ export class MJActionFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'identificationHierarchy', sectionName: 'Identification & Hierarchy', isExpanded: true },
             { sectionKey: 'definitionPrompting', sectionName: 'Definition & Prompting', isExpanded: true },
-            { sectionKey: 'codeApproval', sectionName: 'Code & Approval', isExpanded: false },
-            { sectionKey: 'displayExecution', sectionName: 'Display & Execution', isExpanded: false },
+            { sectionKey: 'codeApproval', sectionName: 'Code & Approval', isExpanded: true },
+            { sectionKey: 'displayExecution', sectionName: 'Display & Execution', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionParams', sectionName: 'Params', isExpanded: false },
             { sectionKey: 'mJActionLibraries', sectionName: 'Libraries', isExpanded: false },
