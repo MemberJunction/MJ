@@ -40,6 +40,8 @@ export function renderMarkdown(report: DiffReport): string {
   lines.push(`| Functions checked | ${report.summary.functionsChecked} |`);
   lines.push(`| Triggers checked | ${report.summary.triggersChecked} |`);
   lines.push(`| Sequences checked | ${report.summary.sequencesChecked} |`);
+  lines.push(`| User-defined types checked | ${report.summary.userDefinedTypesChecked} |`);
+  lines.push(`| Extended properties checked | ${report.summary.extendedPropertiesChecked} |`);
   lines.push(`| Objects with diffs | ${report.summary.objectsWithDiffs} |`);
   lines.push(`| Tables with row diffs | ${report.summary.tablesWithRowDiffs} |`);
   lines.push(`| Total row diffs | ${report.summary.totalRowDiffs} |`);

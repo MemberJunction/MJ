@@ -7,10 +7,11 @@
  */
 
 import type { QueryRunner } from './connection';
-import { stableSortBy } from './util';
+import { isExcludedTable, stableSortBy } from './util';
 import type {
   CheckConstraintDef,
   ColumnDef,
+  ExtendedPropertyDef,
   ForeignKeyDef,
   IndexDef,
   PrimaryKeyDef,
@@ -20,6 +21,8 @@ import type {
   TableDef,
   TriggerDef,
   UniqueConstraintDef,
+  UserDefinedTypeColumnDef,
+  UserDefinedTypeDef,
   ViewDef,
 } from './types';
 
@@ -53,6 +56,12 @@ export async function introspectMssql(db: QueryRunner, progress: Progress = {}):
   progress.onPhase?.('sequences');
   const sequences = await readSequences(db);
 
+  progress.onPhase?.('userDefinedTypes');
+  const userDefinedTypes = await readUserDefinedTypes(db);
+
+  progress.onPhase?.('extendedProperties');
+  const extendedProperties = await readExtendedProperties(db);
+
   return {
     dialect: 'mssql',
     schemas: stableSortBy(schemas, (s) => s.name.toLowerCase()),
@@ -62,7 +71,24 @@ export async function introspectMssql(db: QueryRunner, progress: Progress = {}):
     functions: stableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
     triggers: stableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
     sequences: stableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    userDefinedTypes: stableSortBy(userDefinedTypes, (u) => `${u.schema}.${u.name}`.toLowerCase()),
+    extendedProperties: stableSortBy(
+      extendedProperties,
+      (p) => extPropSortKey(p),
+    ),
   };
+}
+
+/** Canonical sort key for extended properties so output stays byte-deterministic. */
+function extPropSortKey(p: ExtendedPropertyDef): string {
+  return [
+    p.schemaName.toLowerCase(),
+    (p.level1Type || '').toLowerCase(),
+    (p.level1Name || '').toLowerCase(),
+    (p.level2Type || '').toLowerCase(),
+    (p.level2Name || '').toLowerCase(),
+    p.name.toLowerCase(),
+  ].join('|');
 }
 
 async function readTables(db: QueryRunner): Promise<TableDef[]> {
@@ -82,7 +108,8 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
     schema_name: string; table_name: string; column_name: string; ordinal: number;
     data_type: string; max_length: number; precision: number; scale: number;
     is_nullable: number; is_identity: number; is_computed: number;
-    computed_definition: string | null; default_definition: string | null;
+    computed_definition: string | null; computed_is_persisted: number | null;
+    default_definition: string | null; default_name: string | null;
     collation: string | null;
   }>(`
     SELECT s.name AS schema_name, t.name AS table_name, c.name AS column_name,
@@ -90,7 +117,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
            ty.name AS data_type, c.max_length, c.precision, c.scale,
            c.is_nullable, c.is_identity, c.is_computed,
            cc.definition AS computed_definition,
+           CAST(cc.is_persisted AS INT) AS computed_is_persisted,
            dc.definition AS default_definition,
+           dc.name AS default_name,
            c.collation_name AS collation
       FROM sys.tables t
       JOIN sys.schemas s ON s.schema_id = t.schema_id
@@ -171,6 +200,12 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
 
   const tables: TableDef[] = [];
   for (const t of tableRows) {
+    // Skip Skyway/Flyway's own bookkeeping table — the migrator creates it
+    // automatically before running any migration, so emitting CREATE TABLE for
+    // it in the baseline collides ("There is already an object named ...").
+    // Filtering at the introspector level removes the table AND all of its
+    // nested constraints/indexes/data from the snapshot in one pass.
+    if (isExcludedTable(t.table_name)) continue;
     const tableKey = `${t.schema_name}.${t.table_name}`;
     const columns: ColumnDef[] = stableSortBy(
       columnRows.filter((c) => c.schema_name === t.schema_name && c.table_name === t.table_name),
@@ -183,7 +218,9 @@ async function readTables(db: QueryRunner): Promise<TableDef[]> {
       isIdentity: !!c.is_identity,
       isComputed: !!c.is_computed,
       computedExpression: c.computed_definition ?? undefined,
+      isComputedPersisted: c.computed_is_persisted == null ? undefined : !!c.computed_is_persisted,
       defaultExpression: c.default_definition ?? undefined,
+      defaultConstraintName: c.default_name ?? undefined,
       collation: c.collation ?? undefined,
     }));
 
@@ -315,6 +352,7 @@ async function readTriggers(db: QueryRunner): Promise<TriggerDef[]> {
       JOIN sys.tables t ON t.object_id = tr.parent_id
       JOIN sys.schemas s ON s.schema_id = t.schema_id
      WHERE tr.is_ms_shipped = 0
+       AND t.name <> 'flyway_schema_history'   -- defensive: never emit triggers on the migrator's own table
   `);
   return rows.map((r) => ({
     schema: r.schema_name,
@@ -349,6 +387,212 @@ async function readSequences(db: QueryRunner): Promise<SequenceDef[]> {
     cycle: !!r.is_cycling,
     currentValue: r.current_value ?? undefined,
   }));
+}
+
+async function readUserDefinedTypes(db: QueryRunner): Promise<UserDefinedTypeDef[]> {
+  // Table types live in sys.table_types. We only support user-defined ones.
+  // Note: tt.type_table_object_id is the synthetic object whose columns live in sys.columns.
+  const typeRows = await db.query<{
+    schema_name: string; type_name: string; type_table_object_id: number; is_memory_optimized: number;
+  }>(`
+    SELECT s.name AS schema_name,
+           tt.name AS type_name,
+           tt.type_table_object_id,
+           CAST(tt.is_memory_optimized AS INT) AS is_memory_optimized
+      FROM sys.table_types tt
+      JOIN sys.schemas s ON s.schema_id = tt.schema_id
+     WHERE tt.is_user_defined = 1
+  `);
+  if (typeRows.length === 0) return [];
+
+  const columnRows = await db.query<{
+    type_table_object_id: number; column_name: string; ordinal: number;
+    data_type: string; max_length: number; precision: number; scale: number;
+    is_nullable: number; collation: string | null;
+  }>(`
+    SELECT tt.type_table_object_id,
+           c.name AS column_name,
+           c.column_id AS ordinal,
+           ty.name AS data_type, c.max_length, c.precision, c.scale,
+           CAST(c.is_nullable AS INT) AS is_nullable,
+           c.collation_name AS collation
+      FROM sys.table_types tt
+      JOIN sys.columns c ON c.object_id = tt.type_table_object_id
+      JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+     WHERE tt.is_user_defined = 1
+  `);
+
+  // Read primary keys defined inline on table types. Distinct query because the
+  // sys.indexes object_id matches type_table_object_id (not sys.tables).
+  const pkRows = await db.query<{
+    type_table_object_id: number; constraint_name: string;
+    column_name: string; key_ordinal: number; is_clustered: number;
+  }>(`
+    SELECT tt.type_table_object_id, kc.name AS constraint_name,
+           c.name AS column_name, ic.key_ordinal,
+           CAST(CASE WHEN i.type = 1 THEN 1 ELSE 0 END AS INT) AS is_clustered
+      FROM sys.table_types tt
+      JOIN sys.key_constraints kc ON kc.parent_object_id = tt.type_table_object_id AND kc.type = 'PK'
+      JOIN sys.indexes i ON i.object_id = kc.parent_object_id AND i.index_id = kc.unique_index_id
+      JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+      JOIN sys.columns c ON c.object_id = i.object_id AND c.column_id = ic.column_id
+     WHERE tt.is_user_defined = 1
+  `);
+
+  const out: UserDefinedTypeDef[] = [];
+  for (const t of typeRows) {
+    const cols: UserDefinedTypeColumnDef[] = stableSortBy(
+      columnRows.filter((c) => c.type_table_object_id === t.type_table_object_id),
+      (c) => String(c.ordinal).padStart(6, '0'),
+    ).map((c) => ({
+      name: c.column_name,
+      ordinal: c.ordinal,
+      dataType: formatMssqlType(c),
+      isNullable: !!c.is_nullable,
+      collation: c.collation ?? undefined,
+    }));
+
+    const pkCols = pkRows.filter((r) => r.type_table_object_id === t.type_table_object_id);
+    const primaryKey: PrimaryKeyDef | undefined = pkCols.length
+      ? {
+          name: pkCols[0].constraint_name,
+          clustered: !!pkCols[0].is_clustered,
+          columns: stableSortBy(pkCols, (r) => String(r.key_ordinal).padStart(6, '0')).map((r) => r.column_name),
+        }
+      : undefined;
+
+    out.push({
+      schema: t.schema_name,
+      name: t.type_name,
+      kind: 'table',
+      isMemoryOptimized: !!t.is_memory_optimized,
+      columns: cols,
+      primaryKey,
+    });
+  }
+  return out;
+}
+
+async function readExtendedProperties(db: QueryRunner): Promise<ExtendedPropertyDef[]> {
+  // Three classes of extended properties matter for MJ:
+  //   class=1 OBJECT_OR_COLUMN — table, view, proc, function, trigger, type, and any column thereof
+  //   class=3 SCHEMA
+  //   class=7 INDEX — rare in MJ but emit for completeness
+  // Everything else (DB-level, assemblies, etc.) is skipped intentionally.
+  //
+  // For class=1 we have to look up the object's type (sys.objects.type) and
+  // figure out the level1Type (TABLE/VIEW/PROCEDURE/FUNCTION/TYPE) plus the
+  // optional level2 column. Table types route through sys.table_types since
+  // their object_id matches type_table_object_id, not sys.objects.
+  const rows = await db.query<{
+    class_id: number;
+    prop_name: string;
+    prop_value: string | null;
+    schema_name: string | null;
+    level1_type: string | null;
+    level1_name: string | null;
+    level2_type: string | null;
+    level2_name: string | null;
+  }>(`
+    -- class 1: object (or column)
+    SELECT 1 AS class_id,
+           ep.name AS prop_name,
+           CAST(ep.value AS NVARCHAR(MAX)) AS prop_value,
+           s.name AS schema_name,
+           CASE
+             WHEN o.type IN ('U') THEN 'TABLE'
+             WHEN o.type IN ('V') THEN 'VIEW'
+             WHEN o.type IN ('P') THEN 'PROCEDURE'
+             WHEN o.type IN ('FN','TF','IF') THEN 'FUNCTION'
+             WHEN o.type IN ('SO') THEN 'SEQUENCE'
+             WHEN o.type IN ('TR') THEN NULL -- triggers get re-routed below to TABLE/TRIGGER
+             ELSE NULL
+           END AS level1_type,
+           o.name AS level1_name,
+           CASE WHEN ep.minor_id > 0 THEN 'COLUMN' ELSE NULL END AS level2_type,
+           c.name AS level2_name
+      FROM sys.extended_properties ep
+      JOIN sys.objects o ON o.object_id = ep.major_id
+      JOIN sys.schemas s ON s.schema_id = o.schema_id
+ LEFT JOIN sys.columns c ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.minor_id > 0
+     WHERE ep.class = 1
+       AND o.is_ms_shipped = 0
+       AND o.type IN ('U','V','P','FN','TF','IF','SO')   -- triggers handled below
+
+    UNION ALL
+
+    -- class 1 (triggers): level1=TABLE (parent), level2=TRIGGER (the trigger itself)
+    SELECT 1 AS class_id,
+           ep.name AS prop_name,
+           CAST(ep.value AS NVARCHAR(MAX)) AS prop_value,
+           ps.name AS schema_name,
+           'TABLE' AS level1_type,
+           pt.name AS level1_name,
+           'TRIGGER' AS level2_type,
+           tr.name AS level2_name
+      FROM sys.extended_properties ep
+      JOIN sys.triggers tr ON tr.object_id = ep.major_id
+      JOIN sys.tables pt ON pt.object_id = tr.parent_id
+      JOIN sys.schemas ps ON ps.schema_id = pt.schema_id
+     WHERE ep.class = 1
+       AND tr.is_ms_shipped = 0
+
+    UNION ALL
+
+    -- class 1 (table types): level1=TYPE, level2 = COLUMN if applicable
+    SELECT 1 AS class_id,
+           ep.name AS prop_name,
+           CAST(ep.value AS NVARCHAR(MAX)) AS prop_value,
+           s.name AS schema_name,
+           'TYPE' AS level1_type,
+           tt.name AS level1_name,
+           CASE WHEN ep.minor_id > 0 THEN 'COLUMN' ELSE NULL END AS level2_type,
+           c.name AS level2_name
+      FROM sys.extended_properties ep
+      JOIN sys.table_types tt ON tt.type_table_object_id = ep.major_id
+      JOIN sys.schemas s ON s.schema_id = tt.schema_id
+ LEFT JOIN sys.columns c ON c.object_id = ep.major_id AND c.column_id = ep.minor_id AND ep.minor_id > 0
+     WHERE ep.class = 1
+       AND tt.is_user_defined = 1
+
+    UNION ALL
+
+    -- class 3: schema-level
+    SELECT 3 AS class_id,
+           ep.name AS prop_name,
+           CAST(ep.value AS NVARCHAR(MAX)) AS prop_value,
+           s.name AS schema_name,
+           NULL AS level1_type,
+           NULL AS level1_name,
+           NULL AS level2_type,
+           NULL AS level2_name
+      FROM sys.extended_properties ep
+      JOIN sys.schemas s ON s.schema_id = ep.major_id
+     WHERE ep.class = 3
+       AND s.name NOT IN ('sys', 'INFORMATION_SCHEMA', 'guest', 'db_owner', 'db_accessadmin',
+                          'db_securityadmin', 'db_ddladmin', 'db_backupoperator', 'db_datareader',
+                          'db_datawriter', 'db_denydatareader', 'db_denydatawriter')
+  `);
+
+  const out: ExtendedPropertyDef[] = [];
+  for (const r of rows) {
+    // Skip rows we couldn't classify (level1_type=NULL on class=1 means an
+    // object kind we don't emit baselines for, e.g. CLR assemblies).
+    if (r.class_id === 1 && !r.level1_type) continue;
+    if (!r.schema_name) continue;
+    // Mirror the table-level filter for any property attached to flyway_schema_history.
+    if (r.level1_name && isExcludedTable(r.level1_name)) continue;
+    out.push({
+      name: r.prop_name,
+      value: r.prop_value ?? '',
+      schemaName: r.schema_name,
+      level1Type: r.level1_type ?? undefined,
+      level1Name: r.level1_name ?? undefined,
+      level2Type: r.level2_type ?? undefined,
+      level2Name: r.level2_name ?? undefined,
+    });
+  }
+  return out;
 }
 
 function formatMssqlType(c: {

@@ -19,6 +19,10 @@ export interface SchemaSnapshot {
   functions: RoutineDef[];
   triggers: TriggerDef[];
   sequences: SequenceDef[];
+  /** User-defined types (table types primarily; scalar/CLR are future work). */
+  userDefinedTypes: UserDefinedTypeDef[];
+  /** sp_addextendedproperty entries (descriptions etc.) on schemas/tables/columns/views/routines. */
+  extendedProperties: ExtendedPropertyDef[];
 }
 
 export interface SchemaDef {
@@ -44,8 +48,14 @@ export interface ColumnDef {
   isNullable: boolean;
   isIdentity: boolean;
   isComputed: boolean;
+  /** When `isComputed`, the body of the AS (...) expression. */
   computedExpression?: string;
+  /** When `isComputed`, whether the value is PERSISTED. */
+  isComputedPersisted?: boolean;
+  /** DEFAULT expression text (already wrapped in parens by sys.default_constraints.definition). */
   defaultExpression?: string;
+  /** Original `sys.default_constraints.name`. Needed so the new DB's DF_* constraints match the source byte-for-byte. */
+  defaultConstraintName?: string;
   collation?: string;
 }
 
@@ -116,6 +126,46 @@ export interface SequenceDef {
   currentValue?: string;
 }
 
+/** A user-defined TYPE (currently only table types; scalar/CLR are future work). */
+export interface UserDefinedTypeDef {
+  schema: string;
+  name: string;
+  kind: 'table';
+  isMemoryOptimized: boolean;
+  columns: UserDefinedTypeColumnDef[];
+  /** Inline primary key, if any. CREATE TYPE AS TABLE supports a PK clause. */
+  primaryKey?: PrimaryKeyDef;
+}
+
+/** Columns inside a CREATE TYPE AS TABLE definition. Subset of ColumnDef (no identity/computed/FK). */
+export interface UserDefinedTypeColumnDef {
+  name: string;
+  ordinal: number;
+  dataType: string;
+  isNullable: boolean;
+  collation?: string;
+}
+
+/**
+ * An `sp_addextendedproperty` entry. MJ uses these heavily for MS_Description
+ * on tables, columns, views, procs, and functions. Skipping them produces a
+ * silent DB difference that CodeGen and tools depend on.
+ */
+export interface ExtendedPropertyDef {
+  /** Property name, e.g. 'MS_Description'. Case is preserved as stored. */
+  name: string;
+  /** Property value, always serialized as NVARCHAR. */
+  value: string;
+  /** level0 is always SCHEMA in MJ. Stored separately so we can emit the canonical 3-tier call. */
+  schemaName: string;
+  /** TABLE | VIEW | PROCEDURE | FUNCTION | TYPE | SEQUENCE | TRIGGER | null (for schema-level properties). */
+  level1Type?: string;
+  level1Name?: string;
+  /** COLUMN | PARAMETER | TRIGGER | INDEX | null. */
+  level2Type?: string;
+  level2Name?: string;
+}
+
 /** Per-table data dump (every row, ordered deterministically). */
 export interface TableDataDump {
   schema: string;
@@ -149,6 +199,8 @@ export interface DiffSummary {
   functionsChecked: number;
   triggersChecked: number;
   sequencesChecked: number;
+  userDefinedTypesChecked: number;
+  extendedPropertiesChecked: number;
   objectsWithDiffs: number;
   tablesWithRowDiffs: number;
   totalRowDiffs: number;
@@ -170,7 +222,9 @@ export type ObjectKind =
   | 'procedure'
   | 'function'
   | 'trigger'
-  | 'sequence';
+  | 'sequence'
+  | 'userDefinedType'
+  | 'extendedProperty';
 
 export type DiffKind = 'missing-on-left' | 'missing-on-right' | 'changed';
 
@@ -213,7 +267,7 @@ export interface ColumnValueDiff {
 
 /** Build options passed to the emitter. */
 export interface BaselineEmitOptions {
-  baselineVersion: string;     // 'Major.Minor' (literal X is appended in filename, not body)
+  baselineVersion: string;     // 'Major.Minor' (literal x is appended in filename to match V-file convention)
   description: string;
   generatedAtUtc: Date;
   includeData: boolean;

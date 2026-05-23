@@ -4,10 +4,20 @@
 #
 # End-to-end deterministic baseline test inside the Claude Dev Workbench.
 #
+# Two modes:
+#   1. AUTO (within-major rebaseline) — default when --baseline-version is omitted.
+#      Scans the source migrations dir, picks the latest V-file, and uses its
+#      Major.Minor as the new baseline version (with timestamp = latest V's
+#      timestamp + 1 minute). Output sorts after the V-stack it succeeds.
+#
+#   2. EXPLICIT (major-boundary baseline) — when --baseline-version M.N is given.
+#      Used to start a brand-new major version (e.g., v6.0). Output uses now() as
+#      the timestamp.
+#
 # Steps (mssql):
 #   1. Drop+create scratch DB MJ_BL_Stack
-#   2. mj migrate against MJ_BL_Stack (the V-stack gold standard)
-#   3. mj baseline build --source MJ_BL_Stack → emits B<ts>__v<ver>.X__Baseline.sql
+#   2. flyway migrate against MJ_BL_Stack (the V-stack gold standard)
+#   3. mj baseline build → emits B<ts>__v<ver>.x__Baseline.sql
 #   4. Drop+create scratch DB MJ_BL_New
 #   5. Apply the new baseline file to MJ_BL_New (sqlcmd -i)
 #   6. mj baseline compare --left MJ_BL_Stack --right MJ_BL_New --row-compare full
@@ -20,6 +30,7 @@ set -e
 
 DIALECT="mssql"
 BASELINE_VERSION=""
+SOURCE_DIR=""
 DESCRIPTION="MemberJunction Baseline"
 KEEP_DBS=0
 ROW_COMPARE="full"
@@ -28,13 +39,20 @@ OUT_DIR="/workspace/MJ/.workbench"
 
 usage() {
   cat <<EOF
-Usage: baseline-roundtrip --baseline-version <Major.Minor> [options]
+Usage: baseline-roundtrip [--baseline-version <Major.Minor>] [options]
+
+Default mode is AUTO: derive the baseline version + timestamp from the latest
+V-file in --source-dir (within-major rebaseline). Pass --baseline-version to
+force EXPLICIT mode (major-boundary baseline).
 
 Options:
   --dialect mssql|postgres   default: mssql
-  --baseline-version <x.y>   required, e.g. 3.1
+  --baseline-version <x.y>   optional; omit for auto/within-major mode
+  --source-dir <path>        directory to scan for V-files (auto mode).
+                             default: /workspace/MJ/migrations/v<latest>
   --description <text>       header description
-  --migrations <path>        override migrations source (default: workbench config)
+  --migrations <path>        override flyway migrations source for phase 2
+                             (default: /workspace/MJ/migrations)
   --row-compare <mode>       full|hash|counts|none (default: full)
   --keep-dbs                 don't drop scratch DBs after run
   --out <dir>                report output dir (default: /workspace/MJ/.workbench)
@@ -46,6 +64,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --dialect) DIALECT="$2"; shift 2 ;;
     --baseline-version) BASELINE_VERSION="$2"; shift 2 ;;
+    --source-dir) SOURCE_DIR="$2"; shift 2 ;;
     --description) DESCRIPTION="$2"; shift 2 ;;
     --migrations) MIGRATIONS_DIR="$2"; shift 2 ;;
     --row-compare) ROW_COMPARE="$2"; shift 2 ;;
@@ -56,23 +75,41 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$BASELINE_VERSION" ]]; then
-  echo "ERROR: --baseline-version is required (e.g. 3.1)"
-  exit 1
-fi
-
 mkdir -p "$OUT_DIR"
 
 STACK_DB="MJ_BL_Stack"
 NEW_DB="MJ_BL_New"
 TS=$(date -u +%Y%m%d%H%M%S)
+MJ_DIR="/workspace/MJ"
+
+# Default --source-dir to the highest migrations/v*/ if not provided.
+if [[ -z "$SOURCE_DIR" && -d "$MJ_DIR/migrations" ]]; then
+  CANDIDATE=$(ls -1d "$MJ_DIR/migrations"/v* 2>/dev/null | sort -t v -k2 -n | tail -n1 || true)
+  if [[ -n "$CANDIDATE" && -d "$CANDIDATE" ]]; then
+    SOURCE_DIR="$CANDIDATE"
+  fi
+fi
+
+if [[ -z "$BASELINE_VERSION" ]]; then
+  MODE="AUTO (within-major)"
+  if [[ -z "$SOURCE_DIR" ]]; then
+    echo "ERROR: AUTO mode requires --source-dir or a discoverable migrations/v*/ directory"
+    exit 1
+  fi
+  BASELINE_LABEL="auto from $SOURCE_DIR"
+else
+  MODE="EXPLICIT (major-boundary)"
+  BASELINE_LABEL="v${BASELINE_VERSION}.x"
+fi
 
 cat <<EOF
 ╔══════════════════════════════════════════════════════════════════════════╗
 ║  Baseline Roundtrip                                                      ║
 ╠══════════════════════════════════════════════════════════════════════════╣
+║  Mode              : ${MODE}
 ║  Dialect           : ${DIALECT}
-║  Baseline version  : v${BASELINE_VERSION}.X
+║  Baseline          : ${BASELINE_LABEL}
+║  Source dir        : ${SOURCE_DIR:-<none>}
 ║  Stack (gold) DB   : ${STACK_DB}
 ║  Target (new) DB   : ${NEW_DB}
 ║  Row compare       : ${ROW_COMPARE}
@@ -80,11 +117,22 @@ cat <<EOF
 ╚══════════════════════════════════════════════════════════════════════════╝
 EOF
 
+# Clear any prior B-files in OUT_DIR so the post-build glob picks up THIS run's file.
+rm -f "$OUT_DIR"/B*__Baseline.sql 2>/dev/null || true
+
+build_args=()
+if [[ -n "$BASELINE_VERSION" ]]; then
+  build_args+=(--baseline-version "$BASELINE_VERSION")
+fi
+if [[ -n "$SOURCE_DIR" ]]; then
+  build_args+=(--source-dir "$SOURCE_DIR")
+fi
+build_args+=(--description "$DESCRIPTION" --out "$OUT_DIR" --verbose)
+
 if [[ "$DIALECT" == "mssql" ]]; then
   : "${DB_HOST:=sql-claude}"
   : "${DB_USER:=sa}"
   : "${DB_PASSWORD:=Claude2Sql99}"
-  MJ_DIR="/workspace/MJ"
   : "${MIGRATIONS_DIR:=$MJ_DIR/migrations}"
 
   drop_create_mssql() {
@@ -113,13 +161,14 @@ if [[ "$DIALECT" == "mssql" ]]; then
   DB_DATABASE="$STACK_DB" CODEGEN_DB_USERNAME="$DB_USER" CODEGEN_DB_PASSWORD="$DB_PASSWORD" \
     DB_HOST="$DB_HOST" \
     mj baseline build \
-      --baseline-version "$BASELINE_VERSION" \
-      --description "$DESCRIPTION" \
       --database "$STACK_DB" \
-      --out "$OUT_DIR" \
-      --verbose
+      "${build_args[@]}"
 
-  BASELINE_FILE=$(ls -1t "$OUT_DIR"/B*__v${BASELINE_VERSION}.X__Baseline.sql | head -n1)
+  BASELINE_FILE=$(ls -1t "$OUT_DIR"/B*__Baseline.sql 2>/dev/null | head -n1)
+  if [[ -z "$BASELINE_FILE" ]]; then
+    echo "ERROR: baseline build did not produce a B*__Baseline.sql file in $OUT_DIR"
+    exit 1
+  fi
   echo "  ✓ Baseline file: $BASELINE_FILE"
 
   echo "▸ Phase 4: drop+create $NEW_DB"
@@ -143,7 +192,6 @@ elif [[ "$DIALECT" == "postgres" ]]; then
   : "${PG_PORT:=5432}"
   : "${PG_USER:=mj_admin}"
   : "${PG_PASSWORD:=Claude2Pg99}"
-  MJ_DIR="/workspace/MJ"
   : "${MIGRATIONS_DIR:=$MJ_DIR/migrations-pg/v5}"
 
   export PGPASSWORD="$PG_PASSWORD"
@@ -166,7 +214,7 @@ elif [[ "$DIALECT" == "postgres" ]]; then
   echo "    For now: run baseline-roundtrip --dialect mssql first; we then "
   echo "    convert the resulting T-SQL via 'mj migrate convert' and apply."
 
-  TSQL_BASELINE=$(ls -1t "$OUT_DIR"/B*__v${BASELINE_VERSION}.X__Baseline.sql 2>/dev/null | head -n1 || true)
+  TSQL_BASELINE=$(ls -1t "$OUT_DIR"/B*__Baseline.sql 2>/dev/null | head -n1 || true)
   if [[ -z "$TSQL_BASELINE" ]]; then
     echo "ERROR: no T-SQL baseline file found in $OUT_DIR. Run --dialect mssql first."
     exit 1

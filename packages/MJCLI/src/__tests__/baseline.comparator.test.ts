@@ -12,6 +12,8 @@ function emptySnapshot(overrides: Partial<SchemaSnapshot> = {}): SchemaSnapshot 
     functions: [],
     triggers: [],
     sequences: [],
+    userDefinedTypes: [],
+    extendedProperties: [],
     ...overrides,
   };
 }

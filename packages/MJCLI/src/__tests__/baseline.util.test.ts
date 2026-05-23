@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import {
+  addMinutes,
   baselineFilename,
+  computeAutoBaselineStamp,
   deepValueEqual,
+  discoverMigrationsSourceDir,
   fileStamp,
+  findLatestBaselineMigration,
+  findLatestVersionedMigration,
   formatTsqlValue,
   isoUtcSeconds,
+  parseFileStamp,
+  parseMigrationFilename,
   qname,
   quoteIdent,
   quoteString,
@@ -62,10 +72,10 @@ describe('baseline/util', () => {
   });
 
   describe('baselineFilename', () => {
-    it('uses literal X for patch', () => {
+    it('uses literal lowercase x for patch (matches V-file convention)', () => {
       const d = new Date(Date.UTC(2026, 4, 2, 19, 47));
       expect(baselineFilename({ generatedAtUtc: d, baselineVersion: '3.1' }))
-        .toBe('B202605021947__v3.1.X__Baseline.sql');
+        .toBe('B202605021947__v3.1.x__Baseline.sql');
     });
   });
 
@@ -101,6 +111,168 @@ describe('baseline/util', () => {
     });
     it('handles Uint8Array as 0x-prefixed hex', () => {
       expect(formatTsqlValue(new Uint8Array([0xde, 0xad]))).toBe('0xDEAD');
+    });
+  });
+
+  describe('parseFileStamp', () => {
+    it('parses YYYYMMDDHHMM into a UTC Date', () => {
+      const d = parseFileStamp('202605032236');
+      expect(d.toISOString()).toBe('2026-05-03T22:36:00.000Z');
+    });
+    it('rejects malformed input', () => {
+      expect(() => parseFileStamp('20260503')).toThrow();
+      expect(() => parseFileStamp('20260503223X')).toThrow();
+    });
+    it('round-trips with fileStamp', () => {
+      const stamp = '202605032236';
+      expect(fileStamp(parseFileStamp(stamp))).toBe(stamp);
+    });
+  });
+
+  describe('addMinutes', () => {
+    it('adds minutes', () => {
+      const d = new Date(Date.UTC(2026, 4, 3, 22, 36));
+      expect(addMinutes(d, 1).toISOString()).toBe('2026-05-03T22:37:00.000Z');
+    });
+    it('rolls hours/days forward', () => {
+      const d = new Date(Date.UTC(2026, 4, 3, 23, 59));
+      expect(addMinutes(d, 1).toISOString()).toBe('2026-05-04T00:00:00.000Z');
+    });
+  });
+
+  describe('parseMigrationFilename', () => {
+    it('parses a V-file with .x patch', () => {
+      const r = parseMigrationFilename('V202605032236__v5.32.x__Metadata_Sync.sql');
+      expect(r).not.toBeNull();
+      expect(r!.kind).toBe('V');
+      expect(r!.timestamp).toBe('202605032236');
+      expect(r!.major).toBe(5);
+      expect(r!.minor).toBe(32);
+      expect(r!.majorMinor).toBe('5.32');
+    });
+    it('parses a V-file without patch suffix', () => {
+      const r = parseMigrationFilename('V202602170015__v5.1__Regenerate_Delete_Stored_Procs.sql');
+      expect(r).not.toBeNull();
+      expect(r!.majorMinor).toBe('5.1');
+    });
+    it('parses a B-file (baseline)', () => {
+      const r = parseMigrationFilename('B202602151200__v5.0__Baseline.sql');
+      expect(r).not.toBeNull();
+      expect(r!.kind).toBe('B');
+      expect(r!.majorMinor).toBe('5.0');
+    });
+    it('parses a B-file with literal x patch (current emitter convention)', () => {
+      const r = parseMigrationFilename('B202605032237__v5.32.x__Baseline.sql');
+      expect(r).not.toBeNull();
+      expect(r!.kind).toBe('B');
+      expect(r!.majorMinor).toBe('5.32');
+    });
+    it('also parses legacy B-files with uppercase X (back-compat)', () => {
+      const r = parseMigrationFilename('B202605032237__v5.32.X__Baseline.sql');
+      expect(r).not.toBeNull();
+      expect(r!.kind).toBe('B');
+      expect(r!.majorMinor).toBe('5.32');
+    });
+    it('returns null for unrecognized shapes', () => {
+      expect(parseMigrationFilename('R__RefreshMetadata.sql')).toBeNull();
+      expect(parseMigrationFilename('something-else.sql')).toBeNull();
+      expect(parseMigrationFilename('V202602170015_no_double_underscore.sql')).toBeNull();
+    });
+  });
+
+  describe('findLatestVersionedMigration / findLatestBaselineMigration', () => {
+    function makeTempMigrationsDir(files: string[]): string {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-baseline-test-'));
+      for (const f of files) fs.writeFileSync(path.join(dir, f), '');
+      return dir;
+    }
+
+    it('returns the highest-timestamped V-file', () => {
+      const dir = makeTempMigrationsDir([
+        'B202602151200__v5.0__Baseline.sql',
+        'V202602170015__v5.1__Regenerate.sql',
+        'V202605032236__v5.32.x__Metadata_Sync.sql',
+        'V202605021919__v5.32.x__Add_ComponentLibrary.sql',
+        'R__RefreshMetadata.sql',
+      ]);
+      const r = findLatestVersionedMigration(dir);
+      expect(r).not.toBeNull();
+      expect(r!.timestamp).toBe('202605032236');
+      expect(r!.majorMinor).toBe('5.32');
+    });
+
+    it('ignores B-files when looking for V-files', () => {
+      const dir = makeTempMigrationsDir([
+        'B202999999999__v9.9__Baseline.sql', // way in the future
+        'V202605032236__v5.32.x__Metadata.sql',
+      ]);
+      const r = findLatestVersionedMigration(dir);
+      expect(r!.timestamp).toBe('202605032236');
+    });
+
+    it('finds the latest B-file', () => {
+      const dir = makeTempMigrationsDir([
+        'B202602151200__v5.0__Baseline.sql',
+        'B202605032237__v5.32.x__Baseline.sql',
+        'V202605032236__v5.32.x__Metadata.sql',
+      ]);
+      const r = findLatestBaselineMigration(dir);
+      expect(r!.timestamp).toBe('202605032237');
+      expect(r!.majorMinor).toBe('5.32');
+    });
+
+    it('returns null for an empty directory', () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-baseline-empty-'));
+      expect(findLatestVersionedMigration(dir)).toBeNull();
+    });
+
+    it('returns null for a non-existent directory', () => {
+      expect(findLatestVersionedMigration('/nonexistent/path/abc123xyz')).toBeNull();
+    });
+  });
+
+  describe('discoverMigrationsSourceDir', () => {
+    it('walks up to find migrations/ and picks the highest vN/', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-discover-'));
+      fs.mkdirSync(path.join(root, 'migrations', 'v2'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'migrations', 'v5'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'migrations', 'v3'), { recursive: true });
+      fs.mkdirSync(path.join(root, 'packages', 'MJCLI', 'src'), { recursive: true });
+      const found = discoverMigrationsSourceDir(path.join(root, 'packages', 'MJCLI', 'src'));
+      expect(found).toBe(path.join(root, 'migrations', 'v5'));
+    });
+    it('returns null when no migrations/ exists in the parent chain', () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mj-discover-empty-'));
+      // No 'migrations' anywhere in the chain — but tmp dirs may collide with
+      // ancestors that DO have migrations. Use a sentinel-only deep path.
+      const deep = path.join(root, 'a', 'b', 'c');
+      fs.mkdirSync(deep, { recursive: true });
+      // We can't fully isolate from ancestors but the sub-tree under root has
+      // no 'migrations'. Walking up from `deep` past `root` will eventually
+      // find one only if the test runner's cwd has one. So just assert it
+      // either finds something outside the test root, or null — the API
+      // contract is "best effort".
+      const found = discoverMigrationsSourceDir(deep);
+      // If found, it should NOT be inside our temp tree.
+      if (found !== null) expect(found.startsWith(root)).toBe(false);
+    });
+  });
+
+  describe('computeAutoBaselineStamp', () => {
+    it('produces latestV+1m for the canonical example', () => {
+      // V-file V202605032236__v5.32.x__Metadata_Sync.sql is the head of v5
+      const result = computeAutoBaselineStamp('202605032236');
+      expect(result.fileStamp).toBe('202605032237');
+      expect(result.generatedAtUtc.toISOString()).toBe('2026-05-03T22:37:00.000Z');
+    });
+    it('rolls correctly across hour/day boundary', () => {
+      const result = computeAutoBaselineStamp('202605032359');
+      expect(result.fileStamp).toBe('202605040000');
+    });
+    it('builds the canonical baseline filename for v5.32 auto rebaseline', () => {
+      const { generatedAtUtc } = computeAutoBaselineStamp('202605032236');
+      expect(baselineFilename({ generatedAtUtc, baselineVersion: '5.32' }))
+        .toBe('B202605032237__v5.32.x__Baseline.sql');
     });
   });
 

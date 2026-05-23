@@ -14,6 +14,7 @@ import type {
   BaselineCompareOptions,
   ColumnValueDiff,
   DiffReport,
+  ExtendedPropertyDef,
   ObjectDiff,
   ObjectKind,
   SchemaSnapshot,
@@ -21,6 +22,7 @@ import type {
   TableDef,
   TableRowDiff,
   RowDiff,
+  UserDefinedTypeDef,
 } from './types';
 
 export interface CompareInput {
@@ -32,7 +34,16 @@ export interface CompareInput {
 export function compareSnapshots(input: CompareInput): DiffReport {
   const { left, right, options } = input;
   const ignored = options.ignorePattern;
-  const matchesIgnore = (q: string) => (ignored ? ignored.test(q) : false);
+  const matchesIgnore = (q: string) => {
+    if (!ignored) return false;
+    if (ignored.test(q)) return true;
+    // Also test against the bare object name (post-dot) so that bare patterns
+    // like /^flyway_schema_history$/ match keys we lowercase + schema-qualify
+    // internally (e.g. "dbo.flyway_schema_history"). Schema-qualified patterns
+    // continue to work via the first test() above.
+    const bare = q.includes('.') ? q.slice(q.lastIndexOf('.') + 1) : q;
+    return ignored.test(bare);
+  };
 
   const objectDiffs: ObjectDiff[] = [];
   let objectsWithDiffs = 0;
@@ -139,6 +150,12 @@ export function compareSnapshots(input: CompareInput): DiffReport {
     ),
   );
 
+  // User-defined types (table types)
+  counted(diffUserDefinedTypes(left.snapshot.userDefinedTypes, right.snapshot.userDefinedTypes, matchesIgnore));
+
+  // Extended properties (sp_addextendedproperty entries — MS_Description etc.)
+  counted(diffExtendedProperties(left.snapshot.extendedProperties, right.snapshot.extendedProperties));
+
   // Row data
   const tableRowDiffs: TableRowDiff[] = [];
   let totalRowDiffs = 0;
@@ -166,6 +183,14 @@ export function compareSnapshots(input: CompareInput): DiffReport {
     functionsChecked: Math.max(left.snapshot.functions.length, right.snapshot.functions.length),
     triggersChecked: Math.max(left.snapshot.triggers.length, right.snapshot.triggers.length),
     sequencesChecked: Math.max(left.snapshot.sequences.length, right.snapshot.sequences.length),
+    userDefinedTypesChecked: Math.max(
+      left.snapshot.userDefinedTypes.length,
+      right.snapshot.userDefinedTypes.length,
+    ),
+    extendedPropertiesChecked: Math.max(
+      left.snapshot.extendedProperties.length,
+      right.snapshot.extendedProperties.length,
+    ),
     objectsWithDiffs,
     tablesWithRowDiffs: tableRowDiffs.length,
     totalRowDiffs,
@@ -229,7 +254,14 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
       if (l.isNullable !== r.isNullable) fields.push(`nullable: ${l.isNullable} vs ${r.isNullable}`);
       if (l.isIdentity !== r.isIdentity) fields.push(`identity: ${l.isIdentity} vs ${r.isIdentity}`);
       if (l.isComputed !== r.isComputed) fields.push(`computed: ${l.isComputed} vs ${r.isComputed}`);
-      if ((l.defaultExpression || '').toLowerCase() !== (r.defaultExpression || '').toLowerCase())
+      if (l.ordinal !== r.ordinal) fields.push(`ordinal: ${l.ordinal} vs ${r.ordinal}`);
+      if ((l.collation || '') !== (r.collation || ''))
+        fields.push(`collation: ${l.collation} vs ${r.collation}`);
+      if ((l.computedExpression || '').trim() !== (r.computedExpression || '').trim())
+        fields.push(`computedExpression differs`);
+      if (!!l.isComputedPersisted !== !!r.isComputedPersisted)
+        fields.push(`computedPersisted: ${l.isComputedPersisted} vs ${r.isComputedPersisted}`);
+      if (normalizeDefault(l.defaultExpression) !== normalizeDefault(r.defaultExpression))
         fields.push(`default: ${l.defaultExpression} vs ${r.defaultExpression}`);
       if (fields.length) out.push({ kind: 'column', diffKind: 'changed', qualifiedName: q, details: fields.join('; ') });
     }
@@ -243,15 +275,36 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
       qualifiedName: tableQ,
     });
   } else if (left.primaryKey && right.primaryKey) {
-    if (left.primaryKey.columns.join(',') !== right.primaryKey.columns.join(',')) {
+    const reasons: string[] = [];
+    if (left.primaryKey.columns.join(',') !== right.primaryKey.columns.join(','))
+      reasons.push(`pk columns: ${left.primaryKey.columns} vs ${right.primaryKey.columns}`);
+    if (left.primaryKey.clustered !== right.primaryKey.clustered)
+      reasons.push(`pk clustered: ${left.primaryKey.clustered} vs ${right.primaryKey.clustered}`);
+    if (left.primaryKey.name !== right.primaryKey.name)
+      reasons.push(`pk name: ${left.primaryKey.name} vs ${right.primaryKey.name}`);
+    if (reasons.length) {
       out.push({
         kind: 'primaryKey',
         diffKind: 'changed',
         qualifiedName: tableQ,
-        details: `pk columns: ${left.primaryKey.columns} vs ${right.primaryKey.columns}`,
+        details: reasons.join('; '),
       });
     }
   }
+
+  // Unique constraints (previously uncompared — silent gap)
+  out.push(...diffNamedSet(
+    'uniqueConstraint',
+    left.uniqueConstraints,
+    right.uniqueConstraints,
+    (u) => `${tableQ}.${u.name}`,
+    () => false,
+    (l, r) => {
+      if (l.columns.join(',') !== r.columns.join(',')) return 'unique constraint columns differ';
+      if (l.clustered !== r.clustered) return `unique constraint clustered: ${l.clustered} vs ${r.clustered}`;
+      return null;
+    },
+  ));
 
   // Indexes
   out.push(...diffNamedSet(
@@ -264,6 +317,8 @@ function diffTable(left: TableDef, right: TableDef): ObjectDiff[] {
       if (l.columns.join(',') !== r.columns.join(',')) return `index columns differ: ${l.columns} vs ${r.columns}`;
       if (l.includes.join(',') !== r.includes.join(',')) return `index includes differ`;
       if (l.isUnique !== r.isUnique) return `index uniqueness differs`;
+      if (l.isClustered !== r.isClustered) return `index clustered: ${l.isClustered} vs ${r.isClustered}`;
+      if ((l.filter || '').trim() !== (r.filter || '').trim()) return `index filter differs`;
       return null;
     },
   ));
@@ -385,4 +440,111 @@ function keyForRow(row: readonly unknown[], _columns: readonly string[]): string
 /** Normalize whitespace in object body text for tolerant body diffs. */
 function normalizeBody(text: string): string {
   return text.replace(/\s+/g, ' ').replace(/\s*([(),;])\s*/g, '$1').trim().toLowerCase();
+}
+
+/**
+ * Normalize a DEFAULT expression for equality. `sys.default_constraints.definition`
+ * always returns the value parenthesized — but how many layers of parens varies
+ * by SQL Server version and origin (CREATE TABLE inline vs ALTER TABLE ADD CONSTRAINT).
+ * Strip outer matched parens iteratively, lowercase, drop whitespace.
+ */
+function normalizeDefault(value: string | undefined): string {
+  if (!value) return '';
+  let v = value.trim();
+  while (v.startsWith('(') && v.endsWith(')')) {
+    // Only peel a layer if the OUTER pair is matched (i.e. the open paren at
+    // index 0 closes at the last char). Naive .slice would corrupt expressions
+    // like `(a)+(b)`.
+    let depth = 0;
+    let matched = true;
+    for (let i = 0; i < v.length; i++) {
+      if (v[i] === '(') depth++;
+      else if (v[i] === ')') depth--;
+      if (depth === 0 && i < v.length - 1) { matched = false; break; }
+    }
+    if (!matched) break;
+    v = v.slice(1, -1).trim();
+  }
+  return v.replace(/\s+/g, ' ').toLowerCase();
+}
+
+/** Diff user-defined types (table types). Comparison is structural: same columns, same PK, same memory-optimization. */
+function diffUserDefinedTypes(
+  left: readonly UserDefinedTypeDef[],
+  right: readonly UserDefinedTypeDef[],
+  ignore: (q: string) => boolean,
+): ObjectDiff[] {
+  return diffNamedSet(
+    'userDefinedType',
+    left,
+    right,
+    (t) => `${t.schema}.${t.name}`,
+    ignore,
+    (l, r) => {
+      const reasons: string[] = [];
+      if (l.kind !== r.kind) reasons.push(`kind: ${l.kind} vs ${r.kind}`);
+      if (l.isMemoryOptimized !== r.isMemoryOptimized) reasons.push('memory-optimized differs');
+      // Column-by-column structural diff. Order matters (TVPs have a fixed
+      // column ordinal that affects INSERT compatibility).
+      if (l.columns.length !== r.columns.length) {
+        reasons.push(`column count: ${l.columns.length} vs ${r.columns.length}`);
+      } else {
+        for (let i = 0; i < l.columns.length; i++) {
+          const lc = l.columns[i];
+          const rc = r.columns[i];
+          if (lc.name !== rc.name) reasons.push(`col[${i}] name: ${lc.name} vs ${rc.name}`);
+          if (lc.dataType.toLowerCase() !== rc.dataType.toLowerCase())
+            reasons.push(`col[${i}] dataType: ${lc.dataType} vs ${rc.dataType}`);
+          if (lc.isNullable !== rc.isNullable)
+            reasons.push(`col[${i}] nullable: ${lc.isNullable} vs ${rc.isNullable}`);
+        }
+      }
+      const lPkCols = l.primaryKey?.columns.join(',') ?? '';
+      const rPkCols = r.primaryKey?.columns.join(',') ?? '';
+      if (lPkCols !== rPkCols) reasons.push(`pk columns: ${lPkCols} vs ${rPkCols}`);
+      return reasons.length === 0 ? null : reasons.join('; ');
+    },
+  );
+}
+
+/**
+ * Diff extended properties. These are pure key/value entries on schema/object/column
+ * targets — we compare by their canonical target key and assert value equality.
+ */
+function diffExtendedProperties(
+  left: readonly ExtendedPropertyDef[],
+  right: readonly ExtendedPropertyDef[],
+): ObjectDiff[] {
+  const key = (p: ExtendedPropertyDef) =>
+    [
+      p.schemaName,
+      p.level1Type ?? '',
+      p.level1Name ?? '',
+      p.level2Type ?? '',
+      p.level2Name ?? '',
+      p.name,
+    ]
+      .join('::')
+      .toLowerCase();
+  const leftMap = new Map(left.map((p) => [key(p), p]));
+  const rightMap = new Map(right.map((p) => [key(p), p]));
+  const allKeys = new Set([...leftMap.keys(), ...rightMap.keys()]);
+  const out: ObjectDiff[] = [];
+  for (const k of allKeys) {
+    const l = leftMap.get(k);
+    const r = rightMap.get(k);
+    if (!l && r) out.push({ kind: 'extendedProperty', diffKind: 'missing-on-left', qualifiedName: k });
+    else if (l && !r) out.push({ kind: 'extendedProperty', diffKind: 'missing-on-right', qualifiedName: k });
+    else if (l && r && l.value !== r.value) {
+      out.push({
+        kind: 'extendedProperty',
+        diffKind: 'changed',
+        qualifiedName: k,
+        details: `value differs`,
+        leftValue: l.value,
+        rightValue: r.value,
+      });
+    }
+  }
+  return out;
 }

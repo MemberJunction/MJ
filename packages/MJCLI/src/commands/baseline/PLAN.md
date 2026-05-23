@@ -14,14 +14,34 @@ The implementation is **MJ-only** (no skyway changes). Skyway already understand
 
 > Take the END-STATE of an already-migrated database, introspect every object, dump every row of every table, and emit a canonical, deterministic SQL script. Then prove equivalence by applying that script to a fresh database and comparing object-by-object **and row-by-row** against the original.
 
+## Two operating modes
+
+| Mode | Trigger | Version source | Timestamp source | Output folder |
+| --- | --- | --- | --- | --- |
+| **AUTO — within-major rebaseline** (default) | `--baseline-version` omitted | `Major.Minor` parsed from the latest V-file in `--source-dir` (e.g. `5.32` from `V202605032236__v5.32.x__Metadata_Sync.sql`) | latest V-file's `YYYYMMDDHHMM` **+ 1 minute** | **same** `migrations/v{N}/` it scanned |
+| **EXPLICIT — major-boundary baseline** | `--baseline-version M.N` provided | The flag value (e.g. `6.0`) | `Date.now()` UTC | `migrations/v{N+1}/` (new dir) |
+
+### Why AUTO uses `latestV.timestamp + 1 minute`, not `now()`
+
+1. **Skyway/Flyway ordering** — the new baseline is meant to succeed the V-stack it collapses. `latestV + 1m` guarantees the B-file always sorts strictly after the head V-file, which is what Flyway's `baselineVersion` ordering requires.
+2. **Deterministic re-runs** — re-running AUTO mode against the same V-stack yields the **same** filename, which is critical for the byte-equivalence claim. `Date.now()` would skew with each run.
+3. **Reviewability** — the timestamp tells the reviewer at a glance which V-file the baseline succeeded.
+
+### Why AUTO writes to the same `vN/` folder
+
+A within-major rebaseline collapses `B<old>` + the V-files between it and `latestV` into a single new `B<new>` inside the same major-version folder. Skyway's `baselineVersion` config is then bumped to the new B-file's timestamp; fresh installs use the new baseline, existing installs keep moving forward through later V-files normally.
+
 ## Output filename format
 
 ```
-B{YYYYMMDDHHMM}__v{Major}.{Minor}.X__Baseline.sql
+B{YYYYMMDDHHMM}__v{Major}.{Minor}.x__Baseline.sql
 ```
 
-Example: `B202605021947__v3.1.X__Baseline.sql`. The literal `X` is the patch
-component because patches don't carry migrations. See `util.ts → baselineFilename()`.
+Examples:
+- AUTO from MJ v5.32.x state: `B202605032237__v5.32.x__Baseline.sql` (latest V was `V202605032236__v5.32.x__Metadata_Sync.sql`)
+- EXPLICIT for new major: `B202605041430__v6.0.x__Baseline.sql`
+
+The literal lowercase `x` is the patch component (matches the V-file convention like `__v5.32.x__`). Patches don't carry migrations. See `util.ts → baselineFilename()`.
 
 ## Components — built
 
@@ -67,7 +87,10 @@ Live integration (a real MSSQL roundtrip against the actual MJ V-stack) is gated
 
 ## Resolved decisions
 
-- Filename: `B{YYYYMMDDHHMM}__v{Major}.{Minor}.X__Baseline.sql` (literal X).
+- Filename: `B{YYYYMMDDHHMM}__v{Major}.{Minor}.x__Baseline.sql` (literal lowercase x — matches V-file convention).
+- **Default mode is AUTO (within-major rebaseline).** `--baseline-version` is optional; omitted ⇒ scan `--source-dir` for the latest V-file and derive both version and `latestV+1m` timestamp from it. Pass `--baseline-version M.N` only when starting a new major version.
+- AUTO mode writes to the same `vN/` folder it scanned; EXPLICIT mode writes to `v{N+1}/`.
+- `--source-dir` defaults to the highest `migrations/v*/` walked up from cwd; passable explicitly when the caller knows better.
 - PG strategy: T-SQL baseline → `/pg-migrate` (`mj migrate convert`) → apply to PG → compare against `migrations-pg/v{N}/` V-stack.
 - Data dump: all rows, all columns, every table by default. Excludes `flyway_schema_history`.
 - Default row-compare: `full`.

@@ -60,6 +60,12 @@ export async function introspectPostgres(db: QueryRunner, progress: Progress = {
     functions: stableSortBy(functions, (r) => `${r.schema}.${r.name}`.toLowerCase()),
     triggers: stableSortBy(triggers, (t) => `${t.schema}.${t.name}`.toLowerCase()),
     sequences: stableSortBy(sequences, (s) => `${s.schema}.${s.name}`.toLowerCase()),
+    // PG introspection of UDTs / extended-property analogs is future work — the
+    // MSSQL → PG converter currently doesn't translate `sp_addextendedproperty`
+    // or `CREATE TYPE AS TABLE`, so returning empty here keeps the snapshot
+    // shape consistent without misrepresenting the source.
+    userDefinedTypes: [],
+    extendedProperties: [],
   };
 }
 

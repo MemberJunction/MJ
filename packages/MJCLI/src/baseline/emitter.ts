@@ -15,11 +15,13 @@
  *   7. Indexes (non-PK, non-unique-constraint)
  *   8. Data inserts (with SET IDENTITY_INSERT bookends)
  *   9. Reseed identity columns
- *  10. CREATE VIEW statements
- *  11. CREATE FUNCTION statements
- *  12. CREATE PROCEDURE statements
- *  13. CREATE TRIGGER statements
- *  14. ALTER TABLE ADD CONSTRAINT … FOREIGN KEY (last so order doesn't matter)
+ *  10. CREATE TYPE … AS TABLE (UDTs — before functions/procs that take TVPs)
+ *  11. CREATE FUNCTION statements (before views — MJ views reference UDFs)
+ *  12. CREATE VIEW statements
+ *  13. CREATE PROCEDURE statements
+ *  14. CREATE TRIGGER statements
+ *  15. ALTER TABLE ADD CONSTRAINT … FOREIGN KEY (last so order doesn't matter)
+ *  16. EXEC sp_addextendedproperty calls (after every object that can carry them)
  */
 
 import {
@@ -29,10 +31,12 @@ import {
   quoteIdent,
   quoteString,
   stableSortBy,
+  topoSortRoutinesByDefinition,
 } from './util';
 import type {
   BaselineEmitOptions,
   ColumnDef,
+  ExtendedPropertyDef,
   ForeignKeyDef,
   IndexDef,
   RoutineDef,
@@ -41,6 +45,7 @@ import type {
   TableDataDump,
   TableDef,
   TriggerDef,
+  UserDefinedTypeDef,
   ViewDef,
 } from './types';
 
@@ -65,11 +70,25 @@ export function emitBaselineTsql(input: EmitInput): string {
   if (input.options.includeData) {
     parts.push(emitData(input.snapshot.tables, input.dataDumps, input.options.batchSize));
   }
-  parts.push(emitViews(input.snapshot.views));
-  parts.push(emitRoutines(input.snapshot.functions, 'function'));
-  parts.push(emitRoutines(input.snapshot.procedures, 'procedure'));
-  parts.push(emitTriggers(input.snapshot.triggers));
+  // UDTs (table types) BEFORE any routine: procs/functions accept these as TVPs
+  // and MSSQL needs the type to exist at create time.
+  parts.push(emitUserDefinedTypes(input.snapshot.userDefinedTypes));
+  // Functions before views: MJ views frequently reference scalar/table UDFs
+  // (e.g. vwActionCategories → fnActionCategoryParentID_GetRootID). MSSQL does
+  // NOT defer name resolution for view bodies, so the function must already
+  // exist when the view is created.
+  //
+  // Within each category we also topo-sort by inferred body references because
+  // views can reference other views, functions can reference other functions,
+  // etc. Cycles fall back to qname order so output stays deterministic.
+  parts.push(emitRoutines(topoSortRoutinesByDefinition(input.snapshot.functions), 'function'));
+  parts.push(emitViews(topoSortRoutinesByDefinition(input.snapshot.views)));
+  parts.push(emitRoutines(topoSortRoutinesByDefinition(input.snapshot.procedures), 'procedure'));
+  parts.push(emitTriggers(topoSortRoutinesByDefinition(input.snapshot.triggers)));
   parts.push(emitForeignKeys(input.snapshot.tables));
+  // Extended properties LAST: every object they reference must already exist,
+  // since sp_addextendedproperty validates the target.
+  parts.push(emitExtendedProperties(input.snapshot.extendedProperties));
   parts.push(emitFooter());
   return parts.filter((p) => p.length > 0).join(NL + NL) + NL;
 }
@@ -78,7 +97,7 @@ function emitHeader(options: BaselineEmitOptions): string {
   return [
     `-- ============================================================================`,
     `-- ${options.description}`,
-    `-- Baseline version : v${options.baselineVersion}.X`,
+    `-- Baseline version : v${options.baselineVersion}.x`,
     `-- Generated at     : ${isoUtcSeconds(options.generatedAtUtc)}`,
     `-- Generator        : @memberjunction/cli baseline build`,
     `-- ============================================================================`,
@@ -162,8 +181,14 @@ function emitCreateTable(t: TableDef): string {
 
 function columnDefinition(c: ColumnDef): string {
   if (c.isComputed && c.computedExpression) {
-    const persisted = ''; // sys.computed_columns doesn't expose is_persisted in our query
-    return `${quoteIdent(c.name)} AS (${c.computedExpression})${persisted}`;
+    // sys.computed_columns.is_persisted is captured in the introspector now;
+    // emit PERSISTED so the target column has the same plan/index eligibility.
+    const persisted = c.isComputedPersisted ? ' PERSISTED' : '';
+    // The introspector hands us the body inside parens already? No — `cc.definition`
+    // returns the body WITHOUT outer parens for some shapes. Wrap defensively.
+    const body = c.computedExpression.trim();
+    const wrapped = body.startsWith('(') && body.endsWith(')') ? body : `(${body})`;
+    return `${quoteIdent(c.name)} AS ${wrapped}${persisted}`;
   }
   const parts = [quoteIdent(c.name), c.dataType.toUpperCase()];
   if (c.collation && c.dataType.toLowerCase().includes('char')) {
@@ -179,7 +204,10 @@ function emitDefaults(tables: readonly TableDef[]): string {
   for (const t of tables) {
     for (const c of t.columns) {
       if (c.defaultExpression && !c.isComputed) {
-        const constraintName = `DF_${t.name}_${c.name}`;
+        // Use the original constraint name if the introspector captured it
+        // (it should, for every default — `sys.default_constraints.name`).
+        // Fall back to the synthetic format only for hand-built test fixtures.
+        const constraintName = c.defaultConstraintName ?? `DF_${t.schema}_${t.name}_${c.name}`;
         stmts.push(
           `ALTER TABLE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} ` +
           `ADD CONSTRAINT ${quoteIdent(constraintName)} DEFAULT ${c.defaultExpression} ` +
@@ -311,7 +339,12 @@ function emitTableData(table: TableDef, dump: TableDataDump, batchSize: number):
 
 function emitViews(views: readonly ViewDef[]): string {
   if (views.length === 0) return '';
-  const lines: string[] = ['-- Views'];
+  // The trailing `GO` after the section header is REQUIRED: MSSQL stores the
+  // entire batch text (including leading comments) in OBJECT_DEFINITION(), so
+  // without this the first view's body would contain `-- Views\n` as a prefix
+  // and the comparator would flag a body-mismatch against the source DB whose
+  // V-stack-created view body has no such prefix.
+  const lines: string[] = ['-- Views', 'GO'];
   for (const v of views) {
     if (!v.definition.trim()) continue;
     lines.push(v.definition.trim());
@@ -322,7 +355,8 @@ function emitViews(views: readonly ViewDef[]): string {
 
 function emitRoutines(routines: readonly RoutineDef[], _kind: 'procedure' | 'function'): string {
   if (routines.length === 0) return '';
-  const lines: string[] = [`-- ${routines[0].kind === 'procedure' ? 'Procedures' : 'Functions'}`];
+  // Same comment-leak fix as emitViews — see comment there.
+  const lines: string[] = [`-- ${routines[0].kind === 'procedure' ? 'Procedures' : 'Functions'}`, 'GO'];
   for (const r of routines) {
     if (!r.definition.trim()) continue;
     lines.push(r.definition.trim());
@@ -333,10 +367,83 @@ function emitRoutines(routines: readonly RoutineDef[], _kind: 'procedure' | 'fun
 
 function emitTriggers(triggers: readonly TriggerDef[]): string {
   if (triggers.length === 0) return '';
-  const lines: string[] = ['-- Triggers'];
+  // Same comment-leak fix as emitViews — see comment there.
+  const lines: string[] = ['-- Triggers', 'GO'];
   for (const t of triggers) {
     if (!t.definition.trim()) continue;
     lines.push(t.definition.trim());
+    lines.push('GO');
+  }
+  return lines.join(NL);
+}
+
+function emitUserDefinedTypes(types: readonly UserDefinedTypeDef[]): string {
+  if (types.length === 0) return '';
+  const lines: string[] = ['-- User-defined types (table types)'];
+  for (const t of stableSortBy(types, (u) => `${u.schema}.${u.name}`.toLowerCase())) {
+    if (t.isMemoryOptimized) {
+      // MEMORY_OPTIMIZED table types require a hash/range index in their body.
+      // MJ doesn't use them today; if that changes we'll need to capture the
+      // bucket-count + index columns and emit the proper WITH (...) clause.
+      throw new Error(
+        `User-defined type ${t.schema}.${t.name} is MEMORY_OPTIMIZED — emitter has no path for that yet.`,
+      );
+    }
+    const colLines: string[] = [];
+    for (const c of t.columns) {
+      const parts = [quoteIdent(c.name), c.dataType.toUpperCase()];
+      // CREATE TYPE AS TABLE accepts COLLATE only on char-family columns, same as CREATE TABLE.
+      if (c.collation && /char|text/.test(c.dataType.toLowerCase())) {
+        parts.push(`COLLATE ${c.collation}`);
+      }
+      parts.push(c.isNullable ? 'NULL' : 'NOT NULL');
+      colLines.push('    ' + parts.join(' '));
+    }
+    if (t.primaryKey) {
+      // Table types can't have a named PK constraint — the name is auto-generated
+      // by MSSQL. Use the inline `PRIMARY KEY (...)` clause.
+      const cluster = t.primaryKey.clustered ? 'CLUSTERED' : 'NONCLUSTERED';
+      colLines.push(
+        `    PRIMARY KEY ${cluster} (${t.primaryKey.columns.map((n) => quoteIdent(n)).join(', ')})`,
+      );
+    }
+    lines.push(`CREATE TYPE ${quoteIdent(t.schema)}.${quoteIdent(t.name)} AS TABLE (`);
+    lines.push(colLines.join(',' + NL));
+    lines.push(');');
+    lines.push('GO');
+  }
+  return lines.join(NL);
+}
+
+/**
+ * Emit `sp_addextendedproperty` calls. MJ uses these for MS_Description on
+ * schemas, tables, columns, views, procs, functions, and triggers. The level0
+ * is always SCHEMA; level1/level2 distinguish the target's kind and depth.
+ *
+ * We don't use `IF NOT EXISTS … sp_updateextendedproperty` style guards — the
+ * baseline applies to an empty DB by contract, so a straight `sp_addextendedproperty`
+ * is the right call.
+ */
+function emitExtendedProperties(props: readonly ExtendedPropertyDef[]): string {
+  if (props.length === 0) return '';
+  const lines: string[] = ['-- Extended properties (descriptions etc.)'];
+  for (const p of props) {
+    const args: string[] = [
+      `@name = ${quoteString(p.name)}`,
+      `@value = ${quoteString(p.value)}`,
+      `@level0type = N'SCHEMA', @level0name = ${quoteString(p.schemaName)}`,
+    ];
+    if (p.level1Type) {
+      args.push(
+        `@level1type = N'${p.level1Type}', @level1name = ${quoteString(p.level1Name ?? '')}`,
+      );
+    }
+    if (p.level2Type) {
+      args.push(
+        `@level2type = N'${p.level2Type}', @level2name = ${quoteString(p.level2Name ?? '')}`,
+      );
+    }
+    lines.push(`EXEC sp_addextendedproperty ${args.join(', ')};`);
     lines.push('GO');
   }
   return lines.join(NL);

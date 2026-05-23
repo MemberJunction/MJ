@@ -46,7 +46,12 @@ export async function openConnection(params: DbConnectionParams): Promise<QueryR
 }
 
 async function openMssql(params: DbConnectionParams): Promise<QueryRunner> {
-  const mssql = await import('mssql');
+  // mssql is a CJS package; under `await import()` its actual exports may live
+  // under `.default` depending on Node/TS interop. Mirror the pg branch below.
+  const mssqlMod = await import('mssql');
+  const mssql = (mssqlMod as { ConnectionPool?: typeof mssqlMod.ConnectionPool }).ConnectionPool
+    ? mssqlMod
+    : (mssqlMod as unknown as { default: typeof mssqlMod }).default;
   const config = {
     server: params.host,
     port: params.port ?? 1433,
@@ -111,8 +116,16 @@ async function openPostgres(params: DbConnectionParams): Promise<QueryRunner> {
     },
     async stream(sql, onRow) {
       // Use a cursor for memory-bounded iteration.
+      // pg-query-stream is a direct dep but loaded lazily — only the postgres
+      // path needs it, and the same QueryRunner is used for mssql callers.
+      type QueryStreamCtor = new (sql: string, values: unknown[]) => AsyncIterable<unknown>;
       const QueryStream = await import('pg-query-stream').then(
-        (m) => m.default ?? m,
+        (m): QueryStreamCtor | null => {
+          const ctor =
+            (m as { default?: QueryStreamCtor }).default
+            ?? (m as unknown as QueryStreamCtor);
+          return ctor ?? null;
+        },
       ).catch(() => null);
       if (!QueryStream) {
         // Fallback: load all rows. Acceptable for compare runs where rows
@@ -121,7 +134,7 @@ async function openPostgres(params: DbConnectionParams): Promise<QueryRunner> {
         for (const row of result.rows) await onRow(row as Record<string, unknown>);
         return;
       }
-      const stream = client.query(new (QueryStream as never)(sql, []));
+      const stream = client.query(new QueryStream(sql, []));
       for await (const row of stream) {
         await onRow(row as Record<string, unknown>);
       }

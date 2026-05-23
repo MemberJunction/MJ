@@ -13,18 +13,33 @@ import { dumpTables } from '../../baseline/data-dumper';
 import { emitBaselineTsql } from '../../baseline/emitter';
 import { compareSnapshots } from '../../baseline/comparator';
 import { renderJson, renderMarkdown } from '../../baseline/report';
-import { baselineFilename } from '../../baseline/util';
+import {
+  baselineFilename,
+  computeAutoBaselineStamp,
+  discoverMigrationsSourceDir,
+  findLatestVersionedMigration,
+} from '../../baseline/util';
 
 export default class BaselineRoundtrip extends Command {
   static description =
     'Build a baseline from a V-stack database, apply it to a fresh DB, and prove byte-equivalence.';
 
   static examples = [
-    '<%= config.bin %> <%= command.id %> --baseline-version 3.1 --source MJ_BL_Stack --target MJ_BL_New',
+    '<%= config.bin %> <%= command.id %> --source MJ_BL_Stack --target MJ_BL_New                          # auto: within-major',
+    '<%= config.bin %> <%= command.id %> --baseline-version 6.0 --source MJ_BL_Stack --target MJ_BL_New   # explicit major-boundary',
+    '<%= config.bin %> <%= command.id %> --source-dir ./migrations/v5 --source MJ_BL_Stack --target MJ_BL_New',
   ];
 
   static flags = {
-    'baseline-version': Flags.string({ description: 'Major.Minor version stamp.', required: true }),
+    'baseline-version': Flags.string({
+      description:
+        'Major.Minor version stamp. Omit to auto-detect from --source-dir (within-major rebaseline).',
+    }),
+    'source-dir': Flags.string({
+      description:
+        'Migrations source directory used to auto-detect baseline version + timestamp when --baseline-version is omitted. ' +
+        'Defaults to the highest migrations/v*/ near cwd.',
+    }),
     'description': Flags.string({ description: 'Header description.', default: 'MemberJunction Baseline' }),
     'dialect': Flags.string({
       description: 'Dialect to test. PG path runs the converter via /pg-migrate first.',
@@ -58,8 +73,10 @@ export default class BaselineRoundtrip extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(BaselineRoundtrip);
-    if (!/^\d+\.\d+$/.test(flags['baseline-version'])) {
-      this.error(`--baseline-version must be Major.Minor (got "${flags['baseline-version']}")`);
+    const { baselineVersion, generatedAtUtc, autoSource } = this.resolveVersionAndStamp(flags);
+    if (autoSource) {
+      this.log(chalk.dim(`  Auto-detected baseline: v${baselineVersion}.x (from ${autoSource.filename})`));
+      this.log(chalk.dim(`  Auto timestamp        : ${autoSource.timestamp} + 1m`));
     }
     const dialect = flags.dialect as 'mssql' | 'postgres';
     const useSpinner = isTty();
@@ -90,12 +107,11 @@ export default class BaselineRoundtrip extends Command {
 
     // 2. Emit baseline
     phase('Emitting baseline SQL');
-    const generatedAtUtc = new Date();
     const sql = emitBaselineTsql({
       snapshot: sourceSnapshot,
       dataDumps: sourceDumps,
       options: {
-        baselineVersion: flags['baseline-version'],
+        baselineVersion,
         description: flags.description,
         generatedAtUtc,
         includeData: true,
@@ -103,7 +119,7 @@ export default class BaselineRoundtrip extends Command {
         batchSize: 1000,
       },
     });
-    const filename = baselineFilename({ generatedAtUtc, baselineVersion: flags['baseline-version'] });
+    const filename = baselineFilename({ generatedAtUtc, baselineVersion });
     const baselinePath = path.resolve(flags.out, filename);
     fs.writeFileSync(baselinePath, sql, 'utf8');
     succeed(`Baseline emitted: ${baselinePath}`);
@@ -179,6 +195,43 @@ export default class BaselineRoundtrip extends Command {
     if (flags['fail-on-diff'] && !report.isClean) {
       this.exit(2);
     }
+  }
+
+  /** Same logic as in `BaselineBuild`: explicit version → now; otherwise auto-detect. */
+  private resolveVersionAndStamp(flags: {
+    'baseline-version'?: string;
+    'source-dir'?: string;
+  }): {
+    baselineVersion: string;
+    generatedAtUtc: Date;
+    autoSource: { filename: string; timestamp: string } | null;
+  } {
+    const explicit = flags['baseline-version'];
+    if (explicit) {
+      if (!/^\d+\.\d+$/.test(explicit)) {
+        this.error(`--baseline-version must be Major.Minor (got "${explicit}")`);
+      }
+      return { baselineVersion: explicit, generatedAtUtc: new Date(), autoSource: null };
+    }
+    const sourceDir = flags['source-dir'] ?? discoverMigrationsSourceDir(process.cwd());
+    if (!sourceDir) {
+      this.error(
+        'No --baseline-version provided and could not auto-discover a migrations directory. ' +
+          'Pass --source-dir or --baseline-version.',
+      );
+    }
+    const latest = findLatestVersionedMigration(sourceDir);
+    if (!latest) {
+      this.error(
+        `No V-files found in ${sourceDir}. Pass --baseline-version explicitly or point --source-dir at a folder with V<ts>__v<Major>.<Minor>...sql migrations.`,
+      );
+    }
+    const { generatedAtUtc } = computeAutoBaselineStamp(latest.timestamp);
+    return {
+      baselineVersion: latest.majorMinor,
+      generatedAtUtc,
+      autoSource: { filename: latest.filename, timestamp: latest.timestamp },
+    };
   }
 }
 

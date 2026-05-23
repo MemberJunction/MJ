@@ -50,6 +50,8 @@ function snapshotFixture(): SchemaSnapshot {
     functions: [],
     triggers: [],
     sequences: [],
+    userDefinedTypes: [],
+    extendedProperties: [],
   };
 }
 
