@@ -62,18 +62,28 @@ export class QueryPagingEngine {
     /**
      * Applies a row cap to the outermost SELECT.
      *
-     * Strategy:
-     *   1. Parse via AST and inject `TOP N` (SQL Server) or `LIMIT N`
-     *      (PostgreSQL) into the outermost SELECT node.
-     *   2. If the parser cannot represent the input but the SQL is
-     *      CTE-headed, append `OFFSET 0 ROWS FETCH NEXT N ROWS ONLY` via
-     *      {@link buildDataSQL}.
-     *   3. Otherwise return the SQL unchanged.
+     * `maxRows` is treated as a hard ceiling: the result is guaranteed to
+     * return at most `maxRows` rows whenever the SQL shape can be capped
+     * without corrupting the query.
      *
-     * A user-written outer TOP or LIMIT is preserved. SELECT INTO and
-     * UNION/INTERSECT/EXCEPT pass through unchanged. Non-positive,
-     * non-finite, or fractional `maxRows` are sanitized (`<= 0` and
-     * non-finite are no-ops; fractional values are floored).
+     * Strategy:
+     *   1. Parse via AST. If the outermost SELECT has no existing cap,
+     *      inject `TOP N` (SQL Server) or `LIMIT N` (PostgreSQL).
+     *   2. If an existing numeric `TOP`/`LIMIT` is present, reduce it to
+     *      `min(existing, maxRows)`. The tighter cap wins.
+     *   3. If the AST recognizes the shape but can't inject (`TOP PERCENT`,
+     *      non-numeric `TOP`, `UNION`, `WITH TIES`, etc.), wrap with an
+     *      outer `SELECT TOP N * FROM (…) AS _mj_capped` (or LIMIT on PG).
+     *   4. If the parser can't handle the input but the SQL is CTE-headed,
+     *      append `OFFSET 0 ROWS FETCH NEXT N ROWS ONLY` via {@link buildDataSQL}.
+     *   5. Shapes that can't legally appear inside a derived table
+     *      (`FOR JSON`, `FOR XML`, `OPTION (...)`, `SELECT INTO`,
+     *      mutations) are returned unchanged — the cap is moot
+     *      (FOR JSON/XML return one row) or the validator should have
+     *      rejected them earlier (mutations, SELECT INTO).
+     *
+     * Non-positive, non-finite, or fractional `maxRows` are sanitized
+     * (`<= 0` and non-finite are no-ops; fractional values are floored).
      */
     static WrapWithMaxRows(
         resolvedSQL: string,
@@ -83,6 +93,7 @@ export class QueryPagingEngine {
         const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
 
         if (!Number.isFinite(maxRows) || maxRows <= 0) return cleanedSQL;
+        if (cleanedSQL.trim().length === 0) return cleanedSQL;
         const cap = Math.floor(maxRows);
 
         const dialect = QueryPagingEngine.getDialect(platform);
@@ -91,29 +102,135 @@ export class QueryPagingEngine {
         if (astResult.outcome === 'capped') return astResult.sql;
         if (astResult.outcome === 'pass-through') return cleanedSQL;
 
-        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
-        if (!isCTE) return cleanedSQL;
+        // Both `wrap` and `unparseable` outcomes may try the outer-wrap path.
+        // First, check for clauses that cannot legally appear inside a derived
+        // table — wrapping such queries would produce invalid SQL.
+        const unwrappable = QueryPagingEngine.containsUnwrappableClause(cleanedSQL);
 
-        try {
-            return QueryPagingEngine.buildDataSQL(cleanedSQL, 0, cap, dialect);
-        } catch {
-            return cleanedSQL;
+        if (astResult.outcome === 'wrap') {
+            if (unwrappable) return cleanedSQL;
+            return QueryPagingEngine.outerWrap(cleanedSQL, cap, dialect);
         }
+
+        // unparseable — try the CTE-fallback path first.
+        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
+        if (isCTE) {
+            try {
+                return QueryPagingEngine.buildDataSQL(cleanedSQL, 0, cap, dialect);
+            } catch {
+                return cleanedSQL;
+            }
+        }
+
+        if (unwrappable) return cleanedSQL;
+
+        return QueryPagingEngine.outerWrap(cleanedSQL, cap, dialect);
+    }
+
+    /**
+     * Wraps `sql` in an outer SELECT that enforces the row cap.
+     * Used when the AST recognises the shape but cannot inject the cap
+     * cleanly, or when the AST can't parse the input but the SQL is known
+     * to be wrap-safe (no FOR JSON/FOR XML/OPTION at top level).
+     */
+    private static outerWrap(sql: string, cap: number, dialect: SQLDialect): string {
+        if (dialect.PlatformKey === 'sqlserver') {
+            return `SELECT TOP ${cap} * FROM (\n${sql}\n) AS _mj_capped`;
+        }
+        return `SELECT * FROM (\n${sql}\n) AS _mj_capped LIMIT ${cap}`;
+    }
+
+    /**
+     * Token-aware scan for clauses that cannot legally appear inside a
+     * derived table — wrapping such a query would produce invalid SQL.
+     *
+     * Detects (case-insensitive, outside string literals and quoted
+     * identifiers):
+     *   - `FOR JSON …`
+     *   - `FOR XML …`
+     *   - `OPTION (…)`
+     *
+     * `SELECT INTO` and mutations are handled separately via the AST
+     * (`applyMaxRowsViaAST` returns `pass-through` for those).
+     */
+    private static containsUnwrappableClause(sql: string): boolean {
+        const len = sql.length;
+        let i = 0;
+
+        const isWordChar = (ch: string): boolean =>
+            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+            (ch >= '0' && ch <= '9') || ch === '_';
+
+        const isWS = (ch: string): boolean =>
+            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+
+        const matchWord = (start: number, word: string): boolean => {
+            if (start + word.length > len) return false;
+            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
+            const after = start + word.length;
+            return after === len || !isWordChar(sql[after]);
+        };
+
+        while (i < len) {
+            const c = sql[i];
+
+            // Skip string literals and quoted identifiers (single quote,
+            // bracket, double quote — all support doubled-delimiter escapes).
+            if (c === "'" || c === '[' || c === '"') {
+                const close = c === '[' ? ']' : c;
+                i++;
+                while (i < len) {
+                    if (sql[i] === close) {
+                        if (sql[i + 1] === close) { i += 2; continue; }
+                        i++; break;
+                    }
+                    i++;
+                }
+                continue;
+            }
+
+            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
+            if (!prevIsWord) {
+                if (matchWord(i, 'FOR')) {
+                    let j = i + 3;
+                    while (j < len && isWS(sql[j])) j++;
+                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
+                }
+                if (matchWord(i, 'OPTION')) {
+                    let j = i + 6;
+                    while (j < len && isWS(sql[j])) j++;
+                    if (j < len && sql[j] === '(') return true;
+                }
+            }
+
+            i++;
+        }
+
+        return false;
     }
 
     /**
      * AST-based row-cap injection.
-     *   `capped`       — `sql` contains the input with TOP/LIMIT injected.
-     *   `pass-through` — input must not be capped (mutation, SELECT INTO,
-     *                    UNION, or existing outer cap).
+     *   `capped`       — `sql` contains the input with TOP/LIMIT injected
+     *                    or reduced to `min(existing, cap)`.
+     *   `wrap`         — AST recognized the shape but the cap can't be
+     *                    safely injected inline (`TOP PERCENT`, non-numeric
+     *                    `TOP`/`LIMIT`); caller should outer-wrap.
+     *   `pass-through` — shape can't be capped at all without corrupting
+     *                    the query (SELECT INTO, mutation).
      *   `unparseable`  — parser could not handle the input; caller may
-     *                    attempt a textual fallback.
+     *                    attempt a CTE-fallback or outer wrap.
      */
     private static applyMaxRowsViaAST(
         sql: string,
         cap: number,
         dialect: SQLDialect,
-    ): { outcome: 'capped'; sql: string } | { outcome: 'pass-through' } | { outcome: 'unparseable' } {
+    ):
+        | { outcome: 'capped'; sql: string }
+        | { outcome: 'wrap' }
+        | { outcome: 'pass-through' }
+        | { outcome: 'unparseable' }
+    {
         const ast = SQLParser.ParseSQL(sql, dialect);
         if (!ast) return { outcome: 'unparseable' };
 
@@ -128,13 +245,47 @@ export class QueryPagingEngine {
 
         if (root.set_op) return { outcome: 'unparseable' };
 
-        const existingTop = root.top as { value: number } | null | undefined;
-        if (existingTop != null) return { outcome: 'pass-through' };
-        const existingLimit = root.limit as { value: unknown[] } | null | undefined;
-        if (existingLimit != null && Array.isArray(existingLimit.value) && existingLimit.value.length > 0) {
-            return { outcome: 'pass-through' };
+        // Existing TOP — reduce to min(existing, cap). PERCENT and non-numeric
+        // values (e.g. TOP (@n)) can't be reasoned about as row counts; let
+        // the caller outer-wrap them.
+        const existingTop = root.top as { value: unknown; percent?: unknown } | null | undefined;
+        if (existingTop != null) {
+            if (existingTop.percent) return { outcome: 'wrap' };
+            const existingValue = typeof existingTop.value === 'number'
+                ? existingTop.value
+                : Number(existingTop.value);
+            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
+            if (existingValue <= cap) return { outcome: 'capped', sql };
+            root.top = { value: cap, percent: null };
+            try {
+                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
+            } catch {
+                return { outcome: 'unparseable' };
+            }
         }
 
+        // Existing LIMIT — reduce the LIMIT value (preserves OFFSET).
+        // node-sql-parser shape for SQL Server / PostgreSQL:
+        //   `LIMIT N`           → value=[{value:N}],         seperator=''
+        //   `LIMIT N OFFSET M`  → value=[{value:N},{value:M}], seperator='offset'
+        // The LIMIT value is always at index 0 for these dialects.
+        const existingLimit = root.limit as { value: { value: unknown }[]; seperator?: string } | null | undefined;
+        if (existingLimit != null && Array.isArray(existingLimit.value) && existingLimit.value.length > 0) {
+            const limitNode = existingLimit.value[0];
+            const existingValue = typeof limitNode.value === 'number'
+                ? limitNode.value
+                : Number(limitNode.value);
+            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
+            if (existingValue <= cap) return { outcome: 'capped', sql };
+            existingLimit.value[0] = { type: 'number', value: cap } as { type: 'number'; value: number };
+            try {
+                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
+            } catch {
+                return { outcome: 'unparseable' };
+            }
+        }
+
+        // No existing cap — inject one.
         if (dialect.PlatformKey === 'sqlserver') {
             root.top = { value: cap, percent: null };
         } else {
