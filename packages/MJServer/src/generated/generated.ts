@@ -44837,6 +44837,9 @@ export class MJEntityFormOverride_ {
     @MaxLength(20)
     Status: string;
         
+    @Field({nullable: true, description: `Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.`}) 
+    Notes?: string;
+        
     @Field() 
     _mj__CreatedAt: Date;
         
@@ -44896,6 +44899,9 @@ export class CreateMJEntityFormOverrideInput {
     @Field({ nullable: true })
     Status?: string;
 
+    @Field({ nullable: true })
+    Notes: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -44935,6 +44941,9 @@ export class UpdateMJEntityFormOverrideInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -77931,11 +77940,11 @@ export class MJUser_ {
     @Field(() => [MJAIAgent_])
     MJAIAgents_OwnerUserIDArray: MJAIAgent_[]; // Link to MJAIAgents
     
-    @Field(() => [MJEntityFormOverride_])
-    MJEntityFormOverrides_UserIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
-    
     @Field(() => [MJList_])
     MJLists_LastRefreshedByUserIDArray: MJList_[]; // Link to MJLists
+    
+    @Field(() => [MJEntityFormOverride_])
+    MJEntityFormOverrides_UserIDArray: MJEntityFormOverride_[]; // Link to MJEntityFormOverrides
     
 }
 
@@ -79072,16 +79081,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJEntityFormOverride_])
-    async MJEntityFormOverrides_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJList_])
     async MJLists_LastRefreshedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Lists', userPayload);
@@ -79089,6 +79088,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('LastRefreshedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJEntityFormOverride_])
+    async MJEntityFormOverrides_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Entity Form Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwEntityFormOverrides')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Entity Form Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Entity Form Overrides', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

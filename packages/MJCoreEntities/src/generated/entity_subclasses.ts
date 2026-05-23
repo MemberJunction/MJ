@@ -15546,6 +15546,11 @@ export const MJEntityFormOverrideSchema = z.object({
     *   * Inactive
     *   * Pending
         * * Description: Active = eligible for resolution. Inactive = ignored. Pending = AI-authored, awaiting human activation (resolver treats as Inactive).`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -67602,49 +67607,53 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
 
     /**
     * Validate() method override for MJ: Entity Form Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Ensures that the record correctly identifies its target based on the selected scope: User-scoped records must have a User but no Role, Role-scoped records must have a Role but no User, and Global records must not have either.
+    * * Table-Level: Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateScopeTargetConsistency(result);
+        this.ValidateScopeAndIdentifierConsistency(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * Ensures that the record correctly identifies its target based on the selected scope: User-scoped records must have a User but no Role, Role-scoped records must have a Role but no User, and Global records must not have either.
+    * Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateScopeTargetConsistency(result: ValidationResult) {
-    	if (this.Scope === 'User' && (this.UserID == null || this.RoleID != null)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"UserID",
-    			"When the scope is set to 'User', a User must be selected and the Role must be empty.",
-    			this.UserID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.Scope === 'Role' && (this.RoleID == null || this.UserID != null)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"RoleID",
-    			"When the scope is set to 'Role', a Role must be selected and the User must be empty.",
-    			this.RoleID,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    	if (this.Scope === 'Global' && (this.UserID != null || this.RoleID != null)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"Scope",
-    			"When the scope is set to 'Global', both the User and Role fields must be empty.",
-    			this.Scope,
-    			ValidationErrorType.Failure
-    		));
+    public ValidateScopeAndIdentifierConsistency(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"When the scope is set to 'User', a User must be specified and the Role must be left empty.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null || this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"When the scope is set to 'Role', a Role must be specified and the User must be left empty.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Scope",
+    				"When the scope is set to 'Global', both the User and Role fields must be empty.",
+    				this.Scope,
+    				ValidationErrorType.Failure
+    			));
+    		}
     	}
     }
 
@@ -67793,6 +67802,19 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     }
     set Status(value: 'Active' | 'Inactive' | 'Pending') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional free-form commentary about this override — e.g. who authored it, why it exists, what should change before it goes Global, links to related discussions. Does not affect resolution.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
     }
 
     /**

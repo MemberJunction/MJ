@@ -15,9 +15,9 @@ export class MJEntityFormOverrideFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'targetingAndResolution', sectionName: 'Targeting and Resolution', isExpanded: true },
             { sectionKey: 'overrideConfiguration', sectionName: 'Override Configuration', isExpanded: true },
-            { sectionKey: 'scopeAssignment', sectionName: 'Scope Assignment', isExpanded: true },
+            { sectionKey: 'overrideDetails', sectionName: 'Override Details', isExpanded: true },
+            { sectionKey: 'resolutionRules', sectionName: 'Resolution Rules', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
