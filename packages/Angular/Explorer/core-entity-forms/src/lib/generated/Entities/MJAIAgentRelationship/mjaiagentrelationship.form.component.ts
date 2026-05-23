@@ -17,7 +17,7 @@ export class MJAIAgentRelationshipFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'agentRelationship', sectionName: 'Agent Relationship', isExpanded: true },
             { sectionKey: 'payloadMappingContext', sectionName: 'Payload Mapping & Context', isExpanded: true },
-            { sectionKey: 'conversationSettings', sectionName: 'Conversation Settings', isExpanded: false },
+            { sectionKey: 'conversationSettings', sectionName: 'Conversation Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

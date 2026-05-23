@@ -1,0 +1,63 @@
+<!doctype html><html><head><meta charset="utf-8"><title>05 — Categories</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item"><i class="fa-solid fa-house"></i> Home</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header"><h1><i class="fa-solid fa-list-check"></i> Lists</h1><div class="spacer"></div><button class="mj-btn mj-btn-primary"><i class="fa-solid fa-folder-plus"></i> New Category</button></div>
+  <div class="app-tabs"><div class="tab"><i class="fa-solid fa-list"></i>Browse</div><div class="tab"><i class="fa-solid fa-diagram-project"></i>Operations</div><div class="tab active"><i class="fa-solid fa-folder-tree"></i>Categories</div></div>
+
+  <div style="display:grid; grid-template-columns: 360px 1fr; gap: 16px;">
+    <div class="mj-panel">
+      <div class="mj-panel-header"><h3><i class="fa-solid fa-folder-tree"></i>Categories</h3></div>
+      <div class="mj-panel-body">
+        <div class="mj-search mb-16"><i class="fa-solid fa-search icon"></i><input class="mj-input" placeholder="Find category…"></div>
+        <div class="tree">
+          <div class="tree-node selected"><i class="fa-solid fa-chevron-down chevron"></i><i class="fa-solid fa-folder-open" style="color:var(--mj-status-warning)"></i><span><strong>Marketing</strong></span><span class="count-badge">24</span></div>
+          <div class="tree-children">
+            <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span>Campaigns</span><span class="count-badge">12</span></div>
+            <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span>Newsletter Segments</span><span class="count-badge">8</span></div>
+            <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span>Event Audiences</span><span class="count-badge">4</span></div>
+          </div>
+          <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span><strong>Finance</strong></span><span class="count-badge">9</span></div>
+          <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span><strong>Operations</strong></span><span class="count-badge">38</span></div>
+          <div class="tree-node"><i class="fa-solid fa-chevron-right chevron"></i><i class="fa-solid fa-folder" style="color:var(--mj-status-warning)"></i><span><strong>Data Quality</strong></span><span class="count-badge">15</span></div>
+        </div>
+        <div class="muted mt-12" style="font-size:11px;"><i class="fa-solid fa-arrows-up-down-left-right"></i> Drag categories to reorganize</div>
+      </div>
+    </div>
+
+    <div class="mj-panel">
+      <div class="mj-panel-header">
+        <h3><i class="fa-solid fa-folder-open"></i>Marketing</h3>
+        <div style="margin-left:auto; display:flex; gap:6px;">
+          <button class="mj-btn mj-btn-icon mj-btn-ghost" title="Edit"><i class="fa-solid fa-pen"></i></button>
+          <button class="mj-btn mj-btn-icon mj-btn-ghost" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+      <div class="mj-panel-body">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+          <div><div class="label">Name</div><input class="mj-input" value="Marketing"></div>
+          <div><div class="label">Parent Category</div><select class="mj-input mj-select"><option>(none — root)</option></select></div>
+          <div style="grid-column:1/-1;"><div class="label">Description</div><textarea class="mj-input" rows="2">All lists owned by the marketing department.</textarea></div>
+        </div>
+        <div class="divider"></div>
+        <div class="row gap-16">
+          <div style="text-align:center; padding:14px; background:var(--mj-bg-surface-sunken); border-radius:10px; flex:1;"><div style="font-size:24px; font-weight:700;">24</div><div class="muted" style="font-size:11px;">Lists</div></div>
+          <div style="text-align:center; padding:14px; background:var(--mj-bg-surface-sunken); border-radius:10px; flex:1;"><div style="font-size:24px; font-weight:700;">3</div><div class="muted" style="font-size:11px;">Subcategories</div></div>
+          <div style="text-align:center; padding:14px; background:var(--mj-bg-surface-sunken); border-radius:10px; flex:1;"><div style="font-size:24px; font-weight:700;">5,194</div><div class="muted" style="font-size:11px;">Total Items</div></div>
+        </div>
+        <div class="divider"></div>
+        <div class="label mb-8">Lists in this category</div>
+        <table class="mj-table">
+          <tbody>
+            <tr><td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-list"></i></span><span>VIP Donors Q4 2026</span></div></td><td class="muted">Contacts · 348 items</td><td style="text-align:right;"><i class="fa-solid fa-arrow-right muted"></i></td></tr>
+            <tr><td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-list"></i></span><span>Lapsed Members — 90d</span></div></td><td class="muted">Members · 1,204 items</td><td style="text-align:right;"><i class="fa-solid fa-arrow-right muted"></i></td></tr>
+            <tr><td><div class="cell-icon-row"><span class="row-icon"><i class="fa-solid fa-list"></i></span><span>Welcome Series Cohort</span></div></td><td class="muted">Contacts · 487 items</td><td style="text-align:right;"><i class="fa-solid fa-arrow-right muted"></i></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>
