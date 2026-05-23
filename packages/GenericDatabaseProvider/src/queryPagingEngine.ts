@@ -60,6 +60,98 @@ export class QueryPagingEngine {
     }
 
     /**
+     * Applies a row cap to the outermost SELECT.
+     *
+     * Strategy:
+     *   1. Parse via AST and inject `TOP N` (SQL Server) or `LIMIT N`
+     *      (PostgreSQL) into the outermost SELECT node.
+     *   2. If the parser cannot represent the input but the SQL is
+     *      CTE-headed, append `OFFSET 0 ROWS FETCH NEXT N ROWS ONLY` via
+     *      {@link buildDataSQL}.
+     *   3. Otherwise return the SQL unchanged.
+     *
+     * A user-written outer TOP or LIMIT is preserved. SELECT INTO and
+     * UNION/INTERSECT/EXCEPT pass through unchanged. Non-positive,
+     * non-finite, or fractional `maxRows` are sanitized (`<= 0` and
+     * non-finite are no-ops; fractional values are floored).
+     */
+    static WrapWithMaxRows(
+        resolvedSQL: string,
+        maxRows: number,
+        platform: DatabasePlatform,
+    ): string {
+        const cleanedSQL = resolvedSQL.trimEnd().replace(/;\s*$/, '');
+
+        if (!Number.isFinite(maxRows) || maxRows <= 0) return cleanedSQL;
+        const cap = Math.floor(maxRows);
+
+        const dialect = QueryPagingEngine.getDialect(platform);
+
+        const astResult = QueryPagingEngine.applyMaxRowsViaAST(cleanedSQL, cap, dialect);
+        if (astResult.outcome === 'capped') return astResult.sql;
+        if (astResult.outcome === 'pass-through') return cleanedSQL;
+
+        const isCTE = SQLParser.ExtractCTEs(cleanedSQL, dialect) !== null;
+        if (!isCTE) return cleanedSQL;
+
+        try {
+            return QueryPagingEngine.buildDataSQL(cleanedSQL, 0, cap, dialect);
+        } catch {
+            return cleanedSQL;
+        }
+    }
+
+    /**
+     * AST-based row-cap injection.
+     *   `capped`       — `sql` contains the input with TOP/LIMIT injected.
+     *   `pass-through` — input must not be capped (mutation, SELECT INTO,
+     *                    UNION, or existing outer cap).
+     *   `unparseable`  — parser could not handle the input; caller may
+     *                    attempt a textual fallback.
+     */
+    private static applyMaxRowsViaAST(
+        sql: string,
+        cap: number,
+        dialect: SQLDialect,
+    ): { outcome: 'capped'; sql: string } | { outcome: 'pass-through' } | { outcome: 'unparseable' } {
+        const ast = SQLParser.ParseSQL(sql, dialect);
+        if (!ast) return { outcome: 'unparseable' };
+
+        const rootNode = Array.isArray(ast) ? ast[0] : ast;
+        if (!rootNode) return { outcome: 'unparseable' };
+        const root = rootNode as unknown as Record<string, unknown>;
+
+        if (root.type !== 'select') return { outcome: 'pass-through' };
+
+        const into = root.into as { position?: unknown } | undefined;
+        if (into && into.position) return { outcome: 'pass-through' };
+
+        if (root.set_op) return { outcome: 'unparseable' };
+
+        const existingTop = root.top as { value: number } | null | undefined;
+        if (existingTop != null) return { outcome: 'pass-through' };
+        const existingLimit = root.limit as { value: unknown[] } | null | undefined;
+        if (existingLimit != null && Array.isArray(existingLimit.value) && existingLimit.value.length > 0) {
+            return { outcome: 'pass-through' };
+        }
+
+        if (dialect.PlatformKey === 'sqlserver') {
+            root.top = { value: cap, percent: null };
+        } else {
+            root.limit = {
+                seperator: '',
+                value: [{ type: 'number', value: cap }],
+            };
+        }
+
+        try {
+            return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
+        } catch {
+            return { outcome: 'unparseable' };
+        }
+    }
+
+    /**
      * Determines whether the given params indicate paging should be applied.
      */
     static ShouldPage(startRow: number | undefined, maxRows: number | undefined): boolean {
