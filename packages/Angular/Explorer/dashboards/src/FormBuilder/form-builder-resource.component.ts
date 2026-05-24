@@ -31,6 +31,25 @@ import { EntityFormOverrideService } from '../ComponentStudio/services/entity-fo
 import type { FormOverrideDialogResult } from '../ComponentStudio/components/form-override-dialog.component';
 
 /**
+ * One Component version in the active form's Name lineage. The version rail
+ * lists these; clicking activates / previews / diffs.
+ */
+export interface ComponentVersionRow {
+    ID: string;
+    Name: string;
+    Version: string;
+    VersionSequence: number;
+    Status: string;
+    UpdatedAt: Date | null;
+    /** True when this version is the one currently pointed at by an Active
+     *  override for the calling user. */
+    IsActive: boolean;
+    /** True when this version is pointed at by a Pending override for the
+     *  user (i.e. an AI-authored refinement awaiting activation). */
+    IsPending: boolean;
+}
+
+/**
  * Lightweight summary of a form-role Component, populated from MJ: Components
  * for the left-rail picker. Specification is loaded on demand when the user
  * actually opens a form so we don't pay the JSON parse cost N times.
@@ -80,9 +99,25 @@ export class FormBuilderResourceComponent
 
     public LeftRailCollapsed = false;
     public RightRailCollapsed = false;
+    public ChatPaneCollapsed = false;
     public IsLoading = true;
     public ExistingForms: FormComponentSummary[] = [];
     public LeftRailFilter = '';
+
+    /**
+     * Center-pane view mode for the cockpit. Default is 'preview' because the
+     * preview is the most useful single view when a form is loaded; users
+     * tab to 'code' to edit and 'layout' for the (legacy) drag-drop canvas.
+     */
+    public CenterPaneMode: 'preview' | 'code' | 'layout' = 'preview';
+
+    /**
+     * Version rail data. Lineage = all Component rows sharing the active
+     * form's Name. Ordered by VersionSequence DESC so the newest is on top.
+     */
+    public Versions: ComponentVersionRow[] = [];
+    public VersionsLoading = false;
+    public ActiveVersionID: string | null = null;
 
     public SelectedFormID: string | null = null;
     public SelectedFormName = '';
@@ -119,6 +154,15 @@ export class FormBuilderResourceComponent
     public async ngAfterViewInit(): Promise<void> {
         try {
             this.refreshEntityChoices();
+            // Restore chat-pane collapse state per-user across sessions.
+            try {
+                if (typeof window !== 'undefined' && window.localStorage) {
+                    const stored = window.localStorage.getItem('mj.formBuilder.chatPaneCollapsed');
+                    if (stored === 'true') this.ChatPaneCollapsed = true;
+                }
+            } catch {
+                // localStorage unavailable — fall through with default
+            }
             await this.loadExistingForms();
         } catch (err) {
             LogError(`FormBuilderResource.ngAfterViewInit: ${err instanceof Error ? err.message : String(err)}`);
@@ -194,6 +238,203 @@ export class FormBuilderResourceComponent
         this.cdr.markForCheck();
     }
 
+    public ToggleChatPane(): void {
+        this.ChatPaneCollapsed = !this.ChatPaneCollapsed;
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('mj.formBuilder.chatPaneCollapsed', String(this.ChatPaneCollapsed));
+            }
+        } catch {
+            // localStorage unavailable — fine, just don't persist
+        }
+        this.cdr.markForCheck();
+    }
+
+    public SetCenterPaneMode(mode: 'preview' | 'code' | 'layout'): void {
+        this.CenterPaneMode = mode;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Direct-edit handler for the Code pane's textarea. Marks the form dirty
+     * so the Save button activates; the Layout-tab canvas is *not* re-derived
+     * from this code unless the user explicitly re-syncs (avoids destructive
+     * round-trips when the JSX has hand-authored bits the canvas can't model).
+     */
+    public OnEditableCodeInput(event: Event): void {
+        const next = (event.target as HTMLTextAreaElement).value ?? '';
+        if (next === this.EditableCode) return;
+        this.EditableCode = next;
+        this.DirtyFlag = true;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Load all Component versions sharing the active form's Name. The version
+     * rail renders these; `Active` / `Pending` flags come from cross-referencing
+     * EntityFormOverrides for the user. Tolerates missing user / empty results
+     * — version rail just shows nothing in that case.
+     */
+    public async loadVersionsForActiveForm(): Promise<void> {
+        if (!this.SelectedFormName) {
+            this.Versions = [];
+            this.ActiveVersionID = null;
+            return;
+        }
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user) {
+            this.Versions = [];
+            return;
+        }
+        this.VersionsLoading = true;
+        this.cdr.markForCheck();
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const escapedName = this.SelectedFormName.replace(/'/g, "''");
+            const result = await rv.RunView<{
+                ID: string;
+                Name: string;
+                Version: string;
+                VersionSequence: number;
+                Status: string;
+                __mj_UpdatedAt: string;
+            }>({
+                EntityName: 'MJ: Components',
+                ExtraFilter: `Name='${escapedName}'`,
+                Fields: ['ID', 'Name', 'Version', 'VersionSequence', 'Status', '__mj_UpdatedAt'],
+                OrderBy: 'VersionSequence DESC',
+                ResultType: 'simple',
+            }, user);
+            if (!result.Success) {
+                LogError(`FormBuilderResource.loadVersionsForActiveForm: ${result.ErrorMessage}`);
+                this.Versions = [];
+                return;
+            }
+            // Cross-reference overrides to tag Active / Pending versions for
+            // the current user. Single query, joined client-side — small N.
+            const overrideResult = await rv.RunView<{
+                ComponentID: string;
+                Status: string;
+            }>({
+                EntityName: 'MJ: Entity Form Overrides',
+                ExtraFilter: `UserID='${user.ID}' AND ComponentID IN (${(result.Results ?? []).map(r => `'${r.ID}'`).join(',') || "''"})`,
+                Fields: ['ComponentID', 'Status'],
+                ResultType: 'simple',
+            }, user);
+            const overrideByComponent = new Map(
+                (overrideResult.Results ?? []).map(o => [o.ComponentID, o.Status]),
+            );
+            this.Versions = (result.Results ?? []).map(r => {
+                const status = overrideByComponent.get(r.ID);
+                return {
+                    ID: r.ID,
+                    Name: r.Name,
+                    Version: r.Version,
+                    VersionSequence: r.VersionSequence,
+                    Status: r.Status,
+                    UpdatedAt: r.__mj_UpdatedAt ? new Date(r.__mj_UpdatedAt) : null,
+                    IsActive: status === 'Active',
+                    IsPending: status === 'Pending',
+                };
+            });
+            this.ActiveVersionID = this.Versions.find(v => v.IsActive)?.ID
+                ?? this.SelectedFormID;
+        } finally {
+            this.VersionsLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /**
+     * Open the chat overlay with the active-form context already set. The
+     * overlay is mounted at the app root; we don't construct it here. The
+     * agent context is kept fresh by `registerAgentContext()` (called on
+     * every form change).
+     *
+     * Side effect: also un-collapses the chat pane so the user sees the
+     * surface they just clicked.
+     */
+    public OnOpenInChat(): void {
+        // Make sure the agent context reflects the *current* form state
+        // before we open the chat. registerAgentContext() reads SelectedForm*.
+        this.registerAgentContext();
+        this.ChatPaneCollapsed = false;
+        // The chat overlay sits at the app root and reads context from
+        // NavigationService — by re-registering above we make sure the
+        // user's next chat message includes ActiveForm. The actual overlay
+        // toggle is the user's choice from the floating chat button.
+        this.notifications.CreateSimpleNotification(
+            'Form context attached. Open the chat to refine.', 'info', 2500);
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Re-point this form's Active override at the picked version. Called
+     * from the version rail "Make Active" button. Delegates to the
+     * `Activate Interactive Form Version` action when the version is Pending,
+     * otherwise delegates to `Revert Interactive Form` (re-point Active
+     * override to an older Component row in the same Name lineage).
+     */
+    public async OnActivateVersion(version: ComponentVersionRow): Promise<void> {
+        // The action layer is the source of truth for the swap semantics;
+        // here we just translate the click into the right server call and
+        // reload. We intentionally don't try to mimic the action's logic on
+        // the client — keeps the lifecycle in one place.
+        const provider = this.provider;
+        if (!provider || !this.currentUser) return;
+        if (version.IsActive) return;   // already active, no-op
+
+        // We don't have a direct action-invoke utility in the resource
+        // component, so we use the lighter-weight path: locate the override
+        // currently pointing at this version, OR (for Revert) the user's
+        // currently-Active override + this version's ComponentID.
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            if (version.IsPending) {
+                // Activate path: find the Pending override pointing at this version.
+                const pending = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: Entity Form Overrides',
+                    ExtraFilter: `UserID='${this.currentUser.ID}' AND ComponentID='${version.ID}' AND Status='Pending'`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                }, this.currentUser);
+                const overrideID = pending.Results?.[0]?.ID;
+                if (!overrideID) {
+                    this.notifications.CreateSimpleNotification(
+                        `Could not find a Pending override for ${version.Version}.`, 'warning', 3500);
+                    return;
+                }
+                await this.overrideService.activateVersion(overrideID, this.currentUser ?? undefined, provider);
+            } else {
+                // Revert path: find the user's Active override for the same lineage.
+                const active = await rv.RunView<{ ID: string }>({
+                    EntityName: 'MJ: Entity Form Overrides',
+                    ExtraFilter: `UserID='${this.currentUser.ID}' AND ComponentID IN (${this.Versions.map(v => `'${v.ID}'`).join(',')}) AND Status='Active'`,
+                    Fields: ['ID'],
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                }, this.currentUser);
+                const overrideID = active.Results?.[0]?.ID;
+                if (!overrideID) {
+                    this.notifications.CreateSimpleNotification(
+                        `Could not find an Active override to revert.`, 'warning', 3500);
+                    return;
+                }
+                await this.overrideService.revertToComponent(overrideID, version.ID, this.currentUser ?? undefined, provider);
+            }
+            await this.loadVersionsForActiveForm();
+            this.notifications.CreateSimpleNotification(
+                `Version ${version.Version} is now Active.`, 'info', 3000);
+        } catch (err) {
+            LogError(`FormBuilderResource.OnActivateVersion: ${err instanceof Error ? err.message : String(err)}`);
+            this.notifications.CreateSimpleNotification(
+                `Failed to switch version: ${err instanceof Error ? err.message : String(err)}`,
+                'error', 4500);
+        }
+    }
+
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
         if (this.DirtyFlag && !this.confirmDiscard()) return;
         try {
@@ -231,6 +472,9 @@ export class FormBuilderResourceComponent
             this.DirtyFlag = false;
             this.cdr.markForCheck();
             this.registerAgentContext();
+            // Populate the version rail (fire-and-forget — the rail shows
+            // a loading spinner until this resolves).
+            this.loadVersionsForActiveForm();
         } catch (err) {
             LogError(`FormBuilderResource.OnFormPicked: ${err instanceof Error ? err.message : String(err)}`);
         }

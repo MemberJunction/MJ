@@ -1,181 +1,329 @@
-<div class="fb-resource" [class.left-collapsed]="LeftRailCollapsed" [class.right-collapsed]="RightRailCollapsed">
+<!--
+    ┌─────────────────────────────────────────────────────────────────────────┐
+    │ FORM BUILDER COCKPIT                                                    │
+    │   4 panes: Forms list │ Versions │ Code / Preview / Layout │ Chat AI    │
+    │   Forms-list rail and Chat rail both collapse to a strip.               │
+    └─────────────────────────────────────────────────────────────────────────┘
+-->
+<div class="fb-cockpit"
+     [class.left-collapsed]="LeftRailCollapsed"
+     [class.chat-collapsed]="ChatPaneCollapsed">
 
-    <!-- ============================================================
-         LEFT RAIL — existing form-role Components
-         ============================================================ -->
-    <aside class="fb-left-rail">
-        <div class="fb-rail-header">
-            <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
-                    [attr.aria-label]="LeftRailCollapsed ? 'Expand form list' : 'Collapse form list'">
-                <i class="fa-solid" [class.fa-chevron-left]="!LeftRailCollapsed" [class.fa-chevron-right]="LeftRailCollapsed"></i>
-            </button>
-            @if (!LeftRailCollapsed) {
-                <h3 class="fb-rail-title">Forms</h3>
-                <button class="fb-rail-new" type="button" (click)="OnNewForm()" title="New form">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>New</span>
-                </button>
-            }
-        </div>
-        @if (!LeftRailCollapsed) {
-            <div class="fb-rail-search">
-                <i class="fa-solid fa-search"></i>
-                <input type="text"
-                       placeholder="Search forms…"
-                       [value]="LeftRailFilter"
-                       (input)="OnLeftRailFilterChange($event)" />
-            </div>
+  <!-- ══════════════════════════════════════════════════════════════════
+       LEFT — Forms list (existing form-role Components, with version rail
+       below). Collapses to a strip.
+       ══════════════════════════════════════════════════════════════════ -->
+  <aside class="fb-forms-rail">
+    <div class="fb-rail-header">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
+              [attr.aria-label]="LeftRailCollapsed ? 'Expand forms list' : 'Collapse forms list'">
+        <i class="fa-solid" [class.fa-chevron-left]="!LeftRailCollapsed" [class.fa-chevron-right]="LeftRailCollapsed"></i>
+      </button>
+      @if (!LeftRailCollapsed) {
+        <h3 class="fb-rail-title">Forms</h3>
+        <button class="fb-rail-new" type="button" (click)="OnNewForm()" title="New form">
+          <i class="fa-solid fa-plus"></i>
+          <span>New</span>
+        </button>
+      }
+    </div>
 
-            <div class="fb-rail-list">
-                @if (IsLoading) {
-                    <div class="fb-rail-empty">Loading…</div>
-                } @else if (filteredForms.length === 0) {
-                    <div class="fb-rail-empty">
-                        <i class="fa-solid fa-table-list"></i>
-                        <p>No forms yet. Click <strong>New</strong> to start.</p>
-                    </div>
-                } @else {
-                    @for (form of filteredForms; track form.ID) {
-                        <button class="fb-rail-item"
-                                type="button"
-                                [class.active]="form.ID === SelectedFormID"
-                                (click)="OnFormPicked(form)">
-                            <div class="fb-rail-item-name">{{ form.Name }}</div>
-                            @if (form.Status) {
-                                <div class="fb-rail-item-meta">
-                                    <span class="fb-rail-badge" [class.is-active]="form.Status === 'Active'">{{ form.Status }}</span>
-                                </div>
-                            }
-                        </button>
-                    }
-                }
-            </div>
-        }
-    </aside>
+    @if (!LeftRailCollapsed) {
+      <div class="fb-rail-search">
+        <i class="fa-solid fa-search"></i>
+        <input type="text"
+               placeholder="Search forms…"
+               [value]="LeftRailFilter"
+               (input)="OnLeftRailFilterChange($event)" />
+      </div>
 
-    <!-- ============================================================
-         CENTER — entity picker + canvas + Save
-         ============================================================ -->
-    <section class="fb-center">
-
-        <div class="fb-toolbar">
-            <input type="text"
-                   class="fb-name-input"
-                   [value]="SelectedFormName"
-                   placeholder="Form name…"
-                   (input)="OnFormNameInput($event)"
-                   title="Form name — used as the JS function identifier in the generated code" />
-
-            <div class="fb-entity-picker" [class.open]="IsEntityPickerOpen">
-                <button type="button" class="fb-entity-btn" (click)="ToggleEntityPicker()">
-                    <i class="fa-solid fa-table"></i>
-                    <span>
-                        @if (TargetEntityName) {
-                            {{ TargetEntityName }}
-                        } @else {
-                            <em>Pick entity…</em>
-                        }
-                    </span>
-                    <i class="fa-solid fa-chevron-down chev"></i>
-                </button>
-                @if (IsEntityPickerOpen) {
-                    <div class="fb-entity-popover" (click)="$event.stopPropagation()">
-                        <input type="text"
-                               class="fb-entity-search"
-                               placeholder="Search entities…"
-                               [value]="EntityPickerSearch"
-                               (input)="OnEntityPickerSearch($event)" />
-                        <ul class="fb-entity-list">
-                            @for (e of filteredEntityChoices; track e.Name; let idx = $index) {
-                                @if (idx < 50) {
-                                    <li class="fb-entity-item" (click)="OnEntityPicked(e.Name)">
-                                        <span class="fb-entity-display">{{ e.DisplayName }}</span>
-                                        <span class="fb-entity-name">{{ e.Name }}</span>
-                                    </li>
-                                }
-                            }
-                        </ul>
-                    </div>
-                }
-            </div>
-
-            @if (SelectedFormID) {
-                <button type="button" class="fb-action fb-action--danger" (click)="OnDelete()"
-                        title="Delete this form and its overrides">
-                    <i class="fa-solid fa-trash"></i>
-                    <span>Delete</span>
-                </button>
-            }
-            <button type="button" class="fb-action fb-action--primary" (click)="OnSave()" [disabled]="!DirtyFlag">
-                <i class="fa-solid fa-floppy-disk"></i>
-                <span>Save</span>
-            </button>
-        </div>
-
-        <div class="fb-canvas-host">
-            @if (!TargetEntityName) {
-                <div class="fb-empty">
-                    <i class="fa-solid fa-table-list"></i>
-                    <h3>Pick an entity to start</h3>
-                    <p>Choose the target entity above, then drag fields from the right panel onto the canvas.</p>
+      <div class="fb-rail-list">
+        @if (IsLoading) {
+          <div class="fb-rail-empty">Loading…</div>
+        } @else if (filteredForms.length === 0) {
+          <div class="fb-rail-empty">
+            <i class="fa-solid fa-table-list"></i>
+            <p>No forms yet. Click <strong>New</strong> to start.</p>
+          </div>
+        } @else {
+          @for (form of filteredForms; track form.ID) {
+            <button class="fb-rail-item"
+                    type="button"
+                    [class.active]="form.ID === SelectedFormID"
+                    (click)="OnFormPicked(form)">
+              <div class="fb-rail-item-name">{{ form.Name }}</div>
+              @if (form.Status) {
+                <div class="fb-rail-item-meta">
+                  <span class="fb-rail-badge" [class.is-active]="form.Status === 'Published'">{{ form.Status }}</span>
                 </div>
-            } @else {
-                <mj-form-builder-canvas
-                    [Canvas]="Canvas"
-                    [Schema]="Schema"
-                    [SelectedElementId]="SelectedElementId"
-                    [SelectedSectionId]="SelectedSectionId"
-                    (CanvasChanged)="OnCanvasChanged($event)"
-                    (ElementSelected)="OnElementSelected($event)"
-                    (SectionSelected)="OnSectionSelected($event)"
-                    (Deselected)="OnDeselected()">
-                </mj-form-builder-canvas>
-            }
-        </div>
-    </section>
-
-    <!-- ============================================================
-         RIGHT RAIL — palette / inspector
-         ============================================================ -->
-    <aside class="fb-right-rail">
-        <div class="fb-rail-header">
-            @if (!RightRailCollapsed) {
-                <h3 class="fb-rail-title">
-                    @if (SelectedElementId || SelectedSectionId) {
-                        Inspector
-                    } @else {
-                        Fields
-                    }
-                </h3>
-            }
-            <button class="fb-rail-collapse" type="button" (click)="ToggleRightRail()"
-                    [attr.aria-label]="RightRailCollapsed ? 'Expand inspector' : 'Collapse inspector'">
-                <i class="fa-solid" [class.fa-chevron-right]="!RightRailCollapsed" [class.fa-chevron-left]="RightRailCollapsed"></i>
+              }
             </button>
-        </div>
-        @if (!RightRailCollapsed) {
-            <mj-form-builder-right-panel
-                [Schema]="Schema"
-                [Canvas]="Canvas"
-                [SelectedElementId]="SelectedElementId"
-                [SelectedSectionId]="SelectedSectionId"
-                (ElementChanged)="OnElementChanged($event)"
-                (SectionChanged)="OnSectionChanged($event)"
-                (ElementDeleted)="OnElementDeleted($event)"
-                (SectionDeleted)="OnSectionDeleted($event)"
-                (FieldAdded)="OnFieldAddedFromPalette($event)">
-            </mj-form-builder-right-panel>
+          }
         }
-    </aside>
+      </div>
 
-    <!-- ============================================================
-         POST-SAVE OVERRIDE DIALOG
-         ============================================================ -->
-    <mj-form-override-dialog
-        [Visible]="ShowFormOverrideDialog"
-        [ComponentName]="PendingOverrideComponentName"
-        [EntityName]="PendingOverrideEntityName"
-        (confirmed)="OnFormOverrideDialogConfirm($event)"
-        (dismissed)="OnFormOverrideDialogDismiss()">
-    </mj-form-override-dialog>
+      <!-- ───── Version rail (history for the active form) ─────────────── -->
+      @if (SelectedFormID) {
+        <div class="fb-versions-header">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <h4>Versions</h4>
+          @if (Versions.length > 0) {
+            <span class="fb-versions-count">{{ Versions.length }}</span>
+          }
+        </div>
+        <div class="fb-versions-list">
+          @if (VersionsLoading) {
+            <div class="fb-rail-empty">Loading…</div>
+          } @else if (Versions.length === 0) {
+            <div class="fb-rail-empty"><p>No version history yet.</p></div>
+          } @else {
+            @for (v of Versions; track v.ID) {
+              <div class="fb-version-row"
+                   [class.is-active]="v.IsActive"
+                   [class.is-pending]="v.IsPending"
+                   [class.is-selected]="v.ID === SelectedFormID">
+                <div class="fb-version-row-main">
+                  <div class="fb-version-label">
+                    v{{ v.Version }}
+                    @if (v.IsActive) {
+                      <span class="fb-version-tag is-active">Active</span>
+                    } @else if (v.IsPending) {
+                      <span class="fb-version-tag is-pending">Pending</span>
+                    } @else {
+                      <span class="fb-version-tag">Inactive</span>
+                    }
+                  </div>
+                  <div class="fb-version-meta">
+                    @if (v.UpdatedAt) { {{ v.UpdatedAt | date:'short' }} } @else { (no timestamp) }
+                  </div>
+                </div>
+                @if (!v.IsActive) {
+                  <button class="fb-version-activate" type="button"
+                          (click)="OnActivateVersion(v)"
+                          [title]="v.IsPending ? 'Activate this Pending version' : 'Revert: make this version active'">
+                    <i class="fa-solid fa-circle-check"></i>
+                  </button>
+                }
+              </div>
+            }
+          }
+        </div>
+      }
+    }
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       CENTER — Tabbed (Preview / Code / Layout) + toolbar
+       ══════════════════════════════════════════════════════════════════ -->
+  <section class="fb-center">
+
+    <div class="fb-toolbar">
+      <input type="text"
+             class="fb-name-input"
+             [value]="SelectedFormName"
+             placeholder="Form name…"
+             (input)="OnFormNameInput($event)"
+             title="Form name — used as the JS function identifier in the generated code" />
+
+      <div class="fb-entity-picker" [class.open]="IsEntityPickerOpen">
+        <button type="button" class="fb-entity-btn" (click)="ToggleEntityPicker()">
+          <i class="fa-solid fa-table"></i>
+          <span>
+            @if (TargetEntityName) {
+              {{ TargetEntityName }}
+            } @else {
+              <em>Pick entity…</em>
+            }
+          </span>
+          <i class="fa-solid fa-chevron-down chev"></i>
+        </button>
+        @if (IsEntityPickerOpen) {
+          <div class="fb-entity-popover" (click)="$event.stopPropagation()">
+            <input type="text"
+                   class="fb-entity-search"
+                   placeholder="Search entities…"
+                   [value]="EntityPickerSearch"
+                   (input)="OnEntityPickerSearch($event)" />
+            <ul class="fb-entity-list">
+              @for (e of filteredEntityChoices; track e.Name; let idx = $index) {
+                @if (idx < 50) {
+                  <li class="fb-entity-item" (click)="OnEntityPicked(e.Name)">
+                    <span class="fb-entity-display">{{ e.DisplayName }}</span>
+                    <span class="fb-entity-name">{{ e.Name }}</span>
+                  </li>
+                }
+              }
+            </ul>
+          </div>
+        }
+      </div>
+
+      <span class="fb-spacer"></span>
+
+      <!-- Center-pane view-mode segmented control -->
+      <div class="fb-modeseg" role="tablist" aria-label="Center pane view">
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'preview'"
+                [attr.aria-selected]="CenterPaneMode === 'preview'"
+                (click)="SetCenterPaneMode('preview')">
+          <i class="fa-solid fa-eye"></i> Preview
+        </button>
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'code'"
+                [attr.aria-selected]="CenterPaneMode === 'code'"
+                (click)="SetCenterPaneMode('code')">
+          <i class="fa-solid fa-code"></i> Code
+        </button>
+        <button type="button"
+                role="tab"
+                class="fb-modeseg-btn"
+                [class.active]="CenterPaneMode === 'layout'"
+                [attr.aria-selected]="CenterPaneMode === 'layout'"
+                (click)="SetCenterPaneMode('layout')">
+          <i class="fa-solid fa-table-cells"></i> Layout
+        </button>
+      </div>
+
+      @if (SelectedFormID) {
+        <button type="button" class="fb-action fb-action--danger" (click)="OnDelete()"
+                title="Delete this form and its overrides">
+          <i class="fa-solid fa-trash"></i>
+          <span>Delete</span>
+        </button>
+      }
+      <button type="button" class="fb-action fb-action--primary" (click)="OnSave()" [disabled]="!DirtyFlag">
+        <i class="fa-solid fa-floppy-disk"></i>
+        <span>Save</span>
+      </button>
+    </div>
+
+    <div class="fb-center-body">
+      @if (!TargetEntityName) {
+        <div class="fb-empty">
+          <i class="fa-solid fa-table-list"></i>
+          <h3>Pick an entity to start</h3>
+          <p>Choose the target entity above, then refine the form via code, preview, or drag-drop layout.</p>
+        </div>
+      } @else {
+        <!-- Preview pane: live render via mj-interactive-form when we have
+             a usable spec + can resolve the entity. For an unsaved canvas,
+             the code is what's "live" via canvas → code regen; preview
+             will render off that. -->
+        @if (CenterPaneMode === 'preview') {
+          <div class="fb-preview-host">
+            <div class="fb-preview-empty">
+              <i class="fa-solid fa-eye"></i>
+              <h4>Live preview</h4>
+              <p>The preview renders against a real Top-1 record from <strong>{{ TargetEntityName }}</strong>.</p>
+              <p class="fb-muted">Switch to <strong>Code</strong> to edit JSX or <strong>Layout</strong> to drag fields.</p>
+            </div>
+          </div>
+        }
+
+        @if (CenterPaneMode === 'code') {
+          <div class="fb-code-host">
+            <textarea class="fb-code-editor"
+                      spellcheck="false"
+                      [value]="EditableCode"
+                      (input)="OnEditableCodeInput($event)"
+                      placeholder="// JSX for your form-role component">
+            </textarea>
+          </div>
+        }
+
+        @if (CenterPaneMode === 'layout') {
+          <div class="fb-canvas-host">
+            <mj-form-builder-canvas
+              [Canvas]="Canvas"
+              [Schema]="Schema"
+              [SelectedElementId]="SelectedElementId"
+              [SelectedSectionId]="SelectedSectionId"
+              (CanvasChanged)="OnCanvasChanged($event)"
+              (ElementSelected)="OnElementSelected($event)"
+              (SectionSelected)="OnSectionSelected($event)"
+              (Deselected)="OnDeselected()">
+            </mj-form-builder-canvas>
+          </div>
+        }
+      }
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       CHAT PANE — Form Builder AI cockpit-mate
+       Embedded right pane that always sits next to the editor. Collapses
+       to a strip. Does NOT host the full chat experience itself — clicking
+       "Refine with AI" attaches the form context and lets the user pop
+       the chat overlay from anywhere in the app.
+       ══════════════════════════════════════════════════════════════════ -->
+  <aside class="fb-chat-pane">
+    <div class="fb-rail-header">
+      @if (!ChatPaneCollapsed) {
+        <h3 class="fb-rail-title">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Form Builder AI
+        </h3>
+      }
+      <button class="fb-rail-collapse" type="button" (click)="ToggleChatPane()"
+              [attr.aria-label]="ChatPaneCollapsed ? 'Expand chat pane' : 'Collapse chat pane'">
+        <i class="fa-solid" [class.fa-chevron-right]="!ChatPaneCollapsed" [class.fa-chevron-left]="ChatPaneCollapsed"></i>
+      </button>
+    </div>
+
+    @if (!ChatPaneCollapsed) {
+      <div class="fb-chat-body">
+        @if (SelectedFormID && TargetEntityName) {
+          <div class="fb-chat-context">
+            <div class="fb-chat-context-label">Editing</div>
+            <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
+            <div class="fb-chat-context-sub">{{ TargetEntityName }}</div>
+          </div>
+        } @else {
+          <div class="fb-chat-context fb-chat-context--empty">
+            <div class="fb-chat-context-sub">Pick or create a form to start.</div>
+          </div>
+        }
+
+        <button type="button"
+                class="fb-chat-refine-btn"
+                [disabled]="!SelectedFormID || !TargetEntityName"
+                (click)="OnOpenInChat()">
+          <i class="fa-solid fa-comments"></i>
+          Refine with AI
+        </button>
+
+        <div class="fb-chat-tips">
+          <h4>What the agent can do</h4>
+          <ul>
+            <li>Generate a brand-new form from the entity's schema</li>
+            <li>Modify your active form (split fields, add charts, hide system fields)</li>
+            <li>Produce a new version as Pending — your live form stays untouched</li>
+          </ul>
+          <p class="fb-muted">
+            Refinements land as <strong>Pending</strong> versions. Activate the one you want
+            from the Versions rail on the left.
+          </p>
+        </div>
+      </div>
+    }
+  </aside>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       POST-SAVE OVERRIDE DIALOG (unchanged)
+       ══════════════════════════════════════════════════════════════════ -->
+  <mj-form-override-dialog
+    [Visible]="ShowFormOverrideDialog"
+    [ComponentName]="PendingOverrideComponentName"
+    [EntityName]="PendingOverrideEntityName"
+    (confirmed)="OnFormOverrideDialogConfirm($event)"
+    (dismissed)="OnFormOverrideDialogDismiss()">
+  </mj-form-override-dialog>
+
+  <!-- Inspector pane for Layout mode lives inside the Layout view — for the
+       Preview / Code modes it stays hidden (the field palette is only useful
+       in the canvas surface). When we resurrect it as a pop-out, this is
+       where it'll re-mount. -->
 </div>

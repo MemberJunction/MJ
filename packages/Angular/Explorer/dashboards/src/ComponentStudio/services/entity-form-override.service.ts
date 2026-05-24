@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IMetadataProvider, UserInfo, LogError } from '@memberjunction/core';
-import { MJEntityFormOverrideEntity } from '@memberjunction/core-entities';
+import { MJEntityFormOverrideEntity, MJComponentEntity } from '@memberjunction/core-entities';
 import type { FormOverrideDialogResult } from '../components/form-override-dialog.component';
 
 /** Slim row shape for listing existing overrides — matches FormResolverService. */
@@ -133,6 +133,116 @@ export class EntityFormOverrideService {
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
             LogError(`EntityFormOverrideService.CreateOverride: ${message}`);
+            return { Success: false, Error: message };
+        }
+    }
+
+    /**
+     * Promote a Pending override to Active. Mirrors the server-side
+     * `Activate Interactive Form Version` action's intent without round-
+     * tripping through the Action layer — for cockpit-internal usage where
+     * the user is explicitly clicking "Make Active".
+     *
+     * Atomically flips the target Override to Active AND demotes any sibling
+     * Active override at the same scope target to Inactive. Components
+     * mirror the override status (Published / Draft / Deprecated).
+     */
+    public async activateVersion(
+        id: string,
+        user?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<{ Success: boolean; Error?: string }> {
+        const p = provider ?? Metadata.Provider;
+        const u = user ?? p?.CurrentUser;
+        if (!p || !u) return { Success: false, Error: 'No provider/user available.' };
+        try {
+            const target = await p.GetEntityObject<MJEntityFormOverrideEntity>('MJ: Entity Form Overrides', u);
+            const loaded = await target.Load(id);
+            if (!loaded) return { Success: false, Error: `Override ${id} not found.` };
+
+            // Find sibling Actives at the same scope target.
+            const rv = RunView.FromMetadataProvider(p);
+            const scopeClause = target.Scope === 'User'
+                ? `Scope='User' AND UserID='${target.UserID}'`
+                : target.Scope === 'Role'
+                    ? `Scope='Role' AND RoleID='${target.RoleID}'`
+                    : `Scope='Global' AND UserID IS NULL AND RoleID IS NULL`;
+            const priors = await rv.RunView<{ ID: string; ComponentID: string }>({
+                EntityName: 'MJ: Entity Form Overrides',
+                ExtraFilter: `EntityID='${target.EntityID}' AND ${scopeClause} AND Status='Active' AND ID <> '${target.ID}'`,
+                Fields: ['ID', 'ComponentID'],
+                ResultType: 'simple',
+            }, u);
+
+            // Promote target.
+            target.Status = 'Active';
+            await target.Save();
+            const targetComp = await p.GetEntityObject<MJComponentEntity>('MJ: Components', u);
+            if (await targetComp.Load(target.ComponentID)) {
+                targetComp.Status = 'Published';
+                await targetComp.Save();
+            }
+            // Demote priors.
+            for (const prior of priors.Results ?? []) {
+                const priorO = await p.GetEntityObject<MJEntityFormOverrideEntity>('MJ: Entity Form Overrides', u);
+                if (await priorO.Load(prior.ID)) {
+                    priorO.Status = 'Inactive';
+                    await priorO.Save();
+                }
+                const priorC = await p.GetEntityObject<MJComponentEntity>('MJ: Components', u);
+                if (await priorC.Load(prior.ComponentID)) {
+                    priorC.Status = 'Deprecated';
+                    await priorC.Save();
+                }
+            }
+            return { Success: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            LogError(`EntityFormOverrideService.activateVersion: ${message}`);
+            return { Success: false, Error: message };
+        }
+    }
+
+    /**
+     * Re-point an Active override at an older Component row in the same Name
+     * lineage. Pure UPDATE on the override; no new rows created. Mirrors the
+     * server-side `Revert Interactive Form` action.
+     */
+    public async revertToComponent(
+        activeOverrideID: string,
+        targetComponentID: string,
+        user?: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<{ Success: boolean; Error?: string }> {
+        const p = provider ?? Metadata.Provider;
+        const u = user ?? p?.CurrentUser;
+        if (!p || !u) return { Success: false, Error: 'No provider/user available.' };
+        try {
+            const override = await p.GetEntityObject<MJEntityFormOverrideEntity>('MJ: Entity Form Overrides', u);
+            if (!await override.Load(activeOverrideID)) {
+                return { Success: false, Error: `Override ${activeOverrideID} not found.` };
+            }
+            const previousComponentID = override.ComponentID;
+            override.ComponentID = targetComponentID;
+            const saved = await override.Save();
+            if (!saved) {
+                return { Success: false, Error: override.LatestResult?.CompleteMessage ?? 'Save returned false.' };
+            }
+            // Flip Component statuses to keep them coherent.
+            const newActive = await p.GetEntityObject<MJComponentEntity>('MJ: Components', u);
+            if (await newActive.Load(targetComponentID)) {
+                newActive.Status = 'Published';
+                await newActive.Save();
+            }
+            const oldActive = await p.GetEntityObject<MJComponentEntity>('MJ: Components', u);
+            if (await oldActive.Load(previousComponentID)) {
+                oldActive.Status = 'Deprecated';
+                await oldActive.Save();
+            }
+            return { Success: true };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            LogError(`EntityFormOverrideService.revertToComponent: ${message}`);
             return { Success: false, Error: message };
         }
     }
