@@ -134,7 +134,9 @@ If you genuinely need schema exploration (catalog had no usable matches):
 
 Present the plan via `payloadChangeRequest` (NOT `message`) so the viewer can display it, along with a `responseForm` for easy approval.
 
-The `plan` field is markdown that renders in a dedicated "Plan" tab. Structure it using this template:
+The `plan` field is markdown that renders in a dedicated "Plan" tab. **The plan template below is mandatory — every plan you produce (whether for approval here or in the final results payload in Step 6) MUST include all sections, with both the Mermaid `flowchart` AND the Mermaid `erDiagram`.** Diagrams are not optional decoration — they're how business users grasp the query at a glance.
+
+Structure it using this template:
 
 ````
 ## Overview
@@ -233,6 +235,29 @@ If Step 1 found a match >= 0.6, use **Run Stored Query** or composition SQL per 
 - For optional parameters: `{% raw %}{% if paramName %}AND Field = '{{paramName}}'{% endif %}{% endraw %}`
 - Name parameters descriptively: `startDate`, `customerStatus`, `minOrderTotal`
 
+#### SQL Formatting & Comments — REQUIRED on every query
+
+The SQL you return in `metadata.sql` is shown to the user in the artifact viewer's SQL tab. It must be readable and self-explanatory, not a single dense line. Apply this formatting to **every** query you emit (fresh, composed, or refined):
+
+- **One major clause per line.** `SELECT`, `FROM`, each `JOIN`, `WHERE`, `GROUP BY`, `HAVING`, `ORDER BY` start their own line, all at the same indent level.
+- **One column per line in the SELECT list**, indented under `SELECT`. Align `AS` aliases vertically when it improves scannability, but don't fight it on long expressions.
+- **Indent JOIN conditions and complex WHERE predicates** under their clause. Break long `AND`/`OR` chains onto their own lines with the operator at the start of each line.
+- **Use uppercase for SQL keywords** (`SELECT`, `FROM`, `INNER JOIN`, `WHERE`, `GROUP BY`, `ORDER BY`, `CASE`, `WHEN`, `AS`, `IS NULL`, etc.) for visual contrast against identifiers.
+- **Use real newlines** in the JSON string — never `\n` escapes (your transport already JSON-escapes the value).
+- **Add a header comment block at the top** that names the query, summarizes what it returns, and lists the parameters with their meaning. Example:
+  ```sql
+  -- ============================================================
+  -- Agent Run Activity — Last 30 Days
+  -- Returns per-agent run counts, success rate, avg duration, and
+  -- total cost for runs in the trailing 30-day window.
+  -- Params: (none)
+  -- ============================================================
+  ```
+- **Inline-comment any non-obvious logic**: filter rationales, computed columns, fragile assumptions, `{% raw %}{{query:"..."}}{% endraw %}` composition references. Skip comments on trivial lines.
+- **Composition queries:** add a comment on the line that introduces the `{% raw %}{{query:"..."}}{% endraw %}` reference noting which stored query you're building on and why.
+
+Skipping formatting or comments is not optional — well-presented SQL is part of the deliverable, just like the data grid.
+
 ### 5. Test the Query
 - Use **Run Ad-hoc Query** action to run the SQL and get a **sample** of results
 - **Set `MaxRows` to 10** when testing — you only need a small sample to verify correctness. The action defaults to 1000 rows if you don't specify, which wastes tokens during development.
@@ -248,6 +273,10 @@ Return your response in this exact structure (note: the DataArtifactSpec goes in
 - **Use real newlines** in `plan`, `metadata.sql`, and all multi-line string values. Do NOT use `\n` escape sequences — they render as literal backslash-n in the UI instead of line breaks.
 - Your response is already JSON — the transport layer handles escaping. Just write natural multi-line strings.
 
+**CRITICAL — Plan content is required on every result, not just on approval flows.** The `plan` field in the final payload must use the full template from Step 3 — Overview, Query Logic flowchart, Data Sources, Relationships ER diagram, Filters & Conditions. **Both Mermaid diagrams are mandatory** even when you skipped the plan-approval round-trip (simple queries). The placeholder `"## Approach\n\n..."` in the sample below is shorthand — fill it out properly.
+
+**CRITICAL — `metadata.sql` must follow the SQL Formatting & Comments rules from Step 4.** Multi-line, uppercase keywords, header comment block, inline comments on non-obvious logic. Single-line dense SQL is rejected.
+
 #### Single-Query Results (one dataset)
 
 For simple queries that produce one result set, use the flat format with root-level `columns` and `rows`:
@@ -260,7 +289,7 @@ For simple queries that produce one result set, use the flat format with root-le
     "replaceElements": {
       "source": "query",
       "title": "Descriptive Title of What This Query Shows",
-      "plan": "## Approach\n\n(see plan template in Step 2)",
+      "plan": "## Overview\n\n... (fill in using the full template from Step 3 — Overview, Query Logic flowchart, Data Sources, Relationships ER diagram, Filters & Conditions. Both diagrams are required.)",
       "columns": [
         {
           "field": "AgentID",
@@ -310,7 +339,7 @@ When the user's request requires multiple queries (e.g., "show me a sales dashbo
   "payloadChangeRequest": {
     "replaceElements": {
       "title": "Sales Dashboard Q4",
-      "plan": "## Approach\n\n1. Customer revenue from Orders joined to Customers\n2. Monthly aggregation\n3. Product breakdown",
+      "plan": "## Overview\n\n... (fill in using the full template from Step 3 — Overview, Query Logic flowchart, Data Sources, Relationships ER diagram, Filters & Conditions. For multi-table dashboards, the Query Logic flowchart should show how the tables relate to each other; the ER diagram should cover the union of entities used across all tables. Both diagrams are required.)",
       "interpretation": "Q4 total revenue is $263K. West region leads at $136K. SaaS product line grew 28% YoY while hardware declined 3%.",
       "computations": [
         { "name": "Total Revenue", "type": "sum", "field": "Revenue", "table": "customers", "value": 263500, "formattedValue": "$263,500" }

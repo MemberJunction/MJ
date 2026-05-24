@@ -1,5 +1,5 @@
 import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
-import { GetDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
 import { QueryPagingEngine, PagingWrappedSQL } from './queryPagingEngine.js';
@@ -64,9 +64,9 @@ export interface RenderContext {
      *  directly to processQueryTemplate for parameter validation. When omitted,
      *  a synthetic QueryTemplateInput is built from OriginalSQL + ParameterDefinitions. */
     QueryInfo?: QueryTemplateInput;
-    /** Paging parameters (omit to skip paging) */
+    /** Paging parameters (omit to skip paging). Mutually exclusive with {@link MaxRows}. */
     Paging?: { StartRow: number; MaxRows: number };
-    /** MaxRows safety limit for transient query testing */
+    /** MaxRows safety limit. Mutually exclusive with {@link Paging}. */
     MaxRows?: number;
 }
 
@@ -120,6 +120,16 @@ export class RenderPipeline {
      * @returns Final SQL, applied parameters, composition metadata, and diagnostic trace
      */
     static Run(sql: string, ctx: RenderContext): RenderResult {
+        const hasMaxRows = ctx.MaxRows != null && ctx.MaxRows > 0;
+        const hasPaging = ctx.Paging != null && QueryPagingEngine.ShouldPage(ctx.Paging.StartRow, ctx.Paging.MaxRows);
+        if (hasMaxRows && hasPaging) {
+            throw new Error(
+                'RenderPipeline.Run: ctx.MaxRows and ctx.Paging are mutually exclusive. ' +
+                'Use Paging for pagination (StartRow + MaxRows) or MaxRows alone for a safety cap. ' +
+                `Got MaxRows=${ctx.MaxRows} and Paging=${JSON.stringify(ctx.Paging)}.`
+            );
+        }
+
         let currentSQL = sql;
         let appliedParameters: Record<string, string> = {};
 
@@ -135,7 +145,7 @@ export class RenderPipeline {
         // Nunjucks. Strip them after composition (which correctly ignores
         // comment-embedded tokens) and before Nunjucks processes the SQL.
         // Comments are still visible in Trace.AfterComposition for debugging.
-        currentSQL = RenderPipeline.stripSQLComments(currentSQL);
+        currentSQL = SQLParser.StripComments(currentSQL, GetDialect(ctx.Platform));
 
         // ── Step 2: Nunjucks template evaluation ─────────────────────
         const templateResult = RenderPipeline.runTemplates(currentSQL, sql, ctx, compositionResult);
@@ -144,17 +154,17 @@ export class RenderPipeline {
         const afterTemplates = currentSQL;
 
         // ── Step 3: MaxRows safety limit (if specified) ──────────────
-        if (ctx.MaxRows != null && ctx.MaxRows > 0) {
-            currentSQL = RenderPipeline.applyMaxRows(currentSQL, ctx.MaxRows, ctx.Platform);
+        if (hasMaxRows) {
+            currentSQL = QueryPagingEngine.WrapWithMaxRows(currentSQL, ctx.MaxRows!, ctx.Platform);
         }
 
         // ── Step 4: Paging (if requested) ────────────────────────────
         let pagingResult: PagingWrappedSQL | null = null;
         let afterPaging: string | null = null;
 
-        if (ctx.Paging && QueryPagingEngine.ShouldPage(ctx.Paging.StartRow, ctx.Paging.MaxRows)) {
+        if (hasPaging) {
             pagingResult = QueryPagingEngine.WrapWithPaging(
-                currentSQL, ctx.Paging.StartRow, ctx.Paging.MaxRows, ctx.Platform
+                currentSQL, ctx.Paging!.StartRow, ctx.Paging!.MaxRows, ctx.Platform
             );
             currentSQL = pagingResult.DataSQL;
             afterPaging = currentSQL;
@@ -263,136 +273,6 @@ export class RenderPipeline {
         };
     }
 
-    /**
-     * Injects a row-cap (`TOP N` for SQL Server, `LIMIT N` for Postgres) onto
-     * the outermost SELECT of `sql`.
-     *
-     * Uses an AST-based rewrite so CTE queries (`WITH … SELECT …`), nested
-     * subqueries, comments, and casing are all handled correctly. The cap is
-     * applied to the outermost projection only, leaving any inner `TOP N` /
-     * `LIMIT N` clauses inside CTE definitions or subqueries untouched.
-     *
-     * For shapes the parser can't represent at the top level
-     * (UNION/INTERSECT/EXCEPT, vendor-specific T-SQL the parser rejects, sqlify
-     * round-trip failures), falls back to wrapping the original SQL in
-     * `SELECT TOP N * FROM (<original>) AS _capped` — always safe because the
-     * inner SQL is treated as opaque.
-     */
-    private static applyMaxRows(sql: string, maxRows: number, platform: DatabasePlatform): string {
-        const dialect = RenderPipeline.getDialect(platform);
-        const fromAst = RenderPipeline.applyMaxRowsViaAst(sql, maxRows, dialect);
-        if (fromAst !== null) return fromAst;
-        return RenderPipeline.applyMaxRowsViaSubqueryWrap(sql, maxRows, dialect);
-    }
-
-    private static applyMaxRowsViaAst(sql: string, maxRows: number, dialect: SQLDialect): string | null {
-        const ast = SQLParser.ParseSQL(sql, dialect);
-        if (!ast) return null;
-
-        const root = Array.isArray(ast) ? ast[0] : ast;
-        if (!root) return null;
-
-        // Non-SELECT (INSERT/UPDATE/DELETE/MERGE): row caps don't apply — leave alone.
-        // Discriminating on `type` narrows `root` to node-sql-parser's `Select` shape.
-        if (root.type !== 'select') return sql;
-
-        // `top` is a SQL Server-specific field on the Select node that node-sql-parser's
-        // published .d.ts omits. Widen the narrowed type via intersection so we can
-        // read/write it without an `as unknown` escape hatch.
-        const selectNode = root as typeof root & {
-            top?: { value: number; percent: number | null } | null;
-        };
-
-        // UNION/INTERSECT/EXCEPT: outer SELECT has set_op + _next branches. Injecting
-        // `top` here only caps the first branch, so defer to the subquery wrap.
-        if (selectNode.set_op) return null;
-
-        // Idempotency: an explicit outer TOP/LIMIT wins over MaxRows.
-        // node-sql-parser distinguishes "no LIMIT" by an empty `limit.value` array
-        // on Postgres (the wrapper object is always present), while SQL Server uses
-        // `top === null`. Check both shapes so we don't double-inject.
-        if (selectNode.top != null) return sql;
-        if (selectNode.limit != null && selectNode.limit.value.length > 0) return sql;
-
-        const limitClause = dialect.LimitClause(maxRows);
-        if (limitClause.prefix) {
-            // SQL Server: { value, percent } matches node-sql-parser's parsed shape
-            selectNode.top = { value: maxRows, percent: null };
-        } else {
-            // PostgreSQL: { seperator, value[] } — note the parser's spelling of "seperator"
-            selectNode.limit = { seperator: '', value: [{ type: 'number', value: maxRows }] };
-        }
-
-        try {
-            return SQLParser.SqlifyAST(ast, dialect);
-        } catch {
-            return null;
-        }
-    }
-
-    private static applyMaxRowsViaSubqueryWrap(sql: string, maxRows: number, dialect: SQLDialect): string {
-        const trimmed = sql.trim().replace(/;\s*$/, '');
-        const limitClause = dialect.LimitClause(maxRows);
-
-        if (limitClause.prefix) {
-            // SQL Server: outer projection cap. The optimizer pushes TOP N through trivially.
-            return `SELECT ${limitClause.prefix} * FROM (${trimmed}) AS _capped`;
-        }
-        // PostgreSQL: appending LIMIT N is always legal at the end of a SELECT/CTE.
-        return `${trimmed}\n${limitClause.suffix}`;
-    }
-
-    private static getDialect(platform: DatabasePlatform): SQLDialect {
-        return GetDialect(platform);
-    }
-
-    /**
-     * Strips SQL comments (single-line -- and block comments) from a SQL string.
-     * Preserves single-quoted string literals to avoid stripping inside them.
-     */
-    private static stripSQLComments(sql: string): string {
-        let result = '';
-        let i = 0;
-
-        while (i < sql.length) {
-            // Single-quoted string literal — preserve as-is
-            if (sql[i] === "'") {
-                result += sql[i++];
-                while (i < sql.length) {
-                    if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
-                        result += "''";
-                        i += 2;
-                    } else if (sql[i] === "'") {
-                        result += sql[i++];
-                        break;
-                    } else {
-                        result += sql[i++];
-                    }
-                }
-            }
-            // Single-line comment: -- to end of line
-            else if (sql[i] === '-' && i + 1 < sql.length && sql[i + 1] === '-') {
-                while (i < sql.length && sql[i] !== '\n') i++;
-            }
-            // Block comment: /* ... */
-            else if (sql[i] === '/' && i + 1 < sql.length && sql[i + 1] === '*') {
-                i += 2;
-                while (i < sql.length) {
-                    if (sql[i] === '*' && i + 1 < sql.length && sql[i + 1] === '/') {
-                        i += 2;
-                        break;
-                    }
-                    i++;
-                }
-            }
-            // Normal character
-            else {
-                result += sql[i++];
-            }
-        }
-
-        return result;
-    }
 }
 
 // ════════════════════════════════════════════════════════════════════

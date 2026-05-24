@@ -63,6 +63,7 @@
     "@memberjunction/ng-list-detail-grid": "5.36.0",
     "@memberjunction/ng-list-management": "5.36.0",
     "@memberjunction/ng-notifications": "5.36.0",
+    "@memberjunction/ng-pagination": "5.36.0",
     "@memberjunction/ng-query-viewer": "5.36.0",
     "@memberjunction/ng-record-changes": "5.36.0",
     "@memberjunction/ng-record-selector": "5.36.0",
