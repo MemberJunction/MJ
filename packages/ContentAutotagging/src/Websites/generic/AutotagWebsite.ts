@@ -46,67 +46,101 @@ export class AutotagWebsite extends AutotagBase {
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Website');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
-        const contentItemsToProcess: MJContentItemEntity[] = await this.SetContentItemsToProcess(contentSources);
-        await this.engine.ExtractTextAndProcessWithLLM(contentItemsToProcess, this.contextUser, undefined, undefined, onProgress);
-        return contentItemsToProcess.length;
+
+        // Stream content items source-by-source into the LLM batcher. The
+        // crawl phase produces items as soon as they pass change-detection,
+        // and the LLM phase consumes them in batches without waiting for the
+        // last source to finish crawling. Wall-clock time becomes
+        // max(crawl, classify) + a small buffer instead of crawl + classify.
+        let itemsYielded = 0;
+        const streamSource = this;
+        const itemStream: AsyncIterable<MJContentItemEntity> = (async function*() {
+            for await (const item of streamSource.streamContentItemsToProcess(contentSources)) {
+                itemsYielded++;
+                yield item;
+            }
+        })();
+
+        await this.engine.ExtractTextAndProcessWithLLM(itemStream, this.contextUser, undefined, undefined, onProgress);
+        return itemsYielded;
     }
 
 
     /**
-     * Given a content source, retrieve all content items associated with the content sources. 
-     * The content items are then processed to determine if they have been modified since the last time they were processed or if they are new content items.
-     * @param contentSource 
-     * @returns 
+     * Streaming variant: yields each new/changed content item as soon as it
+     * passes change detection. Lets the crawl and LLM phases overlap so total
+     * wall-clock time is roughly max(crawl, classify) instead of crawl + classify.
+     *
+     * The canonical implementation lives here; the array-returning
+     * `SetContentItemsToProcess` is a thin collector wrapper around this.
      */
-    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
-        const contentItemsToProcess: MJContentItemEntity[] = []
-        
-        // If content source parameters were provided, set them. Otherwise, use the default values.
+    public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {
         for (const contentSource of contentSources) {
+            // Apply per-source params (MaxDepth, CrawlSitesInLowerLevelDomain, etc.)
+            // before crawling. Params are stored as instance fields so the crawler
+            // helpers (which already exist on `this`) pick them up automatically.
             const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
             if (contentSourceParamsMap) {
-                // Override defaults with content source specific params
                 contentSourceParamsMap.forEach((value, key) => {
                     if (key in this) {
                         (this as any)[key] = value;
                     }
-                })
+                });
             }
-            
+
             const contentSourceParams: ContentSourceParams = {
-                contentSourceID: contentSource.ID, 
+                contentSourceID: contentSource.ID,
                 name: contentSource.Name,
                 ContentTypeID: contentSource.ContentTypeID,
                 ContentFileTypeID: contentSource.ContentFileTypeID,
                 ContentSourceTypeID: contentSource.ContentSourceTypeID,
                 URL: contentSource.URL
-            }
+            };
 
             try {
-            
-                // All content items associated with the content source
                 const startURL: string = contentSourceParams.URL;
-
-                // root url should be set to this.RootURL if it exists, otherwise it should be set to the base path of the startURL. 
                 const rootURL: string = this.RootURL ? this.RootURL : this.getBasePath(startURL);
+                const regex: RegExp = (this.URLPattern && new RegExp(this.URLPattern)) || new RegExp('.*');
 
-                // regex should be set to this.URLPattern if it exists, otherwise it should be set to match any URL.
-                const regex: RegExp = this.URLPattern && new RegExp(this.URLPattern) || new RegExp('.*');
-         
                 const allContentItemLinks: string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
-                const contentItems: MJContentItemEntity[] = await this.SetNewAndModifiedContentItems(allContentItemLinks, contentSourceParams, this.contextUser);
-                if (contentItems && contentItems.length > 0) {
-                    contentItemsToProcess.push(...contentItems);
+
+                let yieldedForSource = 0;
+                for (const link of allContentItemLinks) {
+                    try {
+                        const item = await this.processSingleURL(link, contentSourceParams);
+                        if (item) {
+                            yieldedForSource++;
+                            yield item;
+                        }
+                    } catch (e) {
+                        // Per-URL failures are isolated — log and keep going so a single
+                        // bad page doesn't poison the rest of the source.
+                        console.error(`[autotag-website] Failed to process URL ${link}:`, e);
+                    }
                 }
-                else {
-                    // No content items found to process
+
+                if (yieldedForSource === 0) {
                     console.log(`No content items found to process for content source: ${contentSource.Get('Name')}`);
                 }
             } catch (e) {
                 console.error(`Failed to process content source: ${contentSource.Get('Name')}`);
             }
-        } 
+        }
+    }
 
+    /**
+     * Given a content source, retrieve all content items associated with the content sources.
+     * The content items are then processed to determine if they have been modified since the
+     * last time they were processed or if they are new content items.
+     *
+     * Backwards-compatible array form. Internally drains the streaming variant
+     * so there is exactly one implementation of the change-detection logic.
+     */
+    public async SetContentItemsToProcess(contentSources: MJContentSourceEntity[]): Promise<MJContentItemEntity[]> {
+        const contentItemsToProcess: MJContentItemEntity[] = [];
+        for await (const item of this.streamContentItemsToProcess(contentSources)) {
+            contentItemsToProcess.push(item);
+        }
         return contentItemsToProcess;
     }
 
@@ -119,79 +153,89 @@ export class AutotagWebsite extends AutotagBase {
      * @param contextUser 
      * @returns 
      */
+    /**
+     * Backwards-compatible batch form: process an explicit list of URLs and
+     * return all new/changed content items as an array. New code should prefer
+     * `streamContentItemsToProcess` which pipelines into the LLM batcher.
+     */
     protected async SetNewAndModifiedContentItems(contentItemLinks: string[], contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
-
         const addedContentItems: MJContentItemEntity[] = [];
-        for (const contentItemLink of contentItemLinks) {
+        for (const link of contentItemLinks) {
             try {
-                // Fetch the URL ONCE — derive both the change-detection hash and the
-                // body text from the same response. Previously this code path could
-                // hit the network twice (hash + parse) on changed pages and three
-                // times on new ones (hash + parse + save-side hash).
-                const { text, checksum: newHash } = await this.fetchAndExtract(contentItemLink);
-
-                const rv = new RunView();
-                const results = await rv.RunViews<MJContentItemEntity>([
-                    {
-                        EntityName: 'MJ: Content Items',
-                        // Scope to this content source. The previous global
-                        // `Checksum = '...'` query meant a 404 boilerplate from
-                        // site A silently skipped every matching page on site B.
-                        ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND Checksum = '${newHash}'`,
-                        ResultType: 'entity_object'
-                    },
-                    {
-                        EntityName: 'MJ: Content Items',
-                        ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND URL = '${contentItemLink}'`,
-                        ResultType: 'entity_object'
-                    }
-                ], this.contextUser);
-
-                const byChecksum = results[0];
-                const byURL = results[1];
-
-                if (byChecksum.Success && byChecksum.Results.length) {
-                    // Same content already in DB for this source — unchanged, skip.
-                    continue;
-                }
-
-                else if (byURL.Success && byURL.Results.length) {
-                    // URL exists for this source but content has drifted — update in place.
-                    const existing: MJContentItemEntity = byURL.Results[0];
-
-                    if (existing.Checksum !== newHash) {
-                        const md = this.ProviderToUse;
-                        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
-                        await contentItem.Load(existing.ID);
-                        contentItem.Checksum = newHash;
-                        contentItem.Text = text;
-
-                        await contentItem.Save();
-                        addedContentItems.push(contentItem);
-                    }
-                }
-                else {
-                    // New URL — create the content item, reusing the already-fetched body.
-                    const md = this.ProviderToUse;
-                    const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
-                    contentItem.ContentSourceID = contentSourceParams.contentSourceID;
-                    contentItem.Name = this.getPathName(contentItemLink); // Will get overwritten by title later if it exists
-                    contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
-                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID;
-                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID;
-                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID;
-                    contentItem.Checksum = newHash;
-                    contentItem.URL = contentItemLink;
-                    contentItem.Text = text;
-
-                    await contentItem.Save();
-                    addedContentItems.push(contentItem);
-                }
+                const item = await this.processSingleURL(link, contentSourceParams);
+                if (item) addedContentItems.push(item);
             } catch (e) {
                 console.log(e);
             }
         }
         return addedContentItems;
+    }
+
+    /**
+     * Process one URL through the change-detection pipeline. Returns the
+     * MJContentItem if the page is new or changed (caller should hand it off
+     * to the LLM stage), or `null` if the page is unchanged.
+     *
+     * One axios.get per URL: the same response body provides both the
+     * change-detection hash and the page text. Compare with `byChecksum`
+     * scoped to the current ContentSource so identical boilerplate (404 pages,
+     * shared error templates) from a *different* source can't silently mask
+     * legitimate pages here.
+     */
+    protected async processSingleURL(url: string, contentSourceParams: ContentSourceParams): Promise<MJContentItemEntity | null> {
+        const { text, checksum: newHash } = await this.fetchAndExtract(url);
+
+        const rv = new RunView();
+        const results = await rv.RunViews<MJContentItemEntity>([
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND Checksum = '${newHash}'`,
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: Content Items',
+                ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND URL = '${url}'`,
+                ResultType: 'entity_object'
+            }
+        ], this.contextUser);
+
+        const byChecksum = results[0];
+        const byURL = results[1];
+
+        // Same content already in DB for this source — unchanged, skip.
+        if (byChecksum.Success && byChecksum.Results.length) {
+            return null;
+        }
+
+        // URL exists for this source but content has drifted — update in place.
+        if (byURL.Success && byURL.Results.length) {
+            const existing: MJContentItemEntity = byURL.Results[0];
+            if (existing.Checksum === newHash) {
+                return null;
+            }
+            const md = this.ProviderToUse;
+            const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
+            await contentItem.Load(existing.ID);
+            contentItem.Checksum = newHash;
+            contentItem.Text = text;
+            await contentItem.Save();
+            return contentItem;
+        }
+
+        // New URL — create the content item, reusing the already-fetched body.
+        const md = this.ProviderToUse;
+        const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
+        contentItem.ContentSourceID = contentSourceParams.contentSourceID;
+        contentItem.Name = this.getPathName(url); // Will get overwritten by title later if it exists
+        contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
+        contentItem.ContentTypeID = contentSourceParams.ContentTypeID;
+        contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID;
+        contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID;
+        contentItem.Checksum = newHash;
+        contentItem.URL = url;
+        contentItem.Text = text;
+        await contentItem.Save();
+        return contentItem;
     }
 
     public async fetchPageContent(url: string): Promise<string> {

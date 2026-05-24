@@ -176,6 +176,24 @@ describe('AutotagWebsite', () => {
         });
     });
 
+    describe('streamContentItemsToProcess', () => {
+        it('is an async-generator function that returns an AsyncIterable', () => {
+            // Sanity-check the shape — full end-to-end exercise lives in the
+            // engine-side streaming tests and the integration suite.
+            const it = subject.streamContentItemsToProcess([]);
+            expect(it).toBeDefined();
+            expect(typeof (it as AsyncIterable<unknown>)[Symbol.asyncIterator]).toBe('function');
+        });
+
+        it('produces an immediately-done iterator when given zero sources', async () => {
+            const collected: unknown[] = [];
+            for await (const item of subject.streamContentItemsToProcess([])) {
+                collected.push(item);
+            }
+            expect(collected).toEqual([]);
+        });
+    });
+
     describe('fetchAndExtract', () => {
         it('fetches the URL exactly once and returns extracted text + checksum', async () => {
             mockAxiosGet.mockResolvedValueOnce({ data: '<body><p>Hello world</p></body>' });
