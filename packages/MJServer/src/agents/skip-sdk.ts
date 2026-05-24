@@ -779,7 +779,7 @@ export class SkipSDK {
             // Build SkipAPIArtifact entries
             const inputArtifactMap = new Map<string, { artifact: any; artifactType: SkipAPIArtifactType; versions: SkipAPIArtifactVersion[] }>();
             for (const v of versions) {
-                const aRow = artifactRows.find(a => a.ID === v.ArtifactID);
+                const aRow = artifactRows.find(a => UUIDsEqual(a.ID, v.ArtifactID));
                 if (!aRow) continue;
                 if (alreadyLoaded.has(aRow.ID as string)) continue; // dedup
 
