@@ -54,6 +54,61 @@
 </mj-form-toolbar>
 
 <!-- ============================================
+     VARIANT PICKER (only when more than one variant applies)
+     Sits between the toolbar and the form body. Compact "Form: <name> ▾"
+     dropdown that emits VariantChange when a different variant is picked.
+     The host (Explorer's single-record) reloads the form on that event.
+     ============================================ -->
+@if (ShowVariantPicker) {
+<div class="mj-form-variant-picker">
+  <i class="fa-solid fa-pen-ruler mj-form-variant-picker-icon" aria-hidden="true"></i>
+  <span class="mj-form-variant-picker-label">Form:</span>
+  <div class="mj-form-variant-picker-control"
+       tabindex="0"
+       [attr.aria-label]="'Choose form variant. Currently: ' + CurrentVariantLabel"
+       (keydown.enter)="_variantMenuOpen = !_variantMenuOpen"
+       (keydown.escape)="_variantMenuOpen = false"
+       [class.open]="_variantMenuOpen"
+       (click)="_variantMenuOpen = !_variantMenuOpen"
+       (blur)="_variantMenuOpen = false">
+    <span class="mj-form-variant-picker-current">{{ CurrentVariantLabel }}</span>
+    <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+    @if (_variantMenuOpen) {
+    <div class="mj-form-variant-picker-menu" (click)="$event.stopPropagation()">
+      <div class="mj-form-variant-picker-row"
+           [class.current]="!EffectiveCurrentVariantID"
+           (mousedown)="$event.preventDefault()"
+           (click)="OnVariantPicked(null); _variantMenuOpen = false">
+        <div class="mj-form-variant-picker-row-main">
+          <span class="mj-form-variant-picker-row-title">Default form</span>
+          <span class="mj-form-variant-picker-row-sub">CodeGen · Angular</span>
+        </div>
+        @if (!EffectiveCurrentVariantID) {
+          <i class="fa-solid fa-check mj-form-variant-picker-check" aria-hidden="true"></i>
+        }
+      </div>
+      @for (v of EffectiveVariants; track v.ID) {
+      <div class="mj-form-variant-picker-row"
+           [class.current]="v.ID === EffectiveCurrentVariantID"
+           [class.inactive]="v.Status !== 'Active'"
+           (mousedown)="$event.preventDefault()"
+           (click)="OnVariantPicked(v.ID); _variantMenuOpen = false">
+        <div class="mj-form-variant-picker-row-main">
+          <span class="mj-form-variant-picker-row-title">{{ v.Label }}</span>
+          <span class="mj-form-variant-picker-row-sub">{{ variantSubtitle(v) }}</span>
+        </div>
+        @if (v.ID === EffectiveCurrentVariantID) {
+          <i class="fa-solid fa-check mj-form-variant-picker-check" aria-hidden="true"></i>
+        }
+      </div>
+      }
+    </div>
+    }
+  </div>
+</div>
+}
+
+<!-- ============================================
      SCROLL AREA (full-width so mouse wheel works anywhere)
      ============================================ -->
 <div class="mj-forms-scroll-area">

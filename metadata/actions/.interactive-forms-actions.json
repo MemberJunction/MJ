@@ -117,8 +117,96 @@
   },
   {
     "fields": {
+      "Name": "Get Default Form Scaffold For Entity",
+      "Description": "Read-only action that produces a working form-role ComponentSpec scaffolded from an entity's CodeGen metadata (Category, GeneratedFormSectionType, Sequence, FK relationships, value lists, EntitySetting icons). Mirrors the default Angular form layout. Agents call this first when authoring a net-new form, then modify the scaffold per user requirements — far fewer lint failures than writing JSX from scratch.",
+      "DriverClass": "__GetDefaultFormScaffoldForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-layer-group",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name, e.g. 'MJ: Applications'.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Working ComponentSpec with componentRole='form', location='embedded', and JSX code mirroring the default Angular form layout.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Scaffold spec returned." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "MISSING_PARAMETER", "Description": "EntityName was not supplied." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "ENTITY_NOT_FOUND", "Description": "The supplied entity name is not registered." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." } }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Active Form For Entity",
+      "Description": "Read-only action returning the currently-resolved interactive-form override (if any) for the (entity, requesting user) pair plus the full list of applicable variants. Returns null Active + empty Variants when no override exists. Used by the Form Builder agent to decide between Create (no override exists) and Modify (an override already exists).",
+      "DriverClass": "__GetActiveFormForEntity",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fully-qualified entity name, e.g. 'MJ: Applications'.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Result",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "{ EntityName, Active: { OverrideID, ComponentID, Scope, Priority, Status, Spec, ComponentName, ComponentVersion, VersionSequence } | null, Variants: [ ...same shape... ] }. Active is null when no Active override exists; Variants lists all applicable rows (any Status).",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Result returned (Active may be null if no override exists)." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "MISSING_PARAMETER", "Description": "EntityName was not supplied." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "ENTITY_NOT_FOUND", "Description": "The supplied entity name is not registered." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_USER", "Description": "Action requires a ContextUser for scope resolution." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "QUERY_FAILED", "Description": "Override or component lookup failed." } }
+      ]
+    }
+  },
+  {
+    "fields": {
       "Name": "Create Interactive Form",
-      "Description": "Persists an AI-authored or human-authored runtime form. Lints the supplied ComponentSpec (must declare componentRole='form'), inserts a Component row with the spec, and creates an EntityFormOverride row that activates the form for the calling user. Scope is always clamped to 'User' regardless of any args — the action never writes Global or Role overrides. Returns the IDs of the persisted rows.",
+      "Description": "Persists a net-new AI-authored or human-authored runtime form. Lints the supplied ComponentSpec (must declare componentRole='form'), inserts a Component row v1.0.0 with the spec, and creates an EntityFormOverride row that activates the form for the calling user. Returns ALREADY_EXISTS if the user already has an Active override for this entity — agents should call 'Modify Interactive Form' in that case. Scope is always clamped to 'User' regardless of any args — the action never writes Global or Role overrides.",
       "DriverClass": "__CreateInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -202,6 +290,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional free-form notes recorded on the EntityFormOverride.Notes column — e.g. 'authored by Skip 2026-05-22 for tax season variant'. Does not affect resolution.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ComponentID",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -233,6 +332,17 @@
           "sync": {
             "lastModified": "2026-05-22T22:32:57.062Z",
             "checksum": "42cd1e402fa995cdfb5eda121ba0e6a113b7d0323c7908bae2c170912ebee551"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the persisted Component (always '1.0.0' for net-new creates).",
+            "IsRequired": false
           }
         }
       ],
@@ -282,6 +392,13 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "ALREADY_EXISTS",
+            "Description": "An Active User-scope override already exists for this entity. Use 'Modify Interactive Form' to refine it, or 'Revert Interactive Form' to switch versions."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "LINT_FAILED",
             "Description": "The ComponentSpec failed schema or code-level validation. Message contains the linter output. Agent should fix and retry."
           },
@@ -315,6 +432,281 @@
     "sync": {
       "lastModified": "2026-05-22T22:32:56.618Z",
       "checksum": "1458105a68add2d0ba84141758dfd751e613fd69871abe08a7b9f60fa892d2ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Interactive Form",
+      "Description": "Modify an existing interactive-form override. Branches on the pointed-to Component's status: Pending → modify the Component row in place (no new row, avoids version-proliferation during chat refinement); Active → insert a new Component v(N+1) with Status='Pending' and a new Pending Override pointing at it, leaving the live Active row untouched. The user explicitly activates the new version later via 'Activate Interactive Form Version'. Scope is preserved from the existing override.",
+      "DriverClass": "__ModifyInteractiveForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pen-to-square",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the EntityFormOverride to modify. Usually the Active override for the (entity, user); could also be a Pending one for continued refinement.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The new ComponentSpec. Linted before persistence (componentRole='form', code present, etc.).",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Notes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional notes appended to the override's Notes column. New line per Modify call.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component row that now holds the spec (existing row for in-place, new row for new-version).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Override row pointing at the modified component (existing in in-place mode, new Pending in new-version mode).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Mode",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "'in-place' (Pending modified in place) or 'new-version' (new Pending Component + Override created).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the Component the override now points at.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Modification persisted." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "MISSING_PARAMETER", "Description": "OverrideID or Spec missing." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "OVERRIDE_NOT_FOUND", "Description": "The supplied OverrideID does not exist." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "COMPONENT_NOT_FOUND", "Description": "Override pointed at a Component that no longer exists (orphan)." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "LINT_FAILED", "Description": "Spec failed schema or code-level validation." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "PERSIST_FAILED", "Description": "Database write failed; see message." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_USER", "Description": "Action requires a ContextUser." } }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Activate Interactive Form Version",
+      "Description": "Promote a Pending EntityFormOverride to Active. Atomically demotes any sibling Active override at the same scope target to Inactive (and its Component). The Pending Override is the one the agent just produced via Modify; activating it makes it the live form. Old Component rows persist forever as immutable history — revertible via 'Revert Interactive Form'.",
+      "DriverClass": "__ActivateInteractiveFormVersion",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-circle-check",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Pending EntityFormOverride to activate. Idempotent if the override is already Active.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Component row now Active.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Override row now Active (echoed).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousActiveOverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the prior Active override that was demoted to Inactive, or null if there was none.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Override activated; any prior Active override and its Component were flipped to Inactive." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "MISSING_PARAMETER", "Description": "OverrideID missing." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "OVERRIDE_NOT_FOUND", "Description": "The supplied OverrideID does not exist." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NOT_PENDING", "Description": "The target Override is Inactive. Use 'Revert Interactive Form' to restore an older version instead of 'Activate'." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "COMPONENT_NOT_FOUND", "Description": "Override pointed at a Component that no longer exists." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "QUERY_FAILED", "Description": "Sibling-override lookup failed; see message." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "PERSIST_FAILED", "Description": "Database write failed; see message." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_USER", "Description": "Action requires a ContextUser." } }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Revert Interactive Form",
+      "Description": "Re-point an Active EntityFormOverride at an older Component version in the same Name lineage. Pure UPDATE on the override row; no new Components or Overrides are created. Use to roll back to a prior working form when a recent change misbehaves. Old Component rows are never deleted, so revert is fully reversible by reverting again to the original version.",
+      "DriverClass": "__RevertInteractiveForm",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-rotate-left",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ActiveOverrideID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Active EntityFormOverride to re-point.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetComponentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the Component to revert to. Must be in the same Name lineage as the currently-Active Component. Either this or TargetVersionSequence is required.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetVersionSequence",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Numeric VersionSequence to revert to (within the same Name lineage). Either this or TargetComponentID is required.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OverrideID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Override row re-pointed (echoed).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The newly-Active Component.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviousComponentID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Component we demoted (null if revert was a no-op).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Version",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Version string of the now-Active component.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "SUCCESS", "Description": "Override re-pointed; Component statuses flipped." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "MISSING_PARAMETER", "Description": "ActiveOverrideID is required; one of TargetComponentID or TargetVersionSequence is required." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "OVERRIDE_NOT_FOUND", "Description": "The supplied OverrideID does not exist." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NOT_ACTIVE", "Description": "Override is not currently Active. Revert only operates on the Active row." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "COMPONENT_NOT_FOUND", "Description": "Target Component was not found." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "LINEAGE_MISMATCH", "Description": "Target Component is in a different Name lineage than the currently-Active Component." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "PERSIST_FAILED", "Description": "Database write failed; see message." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_PROVIDER", "Description": "No metadata provider configured." } },
+        { "fields": { "ActionID": "@parent:ID", "ResultCode": "NO_USER", "Description": "Action requires a ContextUser." } }
+      ]
     }
   }
 ]

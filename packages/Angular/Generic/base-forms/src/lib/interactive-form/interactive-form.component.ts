@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
@@ -8,6 +8,7 @@ import {
     FormBeforeSaveArgs,
     FormBeforeDeleteArgs,
     FormEditModeChangeRequestedArgs,
+    isFormRole,
 } from '@memberjunction/interactive-component-types/forms';
 import { SimpleEntityFieldInfo } from '@memberjunction/interactive-component-types';
 import { MJReactComponent, ReactBridgeService, ReactComponentEvent } from '@memberjunction/ng-react';
@@ -35,17 +36,27 @@ import { BaseFormComponent } from '../base-form-component';
 })
 export class InteractiveFormComponent extends BaseFormComponent implements OnInit, OnDestroy {
 
-    public override record!: BaseEntity;
+    @Input() public override record!: BaseEntity;
 
     /**
      * The Component row ID resolved for this (entity, user, roles) tuple. Set
      * by `SingleRecordComponent.LoadForm` after the resolver returns an
      * override.
      */
-    public ComponentID: string | null = null;
+    @Input() public ComponentID: string | null = null;
 
-    /** Loaded ComponentSpec, parsed from the Component row's `Specification` JSON. */
-    public componentSpec: ComponentSpec | null = null;
+    /**
+     * Loaded ComponentSpec, parsed from the Component row's `Specification` JSON.
+     *
+     * Two ways to populate this:
+     *   1. **Via `ComponentID`** (the standard path): set the input, ngOnInit
+     *      fetches the row from `MJ: Components` and assigns the parsed spec.
+     *   2. **Direct assignment** (the artifact-viewer path): the caller already
+     *      has the spec in hand (parsed from an artifact JSON blob) and sets
+     *      `componentSpec` directly. In that case `ComponentID` should be left
+     *      null and the DB fetch is skipped.
+     */
+    @Input() public componentSpec: ComponentSpec | null = null;
 
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
     public formHostProps: FormHostProps | null = null;
@@ -95,7 +106,9 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             this.originalSnapshot = this.record.GetAll();
             this.rebuildFormHostProps();
         }
-        if (this.ComponentID) {
+        // Direct-spec path (artifact viewer) takes precedence; DB fetch only
+        // when no spec was supplied and we have an ID to look up.
+        if (!this.componentSpec && this.ComponentID) {
             await this.loadComponentSpec();
         }
     }
@@ -329,8 +342,11 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
                 this.loadError = `Component ${row.Name ?? this.ComponentID} has an empty Specification.`;
                 return;
             }
-            if (this.componentSpec.componentRole && this.componentSpec.componentRole !== 'form') {
-                this.loadError = `Component ${row.Name ?? this.ComponentID} declares componentRole='${this.componentSpec.componentRole}', not 'form'.`;
+            // Validate the spec commits to the form-role contract. We use the
+            // helper (whose signature is structural via Pick<>) so this stays
+            // robust across ComponentSpec field additions.
+            if (!isFormRole(this.componentSpec)) {
+                this.loadError = `Component ${row.Name ?? this.ComponentID} does not declare componentRole='form'.`;
                 return;
             }
         } finally {

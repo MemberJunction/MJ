@@ -153,6 +153,28 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       instance.userPermissions = permissions;
       instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
 
+      // Push variant list + active selection into the form so the
+      // record-form-container's picker renders. Variants comes from the
+      // resolver and includes any applicable override (User/Role/Global)
+      // regardless of status — the picker shows them all but only Active
+      // ones are pick-able as the live form.
+      instance.Variants = (resolution.variants ?? []).map(v => ({
+        ID: v.ID,
+        Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`,
+        Scope: v.Scope,
+        Status: v.Status,
+      }));
+      instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
+      // Wire the handler: persist the selection in localStorage and reload
+      // the form. Reload uses the existing entry path so all the resolver's
+      // tier/priority semantics apply (and the saved choice now overrides).
+      instance.OnVariantChanged = (variantID: string | null) => {
+        this.formResolver.SetSelectedVariant(entityName, variantID);
+        // Re-run the load with the same key — the resolver will honour the
+        // updated session-local selection.
+        this.LoadForm(this.PrimaryKey, entityName);
+      };
+
       // Subscribe to form @Output events and map them to Explorer services
       this.subscribeToFormEvents(instance);
 

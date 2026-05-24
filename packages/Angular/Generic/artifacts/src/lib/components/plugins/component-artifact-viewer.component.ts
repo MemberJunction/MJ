@@ -3,9 +3,9 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { CompositeKey, DataSnapshot } from '@memberjunction/core';
+import { isFormRole } from '@memberjunction/interactive-component-types/forms';
+import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
-import { ComponentFeedbackPanelComponent } from './component-feedback-panel/component-feedback-panel.component';
 
 /**
  * Viewer component for interactive Component artifacts (React-based UI components)
@@ -26,6 +26,37 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
   @Output() tabsChanged = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+
+  /**
+   * Emitted when the user clicks "Apply to my form" on a form-role artifact.
+   * Carries the spec (ready to hand to the agent's Create/Modify action) and
+   * the entity name. The host is responsible for confirming + invoking the
+   * actual server action.
+   */
+  @Output() applyFormRequested = new EventEmitter<{ spec: ComponentSpec; entityName: string }>();
+
+  // ── Form-aware state (only populated when componentRole === 'form') ──
+
+  /** True when this artifact's spec declares `componentRole: 'form'`. */
+  public isFormArtifact = false;
+
+  /** Entity the form targets — resolved from spec.entityName / dataRequirements. */
+  public formEntityInfo: EntityInfo | null = null;
+
+  /** The real or fixture record currently bound to the form preview. */
+  public formRecord: BaseEntity | null = null;
+
+  /** True iff `formRecord` is a real DB row (vs a fixture NewRecord()). */
+  public formRecordIsReal = false;
+
+  /** Label for the chip (e.g. the record's Name field). */
+  public formRecordLabel = '';
+
+  /** Picker UI state. */
+  public showRecordPicker = false;
+  public recordSearchTerm = '';
+  public recordSearchResults: Array<{ ID: string; Label: string }> = [];
+  public formInitError: string | null = null;
 
   // Component data
   public component: ComponentSpec | null = null;
@@ -100,6 +131,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       if (this.artifactVersion?.Content) {
         this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
         this.extractComponentParts();
+        // Form-aware detection. Done here (not in ngAfterViewInit) so the
+        // template's `@if (isFormArtifact)` branch decides which preview
+        // to mount on the very first render — no flash of the non-form
+        // path before the form-aware UI takes over.
+        this.detectAndInitFormArtifact();
       } else {
         throw new Error('Artifact content is empty');
       }
@@ -298,5 +334,185 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   public override AskUserForFeedback(): void {
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
+  }
+
+  // ════════════════════════════════════════════════════════════════════
+  // FORM-AWARE BRANCH
+  //
+  // When the artifact's spec declares `componentRole: 'form'`, the viewer
+  // delegates rendering to `<mj-interactive-form>` instead of the raw
+  // `<mj-react-component>` path. This gives the React form a proper
+  // FormHostProps binding (bound to a real DB record by default) and lets
+  // the user swap records via a search picker before applying.
+  //
+  // Triggered from `loadComponentSpec()` after the spec parses.
+  // ════════════════════════════════════════════════════════════════════
+
+  /**
+   * Detect form-role and kick off entity + record resolution. Failure modes
+   * (missing entity, RunView failure, entity has no rows) fall back to a
+   * synthetic record from `BaseEntity.NewRecord()` so the form still mounts
+   * against type-appropriate empty values.
+   */
+  private async detectAndInitFormArtifact(): Promise<void> {
+    this.isFormArtifact = false;
+    this.formEntityInfo = null;
+    this.formRecord = null;
+    this.formRecordIsReal = false;
+    this.formRecordLabel = '';
+    this.formInitError = null;
+
+    const spec = this.component;
+    if (!spec || !isFormRole(spec)) return;
+
+    this.isFormArtifact = true;
+
+    const entityName = this.resolveFormEntityName(spec);
+    if (!entityName) {
+      this.formInitError = 'Form artifact has no declared entity. Showing without record context.';
+      return;
+    }
+
+    const provider = this.ProviderToUse;
+    const entity = provider?.EntityByName(entityName);
+    if (!entity) {
+      this.formInitError = `Entity "${entityName}" not registered with the active provider.`;
+      return;
+    }
+    this.formEntityInfo = entity;
+
+    // Load Top-1 record by default. If empty / fails, fall back to a fresh
+    // synthetic record. Either way the form mounts — failure to find a real
+    // record is informational, not fatal.
+    const record = await this.loadTopOneRecord(entity);
+    if (record) {
+      this.formRecord = record;
+      this.formRecordIsReal = true;
+      this.formRecordLabel = this.computeRecordLabel(record);
+    } else {
+      this.formRecord = await this.buildFixtureRecord(entity);
+      this.formRecordIsReal = false;
+      this.formRecordLabel = 'Mock data';
+    }
+  }
+
+  /** Spec.entityName is the primary signal; fall back to the dataRequirements primary entity. */
+  private resolveFormEntityName(spec: ComponentSpec): string | null {
+    const direct = (spec as unknown as { entityName?: string }).entityName;
+    if (direct && typeof direct === 'string') return direct.trim();
+    const dr = spec.dataRequirements as unknown as { entities?: Array<{ name?: string }> } | undefined;
+    const first = dr?.entities?.[0]?.name;
+    return first ? first.trim() : null;
+  }
+
+  /** Load the first row by primary key — deterministic, doesn't require a sort field. */
+  private async loadTopOneRecord(entity: EntityInfo): Promise<BaseEntity | null> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<BaseEntity>({
+        EntityName: entity.Name,
+        MaxRows: 1,
+        ResultType: 'entity_object',
+      }, this.ProviderToUse.CurrentUser);
+      if (result.Success && (result.Results?.length ?? 0) > 0) {
+        return result.Results[0];
+      }
+    } catch (err) {
+      LogError(`ComponentArtifactViewer: Top-1 RunView failed for ${entity.Name}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return null;
+  }
+
+  /** Synthetic "create-mode" record when no real row exists or RunView failed. */
+  private async buildFixtureRecord(entity: EntityInfo): Promise<BaseEntity | null> {
+    try {
+      const fresh = await this.ProviderToUse.GetEntityObject<BaseEntity>(entity.Name, this.ProviderToUse.CurrentUser);
+      fresh.NewRecord();
+      return fresh;
+    } catch (err) {
+      LogError(`ComponentArtifactViewer: failed to build fixture record for ${entity.Name}: ${err instanceof Error ? err.message : String(err)}`);
+      return null;
+    }
+  }
+
+  /** Pull a human-readable label from the record's NameField or first text field. */
+  private computeRecordLabel(record: BaseEntity): string {
+    const nameField = record.EntityInfo.NameField?.Name;
+    if (nameField) {
+      const v = record.Get(nameField);
+      if (v != null && String(v).trim().length > 0) return String(v);
+    }
+    if (record.PrimaryKey?.HasValue) return record.PrimaryKey.ToConcatenatedString();
+    return record.EntityInfo.Name;
+  }
+
+  /**
+   * Search-as-you-type for the picker. Queries by name field (or any
+   * indexed string field, best-effort). Limits to 8 hits for tightness.
+   */
+  public async onPickerSearchInput(term: string): Promise<void> {
+    this.recordSearchTerm = term;
+    if (!this.formEntityInfo || term.trim().length === 0) {
+      this.recordSearchResults = [];
+      return;
+    }
+    const nameField = this.formEntityInfo.NameField?.Name;
+    if (!nameField) {
+      this.recordSearchResults = [];
+      return;
+    }
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      // Best-effort LIKE filter against the entity's name field. Wrap the
+      // term so we don't break SQL — RunView passes ExtraFilter as-is.
+      const safe = term.replace(/'/g, "''");
+      const result = await rv.RunView<BaseEntity>({
+        EntityName: this.formEntityInfo.Name,
+        ExtraFilter: `${nameField} LIKE '%${safe}%'`,
+        MaxRows: 8,
+        ResultType: 'entity_object',
+      }, this.ProviderToUse.CurrentUser);
+      if (result.Success) {
+        this.recordSearchResults = (result.Results ?? []).map(r => ({
+          ID: r.PrimaryKey?.ToConcatenatedString() ?? '',
+          Label: this.computeRecordLabel(r),
+        }));
+      }
+    } catch (err) {
+      LogError(`ComponentArtifactViewer: picker search failed: ${err instanceof Error ? err.message : String(err)}`);
+      this.recordSearchResults = [];
+    }
+  }
+
+  /** User picked a different record from the search results. Re-bind the form. */
+  public async onPickerSelect(item: { ID: string; Label: string }): Promise<void> {
+    if (!this.formEntityInfo) return;
+    try {
+      const rec = await this.ProviderToUse.GetEntityObject<BaseEntity>(
+        this.formEntityInfo.Name, this.ProviderToUse.CurrentUser,
+      );
+      const pk = new CompositeKey();
+      pk.LoadFromURLSegment(this.formEntityInfo, item.ID);
+      const loaded = await rec.InnerLoad(pk);
+      if (loaded) {
+        this.formRecord = rec;
+        this.formRecordIsReal = true;
+        this.formRecordLabel = item.Label;
+        this.showRecordPicker = false;
+        this.recordSearchTerm = '';
+        this.recordSearchResults = [];
+      }
+    } catch (err) {
+      LogError(`ComponentArtifactViewer: failed to load picked record ${item.ID}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  /** Bubble Apply intent up to the host (Form Builder dashboard / Sage chat). */
+  public onApplyClicked(): void {
+    if (!this.component || !this.formEntityInfo) return;
+    this.applyFormRequested.emit({
+      spec: this.component,
+      entityName: this.formEntityInfo.Name,
+    });
   }
 }

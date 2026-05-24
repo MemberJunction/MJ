@@ -37,6 +37,7 @@
     "@memberjunction/global": "5.36.0",
     "@memberjunction/interactive-component-types": "5.36.0",
     "@memberjunction/ng-base-types": "5.36.0",
+    "@memberjunction/ng-base-forms": "5.36.0",
     "@memberjunction/ng-code-editor": "5.36.0",
     "@memberjunction/ng-notifications": "5.36.0",
     "@memberjunction/ng-react": "5.36.0",
