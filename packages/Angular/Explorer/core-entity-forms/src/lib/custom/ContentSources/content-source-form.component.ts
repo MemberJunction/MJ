@@ -1,5 +1,9 @@
 import { Component } from '@angular/core';
-import { MJContentSourceEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
+import {
+    MJContentSourceEntity,
+    MJContentSourceEntity_IContentSourceConfiguration,
+    MJContentSourceEntity_IContentSourceWebsiteConfiguration,
+} from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJContentSourceFormComponent } from '../../generated/Entities/MJContentSource/mjcontentsource.form.component';
@@ -12,35 +16,6 @@ interface TaxonomyModeOption {
     icon: string;
     desc: string;
 }
-
-/**
- * Per-source website crawl knobs surfaced in the form. Mirrors the
- * `IContentSourceWebsiteConfiguration` interface in the metadata JSON-Type
- * file (`metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts`)
- * one-for-one. Carried locally so this file compiles before CodeGen
- * regenerates the typed accessor on MJContentSourceEntity to include `Website`.
- *
- * NOTE: drop this local declaration after CodeGen regenerates the typed
- * `MJContentSourceEntity_IContentSourceConfiguration` to include `Website`.
- */
-interface WebsiteConfig {
-    MaxDepth?: number;
-    CrawlSitesInLowerLevelDomain?: boolean;
-    CrawlOtherSitesInTopLevelDomain?: boolean;
-    URLPattern?: string;
-    RootURL?: string;
-}
-
-/**
- * Transitional widening of the generated typed config accessor — adds the two new
- * fields (`MaxItemsPerRun`, `Website`) that the metadata JSON-Type defines but the
- * generated entity class doesn't know about yet. Cast becomes unnecessary after
- * the user runs CodeGen.
- */
-type ExtendedConfig = MJContentSourceEntity_IContentSourceConfiguration & {
-    MaxItemsPerRun?: number;
-    Website?: WebsiteConfig;
-};
 
 /**
  * Custom Content Source form.
@@ -111,15 +86,14 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
      * the JSON didn't supply them. Writing back is via `setConfig` so we keep
      * the record dirty and persist through the standard Save() path.
      */
-    public get Config(): ExtendedConfig {
-        const raw = this.record?.ConfigurationObject;
-        return (raw ?? {}) as ExtendedConfig;
+    public get Config(): MJContentSourceEntity_IContentSourceConfiguration {
+        return this.record?.ConfigurationObject ?? {};
     }
 
-    public setConfig(patch: Partial<ExtendedConfig>): void {
+    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
         if (!this.record) return;
-        const current = (this.record.ConfigurationObject ?? {}) as ExtendedConfig;
-        const merged: ExtendedConfig = { ...current, ...patch };
+        const current = this.record.ConfigurationObject ?? {};
+        const merged: MJContentSourceEntity_IContentSourceConfiguration = { ...current, ...patch };
         // Setting via the typed accessor updates Configuration JSON + marks dirty.
         this.record.ConfigurationObject = merged;
     }
@@ -225,20 +199,17 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
     // ContentSourceParam rows as a legacy / sharper-override path.
 
     /** Return the typed Website sub-object, defaulted to {} so getters can read freely. */
-    public get WebsiteConfig(): WebsiteConfig {
+    public get WebsiteConfig(): MJContentSourceEntity_IContentSourceWebsiteConfiguration {
         return this.Config.Website ?? {};
     }
 
-    private setWebsite(patch: Partial<WebsiteConfig>): void {
-        const current = this.WebsiteConfig;
-        // Spread the patch over current, then strip any keys whose value is undefined
-        // so we don't persist `"key": undefined` artifacts in the JSON.
-        const merged: WebsiteConfig = { ...current };
-        for (const [k, v] of Object.entries(patch)) {
-            if (v === undefined) {
-                delete (merged as Record<string, unknown>)[k];
-            } else {
-                (merged as Record<string, unknown>)[k] = v;
+    private setWebsite(patch: Partial<MJContentSourceEntity_IContentSourceWebsiteConfiguration>): void {
+        // Spread for the typed merge, then explicitly remove keys whose patched
+        // value was undefined so we don't persist `"key": undefined` artifacts.
+        const merged: MJContentSourceEntity_IContentSourceWebsiteConfiguration = { ...this.WebsiteConfig, ...patch };
+        for (const key of Object.keys(patch) as Array<keyof MJContentSourceEntity_IContentSourceWebsiteConfiguration>) {
+            if (patch[key] === undefined) {
+                delete merged[key];
             }
         }
         this.setConfig({ Website: merged });

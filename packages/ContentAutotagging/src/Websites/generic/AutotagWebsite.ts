@@ -1,10 +1,12 @@
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
+import { ContentSourceTypeParamValue } from '../../Engine/generic/content.types';
 import { RunBudget } from '../../Engine/generic/RunBudget';
 import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
 import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
+import type { AnyNode } from 'domhandler';
 import axios from 'axios';
 import { URL } from 'url';
 import dotenv from 'dotenv';
@@ -23,8 +25,10 @@ export class AutotagWebsite extends AutotagBase {
     protected CrawlOtherSitesInTopLevelDomain: boolean = false;
     protected CrawlSitesInLowerLevelDomain: boolean = true;
     protected MaxDepth: number = 2;
-    protected RootURL: string;
-    protected URLPattern: string;
+    // RootURL / URLPattern are optional — when unset, `getAllLinksFromContentSource`
+    // derives RootURL from the seed URL's parent and treats URLPattern as `.*`.
+    protected RootURL: string | undefined;
+    protected URLPattern: string | undefined;
     protected visitedURLs: Set<string>;
 
     /**
@@ -52,8 +56,8 @@ export class AutotagWebsite extends AutotagBase {
         this.CrawlOtherSitesInTopLevelDomain = false;
         this.CrawlSitesInLowerLevelDomain = true;
         this.MaxDepth = 2;
-        this.URLPattern = undefined as unknown as string;
-        this.RootURL = undefined as unknown as string;
+        this.URLPattern = undefined;
+        this.RootURL = undefined;
     }
 
     /**
@@ -68,22 +72,48 @@ export class AutotagWebsite extends AutotagBase {
      * its typed config sub-object key and shape. For now this is the canonical
      * shape; other autotaggers can copy it when they need typed knobs.
      */
+    /**
+     * Apply per-source `ContentSourceParam` rows to this crawler instance. Values
+     * stored in the DB are strings, so we coerce per-key to the right runtime type
+     * instead of bulk-assigning (which previously stuffed strings into number /
+     * boolean fields and relied on JS coercion at use sites).
+     *
+     * Unknown keys are silently ignored — same gate as the prior `if (key in this)`
+     * check, just made explicit.
+     */
+    protected overlayCrawlParamsFromMap(params: Map<string, ContentSourceTypeParamValue>): void {
+        const maxDepth = params.get('MaxDepth');
+        if (maxDepth != null) {
+            const n = this.coerceNumber(maxDepth);
+            if (n != null) this.MaxDepth = n;
+        }
+        const lower = params.get('CrawlSitesInLowerLevelDomain');
+        if (lower != null) this.CrawlSitesInLowerLevelDomain = this.coerceBoolean(lower);
+        const other = params.get('CrawlOtherSitesInTopLevelDomain');
+        if (other != null) this.CrawlOtherSitesInTopLevelDomain = this.coerceBoolean(other);
+        const pattern = params.get('URLPattern');
+        // RegExp values come pre-compiled by the engine — store the source text
+        // so the crawler's `new RegExp(this.URLPattern)` call stays consistent.
+        if (pattern instanceof RegExp) {
+            this.URLPattern = pattern.source;
+        } else if (typeof pattern === 'string' && pattern.length > 0) {
+            this.URLPattern = pattern;
+        }
+        const root = params.get('RootURL');
+        if (typeof root === 'string' && root.length > 0) this.RootURL = root;
+    }
+
+    private coerceBoolean(value: ContentSourceTypeParamValue): boolean {
+        if (typeof value === 'boolean') return value;
+        if (typeof value === 'string') {
+            const trimmed = value.trim().toLowerCase();
+            return trimmed === 'true' || trimmed === '1' || trimmed === 'yes';
+        }
+        return false;
+    }
+
     protected applyWebsiteConfigFromSource(source: MJContentSourceEntity): void {
-        const cfg = source.ConfigurationObject;
-        if (!cfg) return;
-        // `Website` is a new field on IContentSourceConfiguration; tolerate older
-        // typed CodeGen output that doesn't know about it yet via an explicit cast.
-        // Remove the cast after CodeGen regenerates the typed accessor.
-        const extended = cfg as MJContentSourceEntity_IContentSourceConfiguration & {
-            Website?: {
-                MaxDepth?: number;
-                CrawlSitesInLowerLevelDomain?: boolean;
-                CrawlOtherSitesInTopLevelDomain?: boolean;
-                URLPattern?: string;
-                RootURL?: string;
-            };
-        };
-        const w = extended.Website;
+        const w = source.ConfigurationObject?.Website;
         if (!w) return;
         if (typeof w.MaxDepth === 'number' && Number.isFinite(w.MaxDepth)) this.MaxDepth = w.MaxDepth;
         if (typeof w.CrawlSitesInLowerLevelDomain === 'boolean') this.CrawlSitesInLowerLevelDomain = w.CrawlSitesInLowerLevelDomain;
@@ -124,27 +154,26 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
-    private coerceNumber(value: unknown): number | null {
+    private coerceNumber(value: ContentSourceTypeParamValue | number | null | undefined): number | null {
         if (value == null) return null;
-        const n = typeof value === 'number' ? value : Number(value);
-        return Number.isFinite(n) ? n : null;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+        if (typeof value === 'string') {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : null;
+        }
+        return null;
     }
 
     /**
      * Safely read a numeric budget knob from the typed configuration object.
-     * `MaxItemsPerRun` is a transitional addition — the typed accessor on
-     * MJContentSourceEntity may not include it yet on older CodeGen runs,
-     * so we read it as an optional extension. Other knobs are stable typed
-     * fields and the cast is just a tidiness aid.
+     * Returns null when the field is unset or not a finite number.
      */
     private readConfigNumber(
         cfg: MJContentSourceEntity_IContentSourceConfiguration | null,
         key: 'MaxItemsPerRun' | 'MaxNewTagsPerRun' | 'MaxNewTagsPerItem' | 'MaxTokensPerRun' | 'MaxCostPerRun'
     ): number | null {
         if (!cfg) return null;
-        const extended = cfg as MJContentSourceEntity_IContentSourceConfiguration & { MaxItemsPerRun?: number | null };
-        const value = extended[key];
-        return this.coerceNumber(value);
+        return this.coerceNumber(cfg[key]);
     }
 
     /**
@@ -253,14 +282,13 @@ export class AutotagWebsite extends AutotagBase {
 
             // Second overlay: per-source ContentSourceParam rows. These win — legacy
             // sources configured via the params grid (or anyone who wants a sharper
-            // per-instance override) keep working.
+            // per-instance override) keep working. We handle each known crawler key
+            // explicitly so the DB-stored string values get the right runtime type
+            // (the prior "bulk dynamic assign" path silently stuffed strings into
+            // number/boolean fields).
             const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
             if (contentSourceParamsMap) {
-                contentSourceParamsMap.forEach((value, key) => {
-                    if (key in this) {
-                        (this as any)[key] = value;
-                    }
-                });
+                this.overlayCrawlParamsFromMap(contentSourceParamsMap);
             }
 
             const contentSourceParams: ContentSourceParams = {
@@ -418,7 +446,7 @@ export class AutotagWebsite extends AutotagBase {
         return data;
     }
 
-    public getTextWithLineBreaks(element: any, $: cheerio.CheerioAPI): string {
+    public getTextWithLineBreaks(element: AnyNode, $: cheerio.CheerioAPI): string {
         let text = '';
         const children = $(element).contents();
 

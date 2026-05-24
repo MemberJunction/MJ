@@ -7990,10 +7990,10 @@ export const MJArtifactUseSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User
@@ -8053,10 +8053,10 @@ export const MJArtifactVersionAttributeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJArtifactVersionAttributeEntityType = z.infer<typeof MJArtifactVersionAttributeSchema>;
@@ -8536,10 +8536,10 @@ export const MJCollectionArtifactSchema = z.object({
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJCollectionArtifactEntityType = z.infer<typeof MJCollectionArtifactSchema>;
@@ -11490,10 +11490,10 @@ export const MJConversationDetailArtifactSchema = z.object({
         * * Field Name: ConversationDetail
         * * Display Name: Conversation Detail Summary
         * * SQL Data Type: nvarchar(MAX)`),
-    ArtifactVersion: z.number().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Summary
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailArtifactEntityType = z.infer<typeof MJConversationDetailArtifactSchema>;
@@ -11603,10 +11603,10 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Field Name: File
         * * Display Name: File Record
         * * SQL Data Type: nvarchar(500)`),
-    ArtifactVersion: z.number().nullable().describe(`
+    ArtifactVersion: z.string().nullable().describe(`
         * * Field Name: ArtifactVersion
         * * Display Name: Artifact Version Record
-        * * SQL Data Type: int`),
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailAttachmentEntityType = z.infer<typeof MJConversationDetailAttachmentSchema>;
@@ -48228,9 +48228,9 @@ export class MJArtifactUseEntity extends BaseEntity<MJArtifactUseEntityType> {
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 
@@ -48383,9 +48383,9 @@ export class MJArtifactVersionAttributeEntity extends BaseEntity<MJArtifactVersi
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -49615,9 +49615,9 @@ export class MJCollectionArtifactEntity extends BaseEntity<MJCollectionArtifactE
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -56038,6 +56038,19 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      */
     SuggestThreshold?: number;
     /**
+     * Maximum number of content items the autotagger may PROCESS (hand to the LLM) per run
+     * before the run is paused via the existing CancellationRequested machinery. Does not
+     * include items skipped by change-detection — those are free. NULL/unset = unlimited.
+     *
+     * Most intuitive "do at most N this run, do the rest next time" knob. When checking
+     * budgets after a batch, this is evaluated FIRST (before tag / token / cost caps) because
+     * it is the most user-facing and not tied to a specific model's pricing or tokenization.
+     *
+     * Pause is graceful — the next invocation re-crawls, change-detection skips the items
+     * already tagged in DB, and the remaining items get processed.
+     */
+    MaxItemsPerRun?: number;
+    /**
      * Maximum number of new tags the autotagger may auto-create across an entire run before
      * the run is paused via the existing CancellationRequested machinery. NULL/unset = unlimited.
      * Pause is graceful — the run resumes from `LastProcessedOffset` when restarted.
@@ -56067,9 +56080,55 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * - RSS Feed: { URL: "https://example.com/feed.xml" }
      * - Cloud Storage: { FileStorageProviderKey: "Azure Blob Storage", PathPrefix: "/documents" }
      * - Local File System: { Path: "/var/data/documents" }
-     * - Website: { URL: "https://example.com", CrawlDepth: 2 }
+     * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+    /**
+     * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
+     * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
+     * this sub-object first and falls back to ContentSourceParam rows for sources configured
+     * before this field existed.
+     *
+     * In the future, source-type-specific knobs like these may move to a pluggable per-source-type
+     * sub-interface scheme (one named property per source type). This is the first opt-in
+     * implementation; other source types will follow the same pattern as their knobs grow.
+     */
+    Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+}
+
+/**
+ * Per-source crawl/discovery settings specific to AutotagWebsite. All optional with
+ * runtime defaults; an empty object is valid and produces the standard behavior
+ * (MaxDepth=2, recursive crawl on, sibling-domain fan-out off, no URL filter).
+ */
+export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
+    /**
+     * Recursion ceiling for in-domain links. `0` = just the start URL; `2` (the default) =
+     * root + section pages + their child content pages. Higher values combine multiplicatively
+     * with the per-page 1-second crawl delay.
+     */
+    MaxDepth?: number;
+    /**
+     * When true (default), the recursive depth-aware crawler runs. Setting false disables it
+     * (single-page behavior, retrieved-as-discovered-from-the-seed-URL only).
+     */
+    CrawlSitesInLowerLevelDomain?: boolean;
+    /**
+     * When true, also adds sibling-path URLs found on the seed page (single-pass, no recursion).
+     * Off by default to avoid accidental fan-out across paths the operator didn't intend.
+     */
+    CrawlOtherSitesInTopLevelDomain?: boolean;
+    /**
+     * Regex string. Only URLs matching this pattern are added to the visited set. Use to scope
+     * to e.g. `^https://example\.com/blog/.*`. Unset = match everything.
+     */
+    URLPattern?: string;
+    /**
+     * URL prefix used for the in-domain check. When unset, derived as the parent directory of
+     * the seed URL. Override to expand or constrain the crawl boundary (e.g., set to the bare
+     * origin to crawl the whole site).
+     */
+    RootURL?: string;
 }
 
 /**
@@ -57375,9 +57434,9 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Summary
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }
@@ -57388,7 +57447,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -57696,9 +57755,9 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     /**
     * * Field Name: ArtifactVersion
     * * Display Name: Artifact Version Record
-    * * SQL Data Type: int
+    * * SQL Data Type: nvarchar(255)
     */
-    get ArtifactVersion(): number | null {
+    get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
     }
 }

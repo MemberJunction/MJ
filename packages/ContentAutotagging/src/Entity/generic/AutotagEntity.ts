@@ -128,13 +128,8 @@ export class AutotagEntity extends AutotagBase {
             unionScope = ScopeContextResolver.union(unionScope, ctx);
 
             const cfg = source.ConfigurationObject;
-            // MaxItemsPerRun is a transitional knob — the typed accessor on
-            // MJContentSourceEntity may not include it yet on older CodeGen
-            // runs, so read it as an optional extension. Schema/CodeGen
-            // formalization is a planned follow-up.
-            const cfgExt = cfg as (typeof cfg & { MaxItemsPerRun?: number | null }) | null | undefined;
             this.sourceBudgetMap.set(normalizedID, new RunBudget({
-                MaxItemsPerRun: cfgExt?.MaxItemsPerRun ?? null,
+                MaxItemsPerRun: cfg?.MaxItemsPerRun ?? null,
                 MaxNewTagsPerRun: cfg?.MaxNewTagsPerRun ?? null,
                 MaxNewTagsPerItem: cfg?.MaxNewTagsPerItem ?? null,
                 MaxTokensPerRun: cfg?.MaxTokensPerRun ?? null,
