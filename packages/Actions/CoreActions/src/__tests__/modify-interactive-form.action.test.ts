@@ -323,6 +323,58 @@ describe('ModifyInteractiveFormAction', () => {
         expect(stillActive.Status).toBe('Active');
     });
 
+    it('FORBIDDEN when the override is User-scope to a different user', async () => {
+        hoisted.overrides.set('OVER-OTHER', {
+            record: {
+                ID: 'OVER-OTHER', EntityID: 'ENT-1', ComponentID: 'COMP-OTHER',
+                Name: 'F', Scope: 'User', UserID: 'OTHER-USER', RoleID: null,
+                Priority: 0, Status: 'Active',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-OTHER', {
+            record: { ID: 'COMP-OTHER', Name: 'F', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
+            saveOutcome: true, loaded: false,
+        });
+        const result = await run(new ModifyInteractiveFormAction(), mkParams('OVER-OTHER'));
+        expect(result.ResultCode).toBe('FORBIDDEN');
+        // No mutations should have happened.
+        expect(hoisted.newComponents.length).toBe(0);
+        expect(hoisted.newOverrides.length).toBe(0);
+    });
+
+    it('new-version path clamps the new Pending Override to User scope (security)', async () => {
+        // Even when modifying a Role-scope override the caller has access to,
+        // the produced Pending sibling MUST be User-scope to the caller.
+        // Scope-promotion is a separate human action; the agent path can't widen.
+        // Caller has Role 'R1'.
+        hoisted.overrides.set('OVER-ROLE', {
+            record: {
+                ID: 'OVER-ROLE', EntityID: 'ENT-1', ComponentID: 'COMP-ROLE',
+                Name: 'F', Scope: 'Role', UserID: null, RoleID: 'R1',
+                Priority: 0, Status: 'Active',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-ROLE', {
+            record: { ID: 'COMP-ROLE', Name: 'F', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-ROLE');
+        // Override the context user to include role R1.
+        (params as unknown as { ContextUser: { UserRoles: { RoleID: string }[]; ID: string; Name: string } }).ContextUser = {
+            ID: 'U1', Name: 'Test', UserRoles: [{ RoleID: 'R1' }],
+        };
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.Success).toBe(true);
+        expect(hoisted.newOverrides.length).toBe(1);
+        // Critical: the NEW Pending Override is User scope, not Role.
+        const newOver = hoisted.newOverrides[0].record;
+        expect(newOver.Scope).toBe('User');
+        expect(newOver.UserID).toBe('U1');
+        expect(newOver.RoleID).toBeNull();
+    });
+
     it('returns LINT_FAILED when the new spec has no componentRole', async () => {
         hoisted.overrides.set('OVER-1', {
             record: {

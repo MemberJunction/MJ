@@ -4,7 +4,7 @@ import { Metadata, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
-    addOutput, bumpMinorVersion, failure, getStringParam,
+    addOutput, bumpMinorVersion, checkOverrideOwnership, failure, getStringParam,
     insertComponent, insertOverride, lintFormSpec, loadComponent, loadOverride,
     mapFromComponentStatus, parseSpecParam,
 } from "./_shared";
@@ -30,9 +30,18 @@ import {
  *       Active override is untouched — users must explicitly Activate the
  *       new version before it takes effect.
  *
- * **Security clamp.** Modify uses the SAME scope as the existing override
- * (typically User). The agent cannot widen scope through Modify any more
- * than through Create.
+ * **Security clamp.** Modify *always* writes a User-scope Pending Override,
+ * regardless of the original override's scope. Even if the caller is
+ * modifying a Role-scope or Global override (which they have permission to
+ * read because they pass the ownership check), the new Pending sibling
+ * is always User-scoped to the calling user. Scope promotion (User → Role
+ * → Global) is a separate, deliberate human action with its own permission
+ * gate in Component Studio / Form Builder. The agent cannot widen scope
+ * through Modify any more than through Create.
+ *
+ * **Ownership check.** The caller must own (or have role membership for, or
+ * be admin over) the existing override they're modifying. See
+ * `checkOverrideOwnership` in `_shared.ts`. Returns FORBIDDEN if rejected.
  *
  * Inputs:
  *   - `OverrideID` (required, string) — the override to modify
@@ -74,6 +83,9 @@ export class ModifyInteractiveFormAction extends BaseAction {
             if (!override) {
                 return failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
             }
+            // Defense-in-depth ownership check — see _shared.ts.
+            const ownershipFail = checkOverrideOwnership(override, user);
+            if (ownershipFail) return ownershipFail;
             const existingComponent = await loadComponent(provider, user, override.ComponentID);
             if (!existingComponent) {
                 return failure("COMPONENT_NOT_FOUND",

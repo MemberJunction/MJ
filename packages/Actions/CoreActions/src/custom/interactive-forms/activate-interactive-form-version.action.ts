@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import {
-    addOutput, failure, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
+    addOutput, checkOverrideOwnership, failure, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
 } from "./_shared";
 
 /**
@@ -48,6 +48,8 @@ export class ActivateInteractiveFormVersionAction extends BaseAction {
             if (!target) {
                 return failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${overrideID}' not found.`);
             }
+            const ownershipFail = checkOverrideOwnership(target, user);
+            if (ownershipFail) return ownershipFail;
             if (target.Status === 'Active') {
                 addOutput(params, "ComponentID", target.ComponentID);
                 addOutput(params, "OverrideID", target.ID);

@@ -3,7 +3,7 @@ import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError, RunView } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import {
-    addOutput, failure, getNumberParam, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
+    addOutput, checkOverrideOwnership, failure, getNumberParam, getStringParam, loadComponent, loadOverride, mapToComponentStatus,
 } from "./_shared";
 
 /**
@@ -62,6 +62,8 @@ export class RevertInteractiveFormAction extends BaseAction {
             if (!override) {
                 return failure("OVERRIDE_NOT_FOUND", `EntityFormOverride '${activeOverrideID}' not found.`);
             }
+            const ownershipFail = checkOverrideOwnership(override, user);
+            if (ownershipFail) return ownershipFail;
             if (override.Status !== 'Active') {
                 return failure("NOT_ACTIVE",
                     `Override ${activeOverrideID} is not Active (current Status=${override.Status}). Reverting only operates on the Active override row.`);

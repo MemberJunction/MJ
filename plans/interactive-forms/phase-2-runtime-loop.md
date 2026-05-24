@@ -195,6 +195,52 @@ Full-resolution HTML mockups live in [mockups/](mockups/). Open [mockups/index.h
 - **Skip / agent → override authority** (was Q2): agents never mutate overrides directly. They emit interactive component artifacts. The artifact viewer is smart enough to render form-role components with real or mock data and exposes "Apply to my form" as the user's explicit consent step.
 - **Multi-variant surfacing** (was Q3): resolver returns the full applicable list; variant switcher on the form toolbar lets users pick; selection is session-local by default with optional explicit "make this my default" promotion.
 
+## Retrospective fixes (in-flight follow-up)
+
+After the initial implementation landed, a candid critique surfaced 13 real holes — three security, three integration gaps, four UX polish issues, and three coverage gaps — plus a follow-up retrospective task. **All 14 items must close for the phase to be considered done.** Tracked here as the canonical working list.
+
+### Security (must fix before merge)
+
+1. **Ownership checks on Modify / Activate / Revert.** `Create` correctly self-scopes to the calling user. The three mutation actions all take an `OverrideID` from the caller and operate on it without verifying ownership — a user could mutate someone else's User-scope override by guessing the ID. Add explicit guards:
+   - `Scope='User'` → require `override.UserID === ctx.user.ID`
+   - `Scope='Role'` → require caller is a member of `override.RoleID`
+   - `Scope='Global'` → require caller has admin privilege (`IsAdminUser` / Owner role on app — verify which marker MJ uses)
+   - Surface as `FORBIDDEN` result code on all three actions.
+
+2. **"Apply to my form" button has no consumer.** The artifact viewer's form-aware branch emits `applyFormRequested`; nothing listens. Wire it through `<mj-artifact-message-card>` → confirmation dialog → `Create Interactive Form` (or `Modify Interactive Form` when an Active override already exists for this entity+user). Without this the user-facing button is a broken promise.
+
+3. **Modify action docstring lies.** Claims "uses the SAME scope as the existing override"; implementation hard-clamps to `Scope='User'` via the shared helper. The clamp is correct (security boundary); the doc misleads downstream readers. Rewrite to match: "Modify *always* writes a User-scope Pending Override, regardless of the original override's scope — scope promotion is a separate, deliberate human action."
+
+### Integration gaps the plan called for but didn't deliver
+
+4. **`Get Default Form Scaffold For Entity` not wired into the dashboard's New Form flow.** The agent can call it; the dashboard's manual-create still produces an empty canvas. The plan literally promised the dashboard would use it as a baseline. Fix: in `OnNewForm`, after entity pick, call `buildDefaultFormScaffold(entityName, provider)` and seed `EditableCode` + canvas from the result.
+
+5. **Preview spec is reconstructed from `EditableCode` only.** `PreviewSpec` getter builds `{ name, componentRole, location, code, title }` and drops `dataRequirements`, `description`, `functionalRequirements`, `technicalDesign` from the saved spec. Forms whose data-fetching hooks rely on `dataRequirements` render in Preview without their data context. Fix: merge `EditableCode` over the saved spec rather than rebuilding from scratch.
+
+6. **Layout tab and Code tab can silently diverge.** Canvas-to-code is one-way; if a user edits Code then opens Layout, the canvas is stale. Fix: when `parseCanvasFromCode(EditableCode)` would lose information (existing code path detects this with a warning), surface an inline banner inside the canvas pane: "Code has hand-authored content the canvas can't display — saving here will overwrite it." User can still proceed but is warned.
+
+### UX polish — visible-to-end-user gaps
+
+7. **Top-1 record load is non-deterministic.** `RunView({ MaxRows: 1 })` with no `OrderBy` returns physical-order rows; different users open the same artifact and see different records bound. Fix: `OrderBy` = entity's NameField when available, otherwise `__mj_CreatedAt DESC`.
+
+8. **Variant switcher has no "(default)" affordance.** The picker shows all variants equally; users can't tell which is the CodeGen fallback. Fix: visually distinguish the "Default form" row (label + lighter weight + "(CodeGen fallback)" subtitle).
+
+9. **Version rail "Activate" overloaded.** Same button label for Pending → Active (`activateVersion`) and Inactive → Active (`revertToComponent`). Different audit semantics. Fix: button on a Pending row says "Activate"; button on an Inactive row says "Restore".
+
+10. **No error boundary on the Preview pane.** Bad JSX in EditableCode throws inside `<mj-react-component>`; cockpit shows a blank preview without context. Fix: wrap the preview mount in a small error-state component that catches the render error and shows "Preview failed: \<message\>. Switch to Code to fix."
+
+### Coverage gaps
+
+11. **No end-to-end test of artifact → apply flow.** Each link is unit-tested in isolation but the chain isn't. Caught the "no consumer" bug (#2) too late. Fix: integration test that wires a form-role artifact into a fake message card, simulates the Apply click, asserts the action call happens.
+
+12. **No test of cockpit Version rail data loading.** `loadVersionsForActiveForm()` does a Components-by-Name + Overrides-by-ComponentID-IN + client-side-join dance. Untested. Fix: mock RunView with the two-call sequence and assert the resulting `Versions[]` shape (including IsActive / IsPending flags).
+
+13. **No test of Modify scope-preservation contract.** Given the docstring/implementation mismatch in #3, a regression test asserting "Modify on a Role-scope override produces a User-scope Pending" would pin the actual contract. Fix: add to the existing modify-interactive-form.action.test.ts.
+
+### Retrospective
+
+14. **Re-run the retrospective after the 13 fixes land.** Audit for new gaps introduced during the fix work + confirm all 13 are genuinely closed. Document any newly-identified issues with the same severity ranking (security / integration / UX / coverage).
+
 ## Still open — defer to implementation
 
 These are small UX details that don't block the architecture and can be decided when each piece is built:

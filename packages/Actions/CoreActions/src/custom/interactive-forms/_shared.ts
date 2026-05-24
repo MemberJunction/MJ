@@ -145,6 +145,71 @@ export async function loadOverride(
 }
 
 /**
+ * Defense-in-depth ownership check for the override-mutation actions
+ * (Modify / Activate / Revert).
+ *
+ * `Create` is naturally self-scoped — it always emits a fresh User-scope
+ * row owned by the caller. The mutation actions, however, take an
+ * `OverrideID` from the caller and operate on it; without this guard a
+ * user could mutate another user's User-scope override by guessing the ID.
+ * Row-level security may catch some of this, but we don't rely on it.
+ *
+ * Rules:
+ *   - `Scope='User'`   → caller must be the owning user.
+ *   - `Scope='Role'`   → caller must be a member of the override's role.
+ *   - `Scope='Global'` → caller must be a system admin (`UserInfo.Type==='Owner'`).
+ *
+ * Returns `null` on success; a `FORBIDDEN` failure result on rejection.
+ */
+export function checkOverrideOwnership(
+    override: Pick<MJEntityFormOverrideEntity, 'ID' | 'Scope' | 'UserID' | 'RoleID'>,
+    user: UserInfo,
+): ActionResultSimple | null {
+    const ID = override.ID;
+    switch (override.Scope) {
+        case 'User': {
+            if (override.UserID !== user.ID) {
+                return failure(
+                    "FORBIDDEN",
+                    `Override ${ID} is User-scoped to a different user. Only the owning user can mutate it.`,
+                );
+            }
+            return null;
+        }
+        case 'Role': {
+            const userRoleIds = ((user as { UserRoles?: { RoleID?: string }[] }).UserRoles ?? [])
+                .map(r => r.RoleID).filter((x): x is string => !!x);
+            if (!override.RoleID || !userRoleIds.includes(override.RoleID)) {
+                return failure(
+                    "FORBIDDEN",
+                    `Override ${ID} is Role-scoped (${override.RoleID}). Only members of that role can mutate it.`,
+                );
+            }
+            return null;
+        }
+        case 'Global': {
+            // `UserInfo.Type === 'Owner'` is MJ's canonical admin marker —
+            // see packages/MJCore/src/userInfo.ts (Type is a Pick from the
+            // generated entity field). Owners can manage Global overrides;
+            // everyone else is rejected.
+            const isOwner = ((user as { Type?: string }).Type ?? '').toLowerCase() === 'owner';
+            if (!isOwner) {
+                return failure(
+                    "FORBIDDEN",
+                    `Override ${ID} is Global. Only Owner-type users can mutate Global overrides; promote / demote them via Component Studio with appropriate privileges.`,
+                );
+            }
+            return null;
+        }
+        default:
+            return failure(
+                "FORBIDDEN",
+                `Override ${ID} has an unrecognized Scope ('${override.Scope}').`,
+            );
+    }
+}
+
+/**
  * Lifecycle mapping. EntityFormOverride.Status uses
  * 'Active' / 'Pending' / 'Inactive' (it's the resolver-facing union). The
  * underlying Component table's Status column is the existing MJ Component

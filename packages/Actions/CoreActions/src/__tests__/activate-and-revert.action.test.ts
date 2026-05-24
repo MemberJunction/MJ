@@ -100,7 +100,13 @@ async function run<T extends ActivateInteractiveFormVersionAction | RevertIntera
 }
 
 function seedOverride(id: string, attrs: Record<string, unknown>): void {
-    hoisted.overrides.set(id, { record: { ID: id, EntityID: 'ENT-1', UserID: 'U1', RoleID: null, Priority: 0, ...attrs }, saveOutcome: true });
+    // Default Scope='User' / UserID='U1' so the ownership check (added in
+    // the security pass) accepts the seeded row by default. Tests for the
+    // FORBIDDEN path override Scope / UserID explicitly.
+    hoisted.overrides.set(id, {
+        record: { ID: id, EntityID: 'ENT-1', UserID: 'U1', RoleID: null, Scope: 'User', Priority: 0, ...attrs },
+        saveOutcome: true,
+    });
 }
 function seedComponent(id: string, attrs: Record<string, unknown>): void {
     hoisted.components.set(id, { record: { ID: id, ...attrs }, saveOutcome: true });
@@ -117,6 +123,28 @@ describe('ActivateInteractiveFormVersionAction', () => {
     it('returns MISSING_PARAMETER without OverrideID', async () => {
         const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({}));
         expect(r.ResultCode).toBe('MISSING_PARAMETER');
+    });
+
+    it('FORBIDDEN when the target Override is User-scope to a different user', async () => {
+        seedOverride('OVER-X', { ComponentID: 'COMP-X', Scope: 'User', UserID: 'OTHER-USER', Status: 'Pending' });
+        seedComponent('COMP-X', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-X' }));
+        expect(r.ResultCode).toBe('FORBIDDEN');
+    });
+
+    it('FORBIDDEN when the target Override is Role-scope to a role the caller lacks', async () => {
+        seedOverride('OVER-Y', { ComponentID: 'COMP-Y', Scope: 'Role', UserID: null, RoleID: 'ROLE-NOT-MINE', Status: 'Pending' });
+        seedComponent('COMP-Y', { Status: 'Draft' });
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-Y' }));
+        expect(r.ResultCode).toBe('FORBIDDEN');
+    });
+
+    it('FORBIDDEN when the target Override is Global and caller is not an Owner', async () => {
+        seedOverride('OVER-G', { ComponentID: 'COMP-G', Scope: 'Global', UserID: null, RoleID: null, Status: 'Pending' });
+        seedComponent('COMP-G', { Status: 'Draft' });
+        // Default test user has no Owner Type — should be rejected.
+        const r = await run(new ActivateInteractiveFormVersionAction(), mkParams({ OverrideID: 'OVER-G' }));
+        expect(r.ResultCode).toBe('FORBIDDEN');
     });
 
     it('returns OVERRIDE_NOT_FOUND for an unknown ID', async () => {
