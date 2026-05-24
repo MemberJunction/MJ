@@ -235,6 +235,140 @@ export class SQLParser {
     }
 
     /**
+     * Strip line and block comments from SQL, preserving content inside
+     * string literals and quoted identifiers. Block comments support nesting.
+     *
+     * The dialect determines which identifier quoting styles are recognized:
+     * SQL Server uses `[…]`, PostgreSQL uses `"…"`, MySQL uses `` `…` ``.
+     * Double-quoted identifiers are honored on every dialect.
+     */
+    static StripComments(sql: string, dialect: SQLParserDialect): string {
+        const quoteSample = dialect.QuoteIdentifier('x');
+        const recognizeBrackets = quoteSample.startsWith('[');
+        const recognizeBackticks = quoteSample.startsWith('`');
+
+        let out = '';
+        let i = 0;
+        const n = sql.length;
+
+        while (i < n) {
+            const ch = sql[i];
+            const next = i + 1 < n ? sql[i + 1] : '';
+
+            if (ch === '-' && next === '-') {
+                while (i < n && sql[i] !== '\n') i++;
+                continue;
+            }
+
+            if (ch === '/' && next === '*') {
+                i += 2;
+                let depth = 1;
+                while (i < n && depth > 0) {
+                    if (i + 1 < n && sql[i] === '/' && sql[i + 1] === '*') {
+                        depth++;
+                        i += 2;
+                    } else if (i + 1 < n && sql[i] === '*' && sql[i + 1] === '/') {
+                        depth--;
+                        i += 2;
+                    } else {
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            if (ch === "'") {
+                out += ch;
+                i++;
+                while (i < n) {
+                    if (sql[i] === "'") {
+                        if (i + 1 < n && sql[i + 1] === "'") {
+                            out += "''";
+                            i += 2;
+                        } else {
+                            out += "'";
+                            i++;
+                            break;
+                        }
+                    } else {
+                        out += sql[i];
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            if (recognizeBrackets && ch === '[') {
+                out += ch;
+                i++;
+                while (i < n) {
+                    if (sql[i] === ']') {
+                        if (i + 1 < n && sql[i + 1] === ']') {
+                            out += ']]';
+                            i += 2;
+                        } else {
+                            out += ']';
+                            i++;
+                            break;
+                        }
+                    } else {
+                        out += sql[i];
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            if (ch === '"') {
+                out += ch;
+                i++;
+                while (i < n) {
+                    if (sql[i] === '"') {
+                        if (i + 1 < n && sql[i + 1] === '"') {
+                            out += '""';
+                            i += 2;
+                        } else {
+                            out += '"';
+                            i++;
+                            break;
+                        }
+                    } else {
+                        out += sql[i];
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            if (recognizeBackticks && ch === '`') {
+                out += ch;
+                i++;
+                while (i < n) {
+                    if (sql[i] === '`') {
+                        if (i + 1 < n && sql[i + 1] === '`') {
+                            out += '``';
+                            i += 2;
+                        } else {
+                            out += '`';
+                            i++;
+                            break;
+                        }
+                    } else {
+                        out += sql[i];
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            out += ch;
+            i++;
+        }
+
+        return out;
+    }
+
+    /**
      * Convert a single AST expression node to a SQL string.
      * Useful for extracting ORDER BY terms, column expressions, etc.
      *

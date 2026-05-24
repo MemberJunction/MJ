@@ -292,12 +292,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
         const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
 
-        // Build the "shared by" map for the sidebar/header UI. Requires one
-        // extra query to fetch grantor emails (the ResourcePermission view
-        // only denormalizes Name, not Email).
         const rv = new RunView();
-        await this.rebuildSharedByMap(rv, sharedPermissions, contextUser);
-
         const ownershipClause = `UserID='${contextUser.ID}'`;
         const sharedClause =
             sharedConversationIds.length > 0
@@ -322,6 +317,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
             this._conversations$.next([]);
         }
+
+        // Build the "shared by" map AFTER fetching conversations so we can
+        // exclude permissions on conversations the user owns. A role-inherited
+        // grant on the user's own conversation (e.g. they're in a role that
+        // got View access via a feedback workflow) must NOT appear as
+        // "shared with me at View level" — otherwise the chat UI would treat
+        // their own conversation as read-only. See isReadOnlyView in
+        // conversation-chat-area.component.
+        const ownedConversationIds = new Set(
+            (result.Results ?? [])
+                .filter((c) => c.UserID && UUIDsEqual(c.UserID, contextUser.ID))
+                .map((c) => NormalizeUUID(c.ID))
+        );
+        const trulySharedPermissions = sharedPermissions.filter(
+            (p) => !ownedConversationIds.has(NormalizeUUID(p.ResourceRecordID))
+        );
+        await this.rebuildSharedByMap(rv, trulySharedPermissions, contextUser);
     }
 
     /**
