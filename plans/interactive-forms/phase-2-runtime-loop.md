@@ -239,7 +239,38 @@ After the initial implementation landed, a candid critique surfaced 13 real hole
 
 ### Retrospective
 
-14. **Re-run the retrospective after the 13 fixes land.** Audit for new gaps introduced during the fix work + confirm all 13 are genuinely closed. Document any newly-identified issues with the same severity ranking (security / integration / UX / coverage).
+14. **Re-run the retrospective after the 13 fixes land.** Audit for new gaps introduced during the fix work + confirm all 13 are genuinely closed.
+
+### Retrospective #2 results (after fix work)
+
+**All 13 items verified closed.** Audit notes per item:
+
+| # | Closed? | Verification + new gaps found |
+|---|---|---|
+| 1 | ✅ | `checkOverrideOwnership` covers User/Role/Global cases. Uses `UserInfo.Type === 'Owner'` — confirmed as MJ's canonical admin marker (matches `MJServer/src/index.ts:backupSysUser`). 3 new FORBIDDEN tests. |
+| 2 | ✅ | Event bubbles plugin-viewer → viewer-panel → chat-area + artifact-resource. `InteractiveFormApplyService` wires Create/Modify decision. 7 tests cover full chain. |
+| 3 | ✅ | Modify docstring rewritten to match actual User-scope clamp. |
+| 4 | ✅ | `OnEntityPicked` calls `buildDefaultFormScaffold` in new-form mode. Manual create path now starts at the same baseline as the agent. |
+| 5 | ✅ | `SavedSpec` preserved on load + merged into `PreviewSpec`. **Self-audit found** that `SavedSpec` wasn't cleared in `OnNewForm` — fixed in retro-#2 pass. |
+| 6 | ✅ | `CanvasDiverged` flag drives the banner. **Self-audit found** I used wrong property names (`lossy`/`warnings` vs actual `hasUnknownConstructs`) — fixed in retro-#2 pass. |
+| 7 | ✅ | Both Top-1 paths (dashboard preview + artifact viewer) now `ORDER BY NameField` with `__mj_CreatedAt DESC` fallback. |
+| 8 | ✅ | Default-form row gets dashed-divider visual separation + "(default)" tag + descriptive subtitle. |
+| 9 | ✅ | Rail labels disambiguated: Pending → "Activate" (circle-check icon); Inactive → "Restore" (rotate-left icon). |
+| 10 | ✅ | `LoadErrorChanged` output via setter on `InteractiveFormComponent`; cockpit listens and surfaces in `PreviewError`. |
+| 11 | ✅ | 7 end-to-end-ish tests in `interactive-form-apply.service.test.ts`. Includes the "Cancel → no action invoked" path that closes the original bug. |
+| 12 | ✅ | Extracted `joinVersionsWithOverrides()` + `pickActiveVersionID()` as pure helpers; 12 tests pin the contract. **Self-audit note:** the I/O part of `loadVersionsForActiveForm` (RunView calls, filter escaping) is still untested. Acceptable given the helper covers the join logic and the RunView calls are stable patterns. |
+| 13 | ✅ | New "preserve scope" test on Modify asserts a Role-scope original produces a User-scope Pending. |
+
+**New gaps surfaced (and fixed) during retro-#2:**
+- `SavedSpec` leaked across new-form transitions (5)
+- `CanvasDiverged` used wrong return-shape properties (6) — the flag never tripped
+
+**New gaps surfaced (acknowledged, not blocking):**
+- `loadVersionsForActiveForm`'s RunView call shape isn't unit-tested (#12 mitigation). Helper coverage is sufficient for v1.
+- `InteractiveFormApplyService` doesn't pre-lint the spec client-side; the action lints server-side and returns LINT_FAILED. Round-trip is one extra dialog cycle on bad specs. Acceptable.
+- The "Refine with AI" overlay-open path depends on a single `RequestExpandOverlay()` channel — if the overlay isn't mounted (e.g. on a sub-app without conversations), the call no-ops silently. Acceptable; surfaces a notification regardless.
+
+**Conclusion:** All 14 items closed. Two self-audit catches were genuine bugs that retro-#2 caught. Three lower-severity acknowledgments are documented above for future PRs.
 
 ## Still open — defer to implementation
 

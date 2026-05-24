@@ -732,6 +732,17 @@ export class FormBuilderResourceComponent
         this.SelectedElementId = null;
         this.SelectedSectionId = null;
         this.DirtyFlag = false;
+        // Retrospective #2 follow-up: clear leftover saved-spec / version /
+        // preview state so the new form doesn't inherit the prior load's
+        // metadata in PreviewSpec.
+        this.SavedSpec = null;
+        this.Versions = [];
+        this.ActiveVersionID = null;
+        this.PreviewRecord = null;
+        this.PreviewRecordIsReal = false;
+        this.PreviewRecordLabel = '';
+        this.PreviewError = null;
+        this.CanvasDiverged = false;
         this.cdr.markForCheck();
         this.registerAgentContext();
     }
@@ -979,15 +990,12 @@ export class FormBuilderResourceComponent
         const result = parseCanvasFromCode(this.EditableCode, this.Schema);
         this.Canvas = result.canvas
             ?? buildEmptyCanvas(this.TargetEntityName, this.Schema.displayName);
-        // Retrospective fix #6: parseCanvasFromCode returns a `lossy` flag (or
-        // a non-null `warnings`) when the JSX contains hand-authored content
-        // the canvas can't round-trip. Surface that as a flag the Layout-tab
-        // banner reads — users get a visible warning that saving from the
-        // canvas will overwrite the code edits the canvas can't represent.
-        const parseInfo = result as unknown as { lossy?: boolean; warnings?: unknown[] };
-        this.CanvasDiverged = !!parseInfo.lossy
-            || (Array.isArray(parseInfo.warnings) && parseInfo.warnings.length > 0)
-            || !result.canvas;     // fell back to empty canvas
+        // Retrospective fix #6: parseCanvasFromCode signals "code has stuff
+        // the canvas can't represent" via `hasUnknownConstructs` (true when
+        // the parser found JSX it couldn't round-trip) and `canvas: null`
+        // (parse failed outright). Either is a divergence signal — surface
+        // it via the Layout-tab banner so users know saving will overwrite.
+        this.CanvasDiverged = !!result.hasUnknownConstructs || !result.canvas;
         this.SelectedElementId = null;
         this.SelectedSectionId = this.Canvas?.sections[0]?.id ?? null;
     }
