@@ -1,8 +1,9 @@
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
-import { RegisterClass } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
+import { RunBudget } from '../../Engine/generic/RunBudget';
+import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memberjunction/core';
+import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
 import { URL } from 'url';
@@ -26,10 +27,103 @@ export class AutotagWebsite extends AutotagBase {
     protected URLPattern: string;
     protected visitedURLs: Set<string>;
 
+    /**
+     * Per-source RunBudget tracker, keyed by normalized source ID. Items
+     * processed in each batch are tallied against the budget of the source
+     * they belong to; when any budget exhausts, the engine's OnAfterBatch
+     * gate returns `continue:false` and the run pauses gracefully. Next
+     * invocation will re-crawl, change-detection will skip the already-
+     * processed pages, and the remaining ones get processed.
+     */
+    protected sourceBudgetMap: Map<string, RunBudget> = new Map();
+
     constructor() {
         super();
         this.engine = AutotagBaseEngine.Instance;
         this.visitedURLs = new Set<string>();
+    }
+
+    /**
+     * Build a per-source RunBudget map from each source's ConfigurationObject.
+     * Sources with no budget knobs set still get a RunBudget entry (with all
+     * limits = null) so the OnAfterBatch hook can update item counts uniformly.
+     *
+     * Per-source overrides via ContentSourceParam rows (e.g., MaxItemsPerRun
+     * stored as a param) take precedence over the ConfigurationObject value.
+     */
+    protected async setupRunBudgets(contentSources: MJContentSourceEntity[]): Promise<void> {
+        this.sourceBudgetMap = new Map();
+        for (const source of contentSources) {
+            const id = NormalizeUUID(source.ID);
+            const cfg: MJContentSourceEntity_IContentSourceConfiguration | null = source.ConfigurationObject;
+            const params = await this.engine.getContentSourceParams(source, this.contextUser);
+
+            // ContentSourceParam override beats ConfigurationObject — that
+            // lets the per-source-instance UI knob win over the global
+            // ContentSource defaults.
+            const paramMaxItems = params?.get('MaxItemsPerRun');
+            const paramMaxTokens = params?.get('MaxTokensPerRun');
+            const paramMaxCost = params?.get('MaxCostPerRun');
+
+            this.sourceBudgetMap.set(id, new RunBudget({
+                MaxItemsPerRun: this.coerceNumber(paramMaxItems) ?? this.readConfigNumber(cfg, 'MaxItemsPerRun'),
+                MaxNewTagsPerRun: this.readConfigNumber(cfg, 'MaxNewTagsPerRun'),
+                MaxNewTagsPerItem: this.readConfigNumber(cfg, 'MaxNewTagsPerItem'),
+                MaxTokensPerRun: this.coerceNumber(paramMaxTokens) ?? this.readConfigNumber(cfg, 'MaxTokensPerRun'),
+                MaxCostPerRun: this.coerceNumber(paramMaxCost) ?? this.readConfigNumber(cfg, 'MaxCostPerRun'),
+            }));
+        }
+    }
+
+    private coerceNumber(value: unknown): number | null {
+        if (value == null) return null;
+        const n = typeof value === 'number' ? value : Number(value);
+        return Number.isFinite(n) ? n : null;
+    }
+
+    /**
+     * Safely read a numeric budget knob from the typed configuration object.
+     * `MaxItemsPerRun` is a transitional addition — the typed accessor on
+     * MJContentSourceEntity may not include it yet on older CodeGen runs,
+     * so we read it as an optional extension. Other knobs are stable typed
+     * fields and the cast is just a tidiness aid.
+     */
+    private readConfigNumber(
+        cfg: MJContentSourceEntity_IContentSourceConfiguration | null,
+        key: 'MaxItemsPerRun' | 'MaxNewTagsPerRun' | 'MaxNewTagsPerItem' | 'MaxTokensPerRun' | 'MaxCostPerRun'
+    ): number | null {
+        if (!cfg) return null;
+        const extended = cfg as MJContentSourceEntity_IContentSourceConfiguration & { MaxItemsPerRun?: number | null };
+        const value = extended[key];
+        return this.coerceNumber(value);
+    }
+
+    /**
+     * Install the engine's OnAfterBatch hook so each batch's items are
+     * counted against the budget of the source they belong to. Returns
+     * `continue:false` from the gate when any source's budget exhausts,
+     * which the engine then translates into a graceful pause.
+     */
+    protected installBudgetGate(): void {
+        this.engine.OnAfterBatch = async (batch, _totalProcessed) => {
+            // Tally items per source within this batch.
+            const perSourceCounts = new Map<string, number>();
+            for (const item of batch) {
+                if (!item.ContentSourceID) continue;
+                const id = NormalizeUUID(item.ContentSourceID);
+                perSourceCounts.set(id, (perSourceCounts.get(id) ?? 0) + 1);
+            }
+            for (const [id, count] of perSourceCounts) {
+                const budget = this.sourceBudgetMap.get(id);
+                if (!budget) continue;
+                budget.recordItemsProcessed(count);
+                const verdict = budget.checkBudgets();
+                if (!verdict.ok) {
+                    return { continue: false, reason: `${verdict.reason}: ${verdict.details ?? ''}` };
+                }
+            }
+            return { continue: true };
+        };
     }
 
     protected getContextUser(): UserInfo {
@@ -47,6 +141,13 @@ export class AutotagWebsite extends AutotagBase {
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Website');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
 
+        // Per-source budget setup — produces a RunBudget for each content
+        // source and installs the OnAfterBatch gate on the engine so the
+        // run pauses gracefully when any source exhausts its MaxItemsPerRun /
+        // tokens / cost / tag budget.
+        await this.setupRunBudgets(contentSources);
+        this.installBudgetGate();
+
         // Stream content items source-by-source into the LLM batcher. The
         // crawl phase produces items as soon as they pass change-detection,
         // and the LLM phase consumes them in batches without waiting for the
@@ -61,7 +162,24 @@ export class AutotagWebsite extends AutotagBase {
             }
         })();
 
-        await this.engine.ExtractTextAndProcessWithLLM(itemStream, this.contextUser, undefined, undefined, onProgress);
+        try {
+            await this.engine.ExtractTextAndProcessWithLLM(itemStream, this.contextUser, undefined, undefined, onProgress);
+        } finally {
+            // Clean up engine state — leaving stale hooks around would leak
+            // budget state into the next Autotag invocation on a shared
+            // engine singleton.
+            this.engine.OnAfterBatch = null;
+        }
+
+        // Surface per-source budget pause reasons in the log so operators can
+        // see why a run stopped short.
+        for (const [sourceID, budget] of this.sourceBudgetMap) {
+            const verdict = budget.checkBudgets();
+            if (!verdict.ok) {
+                LogStatus(`[autotag-website] Source ${sourceID} reached budget: ${verdict.reason} — ${verdict.details ?? ''}`);
+            }
+        }
+
         return itemsYielded;
     }
 

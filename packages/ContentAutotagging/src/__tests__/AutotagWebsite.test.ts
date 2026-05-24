@@ -11,6 +11,12 @@ const { mockEngineInstance, mockAxiosGet } = vi.hoisted(() => ({
             // engine uses SHA-256 but for tests we just need stable values.
             return Promise.resolve(`fake-${text.length}-${text.slice(0, 16).replace(/\s+/g, '_')}`);
         }),
+        // Engine hook surface used by Autotag's budget setup.
+        OnAfterBatch: null as unknown,
+        SetSubclassContentSourceType: vi.fn().mockReturnValue('source-type-website'),
+        getAllContentSources: vi.fn().mockResolvedValue([]),
+        getContentSourceParams: vi.fn().mockResolvedValue(new Map()),
+        ExtractTextAndProcessWithLLM: vi.fn().mockResolvedValue(undefined),
     },
     mockAxiosGet: vi.fn(),
 }));
@@ -73,6 +79,12 @@ class TestableAutotagWebsite extends AutotagWebsite {
 
     public $normalizeURL(href: string): string { return this.normalizeURL(href); }
     public $extractTextFromHTML(html: string): string { return this.extractTextFromHTML(html); }
+
+    public get $sourceBudgetMap() { return this.sourceBudgetMap; }
+    public $installBudgetGate(): void { return this.installBudgetGate(); }
+    public async $setupRunBudgets(sources: unknown[]): Promise<void> {
+        return this.setupRunBudgets(sources as never);
+    }
 }
 
 describe('AutotagWebsite', () => {
@@ -173,6 +185,99 @@ describe('AutotagWebsite', () => {
             const html = '<body><p>visible</p><script>const x=1;</script></body>';
             const text = subject.$extractTextFromHTML(html);
             expect(text).toContain('visible');
+        });
+    });
+
+    describe('RunBudget integration (MaxItemsPerRun)', () => {
+        const mockUser = { ID: 'user-1' } as never;
+
+        beforeEach(() => {
+            // Reset engine hook between tests so install assertions are clean.
+            mockEngineInstance.OnAfterBatch = null;
+        });
+
+        it('setupRunBudgets creates one RunBudget per source, even with no knobs configured', async () => {
+            const sources = [
+                { ID: 'src-a', Name: 'A', ConfigurationObject: null },
+                { ID: 'src-b', Name: 'B', ConfigurationObject: null },
+            ];
+            (subject as unknown as { contextUser: typeof mockUser }).contextUser = mockUser;
+            await subject.$setupRunBudgets(sources as never);
+            expect(subject.$sourceBudgetMap.size).toBe(2);
+        });
+
+        it('setupRunBudgets reads MaxItemsPerRun from ConfigurationObject', async () => {
+            const sources = [
+                { ID: 'src-a', Name: 'A', ConfigurationObject: { MaxItemsPerRun: 50 } },
+            ];
+            (subject as unknown as { contextUser: typeof mockUser }).contextUser = mockUser;
+            await subject.$setupRunBudgets(sources as never);
+            const budget = subject.$sourceBudgetMap.values().next().value!;
+            // Push exactly to the cap — should pause.
+            budget.recordItemsProcessed(50);
+            expect(budget.checkBudgets().reason).toBe('MaxItemsPerRunExceeded');
+        });
+
+        it('ContentSourceParam MaxItemsPerRun overrides ConfigurationObject', async () => {
+            // The per-instance UI knob should win over the global ConfigurationObject
+            // default — this is the only way to make per-source tuning sane.
+            mockEngineInstance.getContentSourceParams.mockResolvedValueOnce(
+                new Map([['MaxItemsPerRun', '7']])
+            );
+            const sources = [
+                { ID: 'src-a', Name: 'A', ConfigurationObject: { MaxItemsPerRun: 1000 } },
+            ];
+            (subject as unknown as { contextUser: typeof mockUser }).contextUser = mockUser;
+            await subject.$setupRunBudgets(sources as never);
+            const budget = subject.$sourceBudgetMap.values().next().value!;
+            budget.recordItemsProcessed(7);
+            const v = budget.checkBudgets();
+            expect(v.ok).toBe(false);
+            expect(v.details).toContain('7/7');
+        });
+
+        it('installBudgetGate registers an OnAfterBatch hook that increments item counts per source', async () => {
+            const sources = [{ ID: 'src-a', Name: 'A', ConfigurationObject: { MaxItemsPerRun: 3 } }];
+            (subject as unknown as { contextUser: typeof mockUser }).contextUser = mockUser;
+            await subject.$setupRunBudgets(sources as never);
+            subject.$installBudgetGate();
+
+            expect(typeof mockEngineInstance.OnAfterBatch).toBe('function');
+
+            // Drive the hook directly with a fake batch — simulates one engine batch.
+            const hook = mockEngineInstance.OnAfterBatch as (batch: unknown[], total: number) => Promise<{ continue: boolean; reason?: string }>;
+            const v1 = await hook([{ ContentSourceID: 'src-a' }, { ContentSourceID: 'src-a' }], 2);
+            expect(v1.continue).toBe(true);
+
+            // Second batch tips us over the 3-item cap → gate returns false.
+            const v2 = await hook([{ ContentSourceID: 'src-a' }, { ContentSourceID: 'src-a' }], 4);
+            expect(v2.continue).toBe(false);
+            expect(v2.reason).toContain('MaxItemsPerRunExceeded');
+        });
+
+        it('budget gate scopes item counts to the correct source when batch spans multiple sources', async () => {
+            const sources = [
+                { ID: 'src-a', Name: 'A', ConfigurationObject: { MaxItemsPerRun: 2 } },
+                { ID: 'src-b', Name: 'B', ConfigurationObject: { MaxItemsPerRun: 10 } },
+            ];
+            (subject as unknown as { contextUser: typeof mockUser }).contextUser = mockUser;
+            await subject.$setupRunBudgets(sources as never);
+            subject.$installBudgetGate();
+
+            const hook = mockEngineInstance.OnAfterBatch as (batch: unknown[], total: number) => Promise<{ continue: boolean; reason?: string }>;
+            // Batch has 5 src-b items and 2 src-a items — only src-a hits its cap.
+            const verdict = await hook([
+                { ContentSourceID: 'src-b' }, { ContentSourceID: 'src-b' },
+                { ContentSourceID: 'src-b' }, { ContentSourceID: 'src-b' }, { ContentSourceID: 'src-b' },
+                { ContentSourceID: 'src-a' }, { ContentSourceID: 'src-a' },
+            ], 7);
+            expect(verdict.continue).toBe(false);
+            expect(verdict.reason).toContain('MaxItemsPerRunExceeded');
+
+            // src-b is at 5/10 — well under, would have allowed continue if it
+            // were the only source. Confirms the gate scopes per source.
+            const bBudget = subject.$sourceBudgetMap.get('src-b')!;
+            expect(bBudget.snapshot().items).toBe(5);
         });
     });
 

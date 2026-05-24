@@ -128,7 +128,13 @@ export class AutotagEntity extends AutotagBase {
             unionScope = ScopeContextResolver.union(unionScope, ctx);
 
             const cfg = source.ConfigurationObject;
+            // MaxItemsPerRun is a transitional knob — the typed accessor on
+            // MJContentSourceEntity may not include it yet on older CodeGen
+            // runs, so read it as an optional extension. Schema/CodeGen
+            // formalization is a planned follow-up.
+            const cfgExt = cfg as (typeof cfg & { MaxItemsPerRun?: number | null }) | null | undefined;
             this.sourceBudgetMap.set(normalizedID, new RunBudget({
+                MaxItemsPerRun: cfgExt?.MaxItemsPerRun ?? null,
                 MaxNewTagsPerRun: cfg?.MaxNewTagsPerRun ?? null,
                 MaxNewTagsPerItem: cfg?.MaxNewTagsPerItem ?? null,
                 MaxTokensPerRun: cfg?.MaxTokensPerRun ?? null,
@@ -166,14 +172,18 @@ export class AutotagEntity extends AutotagBase {
         };
 
         // Per-batch budget gate — pause the run when any source's budget is exceeded.
+        // Tally items per source first so MaxItemsPerRun ticks; then check all budgets.
         this.engine.OnAfterBatch = async (batch, _totalProcessed) => {
-            const sourcesInBatch = new Set<string>();
+            const perSourceCounts = new Map<string, number>();
             for (const item of batch) {
-                if (item.ContentSourceID) sourcesInBatch.add(NormalizeUUID(item.ContentSourceID));
+                if (!item.ContentSourceID) continue;
+                const id = NormalizeUUID(item.ContentSourceID);
+                perSourceCounts.set(id, (perSourceCounts.get(id) ?? 0) + 1);
             }
-            for (const id of sourcesInBatch) {
+            for (const [id, count] of perSourceCounts) {
                 const budget = this.sourceBudgetMap.get(id);
                 if (!budget) continue;
+                budget.recordItemsProcessed(count);
                 const verdict = budget.checkBudgets();
                 if (!verdict.ok) {
                     return { continue: false, reason: `${verdict.reason}: ${verdict.details ?? ''}` };
