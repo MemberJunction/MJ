@@ -48,6 +48,25 @@
     margin: 4px 0 12px;
 }
 .cs-grid.four { grid-template-columns: repeat(4, 1fr); }
+.cs-grid.three { grid-template-columns: repeat(3, 1fr); }
+
+/* Primary budget row — the MaxItemsPerRun knob is promoted out of the dense
+   4-col grid because it's the most intuitive cap and deserves a longer hint. */
+.cs-primary-budget {
+    margin: 4px 0 10px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 4%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-border-default));
+    border-radius: 6px;
+}
+.cs-field-primary label {
+    font-size: 13px;
+    color: var(--mj-text-primary);
+}
+.cs-field-primary .hint {
+    line-height: 1.45;
+    max-width: 78ch;
+}
 .cs-field { display: flex; flex-direction: column; gap: 4px; }
 .cs-field label {
     font-size: 12px;

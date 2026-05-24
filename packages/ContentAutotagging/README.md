@@ -243,9 +243,14 @@ export class AutotagCustomSource extends AutotagBase {
 
 ## Website Crawl Settings
 
-The `AutotagWebsite` provider reads its crawl behavior from `ContentSourceParam` rows attached to each content source. Each knob has a sensible default so newly-created sources work without configuration; override only the ones you need.
+The `AutotagWebsite` provider reads its crawl behavior from two layered sources:
 
-| Param Key | Type | Default | Purpose |
+1. **Typed `Configuration.Website` sub-object** on the content source (canonical for new sources, set via the Content Source form's "Website Crawler Settings" section).
+2. **`ContentSourceParam` rows** with matching keys (legacy storage / per-instance sharper override — wins over the typed sub-object when both are present).
+
+Each knob has a sensible default so newly-created sources work without configuration; override only the ones you need.
+
+| Key | Type | Default | Purpose |
 |---|---|---|---|
 | `MaxDepth` | integer | `2` | Recursion ceiling for in-domain links. `0` = just the start URL; `2` = root + section pages + their child content pages. Higher values combine multiplicatively with the per-page delay |
 | `CrawlSitesInLowerLevelDomain` | boolean | `true` | When `true`, the recursive depth-aware crawler runs. Setting `false` disables it (single-page behavior) |

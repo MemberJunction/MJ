@@ -219,37 +219,123 @@
             Volume &amp; cost budgets
             <span style="text-transform: none; letter-spacing: 0; color: var(--mj-text-muted); font-weight: 400; margin-left: 8px;">When a budget is hit the run pauses (resumes on next start).</span>
         </h4>
+
+        <!--
+            Items knob is the most intuitive cap ("do at most N this run"), so
+            it gets a primary row of its own with a richer hint. The four
+            derived/secondary caps stay grouped below in a 4-col grid.
+        -->
+        <div class="cs-primary-budget">
+            <div class="cs-field cs-field-primary">
+                <label>Max items / run</label>
+                <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
+                       [ngModel]="MaxItemsPerRunValue ?? ''"
+                       (ngModelChange)="MaxItemsPerRunValue = $event"
+                       placeholder="unlimited" />
+                <span class="hint">Caps the number of content items handed to the LLM. Skipped (unchanged) items don't count. Paused work resumes on the next run — the change-detection short-circuit skips already-tagged pages, so re-crawl only wastes HTTP, not LLM cycles.</span>
+            </div>
+        </div>
+
         <div class="cs-grid four">
             <div class="cs-field">
                 <label>Max new tags / run</label>
                 <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
                        [ngModel]="MaxNewTagsPerRunValue ?? ''"
-                       (ngModelChange)="MaxNewTagsPerRunValue = $event" />
-                <span class="hint">unlimited if blank</span>
+                       (ngModelChange)="MaxNewTagsPerRunValue = $event"
+                       placeholder="unlimited" />
+                <span class="hint">across all items</span>
             </div>
             <div class="cs-field">
                 <label>Max new tags / item</label>
                 <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
                        [ngModel]="MaxNewTagsPerItemValue ?? ''"
-                       (ngModelChange)="MaxNewTagsPerItemValue = $event" />
+                       (ngModelChange)="MaxNewTagsPerItemValue = $event"
+                       placeholder="unlimited" />
                 <span class="hint">extras → suggestions</span>
             </div>
             <div class="cs-field">
                 <label>Max tokens / run</label>
                 <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
                        [ngModel]="MaxTokensPerRunValue ?? ''"
-                       (ngModelChange)="MaxTokensPerRunValue = $event" />
+                       (ngModelChange)="MaxTokensPerRunValue = $event"
+                       placeholder="unlimited" />
                 <span class="hint">across all LLM calls</span>
             </div>
             <div class="cs-field">
                 <label>Max cost / run (USD)</label>
                 <input class="cs-input" type="number" min="0" step="0.01" [disabled]="!EditMode"
                        [ngModel]="MaxCostPerRunValue ?? ''"
-                       (ngModelChange)="MaxCostPerRunValue = $event" />
+                       (ngModelChange)="MaxCostPerRunValue = $event"
+                       placeholder="unlimited" />
                 <span class="hint">$ stops the run</span>
             </div>
         </div>
     </mj-collapsible-panel>
+
+    <!--
+        Website Crawler Settings — only shown for Website sources. Future plan:
+        each source type that grows typed config (RSS, Cloud Storage, etc.) will
+        get its own conditional section here. When the count grows past 2-3,
+        promote to a pluggable extension scheme keyed on ContentSourceType.
+    -->
+    @if (IsWebsiteSourceType) {
+    <mj-collapsible-panel
+        SectionKey="websiteCrawlerSettings"
+        SectionName="Website Crawler Settings"
+        Icon="fa fa-globe"
+        [Form]="this"
+        [FormContext]="formContext">
+
+        <div class="cs-grid">
+            <div class="cs-field">
+                <label>Max depth</label>
+                <input class="cs-input" type="number" min="0" max="10" step="1" [disabled]="!EditMode"
+                       [ngModel]="MaxDepthValue ?? ''"
+                       (ngModelChange)="MaxDepthValue = $event"
+                       placeholder="2 (default)" />
+                <span class="hint">Recursion ceiling for in-domain links. <code>0</code> = just the start URL. <code>2</code> (default) = root + sections + content pages. Higher values multiply with the 1-second per-page delay.</span>
+            </div>
+            <div class="cs-field">
+                <label>Root URL</label>
+                <input class="cs-input" type="text" [disabled]="!EditMode"
+                       [ngModel]="RootURLValue"
+                       (ngModelChange)="RootURLValue = $event"
+                       placeholder="derived from start URL" />
+                <span class="hint">URL prefix used for the in-domain check. Leave blank to derive from the parent directory of the seed URL.</span>
+            </div>
+        </div>
+
+        <div class="cs-field" style="margin-top: 8px;">
+            <label>URL pattern (regex)</label>
+            <input class="cs-input" type="text" [disabled]="!EditMode"
+                   [ngModel]="URLPatternValue"
+                   (ngModelChange)="URLPatternValue = $event"
+                   placeholder="e.g. ^https://example\.com/blog/.*" />
+            @if (URLPatternValidationMessage) {
+                <span class="cs-validation"><i class="fa-solid fa-circle-exclamation"></i> {{ URLPatternValidationMessage }}</span>
+            } @else {
+                <span class="hint">Only URLs matching this regex are added to the visited set. Leave blank to include everything.</span>
+            }
+        </div>
+
+        <div class="cs-toggle-row" style="margin-top: 12px;">
+            <div class="label">
+                <span class="t">Crawl sites in lower-level domain</span>
+                <span class="d">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
+            </div>
+            <div class="cs-switch" [class.on]="CrawlSitesInLowerLevelDomainValue"
+                 (click)="EditMode ? (CrawlSitesInLowerLevelDomainValue = !CrawlSitesInLowerLevelDomainValue) : null"></div>
+        </div>
+        <div class="cs-toggle-row">
+            <div class="label">
+                <span class="t">Crawl other sites in top-level domain</span>
+                <span class="d">When on, also adds sibling-path URLs found on the seed page (single-pass, no recursion). Off by default to avoid accidental fan-out.</span>
+            </div>
+            <div class="cs-switch" [class.on]="CrawlOtherSitesInTopLevelDomainValue"
+                 (click)="EditMode ? (CrawlOtherSitesInTopLevelDomainValue = !CrawlOtherSitesInTopLevelDomainValue) : null"></div>
+        </div>
+    </mj-collapsible-panel>
+    }
 
     <!-- Raw JSON override — for SourceSpecificConfiguration and other future keys -->
     <mj-collapsible-panel

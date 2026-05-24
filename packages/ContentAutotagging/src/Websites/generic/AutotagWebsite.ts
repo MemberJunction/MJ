@@ -44,6 +44,55 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     /**
+     * Reset crawl-related instance fields back to the class defaults. Called at the
+     * start of each content source so prior-source overrides don't leak forward.
+     * URLPattern and RootURL default to undefined — derived later if unset.
+     */
+    protected applyDefaultCrawlSettings(): void {
+        this.CrawlOtherSitesInTopLevelDomain = false;
+        this.CrawlSitesInLowerLevelDomain = true;
+        this.MaxDepth = 2;
+        this.URLPattern = undefined as unknown as string;
+        this.RootURL = undefined as unknown as string;
+    }
+
+    /**
+     * Apply the typed `Configuration.Website` sub-object (if present) to this
+     * crawler instance. Each field is optional — unset values leave the existing
+     * (default) instance value intact.
+     *
+     * NOTE: pluggability — today this is hard-coded for AutotagWebsite. Once we
+     * have more source types that need typed per-instance settings (RSS, Cloud
+     * Storage, etc.), this pattern should be promoted to an
+     * `IConfigurableContentSource<TConfig>` interface where each subclass declares
+     * its typed config sub-object key and shape. For now this is the canonical
+     * shape; other autotaggers can copy it when they need typed knobs.
+     */
+    protected applyWebsiteConfigFromSource(source: MJContentSourceEntity): void {
+        const cfg = source.ConfigurationObject;
+        if (!cfg) return;
+        // `Website` is a new field on IContentSourceConfiguration; tolerate older
+        // typed CodeGen output that doesn't know about it yet via an explicit cast.
+        // Remove the cast after CodeGen regenerates the typed accessor.
+        const extended = cfg as MJContentSourceEntity_IContentSourceConfiguration & {
+            Website?: {
+                MaxDepth?: number;
+                CrawlSitesInLowerLevelDomain?: boolean;
+                CrawlOtherSitesInTopLevelDomain?: boolean;
+                URLPattern?: string;
+                RootURL?: string;
+            };
+        };
+        const w = extended.Website;
+        if (!w) return;
+        if (typeof w.MaxDepth === 'number' && Number.isFinite(w.MaxDepth)) this.MaxDepth = w.MaxDepth;
+        if (typeof w.CrawlSitesInLowerLevelDomain === 'boolean') this.CrawlSitesInLowerLevelDomain = w.CrawlSitesInLowerLevelDomain;
+        if (typeof w.CrawlOtherSitesInTopLevelDomain === 'boolean') this.CrawlOtherSitesInTopLevelDomain = w.CrawlOtherSitesInTopLevelDomain;
+        if (typeof w.URLPattern === 'string' && w.URLPattern.length > 0) this.URLPattern = w.URLPattern;
+        if (typeof w.RootURL === 'string' && w.RootURL.length > 0) this.RootURL = w.RootURL;
+    }
+
+    /**
      * Build a per-source RunBudget map from each source's ConfigurationObject.
      * Sources with no budget knobs set still get a RunBudget entry (with all
      * limits = null) so the OnAfterBatch hook can update item counts uniformly.
@@ -194,9 +243,17 @@ export class AutotagWebsite extends AutotagBase {
      */
     public async *streamContentItemsToProcess(contentSources: MJContentSourceEntity[]): AsyncIterable<MJContentItemEntity> {
         for (const contentSource of contentSources) {
-            // Apply per-source params (MaxDepth, CrawlSitesInLowerLevelDomain, etc.)
-            // before crawling. Params are stored as instance fields so the crawler
-            // helpers (which already exist on `this`) pick them up automatically.
+            // Reset instance state to defaults before applying per-source overrides.
+            // Without this, knobs set on the previous source would leak into the next.
+            this.applyDefaultCrawlSettings();
+
+            // First overlay: typed Configuration.Website sub-object (the structured editor
+            // in the form writes here). This is the canonical storage for new sources.
+            this.applyWebsiteConfigFromSource(contentSource);
+
+            // Second overlay: per-source ContentSourceParam rows. These win — legacy
+            // sources configured via the params grid (or anyone who wants a sharper
+            // per-instance override) keep working.
             const contentSourceParamsMap = await this.engine.getContentSourceParams(contentSource, this.contextUser);
             if (contentSourceParamsMap) {
                 contentSourceParamsMap.forEach((value, key) => {

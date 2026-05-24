@@ -14,6 +14,35 @@ interface TaxonomyModeOption {
 }
 
 /**
+ * Per-source website crawl knobs surfaced in the form. Mirrors the
+ * `IContentSourceWebsiteConfiguration` interface in the metadata JSON-Type
+ * file (`metadata/entities/JSONType-interfaces/IContentSourceConfiguration.ts`)
+ * one-for-one. Carried locally so this file compiles before CodeGen
+ * regenerates the typed accessor on MJContentSourceEntity to include `Website`.
+ *
+ * NOTE: drop this local declaration after CodeGen regenerates the typed
+ * `MJContentSourceEntity_IContentSourceConfiguration` to include `Website`.
+ */
+interface WebsiteConfig {
+    MaxDepth?: number;
+    CrawlSitesInLowerLevelDomain?: boolean;
+    CrawlOtherSitesInTopLevelDomain?: boolean;
+    URLPattern?: string;
+    RootURL?: string;
+}
+
+/**
+ * Transitional widening of the generated typed config accessor — adds the two new
+ * fields (`MaxItemsPerRun`, `Website`) that the metadata JSON-Type defines but the
+ * generated entity class doesn't know about yet. Cast becomes unnecessary after
+ * the user runs CodeGen.
+ */
+type ExtendedConfig = MJContentSourceEntity_IContentSourceConfiguration & {
+    MaxItemsPerRun?: number;
+    Website?: WebsiteConfig;
+};
+
+/**
  * Custom Content Source form.
  *
  * Adds two responsibilities on top of the generated form:
@@ -62,19 +91,35 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
     }
 
     /**
+     * Whether the current source type is "Website", which surfaces the
+     * crawler-specific knobs (MaxDepth, URL filter, etc.).
+     *
+     * NOTE: this is the first source-type-conditional panel beyond Entity. As
+     * more source types grow typed config (RSS, Cloud Storage, etc.), this
+     * pattern should be promoted to a registered class extension point —
+     * each subclass declares its `SourceTypeName` + renders its own section.
+     * For now, hard-coding by source type name keeps the wire-up simple.
+     */
+    public get IsWebsiteSourceType(): boolean {
+        if (!this.record) return false;
+        const typeName = this.record.ContentSourceType;
+        return typeName != null && typeName.trim().toLowerCase() === 'website';
+    }
+
+    /**
      * Read the typed Configuration object — never null, defaults applied where
      * the JSON didn't supply them. Writing back is via `setConfig` so we keep
      * the record dirty and persist through the standard Save() path.
      */
-    public get Config(): MJContentSourceEntity_IContentSourceConfiguration {
+    public get Config(): ExtendedConfig {
         const raw = this.record?.ConfigurationObject;
-        return raw ?? {};
+        return (raw ?? {}) as ExtendedConfig;
     }
 
-    public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
+    public setConfig(patch: Partial<ExtendedConfig>): void {
         if (!this.record) return;
-        const current = this.record.ConfigurationObject ?? {};
-        const merged: MJContentSourceEntity_IContentSourceConfiguration = { ...current, ...patch };
+        const current = (this.record.ConfigurationObject ?? {}) as ExtendedConfig;
+        const merged: ExtendedConfig = { ...current, ...patch };
         // Setting via the typed accessor updates Configuration JSON + marks dirty.
         this.record.ConfigurationObject = merged;
     }
@@ -140,6 +185,12 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
 
     // ---------- Budgets ----------------------------------------------------
 
+    public get MaxItemsPerRunValue(): number | null {
+        return this.Config.MaxItemsPerRun ?? null;
+    }
+    public set MaxItemsPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxItemsPerRun: this.normalizeNullableNumber(v) });
+    }
     public get MaxNewTagsPerRunValue(): number | null {
         return this.Config.MaxNewTagsPerRun ?? null;
     }
@@ -163,6 +214,82 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
     }
     public set MaxCostPerRunValue(v: number | string | null) {
         this.setConfig({ MaxCostPerRun: this.normalizeNullableNumber(v) });
+    }
+
+    // ---------- Website crawler knobs (Configuration.Website sub-object) ---
+    //
+    // These are only meaningful when ContentSourceType = "Website". The form
+    // hides the section for other source types via `IsWebsiteSourceType`.
+    // Storage is the typed `Configuration.Website` sub-object on the parent
+    // ContentSource — AutotagWebsite reads it first, then overlays per-source
+    // ContentSourceParam rows as a legacy / sharper-override path.
+
+    /** Return the typed Website sub-object, defaulted to {} so getters can read freely. */
+    public get WebsiteConfig(): WebsiteConfig {
+        return this.Config.Website ?? {};
+    }
+
+    private setWebsite(patch: Partial<WebsiteConfig>): void {
+        const current = this.WebsiteConfig;
+        // Spread the patch over current, then strip any keys whose value is undefined
+        // so we don't persist `"key": undefined` artifacts in the JSON.
+        const merged: WebsiteConfig = { ...current };
+        for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined) {
+                delete (merged as Record<string, unknown>)[k];
+            } else {
+                (merged as Record<string, unknown>)[k] = v;
+            }
+        }
+        this.setConfig({ Website: merged });
+    }
+
+    public get MaxDepthValue(): number | null {
+        return this.WebsiteConfig.MaxDepth ?? null;
+    }
+    public set MaxDepthValue(v: number | string | null) {
+        this.setWebsite({ MaxDepth: this.normalizeNullableNumber(v) });
+    }
+
+    public get CrawlSitesInLowerLevelDomainValue(): boolean {
+        // Default true — matches the autotagger's runtime default. Treat unset
+        // and explicit true the same so the toggle starts in the expected state.
+        return this.WebsiteConfig.CrawlSitesInLowerLevelDomain !== false;
+    }
+    public set CrawlSitesInLowerLevelDomainValue(v: boolean) {
+        this.setWebsite({ CrawlSitesInLowerLevelDomain: v });
+    }
+
+    public get CrawlOtherSitesInTopLevelDomainValue(): boolean {
+        // Default false — matches the autotagger's runtime default.
+        return this.WebsiteConfig.CrawlOtherSitesInTopLevelDomain === true;
+    }
+    public set CrawlOtherSitesInTopLevelDomainValue(v: boolean) {
+        this.setWebsite({ CrawlOtherSitesInTopLevelDomain: v });
+    }
+
+    public get URLPatternValue(): string {
+        return this.WebsiteConfig.URLPattern ?? '';
+    }
+    public set URLPatternValue(v: string | null | undefined) {
+        const trimmed = (v ?? '').trim();
+        this.setWebsite({ URLPattern: trimmed === '' ? undefined : trimmed });
+    }
+
+    public get RootURLValue(): string {
+        return this.WebsiteConfig.RootURL ?? '';
+    }
+    public set RootURLValue(v: string | null | undefined) {
+        const trimmed = (v ?? '').trim();
+        this.setWebsite({ RootURL: trimmed === '' ? undefined : trimmed });
+    }
+
+    /** Live validation: a non-empty URLPattern must be a valid JavaScript regex. */
+    public get URLPatternValidationMessage(): string | null {
+        const v = this.URLPatternValue;
+        if (!v) return null;
+        try { new RegExp(v); return null; }
+        catch (e) { return `Invalid regex — ${e instanceof Error ? e.message : String(e)}`; }
     }
 
     /**

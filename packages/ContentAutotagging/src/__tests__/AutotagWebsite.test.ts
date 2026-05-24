@@ -76,6 +76,8 @@ class TestableAutotagWebsite extends AutotagWebsite {
     public get $MaxDepth(): number { return this.MaxDepth; }
     public get $CrawlSitesInLowerLevelDomain(): boolean { return this.CrawlSitesInLowerLevelDomain; }
     public get $CrawlOtherSitesInTopLevelDomain(): boolean { return this.CrawlOtherSitesInTopLevelDomain; }
+    public get $URLPattern(): string { return this.URLPattern; }
+    public get $RootURL(): string { return this.RootURL; }
 
     public $normalizeURL(href: string): string { return this.normalizeURL(href); }
     public $extractTextFromHTML(html: string): string { return this.extractTextFromHTML(html); }
@@ -84,6 +86,11 @@ class TestableAutotagWebsite extends AutotagWebsite {
     public $installBudgetGate(): void { return this.installBudgetGate(); }
     public async $setupRunBudgets(sources: unknown[]): Promise<void> {
         return this.setupRunBudgets(sources as never);
+    }
+
+    public $applyDefaultCrawlSettings(): void { return this.applyDefaultCrawlSettings(); }
+    public $applyWebsiteConfigFromSource(source: unknown): void {
+        return this.applyWebsiteConfigFromSource(source as never);
     }
 }
 
@@ -278,6 +285,86 @@ describe('AutotagWebsite', () => {
             // were the only source. Confirms the gate scopes per source.
             const bBudget = subject.$sourceBudgetMap.get('src-b')!;
             expect(bBudget.snapshot().items).toBe(5);
+        });
+    });
+
+    describe('applyWebsiteConfigFromSource (Configuration.Website storage)', () => {
+        it('does nothing when the source has no ConfigurationObject', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({ ConfigurationObject: null });
+            expect(subject.$MaxDepth).toBe(2);
+            expect(subject.$CrawlSitesInLowerLevelDomain).toBe(true);
+            expect(subject.$CrawlOtherSitesInTopLevelDomain).toBe(false);
+        });
+
+        it('does nothing when ConfigurationObject has no Website sub-object', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({ ConfigurationObject: { MaxItemsPerRun: 50 } });
+            // Defaults remain — only the Website sub-object affects crawl knobs.
+            expect(subject.$MaxDepth).toBe(2);
+        });
+
+        it('applies every Website sub-object field that is set', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({
+                ConfigurationObject: {
+                    Website: {
+                        MaxDepth: 5,
+                        CrawlSitesInLowerLevelDomain: false,
+                        CrawlOtherSitesInTopLevelDomain: true,
+                        URLPattern: '^https://example\\.com/blog/.*',
+                        RootURL: 'https://example.com',
+                    },
+                },
+            });
+            expect(subject.$MaxDepth).toBe(5);
+            expect(subject.$CrawlSitesInLowerLevelDomain).toBe(false);
+            expect(subject.$CrawlOtherSitesInTopLevelDomain).toBe(true);
+            expect(subject.$URLPattern).toBe('^https://example\\.com/blog/.*');
+            expect(subject.$RootURL).toBe('https://example.com');
+        });
+
+        it('preserves defaults for unset Website fields (partial overlay)', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({
+                ConfigurationObject: { Website: { MaxDepth: 0 } },
+            });
+            expect(subject.$MaxDepth).toBe(0);
+            // Booleans not set — defaults stand.
+            expect(subject.$CrawlSitesInLowerLevelDomain).toBe(true);
+            expect(subject.$CrawlOtherSitesInTopLevelDomain).toBe(false);
+        });
+
+        it('rejects non-finite MaxDepth values (e.g., NaN from corrupt JSON)', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({
+                ConfigurationObject: { Website: { MaxDepth: Number.NaN } },
+            });
+            // Falls back to the default — never applies NaN.
+            expect(subject.$MaxDepth).toBe(2);
+        });
+
+        it('rejects empty-string URLPattern / RootURL (defaults remain in effect)', () => {
+            subject.$applyDefaultCrawlSettings();
+            subject.$applyWebsiteConfigFromSource({
+                ConfigurationObject: { Website: { URLPattern: '', RootURL: '' } },
+            });
+            expect(subject.$URLPattern).toBeUndefined();
+            expect(subject.$RootURL).toBeUndefined();
+        });
+
+        it('applyDefaultCrawlSettings resets after a prior source set non-default values', () => {
+            // Simulate the streaming loop's per-source reset: source A sets knobs,
+            // applyDefaults restores them before processing source B.
+            subject.$applyWebsiteConfigFromSource({
+                ConfigurationObject: { Website: { MaxDepth: 7, CrawlOtherSitesInTopLevelDomain: true } },
+            });
+            expect(subject.$MaxDepth).toBe(7);
+            expect(subject.$CrawlOtherSitesInTopLevelDomain).toBe(true);
+
+            subject.$applyDefaultCrawlSettings();
+            expect(subject.$MaxDepth).toBe(2);
+            expect(subject.$CrawlOtherSitesInTopLevelDomain).toBe(false);
         });
     });
 
