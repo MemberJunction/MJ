@@ -14,9 +14,14 @@ export class AutotagWebsite extends AutotagBase {
     private contextUser: UserInfo;
     private engine: AutotagBaseEngine;
     protected contentSourceTypeID: string
-    protected CrawlOtherSitesInTopLevelDomain: boolean;
-    protected CrawlSitesInLowerLevelDomain: boolean;
-    protected MaxDepth: number;
+    // Sensible defaults — overridable per content source via ContentSourceParam rows.
+    // CrawlSitesInLowerLevelDomain=true + MaxDepth=2 means we crawl the start URL
+    // plus two levels of in-domain links by default (~root + sections + content pages).
+    // CrawlOtherSitesInTopLevelDomain stays false to avoid accidentally fanning out
+    // across sibling paths of the seed URL unless explicitly opted in.
+    protected CrawlOtherSitesInTopLevelDomain: boolean = false;
+    protected CrawlSitesInLowerLevelDomain: boolean = true;
+    protected MaxDepth: number = 2;
     protected RootURL: string;
     protected URLPattern: string;
     protected visitedURLs: Set<string>;
@@ -231,11 +236,17 @@ export class AutotagWebsite extends AutotagBase {
      * @returns
      */
     protected async getAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): Promise<string[]> {
-    
+        // Start each content source with a clean visited set — otherwise URLs found
+        // for one source silently get deduped away when the next source is crawled.
+        this.visitedURLs = new Set<string>();
+
+        // Normalize the seed URL once so all downstream comparisons share the same form.
+        const seedURL = this.normalizeURL(url);
+
         try {
-            await this.getLowerLevelLinks(url, rootURL, this.MaxDepth, new Set<string>(), regex);
-            await this.getTopLevelLinks(url, this.getBasePath(url));
-            
+            await this.getLowerLevelLinks(seedURL, rootURL, this.MaxDepth, new Set<string>(), regex);
+            await this.getTopLevelLinks(seedURL, this.getBasePath(seedURL), regex);
+
             return Array.from(this.visitedURLs);
         } catch (e) {
             console.error(`Failed to get links from ${url}`);
@@ -250,15 +261,15 @@ export class AutotagWebsite extends AutotagBase {
      * @param visitedURLs 
      * @returns 
      */
-    protected async getTopLevelLinks(url: string, rootURL: string): Promise<void> {
+    protected async getTopLevelLinks(url: string, rootURL: string, regex: RegExp): Promise<void> {
         if (!this.CrawlOtherSitesInTopLevelDomain) {
             this.visitedURLs.add(url);
             return
         }
-        
+
         // If we have already visited this URL, return an empty array
         if (this.visitedURLs.has(url) || !await this.urlIsValid(url) || this.isHighestDomain(url)) {
-            return 
+            return
         }
 
         this.visitedURLs.add(url);
@@ -271,8 +282,8 @@ export class AutotagWebsite extends AutotagBase {
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
                 if (link) {
-                    const newURL = new URL(link, url).href;
-                    if (newURL.startsWith(rootURL) && !this.visitedURLs.has(newURL)) {
+                    const newURL = this.normalizeURL(new URL(link, url).href);
+                    if (newURL.startsWith(rootURL) && !this.visitedURLs.has(newURL) && regex.test(newURL)) {
                         this.visitedURLs.add(newURL);
                     }
                 }
@@ -281,7 +292,7 @@ export class AutotagWebsite extends AutotagBase {
         }
         catch (e) {
             console.error(`Failed to get links from ${url}`);
-            return 
+            return
         }
     }
 
@@ -325,6 +336,32 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
+    /**
+     * Normalize a URL for use as a dedup key in `visitedURLs`. Conservative
+     * normalization that catches the common variations without risking the merge
+     * of two semantically distinct pages:
+     *   - drops the fragment (always client-side per RFC 3986)
+     *   - collapses trailing slash on the path (except the root "/")
+     *   - sorts query parameters for stable equality
+     *   - host is already lower-cased by URL parser
+     * Path case is intentionally preserved — RFC 3986 says paths are case-sensitive
+     * and some servers (wikis, certain Linux file fronts) actually treat them that way.
+     */
+    protected normalizeURL(href: string): string {
+        try {
+            const u = new URL(href);
+            u.hash = '';
+            if (u.pathname.length > 1 && u.pathname.endsWith('/')) {
+                u.pathname = u.pathname.slice(0, -1);
+            }
+            u.searchParams.sort();
+            return u.href;
+        }
+        catch {
+            return href;
+        }
+    }
+
     protected async urlIsValid(url: string): Promise<boolean> {
         try { 
             const response = await axios.head(url);
@@ -346,10 +383,13 @@ export class AutotagWebsite extends AutotagBase {
      */
     protected async getLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp): Promise<Set<string>> {
         
-        try { 
+        try {
             console.log(`Scraping ${url}`);
-            // If we have already visited this URL, return an empty array
-            if (scrapedURLs.has(url) || await this.urlIsValid(url) === false || crawlDepth < 0 || !this.CrawlSitesInLowerLevelDomain) {
+            // If we have already visited this URL, return an empty array.
+            // The Number.isFinite guard protects against accidental NaN/undefined
+            // arriving as crawlDepth — without it, `undefined < 0` is false and the
+            // recursion runs without a depth ceiling.
+            if (scrapedURLs.has(url) || await this.urlIsValid(url) === false || !Number.isFinite(crawlDepth) || crawlDepth < 0 || !this.CrawlSitesInLowerLevelDomain) {
                 return new Set<string>();
             }
 
@@ -363,7 +403,7 @@ export class AutotagWebsite extends AutotagBase {
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
                 if (link) {
-                    const newURL = new URL(link, url).href;
+                    const newURL = this.normalizeURL(new URL(link, url).href);
                     if (newURL.startsWith(rootURL) && newURL !== url && !this.visitedURLs.has(newURL) && regex.test(newURL)) {
                         extractedLinks.add(newURL);
                         this.visitedURLs.add(newURL);
