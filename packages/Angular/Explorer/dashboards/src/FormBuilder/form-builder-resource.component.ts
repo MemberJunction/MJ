@@ -6,7 +6,7 @@ import {
     OnDestroy,
     inject,
 } from '@angular/core';
-import { LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ResourceData } from '@memberjunction/core-entities';
 import type { MJComponentEntity, MJEntityFormOverrideEntity } from '@memberjunction/core-entities';
@@ -28,6 +28,7 @@ import {
     type FormCanvasSection,
 } from '../ComponentStudio/services/form-canvas-model';
 import { EntityFormOverrideService } from '../ComponentStudio/services/entity-form-override.service';
+import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import type { FormOverrideDialogResult } from '../ComponentStudio/components/form-override-dialog.component';
 
 /**
@@ -119,6 +120,23 @@ export class FormBuilderResourceComponent
     public VersionsLoading = false;
     public ActiveVersionID: string | null = null;
 
+    /**
+     * Live preview state. When the user switches to the Preview tab, we load
+     * a Top-1 record from `TargetEntityName` and mount `<mj-interactive-form>`
+     * with the working `componentSpec` derived from the current EditableCode.
+     * Failure modes (no record, RunView error) fall back to a synthetic
+     * NewRecord() so the form still mounts — the user just sees an empty
+     * draft instead of a broken pane.
+     */
+    public PreviewRecord: BaseEntity | null = null;
+    public PreviewRecordIsReal = false;
+    public PreviewRecordLabel = '';
+    public PreviewLoading = false;
+    public PreviewError: string | null = null;
+    public PreviewPickerOpen = false;
+    public PreviewSearchTerm = '';
+    public PreviewSearchResults: Array<{ ID: string; Label: string }> = [];
+
     public SelectedFormID: string | null = null;
     public SelectedFormName = '';
     public IsNewForm = false;
@@ -142,6 +160,7 @@ export class FormBuilderResourceComponent
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly notifications = inject(MJNotificationService);
     private readonly overrideService = inject(EntityFormOverrideService);
+    private readonly conversationBridge = inject(ConversationBridgeService);
 
     private get provider(): IMetadataProvider {
         return this.ProviderToUse;
@@ -253,6 +272,155 @@ export class FormBuilderResourceComponent
     public SetCenterPaneMode(mode: 'preview' | 'code' | 'layout'): void {
         this.CenterPaneMode = mode;
         this.cdr.markForCheck();
+        if (mode === 'preview' && this.TargetEntityName && !this.PreviewRecord) {
+            // Lazy-load on first switch — avoids the RunView on every form
+            // pick when the user prefers Code or Layout.
+            void this.loadPreviewRecord();
+        }
+    }
+
+    /**
+     * Live `ComponentSpec` for the Preview pane. Derived from the in-memory
+     * `EditableCode` so the preview reflects unsaved edits — switching to
+     * Preview while typing in Code shows the in-progress version, not the
+     * last-saved one. Falls back to null when there's no code yet, in which
+     * case the Preview pane shows a friendly empty state.
+     */
+    public get PreviewSpec(): import('@memberjunction/interactive-component-types').ComponentSpec | null {
+        if (!this.SelectedFormName || !this.EditableCode || !this.EditableCode.trim()) {
+            return null;
+        }
+        return {
+            name: toComponentIdentifier(this.SelectedFormName),
+            componentRole: 'form',
+            location: 'embedded',
+            code: this.EditableCode,
+            title: this.SelectedFormName,
+        } as unknown as import('@memberjunction/interactive-component-types').ComponentSpec;
+    }
+
+    /**
+     * Load a Top-1 record from the target entity to bind into the preview.
+     * If the entity has no rows, we still mount the form against a synthetic
+     * NewRecord() so the layout / styling / event handlers can be evaluated.
+     */
+    public async loadPreviewRecord(): Promise<void> {
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user || !this.TargetEntityName) return;
+        this.PreviewLoading = true;
+        this.PreviewError = null;
+        this.cdr.markForCheck();
+        try {
+            const entityInfo = provider.EntityByName(this.TargetEntityName);
+            if (!entityInfo) {
+                this.PreviewError = `Entity '${this.TargetEntityName}' is not registered.`;
+                return;
+            }
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<BaseEntity>({
+                EntityName: this.TargetEntityName,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+            if (result.Success && (result.Results?.length ?? 0) > 0) {
+                this.PreviewRecord = result.Results[0];
+                this.PreviewRecordIsReal = true;
+                this.PreviewRecordLabel = this.recordLabel(this.PreviewRecord);
+            } else {
+                // No rows — fall back to a fresh NewRecord. The form still
+                // mounts and the user can see how create-mode renders.
+                const fresh = await provider.GetEntityObject<BaseEntity>(this.TargetEntityName, user);
+                fresh.NewRecord();
+                this.PreviewRecord = fresh;
+                this.PreviewRecordIsReal = false;
+                this.PreviewRecordLabel = 'New record (mock)';
+            }
+        } catch (err) {
+            this.PreviewError = err instanceof Error ? err.message : String(err);
+            LogError(`FormBuilderResource.loadPreviewRecord: ${this.PreviewError}`);
+        } finally {
+            this.PreviewLoading = false;
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Pull a human label from the record's NameField or primary key. */
+    private recordLabel(record: BaseEntity): string {
+        const nameField = record.EntityInfo?.NameField?.Name;
+        if (nameField) {
+            const v = record.Get(nameField);
+            if (v != null && String(v).trim().length > 0) return String(v);
+        }
+        if (record.PrimaryKey?.HasValue) return record.PrimaryKey.ToConcatenatedString();
+        return record.EntityInfo?.Name ?? '(record)';
+    }
+
+    public TogglePreviewPicker(): void {
+        this.PreviewPickerOpen = !this.PreviewPickerOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** Search-as-you-type for the preview record picker. */
+    public async OnPreviewSearchInput(event: Event): Promise<void> {
+        const term = (event.target as HTMLInputElement).value ?? '';
+        this.PreviewSearchTerm = term;
+        if (!this.TargetEntityName || term.trim().length === 0) {
+            this.PreviewSearchResults = [];
+            this.cdr.markForCheck();
+            return;
+        }
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user) return;
+        const entity = provider.EntityByName(this.TargetEntityName);
+        const nameField = entity?.NameField?.Name;
+        if (!nameField) {
+            this.PreviewSearchResults = [];
+            return;
+        }
+        const safe = term.replace(/'/g, "''");
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<BaseEntity>({
+                EntityName: this.TargetEntityName,
+                ExtraFilter: `${nameField} LIKE '%${safe}%'`,
+                MaxRows: 8,
+                ResultType: 'entity_object',
+            }, user);
+            this.PreviewSearchResults = (result.Results ?? []).map(r => ({
+                ID: r.PrimaryKey?.ToConcatenatedString() ?? '',
+                Label: this.recordLabel(r),
+            }));
+            this.cdr.markForCheck();
+        } catch (err) {
+            LogError(`FormBuilderResource.OnPreviewSearchInput: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /** User picked a different record from the search results — re-bind preview. */
+    public async OnPreviewRecordPicked(item: { ID: string; Label: string }): Promise<void> {
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user || !this.TargetEntityName) return;
+        const entityInfo = provider.EntityByName(this.TargetEntityName);
+        if (!entityInfo) return;
+        try {
+            const rec = await provider.GetEntityObject<BaseEntity>(this.TargetEntityName, user);
+            const pk = new CompositeKey();
+            pk.LoadFromURLSegment(entityInfo, item.ID);
+            if (await rec.InnerLoad(pk)) {
+                this.PreviewRecord = rec;
+                this.PreviewRecordIsReal = true;
+                this.PreviewRecordLabel = item.Label;
+                this.PreviewPickerOpen = false;
+                this.PreviewSearchTerm = '';
+                this.PreviewSearchResults = [];
+                this.cdr.markForCheck();
+            }
+        } catch (err) {
+            LogError(`FormBuilderResource.OnPreviewRecordPicked: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -357,15 +525,14 @@ export class FormBuilderResourceComponent
      */
     public OnOpenInChat(): void {
         // Make sure the agent context reflects the *current* form state
-        // before we open the chat. registerAgentContext() reads SelectedForm*.
+        // before we open the chat. registerAgentContext() reads SelectedForm*
+        // and pushes through NavigationService so the next user message in
+        // chat carries ActiveForm.
         this.registerAgentContext();
         this.ChatPaneCollapsed = false;
-        // The chat overlay sits at the app root and reads context from
-        // NavigationService — by re-registering above we make sure the
-        // user's next chat message includes ActiveForm. The actual overlay
-        // toggle is the user's choice from the floating chat button.
-        this.notifications.CreateSimpleNotification(
-            'Form context attached. Open the chat to refine.', 'info', 2500);
+        // Pop the floating chat overlay. The bridge is the decoupled
+        // request channel — see ConversationBridgeService.RequestExpandOverlay.
+        this.conversationBridge.RequestExpandOverlay();
         this.cdr.markForCheck();
     }
 
@@ -475,6 +642,16 @@ export class FormBuilderResourceComponent
             // Populate the version rail (fire-and-forget — the rail shows
             // a loading spinner until this resolves).
             this.loadVersionsForActiveForm();
+            // Reset preview state — record will lazy-load on next switch
+            // to the Preview tab against the (new) target entity.
+            this.PreviewRecord = null;
+            this.PreviewRecordIsReal = false;
+            this.PreviewRecordLabel = '';
+            this.PreviewError = null;
+            // If the user is already on the Preview tab, kick off loading now.
+            if (this.CenterPaneMode === 'preview' && this.TargetEntityName) {
+                void this.loadPreviewRecord();
+            }
         } catch (err) {
             LogError(`FormBuilderResource.OnFormPicked: ${err instanceof Error ? err.message : String(err)}`);
         }

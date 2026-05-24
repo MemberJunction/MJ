@@ -571,6 +571,17 @@ export class ChatAgentsOverlayComponent extends BaseAngularComponent implements 
                 }
             });
 
+        // Allow arbitrary callers (Form Builder cockpit, etc.) to ask the
+        // overlay to expand. Idempotent if we're already expanded —
+        // Expand() is safe to call in any state.
+        this.bridge.ExpandOverlayRequested$
+            .pipe(takeUntil(this.destroy$))
+            .subscribe(() => {
+                if (this.State === 'collapsed') {
+                    this.Expand();
+                }
+            });
+
         this.bridge.ActiveConversationID$
             .pipe(takeUntil(this.destroy$))
             .subscribe((id: string | null) => {

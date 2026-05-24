@@ -8,6 +8,10 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
+// BaseFormsModule supplies <mj-interactive-form> for the Form Builder
+// cockpit's Preview tab. The cockpit binds a working spec + a real Top-1
+// record into it so the user sees the form rendering live as they edit.
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 
 // Component Studio Components
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
@@ -73,6 +77,7 @@ import { FormBuilderResourceComponent } from './FormBuilder/form-builder-resourc
     MJReactModule,
     SharedGenericModule,
     MarkdownModule,
+    BaseFormsModule,
     MJButtonDirective,
     MJDialogComponent,
     MJDialogTitlebarComponent,

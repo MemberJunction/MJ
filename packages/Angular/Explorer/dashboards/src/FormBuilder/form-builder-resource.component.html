@@ -215,11 +215,77 @@
              will render off that. -->
         @if (CenterPaneMode === 'preview') {
           <div class="fb-preview-host">
-            <div class="fb-preview-empty">
-              <i class="fa-solid fa-eye"></i>
-              <h4>Live preview</h4>
-              <p>The preview renders against a real Top-1 record from <strong>{{ TargetEntityName }}</strong>.</p>
-              <p class="fb-muted">Switch to <strong>Code</strong> to edit JSX or <strong>Layout</strong> to drag fields.</p>
+            <!-- Preview record picker strip — same affordance shape as the
+                 artifact-viewer form-aware branch, so users see one consistent
+                 pattern across the chat artifact path and the cockpit path. -->
+            <div class="fb-preview-toolstrip">
+              <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+              <span>Previewing record:</span>
+              <button type="button"
+                      class="fb-preview-chip"
+                      (click)="TogglePreviewPicker()">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <strong>{{ PreviewRecordLabel || 'No record' }}</strong>
+                @if (!PreviewRecordIsReal && PreviewRecord) {
+                  <span class="fb-preview-chip-badge">Mock</span>
+                }
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              <span class="fb-preview-chip-entity">{{ TargetEntityName }}</span>
+              @if (PreviewError) {
+                <span class="fb-preview-warning" [title]="PreviewError">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                </span>
+              }
+            </div>
+
+            @if (PreviewPickerOpen) {
+              <div class="fb-preview-picker-panel" (click)="$event.stopPropagation()">
+                <input type="text"
+                       class="fb-preview-picker-search"
+                       placeholder="Search records by name…"
+                       [value]="PreviewSearchTerm"
+                       (input)="OnPreviewSearchInput($event)" />
+                @if (PreviewSearchResults.length > 0) {
+                  <ul class="fb-preview-picker-results">
+                    @for (r of PreviewSearchResults; track r.ID) {
+                      <li class="fb-preview-picker-row" (click)="OnPreviewRecordPicked(r)">
+                        <i class="fa-solid fa-circle-dot"></i>
+                        <span>{{ r.Label }}</span>
+                      </li>
+                    }
+                  </ul>
+                } @else if (PreviewSearchTerm.length > 0) {
+                  <div class="fb-preview-picker-empty">No matches.</div>
+                } @else {
+                  <div class="fb-preview-picker-empty">Start typing to search.</div>
+                }
+              </div>
+            }
+
+            <div class="fb-preview-frame">
+              @if (PreviewLoading) {
+                <div class="fb-preview-empty">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <p>Loading preview…</p>
+                </div>
+              } @else if (!PreviewSpec) {
+                <div class="fb-preview-empty">
+                  <i class="fa-solid fa-eye"></i>
+                  <h4>Live preview</h4>
+                  <p>Code is empty — switch to <strong>Code</strong> or <strong>Layout</strong> to start.</p>
+                </div>
+              } @else if (PreviewRecord) {
+                <mj-interactive-form
+                  [componentSpec]="PreviewSpec"
+                  [record]="PreviewRecord">
+                </mj-interactive-form>
+              } @else {
+                <div class="fb-preview-empty">
+                  <i class="fa-solid fa-triangle-exclamation"></i>
+                  <p>{{ PreviewError || 'Could not bind a record for preview.' }}</p>
+                </div>
+              }
             </div>
           </div>
         }
