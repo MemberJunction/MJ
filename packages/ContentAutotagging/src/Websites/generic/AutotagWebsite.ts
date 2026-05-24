@@ -119,72 +119,77 @@ export class AutotagWebsite extends AutotagBase {
      * @param contextUser 
      * @returns 
      */
-    protected async SetNewAndModifiedContentItems(contentItemLinks: string[], contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<MJContentItemEntity[]> { 
+    protected async SetNewAndModifiedContentItems(contentItemLinks: string[], contentSourceParams: ContentSourceParams, contextUser: UserInfo): Promise<MJContentItemEntity[]> {
 
         const addedContentItems: MJContentItemEntity[] = [];
         for (const contentItemLink of contentItemLinks) {
             try {
-                const newHash = await this.engine.getChecksumFromURL(contentItemLink);
+                // Fetch the URL ONCE — derive both the change-detection hash and the
+                // body text from the same response. Previously this code path could
+                // hit the network twice (hash + parse) on changed pages and three
+                // times on new ones (hash + parse + save-side hash).
+                const { text, checksum: newHash } = await this.fetchAndExtract(contentItemLink);
 
                 const rv = new RunView();
                 const results = await rv.RunViews<MJContentItemEntity>([
                     {
                         EntityName: 'MJ: Content Items',
-                        ExtraFilter: `Checksum = '${newHash}'`,
+                        // Scope to this content source. The previous global
+                        // `Checksum = '...'` query meant a 404 boilerplate from
+                        // site A silently skipped every matching page on site B.
+                        ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND Checksum = '${newHash}'`,
                         ResultType: 'entity_object'
-                    }, 
+                    },
                     {
                         EntityName: 'MJ: Content Items',
                         ExtraFilter: `ContentSourceID = '${contentSourceParams.contentSourceID}' AND URL = '${contentItemLink}'`,
                         ResultType: 'entity_object'
                     }
-                ], this.contextUser)
-                
-                const contentItemResultsWithChecksum = results[0]
-                const contentItemResultsWithURL = results[1]
-                
-                if (contentItemResultsWithChecksum.Success && contentItemResultsWithChecksum.Results.length) {
-                    // We found the checksum so this content item has not changed since we last accessed it, do nothing
+                ], this.contextUser);
+
+                const byChecksum = results[0];
+                const byURL = results[1];
+
+                if (byChecksum.Success && byChecksum.Results.length) {
+                    // Same content already in DB for this source — unchanged, skip.
                     continue;
                 }
-                
-                else if (contentItemResultsWithURL.Success && contentItemResultsWithURL.Results.length) {
-                    // This content item already exists, update the hash and last updated date
-                    const contentItemResult: MJContentItemEntity = contentItemResultsWithURL.Results[0]; 
-                    const lastStoredHash: string = contentItemResult.Checksum
-            
-                    if (lastStoredHash !== newHash) {
-                        // This content item has changed since we last access it, update the hash and last updated date
+
+                else if (byURL.Success && byURL.Results.length) {
+                    // URL exists for this source but content has drifted — update in place.
+                    const existing: MJContentItemEntity = byURL.Results[0];
+
+                    if (existing.Checksum !== newHash) {
                         const md = this.ProviderToUse;
                         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
-                        contentItem.Load(contentItemResult.ID);
-                        contentItem.Checksum = newHash
-                        contentItem.Text = await this.parseWebPage(contentItemLink)
-            
+                        await contentItem.Load(existing.ID);
+                        contentItem.Checksum = newHash;
+                        contentItem.Text = text;
+
                         await contentItem.Save();
-                        addedContentItems.push(contentItem); // Content item was modified, add to list
+                        addedContentItems.push(contentItem);
                     }
                 }
                 else {
-                    // This content item does not exist, add it
+                    // New URL — create the content item, reusing the already-fetched body.
                     const md = this.ProviderToUse;
                     const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
-                    contentItem.ContentSourceID = contentSourceParams.contentSourceID
-                    contentItem.Name = this.getPathName(contentItemLink) // Will get overwritten by title later if it exists
-                    contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams)
-                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID
-                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID
-                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID
-                    contentItem.Checksum = await this.engine.getChecksumFromURL(contentItemLink)
-                    contentItem.URL = contentItemLink
-                    contentItem.Text = await this.parseWebPage(contentItemLink)
-                
+                    contentItem.ContentSourceID = contentSourceParams.contentSourceID;
+                    contentItem.Name = this.getPathName(contentItemLink); // Will get overwritten by title later if it exists
+                    contentItem.Description = this.engine.GetContentItemDescription(contentSourceParams);
+                    contentItem.ContentTypeID = contentSourceParams.ContentTypeID;
+                    contentItem.ContentFileTypeID = contentSourceParams.ContentFileTypeID;
+                    contentItem.ContentSourceTypeID = contentSourceParams.ContentSourceTypeID;
+                    contentItem.Checksum = newHash;
+                    contentItem.URL = contentItemLink;
+                    contentItem.Text = text;
+
                     await contentItem.Save();
-                    addedContentItems.push(contentItem); // Content item was added, add to list
+                    addedContentItems.push(contentItem);
                 }
-                }catch (e) {
-                    console.log(e)
-                } 
+            } catch (e) {
+                console.log(e);
+            }
         }
         return addedContentItems;
     }
@@ -211,17 +216,46 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     /**
-     * Given a URL, this function extracts text from a webpage. 
-     * @param url 
-     * @returns The text extracted from the webpage
+     * Pure helper: extract clean body text from raw HTML. No IO. Exposed as
+     * a protected method so subclasses and unit tests can exercise it without
+     * monkey-patching axios.
+     */
+    protected extractTextFromHTML(html: string): string {
+        const $ = cheerio.load(html);
+        const body = $('body')[0];
+        if (!body) return '';
+        return this.getTextWithLineBreaks(body, $);
+    }
+
+    /**
+     * Fetch a URL once, extract clean text, and compute a stable checksum
+     * over that text. Returns both so callers don't have to fetch twice for
+     * "is this changed?" + "what's the content?".
+     *
+     * The checksum is computed over the EXTRACTED body text, NOT the raw
+     * HTML, because raw HTML routinely contains incidental changes (server
+     * timestamps, CSRF tokens, build hashes, ad rotators) that would
+     * falsely report a page as "changed" on every crawl. Hashing the
+     * extracted text is what users actually mean by "did the content
+     * change?"
+     */
+    public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
+        const { data } = await axios.get(url);
+        const text = this.extractTextFromHTML(String(data));
+        const checksum = await this.engine.getChecksumFromText(text);
+        return { text, checksum };
+    }
+
+    /**
+     * Given a URL, extracts text from a webpage. Kept for external callers
+     * that just want the text — internal change-detection now uses
+     * `fetchAndExtract` to avoid redundant fetches.
      */
     public async parseWebPage(url: string): Promise<string> {
         try {
             const pageContent: string = await this.fetchPageContent(url);
-            const $ = cheerio.load(pageContent);
-            const text: string = this.getTextWithLineBreaks($('body')[0], $);
-            return text;
-        } 
+            return this.extractTextFromHTML(pageContent);
+        }
         catch (error) {
             console.error(`Error processing ${url}:`, error);
             return '';
