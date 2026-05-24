@@ -41,7 +41,12 @@ import { InteractionType } from '@azure/msal-browser';
 //***********************************************************
 import { AppComponent } from './app.component';
 import { GeneratedFormsModule } from './generated/generated-forms.module';
+import { FeedbackComponent } from './feedback/feedback.component';
 import { environment } from '../environments/environment';
+
+// Standalone MJ components used by FeedbackComponent
+import { PaginationComponent } from '@memberjunction/ng-pagination';
+import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 
 /**
  * Set your default interaction type for MSALGuard here. If you have any
@@ -64,7 +69,8 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
 
 @NgModule({
   declarations: [
-    AppComponent, 
+    AppComponent,
+    FeedbackComponent,
   ],
   imports: [
     // Angular Core Modules
@@ -83,7 +89,11 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
     MJExplorerAppModule.forRoot(environment),
 
     // App-specific modules
-    GeneratedFormsModule
+    GeneratedFormsModule,
+
+    // Standalone components used in templates
+    PaginationComponent,
+    MJButtonDirective
   ],
   providers: [
     SharedService,
