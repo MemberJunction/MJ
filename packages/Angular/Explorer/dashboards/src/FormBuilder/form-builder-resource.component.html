@@ -97,11 +97,18 @@
                     @if (v.UpdatedAt) { {{ v.UpdatedAt | date:'short' }} } @else { (no timestamp) }
                   </div>
                 </div>
+                <!--
+                  Retrospective fix #9: disambiguate the rail-row action.
+                  Pending → "Activate" (promote new work).
+                  Inactive → "Restore" (roll back to an older version).
+                  Different audit semantics, different button labels.
+                -->
                 @if (!v.IsActive) {
                   <button class="fb-version-activate" type="button"
                           (click)="OnActivateVersion(v)"
-                          [title]="v.IsPending ? 'Activate this Pending version' : 'Revert: make this version active'">
-                    <i class="fa-solid fa-circle-check"></i>
+                          [title]="v.IsPending ? 'Activate this Pending version' : 'Restore: roll back to this version'">
+                    <i class="fa-solid" [class.fa-circle-check]="v.IsPending" [class.fa-rotate-left]="!v.IsPending"></i>
+                    <span class="fb-version-activate-label">{{ v.IsPending ? 'Activate' : 'Restore' }}</span>
                   </button>
                 }
               </div>
@@ -276,9 +283,16 @@
                   <p>Code is empty — switch to <strong>Code</strong> or <strong>Layout</strong> to start.</p>
                 </div>
               } @else if (PreviewRecord) {
+                <!--
+                  Retrospective fix #10: subscribe to LoadErrorChanged so
+                  spec parse / mount errors surface in the cockpit's own
+                  error pane instead of only appearing inline inside the
+                  React component.
+                -->
                 <mj-interactive-form
                   [componentSpec]="PreviewSpec"
-                  [record]="PreviewRecord">
+                  [record]="PreviewRecord"
+                  (LoadErrorChanged)="OnPreviewLoadError($event)">
                 </mj-interactive-form>
               } @else {
                 <div class="fb-preview-empty">
@@ -303,6 +317,22 @@
 
         @if (CenterPaneMode === 'layout') {
           <div class="fb-canvas-host">
+            <!--
+              Retrospective fix #6: warn the user when the loaded JSX has
+              hand-authored content the canvas can't represent. Saving from
+              the canvas regenerates code, which would overwrite those edits.
+              The banner lets users know to keep editing in Code instead.
+            -->
+            @if (CanvasDiverged) {
+              <div class="fb-canvas-divergence-banner">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>
+                  <strong>Code has hand-authored content the canvas can't display.</strong>
+                  Saving from the Layout tab will regenerate code from the canvas and
+                  <strong>overwrite those edits</strong>. To preserve them, edit the Code tab directly.
+                </span>
+              </div>
+            }
             <mj-form-builder-canvas
               [Canvas]="Canvas"
               [Schema]="Schema"

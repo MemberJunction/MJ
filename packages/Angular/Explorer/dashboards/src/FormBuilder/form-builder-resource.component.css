@@ -852,3 +852,15 @@
   padding: 18px;
   background: var(--mj-bg-page);
 }
+
+/* Retrospective fix #9 — labeled rail button (Activate / Restore). */
+.fb-version-activate {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+}
+.fb-version-activate-label {
+  font-weight: 600;
+}

@@ -75,13 +75,19 @@
     <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
     @if (_variantMenuOpen) {
     <div class="mj-form-variant-picker-menu" (click)="$event.stopPropagation()">
-      <div class="mj-form-variant-picker-row"
+      <!-- Retrospective fix #8: distinguish "Default" from custom variants
+           visually so users know what "Default form" means. Sub-label
+           explains it's the CodeGen / Angular fallback, and the "(default)"
+           parenthetical reinforces it. -->
+      <div class="mj-form-variant-picker-row mj-form-variant-picker-default"
            [class.current]="!EffectiveCurrentVariantID"
            (mousedown)="$event.preventDefault()"
            (click)="OnVariantPicked(null); _variantMenuOpen = false">
         <div class="mj-form-variant-picker-row-main">
-          <span class="mj-form-variant-picker-row-title">Default form</span>
-          <span class="mj-form-variant-picker-row-sub">CodeGen · Angular</span>
+          <span class="mj-form-variant-picker-row-title">
+            Default form <span class="mj-form-variant-picker-default-tag">(default)</span>
+          </span>
+          <span class="mj-form-variant-picker-row-sub">CodeGen-generated Angular fallback</span>
         </div>
         @if (!EffectiveCurrentVariantID) {
           <i class="fa-solid fa-check mj-form-variant-picker-check" aria-hidden="true"></i>

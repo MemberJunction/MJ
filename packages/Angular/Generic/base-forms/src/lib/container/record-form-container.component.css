@@ -245,3 +245,16 @@ mj-record-form-container {
   color: var(--mj-brand-primary);
   font-size: 11px;
 }
+
+/* Retrospective fix #8 — visually distinguish the Default row from variants. */
+.mj-form-variant-picker-row.mj-form-variant-picker-default {
+  border-bottom: 1px dashed var(--mj-border-default);
+  margin-bottom: 4px;
+  padding-bottom: 10px;
+}
+.mj-form-variant-picker-default-tag {
+  color: var(--mj-text-muted);
+  font-weight: 400;
+  font-size: 11px;
+  margin-left: 4px;
+}

@@ -1,4 +1,4 @@
-import { ChangeDetectorRef, Component, Input, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
@@ -62,7 +62,22 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
     public formHostProps: FormHostProps | null = null;
 
     /** Loaded-spec error (component row missing, JSON parse failure, etc.). */
-    public loadError: string | null = null;
+    private _loadError: string | null = null;
+
+    /**
+     * Loaded-spec error (component row missing, JSON parse failure,
+     * React-runtime bootstrap failure, etc.). Setter auto-emits
+     * `LoadErrorChanged` so host surfaces (e.g. Form Builder cockpit
+     * Preview tab) can show their own error state — retrospective fix #10.
+     */
+    public get loadError(): string | null { return this._loadError; }
+    public set loadError(v: string | null) {
+        if (v === this._loadError) return;
+        this._loadError = v;
+        this.LoadErrorChanged.emit(v);
+    }
+
+    @Output() public LoadErrorChanged = new EventEmitter<string | null>();
 
     /** Tracks last-known field snapshot for computing the dirty-field diff on save. */
     private originalSnapshot: Record<string, unknown> = {};
@@ -99,7 +114,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             await this.reactBridge.getReactContext();
         } catch (err) {
             LogError(`InteractiveFormComponent: React bridge bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
-            this.loadError = 'React runtime failed to load. Try a hard refresh.';
+            this.loadError ='React runtime failed to load. Try a hard refresh.';
             return;
         }
         if (this.record) {
@@ -306,7 +321,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      */
     private async loadComponentSpec(): Promise<void> {
         if (!this.ComponentID) {
-            this.loadError = 'No ComponentID provided to InteractiveFormComponent.';
+            this.loadError ='No ComponentID provided to InteractiveFormComponent.';
             return;
         }
         try {
@@ -327,7 +342,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             }, this.ProviderToUse.CurrentUser);
 
             if (!result.Success || !result.Results?.length) {
-                this.loadError = `Component ${this.ComponentID} not found.`;
+                this.loadError =`Component ${this.ComponentID} not found.`;
                 return;
             }
 
@@ -335,18 +350,18 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             try {
                 this.componentSpec = JSON.parse(row.Specification ?? 'null') as ComponentSpec;
             } catch (err) {
-                this.loadError = `Component ${row.Name ?? this.ComponentID} has invalid Specification JSON: ${err instanceof Error ? err.message : String(err)}`;
+                this.loadError =`Component ${row.Name ?? this.ComponentID} has invalid Specification JSON: ${err instanceof Error ? err.message : String(err)}`;
                 return;
             }
             if (!this.componentSpec) {
-                this.loadError = `Component ${row.Name ?? this.ComponentID} has an empty Specification.`;
+                this.loadError =`Component ${row.Name ?? this.ComponentID} has an empty Specification.`;
                 return;
             }
             // Validate the spec commits to the form-role contract. We use the
             // helper (whose signature is structural via Pick<>) so this stays
             // robust across ComponentSpec field additions.
             if (!isFormRole(this.componentSpec)) {
-                this.loadError = `Component ${row.Name ?? this.ComponentID} does not declare componentRole='form'.`;
+                this.loadError =`Component ${row.Name ?? this.ComponentID} does not declare componentRole='form'.`;
                 return;
             }
         } finally {

@@ -396,13 +396,22 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     }
   }
 
-  /** Load the first row by primary key — deterministic, doesn't require a sort field. */
+  /**
+   * Load the first row by NameField (then __mj_CreatedAt) so different users
+   * opening the same form-role artifact see the same record bound to the
+   * preview. (Retrospective fix #7 — un-ordered Top-1 was physical-order
+   * and non-deterministic.)
+   */
   private async loadTopOneRecord(entity: EntityInfo): Promise<BaseEntity | null> {
     try {
+      const orderBy = entity.NameField?.Name
+        ? `${entity.NameField.Name} ASC`
+        : `__mj_CreatedAt DESC`;
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<BaseEntity>({
         EntityName: entity.Name,
         MaxRows: 1,
+        OrderBy: orderBy,
         ResultType: 'entity_object',
       }, this.ProviderToUse.CurrentUser);
       if (result.Success && (result.Results?.length ?? 0) > 0) {

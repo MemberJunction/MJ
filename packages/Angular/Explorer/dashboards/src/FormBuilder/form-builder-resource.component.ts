@@ -16,6 +16,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     buildCuratedFormSchema,
+    buildDefaultFormScaffold,
     type CuratedFormSchema,
 } from '@memberjunction/interactive-component-types/forms';
 import { generateCodeFromCanvas, toComponentIdentifier } from '../ComponentStudio/services/canvas-to-code';
@@ -29,6 +30,7 @@ import {
 } from '../ComponentStudio/services/form-canvas-model';
 import { EntityFormOverrideService } from '../ComponentStudio/services/entity-form-override.service';
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
+import { joinVersionsWithOverrides, pickActiveVersionID } from './form-builder-version-rail.helpers';
 import type { FormOverrideDialogResult } from '../ComponentStudio/components/form-override-dialog.component';
 
 /**
@@ -134,6 +136,23 @@ export class FormBuilderResourceComponent
     public PreviewLoading = false;
     public PreviewError: string | null = null;
     public PreviewPickerOpen = false;
+
+    /**
+     * The saved ComponentSpec from the last loaded form, preserved so the
+     * Preview pane can merge live code edits over the rich metadata
+     * (dataRequirements / description / functionalRequirements / technicalDesign)
+     * rather than rebuilding from `EditableCode` alone. Retrospective fix #5.
+     */
+    public SavedSpec: ComponentSpec | null = null;
+
+    /**
+     * True when the in-memory code (EditableCode) has diverged from what the
+     * canvas can represent — e.g. hand-authored sections, computed JSX the
+     * canvas-parser can't round-trip. Set by `hydrateCanvasFromCode`. The
+     * Layout tab shows a warning banner so the user knows the canvas will
+     * overwrite parts of the code on save. Retrospective fix #6.
+     */
+    public CanvasDiverged = false;
     public PreviewSearchTerm = '';
     public PreviewSearchResults: Array<{ ID: string; Label: string }> = [];
 
@@ -290,13 +309,20 @@ export class FormBuilderResourceComponent
         if (!this.SelectedFormName || !this.EditableCode || !this.EditableCode.trim()) {
             return null;
         }
-        return {
-            name: toComponentIdentifier(this.SelectedFormName),
-            componentRole: 'form',
-            location: 'embedded',
-            code: this.EditableCode,
-            title: this.SelectedFormName,
-        } as unknown as import('@memberjunction/interactive-component-types').ComponentSpec;
+        // Retrospective fix #5: merge live edits over the saved spec so the
+        // Preview keeps dataRequirements / functionalRequirements / etc.
+        // intact. Previously the getter rebuilt a stripped spec from code +
+        // name only — components whose hooks depend on dataRequirements
+        // would render in Preview without their data context.
+        const base: Record<string, unknown> = this.SavedSpec
+            ? { ...(this.SavedSpec as unknown as Record<string, unknown>) }
+            : {};
+        base.name = toComponentIdentifier(this.SelectedFormName);
+        base.componentRole = 'form';
+        base.location = 'embedded';
+        base.code = this.EditableCode;
+        base.title = this.SelectedFormName;
+        return base as unknown as import('@memberjunction/interactive-component-types').ComponentSpec;
     }
 
     /**
@@ -317,10 +343,17 @@ export class FormBuilderResourceComponent
                 this.PreviewError = `Entity '${this.TargetEntityName}' is not registered.`;
                 return;
             }
+            // Retrospective fix #7: order by NameField (then created-at) so
+            // the "Top 1" is deterministic — different users see the same
+            // record bound to the preview.
+            const orderBy = entityInfo.NameField?.Name
+                ? `${entityInfo.NameField.Name} ASC`
+                : `__mj_CreatedAt DESC`;
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<BaseEntity>({
                 EntityName: this.TargetEntityName,
                 MaxRows: 1,
+                OrderBy: orderBy,
                 ResultType: 'entity_object',
             }, user);
             if (result.Success && (result.Results?.length ?? 0) > 0) {
@@ -354,6 +387,17 @@ export class FormBuilderResourceComponent
         }
         if (record.PrimaryKey?.HasValue) return record.PrimaryKey.ToConcatenatedString();
         return record.EntityInfo?.Name ?? '(record)';
+    }
+
+    /**
+     * Handle a LoadErrorChanged emit from <mj-interactive-form> in the
+     * Preview pane. Surfaces the error in the cockpit's own error state so
+     * users see "Preview failed" in the cockpit chrome instead of having
+     * to look inside the form's React shell. Retrospective fix #10.
+     */
+    public OnPreviewLoadError(message: string | null): void {
+        this.PreviewError = message;
+        this.cdr.markForCheck();
     }
 
     public TogglePreviewPicker(): void {
@@ -490,24 +534,13 @@ export class FormBuilderResourceComponent
                 Fields: ['ComponentID', 'Status'],
                 ResultType: 'simple',
             }, user);
-            const overrideByComponent = new Map(
-                (overrideResult.Results ?? []).map(o => [o.ComponentID, o.Status]),
+            // Delegate the join to the pure helper — testable without
+            // booting Angular DI. See form-builder-version-rail.helpers.ts.
+            this.Versions = joinVersionsWithOverrides(
+                result.Results ?? [],
+                overrideResult.Results ?? [],
             );
-            this.Versions = (result.Results ?? []).map(r => {
-                const status = overrideByComponent.get(r.ID);
-                return {
-                    ID: r.ID,
-                    Name: r.Name,
-                    Version: r.Version,
-                    VersionSequence: r.VersionSequence,
-                    Status: r.Status,
-                    UpdatedAt: r.__mj_UpdatedAt ? new Date(r.__mj_UpdatedAt) : null,
-                    IsActive: status === 'Active',
-                    IsPending: status === 'Pending',
-                };
-            });
-            this.ActiveVersionID = this.Versions.find(v => v.IsActive)?.ID
-                ?? this.SelectedFormID;
+            this.ActiveVersionID = pickActiveVersionID(this.Versions) ?? this.SelectedFormID;
         } finally {
             this.VersionsLoading = false;
             this.cdr.markForCheck();
@@ -631,6 +664,9 @@ export class FormBuilderResourceComponent
             this.SelectedFormName = form.Name;
             this.IsNewForm = false;
             this.EditableCode = code;
+            // Retrospective fix #5: keep the full loaded spec around so
+            // PreviewSpec can merge live code edits over the saved metadata.
+            this.SavedSpec = spec;
             this.TargetEntityName = entityName;
             this.Schema = entityName
                 ? buildCuratedFormSchema(entityName, provider)
@@ -781,6 +817,19 @@ export class FormBuilderResourceComponent
         if (existing.length > 0) {
             const result = parseCanvasFromCode(existing, schema);
             this.Canvas = result.canvas ?? buildEmptyCanvas(entityName, schema.displayName);
+        } else if (this.IsNewForm) {
+            // Retrospective fix #4: new-form flow seeds the canvas + code
+            // from the CodeGen-equivalent scaffold. Previously the user got
+            // an empty canvas — worse UX than the agent path. Now both paths
+            // start from the same baseline.
+            const scaffold = buildDefaultFormScaffold(entityName, provider);
+            if (scaffold?.code) {
+                this.EditableCode = scaffold.code;
+                const result = parseCanvasFromCode(scaffold.code, schema);
+                this.Canvas = result.canvas ?? buildEmptyCanvas(entityName, schema.displayName);
+            } else {
+                this.Canvas = buildEmptyCanvas(entityName, schema.displayName);
+            }
         } else {
             this.Canvas = buildEmptyCanvas(entityName, schema.displayName);
         }
@@ -924,11 +973,21 @@ export class FormBuilderResourceComponent
     private hydrateCanvasFromCode(): void {
         if (!this.TargetEntityName || !this.Schema || !this.EditableCode) {
             this.Canvas = null;
+            this.CanvasDiverged = false;
             return;
         }
         const result = parseCanvasFromCode(this.EditableCode, this.Schema);
         this.Canvas = result.canvas
             ?? buildEmptyCanvas(this.TargetEntityName, this.Schema.displayName);
+        // Retrospective fix #6: parseCanvasFromCode returns a `lossy` flag (or
+        // a non-null `warnings`) when the JSX contains hand-authored content
+        // the canvas can't round-trip. Surface that as a flag the Layout-tab
+        // banner reads — users get a visible warning that saving from the
+        // canvas will overwrite the code edits the canvas can't represent.
+        const parseInfo = result as unknown as { lossy?: boolean; warnings?: unknown[] };
+        this.CanvasDiverged = !!parseInfo.lossy
+            || (Array.isArray(parseInfo.warnings) && parseInfo.warnings.length > 0)
+            || !result.canvas;     // fell back to empty canvas
         this.SelectedElementId = null;
         this.SelectedSectionId = this.Canvas?.sections[0]?.id ?? null;
     }
