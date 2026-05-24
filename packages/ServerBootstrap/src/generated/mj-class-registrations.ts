@@ -934,10 +934,11 @@ import {
     AutotagWebsite,
 } from '@memberjunction/content-autotagging';
 
-// @memberjunction/core-actions (128 classes)
+// @memberjunction/core-actions (133 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
@@ -989,6 +990,8 @@ import {
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GeocodeAddressAction,
+    GetActiveFormForEntityAction,
+    GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
@@ -1018,6 +1021,7 @@ import {
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
@@ -1034,6 +1038,7 @@ import {
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
+    RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
@@ -1782,6 +1787,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AutotagWebsite,
     APIRateLimiterAction,
     ActionSmithAgent,
+    ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
@@ -1833,6 +1839,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     GammaGeneratePresentationAction,
     GenerateImageAction,
     GeocodeAddressAction,
+    GetActiveFormForEntityAction,
+    GetDefaultFormScaffoldForEntityAction,
     GetDownloadUrlAction,
     GetEntityDetailsAction,
     GetEntityListAction,
@@ -1862,6 +1870,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MCPToolAction,
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
+    ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
     OAuthFlowAction,
@@ -1878,6 +1887,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     ResolveAudienceAction,
     RetryAction,
     ReverseGeocodeAction,
+    RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunStoredQueryAction,
@@ -1935,7 +1945,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 804;
+export const CLASS_REGISTRATIONS_COUNT = 809;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
