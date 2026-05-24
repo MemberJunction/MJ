@@ -9,6 +9,7 @@ export * from './lib/artifacts.module';
 export * from './lib/services/artifact-icon.service';
 export * from './lib/services/artifact-file.service';
 export * from './lib/services/analyze-artifact.service';
+export * from './lib/services/interactive-form-apply.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';

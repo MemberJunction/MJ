@@ -18,7 +18,8 @@ import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
@@ -306,9 +307,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService,
     private bridge: ConversationBridgeService,
-    private analyzeArtifactService: AnalyzeArtifactService
+    private analyzeArtifactService: AnalyzeArtifactService,
+    private interactiveFormApplyService: InteractiveFormApplyService
   ) {
   super();}
+
+  /**
+   * Apply a form-role artifact's spec as an EntityFormOverride for the
+   * current user. The service handles the Create-vs-Modify decision (based
+   * on whether an Active override already exists), confirms via dialog,
+   * and surfaces success/failure via notification.
+   */
+  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    await this.interactiveFormApplyService.ConfirmAndApply(
+      event.spec as ComponentSpec,
+      event.entityName,
+      this.ProviderToUse,
+    );
+  }
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider so multi-server
