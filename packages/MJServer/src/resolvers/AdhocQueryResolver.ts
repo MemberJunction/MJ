@@ -1,8 +1,9 @@
 import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { LogError } from '@memberjunction/core';
+import { DatabasePlatform, LogError } from '@memberjunction/core';
 import { SQLExpressionValidator } from '@memberjunction/global';
+import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
-import { GetReadOnlyDataSource } from '../util.js';
+import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RunQueryResultType } from './QueryResolver.js';
 import sql from 'mssql';
@@ -19,10 +20,10 @@ class AdhocQueryInput {
     @Field(() => Int, { nullable: true, description: 'Query timeout in seconds. Defaults to 30.' })
     TimeoutSeconds?: number;
 
-    @Field(() => Int, { nullable: true, description: 'Maximum number of rows to return. Applied in-memory after SQL execution; SQL still runs unbounded server-side.' })
+    @Field(() => Int, { nullable: true, description: 'Maximum number of rows to return; applied at the database via the render pipeline.' })
     MaxRows?: number;
 
-    @Field(() => Int, { nullable: true, description: 'Zero-based offset for pagination. Used in conjunction with MaxRows.' })
+    @Field(() => Int, { nullable: true, description: 'Zero-based offset for pagination. When > 0, the row cap switches to OFFSET/FETCH pagination.' })
     StartRow?: number;
 }
 
@@ -62,25 +63,45 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
             }
 
-            // 3. Build executable SQL. When MaxRows is provided, wrap in a derived table
-            // with outer TOP so the engine can short-circuit at the source instead of
-            // scanning the full result. Skipped for SQL that begins with WITH/CTE — those
-            // can't be nested in a derived table on SQL Server and fall through to the
-            // in-memory slice below.
+            // 3. Resolve platform from the read-only provider for the render pipeline.
+            let platform: DatabasePlatform = 'sqlserver';
+            try {
+                const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+                if (provider?.PlatformKey) platform = provider.PlatformKey;
+            } catch {
+                // Provider not configured — keep the default platform.
+            }
+            const contextUser = context.userPayload?.userRecord;
+
+            // 4. Route the SQL through RenderPipeline so composition tokens
+            // resolve, comments and templates are processed, and the row cap
+            // is applied at the database (via TOP / LIMIT / OFFSET-FETCH).
             const startRow = input.StartRow ?? 0;
             const maxRows = input.MaxRows;
-            const canWrap =
+            const usePaging =
                 maxRows != null &&
                 Number.isInteger(maxRows) &&
                 maxRows > 0 &&
                 Number.isInteger(startRow) &&
-                startRow >= 0 &&
-                !/^\s*WITH\b/i.test(input.SQL);
-            const executableSql = canWrap
-                ? `SELECT TOP ${startRow + maxRows} * FROM (\n${input.SQL}\n) AS _adhoc_capped`
-                : input.SQL;
+                startRow > 0;
+            let executableSql: string;
+            try {
+                const rendered = RenderPipeline.Run(input.SQL, {
+                    Platform: platform,
+                    ContextUser: contextUser,
+                    ...(usePaging
+                        ? { Paging: { StartRow: startRow, MaxRows: maxRows! } }
+                        : maxRows != null && maxRows > 0
+                            ? { MaxRows: maxRows }
+                            : {}),
+                });
+                executableSql = rendered.FinalSQL;
+            } catch (renderErr) {
+                const renderMsg = renderErr instanceof Error ? renderErr.message : String(renderErr);
+                return this.buildErrorResult(`Ad-hoc query rendering failed: ${renderMsg}`);
+            }
 
-            // 4. Execute with timeout
+            // 5. Execute with timeout
             const timeoutMs = (input.TimeoutSeconds ?? 30) * 1000;
             const request = new sql.Request(readOnlyDS);
 
@@ -92,23 +113,16 @@ export class AdhocQueryResolver extends ResolverBase {
             ]);
             const executionTimeMs = Date.now() - startTime;
 
-            // 5. Apply in-memory pagination. With the wrap applied this is a no-op for
-            // first-page reads; for StartRow > 0 (or CTE-headed SQL where the wrap was
-            // skipped) it carves out the requested page.
-            const fullRecordset = result.recordset ?? [];
-            const totalRowCount = fullRecordset.length;
-            let paginated = fullRecordset;
-            if (startRow > 0) paginated = paginated.slice(startRow);
-            if (maxRows != null && maxRows > 0) paginated = paginated.slice(0, maxRows);
-
             // 6. Return as RunQueryResultType
+            const recordset = result.recordset ?? [];
+
             return {
                 QueryID: '',
                 QueryName: 'Ad-Hoc Query',
                 Success: true,
-                Results: JSON.stringify(paginated),
-                RowCount: paginated.length,
-                TotalRowCount: totalRowCount,
+                Results: JSON.stringify(recordset),
+                RowCount: recordset.length,
+                TotalRowCount: recordset.length,
                 PageNumber: maxRows != null && maxRows > 0 ? Math.floor(startRow / maxRows) + 1 : undefined,
                 PageSize: maxRows ?? undefined,
                 ExecutionTime: executionTimeMs,
