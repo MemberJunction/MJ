@@ -1,5 +1,22 @@
 # Change Log - @memberjunction/ng-entity-communications
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/entity-communications-client@5.37.0
+  - @memberjunction/ng-container-directives@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/entity-communications-base@5.37.0
+  - @memberjunction/templates-base-types@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

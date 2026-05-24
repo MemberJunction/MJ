@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 5.37.0
+
+### Patch Changes
+
+- dadbde9: Raise fire-and-forget client timeout from 15 minutes to 60 minutes so long-running AI agent runs and test executions don't spuriously fail client-side while the server is still processing.
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/interactive-component-types@5.37.0
+  - @memberjunction/lists-base@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

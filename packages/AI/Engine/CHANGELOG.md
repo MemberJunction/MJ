@@ -1,5 +1,21 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes
