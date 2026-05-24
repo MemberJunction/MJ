@@ -121,11 +121,31 @@ vi.mock('@memberjunction/react-linter', () => ({
     },
 }));
 
+/**
+ * Stubbed RunView that returns no rows by default — the post-refactor Create
+ * action queries `MJ: Entity Form Overrides` to detect ALREADY_EXISTS before
+ * persisting. Tests can flip `hoistedRv.alreadyExistsRow` to simulate the
+ * "user already has an Active override" path.
+ */
+const hoistedRv = vi.hoisted(() => ({
+    alreadyExistsRow: null as { ID: string } | null,
+}));
+
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/core');
+    class MockRunView {
+        async RunView<T>(): Promise<{ Success: boolean; Results: T[]; ErrorMessage?: string }> {
+            const rows = hoistedRv.alreadyExistsRow ? [hoistedRv.alreadyExistsRow as unknown as T] : [];
+            return { Success: true, Results: rows };
+        }
+        static FromMetadataProvider(): MockRunView {
+            return new MockRunView();
+        }
+    }
     return {
         ...actual,
         Metadata: { get Provider() { return hoisted.provider; } },
+        RunView: MockRunView,
         LogError: vi.fn(),
     };
 });
@@ -174,6 +194,7 @@ describe('CreateInteractiveFormAction', () => {
         hoisted.lastOverrideEntity = null;
         hoisted.lintResult = { violations: [] };
         hoisted.lintShouldThrow = null;
+        hoistedRv.alreadyExistsRow = null;
     });
 
     describe('input validation', () => {
@@ -446,6 +467,37 @@ describe('CreateInteractiveFormAction', () => {
             // Caller needs to know the Component is already in the table.
             expect(result.Message).toMatch(/Component COMPONENT-NEW-0001/);
             expect(result.Message).toMatch(/no override yet/);
+        });
+    });
+
+    describe('net-new guard (ALREADY_EXISTS)', () => {
+        it('returns ALREADY_EXISTS when an Active User-scope override exists', async () => {
+            // Simulate the post-refactor pre-check: an existing Active row blocks
+            // a fresh Create. Agents must route to Modify instead.
+            hoistedRv.alreadyExistsRow = { ID: 'OVERRIDE-EXISTING-0001' };
+
+            const result = await run(new CreateInteractiveFormAction(), mkParams({
+                EntityName: 'MJ: Applications',
+                Spec: validSpec(),
+                Name: 'Compact',
+            }));
+            expect(result.Success).toBe(false);
+            expect(result.ResultCode).toBe('ALREADY_EXISTS');
+            expect(result.Message).toMatch(/OVERRIDE-EXISTING-0001/);
+            // No Component / Override should have been persisted.
+            expect(hoisted.lastComponentEntity).toBeNull();
+            expect(hoisted.lastOverrideEntity).toBeNull();
+        });
+
+        it('proceeds when no Active override exists', async () => {
+            hoistedRv.alreadyExistsRow = null;
+            const result = await run(new CreateInteractiveFormAction(), mkParams({
+                EntityName: 'MJ: Applications',
+                Spec: validSpec(),
+                Name: 'Compact',
+            }));
+            expect(result.Success).toBe(true);
+            expect(result.ResultCode).toBe('SUCCESS');
         });
     });
 });
