@@ -305,10 +305,13 @@ export class AutotagWebsite extends AutotagBase {
                 const rootURL: string = this.RootURL ? this.RootURL : this.getBasePath(startURL);
                 const regex: RegExp = (this.URLPattern && new RegExp(this.URLPattern)) || new RegExp('.*');
 
-                const allContentItemLinks: string[] = await this.getAllLinksFromContentSource(startURL, rootURL, regex);
-
+                // Consume the URL stream lazily — each `link` arrives as the crawler
+                // discovers it, NOT after the full recursive crawl completes. The
+                // engine's LLM batcher accumulates items as they're yielded here, so
+                // tagging starts firing as soon as the first BatchSize items are ready
+                // (instead of waiting for the entire source to finish crawling).
                 let yieldedForSource = 0;
-                for (const link of allContentItemLinks) {
+                for await (const link of this.streamAllLinksFromContentSource(startURL, rootURL, regex)) {
                     try {
                         const item = await this.processSingleURL(link, contentSourceParams);
                         if (item) {
@@ -510,62 +513,73 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     /**
-     * Given a root URL that corresponds to a content source, retrieve all the links in accordance to the crawl settings. 
-     * If the crawl settings are set to crawl other sites in the top level domain, then all links in the top level domain will be retrieved.
-     * If the crawl settings are set to crawl sites in lower level domains, then function is recursively called to retrieve all links in the lower level domains.
-     * @param url 
-     * @returns
+     * Streaming variant: yields each newly-discovered URL as the crawler finds it,
+     * so downstream consumers (the content-item streamer that feeds the LLM
+     * batcher) can start working before discovery completes. This is the
+     * canonical implementation; `getAllLinksFromContentSource` below is a
+     * backwards-compatible array-collecting wrapper.
      */
-    protected async getAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): Promise<string[]> {
-        // Start each content source with a clean visited set — otherwise URLs found
-        // for one source silently get deduped away when the next source is crawled.
+    protected async *streamAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): AsyncIterable<string> {
+        // Start each content source with a clean visited set — otherwise URLs
+        // found for one source silently get deduped away when the next source
+        // is crawled.
         this.visitedURLs = new Set<string>();
 
         // Normalize the seed URL once so all downstream comparisons share the same form.
         const seedURL = this.normalizeURL(url);
 
         try {
-            await this.getLowerLevelLinks(seedURL, rootURL, this.MaxDepth, new Set<string>(), regex);
-            await this.getTopLevelLinks(seedURL, this.getBasePath(seedURL), regex);
-
-            return Array.from(this.visitedURLs);
+            yield* this.streamLowerLevelLinks(seedURL, rootURL, this.MaxDepth, new Set<string>(), regex);
+            yield* this.streamTopLevelLinks(seedURL, this.getBasePath(seedURL), regex);
         } catch (e) {
             console.error(`Failed to get links from ${url}`);
-            return [];
         }
     }
 
     /**
-     * For a given URL, retrieves all other links at that top level domain.
-     * @param url 
-     * @param rootURL 
-     * @param visitedURLs 
-     * @returns 
+     * Backwards-compatible array form. Drains the streaming variant.
      */
-    protected async getTopLevelLinks(url: string, rootURL: string, regex: RegExp): Promise<void> {
+    protected async getAllLinksFromContentSource(url: string, rootURL: string, regex: RegExp): Promise<string[]> {
+        const collected: string[] = [];
+        for await (const link of this.streamAllLinksFromContentSource(url, rootURL, regex)) {
+            collected.push(link);
+        }
+        return collected;
+    }
+
+    /**
+     * Streaming variant of getTopLevelLinks — yields each URL it adds to the
+     * visited set so the LLM batcher gets fed in real time.
+     */
+    protected async *streamTopLevelLinks(url: string, rootURL: string, regex: RegExp): AsyncIterable<string> {
         if (!this.CrawlOtherSitesInTopLevelDomain) {
-            this.visitedURLs.add(url);
-            return
+            // Seed URL still gets yielded so the processSingleURL pipeline runs on it.
+            if (!this.visitedURLs.has(url)) {
+                this.visitedURLs.add(url);
+                yield url;
+            }
+            return;
         }
 
-        // If we have already visited this URL, return an empty array
+        // If we have already visited this URL, nothing to do.
         if (this.visitedURLs.has(url) || !await this.urlIsValid(url) || this.isHighestDomain(url)) {
-            return
+            return;
         }
 
         this.visitedURLs.add(url);
+        yield url;
 
+        const discovered: string[] = [];
         try {
             const { data } = await axios.get(url);
             const $ = cheerio.load(data);
-
-            // Get all links on the page for the current URL
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
                 if (link) {
                     const newURL = this.normalizeURL(new URL(link, url).href);
                     if (newURL.startsWith(rootURL) && !this.visitedURLs.has(newURL) && regex.test(newURL)) {
                         this.visitedURLs.add(newURL);
+                        discovered.push(newURL);
                     }
                 }
             });
@@ -573,8 +587,23 @@ export class AutotagWebsite extends AutotagBase {
         }
         catch (e) {
             console.error(`Failed to get links from ${url}`);
-            return
+            return;
         }
+
+        // Yield the page's links AFTER the await/delay completes so they're emitted
+        // outside the cheerio sync callback (which can't yield).
+        for (const newURL of discovered) {
+            yield newURL;
+        }
+    }
+
+    /**
+     * Backwards-compatible void form. Drains the streaming variant (links go
+     * into `visitedURLs` as a side effect of streamTopLevelLinks).
+     */
+    protected async getTopLevelLinks(url: string, rootURL: string, regex: RegExp): Promise<void> {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _ of this.streamTopLevelLinks(url, rootURL, regex)) { /* drain */ }
     }
 
     /**
@@ -655,38 +684,36 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     /**
-     * For a given URL, retrieves all links at lower level domains up to the specified crawl depth.
-     * @param url 
-     * @param rootURL 
-     * @param crawlDepth 
-     * @param visitedURLs 
-     * @returns 
+     * Streaming variant of getLowerLevelLinks. Yields each newly-discovered URL
+     * the moment it's added to the visited set, then recurses depth-first into
+     * children. This is the canonical implementation — the LLM batcher gets
+     * fed in real time during crawl instead of having to wait for the entire
+     * recursive discovery to complete.
+     *
+     * `getLowerLevelLinks` below is a thin backwards-compatible wrapper that
+     * drains the stream into a Set.
      */
-    protected async getLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp): Promise<Set<string>> {
-        
+    protected async *streamLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp): AsyncIterable<string> {
         try {
             console.log(`Scraping ${url}`);
-            // If we have already visited this URL, return an empty array.
             // The Number.isFinite guard protects against accidental NaN/undefined
             // arriving as crawlDepth — without it, `undefined < 0` is false and the
             // recursion runs without a depth ceiling.
             if (scrapedURLs.has(url) || await this.urlIsValid(url) === false || !Number.isFinite(crawlDepth) || crawlDepth < 0 || !this.CrawlSitesInLowerLevelDomain) {
-                return new Set<string>();
+                return;
             }
 
-            let combinedLinks = new Set<string>(); // Combined links from the current URL and all lower level URLs
-            const extractedLinks = new Set<string>(); // Links extracted from the input URL
+            const extractedLinks: string[] = [];
 
             const { data } = await axios.get(url);
             const $ = cheerio.load(data);
 
-            // Get all links on the page for the current URL
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
                 if (link) {
                     const newURL = this.normalizeURL(new URL(link, url).href);
                     if (newURL.startsWith(rootURL) && newURL !== url && !this.visitedURLs.has(newURL) && regex.test(newURL)) {
-                        extractedLinks.add(newURL);
+                        extractedLinks.push(newURL);
                         this.visitedURLs.add(newURL);
                     }
                 }
@@ -694,22 +721,34 @@ export class AutotagWebsite extends AutotagBase {
             await this.delay(1000); // Delay to prevent rate limiting
             scrapedURLs.add(url);
 
-            // If we are at the depth limit, return the current set of URLs and don't recurse
-            if (crawlDepth === 0) {
-                return extractedLinks;
+            // Yield each newly-discovered URL outside the (sync) cheerio callback.
+            // Consumers start processing these immediately while we recurse.
+            for (const newURL of extractedLinks) {
+                yield newURL;
             }
 
+            // Depth limit — discover this page's links but don't recurse.
+            if (crawlDepth === 0) return;
+
             for (const subLink of extractedLinks) {
-                //console.log(`Adding ${subLink}`);
-                const lowerLevelLinks = await this.getLowerLevelLinks(subLink, rootURL, crawlDepth-1, scrapedURLs, regex);
-                combinedLinks = new Set<string>([...extractedLinks, ...lowerLevelLinks]);
+                yield* this.streamLowerLevelLinks(subLink, rootURL, crawlDepth - 1, scrapedURLs, regex);
             }
-            return combinedLinks;
         }
         catch (e) {
             console.error(`Failed to get links from ${url}`);
-            return new Set<string>();
         }
+    }
+
+    /**
+     * Backwards-compatible Set form. Drains the streaming variant; URLs end up
+     * in `this.visitedURLs` as a side effect of streamLowerLevelLinks.
+     */
+    protected async getLowerLevelLinks(url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp): Promise<Set<string>> {
+        const out = new Set<string>();
+        for await (const link of this.streamLowerLevelLinks(url, rootURL, crawlDepth, scrapedURLs, regex)) {
+            out.add(link);
+        }
+        return out;
     }
 
     protected async delay(ms: number) {

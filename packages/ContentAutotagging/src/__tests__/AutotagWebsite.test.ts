@@ -386,6 +386,122 @@ describe('AutotagWebsite', () => {
         });
     });
 
+    describe('URL discovery is truly streaming (yields as discovered, not buffered)', () => {
+        // This is the regression test for the "scraping happens but tagging doesn't
+        // interleave" bug. Previously getAllLinksFromContentSource did the full
+        // recursive crawl before returning, so the LLM batcher got zero items
+        // until discovery completed. The fix converts the crawler to an async
+        // generator that yields URLs as it adds them to the visited set.
+
+        class StreamProbeAutotagWebsite extends TestableAutotagWebsite {
+            public yieldEvents: string[] = [];
+            public async *$streamLowerLevelLinks(
+                url: string, rootURL: string, crawlDepth: number, scrapedURLs: Set<string>, regex: RegExp
+            ): AsyncIterable<string> {
+                yield* (this as unknown as { streamLowerLevelLinks: (u: string, r: string, d: number, s: Set<string>, re: RegExp) => AsyncIterable<string> })
+                    .streamLowerLevelLinks(url, rootURL, crawlDepth, scrapedURLs, regex);
+            }
+        }
+        let probe: StreamProbeAutotagWebsite;
+
+        beforeEach(() => {
+            probe = new StreamProbeAutotagWebsite();
+            // Force the crawler past the urlIsValid HEAD check.
+            (probe as unknown as { urlIsValid: (u: string) => Promise<boolean> }).urlIsValid =
+                () => Promise.resolve(true);
+            // Force the per-page delay to 0 so tests don't sleep for seconds.
+            (probe as unknown as { delay: (ms: number) => Promise<void> }).delay =
+                () => Promise.resolve();
+        });
+
+        it('yields the seed-page links BEFORE recursing into them', async () => {
+            // Page A links to B and C. B and C each link to deeper pages.
+            // Critical invariant: B and C should appear in the yield order BEFORE
+            // B's children and C's children — confirming yields fire as soon as a
+            // page's links are extracted, not after the whole subtree is crawled.
+            const pages: Record<string, string> = {
+                'https://ex.com/A': '<a href="https://ex.com/B">b</a><a href="https://ex.com/C">c</a>',
+                'https://ex.com/B': '<a href="https://ex.com/B1">b1</a><a href="https://ex.com/B2">b2</a>',
+                'https://ex.com/C': '<a href="https://ex.com/C1">c1</a>',
+                'https://ex.com/B1': '', 'https://ex.com/B2': '', 'https://ex.com/C1': '',
+            };
+            mockAxiosGet.mockImplementation((url: string) => {
+                const html = pages[url];
+                if (html == null) return Promise.reject(new Error(`unmocked URL ${url}`));
+                return Promise.resolve({ data: `<body>${html}</body>` });
+            });
+
+            const yielded: string[] = [];
+            for await (const link of probe.$streamLowerLevelLinks(
+                'https://ex.com/A', 'https://ex.com/', 2, new Set<string>(), new RegExp('.*')
+            )) {
+                yielded.push(link);
+            }
+
+            // The seed page A's direct children (B, C) must be yielded before
+            // any of B's or C's children. That's the "stream as discovered"
+            // contract — fails on the old buffer-everything implementation.
+            const bIdx = yielded.indexOf('https://ex.com/B');
+            const cIdx = yielded.indexOf('https://ex.com/C');
+            const b1Idx = yielded.indexOf('https://ex.com/B1');
+            const c1Idx = yielded.indexOf('https://ex.com/C1');
+            expect(bIdx).toBeGreaterThanOrEqual(0);
+            expect(cIdx).toBeGreaterThanOrEqual(0);
+            expect(b1Idx).toBeGreaterThan(bIdx);
+            expect(c1Idx).toBeGreaterThan(cIdx);
+            // And B's children should land before C is recursed into (depth-first).
+            expect(b1Idx).toBeLessThan(c1Idx);
+        });
+
+        it('yields each URL exactly once across the full crawl', async () => {
+            const pages: Record<string, string> = {
+                'https://ex.com/A': '<a href="https://ex.com/B">b</a><a href="https://ex.com/C">c</a>',
+                // B and C both link back to A (cycle) — visitedURLs should dedupe.
+                'https://ex.com/B': '<a href="https://ex.com/A">a</a><a href="https://ex.com/D">d</a>',
+                'https://ex.com/C': '<a href="https://ex.com/A">a</a><a href="https://ex.com/D">d</a>',
+                'https://ex.com/D': '',
+            };
+            mockAxiosGet.mockImplementation((url: string) => {
+                const html = pages[url];
+                if (html == null) return Promise.reject(new Error(`unmocked URL ${url}`));
+                return Promise.resolve({ data: `<body>${html}</body>` });
+            });
+
+            const yielded: string[] = [];
+            for await (const link of probe.$streamLowerLevelLinks(
+                'https://ex.com/A', 'https://ex.com/', 3, new Set<string>(), new RegExp('.*')
+            )) {
+                yielded.push(link);
+            }
+
+            // No duplicates — both the B→A and C→A back-edges hit the visitedURLs
+            // dedup; D is discovered by B and skipped by C.
+            const unique = new Set(yielded);
+            expect(yielded.length).toBe(unique.size);
+        });
+
+        it('respects crawlDepth=0 — yields the seed page links but does not recurse', async () => {
+            const pages: Record<string, string> = {
+                'https://ex.com/A': '<a href="https://ex.com/B">b</a>',
+                // B has more links but at depth 0 we don't visit B.
+                'https://ex.com/B': '<a href="https://ex.com/SHOULD_NOT_APPEAR">x</a>',
+            };
+            mockAxiosGet.mockImplementation((url: string) =>
+                Promise.resolve({ data: `<body>${pages[url] ?? ''}</body>` })
+            );
+
+            const yielded: string[] = [];
+            for await (const link of probe.$streamLowerLevelLinks(
+                'https://ex.com/A', 'https://ex.com/', 0, new Set<string>(), new RegExp('.*')
+            )) {
+                yielded.push(link);
+            }
+
+            expect(yielded).toEqual(['https://ex.com/B']);
+            expect(yielded.some(u => u.includes('SHOULD_NOT_APPEAR'))).toBe(false);
+        });
+    });
+
     describe('fetchAndExtract', () => {
         it('fetches the URL exactly once and returns extracted text + checksum', async () => {
             mockAxiosGet.mockResolvedValueOnce({ data: '<body><p>Hello world</p></body>' });
