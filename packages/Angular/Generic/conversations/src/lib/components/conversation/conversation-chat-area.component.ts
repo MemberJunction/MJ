@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureSnapshotCommand } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand } from "@memberjunction/ai-core-plus";
 import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
@@ -325,7 +325,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Subscribe to actionable commands from UICommandHandlerService so we can
     // intercept and locally handle commands that depend on the conversation
-    // surface (e.g. `client:capture-snapshot`, which needs access to the
+    // surface (e.g. `client:capture-data-snapshot`, which needs access to the
     // artifact viewer panel and the message input — both live in this chat-area).
     // The workspace's existing subscription still fires and bubbles every command
     // up to the host application; this is purely additive — host apps can still
@@ -333,8 +333,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.uiCommandHandler.actionableCommandRequested
       .pipe(takeUntil(this.destroy$))
       .subscribe((command) => {
-        if (command.type === 'client:capture-snapshot') {
-          void this.handleCaptureSnapshotCommand(command);
+        if (command.type === 'client:capture-data-snapshot') {
+          void this.handleCaptureDataSnapshotCommand(command);
         }
       });
 
@@ -2307,16 +2307,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Handle a `client:capture-snapshot` actionable command emitted by an
-   * analysis-class agent that needs the user's current view to answer
-   * accurately but has no Data Snapshot artifact attached.
+   * Handle a `client:capture-data-snapshot` actionable command emitted by an
+   * analysis-class agent that needs the user's current view of an artifact to
+   * answer accurately but has no Data Snapshot artifact attached.
    *
    * Flow:
-   *  1. Resolve the target component artifact — `command.componentArtifactId`
-   *     if provided, otherwise the most-recent component artifact on the
-   *     conversation.
-   *  2. Open the artifact viewer panel for it (mounts the React component if
-   *     not already mounted).
+   *  1. Resolve the target artifact — `command.artifactId` if provided,
+   *     otherwise the most-recent output artifact on the conversation.
+   *  2. Open the artifact viewer panel for it (mounts the viewer plugin if not
+   *     already mounted).
    *  3. Poll until the viewer can produce a snapshot via
    *     `GetCurrentStateSnapshot()`, with a short timeout.
    *  4. Reuse the existing `OnAnalyzeArtifact` flow to persist the snapshot
@@ -2328,28 +2327,28 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * Soft-fails — logs a warning and stops on any unrecoverable error rather
    * than throwing. The user's conversation state isn't disrupted.
    */
-  private async handleCaptureSnapshotCommand(command: CaptureSnapshotCommand): Promise<void> {
-    console.log('[client:capture-snapshot] Handler invoked', { command, conversationId: this.conversationId });
+  private async handleCaptureDataSnapshotCommand(command: CaptureDataSnapshotCommand): Promise<void> {
+    console.log('[client:capture-data-snapshot] Handler invoked', { command, conversationId: this.conversationId });
     if (!this.conversationId || !this.currentUser) {
-      console.warn('[client:capture-snapshot] No active conversation/user; ignoring');
+      console.warn('[client:capture-data-snapshot] No active conversation/user; ignoring');
       return;
     }
 
-    let artifactId = command.componentArtifactId;
+    let artifactId = command.artifactId;
     if (!artifactId) {
       artifactId = (await this.findMostRecentComponentArtifactId()) ?? undefined;
-      console.log('[client:capture-snapshot] Resolved artifactId via lookup:', artifactId);
+      console.log('[client:capture-data-snapshot] Resolved artifactId via lookup:', artifactId);
     } else {
-      console.log('[client:capture-snapshot] Using artifactId from command:', artifactId);
+      console.log('[client:capture-data-snapshot] Using artifactId from command:', artifactId);
     }
     if (!artifactId) {
-      console.warn('[client:capture-snapshot] No component artifact found on this conversation; cannot capture');
+      console.warn('[client:capture-data-snapshot] No artifact found on this conversation; cannot capture');
       return;
     }
 
     const panelAlreadyOpen = this.selectedArtifactId === artifactId && this.showArtifactPanel;
     console.log(
-      '[client:capture-snapshot] Panel state — currentSelectedId=' +
+      '[client:capture-data-snapshot] Panel state — currentSelectedId=' +
         this.selectedArtifactId +
         ' showPanel=' +
         this.showArtifactPanel +
@@ -2357,7 +2356,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         panelAlreadyOpen,
     );
 
-    // Open the artifact panel so the component mounts (if it isn't already).
+    // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
       this.selectedArtifactId = artifactId;
       this.selectedVersionNumber = undefined;
@@ -2368,14 +2367,14 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // Non-fatal — permissions are for UI affordances, not capture
       }
       this.cdr.detectChanges();
-      console.log('[client:capture-snapshot] Opened artifact panel; waiting for React mount + data load');
+      console.log('[client:capture-data-snapshot] Opened artifact panel; waiting for viewer mount + data load');
     }
 
-    // Poll for the snapshot — the React component needs a few render cycles
+    // Poll for the snapshot — interactive components need a few render cycles
     // before `getCurrentDataState()` registers via callbacks.RegisterMethod.
     const snapshot = await this.waitForViewerSnapshot(10000);
     if (!snapshot) {
-      console.warn('[client:capture-snapshot] Artifact viewer did not produce a snapshot within timeout');
+      console.warn('[client:capture-data-snapshot] Artifact viewer did not produce a snapshot within timeout');
       return;
     }
 
@@ -2414,7 +2413,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           capturedAttachment ? [capturedAttachment] : undefined,
         );
       } catch (error) {
-        console.error('[client:capture-snapshot] Auto-send failed:', error);
+        console.error('[client:capture-data-snapshot] Auto-send failed:', error);
       }
     }
   }
@@ -2446,7 +2445,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     let lastFallback: DataSnapshot | null = null;
     let tick = 0;
     const startTime = Date.now();
-    console.log('[client:capture-snapshot] Polling for live snapshot, timeout=' + timeoutMs + 'ms');
+    console.log('[client:capture-data-snapshot] Polling for live snapshot, timeout=' + timeoutMs + 'ms');
     while (Date.now() < deadline) {
       tick++;
       const viewer = this.artifactViewerComponent;
@@ -2460,7 +2459,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         // Log every 5th tick to avoid spamming
         if (tick % 5 === 1 || hasLiveData) {
           console.log(
-            `[client:capture-snapshot] tick=${tick} elapsed=${elapsed}ms viewer=${!!viewer} ` +
+            `[client:capture-data-snapshot] tick=${tick} elapsed=${elapsed}ms viewer=${!!viewer} ` +
               `snap=${!!snap} hasLiveData=${hasLiveData} shape=[${tableShape}] ` +
               `keys=[${Object.keys(snap).join(',')}]`,
           );
@@ -2471,21 +2470,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         lastFallback = snap; // remember for timeout case
       } else if (tick % 5 === 1) {
         console.log(
-          `[client:capture-snapshot] tick=${tick} viewer=${!!viewer} snap=null (viewer hasn't returned a snapshot yet)`,
+          `[client:capture-data-snapshot] tick=${tick} viewer=${!!viewer} snap=null (viewer hasn't returned a snapshot yet)`,
         );
       }
       await new Promise((r) => setTimeout(r, intervalMs));
     }
     if (lastFallback) {
       console.warn(
-        '[client:capture-snapshot] Timed out waiting for live data after ' +
+        '[client:capture-data-snapshot] Timed out waiting for live data after ' +
           timeoutMs +
           'ms; falling back to placeholder snapshot. The component may not have registered ' +
           'getCurrentDataState() via callbacks.RegisterMethod, OR its data has not finished loading.',
       );
     } else {
       console.warn(
-        '[client:capture-snapshot] Timed out after ' +
+        '[client:capture-data-snapshot] Timed out after ' +
           timeoutMs +
           'ms — viewer never returned even a fallback snapshot. Artifact viewer may not have mounted.',
       );
@@ -2495,9 +2494,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /**
    * Find the most-recent Component artifact attached as `Output` to this
-   * conversation. Used when a `client:capture-snapshot` command arrives
-   * without an explicit `componentArtifactId` — typical for single-component
-   * conversations where the user is obviously discussing "the component".
+   * conversation. Used when a `client:capture-data-snapshot` command arrives
+   * without an explicit `artifactId`.
+   *
+   * Filtering to Component-typed artifacts is intentional even though the
+   * command type itself is artifact-generic: the downstream
+   * `waitForViewerSnapshot` polling waits for `tables[]` to populate (the
+   * shape Components produce via React `getCurrentDataState()`). Falling back
+   * to a non-Component artifact would 10s-timeout to a placeholder snapshot.
+   * When other artifact types need a usable fallback, generalize the polling
+   * first, then drop the filter here.
    */
   private async findMostRecentComponentArtifactId(): Promise<string | null> {
     if (!this.conversationId || !this.currentUser) return null;
@@ -2583,7 +2589,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       return null;
     } catch (error) {
-      console.error('[client:capture-snapshot] findMostRecentComponentArtifactId failed:', error);
+      console.error('[client:capture-data-snapshot] findMostRecentComponentArtifactId failed:', error);
       return null;
     }
   }

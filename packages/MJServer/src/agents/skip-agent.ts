@@ -359,9 +359,9 @@ export class SkipProxyAgent extends BaseAgent {
         const analysisText = response.analysis?.trim();
 
         // Skip-Brain attaches actionableCommands as an extension field on the
-        // analysis_complete response (e.g. `client:capture-snapshot` when the
-        // Analysis Agent needs the user's current view). Forward to the next
-        // step so AgentRunner persists them to ConversationDetail.ActionableCommands
+        // analysis_complete response (e.g. `client:capture-data-snapshot` when
+        // the Analysis Agent needs the user's current view). Forward to the
+        // next step so AgentRunner persists them to ConversationDetail.ActionableCommands
         // — which the chat UI's actionable-commands.component reads to render buttons.
         const responseExt = response as unknown as { actionableCommands?: unknown[] };
         const actionableCommands = Array.isArray(responseExt.actionableCommands) && responseExt.actionableCommands.length > 0

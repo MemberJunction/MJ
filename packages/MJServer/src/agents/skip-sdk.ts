@@ -685,9 +685,9 @@ export class SkipSDK {
 
             // Also include INPUT artifacts (e.g., user-captured Data Snapshots
             // attached to messages via the Analyze button or
-            // client:capture-snapshot actionable command). The query above only
-            // returns Direction='Output' artifacts produced BY Skip — but Skip
-            // also needs to see artifacts the user gave it as input.
+            // client:capture-data-snapshot actionable command). The query above
+            // only returns Direction='Output' artifacts produced BY Skip — but
+            // Skip also needs to see artifacts the user gave it as input.
             const inputArtifacts = await this.buildInputArtifacts(contextUser, conversationId, artifactMap);
             if (inputArtifacts.length > 0) {
                 artifacts.push(...inputArtifacts);

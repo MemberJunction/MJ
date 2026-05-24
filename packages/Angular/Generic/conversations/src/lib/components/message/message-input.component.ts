@@ -563,6 +563,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Clear pending attachments after successful send
         this.pendingAttachments = [];
 
+        // Also clear the mention editor's content + its own attachments list.
+        // The user-initiated send path (MessageInputBoxComponent.onSendClick)
+        // calls mentionEditor.clear() — we bypass that path here, so the chips
+        // would otherwise stay on screen after the message goes out.
+        this.inputBox?.mentionEditor?.clear();
+
         this.messageSent.emit(detail);
 
         const mentionResult = this.parseMentionsFromMessage(detail.Message);

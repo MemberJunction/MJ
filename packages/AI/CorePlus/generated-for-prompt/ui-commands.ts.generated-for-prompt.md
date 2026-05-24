@@ -2,7 +2,7 @@
 type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureSnapshotCommand;
+    | CaptureDataSnapshotCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -30,11 +30,11 @@ interface OpenURLCommand {
     newTab?: boolean;  // Whether to open in a new tab.
 }
 
-interface CaptureSnapshotCommand {
-    type: 'client:capture-snapshot';  // Command type identifier
+interface CaptureDataSnapshotCommand {
+    type: 'client:capture-data-snapshot';  // Command type identifier
     label: string;  // Button label shown to the user.
     icon?: string;  // Optional Font Awesome icon class to display on the button.
-    componentArtifactId?: string;  // Optional ID of the component artifact to snapshot. When omitted, the
+    artifactId?: string;  // Optional ID of the artifact to snapshot. When omitted, the host defaults
     followupMessage?: string;  // Optional follow-up text the host should pass back to the agent after
 }
 

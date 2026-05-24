@@ -37,7 +37,7 @@
 export type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
-    | CaptureSnapshotCommand;
+    | CaptureDataSnapshotCommand;
 
 /**
  * Command to open a resource in the MemberJunction UI.
@@ -177,48 +177,39 @@ export interface OpenURLCommand {
 }
 
 /**
- * Command requesting the host UI capture the current visible state of a rendered
- * component and submit it as a `Data Snapshot` input artifact on the current
- * conversation, then resume the conversation so the agent can analyze it.
+ * Command requesting the host UI capture a Data Snapshot of the user's current
+ * view of an artifact, submit it as a `Data Snapshot` input artifact on the
+ * conversation, and resume the conversation so the agent can analyze it.
  *
- * This is the right command for an analysis-class agent that needs the user's
- * actual on-screen view (filters, drill state, selected rows) to answer a
- * question but has no `Data Snapshot` artifact attached to the request. The
- * agent emits this command alongside `nextStep: 'Chat'` and a brief `message`
- * explaining why; the chat UI renders a button; on click the host:
+ * Use this when an analysis-class agent needs the user's on-screen state
+ * (filters, drill, sort, selection, scroll position, etc.) to answer accurately
+ * but no `Data Snapshot` artifact is attached to the request. The agent emits
+ * this command alongside `nextStep: 'Chat'` and a brief `message` explaining
+ * why; the chat UI renders a button; on click the host captures the snapshot
+ * from the currently-viewed artifact, persists it as a Data Snapshot artifact,
+ * attaches it as an `Input` to the next conversation turn, and resumes.
  *
- *   1. Locates the rendered `ComponentObject` (by `componentArtifactId` if
- *      provided, otherwise the most recent component in the conversation).
- *   2. Calls `componentObject.getCurrentDataState()` to obtain a `DataSnapshot`.
- *   3. Creates an `Artifact` of type "Data Snapshot" with the JSON content via
- *      `AnalyzeArtifactService.CreateSnapshotArtifact`.
- *   4. Links the new `ArtifactVersion` to the conversation as
- *      `Direction='Input'` and resumes the conversation (re-fires the agent)
- *      with the snapshot now visible.
- *
- * Host integration is app-specific because finding the rendered component
- * instance depends on the chat UI's component-tree layout. The service routes
- * this command via the same `actionableCommandRequested` emitter as
- * `open:resource`.
+ * Any artifact type that supports snapshotting can be captured this way — the
+ * artifact viewer plugin produces the snapshot via its standard contract.
  *
  * @example
  * ```json
  * {
- *   "type": "client:capture-snapshot",
- *   "label": "Capture & Submit Snapshot",
+ *   "type": "client:capture-data-snapshot",
+ *   "label": "Capture & Submit Data Snapshot",
  *   "icon": "fa-camera",
- *   "componentArtifactId": "abc-123",
+ *   "artifactId": "abc-123",
  *   "followupMessage": "Now answer the original question with the snapshot data."
  * }
  * ```
  */
-export interface CaptureSnapshotCommand {
+export interface CaptureDataSnapshotCommand {
     /** Command type identifier */
-    type: 'client:capture-snapshot';
+    type: 'client:capture-data-snapshot';
 
     /**
      * Button label shown to the user.
-     * Should be clear about the action (e.g., "Capture & Submit Snapshot",
+     * Should be clear about the action (e.g., "Capture & Submit Data Snapshot",
      * "Share my current view").
      */
     label: string;
@@ -230,11 +221,11 @@ export interface CaptureSnapshotCommand {
     icon?: string;
 
     /**
-     * Optional ID of the component artifact to snapshot. When omitted, the
-     * host should default to the most recently rendered component in the
-     * conversation (typical for single-component conversations).
+     * Optional ID of the artifact to snapshot. When omitted, the host defaults
+     * to the most recently attached output artifact on the conversation
+     * (typical for single-artifact conversations).
      */
-    componentArtifactId?: string;
+    artifactId?: string;
 
     /**
      * Optional follow-up text the host should pass back to the agent after
