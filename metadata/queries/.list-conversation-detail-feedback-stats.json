@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "ListConversationDetailFeedbackStats",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Conversations",
+      "UserQuestion": "What are the aggregate counts and average for conversation feedback ratings (matching the same filters as the row-level query)?",
+      "Description": "Aggregate companion for ListConversationDetailFeedback. Returns Total, AvgRating, PositiveCount (>=8), and NegativeCount (<=3) over the same filtered universe (StartDate, EndDate, MinRating, MaxRating, AgentID, SearchText). Used by the Agent Feedback admin page to populate the four stat cards.",
+      "SQL": "@file:SQL/list-conversation-detail-feedback-stats.sql",
+      "TechnicalDescription": "Single aggregate SELECT against __mj.ConversationDetail WHERE UserRating IS NOT NULL with the same LEFT JOINs and Nunjucks filter blocks as ListConversationDetailFeedback. Returns four scalars in a single row.",
+      "Status": "Approved",
+      "QualityRank": 8,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "F3D2A1B8-9C4E-4E7A-BCDE-1234567ABCDE"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T04:38:59.452Z",
+      "checksum": "554071148b2a7a11ffcedc7ccd018d5409d57783c8b923eefa61f872541f5723"
+    }
+  }
+]
