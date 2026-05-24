@@ -160,39 +160,103 @@ for each entity:
 
 This means description edits via CodeGen, model swaps, or template tweaks all self-heal on next server start — no manual "regenerate embeddings" command needed. Only stale rows are recomputed; clean rows load straight from disk.
 
+## When and Where Embeddings Are Computed
+
+This is worth being explicit about because it's the question "what triggers a recompute" maps to in practice.
+
+### Single Computation Path: Engine Warmup
+
+**All embedding computation happens inside `EntityEmbeddingEngine.AdditionalLoading()` at server boot.** Nothing else writes to `EmbeddingJSON` / `EmbeddingModelID` / `EmbeddingContentHash` — not CodeGen, not migrations, not BaseEntity hooks.
+
+### Why Not CodeGen
+
+CodeGen runs at build/dev time as a Node script that emits SQL migrations. We could in principle have it call `EmbedTextLocal` and emit `UPDATE Entity SET EmbeddingJSON = '...'` statements. We're choosing not to:
+
+- CodeGen would need an embedding model configured in the build environment. Many dev/CI environments don't have AI credentials wired up for build steps.
+- Embeddings would land in committed migration SQL — large, opaque blobs that bloat diffs and would change every time the embedding model swapped.
+- Two writers means coordination — and CodeGen has no good way to know which entities are stale; it'd have to recompute everything or duplicate the hash logic.
+
+### Why Not a BaseEntity Save Hook
+
+We considered putting `EmbedTextLocal` inside `EntityEntityServer.Save()` so any runtime Name/Description change recomputes immediately (mirrors how `MJAIAgentNoteEntityServer` embeds notes on save). We're choosing not to in v1:
+
+- The `Entity` table is updated via CodeGen-generated SQL `INSERT`/`UPDATE` statements in migrations, **not** through `EntityEntity.Save()`. So the hook would almost never fire for the real-world path.
+- Runtime edits to entity metadata are rare and don't need millisecond freshness — next server restart is fine.
+- Adding the hook later is non-breaking if we find a need.
+
+### How Self-Healing Works in Practice
+
+1. CodeGen updates an entity's `Description` via migration SQL. `EmbeddingContentHash` is unchanged in the DB (or, if we want belt-and-suspenders, CodeGen could nullify it — see below).
+2. Server restarts (or pulls fresh metadata).
+3. `EntityEmbeddingEngine.AdditionalLoading()` runs. For each entity:
+   - Render the template from current Name + Description + SchemaName.
+   - Compute `sha256(template)`.
+   - Compare against stored `EmbeddingContentHash` and check `EmbeddingModelID == currentConfiguredModel`.
+   - If mismatch (or `EmbeddingJSON` is null), recompute via `EmbedTextLocal`, save back to the row.
+4. Build the in-memory vector pool.
+
+The only thing CodeGen could optionally do is set `EmbeddingContentHash = NULL` when it modifies a row's Name or Description — purely a perf optimization so the engine doesn't have to render-and-hash every row to find the stale ones. **Not required for correctness** and not in v1; the engine will detect drift regardless. We can add this later if warmup time on large catalogs becomes a concern.
+
+### What This Means Operationally
+
+- A fresh deployment after a description-heavy migration: first server start does N embedding calls (N = number of changed entities). Subsequent restarts: pure load-from-DB.
+- An MJ upgrade that adds new entities: first start embeds the new ones only.
+- A model swap (changing the configured embedding model): first start re-embeds everything. Rare event.
+- Steady state: zero embedding calls at boot, just deserialize from `EmbeddingJSON`.
+
 ## Engine Lifecycle
 
-### New Singleton: `EntityEmbeddingEngine`
+### New Engine: `EntityEmbeddingEngine`
 
-Extends `BaseSingleton<EntityEmbeddingEngine>` per CLAUDE.md rule #7. Lives in a new package or co-located with `MJCore` infrastructure (TBD in Phase 1).
+Lives in **`@memberjunction/core-entities-server`** (`MJCoreEntitiesServer`). Rationale:
+
+- This is server-only — `EmbedTextLocal` requires `AIEngine` which is a server concern.
+- Every MJ server process (MJAPI and any other host) already pulls in `MJCoreEntitiesServer`, so co-locating here means zero wiring at the host layer.
+- Sits alongside `QueryEngineServer` and `ComponentMetadataEngineServer`, which follow the same `extends BaseEngine + @RegisterForStartup` pattern.
+
+Extends `BaseEngine<EntityEmbeddingEngine>` (which extends `BaseSingleton<T>` under the hood — satisfies CLAUDE.md rule #7). Decorated with `@RegisterForStartup({ deferred: true, ... })` so it warms up at server boot **without** blocking the boot sequence — no need to add bespoke startup code in `MJServer`/`MJAPI`.
 
 ```typescript
-export class EntityEmbeddingEngine extends BaseSingleton<EntityEmbeddingEngine> {
-    protected constructor() { super(); }
+import { BaseEngine, RegisterForStartup, IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { AIEngine } from '@memberjunction/ai-engine';
 
+@RegisterForStartup({
+    deferred: true,
+    priority: 200,
+    severity: 'warn',
+    description: 'EntityEmbeddingEngine — precomputed embeddings for EntitiesByRelevance()'
+})
+export class EntityEmbeddingEngine extends BaseEngine<EntityEmbeddingEngine> {
     public static get Instance(): EntityEmbeddingEngine {
         return EntityEmbeddingEngine.getInstance<EntityEmbeddingEngine>();
     }
 
-    private _loadPromise?: Promise<void>;
     private _vectors: Float32Array[] = [];          // Index-aligned with _entityIds
     private _entityIds: string[] = [];
     private _vectorDim: number = 0;
     private _requestEmbeddingCache = new Map<string, Float32Array>();
 
-    /** Kick off load without awaiting — used at server startup. */
-    public StartWarmup(provider: IMetadataProvider, contextUser?: UserInfo): void {
-        if (!this._loadPromise) {
-            this._loadPromise = this.loadInternal(provider, contextUser);
-        }
+    /**
+     * Called by the @RegisterForStartup orchestrator during server boot.
+     * Because `deferred: true`, this is invoked but NOT awaited at boot —
+     * concurrent callers go through EnsureLoaded().
+     */
+    public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        return super.Config(forceRefresh, contextUser, provider);
     }
 
-    /** Await readiness — no-op once loaded. Called by EntitiesByRelevance. */
-    public async EnsureLoaded(provider: IMetadataProvider, contextUser?: UserInfo): Promise<void> {
-        if (!this._loadPromise) {
-            this._loadPromise = this.loadInternal(provider, contextUser);
-        }
-        await this._loadPromise;
+    protected async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // 1. Pull all Entity rows with embedding columns
+        // 2. For each entity, render template, compute expected SHA-256
+        // 3. Identify stale/missing rows (hash mismatch OR EmbeddingModelID changed OR EmbeddingJSON null)
+        // 4. Batch-embed stale rows via AIEngine.Instance.EmbedTextLocal()
+        // 5. Persist embeddings back via EntityEntity.Save() (one row per stale entity)
+        // 6. Build in-memory vector pool + id map (Float32Array per entity)
+    }
+
+    /** Convenience wrapper — callers do not need to remember to pass forceRefresh=false. */
+    public async EnsureLoaded(contextUser?: UserInfo): Promise<void> {
+        await this.Config(false, contextUser);
     }
 
     /** Compute cosine ranking over the in-memory vector pool. */
@@ -200,37 +264,38 @@ export class EntityEmbeddingEngine extends BaseSingleton<EntityEmbeddingEngine> 
         searchText: string,
         topK: number
     ): Promise<{ entityId: string; score: number }[]> { /* ... */ }
-
-    private async loadInternal(provider: IMetadataProvider, contextUser?: UserInfo): Promise<void> {
-        // 1. Pull all Entity rows with embedding columns
-        // 2. For each entity, compute expected content hash from template
-        // 3. Identify stale/missing rows
-        // 4. Batch-embed stale rows via EmbedTextLocal
-        // 5. Save embeddings back to Entity rows (BaseEntity.Save())
-        // 6. Build in-memory vector pool + id map
-    }
 }
 ```
 
-### Startup Hook
+### How the Decorator Handles Warmup
 
-MJAPI startup (and any other host process that wants semantic search) calls:
+We use the **existing** `deferred: true` option on `RegisterForStartup` (defined in `packages/MJCore/src/generic/RegisterForStartup.ts`). It already does exactly what we want:
 
-```typescript
-EntityEmbeddingEngine.Instance.StartWarmup(Metadata.Provider, systemUser);
-// Do NOT await — server boot stays fast.
-```
+> *"When true, the engine's HandleStartup() is fired during startup but NOT awaited. Consumer contract: code that reads engine state MUST call `await Engine.Instance.EnsureLoaded()` first. BaseEngine load is idempotent — a concurrent caller waits for the in-flight load promise rather than re-loading."*
 
-Concurrent `EntitiesByRelevance` calls during the warmup window all await the same `_loadPromise`. Once loaded, `EnsureLoaded` is a sync-fast resolved-promise no-op.
+This is the canonical pre-warm pattern in MJ — no new decorator flag needed. `AIEngineBase` and `IntegrationEngineBase` already use it. `ProviderBase.EntitiesByRelevance` calls `EntityEmbeddingEngine.Instance.EnsureLoaded(contextUser)` before invoking `RankByText`, satisfying the consumer contract.
 
 ### Cold-Start Behavior
 
-- First request after server start blocks on engine load. For a few thousand entities with only a small fraction stale, this is typically a few hundred milliseconds of cosine math plus N embedding calls for stale rows.
+- Server boot is unaffected — `deferred: true` means warmup fires-and-forgets.
+- First `EntitiesByRelevance` call after boot awaits the in-flight warmup promise (idempotent — won't trigger a second load).
+- For a few thousand entities with only a small fraction stale, warmup is typically a few hundred milliseconds: cosine math is microseconds, the cost is the `EmbedTextLocal` calls for stale rows.
 - A full cold rebuild (every entity stale, e.g., first deployment after migration) is bounded by `EmbedTextLocal` throughput. Batch where the underlying API supports it.
 
 ## Hybrid Ranking
 
-For each `EntitiesByRelevance` call:
+For each `EntitiesByRelevance` call, the lexical pass and the query embedding are dispatched **in parallel**:
+
+```typescript
+const [lexicalScores, queryVector] = await Promise.all([
+    this.computeLexicalScores(searchText),      // sync today, wrapped in Promise.resolve
+    this.embeddingEngine.GetOrComputeQueryEmbedding(searchText)  // async — EmbedTextLocal call
+]);
+const semanticScores = this.embeddingEngine.CosineAgainstAll(queryVector);
+const blended = this.blend(lexicalScores, semanticScores);
+```
+
+The lexical pass is microseconds today — synchronously walking the in-memory name map gives no real win from `Promise.all`. We use it anyway because (a) the future-proofing is free, and (b) if we ever swap the lexical implementation for something non-trivial (SQL Server full-text, an external lexical index, an LLM-judged re-rank), the parallel shape is already in place. No regret cost.
 
 ### Step 1: Lexical Pass
 
@@ -247,7 +312,7 @@ This is cheap (single map walk) and ensures literal user intent ("Invoices") alw
 
 ### Step 2: Semantic Pass
 
-1. Embed `searchText`. Check `_requestEmbeddingCache` first (Map keyed by SHA-256 of normalized text) — avoids recompute on repeated queries within the process.
+1. Embed `searchText`. Check `_requestEmbeddingCache` first (Map keyed by SHA-256 of normalized text) — avoids recompute on repeated queries within the process. This is the actual async work that justifies wrapping the whole thing in `Promise.all`.
 2. Cosine similarity against all `_vectors`. For 1500 entities × 384-dim vectors this is microseconds in plain JS using `Float32Array`.
 3. Normalize cosine `[-1, 1]` → `[0, 1]` via `(cos + 1) / 2`.
 
@@ -380,12 +445,12 @@ The decision rule ("if entity count > N, swap full list for seeded candidates + 
 
 ## Open Questions
 
-1. **Where does `EntityEmbeddingEngine` live?** Candidates: `@memberjunction/core` (next to `ProviderBase`), `@memberjunction/ai-engine` (next to other engines), or a new `@memberjunction/entity-embeddings` package. Leaning toward co-locating with `ProviderBase` since the provider method calls it directly and a separate package adds a dependency edge without a clear win. Will confirm in Phase 1.
+1. **Which model is "the configured embedding model"?** Should this be a server config setting, or read from a row in `MJ: AI Models` flagged as the default for entity embeddings? Probably the latter — consistent with how other AI defaults work in MJ. Same source `AIEngine.EmbedTextLocal()` already uses, so likely zero new config surface.
 
-2. **Which model is "the configured embedding model"?** Should this be a server config setting, or read from a row in `MJ: AI Models` flagged as the default for entity embeddings? Probably the latter — consistent with how other AI defaults work in MJ.
+2. **What's the right `minScore` default?** 0.5 is a guess. Phase 5 measurement should set this empirically against the validation set.
 
-3. **What's the right `minScore` default?** 0.5 is a guess. Phase 5 measurement should set this empirically against the validation set.
+3. **Embedding batch size for warmup?** Depends on `EmbedTextLocal` characteristics — needs to balance throughput against memory and avoid blocking the event loop for too long in any single batch. To be tuned in Phase 2.
 
-4. **Embedding batch size for warmup?** Depends on `EmbedTextLocal` characteristics — needs to balance throughput against memory and avoid blocking the event loop for too long in any single batch. To be tuned in Phase 2.
+4. **Should warmup also run on client providers (e.g., `GraphQLDataProvider`)?** Probably not — clients don't have local embedding capability and shouldn't recompute. Client-side `EntitiesByRelevance` should round-trip to the server via a new GraphQL resolver. Worth scoping in Phase 3 whether the client method goes in v1 or is deferred.
 
-5. **Should warmup also run on client providers (e.g., `GraphQLDataProvider`)?** Probably not — clients don't have local embedding capability and shouldn't recompute. Client-side `EntitiesByRelevance` should round-trip to the server via a new GraphQL resolver. Worth scoping in Phase 3 whether the client method goes in v1 or is deferred.
+5. **Should CodeGen optionally null the `EmbeddingContentHash` when it edits Name/Description?** Pure perf optimization for warmup time on large catalogs — engine self-heals correctly without it. Defer until measurement says we need it.
