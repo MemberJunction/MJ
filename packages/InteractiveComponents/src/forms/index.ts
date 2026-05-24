@@ -21,6 +21,7 @@ export * from './form-host-props';
 export * from './form-event-names';
 export * from './form-method-names';
 export * from './curated-form-schema';
+export * from './default-form-scaffold';
 
 import type { ComponentSpec } from '../component-spec';
 
