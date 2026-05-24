@@ -3,7 +3,7 @@ import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
-import { isFormRole } from '@memberjunction/interactive-component-types/forms';
+import { isFormRole, getDeclaredFormEntityName } from '@memberjunction/interactive-component-types/forms';
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 
@@ -367,7 +367,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
     this.isFormArtifact = true;
 
-    const entityName = this.resolveFormEntityName(spec);
+    const entityName = getDeclaredFormEntityName(spec);
     if (!entityName) {
       this.formInitError = 'Form artifact has no declared entity. Showing without record context.';
       return;
@@ -394,15 +394,6 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       this.formRecordIsReal = false;
       this.formRecordLabel = 'Mock data';
     }
-  }
-
-  /** Spec.entityName is the primary signal; fall back to the dataRequirements primary entity. */
-  private resolveFormEntityName(spec: ComponentSpec): string | null {
-    const direct = (spec as unknown as { entityName?: string }).entityName;
-    if (direct && typeof direct === 'string') return direct.trim();
-    const dr = spec.dataRequirements as unknown as { entities?: Array<{ name?: string }> } | undefined;
-    const first = dr?.entities?.[0]?.name;
-    return first ? first.trim() : null;
   }
 
   /** Load the first row by primary key — deterministic, doesn't require a sort field. */

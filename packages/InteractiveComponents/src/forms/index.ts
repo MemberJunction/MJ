@@ -23,6 +23,7 @@ export * from './form-method-names';
 export * from './curated-form-schema';
 export * from './default-form-scaffold';
 export * from './form-host-props-fixture';
+export * from './form-spec-info';
 
 import type { ComponentSpec } from '../component-spec';
 
