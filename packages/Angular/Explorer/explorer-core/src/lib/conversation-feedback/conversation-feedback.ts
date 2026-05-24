@@ -1,10 +1,10 @@
-import { Component, OnInit, ChangeDetectorRef, HostListener } from '@angular/core';
+import { Component, OnInit, ChangeDetectorRef, HostListener, inject } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RunQuery } from '@memberjunction/core';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
-interface FeedbackRow {
+export interface FeedbackRow {
   ratingID: string;
   rating: number;
   comments: string | null;
@@ -21,17 +21,17 @@ interface FeedbackRow {
   agentName: string | null;
 }
 
-type RatingBand = 'all' | 'high' | 'mid' | 'low';
-type DateRange = 'all' | '1d' | '7d' | '30d' | '90d';
+export type RatingBand = 'all' | 'high' | 'mid' | 'low';
+export type DateRange = 'all' | '1d' | '7d' | '30d' | '90d';
 
 @Component({
   standalone: false,
   selector: 'mj-conversation-feedback',
-  templateUrl: './feedback.component.html',
-  styleUrls: ['./feedback.component.css']
+  templateUrl: './conversation-feedback.html',
+  styleUrls: ['./conversation-feedback.css']
 })
 @RegisterClass(BaseResourceComponent, 'ConversationFeedbackResource')
-export class FeedbackComponent extends BaseResourceComponent implements OnInit {
+export class ConversationFeedbackResource extends BaseResourceComponent implements OnInit {
   isInitializing = true;
   loading = false;
   statsLoading = false;
@@ -54,9 +54,8 @@ export class FeedbackComponent extends BaseResourceComponent implements OnInit {
 
   private searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private cdr: ChangeDetectorRef, private appManager: ApplicationManager) {
-    super();
-  }
+  private cdr = inject(ChangeDetectorRef);
+  private appManager = inject(ApplicationManager);
 
   async GetResourceDisplayName(): Promise<string> {
     return 'Agent Feedback';
