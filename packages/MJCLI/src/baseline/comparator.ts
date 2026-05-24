@@ -13,10 +13,13 @@ import { deepValueEqual, isoUtcSeconds, qname, stableSortBy } from './util';
 import type {
   BaselineCompareOptions,
   ColumnValueDiff,
+  DatabasePrincipalDef,
   DiffReport,
   ExtendedPropertyDef,
   ObjectDiff,
   ObjectKind,
+  PermissionDef,
+  RoleMembershipDef,
   SchemaSnapshot,
   TableDataDump,
   TableDef,
@@ -156,6 +159,15 @@ export function compareSnapshots(input: CompareInput): DiffReport {
   // Extended properties (sp_addextendedproperty entries — MS_Description etc.)
   counted(diffExtendedProperties(left.snapshot.extendedProperties, right.snapshot.extendedProperties));
 
+  // Database principals (users + custom roles)
+  counted(diffPrincipals(left.snapshot.principals, right.snapshot.principals));
+
+  // Role memberships
+  counted(diffRoleMemberships(left.snapshot.roleMemberships, right.snapshot.roleMemberships));
+
+  // Permissions (GRANT/DENY entries)
+  counted(diffPermissions(left.snapshot.permissions, right.snapshot.permissions));
+
   // Row data
   const tableRowDiffs: TableRowDiff[] = [];
   let totalRowDiffs = 0;
@@ -190,6 +202,18 @@ export function compareSnapshots(input: CompareInput): DiffReport {
     extendedPropertiesChecked: Math.max(
       left.snapshot.extendedProperties.length,
       right.snapshot.extendedProperties.length,
+    ),
+    principalsChecked: Math.max(
+      left.snapshot.principals.length,
+      right.snapshot.principals.length,
+    ),
+    roleMembershipsChecked: Math.max(
+      left.snapshot.roleMemberships.length,
+      right.snapshot.roleMemberships.length,
+    ),
+    permissionsChecked: Math.max(
+      left.snapshot.permissions.length,
+      right.snapshot.permissions.length,
     ),
     objectsWithDiffs,
     tablesWithRowDiffs: tableRowDiffs.length,
@@ -543,6 +567,95 @@ function diffExtendedProperties(
         details: `value differs`,
         leftValue: l.value,
         rightValue: r.value,
+      });
+    }
+  }
+  return out;
+}
+
+/** Diff database principals (users + custom roles). Matched by name; kind/owner/defaultSchema compared. */
+function diffPrincipals(
+  left: readonly DatabasePrincipalDef[],
+  right: readonly DatabasePrincipalDef[],
+): ObjectDiff[] {
+  return diffNamedSet(
+    'principal',
+    left,
+    right,
+    (p) => p.name,
+    () => false,
+    (l, r) => {
+      const reasons: string[] = [];
+      if (l.kind !== r.kind) reasons.push(`kind: ${l.kind} vs ${r.kind}`);
+      // Owner mismatch is informational only — emitted CREATE ROLE matches the
+      // source's AUTHORIZATION clause. Skip if either side is missing the owner
+      // (older snapshots / future formats may omit it).
+      if (l.owner && r.owner && l.owner.toLowerCase() !== r.owner.toLowerCase()) {
+        reasons.push(`owner: ${l.owner} vs ${r.owner}`);
+      }
+      if ((l.defaultSchema || '').toLowerCase() !== (r.defaultSchema || '').toLowerCase()) {
+        reasons.push(`defaultSchema: ${l.defaultSchema} vs ${r.defaultSchema}`);
+      }
+      return reasons.length === 0 ? null : reasons.join('; ');
+    },
+  );
+}
+
+/** Diff role memberships. Pair is (role, member); presence is the entire equality. */
+function diffRoleMemberships(
+  left: readonly RoleMembershipDef[],
+  right: readonly RoleMembershipDef[],
+): ObjectDiff[] {
+  const key = (m: RoleMembershipDef) => `${m.role}|${m.member}`.toLowerCase();
+  const leftMap = new Map(left.map((m) => [key(m), m]));
+  const rightMap = new Map(right.map((m) => [key(m), m]));
+  const allKeys = new Set([...leftMap.keys(), ...rightMap.keys()]);
+  const out: ObjectDiff[] = [];
+  for (const k of allKeys) {
+    const inL = leftMap.has(k);
+    const inR = rightMap.has(k);
+    if (inL && !inR) out.push({ kind: 'roleMembership', diffKind: 'missing-on-right', qualifiedName: k });
+    else if (!inL && inR) out.push({ kind: 'roleMembership', diffKind: 'missing-on-left', qualifiedName: k });
+  }
+  return out;
+}
+
+/**
+ * Diff permission grants. Equality key is the full tuple:
+ * (grantee, targetClass, schema, object/type, column, permission). State
+ * (GRANT vs DENY vs WITH-GRANT-OPTION) is part of the value comparison so
+ * a state change shows up as a `changed` diff rather than a remove+add pair.
+ */
+function diffPermissions(
+  left: readonly PermissionDef[],
+  right: readonly PermissionDef[],
+): ObjectDiff[] {
+  const key = (p: PermissionDef) =>
+    [
+      p.grantee,
+      p.targetClass,
+      p.targetSchema ?? '',
+      p.targetObject ?? p.targetType ?? '',
+      p.targetColumn ?? '',
+      p.permission,
+    ]
+      .join('|')
+      .toLowerCase();
+  const leftMap = new Map(left.map((p) => [key(p), p]));
+  const rightMap = new Map(right.map((p) => [key(p), p]));
+  const allKeys = new Set([...leftMap.keys(), ...rightMap.keys()]);
+  const out: ObjectDiff[] = [];
+  for (const k of allKeys) {
+    const l = leftMap.get(k);
+    const r = rightMap.get(k);
+    if (l && !r) out.push({ kind: 'permission', diffKind: 'missing-on-right', qualifiedName: k });
+    else if (!l && r) out.push({ kind: 'permission', diffKind: 'missing-on-left', qualifiedName: k });
+    else if (l && r && l.state !== r.state) {
+      out.push({
+        kind: 'permission',
+        diffKind: 'changed',
+        qualifiedName: k,
+        details: `state: ${l.state} vs ${r.state}`,
       });
     }
   }

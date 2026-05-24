@@ -11,10 +11,13 @@ import { isExcludedTable, stableSortBy } from './util';
 import type {
   CheckConstraintDef,
   ColumnDef,
+  DatabasePrincipalDef,
   ExtendedPropertyDef,
   ForeignKeyDef,
   IndexDef,
+  PermissionDef,
   PrimaryKeyDef,
+  RoleMembershipDef,
   RoutineDef,
   SchemaSnapshot,
   SequenceDef,
@@ -62,6 +65,15 @@ export async function introspectMssql(db: QueryRunner, progress: Progress = {}):
   progress.onPhase?.('extendedProperties');
   const extendedProperties = await readExtendedProperties(db);
 
+  progress.onPhase?.('principals');
+  const principals = await readPrincipals(db);
+
+  progress.onPhase?.('roleMemberships');
+  const roleMemberships = await readRoleMemberships(db);
+
+  progress.onPhase?.('permissions');
+  const permissions = await readPermissions(db);
+
   return {
     dialect: 'mssql',
     schemas: stableSortBy(schemas, (s) => s.name.toLowerCase()),
@@ -76,7 +88,23 @@ export async function introspectMssql(db: QueryRunner, progress: Progress = {}):
       extendedProperties,
       (p) => extPropSortKey(p),
     ),
+    principals: stableSortBy(principals, (p) => `${p.kind}|${p.name}`.toLowerCase()),
+    roleMemberships: stableSortBy(roleMemberships, (m) => `${m.role}|${m.member}`.toLowerCase()),
+    permissions: stableSortBy(permissions, (p) => permissionSortKey(p)),
   };
+}
+
+/** Canonical sort key for permissions so the emitted GRANT block is byte-deterministic. */
+function permissionSortKey(p: PermissionDef): string {
+  return [
+    p.grantee.toLowerCase(),
+    p.targetClass,
+    (p.targetSchema || '').toLowerCase(),
+    (p.targetObject || p.targetType || '').toLowerCase(),
+    (p.targetColumn || '').toLowerCase(),
+    p.permission.toLowerCase(),
+    p.state,
+  ].join('|');
 }
 
 /** Canonical sort key for extended properties so output stays byte-deterministic. */
@@ -359,6 +387,149 @@ async function readTriggers(db: QueryRunner): Promise<TriggerDef[]> {
     name: r.trigger_name,
     table: r.table_name,
     definition: r.definition ?? '',
+  }));
+}
+
+/**
+ * Map `sys.database_principals.type` to our normalized kind.
+ * Skipped types: A (application role) is kept; X/E/G handle AAD/Windows; everything
+ * not in this table is filtered out at the WHERE level below so we never see it.
+ */
+const PRINCIPAL_TYPE_MAP: Record<string, DatabasePrincipalDef['kind']> = {
+  S: 'sql_user',
+  U: 'windows_user',
+  R: 'database_role',
+  A: 'application_role',
+  X: 'aad_group',
+  E: 'aad_user',
+};
+
+async function readPrincipals(db: QueryRunner): Promise<DatabasePrincipalDef[]> {
+  // Filter out:
+  //   - fixed roles (`is_fixed_role = 1`)
+  //   - principal_id <= 4 (dbo / guest / INFORMATION_SCHEMA / sys)
+  //   - `public` role
+  //   - Anything starting with `db_` (defensive — covers fixed roles in older SQL versions)
+  const rows = await db.query<{
+    name: string; type: string; owner_name: string | null; default_schema_name: string | null;
+  }>(`
+    SELECT p.name,
+           CAST(p.type AS NVARCHAR(2)) AS type,
+           o.name AS owner_name,
+           p.default_schema_name
+      FROM sys.database_principals p
+ LEFT JOIN sys.database_principals o ON o.principal_id = p.owning_principal_id
+     WHERE p.is_fixed_role = 0
+       AND p.principal_id > 4
+       AND p.name NOT IN ('dbo','guest','public','sys','INFORMATION_SCHEMA')
+       AND p.name NOT LIKE 'db[_]%'
+       AND p.type IN ('S','U','R','A','X','E')
+  `);
+  return rows
+    .map((r): DatabasePrincipalDef | null => {
+      const kind = PRINCIPAL_TYPE_MAP[r.type];
+      if (!kind) return null;
+      const def: DatabasePrincipalDef = { name: r.name, kind };
+      if (r.owner_name) def.owner = r.owner_name;
+      if (r.default_schema_name) def.defaultSchema = r.default_schema_name;
+      return def;
+    })
+    .filter((p): p is DatabasePrincipalDef => p !== null);
+}
+
+async function readRoleMemberships(db: QueryRunner): Promise<RoleMembershipDef[]> {
+  // Skip the built-in `db_owner <- dbo` membership (SQL Server creates it
+  // automatically). Other memberships involving fixed roles (e.g.
+  // `db_datareader <- MJ_Connect`) ARE meaningful and need to be emitted.
+  const rows = await db.query<{ role_name: string; member_name: string }>(`
+    SELECT rp.name AS role_name, mp.name AS member_name
+      FROM sys.database_role_members rm
+      JOIN sys.database_principals rp ON rp.principal_id = rm.role_principal_id
+      JOIN sys.database_principals mp ON mp.principal_id = rm.member_principal_id
+     WHERE NOT (rp.name = 'db_owner' AND mp.name = 'dbo')
+       AND mp.name NOT IN ('public')
+  `);
+  return rows.map((r) => ({ role: r.role_name, member: r.member_name }));
+}
+
+async function readPermissions(db: QueryRunner): Promise<PermissionDef[]> {
+  // We support four classes: DATABASE (0), OBJECT_OR_COLUMN (1), SCHEMA (3), TYPE (6).
+  // Anything else (DATABASE_PRINCIPAL, ENDPOINT, ASSEMBLY, etc.) is intentionally skipped.
+  // Filtering: skip grants TO public (default), TO dbo (always has full access),
+  // and anything on system schemas / objects.
+  const rows = await db.query<{
+    class_id: number; class_desc: string;
+    state: string; permission_name: string;
+    grantee_name: string;
+    schema_name: string | null; object_name: string | null; column_name: string | null;
+    type_name: string | null;
+  }>(`
+    SELECT 1 AS class_id, 'OBJECT_OR_COLUMN' AS class_desc,
+           CAST(p.state_desc AS NVARCHAR(40)) AS state,
+           CAST(p.permission_name AS NVARCHAR(64)) AS permission_name,
+           USER_NAME(p.grantee_principal_id) AS grantee_name,
+           OBJECT_SCHEMA_NAME(p.major_id) AS schema_name,
+           OBJECT_NAME(p.major_id) AS object_name,
+           CASE WHEN p.minor_id > 0
+                THEN (SELECT c.name FROM sys.columns c WHERE c.object_id = p.major_id AND c.column_id = p.minor_id)
+                ELSE NULL END AS column_name,
+           NULL AS type_name
+      FROM sys.database_permissions p
+     WHERE p.class = 1
+       AND OBJECT_SCHEMA_NAME(p.major_id) IS NOT NULL
+       AND USER_NAME(p.grantee_principal_id) NOT IN ('public','dbo','guest')
+       AND USER_NAME(p.grantee_principal_id) NOT LIKE 'db[_]%'
+
+    UNION ALL
+
+    SELECT 0 AS class_id, 'DATABASE' AS class_desc,
+           CAST(p.state_desc AS NVARCHAR(40)) AS state,
+           CAST(p.permission_name AS NVARCHAR(64)) AS permission_name,
+           USER_NAME(p.grantee_principal_id) AS grantee_name,
+           NULL AS schema_name, NULL AS object_name, NULL AS column_name, NULL AS type_name
+      FROM sys.database_permissions p
+     WHERE p.class = 0
+       AND USER_NAME(p.grantee_principal_id) NOT IN ('public','dbo','guest')
+       AND USER_NAME(p.grantee_principal_id) NOT LIKE 'db[_]%'
+
+    UNION ALL
+
+    SELECT 3 AS class_id, 'SCHEMA' AS class_desc,
+           CAST(p.state_desc AS NVARCHAR(40)) AS state,
+           CAST(p.permission_name AS NVARCHAR(64)) AS permission_name,
+           USER_NAME(p.grantee_principal_id) AS grantee_name,
+           s.name AS schema_name, NULL AS object_name, NULL AS column_name, NULL AS type_name
+      FROM sys.database_permissions p
+      JOIN sys.schemas s ON s.schema_id = p.major_id
+     WHERE p.class = 3
+       AND USER_NAME(p.grantee_principal_id) NOT IN ('public','dbo','guest')
+       AND USER_NAME(p.grantee_principal_id) NOT LIKE 'db[_]%'
+
+    UNION ALL
+
+    SELECT 6 AS class_id, 'TYPE' AS class_desc,
+           CAST(p.state_desc AS NVARCHAR(40)) AS state,
+           CAST(p.permission_name AS NVARCHAR(64)) AS permission_name,
+           USER_NAME(p.grantee_principal_id) AS grantee_name,
+           SCHEMA_NAME(t.schema_id) AS schema_name, NULL AS object_name, NULL AS column_name, t.name AS type_name
+      FROM sys.database_permissions p
+      JOIN sys.types t ON t.user_type_id = p.major_id
+     WHERE p.class = 6
+       AND USER_NAME(p.grantee_principal_id) NOT IN ('public','dbo','guest')
+       AND USER_NAME(p.grantee_principal_id) NOT LIKE 'db[_]%'
+  `);
+  return rows.map((r) => ({
+    grantee: r.grantee_name,
+    state: r.state.toUpperCase() as PermissionDef['state'],
+    permission: r.permission_name.toUpperCase(),
+    targetClass:
+      r.class_id === 0 ? 'database' :
+      r.class_id === 1 ? 'object' :
+      r.class_id === 3 ? 'schema' : 'type',
+    targetSchema: r.schema_name ?? undefined,
+    targetObject: r.object_name ?? undefined,
+    targetType: r.type_name ?? undefined,
+    targetColumn: r.column_name ?? undefined,
   }));
 }
 

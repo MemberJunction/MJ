@@ -14,6 +14,9 @@ function emptySnapshot(overrides: Partial<SchemaSnapshot> = {}): SchemaSnapshot 
     sequences: [],
     userDefinedTypes: [],
     extendedProperties: [],
+    principals: [],
+    roleMemberships: [],
+    permissions: [],
     ...overrides,
   };
 }

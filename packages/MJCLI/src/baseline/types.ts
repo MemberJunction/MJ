@@ -23,6 +23,12 @@ export interface SchemaSnapshot {
   userDefinedTypes: UserDefinedTypeDef[];
   /** sp_addextendedproperty entries (descriptions etc.) on schemas/tables/columns/views/routines. */
   extendedProperties: ExtendedPropertyDef[];
+  /** Non-system database principals (users + custom roles). */
+  principals: DatabasePrincipalDef[];
+  /** Non-system role memberships (ALTER ROLE ... ADD MEMBER). */
+  roleMemberships: RoleMembershipDef[];
+  /** Object/schema/database/type permission grants (no DENY/REVOKE captured by default). */
+  permissions: PermissionDef[];
 }
 
 export interface SchemaDef {
@@ -147,6 +153,47 @@ export interface UserDefinedTypeColumnDef {
 }
 
 /**
+ * A non-system database principal — a SQL user (mapped or contained) or a
+ * custom database role. Fixed roles (db_owner, db_datareader, etc.) and
+ * built-in users (dbo, guest, public, sys) are filtered out at introspection
+ * time; the baseline never re-creates those.
+ */
+export interface DatabasePrincipalDef {
+  name: string;
+  kind: 'sql_user' | 'database_role' | 'windows_user' | 'application_role' | 'aad_user' | 'aad_group';
+  /** Owner principal name (e.g. `db_securityadmin` for MJ's cdp_* roles). Undefined falls back to the current user (typically `dbo`). */
+  owner?: string;
+  /** Default schema for users. Roles don't have one. */
+  defaultSchema?: string;
+}
+
+/** A row in `sys.database_role_members`. Both names refer to principals (user or role). */
+export interface RoleMembershipDef {
+  role: string;
+  member: string;
+}
+
+/** State of a permission row in `sys.database_permissions`. */
+export type PermissionState = 'GRANT' | 'GRANT_WITH_GRANT_OPTION' | 'DENY' | 'REVOKE';
+
+/**
+ * A `GRANT`/`DENY` entry. MJ's CodeGen emits per-object grants for every view
+ * and stored procedure (e.g. `GRANT EXECUTE ON [__mj].[spCreateAIAgent] TO [cdp_Developer]`).
+ * Without these in the baseline, downstream V-files that GRANT to roles fail because
+ * the grantee is missing AND/OR the migration sequence drifts.
+ */
+export interface PermissionDef {
+  grantee: string;
+  state: PermissionState;
+  permission: string;            // SELECT | EXECUTE | CONNECT | UPDATE | INSERT | DELETE | REFERENCES | etc.
+  targetClass: 'database' | 'schema' | 'object' | 'type';
+  targetSchema?: string;         // for class='schema' or 'object'
+  targetObject?: string;         // for class='object'
+  targetType?: string;           // for class='type' (UDT name)
+  targetColumn?: string;         // for column-level grants (object-class with minor_id > 0)
+}
+
+/**
  * An `sp_addextendedproperty` entry. MJ uses these heavily for MS_Description
  * on tables, columns, views, procs, and functions. Skipping them produces a
  * silent DB difference that CodeGen and tools depend on.
@@ -201,6 +248,9 @@ export interface DiffSummary {
   sequencesChecked: number;
   userDefinedTypesChecked: number;
   extendedPropertiesChecked: number;
+  principalsChecked: number;
+  roleMembershipsChecked: number;
+  permissionsChecked: number;
   objectsWithDiffs: number;
   tablesWithRowDiffs: number;
   totalRowDiffs: number;
@@ -224,7 +274,10 @@ export type ObjectKind =
   | 'trigger'
   | 'sequence'
   | 'userDefinedType'
-  | 'extendedProperty';
+  | 'extendedProperty'
+  | 'principal'
+  | 'roleMembership'
+  | 'permission';
 
 export type DiffKind = 'missing-on-left' | 'missing-on-right' | 'changed';
 

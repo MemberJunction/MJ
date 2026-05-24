@@ -66,6 +66,11 @@ export async function introspectPostgres(db: QueryRunner, progress: Progress = {
     // shape consistent without misrepresenting the source.
     userDefinedTypes: [],
     extendedProperties: [],
+    // Principals/role memberships/permissions: PG uses a different model
+    // (roles only — no users — with grants on namespaces). Future work.
+    principals: [],
+    roleMemberships: [],
+    permissions: [],
   };
 }
 

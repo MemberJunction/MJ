@@ -42,6 +42,9 @@ export function renderMarkdown(report: DiffReport): string {
   lines.push(`| Sequences checked | ${report.summary.sequencesChecked} |`);
   lines.push(`| User-defined types checked | ${report.summary.userDefinedTypesChecked} |`);
   lines.push(`| Extended properties checked | ${report.summary.extendedPropertiesChecked} |`);
+  lines.push(`| Database principals checked | ${report.summary.principalsChecked} |`);
+  lines.push(`| Role memberships checked | ${report.summary.roleMembershipsChecked} |`);
+  lines.push(`| Permissions checked | ${report.summary.permissionsChecked} |`);
   lines.push(`| Objects with diffs | ${report.summary.objectsWithDiffs} |`);
   lines.push(`| Tables with row diffs | ${report.summary.tablesWithRowDiffs} |`);
   lines.push(`| Total row diffs | ${report.summary.totalRowDiffs} |`);

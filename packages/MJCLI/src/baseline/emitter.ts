@@ -15,13 +15,16 @@
  *   7. Indexes (non-PK, non-unique-constraint)
  *   8. Data inserts (with SET IDENTITY_INSERT bookends)
  *   9. Reseed identity columns
- *  10. CREATE TYPE … AS TABLE (UDTs — before functions/procs that take TVPs)
- *  11. CREATE FUNCTION statements (before views — MJ views reference UDFs)
- *  12. CREATE VIEW statements
- *  13. CREATE PROCEDURE statements
- *  14. CREATE TRIGGER statements
- *  15. ALTER TABLE ADD CONSTRAINT … FOREIGN KEY (last so order doesn't matter)
- *  16. EXEC sp_addextendedproperty calls (after every object that can carry them)
+ *  10. CREATE USER / CREATE ROLE (database principals — required before any GRANT)
+ *  11. CREATE TYPE … AS TABLE (UDTs — before functions/procs that take TVPs)
+ *  12. CREATE FUNCTION statements (before views — MJ views reference UDFs)
+ *  13. CREATE VIEW statements
+ *  14. CREATE PROCEDURE statements
+ *  15. CREATE TRIGGER statements
+ *  16. ALTER TABLE ADD CONSTRAINT … FOREIGN KEY (last so order doesn't matter)
+ *  17. ALTER ROLE … ADD MEMBER (role memberships — requires both principals to exist)
+ *  18. GRANT/DENY permissions (last so every grantee + every target object exists)
+ *  19. EXEC sp_addextendedproperty calls (after every object that can carry them)
  */
 
 import {
@@ -36,9 +39,12 @@ import {
 import type {
   BaselineEmitOptions,
   ColumnDef,
+  DatabasePrincipalDef,
   ExtendedPropertyDef,
   ForeignKeyDef,
   IndexDef,
+  PermissionDef,
+  RoleMembershipDef,
   RoutineDef,
   SchemaSnapshot,
   SequenceDef,
@@ -62,6 +68,11 @@ export function emitBaselineTsql(input: EmitInput): string {
   const parts: string[] = [];
   parts.push(emitHeader(input.options));
   parts.push(emitSchemas(input.snapshot));
+  // Principals (users + custom roles) come right after schemas so they exist
+  // before any GRANT statement, and so AUTHORIZATION clauses on objects (if
+  // any) can resolve. They're also independent of every other object kind, so
+  // moving them early has no ordering risk.
+  parts.push(emitPrincipals(input.snapshot.principals));
   parts.push(emitSequences(input.snapshot.sequences));
   parts.push(emitTables(input.snapshot.tables));
   parts.push(emitDefaults(input.snapshot.tables));
@@ -86,6 +97,12 @@ export function emitBaselineTsql(input: EmitInput): string {
   parts.push(emitRoutines(topoSortRoutinesByDefinition(input.snapshot.procedures), 'procedure'));
   parts.push(emitTriggers(topoSortRoutinesByDefinition(input.snapshot.triggers)));
   parts.push(emitForeignKeys(input.snapshot.tables));
+  // Role memberships come AFTER principals + all objects exist. ALTER ROLE
+  // requires both the role and the member principal to be present.
+  parts.push(emitRoleMemberships(input.snapshot.roleMemberships));
+  // Permissions come last among real DDL: GRANT validates that both the
+  // grantee principal AND the target object (table/view/proc/etc.) exist.
+  parts.push(emitPermissions(input.snapshot.permissions));
   // Extended properties LAST: every object they reference must already exist,
   // since sp_addextendedproperty validates the target.
   parts.push(emitExtendedProperties(input.snapshot.extendedProperties));
@@ -447,4 +464,133 @@ function emitExtendedProperties(props: readonly ExtendedPropertyDef[]): string {
     lines.push('GO');
   }
   return lines.join(NL);
+}
+
+/**
+ * Emit CREATE USER + CREATE ROLE statements.
+ *
+ * Mirrors the v5.0 baseline's pattern exactly:
+ *   - SQL users use the EngineEdition-aware conditional: on Azure SQL DB
+ *     (EngineEdition=5) create as contained user; otherwise check the server
+ *     login and create FOR LOGIN if it exists, WITHOUT LOGIN otherwise.
+ *   - Roles use `IF DATABASE_PRINCIPAL_ID(...) IS NULL CREATE ROLE …
+ *     AUTHORIZATION [db_securityadmin]` so the owner matches what the source
+ *     DB has (where MJ's cdp_* roles are owned by db_securityadmin).
+ *
+ * Order within the section: roles first (so users can be members at creation
+ * if any future migration wanted to do that — currently the data shows none),
+ * then users.
+ */
+function emitPrincipals(principals: readonly DatabasePrincipalDef[]): string {
+  if (principals.length === 0) return '';
+  const lines: string[] = ['-- Database principals (users + custom roles)', 'GO'];
+
+  const roles = principals.filter((p) => p.kind === 'database_role' || p.kind === 'application_role');
+  const users = principals.filter((p) => p.kind !== 'database_role' && p.kind !== 'application_role');
+
+  for (const r of stableSortBy(roles, (p) => p.name.toLowerCase())) {
+    const authClause = r.owner ? ` AUTHORIZATION ${quoteIdent(r.owner)}` : '';
+    lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(r.name)}) IS NULL`);
+    lines.push(`    EXEC('CREATE ROLE ${quoteIdent(r.name)}${authClause}');`);
+    lines.push('GO');
+  }
+
+  for (const u of stableSortBy(users, (p) => p.name.toLowerCase())) {
+    // Windows / AAD users have a different `CREATE USER` syntax (no FOR LOGIN);
+    // emit them straight if the principal isn't already in the DB.
+    if (u.kind === 'windows_user' || u.kind === 'aad_user' || u.kind === 'aad_group') {
+      lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(u.name)}) IS NULL`);
+      lines.push(`    EXEC('CREATE USER ${quoteIdent(u.name)} FROM EXTERNAL PROVIDER');`);
+      lines.push('GO');
+      continue;
+    }
+    // SQL users: mirror v5.0's conditional FOR LOGIN / WITHOUT LOGIN pattern.
+    // Wrapped in `IF DATABASE_PRINCIPAL_ID(...) IS NULL` so the whole block
+    // is idempotent when the baseline is re-applied (e.g. for diagnostics).
+    lines.push(`IF DATABASE_PRINCIPAL_ID(${quoteString(u.name)}) IS NULL`);
+    lines.push('BEGIN');
+    lines.push(`    DECLARE @login_exists_${safeSuffix(u.name)} BIT = 0;`);
+    lines.push(
+      `    IF SERVERPROPERTY('EngineEdition') = 5 SET @login_exists_${safeSuffix(u.name)} = 1; ` +
+      `ELSE IF EXISTS (SELECT 1 FROM master.sys.server_principals WHERE name = ${quoteString(u.name)}) ` +
+      `SET @login_exists_${safeSuffix(u.name)} = 1;`,
+    );
+    lines.push(`    IF @login_exists_${safeSuffix(u.name)} = 1`);
+    lines.push(`        EXEC('CREATE USER ${quoteIdent(u.name)} FOR LOGIN ${quoteIdent(u.name)}');`);
+    lines.push('    ELSE');
+    lines.push(`        EXEC('CREATE USER ${quoteIdent(u.name)} WITHOUT LOGIN');`);
+    lines.push('END');
+    lines.push('GO');
+  }
+
+  return lines.join(NL);
+}
+
+/** Safe identifier suffix for variable names embedded inside an IF block. */
+function safeSuffix(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_]/g, '_');
+}
+
+/**
+ * Emit ALTER ROLE … ADD MEMBER statements, each guarded by IS_ROLEMEMBER so
+ * the baseline is safe to re-apply (and tolerant of orderings where Skyway
+ * itself may have created a partial state on retry).
+ */
+function emitRoleMemberships(memberships: readonly RoleMembershipDef[]): string {
+  if (memberships.length === 0) return '';
+  const lines: string[] = ['-- Role memberships', 'GO'];
+  for (const m of stableSortBy(memberships, (x) => `${x.role}|${x.member}`.toLowerCase())) {
+    lines.push(`IF IS_ROLEMEMBER(${quoteString(m.role)}, ${quoteString(m.member)}) = 0`);
+    lines.push(`    ALTER ROLE ${quoteIdent(m.role)} ADD MEMBER ${quoteIdent(m.member)};`);
+    lines.push('GO');
+  }
+  return lines.join(NL);
+}
+
+/**
+ * Emit GRANT/DENY statements. Class-specific syntax:
+ *   DATABASE: GRANT <perm> TO [grantee]
+ *   SCHEMA:   GRANT <perm> ON SCHEMA::[schema] TO [grantee]
+ *   OBJECT:   GRANT <perm> ON [schema].[object] TO [grantee]            (most common)
+ *             GRANT <perm> ([column]) ON [schema].[object] TO [grantee] (column-level)
+ *   TYPE:     GRANT <perm> ON TYPE::[schema].[type] TO [grantee]
+ *
+ * GRANT is idempotent in SQL Server (repeated GRANTs are no-ops on permission rows),
+ * so we don't need IF guards. WITH GRANT OPTION is appended for `GRANT_WITH_GRANT_OPTION`.
+ */
+function emitPermissions(perms: readonly PermissionDef[]): string {
+  if (perms.length === 0) return '';
+  const lines: string[] = ['-- Permissions', 'GO'];
+  for (const p of perms) {
+    lines.push(formatPermission(p) + ';');
+    lines.push('GO');
+  }
+  return lines.join(NL);
+}
+
+function formatPermission(p: PermissionDef): string {
+  const verb =
+    p.state === 'DENY' ? 'DENY' :
+    p.state === 'REVOKE' ? 'REVOKE' : 'GRANT';
+  const tail =
+    p.state === 'GRANT_WITH_GRANT_OPTION' ? ' WITH GRANT OPTION' : '';
+
+  const grantee = quoteIdent(p.grantee);
+  const perm = p.permission;
+  const colClause = p.targetColumn ? ` (${quoteIdent(p.targetColumn)})` : '';
+
+  switch (p.targetClass) {
+    case 'database':
+      return `${verb} ${perm} TO ${grantee}${tail}`;
+    case 'schema':
+      return `${verb} ${perm} ON SCHEMA::${quoteIdent(p.targetSchema!)} TO ${grantee}${tail}`;
+    case 'type':
+      return `${verb} ${perm} ON TYPE::${quoteIdent(p.targetSchema!)}.${quoteIdent(p.targetType!)} TO ${grantee}${tail}`;
+    case 'object':
+    default:
+      return (
+        `${verb} ${perm}${colClause} ON ${quoteIdent(p.targetSchema!)}.${quoteIdent(p.targetObject!)} ` +
+        `TO ${grantee}${tail}`
+      );
+  }
 }

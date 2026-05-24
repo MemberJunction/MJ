@@ -52,6 +52,9 @@ function snapshotFixture(): SchemaSnapshot {
     sequences: [],
     userDefinedTypes: [],
     extendedProperties: [],
+    principals: [],
+    roleMemberships: [],
+    permissions: [],
   };
 }
 

@@ -9,7 +9,7 @@
 
 import type { QueryRunner } from './connection';
 import { quoteIdent, stableSortBy } from './util';
-import type { TableDataDump, TableDef } from './types';
+import type { ColumnDef, TableDataDump, TableDef } from './types';
 
 export interface DumpProgress {
   onTable?(table: TableDef, rowsSoFar: number, rowsTotal?: number): void;
@@ -39,7 +39,7 @@ export async function dumpTables(
     const rows: unknown[][] = [];
     let count = 0;
     const orderBy = buildOrderBy(table);
-    const select = `SELECT ${includedColumns.map((c) => quoteIdent(c.name)).join(', ')} ` +
+    const select = `SELECT ${includedColumns.map(selectExpressionForColumn).join(', ')} ` +
       `FROM ${quoteIdent(table.schema)}.${quoteIdent(table.name)} ${orderBy}`;
     let truncated = false;
 
@@ -93,4 +93,26 @@ function isLobType(dataType: string): boolean {
     lower === 'sql_variant' ||
     lower.endsWith('(max)')
   );
+}
+
+/**
+ * Build the SELECT expression for a column.
+ *
+ * Datetime2 / datetimeoffset / time columns carry up to 7 fractional-second
+ * digits (100ns ticks). When the mssql driver hands them back as a JS `Date`
+ * we lose everything past milliseconds — the resulting INSERTs round to
+ * `.SSS000`, producing systematic row-level diffs against the source DB.
+ * Wrapping these in `CONVERT(NVARCHAR(50), col, 121)` returns the raw
+ * datetime string with full precision; SQL Server then implicitly converts
+ * the string literal back to datetime2 at INSERT time.
+ *
+ * `datetime` (legacy) is 3.33ms precision so JS Date is sufficient; we leave
+ * it alone. `smalldatetime` is minute-precision; also fine.
+ */
+function selectExpressionForColumn(c: ColumnDef): string {
+  const lc = c.dataType.toLowerCase();
+  if (lc.startsWith('datetime2') || lc.startsWith('datetimeoffset') || lc.startsWith('time')) {
+    return `CONVERT(NVARCHAR(50), ${quoteIdent(c.name)}, 121) AS ${quoteIdent(c.name)}`;
+  }
+  return quoteIdent(c.name);
 }
