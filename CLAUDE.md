@@ -9,6 +9,22 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 # MemberJunction Development Guide
 
+## 🗺️ Nested CLAUDE.md Index
+
+Sub-directory CLAUDE.md files extend this root guide with topic-specific rules. **Read the relevant one when working in its tree** — they contain conventions that won't appear here.
+
+| Path | Scope |
+|------|-------|
+| [`migrations/CLAUDE.md`](migrations/CLAUDE.md) | Database migration authoring rules — naming, hardcoded UUIDs, system columns, CodeGen handoff |
+| [`docker/CLAUDE.md`](docker/CLAUDE.md) | Docker workbench + MJAPI container configurations |
+| [`metadata/CLAUDE.md`](metadata/CLAUDE.md) | Metadata file authoring — `@lookup` / `@file` / `@parent` refs, sync push, JSON-type interfaces |
+| [`packages/Actions/CLAUDE.md`](packages/Actions/CLAUDE.md) | Action authoring patterns, parameter validation, error handling |
+| [`packages/Angular/CLAUDE.md`](packages/Angular/CLAUDE.md) | Angular conventions — change detection, naming, custom forms, BaseFormPanel slot system |
+| [`packages/Angular/Generic/CLAUDE.md`](packages/Angular/Generic/CLAUDE.md) | Generic-Angular package rules — no Router imports, reusability constraints |
+| [`packages/Angular/Explorer/CLAUDE.md`](packages/Angular/Explorer/CLAUDE.md) | Explorer-specific patterns — `NavigationService`, `BaseResourceComponent`, deep links |
+| [`packages/Angular/Explorer/dashboards/CLAUDE.md`](packages/Angular/Explorer/dashboards/CLAUDE.md) | Dashboard page chrome (`<mj-page-layout>` + header/body trio), `NotifyLoadComplete`, agent context wiring |
+| [`packages/DBAutoDoc/CLAUDE.md`](packages/DBAutoDoc/CLAUDE.md) | DB auto-doc package conventions |
+
 ## 📜 Project-Wide Standards
 
 - **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. No dropping tables or columns, no narrowing types, no renaming, no adding required parameters. Breaking changes force a major version bump. Consult this before authoring any migration that modifies an existing schema. (Adopted 2026-04-29; applies prospectively from each app's next published version going forward.)
