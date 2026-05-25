@@ -1609,10 +1609,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
             : new Map<string, CachedRunViewResult | null>();
 
+        // Pre-build index Map for server results lookup to avoid O(N^2) complexity in the loop below
+        const serverResultsMap = new Map<number, RunViewWithCacheCheckResult<T>>();
+        if (response.results) {
+            for (let i = 0; i < response.results.length; i++) {
+                const r = response.results[i];
+                serverResultsMap.set(r.viewIndex, r);
+            }
+        }
+
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, response.results, preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsMap.get(i), preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -1649,12 +1658,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
-        serverResults: RunViewWithCacheCheckResult<T>[],
+        checkResult: RunViewWithCacheCheckResult<T> | undefined,
         preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
-        const checkResult = serverResults.find(r => r.viewIndex === index);
-
         if (!checkResult) {
             return {
                 result: {
@@ -2737,31 +2744,120 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This prevents non-deterministic output in CodeGen and other metadata consumers
         const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
-        if (fieldValues && fieldValues.length > 0)
-            for (let f of fields) {
-                // populate the field values for each field, if we have them
-                f.EntityFieldValues = fieldValues.filter(fv => UUIDsEqual(fv.EntityFieldID, f.ID));
+        if (fieldValues && fieldValues.length > 0) {
+            const fieldValuesMap = new Map<string, any[]>();
+            for (let i = 0; i < fieldValues.length; i++) {
+                const fv = fieldValues[i];
+                const key = NormalizeUUID(fv.EntityFieldID);
+                let list = fieldValuesMap.get(key);
+                if (!list) {
+                    list = [];
+                    fieldValuesMap.set(key, list);
+                }
+                list.push(fv);
             }
-
-        // Link organic key related entities to their parent organic keys
-        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            for (const ok of organicKeys) {
-                ok.EntityOrganicKeyRelatedEntities = organicKeyRelatedEntities.filter(
-                    okre => UUIDsEqual(okre.EntityOrganicKeyID, ok.ID)
-                );
+            for (let i = 0; i < fields.length; i++) {
+                const f = fields[i];
+                f.EntityFieldValues = fieldValuesMap.get(NormalizeUUID(f.ID)) || [];
             }
         }
 
-        for (let e of sortedEntities) {
-            e.EntityFields = fields.filter(f => UUIDsEqual(f.EntityID, e.ID)).sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissions.filter(p => UUIDsEqual(p.EntityID, e.ID));
-            e.EntityRelationships = relationships.filter(r => UUIDsEqual(r.EntityID, e.ID));
-            e.EntitySettings = settings.filter(s => UUIDsEqual(s.EntityID, e.ID));
+        // Link organic key related entities to their parent organic keys
+        if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
+            const okreMap = new Map<string, any[]>();
+            for (let i = 0; i < organicKeyRelatedEntities.length; i++) {
+                const okre = organicKeyRelatedEntities[i];
+                const key = NormalizeUUID(okre.EntityOrganicKeyID);
+                let list = okreMap.get(key);
+                if (!list) {
+                    list = [];
+                    okreMap.set(key, list);
+                }
+                list.push(okre);
+            }
+            for (let i = 0; i < organicKeys.length; i++) {
+                const ok = organicKeys[i];
+                ok.EntityOrganicKeyRelatedEntities = okreMap.get(NormalizeUUID(ok.ID)) || [];
+            }
+        }
+
+        const fieldsMap = new Map<string, any[]>();
+        for (let i = 0; i < fields.length; i++) {
+            const f = fields[i];
+            const key = NormalizeUUID(f.EntityID);
+            let list = fieldsMap.get(key);
+            if (!list) {
+                list = [];
+                fieldsMap.set(key, list);
+            }
+            list.push(f);
+        }
+
+        const permissionsMap = new Map<string, any[]>();
+        for (let i = 0; i < permissions.length; i++) {
+            const p = permissions[i];
+            const key = NormalizeUUID(p.EntityID);
+            let list = permissionsMap.get(key);
+            if (!list) {
+                list = [];
+                permissionsMap.set(key, list);
+            }
+            list.push(p);
+        }
+
+        const relationshipsMap = new Map<string, any[]>();
+        for (let i = 0; i < relationships.length; i++) {
+            const r = relationships[i];
+            const key = NormalizeUUID(r.EntityID);
+            let list = relationshipsMap.get(key);
+            if (!list) {
+                list = [];
+                relationshipsMap.set(key, list);
+            }
+            list.push(r);
+        }
+
+        const settingsMap = new Map<string, any[]>();
+        for (let i = 0; i < settings.length; i++) {
+            const s = settings[i];
+            const key = NormalizeUUID(s.EntityID);
+            let list = settingsMap.get(key);
+            if (!list) {
+                list = [];
+                settingsMap.set(key, list);
+            }
+            list.push(s);
+        }
+
+        const organicKeysMap = new Map<string, any[]>();
+        if (organicKeys) {
+            for (let i = 0; i < organicKeys.length; i++) {
+                const ok = organicKeys[i];
+                if (ok.Status === 'Active') {
+                    const key = NormalizeUUID(ok.EntityID);
+                    let list = organicKeysMap.get(key);
+                    if (!list) {
+                        list = [];
+                        organicKeysMap.set(key, list);
+                    }
+                    list.push(ok);
+                }
+            }
+        }
+
+        for (let i = 0; i < sortedEntities.length; i++) {
+            const e = sortedEntities[i];
+            const entityIdKey = NormalizeUUID(e.ID);
+
+            const entityFields = fieldsMap.get(entityIdKey) || [];
+            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityPermissions = permissionsMap.get(entityIdKey) || [];
+            e.EntityRelationships = relationshipsMap.get(entityIdKey) || [];
+            e.EntitySettings = settingsMap.get(entityIdKey) || [];
+
             // Link active organic keys to the entity
             if (organicKeys) {
-                e.EntityOrganicKeys = organicKeys.filter(
-                    ok => UUIDsEqual(ok.EntityID, e.ID) && ok.Status === 'Active'
-                );
+                e.EntityOrganicKeys = organicKeysMap.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e));
         }
