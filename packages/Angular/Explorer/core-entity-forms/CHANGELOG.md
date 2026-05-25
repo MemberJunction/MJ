@@ -1,5 +1,49 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [0102dc6]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/ng-base-forms@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-testing@5.37.0
+  - @memberjunction/ng-actions@5.37.0
+  - @memberjunction/ng-ai-test-harness@5.37.0
+  - @memberjunction/ng-list-management@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-search@5.37.0
+  - @memberjunction/ng-versions@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ng-agents@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-link-directives@5.37.0
+  - @memberjunction/ng-action-gallery@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-code-editor@5.37.0
+  - @memberjunction/ng-deep-diff@5.37.0
+  - @memberjunction/ng-entity-relationship-diagram@5.37.0
+  - @memberjunction/ng-entity-viewer@5.37.0
+  - @memberjunction/ng-flow-editor@5.37.0
+  - @memberjunction/ng-join-grid@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/ng-timeline@5.37.0
+  - @memberjunction/ng-trees@5.37.0
+  - @memberjunction/templates-base-types@5.37.0
+  - @memberjunction/ng-tabstrip@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ng-markdown@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

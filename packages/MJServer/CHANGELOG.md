@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/server
 
+## 5.37.0
+
+### Patch Changes
+
+- 22b775f: Add `client:capture-data-snapshot` actionable command so agents can request the user's live view of an artifact (including client-side filter/sort/selection state) before answering. Wires the command through SkipProxyAgent and adds a chat-UI handler that captures the snapshot, attaches it as a Data Snapshot artifact, and auto-sends the followup question.
+- f5531e0: Refactor the SQL render pipeline's row-cap path to be AST-based. Add `SQLParser.StripComments`, a token-aware comment stripper that preserves string literals and quoted identifiers (including SQL Server brackets) and handles nested block comments. Replace the regex-based `applyMaxRows` in `RenderPipeline` with `QueryPagingEngine.WrapWithMaxRows`, which injects `TOP`/`LIMIT` via the AST and falls back to OFFSET/FETCH for parser-unsupported CTE shapes. Throw on `MaxRows + Paging` conflicts instead of silently overriding. Route `AdhocQueryResolver` through `RenderPipeline.Run` so composition macros, templates, and row capping run consistently with saved queries.
+- Updated dependencies [e32f21f]
+- Updated dependencies [dadbde9]
+- Updated dependencies [baf3032]
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/core-actions@5.37.0
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/codegen-lib@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-agent-manager-actions@5.37.0
+  - @memberjunction/ai-agent-manager@5.37.0
+  - @memberjunction/ai-agents@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/computer-use-engine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/scheduling-engine@5.37.0
+  - @memberjunction/skip-types@5.37.0
+  - @memberjunction/templates@5.37.0
+  - @memberjunction/testing-engine@5.37.0
+  - @memberjunction/actions-apollo@5.37.0
+  - @memberjunction/actions-bizapps-accounting@5.37.0
+  - @memberjunction/actions-bizapps-crm@5.37.0
+  - @memberjunction/actions-bizapps-formbuilders@5.37.0
+  - @memberjunction/actions-bizapps-lms@5.37.0
+  - @memberjunction/actions-bizapps-social@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/scheduling-actions@5.37.0
+  - @memberjunction/tag-engine@5.37.0
+  - @memberjunction/tag-engine-base@5.37.0
+  - @memberjunction/ai-mcp-client@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/ai-vectors-pinecone@5.37.0
+  - @memberjunction/api-keys@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/auth-providers@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/entity-communications-base@5.37.0
+  - @memberjunction/entity-communications-server@5.37.0
+  - @memberjunction/notifications@5.37.0
+  - @memberjunction/communication-ms-graph@5.37.0
+  - @memberjunction/communication-sendgrid@5.37.0
+  - @memberjunction/component-registry-client-sdk@5.37.0
+  - @memberjunction/doc-utils@5.37.0
+  - @memberjunction/encryption@5.37.0
+  - @memberjunction/external-change-detection@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/integration-schema-builder@5.37.0
+  - @memberjunction/interactive-component-types@5.37.0
+  - @memberjunction/lists@5.37.0
+  - @memberjunction/data-context@5.37.0
+  - @memberjunction/data-context-server@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/postgresql-dataprovider@5.37.0
+  - @memberjunction/redis-provider@5.37.0
+  - @memberjunction/scheduling-engine-base@5.37.0
+  - @memberjunction/schema-engine@5.37.0
+  - @memberjunction/search-engine@5.37.0
+  - @memberjunction/server-extensions-core@5.37.0
+  - @memberjunction/testing-engine-base@5.37.0
+  - @memberjunction/version-history@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/lists-base@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+  - @memberjunction/scheduling-base-types@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes
