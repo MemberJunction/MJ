@@ -169,6 +169,49 @@ const entity = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEntity>(
 // Returns an instance of the highest-priority registered subclass for 'Users'
 ```
 
+### Structured registration: `@RegisterClassEx` + metadata
+
+When a registration needs anything beyond `(baseClass, key, priority)` — toggling the rarely-used flags, or attaching **metadata** for runtime filtering — reach for `@RegisterClassEx`. It's the same registration under the hood, but accepts a typed options bag instead of trailing positional booleans:
+
+```typescript
+import { RegisterClassEx } from '@memberjunction/global';
+
+@RegisterClassEx(BaseFormPanel, {
+    key: 'content-sources:tag-pipeline',
+    skipNullKeyWarning: true,
+    metadata: {
+        entity: 'MJ: Content Sources',
+        slot: 'after-fields',
+        sortKey: 100,
+    },
+})
+export class TagPipelinePanel extends BaseFormPanel { /* ... */ }
+```
+
+The `metadata` field is stored on the `ClassRegistration` and is purely a runtime aid for discovery — it has no effect on the priority / key lookup. Pair it with one of the discovery helpers below:
+
+| Helper                                                | Use when …                                                                                                                                       |
+|------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| `GetAllRegistrationsByMetadata(base, predicate)`     | You have structured discriminators (`entity`, `slot`, `sortKey`, etc.) and want to filter on multiple fields. Recommended default.               |
+| `GetAllRegistrationsByKeyPrefix(base, prefix)`       | Registrations share a structured key prefix (e.g. `"breed:..."` / `"<EntityName>:..."`) and you want everything below that prefix.               |
+| `GetAllRegistrationsByKeyPattern(base, regex)`       | More nuanced key matching than a prefix can express.                                                                                              |
+
+```typescript
+// Discover every panel that should appear in a given form's slot
+const panels = MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(
+    BaseFormPanel,
+    (m) => m?.entity === 'MJ: Content Sources' && m?.slot === 'after-fields',
+);
+// Sort by metadata.sortKey, then by Priority, then by registration order
+panels.sort((a, b) => {
+    const aSort = (a.Metadata?.sortKey as number) ?? 0;
+    const bSort = (b.Metadata?.sortKey as number) ?? 0;
+    return bSort !== aSort ? bSort - aSort : b.Priority - a.Priority;
+});
+```
+
+`@RegisterClass` also accepts an optional sixth positional `metadata` arg for parity, but the options-bag form scales better past three arguments and reads better at call sites — prefer `@RegisterClassEx` for new code.
+
 ### Event System
 
 MJGlobal provides a publish/subscribe event bus built on RxJS. Events can be observed in real-time or with replay (a `ReplaySubject` buffering up to 100 events for 30 seconds).
