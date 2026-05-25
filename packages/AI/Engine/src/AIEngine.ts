@@ -6,7 +6,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
@@ -62,7 +62,12 @@ export class EntityAIActionParams extends AIActionParams {
  *
  * @description ONLY USE ON SERVER-SIDE. For metadata only, use the AIEngineBase class which can be used anywhere.
  */
-export class AIEngine extends BaseSingleton<AIEngine> {
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 15000,
+    description: "Server-side AI Engine and Embeddings Pre-Warming"
+})
+export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
 
@@ -108,6 +113,22 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
+    }
+
+    /**
+     * Executes the background startup sequence. This method is called automatically
+     * by the StartupManager. It runs AIEngine configuration and pre-warms the local
+     * embedding models and vector caches.
+     *
+     * @param contextUser The authenticated user context (system/boot user context)
+     * @param provider Optional metadata provider override
+     */
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Load the AI configuration and base metadata
+        await this.Config(false, contextUser, provider);
+
+        // Pre-generate agent, action, and other local embeddings in the background
+        await this.ensureEmbeddingsGenerated();
     }
 
     // ========================================================================
