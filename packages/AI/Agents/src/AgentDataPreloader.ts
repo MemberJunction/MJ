@@ -149,14 +149,22 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                 failedSources: []
             };
 
-            // Execute data sources in order
-            for (const source of dataSources) {
+            // Execute data sources in parallel
+            const preloads = dataSources.map(async (source) => {
                 try {
                     const sourceData = await this.executeDataSource(source, contextUser, runId);
-
-                    // Determine the path (use DestinationPath if provided, otherwise Name)
                     const path = source.DestinationPath || source.Name;
+                    return { success: true as const, source, sourceData, path };
+                } catch (error) {
+                    return { success: false as const, source, error };
+                }
+            });
 
+            const preloadedResults = await Promise.all(preloads);
+
+            for (const item of preloadedResults) {
+                if (item.success) {
+                    const { source, sourceData, path } = item;
                     // Set data in the appropriate destination
                     switch (source.DestinationType) {
                         case 'Data':
@@ -184,7 +192,8 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                         verboseOnly: true,
                         isVerboseEnabled: IsVerboseLoggingEnabled
                     });
-                } catch (error) {
+                } else {
+                    const { source, error } = item;
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                     result.failedSources.push({
                         name: source.Name,
@@ -192,7 +201,6 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                         errorMessage
                     });
                     LogError(`Failed to preload data source '${source.Name}' for agent ${agentId}: ${errorMessage}`, undefined, error);
-                    // Continue loading other sources even if one fails
                 }
             }
 

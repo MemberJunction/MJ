@@ -326,6 +326,45 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+## Latency Optimizations & Concurrent Sub-Agent Execution
+
+To drastically reduce execution latency, the framework includes the following optimizations:
+
+### 1. In-Memory Query Embedding Caching
+In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant local ONNX embedding inference, eliminating CPU-bound event-loop blockages.
+* **Eviction**: Holds up to 1000 items using a First-In-First-Out (FIFO) eviction policy.
+* **Control**: Callers can supply options `{ bypassCache: true }` (re-calculates but caches the new result) or `{ noCache: true }` (bypasses and does not store the result).
+* **Reset**: The cache can be manually cleared by calling `AIEngine.Instance.ClearEmbeddingCache()`.
+
+### 2. Parallel Data Source Preloading
+`AgentDataPreloader.PreloadAgentData` resolves and loads all required agent data sources concurrently using `Promise.all`, removing sequential round-trip bottlenecks.
+
+### 3. Non-blocking Observability DB Logging
+Observability writes (`AIAgentRunStep` records) are completely non-blocking:
+* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
+* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
+* All pending logging writes are awaited concurrently on finalization: `await Promise.all(this._pendingSaves)` inside `finalizeAgentRun()`.
+
+### 4. Concurrent Sub-Agent Execution
+Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
+* **Concurrence**: Spawns and runs all requested sub-agents concurrently via `Promise.all`.
+* **State Merging**: Aggregates all media/file outputs and sequentially merges child/related sub-agent payloads back into the parent state via the `PayloadManager` to avoid race conditions.
+* **Context Preservation**: Appends an aggregated delegation and completion log to the parent conversation context once all parallel steps complete.
+
+#### Loop Response Schema
+```json
+{
+  "taskComplete": false,
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgents": [
+      { "name": "DbAgent", "message": "Search the database", "terminateAfter": false },
+      { "name": "WebAgent", "message": "Gather details from web search", "terminateAfter": false }
+    ]
+  }
+}
+```
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:

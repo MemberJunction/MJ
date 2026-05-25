@@ -100,6 +100,16 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     private _actionEmbeddingsCache: Map<string, boolean> = new Map();
     private _embeddingsGenerated: boolean = false;
 
+    // In-memory query embedding cache
+    private _embeddingCache: Map<string, EmbedTextResult> = new Map();
+
+    /**
+     * Clears all cached text embeddings.
+     */
+    public ClearEmbeddingCache(): void {
+        this._embeddingCache.clear();
+    }
+
     // Loading state management
     private _loaded: boolean = false;
     private _loading: boolean = false;
@@ -953,11 +963,24 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         return { result, model };
     }
 
-    /**
-     * Helper method to instantiate a class instance for the given model and calculate an embedding
-     * vector from the provided text.
-     */
-    public async EmbedText(model: MJAIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
+    public async EmbedText(
+        model: MJAIModelEntityExtended, 
+        text: string, 
+        apiKey?: string, 
+        options?: { bypassCache?: boolean; noCache?: boolean }
+    ): Promise<EmbedTextResult | null> {
+        if (!text || text.trim().length === 0) {
+            return null;
+        }
+
+        const bypassCache = options?.bypassCache ?? false;
+        const noCache = options?.noCache ?? false;
+
+        const cacheKey = `${model.ID}:${text}`;
+        if (!bypassCache && !noCache && this._embeddingCache.has(cacheKey)) {
+            return this._embeddingCache.get(cacheKey)!;
+        }
+
         const params: EmbedTextParams = {
             text: text,
             model: model.APIName
@@ -975,6 +998,17 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         }
 
         const result = await embedding.EmbedText(params);
+
+        if (result && result.vector && result.vector.length > 0 && !noCache) {
+            if (this._embeddingCache.size >= 1000) {
+                const firstKey = this._embeddingCache.keys().next().value;
+                if (firstKey !== undefined) {
+                    this._embeddingCache.delete(firstKey);
+                }
+            }
+            this._embeddingCache.set(cacheKey, result);
+        }
+
         return result;
     }
 

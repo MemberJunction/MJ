@@ -239,6 +239,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ---------------------------------------------------------------------------
 
 import { AIEngine, AIActionParams, EntityAIActionParams } from '../AIEngine';
+import { MJGlobal } from '@memberjunction/global';
 import type { NoteEmbeddingMetadata } from '../types/NoteMatchResult';
 import type { ExampleEmbeddingMetadata } from '../types/ExampleMatchResult';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -1041,6 +1042,60 @@ describe('AIEngine', () => {
 
         it('should have correct LocalEmbeddingModelVendorName', () => {
             expect(engine.LocalEmbeddingModelVendorName).toBe('LocalEmbeddings');
+        });
+    });
+
+    describe('Embedding Cache', () => {
+        let mockEmbeddingInstance: any;
+
+        beforeEach(() => {
+            mockEmbeddingInstance = {
+                EmbedText: vi.fn().mockResolvedValue({
+                    success: true,
+                    vector: [0.1, 0.2, 0.3]
+                })
+            };
+            const CreateInstanceMock = (MJGlobal.Instance.ClassFactory.CreateInstance as any);
+            CreateInstanceMock.mockReturnValue(mockEmbeddingInstance);
+            engine.ClearEmbeddingCache();
+        });
+
+        it('should cache embedding results and return cached value on subsequent calls', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            const res1 = await engine.EmbedText(model, 'hello');
+            const res2 = await engine.EmbedText(model, 'hello');
+
+            expect(res1).toEqual(res2);
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(1);
+        });
+
+        it('should bypass cache when bypassCache is set to true', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            await engine.EmbedText(model, 'hello');
+            await engine.EmbedText(model, 'hello', undefined, { bypassCache: true });
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should not cache results when noCache is set to true', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            await engine.EmbedText(model, 'hello', undefined, { noCache: true });
+            await engine.EmbedText(model, 'hello');
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
+        });
+
+        it('should clear cache when ClearEmbeddingCache is called', async () => {
+            const model = { ID: 'model-1', APIName: 'm1', DriverClass: 'd1' } as any;
+            
+            await engine.EmbedText(model, 'hello');
+            engine.ClearEmbeddingCache();
+            await engine.EmbedText(model, 'hello');
+
+            expect(mockEmbeddingInstance.EmbedText).toHaveBeenCalledTimes(2);
         });
     });
 });

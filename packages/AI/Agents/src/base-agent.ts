@@ -199,6 +199,18 @@ export class BaseAgent {
     private _promptRunner: AIPromptRunner = new AIPromptRunner();
 
     /**
+     * List of pending database save Promises for observability step records.
+     * Awaited concurrently in finalizeAgentRun() to prevent blocking.
+     */
+    private _pendingSaves: Promise<boolean>[] = [];
+
+    /**
+     * Queue map to chain database saves sequentially per step entity.
+     * Prevents UPDATE queries running before INSERT queries on quick steps.
+     */
+    private _stepSavePromises: Map<string, Promise<any>> = new Map();
+
+    /**
      * Active per-request metadata provider, set at the start of Execute().
      * Defaults to the global Metadata.Provider; overridden when a per-request
      * provider is passed through ExecuteAgentParams.provider for server isolation.
@@ -4573,10 +4585,9 @@ The context is now within limits. Please retry your request with the recovered c
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
                 SecondaryScopes: params.SecondaryScopes,
-                // Add callback to link AgentRun ID immediately when created
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
-                    await stepEntity.Save();
+                    this.queueStepSave(stepEntity);
                 }
             });
             
@@ -5457,9 +5468,7 @@ The context is now within limits. Please retry your request with the recovered c
             });
         }
         
-        if (!await stepEntity.Save()) {
-            throw new Error(`Failed to create agent run step record: ${JSON.stringify(stepEntity.LatestResult)}`);
-        }
+        this.queueStepSave(stepEntity);
         
         // Add the step to the agent run's Steps array
         if (this._agentRun) {
@@ -5541,13 +5550,29 @@ The context is now within limits. Please retry your request with the recovered c
                 });
             }
             
-            if (!await stepEntity.Save()) {
-                console.error('Failed to update agent run step record');
-            }
+            this.queueStepSave(stepEntity);
         }
         catch (e) {
             console.error('Failed to update agent run step record', e);
         }
+    }
+
+    /**
+     * Queues a database save for a step entity.
+     * Ensures saves on the same step record are executed sequentially to avoid database race conditions.
+     * @private
+     */
+    private queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
+        const id = stepEntity.ID;
+        const previousSave = this._stepSavePromises.get(id) || Promise.resolve();
+        const currentSave = previousSave.then(() => stepEntity.Save()).then((ok) => {
+            if (!ok) {
+                console.error(`Failed to save agent run step record: ${id}`);
+            }
+            return ok;
+        });
+        this._stepSavePromises.set(id, currentSave);
+        this._pendingSaves.push(currentSave);
     }
 
     /**
@@ -5943,10 +5968,9 @@ The context is now within limits. Please retry your request with the recovered c
                 });
             } : undefined;
             
-            // Add callback to link PromptRun ID immediately when created
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;
-                await stepEntity.Save();
+                this.queueStepSave(stepEntity);
             };
             
             // Execute the prompt
@@ -6737,7 +6761,19 @@ The context is now within limits. Please retry your request with the recovered c
         subAgentPayloadOverride?: any,
         stepCount: number = 0
     ): Promise<BaseAgentNextStep<SR, SC>> {
-        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+        // If multiple sub-agents are requested, execute them in parallel
+        if (previousDecision?.subAgents && previousDecision.subAgents.length > 0) {
+            return await this.executeParallelSubAgents<SC, SR>(
+                params,
+                previousDecision.subAgents,
+                previousDecision,
+                parentStepId,
+                subAgentPayloadOverride,
+                stepCount
+            );
+        }
+
+        const subAgentRequest = previousDecision?.subAgent as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
 
         if (!name) {
@@ -6792,6 +6828,278 @@ The context is now within limits. Please retry your request with the recovered c
             errorMessage: `Sub-agent '${name}' not found or not active`,
             previousPayload: previousDecision?.newPayload,
             newPayload: previousDecision?.newPayload
+        };
+    }
+
+    /**
+     * Executes multiple sub-agents in parallel and merges their output payloads sequentially.
+     * 
+     * @private
+     */
+    private async executeParallelSubAgents<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        subAgentRequests: AgentSubAgentRequest<SC>[],
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        parentStepId?: string,
+        subAgentPayloadOverride?: any,
+        stepCount: number = 0
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const currentPayload = previousDecision.newPayload;
+
+        // 1. Dispatch all sub-agents concurrently
+        const subAgentPromises = subAgentRequests.map(async (request) => {
+            const name = request.name;
+            
+            // Find the sub-agent - check both child and related agents
+            const childAgents = AIEngine.Instance.Agents.filter(a =>
+                UUIDsEqual(a.ParentID, params.agent.ID) &&
+                a.Status === 'Active'
+            );
+            const childAgent = childAgents.find(a => a.Name.trim().toLowerCase() === name.trim().toLowerCase());
+
+            let subAgentEntity: MJAIAgentEntityExtended | undefined = childAgent;
+            let relationship: MJAIAgentRelationshipEntity | undefined = undefined;
+
+            if (!subAgentEntity) {
+                // Check related
+                const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
+                    UUIDsEqual(ar.AgentID, params.agent.ID) &&
+                    ar.Status === 'Active'
+                );
+                for (const rel of activeRelationships) {
+                    const relatedAgent = AIEngine.Instance.Agents.find(a =>
+                        UUIDsEqual(a.ID, rel.SubAgentID) &&
+                        a.Status === 'Active'
+                    );
+                    if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
+                        subAgentEntity = relatedAgent;
+                        relationship = rel;
+                        break;
+                    }
+                }
+            }
+
+            if (!subAgentEntity) {
+                throw new Error(`Sub-agent '${name}' not found or not active`);
+            }
+
+            // Report progress
+            params.onProgress?.({
+                step: 'subagent_execution',
+                message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${name}`),
+                metadata: {
+                    agentName: params.agent.Name,
+                    subAgentName: name,
+                    reason: request.message,
+                    relationshipType: relationship ? 'related' : 'child',
+                    stepCount: stepCount + 1,
+                    hierarchicalStep: this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts)
+                }
+            });
+
+            // Add delegation message to conversation
+            params.conversationMessages.push({
+                role: 'assistant',
+                content: `I'm delegating this task to the parallel sub-agent "${name}".\n\nReason: ${request.message}`
+            });
+
+            // Create step entity
+            const stepEntity = await this.createStepEntity({
+                stepType: 'Sub-Agent',
+                stepName: `Execute Parallel Sub-Agent: ${name}`,
+                contextUser: params.contextUser,
+                targetId: subAgentEntity.ID,
+                inputData: {
+                    agentName: params.agent.Name,
+                    subAgentName: name,
+                    message: request.message,
+                    terminateAfter: request.terminateAfter,
+                    conversationMessages: params.conversationMessages,
+                    parentAgentHierarchy: this._agentHierarchy,
+                    relationshipType: relationship ? 'related' : 'child'
+                },
+                payloadAtStart: currentPayload,
+                parentId: parentStepId
+            });
+
+            this.incrementExecutionCount(subAgentEntity.ID);
+
+            // Scoped payload / context computation
+            let initialSubAgentPayload: any = subAgentPayloadOverride;
+            let contextMessage: ChatMessage | null = null;
+            let downstreamPaths: string[] = [];
+            let upstreamPaths: string[] = [];
+
+            if (relationship) {
+                // Related Agent path
+                if (!initialSubAgentPayload && relationship.SubAgentInputMapping) {
+                    initialSubAgentPayload = this.applySubAgentInputMapping(
+                        currentPayload as unknown as Record<string, unknown>,
+                        relationship.SubAgentInputMapping
+                    );
+                }
+                let contextPaths: string[] = [];
+                if (relationship.SubAgentContextPaths) {
+                    try {
+                        contextPaths = JSON.parse(relationship.SubAgentContextPaths);
+                    } catch (parseError) {
+                        LogError(`Failed to parse SubAgentContextPaths for sub-agent ${name}: ${parseError.message}`);
+                    }
+                }
+                contextMessage = this.prepareRelatedSubAgentContextMessage(
+                    currentPayload as unknown as Record<string, unknown>,
+                    contextPaths,
+                    params
+                );
+            } else {
+                // Child Agent path
+                const computedPaths = this.computeUpstreamDownstreamPaths(params, subAgentEntity, request);
+                downstreamPaths = computedPaths.downstreamPaths;
+                upstreamPaths = computedPaths.upstreamPaths;
+                if (!initialSubAgentPayload) {
+                    initialSubAgentPayload = await this.computeChildSubAgentPayload(
+                        params,
+                        subAgentEntity,
+                        downstreamPaths,
+                        request,
+                        previousDecision
+                    );
+                }
+            }
+
+            // Execute sub-agent
+            const subAgentResult = await this.ExecuteSubAgent(
+                params,
+                request,
+                subAgentEntity,
+                stepEntity,
+                initialSubAgentPayload,
+                contextMessage,
+                stepCount
+            );
+
+            return {
+                request,
+                result: subAgentResult,
+                subAgentEntity,
+                relationship,
+                stepEntity,
+                upstreamPaths
+            };
+        });
+
+        const executionResults = await Promise.all(subAgentPromises);
+
+        // 2. Process results and apply upstream payload changes sequentially
+        let mergedPayload = currentPayload;
+        let finalSuccess = true;
+
+        for (const res of executionResults) {
+            if (!res.result.success) {
+                finalSuccess = false;
+            }
+
+            // Merge media outputs
+            if (res.result.mediaOutputs?.length) {
+                this._mediaOutputs.push(...res.result.mediaOutputs);
+            }
+
+            // Merge file outputs
+            if (res.result.fileOutputs?.length) {
+                this._fileOutputs.push(...res.result.fileOutputs);
+            }
+
+            // Merge payload if successful
+            if (res.result.success) {
+                if (res.relationship) {
+                    // Related Agent merge
+                    if (res.relationship.SubAgentOutputMapping) {
+                        const payloadChange = this.applySubAgentOutputMapping(
+                            res.result.payload as unknown as Record<string, unknown>,
+                            mergedPayload as unknown as Record<string, unknown>,
+                            res.relationship.SubAgentOutputMapping
+                        );
+                        if (payloadChange && payloadChange.updateElements) {
+                            const mergeResult = this._payloadManager.applyAgentChangeRequest<SR>(
+                                mergedPayload,
+                                payloadChange as AgentPayloadChangeRequest<SR>,
+                                {
+                                    validateChanges: true,
+                                    logChanges: true,
+                                    analyzeChanges: true,
+                                    generateDiff: true,
+                                    agentName: `${res.request.name} (related agent mapping)`,
+                                    verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                                }
+                            );
+                            mergedPayload = mergeResult.result;
+                        }
+                    }
+                } else {
+                    // Child Agent merge
+                    let resultPayloadForMerge = res.result.payload;
+                    if (res.subAgentEntity.PayloadScope) {
+                        resultPayloadForMerge = this._payloadManager.reversePayloadScope(
+                            res.result.payload,
+                            res.subAgentEntity.PayloadScope
+                        );
+                    }
+                    const mergeResult = this._payloadManager.mergeUpstreamPayload(
+                        res.request.name,
+                        mergedPayload,
+                        resultPayloadForMerge,
+                        res.upstreamPaths,
+                        params.verbose === true || IsVerboseLoggingEnabled()
+                    );
+                    mergedPayload = mergeResult.result;
+                }
+            }
+
+            // Finalize step entity
+            const outputData = {
+                subAgentResult: {
+                    success: res.result.success,
+                    finalStep: res.result.agentRun?.FinalStep,
+                    errorMessage: res.result.agentRun?.ErrorMessage,
+                    stepCount: res.result.agentRun?.Steps?.length || 0,
+                },
+                shouldTerminate: res.request.terminateAfter === true,
+                nextStep: res.request.terminateAfter === true ? 'success' : 'retry'
+            };
+            res.stepEntity.PayloadAtEnd = this.serializePayloadAtEnd(mergedPayload);
+            await this.finalizeStepEntity(
+                res.stepEntity,
+                res.result.success,
+                res.result.agentRun?.ErrorMessage,
+                outputData
+            );
+        }
+
+        // 3. Aggregate all results into conversation context
+        const aggregatedMarkdown = executionResults
+            .map(r => {
+                const statusEmoji = r.result.success ? '✅' : '❌';
+                const baseInfo = `${statusEmoji} **Sub-Agent: ${r.request.name}**\n* Message: "${r.request.message}"\n* Status: ${r.result.agentRun?.FinalStep || 'Failed'}`;
+                if (r.result.agentRun?.ErrorMessage) {
+                    return `${baseInfo}\n* Error: ${r.result.agentRun.ErrorMessage}`;
+                }
+                return baseInfo;
+            })
+            .join('\n\n---\n\n');
+
+        params.conversationMessages.push({
+            role: 'user',
+            content: `Parallel Sub-Agents Completed:\n\n${aggregatedMarkdown}`
+        });
+
+        // Determine if any of the sub-agents require terminating the parent run
+        const shouldTerminateParent = subAgentRequests.some(r => r.terminateAfter === true);
+
+        return {
+            step: shouldTerminateParent ? 'Success' : 'Retry',
+            terminate: shouldTerminateParent,
+            newPayload: mergedPayload,
+            previousPayload: previousDecision.newPayload
         };
     }
 
@@ -7494,7 +7802,7 @@ The context is now within limits. Please retry your request with the recovered c
                     // Update step entity with ActionExecutionLog ID if available
                     if (actionResult.LogEntry?.ID) {
                         stepEntity.TargetLogID = actionResult.LogEntry.ID;
-                        await stepEntity.Save();
+                        this.queueStepSave(stepEntity);
                     }
                     
                     // Prepare output data with action result
@@ -9153,6 +9461,13 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
+        // Await all pending step saves concurrently
+        try {
+            await Promise.all(this._pendingSaves);
+        } catch (error) {
+            console.error('Error awaiting pending step saves:', error);
+        }
+
         // Only resolve media placeholders for ROOT agents (depth === 0)
         // Sub-agents keep placeholders intact so parent agents don't get huge base64 in their context
         // The root agent resolves all placeholders when returning the final result to the UI
