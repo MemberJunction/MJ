@@ -2,6 +2,12 @@
 
 This proposal details the architectural changes to optimize the `MetadataSync` push operation based on upfront batched bulk loading of `BaseEntity` instances, dynamic lookup caching, and file I/O caching.
 
+> **Status note (post-review):** the proposal below describes the original
+> design. The shipped implementation diverges in a few details surfaced by
+> code review — see "Implementation deltas from this proposal" at the
+> bottom of the file. Treat the canonical reference for current behavior
+> as the source under `packages/MetadataSync/src/lib/sync-metadata-engine.ts`.
+
 ---
 
 ## Architectural Overview
@@ -306,6 +312,48 @@ async resolveLookup(...): Promise<string> {
 ## Estimated Performance Impact
 
 Using `BaseEngine` to drive `MetadataSync`'s caching:
-* **Database round-trips**: Reduced by **70% to 85%** on typical sync workflows.
-* **Code complexity**: Substantially lowered by using the framework's existing event bus listener and built-in `RunViews` batching.
-* **Reliability**: Caches stay perfectly synchronized across mutative saves and deletes via standardized `BaseEntity` event listening.
+* **Database round-trips**: Reduced significantly on typical sync workflows by replacing per-record existence checks with one filtered `RunView` per entity. Realized gains depend on the size and shape of the metadata tree being synced; the largest wins are on trees with many records of the same entity.
+* **Code complexity**: Lowered by reusing the framework's `BaseEntity` event bus and built-in `RunViews` batching instead of a bespoke cache.
+* **Reliability**: Caches stay synchronized across saves and deletes via the standardized `BaseEntity` event listener; the file cache is invalidated on write so subsequent passes see fresh content.
+
+---
+
+## Implementation deltas from this proposal
+
+Code review surfaced a few corrections that landed in the shipped code but
+are not reflected in the diagrams above. Read the production source for
+canonical behavior; the highlights:
+
+* **`canUseImmediateMutation` is scoped, not blanket.** The override only
+  returns `true` for configs whose `PropertyName` starts with the
+  `cached_` prefix this engine owns. Non-preload configs (none today, but
+  a future subclass might add some) defer to `BaseEngine`'s default
+  filter/orderby guard. Inline docs explain why the override is safe for
+  our specific filter shape (`(ID='pk1') OR …`).
+* **Lookup invalidation is scoped per entity.** `removeEntityFromCache`
+  no longer clears the entire lookup cache; an entity → key reverse index
+  drops only the lookups touching that entity. `setCachedLookup` accepts
+  an optional `entityName` so callers register their entries in the
+  index.
+* **Lookup cache key is URI-encoded** to prevent collisions when field
+  values contain `=` / `&` / `|`.
+* **Falsy-PK cache hits work.** Callers use `cachedId !== undefined`
+  rather than truthy checks, so legitimately-falsy PKs (empty string,
+  `'0'`) are served from cache instead of forcing a re-query.
+* **`serializePrimaryKey` guards `pk.Type`.** Undefined `Type` no longer
+  blows up on `trim()`.
+* **File cache is invalidated on write.** Every code path that writes
+  back to a metadata JSON file (immediate and deferred) drops the cached
+  snapshot via `invalidateCachedFile()`.
+* **Preload file reads run in parallel** (concurrency cap = 16) instead
+  of sequentially.
+* **Provider plumbing.** `Config()` receives the provider from
+  `SyncEngine.getProvider()` instead of reaching for the global
+  `Metadata.Provider` directly — same effective provider in this
+  single-process CLI, but keeps the wiring self-consistent.
+* **Public helpers, stricter types.** `serializePrimaryKey`,
+  `getUniquePrimaryKeys`, `buildBulkFilter`, and the new
+  `buildBulkFilterChunks` accept `EntityInfo` and `Record<string, unknown>`
+  instead of `any`. The dynamic per-entity cache slot is read/written
+  through a narrow `Record<string, unknown>` cast (matching
+  `BaseEngine`'s own pattern) instead of `(this as any)[propName]`.

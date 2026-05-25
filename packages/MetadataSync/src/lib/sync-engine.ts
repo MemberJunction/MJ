@@ -12,7 +12,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
-import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
@@ -151,6 +151,19 @@ export class SyncEngine {
 
   public getMetadataEngine(): SyncMetadataEngine | null {
     return this.syncMetadataEngine;
+  }
+
+  /**
+   * Returns the metadata provider this engine is using.
+   *
+   * `mj sync` runs as a single-purpose CLI process with one configured
+   * provider per run, so this proxies to the global default (the only
+   * provider the process will ever see). Surfacing it through SyncEngine
+   * keeps callers from reaching for `Metadata.Provider` directly and makes
+   * it obvious which provider the sync is bound to.
+   */
+  public getProvider(): IMetadataProvider {
+    return Metadata.Provider; // global-provider-ok: CLI single-process; see class doc
   }
 
   /**
@@ -514,13 +527,22 @@ export class SyncEngine {
    * }
    * ```
    */
+  /**
+   * Build a canonical, collision-safe cache key for a multi-field lookup.
+   * Encodes each field name + value so embedded `=` / `&` / `|` in user
+   * data can't run two distinct lookups into the same key.
+   */
   private buildLookupCacheKey(
     entityName: string,
     lookupFields: Array<{fieldName: string, fieldValue: string}>
   ): string {
     const sortedFields = [...lookupFields].sort((a, b) => a.fieldName.localeCompare(b.fieldName));
-    const parts = sortedFields.map(f => `${f.fieldName.toLowerCase()}=${(f.fieldValue || '').toLowerCase()}`);
-    return `${entityName.toLowerCase()}:${parts.join('&')}`;
+    const parts = sortedFields.map(f => {
+      const name = encodeURIComponent(f.fieldName.toLowerCase());
+      const value = encodeURIComponent((f.fieldValue ?? '').toLowerCase());
+      return `${name}=${value}`;
+    });
+    return `${encodeURIComponent(entityName.toLowerCase())}|${parts.join('&')}`;
   }
 
   async resolveLookup(
@@ -535,7 +557,9 @@ export class SyncEngine {
     const lookupCacheKey = this.buildLookupCacheKey(entityName, lookupFields);
     if (this.syncMetadataEngine) {
       const cachedId = this.syncMetadataEngine.getCachedLookup(lookupCacheKey);
-      if (cachedId) {
+      // Use `!== undefined` so legitimately-falsy PK values (empty string, '0')
+      // are still served from cache instead of forcing a re-query.
+      if (cachedId !== undefined) {
         return cachedId;
       }
     }
@@ -552,7 +576,7 @@ export class SyncEngine {
         const pkValue = batchContext.lookupByFields(entityName, lookupFields);
         if (pkValue !== undefined) {
           if (this.syncMetadataEngine) {
-            this.syncMetadataEngine.setCachedLookup(lookupCacheKey, pkValue);
+            this.syncMetadataEngine.setCachedLookup(lookupCacheKey, pkValue, entityName);
           }
           return pkValue;
         }
@@ -580,7 +604,7 @@ export class SyncEngine {
                 const pkeyField = entityInfo.PrimaryKeys[0].Name;
                 const id = entity.Get(pkeyField);
                 if (this.syncMetadataEngine) {
-                  this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+                  this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
                 }
                 return id;
               }
@@ -607,12 +631,12 @@ export class SyncEngine {
         if (allMatch) {
           const pkeyField = entityInfo.PrimaryKeys[0].Name;
           const id = cachedEntity.Get(pkeyField);
-          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
           return id;
         }
       }
     }
-    
+
     // Not found in batch context, check database
     const rv = new RunView();
     
@@ -687,7 +711,7 @@ export class SyncEngine {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const id = result.Results[0][pkeyField];
         if (this.syncMetadataEngine) {
-          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
         }
         return id;
       }
@@ -745,7 +769,7 @@ export class SyncEngine {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const newId = newEntity.Get(pkeyField);
         if (this.syncMetadataEngine) {
-          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId);
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId, entityName);
           this.syncMetadataEngine.addEntityToCache(entityName, newEntity);
         }
         return newId;

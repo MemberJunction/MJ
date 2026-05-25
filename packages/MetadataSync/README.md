@@ -197,25 +197,46 @@ The tool is intended for managing business-level metadata such as:
 
 For more information about how CodeGen reflects system-level data from the database into the MJ metadata layer, see the [CodeGen documentation](../CodeGen/README.md).
 
-## Performance Optimizations
+## Performance: Preloading and Caching During Push
 
-To optimize synchronization times and minimize database query load, the Metadata Sync push command utilizes a high-performance upfront preloading and caching system:
+The `push` command preloads existing records and caches files/lookups so the
+per-record sync work avoids redundant DB round-trips and disk I/O.
 
-### 1. Upfront Bulk Preloading (RunViews Batching)
-Before processing individual records, the sync engine performs an upfront scan of all target local metadata files:
-- It collects all primary keys from JSON records and nested related entities.
-- It groups the primary keys by entity type and issues a single batched database request using MemberJunction's dynamic `RunViews` mechanism.
-- This replaces the traditional sequential point-query structure (where every record checks the DB for existence sequentially) with a single network round-trip, reducing database query overhead by **70% to 85%**.
+### 1. Upfront bulk preload (batched `RunViews`)
 
-### 2. Event-Driven In-Memory Caching (BaseEngine Subclass)
-The cache is powered by `SyncMetadataEngine`, which inherits from MemberJunction's core `BaseEngine` class:
-- The cached view properties listen directly to the global `BaseEntity` event bus.
-- It overrides `canUseImmediateMutation` to update in-memory entity arrays synchronously whenever a record is created, updated, or deleted.
-- Lookups and entity existence checks query this local in-memory state instead of issuing new database queries, ensuring changes are immediately visible across subsequent dependencies without DB round-trips.
+Before processing records, the push scans every JSON file in the target
+directories (in parallel, with a concurrency cap), collects primary keys
+from records and nested `relatedEntities`, groups them by entity, and
+issues a single filtered `RunView` per entity. This replaces the
+prior per-record existence check with one batched read per entity at
+push start.
 
-### 3. File I/O & Lookup Caching
-- **File Cache**: Parsed file data and processed `@include` results are cached in memory. This avoids double-reading and re-preprocessing files across the validation and sync cycles.
-- **Lookup Cache**: Matches resolved `@lookup` queries inside `@parent`, `@root`, and composite keys so that subsequent identical lookup requests resolve instantly in-memory.
+### 2. Event-driven in-memory cache (`SyncMetadataEngine` extends `BaseEngine`)
+
+`SyncMetadataEngine` plugs into MJ's `BaseEntity` event bus via `BaseEngine`.
+Saves and deletes performed during the push update the in-memory cache in
+place, so subsequent lookups inside the same run see the new state without
+a re-fetch. The engine overrides `canUseImmediateMutation` to allow this
+in-place update for its own preload configs — the filter is built from
+the preloaded PKs, so updates and deletes stay safe, and newly-created
+records are deliberately added to the cache so later lookups can find them
+within the same push.
+
+### 3. File and lookup caches
+
+- **File cache**: parsed JSON and resolved `@include` output are cached on
+  first read so the validation and sync passes don't reparse. The cache
+  entry for a file is invalidated whenever the push writes that file back
+  to disk.
+- **Lookup cache**: resolved `@lookup` (and `@parent` / `@root`) values are
+  memoized per `(entity, lookup-fields)` key. The cache is indexed by
+  entity so deleting a record invalidates only the affected entries
+  instead of clearing the whole cache. Keys are URI-encoded to prevent
+  collisions when user data contains `=` / `&` / `|`.
+
+> Real-world reductions vary with the size and shape of your metadata
+> tree; expect the biggest wins on syncs that read many records of the
+> same entity (which is the common case).
 
 ## File Structure
 

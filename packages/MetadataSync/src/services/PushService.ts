@@ -280,10 +280,14 @@ export class PushService {
         throw new Error('No entity directories found');
       }
 
-      // Preload entities and cache files
+      // Preload entities and cache files.
+      // We pass the SyncEngine's provider explicitly rather than reaching for
+      // Metadata.Provider — `mj sync` is single-process so they resolve to the
+      // same instance today, but routing through SyncEngine keeps the wiring
+      // self-consistent and makes future provider plumbing trivial.
       callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
       this.syncMetadataEngine.setEntityDirs(entityDirs);
-      await this.syncMetadataEngine.Config(true, this.contextUser, Metadata.Provider);
+      await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
       callbacks?.onLog?.('✓ Preload completed successfully\n');
       
       if (options.verbose) {
@@ -784,6 +788,9 @@ export class PushService {
             } else {
               await JsonWriteHelper.writeOrderedRecordData(filePath, unprocessedRecords[0]);
             }
+            // Drop the cached snapshot — file on disk no longer matches it,
+            // and any later reader within this push must see fresh contents.
+            this.syncMetadataEngine.invalidateCachedFile(filePath);
           }
         }
 
@@ -2045,6 +2052,8 @@ export class PushService {
         } else {
           await JsonWriteHelper.writeOrderedRecordData(deferredWrite.filePath, deferredWrite.records[0]);
         }
+        // File contents just changed on disk — drop the stale cache entry.
+        this.syncMetadataEngine.invalidateCachedFile(deferredWrite.filePath);
       } catch (error) {
         callbacks?.onWarn?.(`   ⚠️  Failed to write ${deferredWrite.filePath}: ${error}`);
       }

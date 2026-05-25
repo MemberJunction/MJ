@@ -1,117 +1,158 @@
+/**
+ * Unit tests for `SyncMetadataEngine` public helpers.
+ *
+ * These tests cover the pure helpers (PK serialization, dedup, filter
+ * building) and the cache wrappers in isolation. They intentionally do NOT
+ * cover the BaseEngine event-bus integration — that path exercises the
+ * real `applyImmediateMutation` flow and is best covered by an integration
+ * test against a live MJ provider rather than mocked here. See module
+ * docstring on `SyncMetadataEngine` for the broader contract.
+ */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
-import { BaseEntity, CompositeKey } from '@memberjunction/core';
+import type { BaseEntity, EntityFieldInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 
-// Mock @memberjunction/core
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   return {
     ...actual,
+    // Replace BaseEngine with a no-op shim so we can construct
+    // SyncMetadataEngine without invoking the global object store /
+    // metadata-loading machinery. The tests below never call `Load()`.
     BaseEngine: class {
-      protected ProviderToUse: any = null;
-      public Configs: any[] = [];
-      protected async Load() {}
-      protected SetupGlobalEventListener() {}
-      protected canUseImmediateMutation() {
+      protected ProviderToUse: IMetadataProvider | null = null;
+      public Configs: unknown[] = [];
+      protected async Load(): Promise<void> {}
+      protected SetupGlobalEventListener(): void {}
+      protected canUseImmediateMutation(): boolean {
         return true;
-      }
-    },
-    BaseEntity: class {
-      public EntityInfo: any;
-      public PrimaryKey: any;
-      private data: any = {};
-      constructor(entityInfo: any) {
-        this.EntityInfo = entityInfo;
-      }
-      public Get(name: string) {
-        return this.data[name];
-      }
-      public Set(name: string, val: any) {
-        this.data[name] = val;
-      }
-      public GetAll() {
-        return { ...this.data };
-      }
-    },
-    CompositeKey: class {
-      private keys: any = {};
-      public LoadFromSimpleObject(obj: any) {
-        this.keys = obj;
-      }
-      public Equals(other: any) {
-        if (!other) return false;
-        return JSON.stringify(this.keys) === JSON.stringify(other.keys);
       }
     }
   };
 });
 
+// Type the field-info shape we actually exercise in tests. The real
+// EntityFieldInfo has many more properties; this typed alias keeps mock
+// objects strict without re-declaring the whole class.
+type TestField = Pick<EntityFieldInfo, 'Name' | 'Type' | 'NeedsQuotes'>;
+type TestEntityInfo = Pick<EntityInfo, 'Name'> & {
+  PrimaryKeys: TestField[];
+  Fields?: TestField[];
+};
+
+/** Minimal stub matching the surface SyncMetadataEngine reads off SyncEngine in these tests. */
+interface SyncEngineStub {
+  getEntityInfo: (name: string) => EntityInfo | null;
+  serializePrimaryKey: (entityInfo: EntityInfo, pk: Record<string, unknown>) => string;
+}
+
+/**
+ * Builds a `BaseEntity`-shaped fake that satisfies just enough of the
+ * surface the tests touch (`Get`, `GetAll`, `PrimaryKey.Equals`). Cast at
+ * the call site so the production code path sees the right structural type
+ * without us depending on the framework's full BaseEntity initialization.
+ */
+function makeFakeEntity(fields: Record<string, unknown>): BaseEntity {
+  return {
+    Get(name: string) {
+      return fields[name];
+    },
+    GetAll() {
+      return { ...fields };
+    },
+    PrimaryKey: {
+      Equals(other: unknown) {
+        if (!other || typeof other !== 'object') return false;
+        const o = other as { ToString?: () => string; KeyValuePairs?: Array<{ FieldName: string; Value: unknown }> };
+        // Trivial equality: same field bag
+        return JSON.stringify(o) === JSON.stringify(this);
+      }
+    }
+  } as unknown as BaseEntity;
+}
+
 describe('SyncMetadataEngine', () => {
   let engine: SyncMetadataEngine;
-  let mockSyncEngine: any;
+  let mockSyncEngine: SyncEngineStub;
 
   beforeEach(() => {
     mockSyncEngine = {
-      getEntityInfo: vi.fn().mockImplementation((name: string) => {
+      getEntityInfo: vi.fn().mockImplementation((name: string): EntityInfo => {
         if (name === 'CompositeEntity') {
           return {
             Name: name,
-            PrimaryKeys: [{ Name: 'KeyA', Type: 'nvarchar' }, { Name: 'KeyB', Type: 'uniqueidentifier' }],
-            Fields: [{ Name: 'KeyA', NeedsQuotes: true }, { Name: 'KeyB', NeedsQuotes: true, Type: 'uniqueidentifier' }]
-          };
+            PrimaryKeys: [
+              { Name: 'KeyA', Type: 'nvarchar', NeedsQuotes: true },
+              { Name: 'KeyB', Type: 'uniqueidentifier', NeedsQuotes: true }
+            ],
+            Fields: [
+              { Name: 'KeyA', NeedsQuotes: true, Type: 'nvarchar' },
+              { Name: 'KeyB', NeedsQuotes: true, Type: 'uniqueidentifier' }
+            ]
+          } as unknown as EntityInfo;
         }
         return {
           Name: name,
-          PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }],
+          PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }],
           Fields: [{ Name: 'ID', NeedsQuotes: true, Type: 'uniqueidentifier' }]
-        };
+        } as unknown as EntityInfo;
       }),
       serializePrimaryKey: vi.fn()
     };
 
     engine = new SyncMetadataEngine();
-    engine.initializeEngine(mockSyncEngine);
+    // Cast through unknown because SyncEngine here is a partial stub — we
+    // only call the two methods we depend on.
+    engine.initializeEngine(mockSyncEngine as unknown as import('../lib/sync-engine').SyncEngine);
   });
 
   describe('serializePrimaryKey', () => {
-    it('serializes single primary key and normalizes UUID to lowercase', () => {
-      const entityInfo = {
-        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }]
+    it('serializes a single UUID primary key and lowercases the value', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }]
       };
-      const pk = { ID: 'ABC-123-XYZ' };
-      const serialized = engine.serializePrimaryKey(entityInfo, pk);
+      const serialized = engine.serializePrimaryKey(entityInfo as unknown as EntityInfo, { ID: 'ABC-123-XYZ' });
       expect(serialized).toBe('id=abc-123-xyz');
     });
 
-    it('serializes composite primary keys with sorting to guarantee order-independence', () => {
-      const entityInfo = {
-        PrimaryKeys: [{ Name: 'KeyB', Type: 'uniqueidentifier' }, { Name: 'KeyA', Type: 'nvarchar' }]
+    it('orders composite keys deterministically regardless of input order', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [
+          { Name: 'KeyB', Type: 'uniqueidentifier', NeedsQuotes: true },
+          { Name: 'KeyA', Type: 'nvarchar', NeedsQuotes: true }
+        ]
       };
-      // KeyB is UUID so it normalizes to lowercase, KeyA is nvarchar so it does not
-      const pk1 = { KeyB: 'ABC-123-XYZ', KeyA: 'ValueA' };
-      const pk2 = { KeyA: 'ValueA', KeyB: 'ABC-123-XYZ' };
-
-      const s1 = engine.serializePrimaryKey(entityInfo, pk1);
-      const s2 = engine.serializePrimaryKey(entityInfo, pk2);
-
+      const s1 = engine.serializePrimaryKey(entityInfo as unknown as EntityInfo, { KeyB: 'ABC-123-XYZ', KeyA: 'ValueA' });
+      const s2 = engine.serializePrimaryKey(entityInfo as unknown as EntityInfo, { KeyA: 'ValueA', KeyB: 'ABC-123-XYZ' });
       expect(s1).toBe('keya=ValueA|keyb=abc-123-xyz');
-      expect(s2).toBe('keya=ValueA|keyb=abc-123-xyz');
-      expect(s1).toBe(s2);
+      expect(s2).toBe(s1);
+    });
+
+    it('does not throw when a PrimaryKey definition has no Type', () => {
+      // Defensive: real EntityInfo always carries a Type, but historically the
+      // engine threw `cannot read trim of undefined` if a caller passed an
+      // ad-hoc PK descriptor. Keep that guard exercised here.
+      const entityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true } as unknown as EntityFieldInfo]
+      } as unknown as EntityInfo;
+      expect(() => engine.serializePrimaryKey(entityInfo, { ID: 'abc' })).not.toThrow();
     });
   });
 
   describe('getUniquePrimaryKeys', () => {
-    it('deduplicates primary keys based on serialized representation', () => {
-      const entityInfo = {
-        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }]
+    it('deduplicates after applying UUID case normalization', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }]
       };
-      const pks = [
+      const unique = engine.getUniquePrimaryKeys(entityInfo as unknown as EntityInfo, [
         { ID: 'ABC-123' },
-        { ID: 'abc-123' }, // should be treated as duplicate because of normalization
+        { ID: 'abc-123' }, // duplicate after UUID normalization
         { ID: 'XYZ-789' }
-      ];
-
-      const unique = engine.getUniquePrimaryKeys(entityInfo, pks);
+      ]);
       expect(unique).toHaveLength(2);
       expect(unique[0]).toEqual({ ID: 'ABC-123' });
       expect(unique[1]).toEqual({ ID: 'XYZ-789' });
@@ -119,25 +160,51 @@ describe('SyncMetadataEngine', () => {
   });
 
   describe('buildBulkFilter', () => {
-    it('builds SQL filter for single primary keys', () => {
-      const entityInfo = {
-        PrimaryKeys: [{ Name: 'ID', NeedsQuotes: true }]
+    it('builds an OR-joined filter for single-column primary keys', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }]
       };
-      const uniquePks = [{ ID: 'id1' }, { ID: 'id2' }];
-      const filter = engine.buildBulkFilter(entityInfo, uniquePks);
+      const filter = engine.buildBulkFilter(entityInfo as unknown as EntityInfo, [{ ID: 'id1' }, { ID: 'id2' }]);
       expect(filter).toBe("(ID = 'id1') OR (ID = 'id2')");
     });
 
-    it('builds SQL filter for composite primary keys', () => {
-      const entityInfo = {
-        PrimaryKeys: [{ Name: 'KeyA', NeedsQuotes: true }, { Name: 'KeyB', NeedsQuotes: false }]
+    it('builds AND/OR filters for composite primary keys with mixed quoting', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [
+          { Name: 'KeyA', Type: 'nvarchar', NeedsQuotes: true },
+          { Name: 'KeyB', Type: 'int', NeedsQuotes: false }
+        ]
       };
-      const uniquePks = [
+      const filter = engine.buildBulkFilter(entityInfo as unknown as EntityInfo, [
         { KeyA: 'val1', KeyB: 123 },
         { KeyA: 'val2', KeyB: 456 }
-      ];
-      const filter = engine.buildBulkFilter(entityInfo, uniquePks);
+      ]);
       expect(filter).toBe("(KeyA = 'val1' AND KeyB = 123) OR (KeyA = 'val2' AND KeyB = 456)");
+    });
+
+    it('escapes embedded single quotes in string PK values', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'Name', Type: 'nvarchar', NeedsQuotes: true }]
+      };
+      const filter = engine.buildBulkFilter(entityInfo as unknown as EntityInfo, [{ Name: "O'Brien" }]);
+      expect(filter).toBe("(Name = 'O''Brien')");
+    });
+  });
+
+  describe('buildBulkFilterChunks', () => {
+    it('splits PK lists into chunks of the requested size', () => {
+      const entityInfo: TestEntityInfo = {
+        Name: 'X',
+        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }]
+      };
+      const pks = Array.from({ length: 7 }, (_, i) => ({ ID: `id${i}` }));
+      const chunks = engine.buildBulkFilterChunks(entityInfo as unknown as EntityInfo, pks, 3);
+      expect(chunks).toHaveLength(3);
+      expect(chunks[0]).toBe("(ID = 'id0') OR (ID = 'id1') OR (ID = 'id2')");
+      expect(chunks[2]).toBe("(ID = 'id6')");
     });
   });
 
@@ -150,39 +217,62 @@ describe('SyncMetadataEngine', () => {
       engine.clearLookupCache();
       expect(engine.getCachedLookup('my-key')).toBeUndefined();
     });
+
+    it('serves legitimately-falsy PK values (empty string, "0") from cache', () => {
+      // Regression guard: an earlier bug used `if (cachedId)` which would
+      // miss on empty-string / '0' PKs and force a re-query.
+      engine.setCachedLookup('empty', '');
+      engine.setCachedLookup('zero', '0');
+      expect(engine.getCachedLookup('empty')).toBe('');
+      expect(engine.getCachedLookup('zero')).toBe('0');
+    });
+
+    it('invalidateLookupsForEntity drops only that entity\'s entries', () => {
+      engine.setCachedLookup('users-key', 'user-id-1', 'Users');
+      engine.setCachedLookup('roles-key', 'role-id-1', 'Roles');
+
+      engine.invalidateLookupsForEntity('Users');
+
+      expect(engine.getCachedLookup('users-key')).toBeUndefined();
+      expect(engine.getCachedLookup('roles-key')).toBe('role-id-1');
+    });
+  });
+
+  describe('file cache', () => {
+    it('stores and invalidates parsed file contents', () => {
+      engine.cacheFile('/tmp/a.json', { raw: 1 }, { resolved: 1 });
+      expect(engine.getCachedFile('/tmp/a.json')).toEqual({ rawData: { raw: 1 }, fileData: { resolved: 1 } });
+
+      engine.invalidateCachedFile('/tmp/a.json');
+      expect(engine.getCachedFile('/tmp/a.json')).toBeUndefined();
+    });
   });
 
   describe('entity cache operations', () => {
-    it('adds and retrieves entities from dynamic properties', () => {
-      const entityInfo = { Name: 'TestEntity', PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }] };
-      const entity = new BaseEntity(entityInfo) as unknown as BaseEntity;
-      entity.PrimaryKey = { Equals: (other: any) => other && other.ID === 'id-1', keys: { ID: 'id-1' } };
-      (entity as any).Set('ID', 'id-1');
-
+    it('adds and retrieves entities under the dynamic per-entity slot', () => {
+      const entity = makeFakeEntity({ ID: 'id-1' });
       engine.addEntityToCache('TestEntity', entity);
-      
+
       const cached = engine.getCachedEntities('TestEntity');
       expect(cached).toHaveLength(1);
       expect(cached[0]).toBe(entity);
     });
 
-    it('removes entities from dynamic properties and clears lookup cache', () => {
-      const entityInfo = { Name: 'TestEntity', PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier' }] };
-      const entity = new BaseEntity(entityInfo) as unknown as BaseEntity;
-      entity.PrimaryKey = { Equals: (other: any) => other && other.ID === 'id-1', keys: { ID: 'id-1' } };
-      (entity as any).Set('ID', 'id-1');
-
+    it('removes entities by primary key and scopes lookup invalidation to that entity', () => {
+      const entity = makeFakeEntity({ ID: 'id-1' });
       engine.addEntityToCache('TestEntity', entity);
-      engine.setCachedLookup('some-lookup', 'some-id');
 
-      // Setup mockSyncEngine serializePrimaryKey mock
-      mockSyncEngine.serializePrimaryKey.mockReturnValue('id=id-1');
+      // Two cached lookups — only TestEntity's should drop on removal.
+      engine.setCachedLookup('test-lookup', 'id-1', 'TestEntity');
+      engine.setCachedLookup('other-lookup', 'other-id', 'OtherEntity');
 
+      // serializePrimaryKey on the entity (`GetAll()` -> { ID: 'id-1' }) must
+      // match what we pass to removeEntityFromCache for the splice to find it.
       engine.removeEntityFromCache('TestEntity', { ID: 'id-1' });
 
-      const cached = engine.getCachedEntities('TestEntity');
-      expect(cached).toHaveLength(0);
-      expect(engine.getCachedLookup('some-lookup')).toBeUndefined(); // lookup cache should be cleared
+      expect(engine.getCachedEntities('TestEntity')).toHaveLength(0);
+      expect(engine.getCachedLookup('test-lookup')).toBeUndefined();
+      expect(engine.getCachedLookup('other-lookup')).toBe('other-id');
     });
   });
 });
