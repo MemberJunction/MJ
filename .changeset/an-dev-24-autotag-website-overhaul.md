@@ -3,9 +3,16 @@
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/server": minor
+"@memberjunction/global": minor
+"@memberjunction/ng-base-forms": minor
+"@memberjunction/ng-dashboards": minor
 ---
 
-Autotag website crawler overhaul — fixes the long-standing "only crawls the seed page" symptom and adds first-class run budgets, a streaming pipeline, and per-source UI knobs.
+Two intertwined deliverables in one PR: the autotag-website overhaul, plus a new dynamic forms-extension architecture (`BaseFormPanel` slot system) that lets consumers extend generated entity forms without the heavyweight custom-form override pattern.
+
+## Autotag website crawler overhaul
+
+Fixes the long-standing "only crawls the seed page" symptom and adds first-class run budgets, a streaming pipeline, and per-source UI knobs.
 
 **Fixes**
 
@@ -39,4 +46,60 @@ Autotag website crawler overhaul — fixes the long-standing "only crawls the se
 
 - True crawl-side resume that persists discovered URLs so re-runs skip the HTTP re-discovery — today's resume is "functional via change-detection dedup."
 - `ETag` / `If-Modified-Since` conditional GETs on re-crawls (needs new columns on `MJContentItem`).
-- Promote source-type-specific form sections to a registered class extension point when the count grows past 2-3.
+
+## `BaseFormPanel` slot system (`@memberjunction/ng-base-forms`)
+
+Generated entity forms can now be extended **without** replacing them via a `*Extended` custom-form override. Author a standalone Angular component extending `BaseFormPanel`, decorate with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare in any module. `<mj-form-panel-slot>` hosts in the generated form discover matching panels at runtime and dynamically mount them.
+
+**Slot positions** (top → bottom): `top-area`, `before-fields`, `after-fields`, `after-related`, `after-everything`.
+
+**Fallback chain** via `FormSlotCoordinator`: if the registered slot is missing because CodeGen hasn't been rerun against the new template emitter, the panel walks forward in the chain until it finds an existing slot. `MjRecordFormContainer` ALWAYS emits `after-everything` in its template, so panels never dead-end — pre-CodeGen-regen forms display every panel (at the bottom); post-regen forms display them in the preferred position.
+
+New public exports from `@memberjunction/ng-base-forms`:
+- `BaseFormPanel<TRecord>` abstract directive
+- `FormPanelSlot` type union
+- `FormPanelRegistrationMetadata` interface
+- `<mj-form-panel-slot>` component
+- `FormSlotCoordinator` service
+- `FORM_SLOT_CHAIN` constant
+
+Custom `*Extended` forms (e.g. `AIAgentFormComponentExtended`) remain a first-class pattern for truly bespoke layouts where the generated form is the wrong starting point entirely.
+
+Full authoring guide in `packages/Angular/Generic/base-forms/PANELS.md`.
+
+## `@RegisterClassEx` + ClassFactory metadata (`@memberjunction/global`)
+
+Existing `@RegisterClass` keeps its exact positional signature (zero breaking changes) but also accepts an optional 6th `metadata` arg for parity. New `@RegisterClassEx(baseClass, options)` is the modern form when you have anything beyond `(baseClass, key, priority)` to specify — options-bag avoids positional-boolean noise and is the right place to attach `metadata`.
+
+New public exports from `@memberjunction/global`:
+- `RegisterClassEx` decorator
+- `RegisterClassOptions` interface
+- `ClassRegistration.Metadata` field (optional, additive)
+- `ClassFactory.GetAllRegistrationsByKeyPrefix(base, prefix)` — common structured-key case (case-insensitive, trimmed)
+- `ClassFactory.GetAllRegistrationsByKeyPattern(base, regex)` — nuanced key matching
+- `ClassFactory.GetAllRegistrationsByMetadata(base, predicate)` — recommended for structured discriminators
+
+The `Ex` suffix follows MJ's existing `Foo`/`FooAsync`/`FooEx` convention. Not a true TS overload — JS overloads are hacky compared to true OOP, and sibling decorators give cleaner IntelliSense + a clean deprecation path if we ever consolidate.
+
+MJGlobal README adds a "Structured registration" section documenting both decorators + all three lookup helpers.
+
+## Knowledge Hub dashboard quick-edit (`@memberjunction/ng-dashboards`)
+
+The AI > Autotagging Pipeline dashboard's "Edit Content Source" slide-in is intentionally a **quick-edit surface**, not a full form. Added the most-useful subset of the new knobs:
+
+- `MaxItemsPerRun` (always shown — most-asked-for budget cap)
+- `MaxDepth` + 2 crawl toggles (Website-source-conditional)
+- **"Open advanced settings →"** link that calls `NavigationService.OpenEntityRecord('MJ: Content Sources', id)` to land in the full entity form, where every panel is available via the slot system.
+
+## Documentation
+
+- `packages/Angular/Generic/base-forms/PANELS.md` (NEW) — comprehensive BaseFormPanel authoring guide.
+- `packages/Angular/CLAUDE.md` — restructured "Extending Entity Forms" section. Both patterns first-class.
+- `packages/Angular/Explorer/core-entity-forms/README.md` — new "Two Patterns" section above the existing custom-form guide.
+- `guides/CONTENT_AUTOTAGGING_GUIDE.md` — extended config table (all budget caps + `Website` sub-object) + UI section pointing at PANELS.md.
+- `packages/MJGlobal/README.md` — new "Structured registration: `@RegisterClassEx` + metadata" section.
+- Root `CLAUDE.md` — new "Nested CLAUDE.md Index" pointing at every sub-directory CLAUDE.md.
+
+## Follow-ups (not in this PR)
+
+- Promote source-type-specific form sections to a registered class extension point when the count grows past 2-3 (e.g., RSS, Cloud Storage). Today's `IsWebsiteSourceType` template gate works fine for 1-2 source types.
