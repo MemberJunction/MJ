@@ -332,23 +332,31 @@ To drastically reduce execution latency, the framework includes the following op
 
 ### 1. In-Memory Query Embedding Caching
 In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant local ONNX embedding inference, eliminating CPU-bound event-loop blockages.
-* **Eviction**: Holds up to 1000 items using a First-In-First-Out (FIFO) eviction policy.
+* **Eviction**: Backed by `MJLruCache` from `@memberjunction/global` — a bounded LRU keeps hot queries warm across bursts (default capacity 5000 entries).
+* **Cache keys**: `${modelID}|sha256(text)` so a large text doesn't pin its full string in the cache map.
+* **Promise dedup**: Concurrent callers for the same `(model, text)` share a single in-flight inference promise — only one ONNX run happens even under fan-out load.
 * **Control**: Callers can supply options `{ bypassCache: true }` (re-calculates but caches the new result) or `{ noCache: true }` (bypasses and does not store the result).
+* **Empty input**: Empty/whitespace text short-circuits to `null` without invoking the embedding provider.
+* **Negative result eviction**: Failed or empty-vector responses are evicted so subsequent calls retry rather than returning a stale failure.
 * **Reset**: The cache can be manually cleared by calling `AIEngine.Instance.ClearEmbeddingCache()`.
 
 ### 2. Parallel Data Source Preloading
-`AgentDataPreloader.PreloadAgentData` resolves and loads all required agent data sources concurrently using `Promise.all`, removing sequential round-trip bottlenecks.
+`AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
 
 ### 3. Non-blocking Observability DB Logging
 Observability writes (`AIAgentRunStep` records) are completely non-blocking:
 * Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
 * Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
-* All pending logging writes are awaited concurrently on finalization: `await Promise.all(this._pendingSaves)` inside `finalizeAgentRun()`.
+* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
 
 ### 4. Concurrent Sub-Agent Execution
 Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
-* **Concurrence**: Spawns and runs all requested sub-agents concurrently via `Promise.all`.
+* **Bounded fan-out**: Sub-agents dispatch with a configurable concurrency cap (default 5) so a misbehaving LLM can't spawn unbounded parallel runs.
+* **Deterministic transcript**: Delegation messages and progress events are pushed *synchronously* in the source order of the `subAgents` array — completion order doesn't reorder the conversation.
+* **Payload isolation**: Each child sub-agent receives a deep-cloned copy of its input payload, so in-flight mutations by one sibling can't be observed by another.
 * **State Merging**: Aggregates all media/file outputs and sequentially merges child/related sub-agent payloads back into the parent state via the `PayloadManager` to avoid race conditions.
+* **Per-sibling audit trail**: Each parallel sub-agent's `AIAgentRunStep` records *its own* contribution as `PayloadAtEnd` rather than the cumulative merged state, so forensic logs distinguish each sibling.
+* **Termination semantics**: The parent terminates only if at least one **successful** sub-agent requested `terminateAfter: true`. A failing sub-agent's `terminateAfter` is ignored — the parent falls through to `Retry` so it can react.
 * **Context Preservation**: Appends an aggregated delegation and completion log to the parent conversation context once all parallel steps complete.
 
 #### Loop Response Schema

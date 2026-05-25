@@ -220,8 +220,13 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             agent.testQueueStepSave(stepEntity);
             agent.testQueueStepSave(stepEntity);
 
-            // Give a microtask tick for execution to start
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            // Drain the microtask queue without relying on wall-clock timing — we
+            // need save-1 to *start* but stay blocked on `firstSavePromise`.
+            // Two microtask ticks is enough for the .then() chain to reach the
+            // `await firstSavePromise` line.
+            await Promise.resolve();
+            await Promise.resolve();
+            await Promise.resolve();
 
             expect(callOrder).toEqual(['save-1-started']); // Save 2 should not have started yet
 
@@ -459,6 +464,250 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             expect(parentFiles).toHaveLength(2);
             expect(parentFiles[0].FileName).toBe('doc1.pdf');
             expect(parentFiles[1].FileName).toBe('doc2.pdf');
+        });
+
+        // ── Determinism & safety regressions ──────────────────────────────
+
+        it('should push delegation messages in source order even when one sub-agent finishes first', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Slow job', terminateAfter: false },
+                    { name: 'ChildAgent2', message: 'Fast job', terminateAfter: false }
+                ]
+            };
+            // ChildAgent2 will resolve before ChildAgent1; the transcript must still list 1 then 2.
+            agent.mockExecuteSubAgentResult = (name: string) => ({
+                success: true,
+                payload: { [name]: 'ok' },
+                agentRun: { FinalStep: 'Success' } as any
+            });
+
+            await agent.testProcessSubAgentStep(params, previousDecision);
+
+            const assistantContents = params.conversationMessages
+                .filter(m => m.role === 'assistant')
+                .map(m => m.content);
+            expect(assistantContents).toHaveLength(2);
+            expect(assistantContents[0]).toContain('ChildAgent1');
+            expect(assistantContents[1]).toContain('ChildAgent2');
+        });
+
+        it('should NOT terminate the parent when only the failing sub-agent requested terminateAfter', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Will fail', terminateAfter: true },
+                    { name: 'ChildAgent2', message: 'Will succeed', terminateAfter: false }
+                ]
+            };
+            agent.mockExecuteSubAgentResult = (name: string) => {
+                if (name === 'ChildAgent1') {
+                    return {
+                        success: false,
+                        payload: {},
+                        agentRun: { FinalStep: 'Failed', ErrorMessage: 'boom' } as any
+                    };
+                }
+                return {
+                    success: true,
+                    payload: { ok: true },
+                    agentRun: { FinalStep: 'Success' } as any
+                };
+            };
+
+            const result = await agent.testProcessSubAgentStep(params, previousDecision);
+
+            // The failing sub-agent's terminateAfter must be ignored.
+            // We saw at least one failure → step is Retry, terminate is false.
+            expect(result.terminate).toBe(false);
+            expect(result.step).toBe('Retry');
+        });
+
+        it('should terminate the parent when a successful sub-agent requested terminateAfter', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Job 1', terminateAfter: true }
+                ]
+            };
+            agent.mockExecuteSubAgentResult = () => ({
+                success: true,
+                payload: { ok: true },
+                agentRun: { FinalStep: 'Success' } as any
+            });
+
+            const result = await agent.testProcessSubAgentStep(params, previousDecision);
+            expect(result.terminate).toBe(true);
+            expect(result.step).toBe('Success');
+        });
+
+        it('should deep-clone parent payload per child sub-agent to prevent in-flight mutation races', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+
+            const parentPayload = { shared: { counter: 0 } };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: parentPayload,
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Job 1', terminateAfter: false },
+                    { name: 'ChildAgent2', message: 'Job 2', terminateAfter: false }
+                ]
+            };
+
+            const passedPayloads: any[] = [];
+            agent.mockExecuteSubAgentResult = (_name: string, initialPayload: any) => {
+                passedPayloads.push(initialPayload);
+                // Mutate the received payload — siblings must not see this.
+                if (initialPayload?.shared) {
+                    initialPayload.shared.counter = 999;
+                }
+                return { success: true, payload: {}, agentRun: { FinalStep: 'Success' } as any };
+            };
+
+            await agent.testProcessSubAgentStep(params, previousDecision);
+
+            // Each child got its own clone — sibling mutations are isolated.
+            expect(passedPayloads).toHaveLength(2);
+            expect(passedPayloads[0]).not.toBe(passedPayloads[1]);
+            expect(passedPayloads[0]?.shared).not.toBe(passedPayloads[1]?.shared);
+            // Parent's original payload is untouched.
+            expect(parentPayload.shared.counter).toBe(0);
+        });
+
+        it('should record per-sibling step PayloadAtEnd (the sub-agent contribution, not the cumulative state)', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'Job 1', terminateAfter: false },
+                    { name: 'ChildAgent2', message: 'Job 2', terminateAfter: false }
+                ]
+            };
+            agent.mockExecuteSubAgentResult = (name: string) => ({
+                success: true,
+                payload: name === 'ChildAgent1' ? { a: 1 } : { b: 2 },
+                agentRun: { FinalStep: 'Success' } as any
+            });
+
+            await agent.testProcessSubAgentStep(params, previousDecision);
+
+            // mockStepEntitiesCreated holds the step entities the agent created
+            // through GetEntityObject in the order they were requested.
+            const stepEnds = mockStepEntitiesCreated
+                .map(s => s.PayloadAtEnd)
+                .filter((v): v is string => typeof v === 'string')
+                .map(s => JSON.parse(s));
+            expect(stepEnds).toContainEqual({ a: 1 });
+            expect(stepEnds).toContainEqual({ b: 2 });
+            // No step should record the *combined* {a:1,b:2} — each is its own contribution.
+            expect(stepEnds.every(s => Object.keys(s).length === 1)).toBe(true);
+        });
+
+        it('should produce a Retry step (without throwing) when one sub-agent name is unresolved', async () => {
+            const params: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'OK', terminateAfter: false },
+                    { name: 'DoesNotExist', message: 'should fail to resolve', terminateAfter: false }
+                ]
+            };
+            agent.mockExecuteSubAgentResult = () => ({
+                success: true, payload: {}, agentRun: { FinalStep: 'Success' } as any
+            });
+
+            const result = await agent.testProcessSubAgentStep(params, previousDecision);
+            expect(result.step).toBe('Retry');
+            // The aggregated summary should mention the unresolved sibling.
+            const summary = params.conversationMessages.find(m =>
+                typeof m.content === 'string' && m.content.includes('Parallel Sub-Agents Completed')
+            );
+            expect(summary?.content).toContain('DoesNotExist');
+        });
+    });
+
+    describe('finalizeAgentRun pending-save lifecycle', () => {
+        it('should clear _pendingSaves and _stepSavePromises after awaiting them', async () => {
+            const step1 = new MockStepEntity('s1');
+            const step2 = new MockStepEntity('s2');
+            agent.testQueueStepSave(step1);
+            agent.testQueueStepSave(step2);
+
+            expect(agent.getPendingSaves().length).toBe(2);
+            expect(agent.getStepSavePromises().size).toBe(2);
+
+            // Invoke finalizeAgentRun via reflection
+            const fakeFinalStep: any = { step: 'Success', terminate: true, newPayload: {}, previousPayload: {} };
+            // Mock the rest of finalize so it doesn't trip on missing internals
+            (agent as any)._depth = 0;
+            (agent as any)._mediaOutputs = [];
+            (agent as any)._fileOutputs = [];
+            (agent as any)._agentRun = {
+                ID: 'mock-run-id',
+                Steps: [],
+                ErrorMessage: null,
+                Save: vi.fn().mockResolvedValue(true)
+            };
+            // Stub out resolveMediaPlaceholdersInPayload/processMessageMediaPlaceholders so
+            // finalize doesn't blow up before reaching the cleanup we care about.
+            (agent as any).resolveMediaPlaceholdersInPayload = (x: any) => x;
+            (agent as any).processMessageMediaPlaceholders = (x: any) => x;
+            (agent as any).buildExecuteAgentResult = vi.fn().mockReturnValue({ success: true });
+            (agent as any).finalize_realFinalize = (agent as any).finalizeAgentRun;
+
+            try {
+                await (agent as any).finalizeAgentRun(fakeFinalStep, {}, undefined);
+            } catch {
+                // We only care about the cleanup contract, not the rest of finalize
+            }
+
+            expect(agent.getPendingSaves().length).toBe(0);
+            expect(agent.getStepSavePromises().size).toBe(0);
         });
     });
 });

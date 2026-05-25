@@ -69,6 +69,12 @@ interface CacheEntry {
  * // data = { ALL_ENTITIES: [...], MODEL_LIST: [...] }
  * ```
  */
+/**
+ * Maximum number of data sources to resolve concurrently for a single agent.
+ * Prevents a runaway agent with many data sources from saturating the DB pool.
+ */
+const PRELOAD_CONCURRENCY_LIMIT = 10;
+
 export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
     /**
      * Per-agent cache (global, TTL-based)
@@ -149,18 +155,9 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                 failedSources: []
             };
 
-            // Execute data sources in parallel
-            const preloads = dataSources.map(async (source) => {
-                try {
-                    const sourceData = await this.executeDataSource(source, contextUser, runId);
-                    const path = source.DestinationPath || source.Name;
-                    return { success: true as const, source, sourceData, path };
-                } catch (error) {
-                    return { success: false as const, source, error };
-                }
-            });
-
-            const preloadedResults = await Promise.all(preloads);
+            // Execute data sources in parallel with a bounded concurrency cap so a
+            // long list of sources can't saturate the DB connection pool.
+            const preloadedResults = await this.resolveDataSources(dataSources, contextUser, runId);
 
             for (const item of preloadedResults) {
                 if (item.success) {
@@ -192,8 +189,9 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
                         verboseOnly: true,
                         isVerboseEnabled: IsVerboseLoggingEnabled
                     });
-                } else {
-                    const { source, error } = item;
+                } else if (item.success === false) {
+                    const source = item.source;
+                    const error = item.error;
                     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
                     result.failedSources.push({
                         name: source.Name,
@@ -240,6 +238,53 @@ export class AgentDataPreloader extends BaseSingleton<AgentDataPreloader> {
             verboseOnly: true,
             isVerboseEnabled: IsVerboseLoggingEnabled
         });
+    }
+
+    /**
+     * Resolves all data sources with bounded concurrency, preserving input order
+     * in the returned result array. Each item is wrapped so the caller can
+     * distinguish success from failure without try/catch noise.
+     *
+     * @private
+     */
+    private async resolveDataSources(
+        dataSources: MJAIAgentDataSourceEntity[],
+        contextUser: UserInfo,
+        runId?: string
+    ): Promise<Array<
+        | { success: true; source: MJAIAgentDataSourceEntity; sourceData: unknown; path: string }
+        | { success: false; source: MJAIAgentDataSourceEntity; error: unknown }
+    >> {
+        if (dataSources.length === 0) return [];
+        const limit = Math.max(1, Math.min(PRELOAD_CONCURRENCY_LIMIT, dataSources.length));
+        const results: Array<
+            | { success: true; source: MJAIAgentDataSourceEntity; sourceData: unknown; path: string }
+            | { success: false; source: MJAIAgentDataSourceEntity; error: unknown }
+        > = new Array(dataSources.length);
+        let cursor = 0;
+        const runners: Promise<void>[] = [];
+        for (let i = 0; i < limit; i++) {
+            runners.push((async () => {
+                while (true) {
+                    const idx = cursor++;
+                    if (idx >= dataSources.length) return;
+                    const source = dataSources[idx];
+                    try {
+                        const sourceData = await this.executeDataSource(source, contextUser, runId);
+                        results[idx] = {
+                            success: true as const,
+                            source,
+                            sourceData,
+                            path: source.DestinationPath || source.Name
+                        };
+                    } catch (error) {
+                        results[idx] = { success: false as const, source, error };
+                    }
+                }
+            })());
+        }
+        await Promise.all(runners);
+        return results;
     }
 
     /**

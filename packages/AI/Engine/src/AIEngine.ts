@@ -7,7 +7,8 @@ import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
 import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
@@ -100,14 +101,33 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     private _actionEmbeddingsCache: Map<string, boolean> = new Map();
     private _embeddingsGenerated: boolean = false;
 
-    // In-memory query embedding cache
-    private _embeddingCache: Map<string, EmbedTextResult> = new Map();
+    /**
+     * In-memory query embedding cache.
+     *
+     * - LRU eviction (5000-entry default) — keeps hot queries warm across bursts.
+     * - Stores the in-flight `Promise<EmbedTextResult>` so concurrent callers
+     *   for the same key share one inference rather than racing.
+     * - Cache keys are `${modelID}|sha256(text)` so a 50KB text doesn't pin
+     *   its full string in the Map.
+     * - Failed promises are evicted via `Delete` so we don't trap negative
+     *   results.
+     */
+    private _embeddingCache: MJLruCache<string, Promise<EmbedTextResult | null>> = new MJLruCache({ maxSize: 5000 });
 
     /**
      * Clears all cached text embeddings.
      */
     public ClearEmbeddingCache(): void {
-        this._embeddingCache.clear();
+        this._embeddingCache.Clear();
+    }
+
+    /**
+     * Builds a bounded, collision-resistant cache key for a (model, text) pair.
+     * Hashing the text keeps Map memory bounded regardless of text size.
+     */
+    private buildEmbeddingCacheKey(modelId: string, text: string): string {
+        const hash = createHash('sha256').update(text).digest('hex');
+        return `${modelId}|${hash}`;
     }
 
     // Loading state management
@@ -963,10 +983,22 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         return { result, model };
     }
 
+    /**
+     * Helper method to instantiate a class instance for the given model and calculate an embedding
+     * vector from the provided text.
+     *
+     * Includes an LRU cache (see `_embeddingCache`) that dedupes concurrent calls for the same
+     * (model, text) pair — the in-flight Promise is shared until it settles.
+     *
+     * @param options.bypassCache when true, skips the cache read but still populates it on success
+     * @param options.noCache    when true, neither reads nor writes the cache
+     *
+     * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
+     */
     public async EmbedText(
-        model: MJAIModelEntityExtended, 
-        text: string, 
-        apiKey?: string, 
+        model: MJAIModelEntityExtended,
+        text: string,
+        apiKey?: string,
         options?: { bypassCache?: boolean; noCache?: boolean }
     ): Promise<EmbedTextResult | null> {
         if (!text || text.trim().length === 0) {
@@ -975,41 +1007,50 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
         const bypassCache = options?.bypassCache ?? false;
         const noCache = options?.noCache ?? false;
+        const cacheKey = this.buildEmbeddingCacheKey(model.ID, text);
 
-        const cacheKey = `${model.ID}:${text}`;
-        if (!bypassCache && !noCache && this._embeddingCache.has(cacheKey)) {
-            return this._embeddingCache.get(cacheKey)!;
-        }
-
-        const params: EmbedTextParams = {
-            text: text,
-            model: model.APIName
-        };
-
-        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings,
-            model.DriverClass,
-            apiKey
-        );
-
-        if (!embedding) {
-            LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
-            return null;
-        }
-
-        const result = await embedding.EmbedText(params);
-
-        if (result && result.vector && result.vector.length > 0 && !noCache) {
-            if (this._embeddingCache.size >= 1000) {
-                const firstKey = this._embeddingCache.keys().next().value;
-                if (firstKey !== undefined) {
-                    this._embeddingCache.delete(firstKey);
-                }
+        if (!bypassCache && !noCache) {
+            const cached = this._embeddingCache.Get(cacheKey);
+            if (cached) {
+                return cached;
             }
-            this._embeddingCache.set(cacheKey, result);
         }
 
-        return result;
+        // Inference promise — installed in the cache *before* awaiting so concurrent
+        // callers can share it (avoids redundant CPU-bound ONNX inference under load).
+        const inferencePromise = (async (): Promise<EmbedTextResult | null> => {
+            const params: EmbedTextParams = {
+                text: text,
+                model: model.APIName
+            };
+
+            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings,
+                model.DriverClass,
+                apiKey
+            );
+
+            if (!embedding) {
+                LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+                return null;
+            }
+
+            return await embedding.EmbedText(params);
+        })();
+
+        if (!noCache) {
+            this._embeddingCache.Set(cacheKey, inferencePromise);
+            // Evict failed/empty results so we don't trap a bad cached entry.
+            inferencePromise
+                .then(result => {
+                    if (!result || !result.vector || result.vector.length === 0) {
+                        this._embeddingCache.Delete(cacheKey);
+                    }
+                })
+                .catch(() => this._embeddingCache.Delete(cacheKey));
+        }
+
+        return await inferencePromise;
     }
 
     // ========================================================================

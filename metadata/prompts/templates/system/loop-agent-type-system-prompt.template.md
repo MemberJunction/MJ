@@ -46,8 +46,20 @@ interface LoopAgentResponse {
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
         clientTools?: Array<{ Name: string; Params: Record<string, unknown> }>;
 {% endif %}
-        /** Sub-agent details (when type='Sub-Agent') */
+        /**
+         * Sub-agent details (when type='Sub-Agent').
+         * Use `subAgent` for a single sub-agent OR `subAgents` for parallel fan-out.
+         * Only one of the two should be set per response.
+         */
         subAgent?: { name: string; message: string; terminateAfter: boolean };
+        /**
+         * Multiple sub-agents to run IN PARALLEL (when type='Sub-Agent').
+         * Use only when the sub-tasks are genuinely independent — their result
+         * payloads are merged back into the parent sequentially in this array's
+         * order. `terminateAfter` is respected only on a sub-agent that
+         * succeeds; failures fall through to a Retry so you can react.
+         */
+        subAgents?: Array<{ name: string; message: string; terminateAfter: boolean }>;
         /** Message index to expand (when type='Retry' and expanding a compacted message) */
         messageIndex?: number;
 {% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %}
@@ -88,7 +100,7 @@ Each iteration:
 2. Identify remaining work
 3. Choose next step:
    - Continue reasoning
-   {% if subAgentCount > 0 %}- Invoke sub-agent{% endif %}
+   {% if subAgentCount > 0 %}- Invoke a single sub-agent (`subAgent`) or fan out to multiple independent sub-agents in parallel (`subAgents`){% endif %}
    {% if actionCount > 0 %}- Execute action(s){% endif %}
    - Expand compacted message (if you need full details from a prior result)
 {% if clientToolDetails %}   - Invoke client tool(s) — interact with the user's browser{% endif %}
