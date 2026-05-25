@@ -55,7 +55,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Content Sources&Name=Configuration"
           },
           "sync": {
-            "lastModified": "2026-05-25T15:38:31.830Z",
+            "lastModified": "2026-05-25T22:36:35.675Z",
             "checksum": "3922df26fc11f46bc7e010b405481738baa9562592a26216f24bc69842adf024"
           }
         }

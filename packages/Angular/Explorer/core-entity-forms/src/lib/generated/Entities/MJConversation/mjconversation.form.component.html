@@ -168,10 +168,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Application Binding Section -->
+    <!-- Application Integration Section -->
     <mj-collapsible-panel
-        SectionKey="applicationBinding"
-        SectionName="Application Binding"
+        SectionKey="applicationIntegration"
+        SectionName="Application Integration"
         Icon="fa fa-plug"
         [Form]="this"
         [FormContext]="formContext">
@@ -200,6 +200,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AdditionalData"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
         ></mj-form-field>
 
     </mj-collapsible-panel>

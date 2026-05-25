@@ -20,7 +20,7 @@ export class MJConversationFormComponent extends BaseFormComponent {
             { sectionKey: 'participantsReferences', sectionName: 'Participants & References', isExpanded: true },
             { sectionKey: 'contextualScope', sectionName: 'Contextual Scope', isExpanded: true },
             { sectionKey: 'testRunDetails', sectionName: 'Test Run Details', isExpanded: true },
-            { sectionKey: 'applicationBinding', sectionName: 'Application Binding', isExpanded: true },
+            { sectionKey: 'applicationIntegration', sectionName: 'Application Integration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJReports', sectionName: 'Reports', isExpanded: false },

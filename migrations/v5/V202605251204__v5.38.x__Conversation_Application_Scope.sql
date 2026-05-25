@@ -1,7 +1,21 @@
 /*
-    Conversation: Application Scope, Application Binding, and Default Agent
-    ------------------------------------------------------------------------
-    Adds three columns to the Conversation table:
+    Conversation: Application Scope, Application Binding, Default Agent, and
+    Generic Resource Link
+    -------------------------------------------------------------------------
+    Adds FOUR new columns to the Conversation table (ApplicationScope,
+    ApplicationID, DefaultAgentID, AdditionalData) and a pair-binding
+    CHECK on the existing LinkedEntityID / LinkedRecordID columns that
+    were already part of the baseline schema. Single migration so a
+    fresh-DB install ends up with the complete v5.38 conversation
+    schema after one CodeGen pass.
+
+    Heads-up: `LinkedEntityID` (UNIQUEIDENTIFIER NULL, FK to Entity via
+    the existing `FK_Conversation_Entity` constraint) and `LinkedRecordID`
+    (NVARCHAR(500) NULL) already exist in the baseline. We do NOT
+    re-add them here. We only add the cross-column CHECK that pairs
+    them and refresh their descriptions to reflect the modern usage
+    pattern (Form Builder cockpit linking conversations to ComponentIDs
+    in the MJ: Components entity, etc.).
 
       1. ApplicationScope (NVARCHAR(20), NOT NULL, default 'Global')
          CHECK in ('Global', 'Application', 'Both')
@@ -24,30 +38,47 @@
          to the embedder-supplied default). Lets a user pin a conversation
          to e.g. Research Agent, so Sage is never invoked for that thread.
 
-    Plus a cross-column CHECK that keeps ApplicationScope and ApplicationID
-    in sync:
-        Global       => ApplicationID IS NULL
-        Application  => ApplicationID IS NOT NULL
-        Both         => ApplicationID IS NOT NULL
+      4. AdditionalData (NVARCHAR(MAX), NULL)
+         Free-form JSON extensibility column. Apps that want to attach
+         conversation-scoped metadata (UI state, draft notes, custom
+         analytics tags, etc.) can stuff it here without a schema change.
+         **Namespace your keys** to avoid collisions across apps — store
+         e.g. `{"form-builder.lastPreviewRecordId": "...", "my-app.fooFlag": true}`
+         rather than top-level `lastPreviewRecordId`. Core MJ code paths
+         do NOT read this column; it's purely for downstream apps.
+
+    Cross-column CHECKs enforce two invariants:
+      - Scope ↔ ApplicationID:
+          Global       => ApplicationID IS NULL
+          Application  => ApplicationID IS NOT NULL
+          Both         => ApplicationID IS NOT NULL
+      - Linked entity ↔ Linked record:
+          Both NULL together, or both populated together. Never one
+          without the other (a record without an entity is unresolvable;
+          an entity without a record is a noisy filter).
 
     Existing rows: the NOT NULL default on ApplicationScope sets every
-    pre-existing conversation to 'Global' with ApplicationID = NULL, which
-    is the correct retro-classification (today every conversation lives in
-    the main chat app; embedded surfaces don't exist yet).
+    pre-existing conversation to 'Global' with ApplicationID = NULL and
+    both Linked* columns NULL — the correct retro-classification (no
+    embedded surfaces existed prior to this migration).
 
     Per migrations/CLAUDE.md:
-      - Single ALTER TABLE with multiple ADD clauses (not three separate ALTERs)
+      - Single ALTER TABLE with multiple ADD clauses (not N separate ALTERs)
       - No __mj timestamp columns (CodeGen owns those)
       - No FK indexes (CodeGen owns those — IDX_AUTO_MJ_FKEY_*)
       - sp_addextendedproperty for every new column so CodeGen can carry
         descriptions through to the generated types + GraphQL + UI
 */
 
--- ── 1. Add the three columns + CHECK in a single ALTER ──────────────────
+-- ── 1. Add the four new columns + CHECKs + FKs in a single ALTER ───────
+-- Note: LinkedEntityID + LinkedRecordID are NOT added here — they were
+-- already part of the baseline schema (with an existing FK to Entity).
+-- We only add the pair-binding CHECK on them below in section 3.
 ALTER TABLE ${flyway:defaultSchema}.Conversation ADD
     ApplicationScope NVARCHAR(20)     NOT NULL CONSTRAINT DF_Conversation_ApplicationScope DEFAULT ('Global'),
     ApplicationID    UNIQUEIDENTIFIER NULL,
     DefaultAgentID   UNIQUEIDENTIFIER NULL,
+    AdditionalData   NVARCHAR(MAX)    NULL,
     CONSTRAINT CK_Conversation_ApplicationScope CHECK (ApplicationScope IN ('Global', 'Application', 'Both')),
     CONSTRAINT CK_Conversation_ScopeAppBinding  CHECK (
         (ApplicationScope = 'Global'                       AND ApplicationID IS NULL)
@@ -55,6 +86,14 @@ ALTER TABLE ${flyway:defaultSchema}.Conversation ADD
     ),
     CONSTRAINT FK_Conversation_Application      FOREIGN KEY (ApplicationID)  REFERENCES ${flyway:defaultSchema}.Application(ID),
     CONSTRAINT FK_Conversation_DefaultAgent     FOREIGN KEY (DefaultAgentID) REFERENCES ${flyway:defaultSchema}.AIAgent(ID);
+
+-- ── 2. Pair-binding CHECK on the existing LinkedEntityID / LinkedRecordID
+-- Added as a separate ALTER because the columns predate this migration.
+ALTER TABLE ${flyway:defaultSchema}.Conversation
+    ADD CONSTRAINT CK_Conversation_LinkBinding CHECK (
+        (LinkedEntityID IS NULL     AND LinkedRecordID IS NULL)
+     OR (LinkedEntityID IS NOT NULL AND LinkedRecordID IS NOT NULL)
+    );
 
 -- ── 2. Extended properties so CodeGen carries descriptions through ──────
 EXEC sp_addextendedproperty
@@ -81,6 +120,63 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'DefaultAgentID';
 GO
 
+-- LinkedEntityID + LinkedRecordID existed in the baseline schema. Drop
+-- any prior MS_Description first so the re-add doesn't fail with
+-- "Property already exists" (per migrations/CLAUDE.md rule #2 — the
+-- canonical pattern when modifying existing field metadata).
+IF EXISTS (SELECT 1 FROM sys.extended_properties
+           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.Conversation')
+             AND minor_id = (SELECT column_id FROM sys.columns
+                             WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.Conversation')
+                               AND name = 'LinkedEntityID')
+             AND name = 'MS_Description')
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name      = N'MS_Description',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'Conversation',
+        @level2type = N'COLUMN', @level2name = N'LinkedEntityID';
+END
+GO
+
+EXEC sp_addextendedproperty
+    @name      = N'MS_Description',
+    @value     = N'Generic ''what is this conversation about?'' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. ''show prior conversations about THIS form''). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'Conversation',
+    @level2type = N'COLUMN', @level2name = N'LinkedEntityID';
+GO
+
+IF EXISTS (SELECT 1 FROM sys.extended_properties
+           WHERE major_id = OBJECT_ID('${flyway:defaultSchema}.Conversation')
+             AND minor_id = (SELECT column_id FROM sys.columns
+                             WHERE object_id = OBJECT_ID('${flyway:defaultSchema}.Conversation')
+                               AND name = 'LinkedRecordID')
+             AND name = 'MS_Description')
+BEGIN
+    EXEC sp_dropextendedproperty
+        @name      = N'MS_Description',
+        @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+        @level1type = N'TABLE',  @level1name = N'Conversation',
+        @level2type = N'COLUMN', @level2name = N'LinkedRecordID';
+END
+GO
+
+EXEC sp_addextendedproperty
+    @name      = N'MS_Description',
+    @value     = N'The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'Conversation',
+    @level2type = N'COLUMN', @level2name = N'LinkedRecordID';
+GO
+
+EXEC sp_addextendedproperty
+    @name      = N'MS_Description',
+    @value     = N'Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it''s purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'Conversation',
+    @level2type = N'COLUMN', @level2name = N'AdditionalData';
+GO
 
 
 
@@ -130,10 +226,11 @@ GO
 
 
 
--- CODE GEN RUN
+
+-- CODE GEN RUN 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '91dd32d0-4448-4136-aea7-6505dfa7cace' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ApplicationScope')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6e6637f4-cfb6-4722-b00b-9db7c0440e0b' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ApplicationScope')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -166,9 +263,9 @@ GO
          )
          VALUES
          (
-            '91dd32d0-4448-4136-aea7-6505dfa7cace',
+            '6e6637f4-cfb6-4722-b00b-9db7c0440e0b',
             '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
-            100044,
+            100045,
             'ApplicationScope',
             'Application Scope',
             'Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application''s embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application''s embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.',
@@ -198,7 +295,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '15958992-ec32-4fc1-b3d6-95f0ea16a9ba' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ApplicationID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1ec97ab3-f5f1-493c-a3b1-6583aee9f649' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'ApplicationID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -231,9 +328,9 @@ GO
          )
          VALUES
          (
-            '15958992-ec32-4fc1-b3d6-95f0ea16a9ba',
+            '1ec97ab3-f5f1-493c-a3b1-6583aee9f649',
             '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
-            100045,
+            100046,
             'ApplicationID',
             'Application ID',
             'Optional Application this conversation is bound to. Required when ApplicationScope is ''Application'' or ''Both''; must be NULL when ApplicationScope is ''Global''. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application''s conversations.',
@@ -263,7 +360,7 @@ GO
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f98b0320-7a36-466d-9562-a0cbe02bd638' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultAgentID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1fbfce7b-f7ed-4245-a862-af9f72f20e2b' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultAgentID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -296,9 +393,9 @@ GO
          )
          VALUES
          (
-            'f98b0320-7a36-466d-9562-a0cbe02bd638',
+            '1fbfce7b-f7ed-4245-a862-af9f72f20e2b',
             '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
-            100046,
+            100047,
             'DefaultAgentID',
             'Default Agent ID',
             'Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder''s defaultAgentId input > Sage fallback.',
@@ -326,45 +423,110 @@ GO
          )
       END;
 
-/* SQL text to insert entity field value with ID 4a061fa0-c96b-470b-941a-561454f8a6f9 */
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '83e9fbc5-ed0f-4f37-bf90-29dd94cded94' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'AdditionalData')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '83e9fbc5-ed0f-4f37-bf90-29dd94cded94',
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
+            100048,
+            'AdditionalData',
+            'Additional Data',
+            'Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it''s purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to insert entity field value with ID 12cec38a-97ef-438b-a790-9aeb62eda474 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('4a061fa0-c96b-470b-941a-561454f8a6f9', '91DD32D0-4448-4136-AEA7-6505DFA7CACE', 1, 'Application', 'Application', GETUTCDATE(), GETUTCDATE());
+                                       ('12cec38a-97ef-438b-a790-9aeb62eda474', '6E6637F4-CFB6-4722-B00B-9DB7C0440E0B', 1, 'Application', 'Application', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 2207d4f5-4697-4c9c-874a-cd5fcca3096e */
+/* SQL text to insert entity field value with ID 47df675c-c948-4b8c-a441-bb36f11a87b1 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('2207d4f5-4697-4c9c-874a-cd5fcca3096e', '91DD32D0-4448-4136-AEA7-6505DFA7CACE', 2, 'Both', 'Both', GETUTCDATE(), GETUTCDATE());
+                                       ('47df675c-c948-4b8c-a441-bb36f11a87b1', '6E6637F4-CFB6-4722-B00B-9DB7C0440E0B', 2, 'Both', 'Both', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID dfb776be-e86e-43d0-94a0-54fb6f8f0fab */
+/* SQL text to insert entity field value with ID 284b74ab-1377-4318-b1f8-824dffcbe130 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('dfb776be-e86e-43d0-94a0-54fb6f8f0fab', '91DD32D0-4448-4136-AEA7-6505DFA7CACE', 3, 'Global', 'Global', GETUTCDATE(), GETUTCDATE());
+                                       ('284b74ab-1377-4318-b1f8-824dffcbe130', '6E6637F4-CFB6-4722-B00B-9DB7C0440E0B', 3, 'Global', 'Global', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 91DD32D0-4448-4136-AEA7-6505DFA7CACE */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='91DD32D0-4448-4136-AEA7-6505DFA7CACE';
+/* SQL text to update ValueListType for entity field ID 6E6637F4-CFB6-4722-B00B-9DB7C0440E0B */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='6E6637F4-CFB6-4722-B00B-9DB7C0440E0B';
 
 
 /* Create Entity Relationship: MJ: AI Agents -> MJ: Conversations (One To Many via DefaultAgentID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '10f6ea79-9f75-4a67-b092-e484450fa4c9'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '4d4d35fa-6705-4677-beea-0e427931d78a'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('10f6ea79-9f75-4a67-b092-e484450fa4c9', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'DefaultAgentID', 'One To Many', 1, 1, 27, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('4d4d35fa-6705-4677-beea-0e427931d78a', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'DefaultAgentID', 'One To Many', 1, 1, 27, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Applications -> MJ: Conversations (One To Many via ApplicationID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ff2e19ab-99eb-4c6a-b328-fc5ffe53e246'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'd8a7e262-77a3-48a7-a72e-303e67954c7f'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('ff2e19ab-99eb-4c6a-b328-fc5ffe53e246', 'E8238F34-2837-EF11-86D4-6045BDEE16E6', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'ApplicationID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('d8a7e262-77a3-48a7-a72e-303e67954c7f', 'E8238F34-2837-EF11-86D4-6045BDEE16E6', '13248F34-2837-EF11-86D4-6045BDEE16E6', 'ApplicationID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
    END;
 
 /* Index for Foreign Keys for Conversation */
@@ -448,11 +610,11 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_DefaultAgentID ON [${flyway:defaultSchema}].[Conversation] ([DefaultAgentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 15958992-EC32-4FC1-B3D6-95F0EA16A9BA */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='15958992-EC32-4FC1-B3D6-95F0EA16A9BA', @RelatedEntityNameFieldMap='Application';
+/* SQL text to update entity field related entity name field map for entity field ID 1EC97AB3-F5F1-493C-A3B1-6583AEE9F649 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='1EC97AB3-F5F1-493C-A3B1-6583AEE9F649', @RelatedEntityNameFieldMap='Application';
 
-/* SQL text to update entity field related entity name field map for entity field ID F98B0320-7A36-466D-9562-A0CBE02BD638 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F98B0320-7A36-466D-9562-A0CBE02BD638', @RelatedEntityNameFieldMap='DefaultAgent';
+/* SQL text to update entity field related entity name field map for entity field ID 1FBFCE7B-F7ED-4245-A862-AF9F72F20E2B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='1FBFCE7B-F7ED-4245-A862-AF9F72F20E2B', @RelatedEntityNameFieldMap='DefaultAgent';
 
 /* Base View SQL for MJ: Conversations */
 -----------------------------------------------------------------
@@ -580,7 +742,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateConversation]
     @ApplicationID_Clear bit = 0,
     @ApplicationID uniqueidentifier = NULL,
     @DefaultAgentID_Clear bit = 0,
-    @DefaultAgentID uniqueidentifier = NULL
+    @DefaultAgentID uniqueidentifier = NULL,
+    @AdditionalData_Clear bit = 0,
+    @AdditionalData nvarchar(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -608,7 +772,8 @@ BEGIN
                 [TestRunID],
                 [ApplicationScope],
                 [ApplicationID],
-                [DefaultAgentID]
+                [DefaultAgentID],
+                [AdditionalData]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -630,7 +795,8 @@ BEGIN
                 CASE WHEN @TestRunID_Clear = 1 THEN NULL ELSE ISNULL(@TestRunID, NULL) END,
                 ISNULL(@ApplicationScope, 'Global'),
                 CASE WHEN @ApplicationID_Clear = 1 THEN NULL ELSE ISNULL(@ApplicationID, NULL) END,
-                CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, NULL) END
+                CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, NULL) END,
+                CASE WHEN @AdditionalData_Clear = 1 THEN NULL ELSE ISNULL(@AdditionalData, NULL) END
             )
     END
     ELSE
@@ -654,7 +820,8 @@ BEGIN
                 [TestRunID],
                 [ApplicationScope],
                 [ApplicationID],
-                [DefaultAgentID]
+                [DefaultAgentID],
+                [AdditionalData]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
@@ -675,7 +842,8 @@ BEGIN
                 CASE WHEN @TestRunID_Clear = 1 THEN NULL ELSE ISNULL(@TestRunID, NULL) END,
                 ISNULL(@ApplicationScope, 'Global'),
                 CASE WHEN @ApplicationID_Clear = 1 THEN NULL ELSE ISNULL(@ApplicationID, NULL) END,
-                CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, NULL) END
+                CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, NULL) END,
+                CASE WHEN @AdditionalData_Clear = 1 THEN NULL ELSE ISNULL(@AdditionalData, NULL) END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -733,7 +901,9 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateConversation]
     @ApplicationID_Clear bit = 0,
     @ApplicationID uniqueidentifier = NULL,
     @DefaultAgentID_Clear bit = 0,
-    @DefaultAgentID uniqueidentifier = NULL
+    @DefaultAgentID uniqueidentifier = NULL,
+    @AdditionalData_Clear bit = 0,
+    @AdditionalData nvarchar(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -756,7 +926,8 @@ BEGIN
         [TestRunID] = CASE WHEN @TestRunID_Clear = 1 THEN NULL ELSE ISNULL(@TestRunID, [TestRunID]) END,
         [ApplicationScope] = ISNULL(@ApplicationScope, [ApplicationScope]),
         [ApplicationID] = CASE WHEN @ApplicationID_Clear = 1 THEN NULL ELSE ISNULL(@ApplicationID, [ApplicationID]) END,
-        [DefaultAgentID] = CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, [DefaultAgentID]) END
+        [DefaultAgentID] = CASE WHEN @DefaultAgentID_Clear = 1 THEN NULL ELSE ISNULL(@DefaultAgentID, [DefaultAgentID]) END,
+        [AdditionalData] = CASE WHEN @AdditionalData_Clear = 1 THEN NULL ELSE ISNULL(@AdditionalData, [AdditionalData]) END
     WHERE
         [ID] = @ID
 
@@ -1912,13 +2083,14 @@ BEGIN
     DECLARE @MJConversations_DefaultAgentID_ApplicationScope nvarchar(20)
     DECLARE @MJConversations_DefaultAgentID_ApplicationID uniqueidentifier
     DECLARE @MJConversations_DefaultAgentID_DefaultAgentID uniqueidentifier
+    DECLARE @MJConversations_DefaultAgentID_AdditionalData nvarchar(MAX)
     DECLARE cascade_update_MJConversations_DefaultAgentID_cursor CURSOR FOR
-        SELECT [ID], [UserID], [ExternalID], [Name], [Description], [Type], [IsArchived], [LinkedEntityID], [LinkedRecordID], [DataContextID], [Status], [EnvironmentID], [ProjectID], [IsPinned], [TestRunID], [ApplicationScope], [ApplicationID], [DefaultAgentID]
+        SELECT [ID], [UserID], [ExternalID], [Name], [Description], [Type], [IsArchived], [LinkedEntityID], [LinkedRecordID], [DataContextID], [Status], [EnvironmentID], [ProjectID], [IsPinned], [TestRunID], [ApplicationScope], [ApplicationID], [DefaultAgentID], [AdditionalData]
         FROM [${flyway:defaultSchema}].[Conversation]
         WHERE [DefaultAgentID] = @ID
 
     OPEN cascade_update_MJConversations_DefaultAgentID_cursor
-    FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID
+    FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
@@ -1926,9 +2098,9 @@ BEGIN
         SET @MJConversations_DefaultAgentID_DefaultAgentID = NULL
 
         -- Call the update SP for the related entity
-        EXEC [${flyway:defaultSchema}].[spUpdateConversation] @ID = @MJConversations_DefaultAgentIDID, @UserID = @MJConversations_DefaultAgentID_UserID, @ExternalID = @MJConversations_DefaultAgentID_ExternalID, @Name = @MJConversations_DefaultAgentID_Name, @Description = @MJConversations_DefaultAgentID_Description, @Type = @MJConversations_DefaultAgentID_Type, @IsArchived = @MJConversations_DefaultAgentID_IsArchived, @LinkedEntityID = @MJConversations_DefaultAgentID_LinkedEntityID, @LinkedRecordID = @MJConversations_DefaultAgentID_LinkedRecordID, @DataContextID = @MJConversations_DefaultAgentID_DataContextID, @Status = @MJConversations_DefaultAgentID_Status, @EnvironmentID = @MJConversations_DefaultAgentID_EnvironmentID, @ProjectID = @MJConversations_DefaultAgentID_ProjectID, @IsPinned = @MJConversations_DefaultAgentID_IsPinned, @TestRunID = @MJConversations_DefaultAgentID_TestRunID, @ApplicationScope = @MJConversations_DefaultAgentID_ApplicationScope, @ApplicationID = @MJConversations_DefaultAgentID_ApplicationID, @DefaultAgentID_Clear = 1, @DefaultAgentID = @MJConversations_DefaultAgentID_DefaultAgentID
+        EXEC [${flyway:defaultSchema}].[spUpdateConversation] @ID = @MJConversations_DefaultAgentIDID, @UserID = @MJConversations_DefaultAgentID_UserID, @ExternalID = @MJConversations_DefaultAgentID_ExternalID, @Name = @MJConversations_DefaultAgentID_Name, @Description = @MJConversations_DefaultAgentID_Description, @Type = @MJConversations_DefaultAgentID_Type, @IsArchived = @MJConversations_DefaultAgentID_IsArchived, @LinkedEntityID = @MJConversations_DefaultAgentID_LinkedEntityID, @LinkedRecordID = @MJConversations_DefaultAgentID_LinkedRecordID, @DataContextID = @MJConversations_DefaultAgentID_DataContextID, @Status = @MJConversations_DefaultAgentID_Status, @EnvironmentID = @MJConversations_DefaultAgentID_EnvironmentID, @ProjectID = @MJConversations_DefaultAgentID_ProjectID, @IsPinned = @MJConversations_DefaultAgentID_IsPinned, @TestRunID = @MJConversations_DefaultAgentID_TestRunID, @ApplicationScope = @MJConversations_DefaultAgentID_ApplicationScope, @ApplicationID = @MJConversations_DefaultAgentID_ApplicationID, @DefaultAgentID_Clear = 1, @DefaultAgentID = @MJConversations_DefaultAgentID_DefaultAgentID, @AdditionalData = @MJConversations_DefaultAgentID_AdditionalData
 
-        FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID
+        FETCH NEXT FROM cascade_update_MJConversations_DefaultAgentID_cursor INTO @MJConversations_DefaultAgentIDID, @MJConversations_DefaultAgentID_UserID, @MJConversations_DefaultAgentID_ExternalID, @MJConversations_DefaultAgentID_Name, @MJConversations_DefaultAgentID_Description, @MJConversations_DefaultAgentID_Type, @MJConversations_DefaultAgentID_IsArchived, @MJConversations_DefaultAgentID_LinkedEntityID, @MJConversations_DefaultAgentID_LinkedRecordID, @MJConversations_DefaultAgentID_DataContextID, @MJConversations_DefaultAgentID_Status, @MJConversations_DefaultAgentID_EnvironmentID, @MJConversations_DefaultAgentID_ProjectID, @MJConversations_DefaultAgentID_IsPinned, @MJConversations_DefaultAgentID_TestRunID, @MJConversations_DefaultAgentID_ApplicationScope, @MJConversations_DefaultAgentID_ApplicationID, @MJConversations_DefaultAgentID_DefaultAgentID, @MJConversations_DefaultAgentID_AdditionalData
     END
 
     CLOSE cascade_update_MJConversations_DefaultAgentID_cursor
@@ -2029,7 +2201,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '024ca805-658f-44e9-b2ef-54b00446db13' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Application')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1252be08-2567-4da1-98c6-75ad57b2fe41' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Application')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2062,9 +2234,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            '024ca805-658f-44e9-b2ef-54b00446db13',
+            '1252be08-2567-4da1-98c6-75ad57b2fe41',
             '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
-            100053,
+            100055,
             'Application',
             'Application',
             NULL,
@@ -2094,7 +2266,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
 
 /* SQL text to insert new entity field */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ef3bdeb9-08c6-4165-a59c-3b402e8e702b' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultAgent')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '996f4f15-858f-428c-8962-6bbd6ae78585' OR (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'DefaultAgent')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2127,9 +2299,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
          )
          VALUES
          (
-            'ef3bdeb9-08c6-4165-a59c-3b402e8e702b',
+            '996f4f15-858f-428c-8962-6bbd6ae78585',
             '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Conversations
-            100054,
+            100056,
             'DefaultAgent',
             'Default Agent',
             NULL,
@@ -2160,33 +2332,13 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
 /* Set field properties for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '024CA805-658F-44E9-B2EF-54B00446DB13'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET IncludeInUserSearchAPI = 1
-               WHERE ID = '575753A4-C12E-4E48-A835-6FE3FACE5527'
-               AND AutoUpdateIncludeInUserSearchAPI = 1;
+               SET UserSearchPredicateAPI = 'Exact'
+               WHERE ID = '114E17F0-6F36-EF11-86D4-6045BDEE16E6'
+               AND AutoUpdateUserSearchPredicate = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET UserSearchPredicateAPI = 'BeginsWith'
                WHERE ID = '804E17F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '575753A4-C12E-4E48-A835-6FE3FACE5527'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'BeginsWith'
-               WHERE ID = '6E4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND AutoUpdateUserSearchPredicate = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET UserSearchPredicateAPI = 'Exact'
-               WHERE ID = '114E17F0-6F36-EF11-86D4-6045BDEE16E6'
                AND AutoUpdateUserSearchPredicate = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
@@ -2194,7 +2346,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Developer],
             WHERE ID = '13248F34-2837-EF11-86D4-6045BDEE16E6'
             AND AutoUpdateAllowUserSearchAPI = 1;
 
-/* Set categories for 28 fields */
+/* Set categories for 29 fields */
 
 -- UPDATE Entity Field Category Info MJ: Conversations.ID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2232,16 +2384,6 @@ SET
 WHERE 
    ID = '804E17F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
 
--- UPDATE Entity Field Category Info MJ: Conversations.IsArchived 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Is Archived',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '144417F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
-
 -- UPDATE Entity Field Category Info MJ: Conversations.Status 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
@@ -2251,11 +2393,19 @@ SET
 WHERE 
    ID = '575753A4-C12E-4E48-A835-6FE3FACE5527' AND AutoUpdateCategory = 1;
 
+-- UPDATE Entity Field Category Info MJ: Conversations.IsArchived 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   GeneratedFormSection = 'Category',
+   ExtendedType = NULL,
+   CodeType = NULL
+WHERE 
+   ID = '144417F0-6F36-EF11-86D4-6045BDEE16E6' AND AutoUpdateCategory = 1;
+
 -- UPDATE Entity Field Category Info MJ: Conversations.IsPinned 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    GeneratedFormSection = 'Category',
-   DisplayName = 'Is Pinned',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
@@ -2373,56 +2523,66 @@ WHERE
 -- UPDATE Entity Field Category Info MJ: Conversations.ApplicationScope 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Application Binding',
+   Category = 'Application Integration',
    GeneratedFormSection = 'Category',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '91DD32D0-4448-4136-AEA7-6505DFA7CACE' AND AutoUpdateCategory = 1;
+   ID = '6E6637F4-CFB6-4722-B00B-9DB7C0440E0B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversations.ApplicationID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Application Binding',
+   Category = 'Application Integration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Application',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '15958992-EC32-4FC1-B3D6-95F0EA16A9BA' AND AutoUpdateCategory = 1;
+   ID = '1EC97AB3-F5F1-493C-A3B1-6583AEE9F649' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversations.Application 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Application Binding',
+   Category = 'Application Integration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Application Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = '024CA805-658F-44E9-B2EF-54B00446DB13' AND AutoUpdateCategory = 1;
+   ID = '1252BE08-2567-4DA1-98C6-75AD57B2FE41' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversations.DefaultAgentID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Application Binding',
+   Category = 'Application Integration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Default Agent',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'F98B0320-7A36-466D-9562-A0CBE02BD638' AND AutoUpdateCategory = 1;
+   ID = '1FBFCE7B-F7ED-4245-A862-AF9F72F20E2B' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversations.DefaultAgent 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Application Binding',
+   Category = 'Application Integration',
    GeneratedFormSection = 'Category',
    DisplayName = 'Default Agent Name',
    ExtendedType = NULL,
    CodeType = NULL
 WHERE 
-   ID = 'EF3BDEB9-08C6-4165-A59C-3B402E8E702B' AND AutoUpdateCategory = 1;
+   ID = '996F4F15-858F-428C-8962-6BBD6AE78585' AND AutoUpdateCategory = 1;
+
+-- UPDATE Entity Field Category Info MJ: Conversations.AdditionalData 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Application Integration',
+   GeneratedFormSection = 'Category',
+   ExtendedType = 'Code',
+   CodeType = 'Other'
+WHERE 
+   ID = '83E9FBC5-ED0F-4F37-BF90-29DD94CDED94' AND AutoUpdateCategory = 1;
 
 -- UPDATE Entity Field Category Info MJ: Conversations.TestRunID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
@@ -2463,34 +2623,51 @@ WHERE
 /* Update FieldCategoryInfo setting for entity */
 
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Application Binding":{"icon":"fa fa-plug","description":"Configuration for application-specific chat surfaces and agent routing"}}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Application Integration":{"icon":"fa fa-plug","description":"Configuration for application-specific chat behavior and integrations"}}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND [Name] = 'FieldCategoryInfo';
 
 /* Update FieldCategoryIcons setting (legacy) */
 
                UPDATE [${flyway:defaultSchema}].[EntitySetting]
-               SET [Value] = '{"Application Binding":"fa fa-plug"}', [__mj_UpdatedAt] = GETUTCDATE()
+               SET [Value] = '{"Application Integration":"fa fa-plug"}', [__mj_UpdatedAt] = GETUTCDATE()
                WHERE [EntityID] = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND [Name] = 'FieldCategoryIcons';
 
 /* Generated Validation Functions for MJ: Conversations */
 -- CHECK constraint for MJ: Conversations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', GETUTCDATE(), 'TypeScript', 'Approved', '([ApplicationScope]=''Global'' AND [ApplicationID] IS NULL OR ([ApplicationScope]=''Both'' OR [ApplicationScope]=''Application'') AND [ApplicationID] IS NOT NULL)', 'public ValidateApplicationIDBasedOnScope(result: ValidationResult) {
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', GETUTCDATE(), 'TypeScript', 'Approved', '([ApplicationScope]=''Global'' AND [ApplicationID] IS NULL OR ([ApplicationScope]=''Both'' OR [ApplicationScope]=''Application'') AND [ApplicationID] IS NOT NULL)', 'public ValidateApplicationScopeAndIDConsistency(result: ValidationResult) {
+	// If the scope is Global, ApplicationID must be null
 	if (this.ApplicationScope === ''Global'' && this.ApplicationID != null) {
 		result.Errors.push(new ValidationErrorInfo(
 			"ApplicationID",
-			"Application ID must be empty when the Application Scope is set to ''Global''.",
+			"Application ID must be empty when the application scope is set to Global.",
 			this.ApplicationID,
 			ValidationErrorType.Failure
 		));
 	}
+
+	// If the scope is Application or Both, ApplicationID must be provided
 	if ((this.ApplicationScope === ''Application'' || this.ApplicationScope === ''Both'') && this.ApplicationID == null) {
 		result.Errors.push(new ValidationErrorInfo(
 			"ApplicationID",
-			"An Application ID must be provided when the Application Scope is set to ''Application'' or ''Both''.",
+			"An Application ID is required when the application scope is set to Application or Both.",
 			this.ApplicationID,
 			ValidationErrorType.Failure
 		));
 	}
-}', 'Records with a ''Global'' scope must not have an application assigned, while records scoped to ''Application'' or ''Both'' must have a valid application ID to ensure correct scoping.', 'ValidateApplicationIDBasedOnScope', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '13248F34-2837-EF11-86D4-6045BDEE16E6');
+}', 'Ensures that records scoped as ''Global'' do not have an associated Application ID, while records scoped to ''Application'' or ''Both'' must have a valid Application ID assigned.', 'ValidateApplicationScopeAndIDConsistency', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '13248F34-2837-EF11-86D4-6045BDEE16E6');
+
+            -- CHECK constraint for MJ: Conversations @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
+INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), '7B31F48E-EDA3-47B4-9602-D98B7EB1AF45', GETUTCDATE(), 'TypeScript', 'Approved', '([LinkedEntityID] IS NULL AND [LinkedRecordID] IS NULL OR [LinkedEntityID] IS NOT NULL AND [LinkedRecordID] IS NOT NULL)', 'public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+	// The constraint ensures that LinkedEntityID and LinkedRecordID are either both null or both populated
+	if ((this.LinkedEntityID == null && this.LinkedRecordID != null) || (this.LinkedEntityID != null && this.LinkedRecordID == null)) {
+		result.Errors.push(new ValidationErrorInfo(
+			"LinkedEntityID",
+			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
+			this.LinkedEntityID,
+			ValidationErrorType.Failure
+		));
+	}
+}', 'Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.', 'ValidateLinkedEntityAndRecordCoexistence', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '13248F34-2837-EF11-86D4-6045BDEE16E6');
 

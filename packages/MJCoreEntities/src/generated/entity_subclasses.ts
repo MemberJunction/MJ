@@ -11895,7 +11895,7 @@ export const MJConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Is Archived
+        * * Display Name: Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
@@ -11903,12 +11903,13 @@ export const MJConversationSchema = z.object({
         * * Field Name: LinkedEntityID
         * * Display Name: Linked Entity
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.`),
     LinkedRecordID: z.string().nullable().describe(`
         * * Field Name: LinkedRecordID
         * * Display Name: Linked Record ID
         * * SQL Data Type: nvarchar(500)
-        * * Description: ID of a related record this conversation is about (support ticket, order, etc.).`),
+        * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).`),
     DataContextID: z.string().nullable().describe(`
         * * Field Name: DataContextID
         * * Display Name: Data Context
@@ -11947,7 +11948,7 @@ export const MJConversationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Is Pinned
+        * * Display Name: Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
@@ -11980,6 +11981,11 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
         * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
+    AdditionalData: z.string().nullable().describe(`
+        * * Field Name: AdditionalData
+        * * Display Name: Additional Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
@@ -57584,7 +57590,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -58666,39 +58672,62 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Records with a 'Global' scope must not have an application assigned, while records scoped to 'Application' or 'Both' must have a valid application ID to ensure correct scoping.
+    * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateApplicationIDBasedOnScope(result);
+        this.ValidateApplicationScopeAndIDConsistency(result);
+        this.ValidateLinkedEntityAndRecordCoexistence(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * Records with a 'Global' scope must not have an application assigned, while records scoped to 'Application' or 'Both' must have a valid application ID to ensure correct scoping.
+    * Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateApplicationIDBasedOnScope(result: ValidationResult) {
+    public ValidateApplicationScopeAndIDConsistency(result: ValidationResult) {
+    	// If the scope is Global, ApplicationID must be null
     	if (this.ApplicationScope === 'Global' && this.ApplicationID != null) {
     		result.Errors.push(new ValidationErrorInfo(
     			"ApplicationID",
-    			"Application ID must be empty when the Application Scope is set to 'Global'.",
+    			"Application ID must be empty when the application scope is set to Global.",
     			this.ApplicationID,
     			ValidationErrorType.Failure
     		));
     	}
+    
+    	// If the scope is Application or Both, ApplicationID must be provided
     	if ((this.ApplicationScope === 'Application' || this.ApplicationScope === 'Both') && this.ApplicationID == null) {
     		result.Errors.push(new ValidationErrorInfo(
     			"ApplicationID",
-    			"An Application ID must be provided when the Application Scope is set to 'Application' or 'Both'.",
+    			"An Application ID is required when the application scope is set to Application or Both.",
     			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+    	// The constraint ensures that LinkedEntityID and LinkedRecordID are either both null or both populated
+    	if ((this.LinkedEntityID == null && this.LinkedRecordID != null) || (this.LinkedEntityID != null && this.LinkedRecordID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LinkedEntityID",
+    			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
+    			this.LinkedEntityID,
     			ValidationErrorType.Failure
     		));
     	}
@@ -58783,7 +58812,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Is Archived
+    * * Display Name: Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -58800,6 +58829,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Display Name: Linked Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Generic 'what is this conversation about?' pointer. Names the Entity whose record this conversation references (e.g. MJ: Components when the conversation was started in the Form Builder cockpit about a specific form). Paired with LinkedRecordID via the CK_Conversation_LinkBinding cross-column CHECK — both NULL or both populated. Surfaces use this to filter their conversation list to entries about the currently-loaded record (e.g. 'show prior conversations about THIS form'). Reusable beyond Form Builder by any future dashboard / record-context surface that wants the same UX without further schema work.
     */
     get LinkedEntityID(): string | null {
         return this.Get('LinkedEntityID');
@@ -58812,7 +58842,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * * Field Name: LinkedRecordID
     * * Display Name: Linked Record ID
     * * SQL Data Type: nvarchar(500)
-    * * Description: ID of a related record this conversation is about (support ticket, order, etc.).
+    * * Description: The primary key of the record this conversation is about, serialized as a string so any entity type can be referenced regardless of its PK shape (UUID, int, composite). Used together with LinkedEntityID — see CK_Conversation_LinkBinding. Wide enough (NVARCHAR(500) in the baseline schema) to handle chunky composite keys. Surfaces query by (LinkedEntityID, LinkedRecordID) — or by LinkedRecordID IN (...) when a lineage of records shares conversation context (e.g. multiple Component versions of the same form lineage).
     */
     get LinkedRecordID(): string | null {
         return this.Get('LinkedRecordID');
@@ -58901,7 +58931,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Is Pinned
+    * * Display Name: Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -58972,6 +59002,19 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
     set DefaultAgentID(value: string | null) {
         this.Set('DefaultAgentID', value);
+    }
+
+    /**
+    * * Field Name: AdditionalData
+    * * Display Name: Additional Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form JSON extensibility column. Apps that want to attach conversation-scoped metadata (UI state, draft notes, custom analytics tags, etc.) can stuff it here without a schema change. **Namespace your keys** to avoid collisions across apps — store e.g. {"form-builder.lastPreviewRecordId":"...","my-app.fooFlag":true} rather than top-level lastPreviewRecordId. Core MJ code paths do NOT read this column; it's purely for downstream apps. NVARCHAR(MAX) so callers can store arbitrarily large blobs, but treat that as a smell — heavy data belongs in a real entity, not a JSON dump.
+    */
+    get AdditionalData(): string | null {
+        return this.Get('AdditionalData');
+    }
+    set AdditionalData(value: string | null) {
+        this.Set('AdditionalData', value);
     }
 
     /**
