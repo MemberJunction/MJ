@@ -769,6 +769,7 @@ export class AIPromptRunner {
       if (promptRun) {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = false;
         promptRun.Result = `ERROR: ${error.message}`;
         
         // Set Status and Cancelled based on error type
