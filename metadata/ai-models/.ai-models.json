@@ -13365,7 +13365,7 @@
     "fields": {
       "Name": "DeepSeek V4 Pro",
       "PowerRank": 15,
-      "Description": "DeepSeek's flagship reasoning model, released as preview April 24, 2026. Mixture-of-Experts with 1.6T total / 49B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. OpenAI-compatible and Anthropic-compatible API formats. Recorded cost row uses list pricing; a 75% promotional discount runs through 2026-05-31 15:59 UTC (effective $0.435/$0.87 per 1M tokens during the promo).",
+      "Description": "DeepSeek's flagship reasoning model, released as preview April 24, 2026. Mixture-of-Experts with 1.6T total / 49B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. OpenAI-compatible and Anthropic-compatible API formats. As of May 22, 2026, the prior 75% promotional discount became the permanent list price: $0.435/$0.87 per 1M tokens, with cache-hit input at ~$0.003625/1M.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
@@ -13438,6 +13438,21 @@
           "sync": {
             "lastModified": "2026-05-08T00:53:58.444Z",
             "checksum": "1a23fc2a5167107300907202e6eb0c0e9cb508ac1b7fc8755bf343593b7cde5b"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-05-22T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.435,
+            "OutputPricePerUnit": 0.87,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Pro permanent list pricing effective May 22, 2026. On this date DeepSeek announced that the 75% V4-Pro discount originally scheduled to expire 2026-05-31 is now the standard rate: $0.435/1M input, $0.87/1M output. Cache-hit input remains 1/10 of input price (~$0.003625/1M). Replaces the prior $1.74/$3.48 launch list pricing recorded above. Sources: https://www.engadget.com/2180062/deepseek-permanently-reduces-the-price-of-its-flagship-v4-model-by-75-percent/ ; https://www.androidheadlines.com/2026/05/deepseek-v4-pro-api-price-cut-permanent-ai-rate-limits.html ; https://finance.yahoo.com/sectors/technology/articles/chinas-deepseek-permanent-75-price-133313757.html ; https://api-docs.deepseek.com/quick_start/pricing"
           }
         }
       ]
@@ -14894,6 +14909,98 @@
     "sync": {
       "lastModified": "2026-05-21T22:25:01.106Z",
       "checksum": "16c1cba3c18c4071c423cabf91d6b3c44fd977852bcbe4d1be37f280d8eb6fea"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok Build 0.1",
+      "PowerRank": 13,
+      "Description": "xAI's first purpose-built coding model, released in early access on May 14, 2026. Trained specifically for agentic software-engineering workflows: multi-step tool use, terminal interaction, error-checking, and self-correction loops. Built-in reasoning is always active. Accepts text and image inputs; emits text. Supports function calling and structured outputs. 256K token context window with no enforced output cap, enabling whole-codebase refactors without the typical 8K output ceiling. Input cost doubles for context above 200K tokens. Available via xAI direct API and via OpenRouter passthrough. SuperGrok and X Premium subscribers can use Grok Build through xAI's OpenCode environment with no separate API billing.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-build-0.1",
+            "MaxInputTokens": 256000,
+            "MaxOutputTokens": 256000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 2,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "x-ai/grok-build-0.1",
+            "MaxInputTokens": 256000,
+            "MaxOutputTokens": 256000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-05-14T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.0,
+            "OutputPricePerUnit": 2.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Build 0.1 pricing on xAI direct API as of May 14, 2026 early-access release: $1.00/1M input, $2.00/1M output, $0.20/1M cached input. Requests exceeding the 200K-token threshold are billed at higher input rates per xAI doc (roughly 2x). Sources: https://docs.x.ai/developers/models/grok-build-0.1 ; https://blog.kilo.ai/p/the-quiet-arrival-of-grok-build-01 ; https://www.kucoin.com/news/flash/xai-launches-grok-build-0-1-for-agentic-coding-with-256k-context-window"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-05-14T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.0,
+            "OutputPricePerUnit": 2.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok Build 0.1 on OpenRouter (passthrough pricing). Source: https://openrouter.ai/x-ai/grok-build-0.1"
+          }
+        }
+      ]
     }
   }
 ]
