@@ -1,5 +1,12 @@
 # @memberjunction/ai-fireworks
 
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.36.0
+- @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes
