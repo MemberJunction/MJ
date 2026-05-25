@@ -18,6 +18,7 @@ import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-di
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
+import { SyncMetadataEngine } from './sync-metadata-engine';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
@@ -142,6 +143,15 @@ export interface RecordData {
 export class SyncEngine {
   private metadata: Metadata;
   private contextUser: UserInfo;
+  private syncMetadataEngine: SyncMetadataEngine | null = null;
+
+  public setMetadataEngine(engine: SyncMetadataEngine): void {
+    this.syncMetadataEngine = engine;
+  }
+
+  public getMetadataEngine(): SyncMetadataEngine | null {
+    return this.syncMetadataEngine;
+  }
 
   /**
    * Creates a new SyncEngine instance
@@ -504,6 +514,15 @@ export class SyncEngine {
    * }
    * ```
    */
+  private buildLookupCacheKey(
+    entityName: string,
+    lookupFields: Array<{fieldName: string, fieldValue: string}>
+  ): string {
+    const sortedFields = [...lookupFields].sort((a, b) => a.fieldName.localeCompare(b.fieldName));
+    const parts = sortedFields.map(f => `${f.fieldName.toLowerCase()}=${(f.fieldValue || '').toLowerCase()}`);
+    return `${entityName.toLowerCase()}:${parts.join('&')}`;
+  }
+
   async resolveLookup(
     entityName: string,
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
@@ -513,12 +532,28 @@ export class SyncEngine {
     allowDefer: boolean = false,
     originalValue?: string
   ): Promise<string> {
+    const lookupCacheKey = this.buildLookupCacheKey(entityName, lookupFields);
+    if (this.syncMetadataEngine) {
+      const cachedId = this.syncMetadataEngine.getCachedLookup(lookupCacheKey);
+      if (cachedId) {
+        return cachedId;
+      }
+    }
+
+    const entityInfo = this.metadata.EntityByName(entityName);
+    if (!entityInfo) {
+      throw new Error(`Entity not found: ${entityName}`);
+    }
+
     // First check batch context for in-memory entities
     if (batchContext) {
       if (batchContext instanceof BatchContextIndex) {
         // O(1) indexed lookup
         const pkValue = batchContext.lookupByFields(entityName, lookupFields);
         if (pkValue !== undefined) {
+          if (this.syncMetadataEngine) {
+            this.syncMetadataEngine.setCachedLookup(lookupCacheKey, pkValue);
+          }
           return pkValue;
         }
       } else {
@@ -541,23 +576,45 @@ export class SyncEngine {
 
             if (allMatch) {
               // Found in batch context, return primary key
-              const entityInfo = this.metadata.EntityByName(entityName);
-              if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+              if (entityInfo.PrimaryKeys.length > 0) {
                 const pkeyField = entityInfo.PrimaryKeys[0].Name;
-                return entity.Get(pkeyField);
+                const id = entity.Get(pkeyField);
+                if (this.syncMetadataEngine) {
+                  this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+                }
+                return id;
               }
             }
           }
         }
       }
     }
+
+    // Scan preloaded entities in-memory if preloaded
+    if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
+      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
+      for (const cachedEntity of cachedEntities) {
+        let allMatch = true;
+        for (const {fieldName, fieldValue} of lookupFields) {
+          const entityValue = cachedEntity.Get(fieldName);
+          const normalizedEntityValue = (entityValue?.toString() || '').toLowerCase().trim();
+          const normalizedLookupValue = (fieldValue?.toString() || '').toLowerCase().trim();
+          if (normalizedEntityValue !== normalizedLookupValue) {
+            allMatch = false;
+            break;
+          }
+        }
+        if (allMatch) {
+          const pkeyField = entityInfo.PrimaryKeys[0].Name;
+          const id = cachedEntity.Get(pkeyField);
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+          return id;
+        }
+      }
+    }
     
     // Not found in batch context, check database
     const rv = new RunView();
-    const entityInfo = this.metadata.EntityByName(entityName);
-    if (!entityInfo) {
-      throw new Error(`Entity not found: ${entityName}`);
-    }
     
     // Build compound filter for all lookup fields
     const filterParts: string[] = [];
@@ -629,6 +686,9 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const id = result.Results[0][pkeyField];
+        if (this.syncMetadataEngine) {
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id);
+        }
         return id;
       }
     }
@@ -684,6 +744,10 @@ export class SyncEngine {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
         const newId = newEntity.Get(pkeyField);
+        if (this.syncMetadataEngine) {
+          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId);
+          this.syncMetadataEngine.addEntityToCache(entityName, newEntity);
+        }
         return newId;
       }
     }
@@ -994,6 +1058,13 @@ export class SyncEngine {
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
     }
+
+    if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
+      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
+      const pkStr = this.syncMetadataEngine.serializePrimaryKey(entityInfo, primaryKey);
+      const cached = cachedEntities.find(e => this.syncMetadataEngine!.serializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
+      return cached || null;
+    }
     
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
     // when records don't exist (which is a normal scenario during sync operations)
@@ -1031,7 +1102,11 @@ export class SyncEngine {
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
     
-    return loaded ? entity : null;
+    const loadedEntity = loaded ? entity : null;
+    if (loadedEntity && this.syncMetadataEngine) {
+      this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
+    }
+    return loadedEntity;
   }
   
   /**

@@ -5,6 +5,7 @@ import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjuncti
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
+import { SyncMetadataEngine } from '../lib/sync-metadata-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -121,11 +122,17 @@ export class PushService {
   private deferredFileWrites: Map<string, DeferredFileWrite> = new Map();
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
+  private syncMetadataEngine: SyncMetadataEngine;
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
     this.contextUser = contextUser;
     this.stateManager = stateManager;
+    
+    // Initialize SyncMetadataEngine
+    this.syncMetadataEngine = new SyncMetadataEngine();
+    this.syncMetadataEngine.initializeEngine(this.syncEngine);
+    this.syncEngine.setMetadataEngine(this.syncMetadataEngine);
   }
 
   /** Set or replace the state manager after construction. */
@@ -272,6 +279,12 @@ export class PushService {
       if (entityDirs.length === 0) {
         throw new Error('No entity directories found');
       }
+
+      // Preload entities and cache files
+      callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
+      this.syncMetadataEngine.setEntityDirs(entityDirs);
+      await this.syncMetadataEngine.Config(true, this.contextUser, Metadata.Provider);
+      callbacks?.onLog?.('✓ Preload completed successfully\n');
       
       if (options.verbose) {
         callbacks?.onLog?.(`Found ${entityDirs.length} entity ${entityDirs.length === 1 ? 'directory' : 'directories'} to process`);
@@ -549,23 +562,31 @@ export class PushService {
           await fileBackupManager.backupFile(filePath);
         }
         
-        // Read the raw file data first
-        const rawFileData = await fs.readJson(filePath);
+        // Check if file is already cached to avoid double I/O
+        let rawFileData: any;
+        let fileData: any;
+        const cachedFile = this.syncMetadataEngine.getCachedFile(filePath);
+        
+        if (cachedFile) {
+          rawFileData = cachedFile.rawData;
+          fileData = cachedFile.fileData;
+        } else {
+          // Fallback (e.g. if not preloaded)
+          rawFileData = await fs.readJson(filePath);
+          fileData = rawFileData;
+          
+          const jsonString = JSON.stringify(rawFileData);
+          const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
+          if (hasIncludes) {
+            const jsonPreprocessor = new JsonPreprocessor();
+            fileData = await jsonPreprocessor.processFile(filePath);
+          }
+          this.syncMetadataEngine.cacheFile(filePath, rawFileData, fileData);
+        }
 
         // Keep unprocessed data to write back (preserves @file: references)
         const unprocessedRecords = Array.isArray(rawFileData) ? rawFileData : [rawFileData];
         const isArray = Array.isArray(rawFileData);
-
-        // Preprocess @include directives before checksumming, so changes to
-        // included files are detected by the incremental skip check.
-        let fileData = rawFileData;
-        const jsonString = JSON.stringify(rawFileData);
-        const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
-        if (hasIncludes) {
-          const jsonPreprocessor = new JsonPreprocessor();
-          fileData = await jsonPreprocessor.processFile(filePath);
-        }
 
         // Compute checksum on the RESOLVED content (after @include preprocessing)
         // so that changes to included files are properly detected.
@@ -1525,6 +1546,9 @@ export class PushService {
         
         throw new Error(`Failed to delete ${entityName} record: ${errorMessage}`);
       }
+
+      // Remove from metadata cache
+      this.syncMetadataEngine.removeEntityFromCache(entityName, record.primaryKey);
       
       // Set deletedAt timestamp after successful deletion (only for metadata records)
       if (!isDbOnly) {
