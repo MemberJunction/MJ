@@ -25,6 +25,7 @@ import {
 import { BaseFormComponent } from '../base-form-component';
 import { RestoreVersionEvent, RecordChangesComponent } from '@memberjunction/ng-record-changes';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -74,7 +75,10 @@ export interface VariantPickerItem {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
-  styleUrls: ['./record-form-container.component.css']
+  styleUrls: ['./record-form-container.component.css'],
+  // FormSlotCoordinator scoped per-container so each form has its own
+  // slot-presence map for fallback resolution. See FormPanelSlotComponent.
+  providers: [FormSlotCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);

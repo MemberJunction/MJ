@@ -569,10 +569,11 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (8 classes)
+// @memberjunction/ng-explorer-core (9 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
+    ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
@@ -1091,6 +1092,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FileBrowserResource,
     ArtifactResource,
     ChatConversationsResource,
+    ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
@@ -1103,7 +1105,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 510;
+export const CLASS_REGISTRATIONS_COUNT = 508;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

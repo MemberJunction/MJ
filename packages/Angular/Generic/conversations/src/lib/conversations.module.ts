@@ -60,6 +60,7 @@ import { NotificationBadgeComponent } from './components/notification/notificati
 import { ActivityIndicatorComponent } from './components/notification/activity-indicator.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { InputDialogComponent } from './components/dialogs/input-dialog.component';
+import { RatingDialogComponent } from './components/dialogs/rating-dialog.component';
 import { CollectionShareModalComponent } from './components/collection/collection-share-modal.component';
 import { UserPickerComponent } from './components/shared/user-picker.component';
 import { ArtifactCollectionPickerModalComponent } from './components/collection/artifact-collection-picker-modal.component';
@@ -113,6 +114,7 @@ const COMPONENTS = [
   ActivityIndicatorComponent,
   ToastComponent,
   InputDialogComponent,
+  RatingDialogComponent,
   GlobalTasksPanelComponent,
   ImageViewerComponent,
   PinnedMessagesPanelComponent,

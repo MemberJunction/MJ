@@ -1199,7 +1199,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
   public AddArtifactAttachment(artifact: {
     fileID: string; fileName: string; mimeType: string;
     sizeBytes: number; artifactVersionId?: string;
-  }): void {
+  }): PendingAttachment {
     const attachment: PendingAttachment = {
       id: crypto.randomUUID(),
       file: null,
@@ -1213,6 +1213,7 @@ export class MentionEditorComponent implements OnInit, AfterViewInit, ControlVal
     };
     this.pendingAttachments.push(attachment);
     this.attachmentsChanged.emit([...this.pendingAttachments]);
+    return attachment;
   }
 
   /**

@@ -464,10 +464,11 @@ import {
     FileBrowserResource,
 } from '@memberjunction/ng-file-storage';
 
-// @memberjunction/ng-explorer-core (8 classes)
+// @memberjunction/ng-explorer-core (9 classes)
 import {
     ArtifactResource,
     ChatConversationsResource,
+    ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,
@@ -889,6 +890,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     FileBrowserResource,
     ArtifactResource,
     ChatConversationsResource,
+    ConversationFeedbackResource,
     DashboardResource,
     EntityRecordResource,
     ListDetailResource,

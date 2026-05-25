@@ -12,6 +12,7 @@ declare module '@memberjunction/ng-explorer-core' {
     export const ChatCollectionsResource: unknown;
     export const ChatConversationsResource: unknown;
     export const ChatTasksResource: unknown;
+    export const ConversationFeedbackResource: unknown;
     export const DashboardResource: unknown;
     export const EntityRecordResource: unknown;
     export const ListDetailResource: unknown;

@@ -1,8 +1,7 @@
 import { Component } from '@angular/core';
+import { RegisterClassEx } from '@memberjunction/global';
+import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { MJContentSourceEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
-import { BaseFormComponent } from '@memberjunction/ng-base-forms';
-import { MJContentSourceFormComponent } from '../../generated/Entities/MJContentSource/mjcontentsource.form.component';
 
 type TaxonomyModeJson = NonNullable<MJContentSourceEntity_IContentSourceConfiguration['TagTaxonomyMode']>;
 
@@ -14,69 +13,49 @@ interface TaxonomyModeOption {
 }
 
 /**
- * Custom Content Source form.
+ * Tag Pipeline Configuration panel — the typed `IContentSourceConfiguration`
+ * knobs (mode, thresholds, scope, taxonomy sharing, vectorization toggle, and
+ * the five run-budget caps) surfaced as a dense form.
  *
- * Adds two responsibilities on top of the generated form:
- *   1. Conditional Connection Details (Entity-source vs URL-source) — pre-existing.
- *   2. Tag Pipeline Configuration — Option-B "dense form" surface for the typed
- *      `IContentSourceConfiguration` knobs (mode, thresholds, scope, budgets) that
- *      otherwise would only be editable as raw JSON. The Configuration field still
- *      exists below as a code editor for advanced overrides.
+ * Self-registers against the `after-fields` slot for `MJ: Content Sources`.
+ * The slot host mounts it dynamically — no consumer template edits required.
  *
- * The pipeline knobs read/write through the typed `ConfigurationObject` accessor
- * that CodeGen emits on `MJContentSourceEntity`, so changes round-trip through the
- * existing JSON column. There's no separate save path.
+ * Also usable as a plain Angular component (composition pattern) — embed
+ * directly in any custom UI (e.g. a dashboard quick-edit dialog) by binding
+ * `[Record]` to the entity record and (optionally) `[FormComponent]`.
  */
-@RegisterClass(BaseFormComponent, 'MJ: Content Sources')
+@RegisterClassEx(BaseFormPanel, {
+    key: 'content-sources:tag-pipeline-configuration',
+    skipNullKeyWarning: true,
+    metadata: {
+        entity: 'MJ: Content Sources',
+        slot: 'after-fields',
+        sortKey: 100,
+    },
+})
 @Component({
     standalone: false,
-    selector: 'mj-content-source-form-extended',
-    templateUrl: './content-source-form.component.html',
-    styleUrls: ['./content-source-form.component.css'],
+    selector: 'mj-tag-pipeline-configuration-panel',
+    templateUrl: './tag-pipeline-configuration.panel.html',
+    styleUrls: ['./tag-pipeline-configuration.panel.css'],
 })
-export class MJContentSourceFormComponentExtended extends MJContentSourceFormComponent {
-    public override record!: MJContentSourceEntity;
-
+export class TagPipelineConfigurationPanel extends BaseFormPanel<MJContentSourceEntity> {
     public readonly TaxonomyModes: TaxonomyModeOption[] = [
         { value: 'constrained', label: 'Constrained', icon: 'fa-lock', desc: 'Curated only — every novel name → suggestion queue.' },
         { value: 'auto-grow',   label: 'AutoGrow',    icon: 'fa-seedling', desc: 'Bounded auto-creation under TagRoot, gated by per-tag governance.' },
         { value: 'free-flow',   label: 'FreeFlow',    icon: 'fa-water', desc: 'Anything goes — auto-create root-level tags as needed.' },
     ];
-    /** "hybrid" is supported by the engine but not yet enumerated in the JSON-schema literal type;
-     *  we expose it as a compatibility option that maps to the same field. */
-    public readonly HybridModeOption: TaxonomyModeOption = {
-        value: 'auto-grow' as TaxonomyModeJson, // engine accepts 'hybrid' but the typed literal is constrained — TODO: widen schema
-        label: 'Hybrid',
-        icon: 'fa-balance-scale',
-        desc: 'Auto-match enabled, but never auto-creates. Ambiguous matches → suggestion queue.',
-    };
 
-    /**
-     * Whether the current source type is "Entity", which enables
-     * EntityID and EntityDocumentID fields and hides the URL field.
-     */
-    public get IsEntitySourceType(): boolean {
-        if (!this.record) return false;
-        const typeName = this.record.ContentSourceType;
-        return typeName != null && typeName.trim().toLowerCase() === 'entity';
-    }
-
-    /**
-     * Read the typed Configuration object — never null, defaults applied where
-     * the JSON didn't supply them. Writing back is via `setConfig` so we keep
-     * the record dirty and persist through the standard Save() path.
-     */
+    /** Read the typed Configuration object — never null, defaults applied where the JSON didn't supply them. */
     public get Config(): MJContentSourceEntity_IContentSourceConfiguration {
-        const raw = this.record?.ConfigurationObject;
-        return raw ?? {};
+        return this.Record?.ConfigurationObject ?? {};
     }
 
     public setConfig(patch: Partial<MJContentSourceEntity_IContentSourceConfiguration>): void {
-        if (!this.record) return;
-        const current = this.record.ConfigurationObject ?? {};
+        if (!this.Record) return;
+        const current = this.Record.ConfigurationObject ?? {};
         const merged: MJContentSourceEntity_IContentSourceConfiguration = { ...current, ...patch };
-        // Setting via the typed accessor updates Configuration JSON + marks dirty.
-        this.record.ConfigurationObject = merged;
+        this.Record.ConfigurationObject = merged;
     }
 
     // ---------- Mode -------------------------------------------------------
@@ -97,7 +76,6 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
         const clamped = Math.max(0, Math.min(1, Number(v) || 0));
         const cur = this.Config.SuggestThreshold;
         const patch: Partial<MJContentSourceEntity_IContentSourceConfiguration> = { TagMatchThreshold: clamped };
-        // Keep SuggestThreshold below MatchThreshold; if currently above (or unset), pin it.
         if (cur == null || cur >= clamped) patch.SuggestThreshold = Math.max(0, clamped - 0.05);
         this.setConfig(patch);
     }
@@ -140,6 +118,12 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
 
     // ---------- Budgets ----------------------------------------------------
 
+    public get MaxItemsPerRunValue(): number | null {
+        return this.Config.MaxItemsPerRun ?? null;
+    }
+    public set MaxItemsPerRunValue(v: number | string | null) {
+        this.setConfig({ MaxItemsPerRun: this.normalizeNullableNumber(v) });
+    }
     public get MaxNewTagsPerRunValue(): number | null {
         return this.Config.MaxNewTagsPerRun ?? null;
     }
@@ -166,10 +150,8 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
     }
 
     /**
-     * Coerce a possibly-blank input into a typed number. The IContentSourceConfiguration
-     * interface uses optional properties (`?: number`), so "no value" is `undefined`,
-     * not `null`. Returning undefined deletes the key from the persisted JSON when the
-     * setConfig spread is applied.
+     * Coerce a possibly-blank input into a typed number. Returning undefined
+     * deletes the key from the persisted JSON when the setConfig spread is applied.
      */
     private normalizeNullableNumber(v: number | string | null | undefined): number | undefined {
         if (v == null) return undefined;
@@ -183,6 +165,5 @@ export class MJContentSourceFormComponentExtended extends MJContentSourceFormCom
     }
 }
 
-export function LoadContentSourceFormExtended() {
-    // Prevents tree-shaking
-}
+/** Tree-shake guard — call this from the consuming module's loader. */
+export function LoadTagPipelineConfigurationPanel(): void { /* no-op marker */ }
