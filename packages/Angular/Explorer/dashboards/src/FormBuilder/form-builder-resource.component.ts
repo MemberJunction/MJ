@@ -166,6 +166,20 @@ export class FormBuilderResourceComponent
      * form's Name. Ordered by VersionSequence DESC so the newest is on top.
      */
     public Versions: ComponentVersionRow[] = [];
+
+    /**
+     * The version row matching the Component currently loaded in the
+     * editor (`SelectedFormID`). Drives the floating "Viewing v1.0.0"
+     * overlay on the center pane so the user always knows which
+     * version's spec they're looking at — particularly useful when
+     * they've clicked an older row in the version rail to inspect
+     * historical work, and the on-screen form differs from what the
+     * runtime is actually serving.
+     */
+    public get CurrentSelectedVersion(): ComponentVersionRow | null {
+        if (!this.SelectedFormID) return null;
+        return this.Versions.find(v => UUIDsEqual(v.ID, this.SelectedFormID!)) ?? null;
+    }
     public VersionsLoading = false;
     public ActiveVersionID: string | null = null;
 
@@ -555,8 +569,8 @@ export class FormBuilderResourceComponent
             {
                 EntityName: 'MJ: Components',
                 ExtraFilter: "Type='Form' OR Namespace LIKE 'Forms/%' OR Namespace LIKE '%/Forms/%'",
-                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description'],
-                OrderBy: 'Name',
+                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description', 'VersionSequence'],
+                OrderBy: 'Name, VersionSequence DESC',
                 MaxRows: 500,
                 ResultType: 'simple',
             },
@@ -586,13 +600,60 @@ export class FormBuilderResourceComponent
             }
         }
 
-        this.ExistingForms = ((componentsResult.Results ?? []) as Array<{
+        // Group Components by Name (the lineage key) and pick ONE representative
+        // per lineage for the left rail. The version rail at the bottom of the
+        // rail handles historical versions — the form list itself should be one
+        // row per logical form, not one row per Component row.
+        //
+        // Representative selection priority (within a lineage):
+        //   1. The Component pointed at by an Active user override (what the
+        //      user actually sees at runtime).
+        //   2. Else the Component with a Pending user override (in-flight
+        //      refinement — the next thing to be activated).
+        //   3. Else the highest VersionSequence — i.e. the newest Component
+        //      row, regardless of override state.
+        //
+        // The override badge logic stays the same — it shows the override
+        // status for whichever Component ended up as the representative.
+        type RawComponent = {
             ID: string;
             Name: string;
             Namespace: string | null;
             Status: string | null;
             Description: string | null;
-        }>).map(r => ({
+            VersionSequence: number | null;
+        };
+        const componentsByName = new Map<string, RawComponent[]>();
+        for (const row of (componentsResult.Results ?? []) as RawComponent[]) {
+            const key = (row.Name ?? '').trim();
+            if (!key) continue;
+            const bucket = componentsByName.get(key);
+            if (bucket) bucket.push(row); else componentsByName.set(key, [row]);
+        }
+
+        const rankOverride = (s: 'Active' | 'Inactive' | 'Pending' | null): number => {
+            // Higher rank wins. Active > Pending > Inactive > (no override).
+            if (s === 'Active') return 3;
+            if (s === 'Pending') return 2;
+            if (s === 'Inactive') return 1;
+            return 0;
+        };
+
+        const representatives: RawComponent[] = [];
+        for (const bucket of componentsByName.values()) {
+            bucket.sort((a, b) => {
+                const oa = overrideStatusByComponentID.get(NormalizeUUID(a.ID)) ?? null;
+                const ob = overrideStatusByComponentID.get(NormalizeUUID(b.ID)) ?? null;
+                const da = rankOverride(ob) - rankOverride(oa);
+                if (da !== 0) return da;
+                // Same override-rank → newer version wins.
+                return (b.VersionSequence ?? 0) - (a.VersionSequence ?? 0);
+            });
+            representatives.push(bucket[0]);
+        }
+        representatives.sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
+
+        this.ExistingForms = representatives.map(r => ({
             ID: r.ID,
             Name: r.Name,
             Namespace: r.Namespace,
@@ -1200,6 +1261,33 @@ export class FormBuilderResourceComponent
                 `Failed to switch version: ${err instanceof Error ? err.message : String(err)}`,
                 'error', 4500);
         }
+    }
+
+    /**
+     * Version-rail row click. Loads that version's Component into the
+     * cockpit's editor (Preview / Code / Layout) — does NOT change which
+     * version the runtime resolver picks for users (that's still driven
+     * by the Active override). To promote an older version to Active,
+     * the user clicks the row's "Activate" / "Restore" button.
+     *
+     * No-op when the row is already loaded. Builds a synthetic summary
+     * and delegates to {@link OnFormPicked} so the load path is exactly
+     * the same as picking from the left rail (handles dirty-discard
+     * confirmation, schema rebuild, version rail refresh, agent context
+     * push, etc.).
+     */
+    public async OnVersionRowClick(v: ComponentVersionRow): Promise<void> {
+        if (v.ID === this.SelectedFormID) return;
+        const summary: FormComponentSummary = {
+            ID: v.ID,
+            Name: v.Name,
+            Namespace: null,
+            Status: v.Status,
+            OverrideStatus: null, // OnFormPicked recomputes from the override row anyway
+            Description: null,
+            TargetEntityName: null,
+        };
+        await this.OnFormPicked(summary);
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {

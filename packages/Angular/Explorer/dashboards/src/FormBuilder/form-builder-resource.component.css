@@ -587,22 +587,67 @@
 .fb-version-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 8px 10px;
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md, 8px);
   background: var(--mj-bg-surface);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, box-shadow 120ms;
 }
-.fb-version-row.is-active {
-  border-color: var(--mj-brand-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+.fb-version-row:hover {
+  background: var(--mj-bg-surface-hover);
 }
-.fb-version-row.is-pending {
+.fb-version-row:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 1px;
+}
+
+/* Lifecycle marker — left-side dot whose color signals Active/Pending/Inactive.
+   Decoupled from the row's selected state so the two axes (what the runtime
+   serves vs what the user is currently viewing) don't visually collide. */
+.fb-version-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--mj-bg-surface-sunken);
+  border: 1px solid var(--mj-border-strong);
+}
+.fb-version-marker i {
+  font-size: 8px;
+  color: var(--mj-text-muted);
+}
+.fb-version-row.is-active .fb-version-marker {
+  background: color-mix(in srgb, var(--mj-status-success, #16a34a) 25%, transparent);
+  border-color: var(--mj-status-success-border, #16a34a);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-success, #16a34a) 25%, transparent);
+}
+.fb-version-row.is-active .fb-version-marker i {
+  color: var(--mj-status-success, #16a34a);
+  font-size: 11px;
+}
+.fb-version-row.is-pending .fb-version-marker {
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 25%, transparent);
   border-color: var(--mj-status-warning-border, #fcd34d);
-  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 6%, var(--mj-bg-surface));
 }
+.fb-version-row.is-pending .fb-version-marker i {
+  color: var(--mj-status-warning, #f59e0b);
+  font-size: 11px;
+}
+
+/* Selected = "this is what the editor is showing right now". Blue family,
+   clearly distinct from the lifecycle green/amber on the marker. */
 .fb-version-row.is-selected {
-  box-shadow: 0 0 0 1px var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  border-color: var(--mj-brand-primary);
+  box-shadow: inset 3px 0 0 var(--mj-brand-primary);
+}
+.fb-version-row.is-selected:hover {
+  background: color-mix(in srgb, var(--mj-brand-primary) 16%, var(--mj-bg-surface));
 }
 .fb-version-row-main {
   flex: 1;
@@ -675,12 +720,39 @@
   gap: 6px;
 }
 .fb-modeseg-btn:last-child { border-right: none; }
-.fb-modeseg-btn:hover { background: var(--mj-bg-surface-hover); }
+.fb-modeseg-btn:hover:not(:disabled) { background: var(--mj-bg-surface-hover); }
 .fb-modeseg-btn.active {
   background: var(--mj-bg-surface);
   color: var(--mj-brand-primary);
   font-weight: 600;
 }
+.fb-modeseg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--mj-bg-surface-sunken);
+}
+
+/* ── Custom-code chip (toolbar) ───────────────────────────────────── */
+/* Shown when the loaded code has constructs the canvas can't round-trip
+   (hand-authored JSX, computed children, etc.). Signals to the user
+   that this form is in "code-only" mode and explains why the Layout
+   tab is disabled. */
+.fb-custom-code-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mj-status-info, #0ea5e9) 12%, var(--mj-bg-surface));
+  color: var(--mj-status-info-text, #075985);
+  border: 1px solid var(--mj-status-info-border, #38bdf8);
+  cursor: help;
+  user-select: none;
+}
+.fb-custom-code-chip i { font-size: 10px; }
 
 .fb-spacer { flex: 1; }
 
@@ -692,7 +764,69 @@
   display: flex;
   flex-direction: column;
   background: var(--mj-bg-surface-card);
+  position: relative; /* anchors .fb-version-overlay */
 }
+
+/* ── Version overlay (top-right chrome on center pane) ────────────── */
+/* Floats above the preview/code/layout content, anchored to .fb-center-body.
+   Top-RIGHT so it doesn't collide with line numbers / line 1 content in
+   the Code tab. Visually clearly NOT part of the form — sits as a small
+   pill with subtle shadow + backdrop blur so it reads as editor chrome. */
+.fb-version-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--mj-bg-surface-elevated) 90%, transparent);
+  border: 1px solid var(--mj-border-default);
+  color: var(--mj-text-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  user-select: none;
+  pointer-events: auto;
+}
+.fb-version-overlay i {
+  font-size: 10px;
+  opacity: 0.8;
+}
+.fb-version-overlay-label {
+  color: var(--mj-text-primary);
+}
+.fb-version-overlay-tag {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.fb-version-overlay-tag--active {
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
+  border: 1px solid var(--mj-status-success-border);
+}
+.fb-version-overlay-tag--pending {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+}
+.fb-version-overlay-tag--historical {
+  background: color-mix(in srgb, var(--mj-status-warning, #f59e0b) 14%, transparent);
+  color: var(--mj-status-warning-text, #92400e);
+  border: 1px solid var(--mj-status-warning-border, #fcd34d);
+}
+/* Subtle accent on the overlay border to reinforce the lifecycle state. */
+.fb-version-overlay--active { border-color: var(--mj-status-success-border); }
+.fb-version-overlay--pending,
+.fb-version-overlay--historical { border-color: var(--mj-status-warning-border, #fcd34d); }
 .fb-preview-host {
   flex: 1;
   overflow: auto;

@@ -154,16 +154,26 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
 
       // Push variant list + active selection into the form so the
-      // record-form-container's picker renders. Variants comes from the
-      // resolver and includes any applicable override (User/Role/Global)
-      // regardless of status — the picker shows them all but only Active
-      // ones are pick-able as the live form.
-      instance.Variants = (resolution.variants ?? []).map(v => ({
-        ID: v.ID,
-        Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`,
-        Scope: v.Scope,
-        Status: v.Status,
-      }));
+      // record-form-container's picker renders. The resolver returns
+      // every applicable override regardless of status, but the runtime
+      // picker should only surface **Active** ones — Inactive rows are
+      // historical (e.g. the previous Component version that an agent
+      // refinement superseded) and Pending rows are AI-authored work
+      // awaiting activation in Form Builder. Picking either does
+      // nothing at runtime (pickActive requires Status='Active'), so
+      // including them in the picker was misleading the user into
+      // thinking "I can switch to this" when they actually can't.
+      //
+      // Authorship of Pending/Inactive overrides happens in the Form
+      // Builder cockpit, which intentionally shows the full lifecycle.
+      instance.Variants = (resolution.variants ?? [])
+        .filter(v => v.Status === 'Active')
+        .map(v => ({
+          ID: v.ID,
+          Label: v.Name ?? `Override ${v.ID.substring(0, 8)}`,
+          Scope: v.Scope,
+          Status: v.Status,
+        }));
       instance.CurrentVariantID = resolution.kind === 'interactive' ? resolution.override.ID : null;
       // Wire the handler: persist the selection in localStorage and reload
       // the form. Reload uses the existing entry path so all the resolver's

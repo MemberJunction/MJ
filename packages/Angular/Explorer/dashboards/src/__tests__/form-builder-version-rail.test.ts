@@ -109,6 +109,50 @@ describe('joinVersionsWithOverrides', () => {
         const rows = joinVersionsWithOverrides(components, []);
         expect(rows.map(r => r.ID)).toEqual(['C3', 'C2', 'C1']);
     });
+
+    it('when multiple overrides target the same Component, Active wins over Inactive', () => {
+        // Restore scenario: the user's Active override was repointed at C1
+        // (an older Component), but the original Inactive override that ALSO
+        // points at C1 is still there. Rail must report C1 as Active.
+        // Worst-case insertion order — Inactive arrives second.
+        const overrides: OverrideRailRow[] = [
+            { ComponentID: 'C1', Status: 'Active' },
+            { ComponentID: 'C1', Status: 'Inactive' },
+        ];
+        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        expect(rows[0].IsActive).toBe(true);
+    });
+
+    it('Active still wins regardless of override-list insertion order', () => {
+        // Same scenario but the Inactive row appears FIRST in the list,
+        // which a naive last-write-wins Map would let clobber the Active.
+        const overrides: OverrideRailRow[] = [
+            { ComponentID: 'C1', Status: 'Inactive' },
+            { ComponentID: 'C1', Status: 'Active' },
+        ];
+        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        expect(rows[0].IsActive).toBe(true);
+    });
+
+    it('Pending wins over Inactive when both target the same Component', () => {
+        const overrides: OverrideRailRow[] = [
+            { ComponentID: 'C1', Status: 'Inactive' },
+            { ComponentID: 'C1', Status: 'Pending' },
+        ];
+        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        expect(rows[0].IsPending).toBe(true);
+        expect(rows[0].IsActive).toBe(false);
+    });
+
+    it('Active wins over Pending when both target the same Component', () => {
+        const overrides: OverrideRailRow[] = [
+            { ComponentID: 'C1', Status: 'Pending' },
+            { ComponentID: 'C1', Status: 'Active' },
+        ];
+        const rows = joinVersionsWithOverrides([comp('C1', '1.0.0', 1)], overrides);
+        expect(rows[0].IsActive).toBe(true);
+        expect(rows[0].IsPending).toBe(false);
+    });
 });
 
 describe('pickActiveVersionID', () => {

@@ -115,10 +115,27 @@
             <div class="fb-rail-empty"><p>No version history yet.</p></div>
           } @else {
             @for (v of Versions; track v.ID) {
+              <!-- Click a row to LOAD that version into the editor (preview /
+                   code / layout). Doesn't change which version is Active for
+                   the runtime — that's still the Active override. To promote
+                   an older row, use its Activate / Restore button. -->
               <div class="fb-version-row"
                    [class.is-active]="v.IsActive"
                    [class.is-pending]="v.IsPending"
-                   [class.is-selected]="v.ID === SelectedFormID">
+                   [class.is-selected]="v.ID === SelectedFormID"
+                   role="button"
+                   tabindex="0"
+                   [title]="'Load v' + v.Version + ' into the editor'"
+                   (click)="OnVersionRowClick(v)"
+                   (keydown.enter)="OnVersionRowClick(v)"
+                   (keydown.space)="OnVersionRowClick(v); $event.preventDefault()">
+                <!-- Lifecycle marker: green = Active (runtime serves this),
+                     amber = Pending (AI refinement awaiting activation),
+                     muted = Inactive. Separate from the row's selected
+                     state, which uses a blue background tint. -->
+                <span class="fb-version-marker" aria-hidden="true">
+                  <i class="fa-solid fa-circle"></i>
+                </span>
                 <div class="fb-version-row-main">
                   <div class="fb-version-label">
                     v{{ v.Version }}
@@ -138,11 +155,12 @@
                   Retrospective fix #9: disambiguate the rail-row action.
                   Pending → "Activate" (promote new work).
                   Inactive → "Restore" (roll back to an older version).
-                  Different audit semantics, different button labels.
+                  stopPropagation so the button's click doesn't also trigger
+                  the row-level "load this version" handler above.
                 -->
                 @if (!v.IsActive) {
                   <button class="fb-version-activate" type="button"
-                          (click)="OnActivateVersion(v)"
+                          (click)="$event.stopPropagation(); OnActivateVersion(v)"
                           [title]="v.IsPending ? 'Activate this Pending version' : 'Restore: roll back to this version'">
                     <i class="fa-solid" [class.fa-circle-check]="v.IsPending" [class.fa-rotate-left]="!v.IsPending"></i>
                     <span class="fb-version-activate-label">{{ v.IsPending ? 'Activate' : 'Restore' }}</span>
@@ -241,6 +259,20 @@
         </div>
       }
 
+      <!-- Custom-code chip — fires when the canvas parser flagged the
+           loaded code as containing constructs it can't round-trip (hand-
+           authored JSX, computed children, AI-generated patterns, etc.).
+           Signals to the user that this form is in "code-only" authoring
+           mode and is the on-screen explanation for why the Layout tab
+           is disabled. Title spells out the contract on hover. -->
+      @if (CanvasDiverged && HasActiveForm) {
+        <span class="fb-custom-code-chip"
+              title="This form contains custom code the drag-and-drop canvas cannot round-trip. The Layout tab is disabled to prevent overwriting your code; edit in Code instead.">
+          <i class="fa-solid fa-code"></i>
+          Custom code
+        </span>
+      }
+
       <span class="fb-spacer"></span>
 
       <!-- Center-pane view-mode segmented control -->
@@ -296,6 +328,36 @@
     </div>
 
     <div class="fb-center-body">
+      <!-- Version overlay — floating, top-left of the center pane.
+           Shows which Component version the editor is currently bound
+           to, decoupled from the version-rail's selected highlight.
+           When the user clicks an older row to inspect history, this
+           chip stays in sync and visually flags "you are NOT looking
+           at what the runtime serves" by going amber for non-Active
+           historical versions. Clicking the chip dismisses focus
+           but performs no navigation — it's a status indicator. -->
+      @if (CurrentSelectedVersion && HasActiveForm) {
+        <div class="fb-version-overlay"
+             [class.fb-version-overlay--active]="CurrentSelectedVersion.IsActive"
+             [class.fb-version-overlay--pending]="CurrentSelectedVersion.IsPending"
+             [class.fb-version-overlay--historical]="!CurrentSelectedVersion.IsActive && !CurrentSelectedVersion.IsPending"
+             [title]="CurrentSelectedVersion.IsActive
+                ? 'Viewing the version the runtime is currently serving.'
+                : CurrentSelectedVersion.IsPending
+                  ? 'Viewing a Pending version — AI-authored, not yet Activated.'
+                  : 'Viewing an Inactive historical version — the runtime is serving a different version.'">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span class="fb-version-overlay-label">Viewing v{{ CurrentSelectedVersion.Version }}</span>
+          @if (CurrentSelectedVersion.IsActive) {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--active">Active</span>
+          } @else if (CurrentSelectedVersion.IsPending) {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--pending">Pending</span>
+          } @else {
+            <span class="fb-version-overlay-tag fb-version-overlay-tag--historical">Historical</span>
+          }
+        </div>
+      }
+
       @if (!TargetEntityName) {
         <div class="fb-empty">
           <i class="fa-solid fa-table-list"></i>

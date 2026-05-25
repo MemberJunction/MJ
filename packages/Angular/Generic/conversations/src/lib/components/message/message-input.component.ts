@@ -80,6 +80,25 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    */
   @Input() conversationDefaultAgentId: string | null = null;
 
+  /**
+   * The `MJ: AI Agent Configurations.ID` selected via the chat header's
+   * mode picker (Draft / Standard / High). Applied to **non-mention**
+   * routes — when the user types without `@mention`, this preset rides
+   * along on the next `invokeSubAgent` call so the server resolves the
+   * agent's Fast / Standard / High Power AI configuration accordingly.
+   *
+   * Mentioned-route turns still use the preset embedded in the mention
+   * (e.g. `@Form Builder /high`) because that's a per-message intent
+   * the user just expressed. Continuity-route turns (last responder
+   * agent) also honor this input as the fallback when the prior
+   * message itself doesn't carry an explicit configuration preset.
+   *
+   * Picker writes are forward-only: changing the mode does NOT re-route
+   * messages already in flight or already in history. Affects "what
+   * happens next."
+   */
+  @Input() agentConfigurationPresetId: string | null = null;
+
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
   private _initialAttachments: PendingAttachment[] | null = null;
@@ -2167,6 +2186,16 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
     previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
+
+    // Fall back to the chat header's mode-picker selection when nothing
+    // in the message history pinned a preset. The picker reflects the
+    // user's persistent per-agent mode preference (Draft / Standard /
+    // High) and applies to all subsequent non-mention routes. A
+    // history-derived preset still wins because it represents an
+    // explicit per-message intent the user expressed earlier.
+    if (!previousConfigurationId && this.agentConfigurationPresetId) {
+      previousConfigurationId = this.agentConfigurationPresetId;
+    }
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts

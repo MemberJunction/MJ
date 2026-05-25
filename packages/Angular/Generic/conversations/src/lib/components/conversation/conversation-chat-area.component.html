@@ -49,6 +49,19 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
+        @if (showAgentModePicker && ModePickerTargetAgentId) {
+          <!-- Per-agent mode/quality picker (Draft / Standard / High).
+               Targets the agent the next non-mention message will route
+               to. Auto-hides when that agent has fewer than 2 configured
+               presets. Choice persists per-user, per-agent via
+               UserInfoEngine; emits the picked configuration ID up so
+               <mj-message-input> can forward it on the next route. -->
+          <mj-conversation-mode-picker
+            [AgentID]="ModePickerTargetAgentId"
+            [Disabled]="isProcessing"
+            (PresetChanged)="OnAgentModePresetChanged($event)">
+          </mj-conversation-mode-picker>
+        }
         @if (showAgentPicker && conversation) {
           <!-- Per-conversation default-agent pin. When set, non-mention
                messages route to this agent instead of Sage. Persists to
@@ -178,6 +191,7 @@
                     [appContext]="appContext"
                     [defaultAgentId]="defaultAgentId"
                     [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
+                    [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments"

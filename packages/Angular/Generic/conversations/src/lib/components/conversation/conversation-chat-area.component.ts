@@ -160,6 +160,51 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() showAgentPicker: boolean = true;
 
+  /**
+   * Whether the chat header should render the per-agent mode/quality
+   * picker (Draft / Standard / High, etc.). Default true. The picker
+   * auto-hides when the bound agent has fewer than 2 configured
+   * presets, so embedders rarely need to set this explicitly — turn
+   * off only when the surface should never expose model-tier choice
+   * (kiosks, specialty embeds).
+   */
+  @Input() showAgentModePicker: boolean = true;
+
+  /**
+   * The mode/preset picker's selected configuration ID, forwarded to
+   * `<mj-message-input>` so non-mention routes apply it on the next
+   * send. Past messages are NOT retroactively re-routed — the picker
+   * only affects subsequent requests. Updated when the user picks a
+   * row in the mode picker; the picker itself persists the choice
+   * per-user, per-agent via UserInfoEngine.
+   */
+  public ActiveAgentConfigurationPresetId: string | null = null;
+
+  /**
+   * Agent the mode picker should target. Mirrors the routing precedence
+   * minus message-history continuity (the picker is persistent UI; it
+   * shouldn't flip as the user scrolls history).
+   *
+   * Order: conversation-pinned default → embedder default → Sage.
+   */
+  public get ModePickerTargetAgentId(): string | null {
+    return this.conversation?.DefaultAgentID
+        ?? this.defaultAgentId
+        ?? this.conversationManagerAgent?.ID
+        ?? null;
+  }
+
+  /**
+   * Mode picker emitted a new selection. Store it; the next message's
+   * route picks it up via `<mj-message-input>`'s
+   * `[agentConfigurationPresetId]` binding. Past messages stay routed
+   * as they were — the change is forward-only.
+   */
+  public OnAgentModePresetChanged(presetId: string | null): void {
+    this.ActiveAgentConfigurationPresetId = presetId;
+    this.cdr.markForCheck();
+  }
+
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() emptyStateGreeting: string = 'How can I help you?';
 

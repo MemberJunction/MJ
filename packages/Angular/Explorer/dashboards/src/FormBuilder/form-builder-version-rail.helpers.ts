@@ -41,17 +41,41 @@ export interface ComponentVersionRow {
 }
 
 /**
+ * Rank for collapsing multiple override rows targeting the same Component.
+ * Higher wins. Comes up in the Restore-path: when an older version is
+ * promoted back to Active, the existing Active override is repointed at
+ * that older Component, leaving the original Inactive override row in
+ * place ALSO pointing at the same Component. The rail must report
+ * "Active" for that Component, not "Inactive" (last-write-wins on a
+ * naive Map would corrupt the display).
+ */
+const OVERRIDE_STATUS_RANK: Record<string, number> = {
+    Active: 3,
+    Pending: 2,
+    Inactive: 1,
+};
+
+/**
  * Join Components-by-Name results against per-user Overrides to produce
  * the final rail rows. The Overrides query is expected to be pre-filtered
- * to the calling user — this helper just walks the join.
+ * to the calling user. When more than one override row points at the
+ * same Component (e.g. after a Restore repoints the Active override at
+ * a previously-Inactive Component's lineage), we collapse using the
+ * Active > Pending > Inactive precedence — highest rank wins.
  */
 export function joinVersionsWithOverrides(
     components: ComponentRailRow[],
     overrides: OverrideRailRow[],
 ): ComponentVersionRow[] {
-    const overrideByComponent = new Map(
-        overrides.map(o => [o.ComponentID, o.Status]),
-    );
+    const overrideByComponent = new Map<string, string>();
+    for (const o of overrides) {
+        const prev = overrideByComponent.get(o.ComponentID);
+        const prevRank = prev ? (OVERRIDE_STATUS_RANK[prev] ?? 0) : -1;
+        const currRank = OVERRIDE_STATUS_RANK[o.Status] ?? 0;
+        if (currRank > prevRank) {
+            overrideByComponent.set(o.ComponentID, o.Status);
+        }
+    }
     return components.map(c => {
         const status = overrideByComponent.get(c.ID);
         return {
