@@ -1,5 +1,23 @@
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+// Short-circuits config.ts's loadConfig() so this file loads in any environment, not just one
+// with DB env vars set. bootAudit.ts imports `configInfo` at module-init; without this mock,
+// `loadConfig()` runs and throws "Configuration validation failed" on a clean machine or in
+// sandboxed CI. The audit tests below call `auditResolverList` directly and don't read
+// `logVariables`, but the import chain still pulls in `configInfo`. Mirrors the same shim in
+// subscriptionRedaction.test.ts.
+vi.mock('../config', () => ({
+  configInfo: {
+    loggingSettings: { graphql: { logVariables: true } },
+  },
+}));
+vi.mock('../config.js', () => ({
+  configInfo: {
+    loggingSettings: { graphql: { logVariables: true } },
+  },
+}));
+
 import { auditResolverList } from '../logging/bootAudit.js';
 import type { AuditArgParam, AuditResolver } from '../logging/bootAudit.js';
 import { NoLog } from '../logging/NoLog.js';
