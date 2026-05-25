@@ -125,6 +125,40 @@ export const AllMetadataArrays = [
 
 
 /**
+ * Raw entity-metadata row shapes flowing into `PostProcessEntityMetadata` from the
+ * dataset loader. These rows are untyped JSON off the wire; we capture only the
+ * properties this code path actually reads or writes, with an `unknown` index
+ * signature for the rest — matching the `Record<string, unknown> & {…}` pattern
+ * already used by `EntityInfo`'s constructor.
+ */
+type BaseMetadataRow = Record<string, unknown>;
+export type EntityMetadataRow = BaseMetadataRow & {
+    ID: string;
+    Name: string;
+    SchemaName?: string;
+    EntityFields?: unknown[];
+    EntityPermissions?: unknown[];
+    EntityRelationships?: unknown[];
+    EntitySettings?: unknown[];
+    EntityOrganicKeys?: unknown[];
+};
+export type EntityFieldMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Sequence: number;
+    EntityFieldValues?: unknown[];
+};
+export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
+export type EntityChildMetadataRow = BaseMetadataRow & { EntityID: string };
+export type OrganicKeyMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    Status: string;
+    EntityOrganicKeyRelatedEntities?: unknown[];
+};
+export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
+
+/**
  * Base class for all metadata providers in MemberJunction.
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
@@ -2755,8 +2789,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         return map;
     }
 
-    protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
-        const result: any[] = [];
+    protected PostProcessEntityMetadata(
+        entities: EntityMetadataRow[],
+        fields: EntityFieldMetadataRow[],
+        fieldValues: EntityFieldValueMetadataRow[],
+        permissions: EntityChildMetadataRow[],
+        relationships: EntityChildMetadataRow[],
+        settings: EntityChildMetadataRow[],
+        organicKeys?: OrganicKeyMetadataRow[],
+        organicKeyRelatedEntities?: OrganicKeyRelatedEntityMetadataRow[]
+    ): EntityInfo[] {
+        const result: EntityInfo[] = [];
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
@@ -2783,7 +2826,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
         const activeOrganicKeysByEntityId = organicKeys
             ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
-            : new Map<string, unknown[]>();
+            : new Map<string, OrganicKeyMetadataRow[]>();
 
         for (const e of sortedEntities) {
             const entityIdKey = NormalizeUUID(e.ID);
