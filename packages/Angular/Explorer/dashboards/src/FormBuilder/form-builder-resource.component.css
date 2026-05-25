@@ -175,7 +175,9 @@
 }
 
 .fb-rail-badge {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
     padding: 2px 6px;
     font-size: 10px;
     font-weight: 500;
@@ -184,12 +186,28 @@
     color: var(--mj-text-secondary);
     border: 1px solid var(--mj-border-subtle);
 }
+.fb-rail-badge i { font-size: 8px; }
 
-.fb-rail-badge.is-active {
+.fb-rail-badge--active {
     background: var(--mj-status-success-bg);
     color: var(--mj-status-success-text);
     border-color: var(--mj-status-success-border);
 }
+.fb-rail-badge--active i { color: var(--mj-status-success); }
+
+.fb-rail-badge--inactive {
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-muted);
+    border-color: var(--mj-border-strong);
+}
+.fb-rail-badge--inactive i { color: var(--mj-text-muted); }
+
+.fb-rail-badge--pending {
+    background: var(--mj-status-warning-bg);
+    color: var(--mj-status-warning-text);
+    border-color: var(--mj-status-warning-border);
+}
+.fb-rail-badge--pending i { color: var(--mj-status-warning); }
 
 .fb-rail-empty {
     text-align: center;
@@ -257,6 +275,53 @@
 .fb-entity-picker {
     position: relative;
 }
+
+/* ── Override status pill + popover ──────────────────────────── */
+.fb-status-picker { position: relative; display: inline-flex; }
+.fb-status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 10px; border-radius: 999px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary); font-size: 12px; line-height: 1;
+    cursor: pointer;
+    transition: background 120ms, border-color 120ms;
+}
+.fb-status-pill:hover:not(:disabled) { background: var(--mj-bg-surface-hover); border-color: var(--mj-border-strong); }
+.fb-status-pill:disabled { opacity: 0.5; cursor: not-allowed; }
+.fb-status-pill .chev { font-size: 9px; opacity: 0.7; }
+.fb-status-pill--active   { border-color: var(--mj-status-success-border); }
+.fb-status-pill--active i.fa-circle-dot { color: var(--mj-status-success); }
+.fb-status-pill--inactive { border-color: var(--mj-border-strong); }
+.fb-status-pill--inactive i.fa-circle-dot { color: var(--mj-text-muted); }
+.fb-status-pill--pending  { border-color: var(--mj-status-warning-border); }
+.fb-status-pill--pending i.fa-circle-dot { color: var(--mj-status-warning); }
+
+.fb-status-popover {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 50;
+    min-width: 280px;
+    background: var(--mj-bg-surface-elevated);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    padding: 4px 0;
+}
+.fb-status-option {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%;
+    padding: 8px 12px; background: transparent; border: none; cursor: pointer;
+    color: var(--mj-text-primary); font-size: 13px; text-align: left;
+}
+.fb-status-option:hover:not(:disabled) { background: var(--mj-bg-surface-hover); }
+.fb-status-option:disabled { opacity: 0.5; cursor: not-allowed; }
+.fb-status-option > i { margin-top: 2px; color: var(--mj-text-secondary); }
+.fb-status-option--selected { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); }
+.fb-status-option--selected > i { color: var(--mj-brand-primary); }
+.fb-status-option-label { font-weight: 600; }
+.fb-status-option-desc {
+    display: block; font-size: 11px; color: var(--mj-text-muted); margin-top: 2px;
+    white-space: normal;
+}
+.fb-status-option > span { flex: 1; display: block; }
 
 .fb-entity-btn {
     display: inline-flex;

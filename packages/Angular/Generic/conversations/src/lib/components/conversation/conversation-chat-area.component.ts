@@ -132,6 +132,34 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() defaultAgentId: string | null = null;
 
+  /**
+   * Scope to apply when this surface CREATES a new conversation. Forwarded
+   * to `ConversationEngine.CreateConversation` so the new row's
+   * `ApplicationScope` column is stamped correctly. Embedded surfaces
+   * (e.g. the Form Builder cockpit) set this to `'Application'` so their
+   * conversations don't pollute the main Chat app list. Main Chat leaves
+   * it as the default `'Global'`. Has no effect on existing conversations.
+   */
+  @Input() applicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+
+  /**
+   * Application ID to bind a newly-created conversation to. REQUIRED when
+   * `applicationScope` is 'Application' or 'Both' (DB CHECK constraint
+   * enforces it). Used by embedded chat surfaces to scope their
+   * conversations to their owning Application.
+   */
+  @Input() applicationId: string | null = null;
+
+  /**
+   * Whether the conversation header should render the per-conversation
+   * agent picker. Default true. The picker lets a user pin a default
+   * agent on the active conversation (saved to
+   * `MJConversationEntity.DefaultAgentID`), so non-mention messages route
+   * to that agent instead of through Sage. Surfaces with no meaningful
+   * agent-choice UX can set this to false to hide the widget.
+   */
+  @Input() showAgentPicker: boolean = true;
+
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() emptyStateGreeting: string = 'How can I help you?';
 
@@ -2105,11 +2133,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     try {
       this.isProcessing = true;
 
-      // Create a new conversation using the engine
+      // Create a new conversation using the engine. applicationScope +
+      // applicationId let embedded surfaces (e.g. the Form Builder cockpit)
+      // stamp their conversations as 'Application'-scoped so they don't
+      // leak into the main chat list. defaultAgentId pins the routing
+      // target for the first message — it's the same value forwarded to
+      // <mj-message-input> as [defaultAgentId].
+      //
+      // Safety net: the DB CHECK constraint rejects ('Application' || 'Both')
+      // without an ApplicationID. If the embedder hasn't resolved its app
+      // ID yet (or it's missing from the Metadata cache), demote to
+      // 'Global' so the save doesn't blow up. The conversation lands in
+      // the main list — visible but not silently lost.
+      const effectiveScope: 'Global' | 'Application' | 'Both' =
+        (this.applicationScope !== 'Global' && !this.applicationId)
+          ? 'Global'
+          : this.applicationScope;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
-        this.currentUser
+        this.currentUser,
+        undefined,
+        undefined,
+        {
+          applicationScope: effectiveScope,
+          applicationId: effectiveScope === 'Global' ? null : this.applicationId,
+          defaultAgentId: this.defaultAgentId,
+        }
       );
 
       if (!newConversation) {

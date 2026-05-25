@@ -199,6 +199,62 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
 - **Still declare the package in `dependencies`** (or `optionalDependencies` / `peerDependencies`). Dynamic import does not exempt you from the dep graph.
 - Prefer a single top-of-module dynamic load behind a memoized promise over repeated `await import()` inside every method.
 
+### 9. PERSIST USER PREFERENCES VIA `UserInfoEngine` — NEVER `localStorage`
+
+**Never use `window.localStorage` (or `sessionStorage`) to persist user preferences.** All per-user preferences MUST go through `UserInfoEngine.Instance` in `@memberjunction/core-entities`, which writes to the `MJ: User Settings` table.
+
+#### Why this matters
+- `localStorage` is **per-browser, per-origin** — your preference dies if the user switches browsers, clears site data, signs in from a different machine, or uses incognito. That's a broken cross-device UX.
+- `MJ: User Settings` is **per-user, server-side, replicated**. The same person sees the same preferences on every device they sign in from.
+- `UserInfoEngine` already has an **in-memory cache** populated at user bootstrap, so `GetSetting()` is a synchronous cache hit — no extra latency vs. localStorage on the read path.
+- `SetSettingDebounced()` handles UI write storms (resize, drag, rapid clicks) without hammering the DB.
+
+#### The API
+```typescript
+import { UserInfoEngine } from '@memberjunction/core-entities';
+
+// Read — synchronous, returns string | undefined
+const raw = UserInfoEngine.Instance.GetSetting('mj.myFeature.somePref');
+const pref = raw ? JSON.parse(raw) : null;
+
+// Write — debounced, fire-and-forget. Preferred for UI handlers.
+UserInfoEngine.Instance.SetSettingDebounced('mj.myFeature.somePref', JSON.stringify(value));
+
+// Write — explicit await, returns boolean. Use when you need confirmation.
+const saved = await UserInfoEngine.Instance.SetSetting('mj.myFeature.somePref', JSON.stringify(value));
+
+// Delete — async, returns boolean. Fire-and-forget is fine for cleanup paths.
+void UserInfoEngine.Instance.DeleteSetting('mj.myFeature.somePref');
+```
+
+#### Key naming convention
+- Prefix with the dashboard/feature root, dot-separated: `mj.<feature>.<prefName>`. Examples already in the codebase:
+  - `mj.formBuilder.cockpitPrefs.v1` — Form Builder cockpit pane sizes
+  - `mj.formVariant.<entityname>` — per-entity form-variant choice
+  - `search.showFilterPanel`, `HomeApp.HidePinEmptyState` — dashboard-scoped flags
+- Use **lowercased** entity names / IDs in keys when scoping to a record. This avoids case-variant duplicates in the settings table.
+- For non-trivial shapes, serialize as JSON. Include a `v1`/`v2` suffix in the key when the shape may evolve so future code can read the old shape and migrate.
+
+#### When `localStorage` IS acceptable
+- **Auth/MSAL tokens**: the auth providers manage these themselves; don't second-guess them.
+- **Truly ephemeral, throwaway state** that has no value across sessions and you don't want hitting the DB. Rare — most "transient" state is more sticky than you think.
+- **Test fixtures**: the Playwright workflow uses `.playwright-cli/profile` to persist auth across runs. That's tooling, not application UX.
+
+#### Anti-patterns to avoid
+
+```typescript
+// ❌ WRONG — preference dies on browser switch / cache clear
+window.localStorage.setItem('mj.somePref', JSON.stringify(value));
+
+// ❌ WRONG — same problem, different syntax
+sessionStorage.setItem('mj.somePref', value);
+
+// ✅ CORRECT — server-persisted, cross-device
+UserInfoEngine.Instance.SetSettingDebounced('mj.somePref', JSON.stringify(value));
+```
+
+If you're tempted to use `localStorage` because "it's just a little thing" — that's exactly the kind of preference users notice when it disappears on the next laptop. Default to `UserInfoEngine`. Only deviate with a documented reason.
+
 ---
 
 ## 📚 Development Guides

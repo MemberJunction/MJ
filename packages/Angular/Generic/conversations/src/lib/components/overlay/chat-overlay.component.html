@@ -1,6 +1,6 @@
 @if (IsVisible) {
-    <!-- Floating Button (collapsed state) -->
-    @if (State === 'collapsed') {
+    <!-- Floating Button (collapsed state, not hidden) -->
+    @if (State === 'collapsed' && !IsHidden) {
         <div class="chat-overlay-bubble"
              [class.is-pressed]="IsBubblePressed"
              [class.is-dragging]="IsBubbleDragging"
@@ -12,7 +12,33 @@
             @if (UnreadCount > 0) {
                 <span class="chat-overlay-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
             }
+            <!-- Hide affordance: revealed on hover. pointerdown stops drag from starting; click hides the bubble. -->
+            <button type="button"
+                    class="chat-overlay-bubble-close"
+                    title="Hide chat — a thin sliver will remain on the right edge"
+                    aria-label="Hide chat overlay"
+                    (pointerdown)="$event.stopPropagation()"
+                    (click)="Hide($event)">
+                <i class="fa-solid fa-times" aria-hidden="true"></i>
+            </button>
         </div>
+    }
+
+    <!-- Collapsed sliver — flush with the right edge when the bubble is hidden.
+         Click opens the chat directly; closing returns to the bubble (not the
+         sliver). To re-enter hidden mode the user clicks the × pill again. -->
+    @if (State === 'collapsed' && IsHidden) {
+        <button type="button"
+                class="chat-overlay-sliver"
+                title="Open chat"
+                aria-label="Open chat"
+                [style.bottom.px]="BubbleBottomPx"
+                (click)="Expand()">
+            <i class="fa-solid fa-comments chat-overlay-sliver-icon" aria-hidden="true"></i>
+            @if (UnreadCount > 0) {
+                <span class="chat-overlay-badge chat-overlay-sliver-badge">{{ UnreadCount > 9 ? '9+' : UnreadCount }}</span>
+            }
+        </button>
     }
 
     <!-- Expanded / Maximized Chat Panel -->

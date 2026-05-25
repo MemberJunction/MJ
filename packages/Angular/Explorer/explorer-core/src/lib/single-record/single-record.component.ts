@@ -169,7 +169,17 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       // the form. Reload uses the existing entry path so all the resolver's
       // tier/priority semantics apply (and the saved choice now overrides).
       instance.OnVariantChanged = (variantID: string | null) => {
-        this.formResolver.SetSelectedVariant(entityName, variantID);
+        // null from the picker = user picked the "Default form" row →
+        // store the explicit-default sentinel so the resolver skips ALL
+        // overrides and falls back to the CodeGen / @RegisterClass form.
+        // Without this, clearing the preference let the resolver auto-pick
+        // the first Active override again, making Default unreachable from
+        // the UI for entities that have any user-scope overrides.
+        if (variantID === null) {
+          this.formResolver.SetExplicitDefault(entityName);
+        } else {
+          this.formResolver.SetSelectedVariant(entityName, variantID);
+        }
         // Re-run the load with the same key — the resolver will honour the
         // updated session-local selection.
         this.LoadForm(this.PrimaryKey, entityName);

@@ -49,6 +49,17 @@
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
+        @if (showAgentPicker && conversation) {
+          <!-- Per-conversation default-agent pin. When set, non-mention
+               messages route to this agent instead of Sage. Persists to
+               MJConversationEntity.DefaultAgentID. Hidden when no
+               conversation is loaded or when the embedder disables it. -->
+          <mj-conversation-agent-picker
+            [Conversation]="conversation"
+            [CurrentUser]="currentUser"
+            [Disabled]="isReadOnlyView">
+          </mj-conversation-agent-picker>
+        }
         @if (showExportButton) {
           <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
             <i class="fas fa-download"></i>
@@ -166,6 +177,7 @@
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
                     [defaultAgentId]="defaultAgentId"
+                    [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments"

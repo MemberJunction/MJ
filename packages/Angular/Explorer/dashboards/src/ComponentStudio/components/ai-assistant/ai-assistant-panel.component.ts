@@ -1,279 +1,275 @@
-import { Component, OnInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
-import { Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
-import { MJAIModelEntity } from '@memberjunction/core-entities';
-import { ComponentStudioStateService, ComponentError } from '../../services/component-studio-state.service';
+import {
+    ChangeDetectionStrategy,
+    ChangeDetectorRef,
+    Component,
+    OnDestroy,
+    OnInit,
+    inject,
+} from '@angular/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { Subject, Subscription, takeUntil } from 'rxjs';
+import { MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import type {
+    MJConversationEntity,
+    MJTaskEntity,
+} from '@memberjunction/core-entities';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { NavigationService } from '@memberjunction/ng-shared';
+import type { NavigationRequest, PendingAttachment } from '@memberjunction/ng-conversations';
+import { ComponentStudioStateService, ComponentError } from '../../services/component-studio-state.service';
 
 /**
- * Represents a single message in the AI assistant chat thread
- */
-export interface ChatMessage {
-  Role: 'user' | 'assistant' | 'system';
-  Content: string;
-  Timestamp: Date;
-}
-
-/**
- * Represents a quick action button in the AI assistant panel
+ * Quick-action shortcut surfaced above the embedded chat. Clicking a
+ * shortcut prefills the chat input via the pendingMessage handoff — the
+ * same mechanism the empty-state uses to send the first message.
  */
 interface QuickAction {
-  Label: string;
-  Icon: string;
-  Prompt: string;
-  RequiresError: boolean;
+    Label: string;
+    Icon: string;
+    Prompt: string;
+    /** When true, the button is disabled unless `state.CurrentError` is set. */
+    RequiresError: boolean;
 }
 
 /**
- * Represents an AI model option in the model selector dropdown
+ * Component Studio's right-pane AI assistant.
+ *
+ * Previously this was a 880-line bespoke chat stub that emitted "AI
+ * assistant coming soon" — no agent was actually called. This version
+ * thin-wraps `<mj-conversation-chat-area>` (the same primitive the main
+ * Chat app and the Form Builder cockpit use) so the assistant becomes
+ * fully functional with zero duplicated chat plumbing.
+ *
+ * Domain integration preserved from the old stub:
+ *   - **Quick-actions bar** (Fix Errors / Improve / Generate / Explain)
+ *     above the chat — clicking sets `PendingMessage` which the chat-area
+ *     consumes on the next render, mirroring the empty-state handoff.
+ *   - **`SendErrorToAI` channel** — when the runtime preview throws, the
+ *     state service emits a `ComponentError`. We listen and shove a
+ *     "Fix this error: …" message into the same pendingMessage pipe so
+ *     the user doesn't have to copy/paste error text.
+ *
+ * Scoping:
+ *   - `[applicationScope]="'Application'"` + Component Studio app ID →
+ *     conversations stay out of main chat (per the migration scoping work).
+ *   - `[defaultAgentId]` → Codesmith Agent so messages route to the code
+ *     specialist instead of Sage by default. User can still @mention any
+ *     agent, override via the per-conversation pin, or pick a different
+ *     agent through the chat header's picker.
  */
-interface AIModelOption {
-  ID: string;
-  Name: string;
-  Vendor: string | null;
-  DisplayLabel: string;
-}
-
 @Component({
-  standalone: false,
-  selector: 'mj-ai-assistant-panel',
-  templateUrl: './ai-assistant-panel.component.html',
-  styleUrls: ['./ai-assistant-panel.component.css']
+    standalone: false,
+    selector: 'mj-ai-assistant-panel',
+    templateUrl: './ai-assistant-panel.component.html',
+    styleUrls: ['./ai-assistant-panel.component.css'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AIAssistantPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
-  @ViewChild('chatThread') chatThreadEl!: ElementRef<HTMLDivElement>;
-  @ViewChild('chatInput') chatInputEl!: ElementRef<HTMLTextAreaElement>;
+    /** Quick actions surfaced as buttons above the embedded chat. */
+    public QuickActions: QuickAction[] = [
+        { Label: 'Fix Errors',    Icon: 'fa-bug',             Prompt: 'Fix this error: ',                                                                                       RequiresError: true  },
+        { Label: 'Improve Code',  Icon: 'fa-magic',           Prompt: 'Review and improve the current component code. Suggest optimizations, better patterns, and cleaner structure.', RequiresError: false },
+        { Label: 'Generate Code', Icon: 'fa-code',            Prompt: 'Generate code for the current component based on its specification.',                                     RequiresError: false },
+        { Label: 'Explain',       Icon: 'fa-question-circle', Prompt: 'Explain what the current component does, including its structure, data flow, and key behaviors.',         RequiresError: false },
+    ];
 
-  // --- Chat State ---
-  Messages: ChatMessage[] = [];
-  InputText = '';
-  IsWaitingForResponse = false;
+    /** Embedded chat state — same shape the Form Builder cockpit uses. */
+    public ChatConversation: MJConversationEntity | null = null;
+    public ChatConversationId: string | null = null;
+    public ChatIsNewConversation = true;
+    public PendingMessage: string | null = null;
+    public PendingAttachments: PendingAttachment[] | null = null;
+    public ChatThreadId: string | null = null;
+    public ChatPendingArtifactId: string | null = null;
+    public ChatPendingArtifactVersionNumber: number | null = null;
 
-  // --- Model Selector ---
-  AvailableModels: AIModelOption[] = [];
-  SelectedModelID: string | null = null;
-  IsLoadingModels = false;
+    /** Snapshot from NavigationService — drives the agent's app context. */
+    public ChatAppContext: AppContextSnapshot | null = null;
 
-  // --- Quick Actions ---
-  QuickActions: QuickAction[] = [
-    { Label: 'Fix Errors', Icon: 'fa-bug', Prompt: 'Fix this error: ', RequiresError: true },
-    { Label: 'Improve Code', Icon: 'fa-magic', Prompt: 'Review and improve the current component code. Suggest optimizations, better patterns, and cleaner structure.', RequiresError: false },
-    { Label: 'Generate Code', Icon: 'fa-code', Prompt: 'Generate code for the current component based on its specification.', RequiresError: false },
-    { Label: 'Explain', Icon: 'fa-question-circle', Prompt: 'Explain what the current component does, including its structure, data flow, and key behaviors.', RequiresError: false }
-  ];
+    /** Codesmith Agent ID resolved from AIEngineBase cache (no RunView). */
+    public CodesmithAgentId: string | null = null;
 
-  private destroy$ = new Subject<void>();
+    /** Component Studio's Application ID — resolved from Metadata cache. */
+    public CockpitApplicationId: string | null = null;
 
-  constructor(
-    public State: ComponentStudioStateService,
-    private cdr: ChangeDetectorRef
-  ) { super(); }
+    private static readonly CODESMITH_AGENT_NAME = 'Codesmith Agent';
+    private static readonly COCKPIT_APP_NAME = 'Component Studio';
 
-  async ngOnInit(): Promise<void> {
-    this.subscribeToErrorEvents();
-    await this.LoadModels();
-    this.addWelcomeMessage();
-  }
+    private readonly destroy$ = new Subject<void>();
+    private appContextSubscription: Subscription | null = null;
 
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
+    private readonly cdr = inject(ChangeDetectorRef);
+    private readonly navigationService = inject(NavigationService);
 
-  // ============================================================
-  // MODEL LOADING
-  // ============================================================
+    constructor(public State: ComponentStudioStateService) {
+        super();
+    }
 
-  async LoadModels(): Promise<void> {
-    this.IsLoadingModels = true;
-    try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const result = await rv.RunView<MJAIModelEntity>({
-        EntityName: 'MJ: AI Models',
-        ExtraFilter: `IsActive = 1 AND AIModelTypeID IN (SELECT ID FROM __mj.vwAIModelTypes WHERE Name = 'LLM')`,
-        OrderBy: 'PowerRank DESC, Name ASC',
-        ResultType: 'entity_object'
-      });
+    public get EnvironmentId(): string {
+        return MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    }
 
-      if (result.Success && result.Results) {
-        this.AvailableModels = result.Results.map(model => ({
-          ID: model.ID,
-          Name: model.Name,
-          Vendor: model.Vendor,
-          DisplayLabel: model.Vendor ? `${model.Name} (${model.Vendor})` : model.Name
-        }));
+    public get CurrentUser(): UserInfo | null {
+        return this.ProviderToUse?.CurrentUser ?? null;
+    }
 
-        if (this.AvailableModels.length > 0) {
-          this.SelectedModelID = this.AvailableModels[0].ID;
+    public async ngOnInit(): Promise<void> {
+        try {
+            // Resolve default agent + cockpit app ID from in-memory caches
+            // (no RunView round-trips). Both fall back to null cleanly:
+            // missing agent → routes through Sage; missing app → safety
+            // guard in chat-area demotes scope to 'Global'.
+            await AIEngineBase.Instance.Config(false);
+            const codesmith = AIEngineBase.Instance.Agents
+                ?.find(a => a.Name?.trim().toLowerCase() === AIAssistantPanelComponent.CODESMITH_AGENT_NAME.toLowerCase());
+            this.CodesmithAgentId = codesmith?.ID ?? null;
+            if (!codesmith) {
+                LogError(`AIAssistantPanel: '${AIAssistantPanelComponent.CODESMITH_AGENT_NAME}' not found in AIEngineBase cache`);
+            }
+
+            const md = new Metadata();
+            const app = md.Applications?.find(
+                a => a.Name?.trim().toLowerCase() === AIAssistantPanelComponent.COCKPIT_APP_NAME.toLowerCase()
+            );
+            this.CockpitApplicationId = app?.ID ?? null;
+
+            // Subscribe to the Explorer shell's app-context publisher so
+            // the agent sees the same snapshot the floating overlay sees.
+            this.appContextSubscription = this.navigationService.AppContextSnapshot$
+                .subscribe(snapshot => {
+                    this.ChatAppContext = snapshot;
+                    this.cdr.markForCheck();
+                });
+
+            // Wire the SendErrorToAI channel — when the runtime preview
+            // hits an error, push a canned "Fix this error: …" message
+            // into the chat-area's pendingMessage pipe so the user
+            // doesn't have to manually copy the error text.
+            this.State.SendErrorToAI
+                .pipe(takeUntil(this.destroy$))
+                .subscribe(err => this.handleIncomingError(err));
+            this.cdr.markForCheck();
+        } catch (err) {
+            LogError(`AIAssistantPanel.ngOnInit: ${err instanceof Error ? err.message : String(err)}`);
         }
-      }
-    } catch (error) {
-      console.error('Error loading AI models:', error);
-    } finally {
-      this.IsLoadingModels = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  // ============================================================
-  // ERROR SUBSCRIPTION
-  // ============================================================
-
-  private subscribeToErrorEvents(): void {
-    this.State.SendErrorToAI
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((error: ComponentError) => {
-        this.handleIncomingError(error);
-      });
-  }
-
-  private handleIncomingError(error: ComponentError): void {
-    const errorDetails = error.technicalDetails
-      ? (typeof error.technicalDetails === 'string' ? error.technicalDetails : JSON.stringify(error.technicalDetails, null, 2))
-      : '';
-
-    const systemContent = `Error detected [${error.type}]: ${error.message}${errorDetails ? '\n\nDetails:\n' + errorDetails : ''}`;
-
-    this.addMessage('system', systemContent);
-    this.InputText = `Fix this error: ${error.type} - ${error.message}`;
-    this.cdr.detectChanges();
-    this.focusInput();
-  }
-
-  // ============================================================
-  // WELCOME MESSAGE
-  // ============================================================
-
-  private addWelcomeMessage(): void {
-    this.addMessage(
-      'assistant',
-      'Welcome to the Component Studio AI Assistant. I can help you fix errors, improve code, generate components, and explain how things work. Select a component and ask me anything!'
-    );
-  }
-
-  // ============================================================
-  // CHAT ACTIONS
-  // ============================================================
-
-  OnSendMessage(): void {
-    const text = this.InputText.trim();
-    if (!text || this.IsWaitingForResponse) return;
-
-    this.addMessage('user', text);
-    this.InputText = '';
-    this.resetInputHeight();
-    this.simulateResponse(text);
-  }
-
-  OnQuickAction(action: QuickAction): void {
-    if (action.RequiresError && !this.State.CurrentError) return;
-
-    if (action.RequiresError && this.State.CurrentError) {
-      const errorContext = `${this.State.CurrentError.type} - ${this.State.CurrentError.message}`;
-      this.InputText = `${action.Prompt}${errorContext}`;
-    } else {
-      this.InputText = action.Prompt;
     }
 
-    this.cdr.detectChanges();
-    this.focusInput();
-  }
-
-  OnInputKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.OnSendMessage();
+    public ngOnDestroy(): void {
+        this.destroy$.next();
+        this.destroy$.complete();
+        this.appContextSubscription?.unsubscribe();
+        this.appContextSubscription = null;
     }
-  }
 
-  OnInputChange(): void {
-    this.autoGrowTextarea();
-  }
-
-  OnCollapsePanel(): void {
-    this.State.IsAIPanelCollapsed = true;
-    this.State.StateChanged.emit();
-  }
-
-  IsQuickActionEnabled(action: QuickAction): boolean {
-    if (action.RequiresError) {
-      return this.State.CurrentError != null;
+    /** Collapse the right pane (delegated to the parent dashboard). */
+    public OnCollapsePanel(): void {
+        this.State.IsAIPanelCollapsed = true;
+        this.State.StateChanged.emit();
     }
-    return true;
-  }
 
-  // ============================================================
-  // MESSAGE MANAGEMENT
-  // ============================================================
+    /** Quick-action click — prefill the chat with the canned prompt. */
+    public OnQuickAction(action: QuickAction): void {
+        if (action.RequiresError && !this.State.CurrentError) return;
+        let prompt = action.Prompt;
+        if (action.RequiresError && this.State.CurrentError) {
+            prompt += `${this.State.CurrentError.type} - ${this.State.CurrentError.message}`;
+        }
+        this.PendingMessage = prompt;
+        this.PendingAttachments = null;
+        this.cdr.markForCheck();
+    }
 
-  private addMessage(role: 'user' | 'assistant' | 'system', content: string): void {
-    this.Messages.push({
-      Role: role,
-      Content: content,
-      Timestamp: new Date()
-    });
-    this.cdr.detectChanges();
-    this.scrollToBottom();
-  }
+    public IsQuickActionEnabled(action: QuickAction): boolean {
+        return !action.RequiresError || this.State.CurrentError != null;
+    }
 
-  private simulateResponse(userMessage: string): void {
-    this.IsWaitingForResponse = true;
-    this.cdr.detectChanges();
-    this.scrollToBottom();
+    /** Runtime preview surfaced an error — auto-send "Fix this error: …". */
+    private handleIncomingError(error: ComponentError): void {
+        const details = error.technicalDetails
+            ? (typeof error.technicalDetails === 'string'
+                ? error.technicalDetails
+                : JSON.stringify(error.technicalDetails, null, 2))
+            : '';
+        this.PendingMessage = `Fix this error: ${error.type} - ${error.message}${details ? '\n\nDetails:\n' + details : ''}`;
+        this.PendingAttachments = null;
+        this.cdr.markForCheck();
+    }
 
-    setTimeout(() => {
-      this.addMessage(
-        'assistant',
-        'AI assistant coming soon \u2014 agent integration in progress. Your message has been received and will be processed once the AI backend is connected.'
-      );
-      this.IsWaitingForResponse = false;
-      this.cdr.detectChanges();
-    }, 1000);
-  }
+    // ── chat-area event wiring ───────────────────────────────────────
 
-  // ============================================================
-  // UI HELPERS
-  // ============================================================
+    public OnConversationCreated(event: {
+        conversation: MJConversationEntity;
+        pendingMessage?: string;
+        pendingAttachments?: PendingAttachment[];
+    }): void {
+        this.PendingMessage = event.pendingMessage ?? null;
+        this.PendingAttachments = (event.pendingAttachments ?? null) as PendingAttachment[] | null;
+        this.ChatConversation = event.conversation;
+        this.ChatConversationId = event.conversation.ID;
+        this.ChatIsNewConversation = false;
+        this.cdr.markForCheck();
+    }
 
-  private scrollToBottom(): void {
-    Promise.resolve().then(() => {
-      if (this.chatThreadEl) {
-        const el = this.chatThreadEl.nativeElement;
-        el.scrollTop = el.scrollHeight;
-      }
-    });
-  }
+    public OnPendingMessageConsumed(): void {
+        this.PendingMessage = null;
+        this.PendingAttachments = null;
+        this.cdr.markForCheck();
+    }
 
-  private focusInput(): void {
-    Promise.resolve().then(() => {
-      if (this.chatInputEl) {
-        this.chatInputEl.nativeElement.focus();
-      }
-    });
-  }
+    public OnOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+        try {
+            this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+        } catch (err) {
+            LogError(`AIAssistantPanel.OnOpenEntityRecord: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
 
-  private autoGrowTextarea(): void {
-    if (!this.chatInputEl) return;
-    const textarea = this.chatInputEl.nativeElement;
-    textarea.style.height = 'auto';
-    const lineHeight = 20;
-    const maxLines = 4;
-    const maxHeight = lineHeight * maxLines;
-    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
-  }
+    public OnNavigationRequest(event: NavigationRequest): void {
+        void this.navigationService.OpenNavItemByName(event.navItemName, event.params, event.appId);
+    }
 
-  private resetInputHeight(): void {
-    if (!this.chatInputEl) return;
-    this.chatInputEl.nativeElement.style.height = 'auto';
-  }
+    public OnTaskClicked(task: MJTaskEntity): void {
+        try {
+            const key = CompositeKey.FromID(task.ID);
+            this.navigationService.OpenEntityRecord('MJ: Tasks', key);
+        } catch (err) {
+            LogError(`AIAssistantPanel.OnTaskClicked: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
 
-  FormatTimestamp(date: Date): string {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
+    public OnArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): void {
+        const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
+        const paramKey = event.type === 'conversation' ? 'conversationId' : 'collectionId';
+        void this.navigationService.OpenNavItemByName(navItemName, { [paramKey]: event.id });
+    }
 
-  TrackByTimestamp(index: number, message: ChatMessage): number {
-    return message.Timestamp.getTime();
-  }
+    public OnConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+        if (this.ChatConversation && this.ChatConversation.ID === event.conversationId) {
+            this.ChatConversation.Name = event.name;
+            if (event.description !== undefined) {
+                this.ChatConversation.Description = event.description;
+            }
+            this.cdr.markForCheck();
+        }
+    }
+
+    public OnThreadOpened(threadId: string): void {
+        this.ChatThreadId = threadId;
+        this.cdr.markForCheck();
+    }
+
+    public OnThreadClosed(): void {
+        this.ChatThreadId = null;
+        this.cdr.markForCheck();
+    }
+
+    public OnPendingArtifactConsumed(): void {
+        this.ChatPendingArtifactId = null;
+        this.ChatPendingArtifactVersionNumber = null;
+        this.cdr.markForCheck();
+    }
 }

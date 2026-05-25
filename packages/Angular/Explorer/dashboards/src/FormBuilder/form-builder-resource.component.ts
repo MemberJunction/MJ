@@ -6,15 +6,19 @@ import {
     OnDestroy,
     inject,
 } from '@angular/core';
-import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
+import { MJGlobal, MJEventType, MJEvent } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
 import type { MJComponentEntity, MJEntityFormOverrideEntity, MJConversationEntity } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { MJTaskEntity } from '@memberjunction/core-entities';
+import type { NavigationRequest } from '@memberjunction/ng-conversations';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { Subscription } from 'rxjs';
 import {
     buildCuratedFormSchema,
@@ -88,7 +92,23 @@ interface FormComponentSummary {
     ID: string;
     Name: string;
     Namespace: string | null;
+    /**
+     * `Component.Status` (Draft / Published / Deprecated) — kept on the
+     * summary for callers that need it (e.g. the version rail), but NOT
+     * what the left rail badge displays. The left rail surfaces the
+     * **override** status (see `OverrideStatus` below) because that's
+     * what drives runtime visibility for the user.
+     */
     Status: string | null;
+    /**
+     * The current user's `EntityFormOverride.Status` (Active / Inactive /
+     * Pending) for this Component, when an override exists. Null when no
+     * user-scope override binds to this Component — in which case the
+     * runtime falls through to a higher-scope (Role/Global) override or
+     * the CodeGen Angular default. Populated by `loadExistingForms` via
+     * a single batch lookup against `MJ: Entity Form Overrides`.
+     */
+    OverrideStatus: 'Active' | 'Inactive' | 'Pending' | null;
     Description: string | null;
     TargetEntityName: string | null;
 }
@@ -204,6 +224,7 @@ export class FormBuilderResourceComponent
     public FormBuilderAgentId: string | null = null;
 
     private appContextSubscription: Subscription | null = null;
+    private entityEventSubscription: Subscription | null = null;
 
     /**
      * Conversation state for the embedded chat. Initially null/new; when the
@@ -228,6 +249,26 @@ export class FormBuilderResourceComponent
     public ChatPendingAttachments: unknown[] | null = null;
 
     /**
+     * Thread state for the embedded chat. Mirrors the workspace shell's
+     * pattern: chat-area emits `threadOpened` with a thread ID when the
+     * user drills into a sub-thread, and `threadClosed` when they leave.
+     * Forwarded back as `[threadId]` so the chat-area knows which thread
+     * to render. Without these handlers, clicking a thread message in
+     * the cockpit's chat appears to do nothing (the chat-area emits but
+     * no one binds back).
+     */
+    public ChatThreadId: string | null = null;
+
+    /**
+     * Pending artifact pointer for the chat-area to scroll to / highlight
+     * after navigation. Set when an artifact link inside the chat is
+     * clicked (the chat-area asks us to surface a specific artifact
+     * version) and cleared when consumed.
+     */
+    public ChatPendingArtifactId: string | null = null;
+    public ChatPendingArtifactVersionNumber: number | null = null;
+
+    /**
      * Environment ID for the embedded chat-area. Resource components in
      * Explorer accept this via ResourceData.Configuration; we fall back to
      * the default environment when not supplied.
@@ -246,6 +287,16 @@ export class FormBuilderResourceComponent
     public LeftPanePct = 22;
     public CenterPanePct = 56;
     public ChatPanePct = 22;
+
+    /**
+     * True when a form is "actively being shown" — either an existing
+     * form is loaded (SelectedFormID set) or the user clicked New Form
+     * (IsNewForm). The right-side chat pane is gated on this so empty
+     * cockpits don't render an agent shell against no subject.
+     */
+    public get HasActiveForm(): boolean {
+        return this.IsNewForm || !!this.SelectedFormID;
+    }
 
     public SelectedFormID: string | null = null;
     public SelectedFormName = '';
@@ -272,6 +323,25 @@ export class FormBuilderResourceComponent
     private readonly overrideService = inject(EntityFormOverrideService);
     private readonly conversationBridge = inject(ConversationBridgeService);
 
+    /**
+     * Name of the Application this cockpit lives in — must match the
+     * `Application.Name` column. "Form Studio" is the nav-item LABEL
+     * inside the "Component Studio" app, not a separate application;
+     * the canonical Application row is named "Component Studio". See
+     * `/metadata/applications/.component-studio-application.json`.
+     */
+    private static readonly COCKPIT_APP_NAME = 'Component Studio';
+
+    /**
+     * ID of the Application that owns this cockpit. Resolved at init from
+     * `Metadata.Applications` (the in-memory cache populated at provider
+     * bootstrap — NO RunView round-trip) and forwarded to the embedded
+     * chat-area as `[applicationId]`, so conversations created inside this
+     * cockpit are scoped to the Form Studio app and don't pollute the
+     * main Chat list.
+     */
+    public CockpitApplicationId: string | null = null;
+
     private get provider(): IMetadataProvider {
         return this.ProviderToUse;
     }
@@ -286,6 +356,18 @@ export class FormBuilderResourceComponent
     public async ngAfterViewInit(): Promise<void> {
         try {
             this.refreshEntityChoices();
+            // Resolve the owning Application's ID once from the Metadata
+            // cache. Used to scope chat conversations to this cockpit so
+            // they don't pollute the main Chat list. Deterministic name-
+            // based lookup against in-memory data — no RunView.
+            const md = new Metadata();
+            const app = md.Applications?.find(
+                a => a.Name?.trim().toLowerCase() === FormBuilderResourceComponent.COCKPIT_APP_NAME.toLowerCase()
+            );
+            if (!app) {
+                LogError(`FormBuilderResource: Application '${FormBuilderResourceComponent.COCKPIT_APP_NAME}' not found in Metadata cache — conversations will fall back to Global scope.`);
+            }
+            this.CockpitApplicationId = app?.ID ?? null;
             // Restore cockpit UI prefs (pane sizes, collapse, last tab)
             // from UserInfoEngine. Single JSON blob under FORM_BUILDER_PREFS_KEY.
             this.loadPrefs();
@@ -305,6 +387,17 @@ export class FormBuilderResourceComponent
                     this.ChatAppContext = snapshot;
                     this.cdr.markForCheck();
                 });
+
+            // BaseEntity event subscription — fires for both local and
+            // remote saves (Redis pub/sub → GraphQL subscription on the
+            // remote-invalidate side). When the Form Builder agent saves
+            // a Component or EntityFormOverride row that belongs to the
+            // form currently loaded in this cockpit, we reload so the
+            // canvas/code/preview reflect the agent's edits without
+            // requiring a manual refresh. Scoped tightly to the active
+            // form's lineage to avoid cross-cockpit churn.
+            this.entityEventSubscription = MJGlobal.Instance.GetEventListener(false)
+                .subscribe(mjEvent => this.handleEntityEvent(mjEvent));
         } catch (err) {
             LogError(`FormBuilderResource.ngAfterViewInit: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -318,29 +411,126 @@ export class FormBuilderResourceComponent
     public override ngOnDestroy(): void {
         this.appContextSubscription?.unsubscribe();
         this.appContextSubscription = null;
+        this.entityEventSubscription?.unsubscribe();
+        this.entityEventSubscription = null;
         super.ngOnDestroy();
+    }
+
+    /**
+     * MJGlobal event handler — fires whenever any BaseEntity in the app
+     * is saved/deleted/etc. We filter aggressively here: only react to
+     * `save` (local + remote-invalidate from the agent's server-side
+     * action) on `MJ: Components` or `MJ: Entity Form Overrides`, and
+     * only when the affected row belongs to the lineage of the form
+     * currently loaded in this cockpit. Anything else bails immediately
+     * — this listener runs for every entity save in the entire app, so
+     * cheapness matters.
+     */
+    private handleEntityEvent(mjEvent: MJEvent): void {
+        try {
+            if (mjEvent.event !== MJEventType.ComponentEvent) return;
+            if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
+            const evt = mjEvent.args as BaseEntityEvent | undefined;
+            if (!evt) return;
+            // Only care about completed saves and server-side invalidations.
+            if (evt.type !== 'save' && evt.type !== 'remote-invalidate') return;
+
+            const entityName = evt.entityName ?? evt.baseEntity?.EntityInfo?.Name;
+            if (entityName !== 'MJ: Components' && entityName !== 'MJ: Entity Form Overrides') return;
+
+            // Need a form actively loaded to compare against.
+            if (!this.SelectedFormID && !this.ActiveOverrideID && !this.SelectedFormName) return;
+
+            const savedID = evt.baseEntity?.PrimaryKey?.ToConcatenatedString() ?? null;
+
+            if (entityName === 'MJ: Components') {
+                // Match: same Component (in-place Modify on Pending) OR
+                // same Name (Active path → new Pending sibling row in the
+                // form's lineage). Either way the cockpit should refresh.
+                const savedName = evt.baseEntity?.Get?.('Name') as string | undefined;
+                const sameID = savedID && this.SelectedFormID && UUIDsEqual(savedID, this.SelectedFormID);
+                const sameLineage = savedName && this.SelectedFormName && savedName === this.SelectedFormName;
+                if (sameID || sameLineage) {
+                    void this.handleAgentEditedActiveForm();
+                }
+            } else if (entityName === 'MJ: Entity Form Overrides') {
+                // Override row change — either our exact override or any
+                // override in the same lineage (new Pending sibling).
+                // Reload the version rail so a new Pending row surfaces.
+                const sameID = savedID && this.ActiveOverrideID && UUIDsEqual(savedID, this.ActiveOverrideID);
+                if (sameID) {
+                    void this.handleAgentEditedActiveForm();
+                } else {
+                    // Lineage match isn't free to compute here, but
+                    // refreshing the version rail is cheap and covers it.
+                    void this.loadVersionsForActiveForm();
+                }
+            }
+        } catch (err) {
+            LogError(`FormBuilderResource.handleEntityEvent: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Agent (or another client) just modified the Component / Override
+     * for the form currently loaded in this cockpit. Reload the spec
+     * from the same Component so the canvas + code + preview reflect
+     * the new state without forcing a manual refresh.
+     *
+     * Guards: don't clobber unsaved user edits — if the cockpit has its
+     * own `DirtyFlag` set, surface a notification instead of silently
+     * overwriting. The user can manually re-pick the form when ready.
+     */
+    private async handleAgentEditedActiveForm(): Promise<void> {
+        const formID = this.SelectedFormID;
+        if (!formID) return;
+        if (this.DirtyFlag) {
+            this.notifications.CreateSimpleNotification(
+                'Agent saved an update to this form, but you have unsaved local edits. Save or discard your changes to see the agent\'s version.',
+                'info', 6000);
+            return;
+        }
+        // Find the summary in the picker list so OnFormPicked can do its
+        // standard load path (parses spec, rebuilds canvas, refreshes the
+        // version rail, re-pushes agent context, etc.). If the row was
+        // freshly created and isn't in the picker yet, reload the list.
+        let summary = this.ExistingForms.find(f => UUIDsEqual(f.ID, formID));
+        if (!summary) {
+            await this.loadExistingForms();
+            summary = this.ExistingForms.find(f => UUIDsEqual(f.ID, formID));
+        }
+        if (summary) {
+            await this.OnFormPicked(summary);
+            this.notifications.CreateSimpleNotification(
+                'Form updated by agent — canvas refreshed.', 'success', 3500);
+        } else {
+            // Couldn't locate the row (deleted? out-of-scope?) — just
+            // refresh the version rail so the UI isn't stale.
+            await this.loadVersionsForActiveForm();
+        }
     }
 
     /**
      * One-shot lookup of the Form Builder agent's ID. Used to bind the
      * chat-area's `[defaultAgentId]` so the cockpit's chat skips Sage routing
      * and addresses messages directly to the form-authoring specialist.
+     *
+     * Uses `AIEngineBase.Instance.Agents` (the in-memory cache that's
+     * already loaded on app boot) rather than a RunView round-trip. This
+     * also avoids the easy-to-trip entity-name typo (`'AI Agents'` vs
+     * `'MJ: AI Agents'`) that previously left FormBuilderAgentId null and
+     * silently fell back to Sage routing.
      */
     private async resolveFormBuilderAgentId(): Promise<void> {
-        const provider = this.provider;
-        if (!provider) return;
         try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const result = await rv.RunView<{ ID: string }>({
-                EntityName: 'AI Agents',
-                ExtraFilter: `Name='Form Builder'`,
-                Fields: ['ID'],
-                MaxRows: 1,
-                ResultType: 'simple',
-            }, this.currentUser ?? undefined);
-            if (result.Success && (result.Results?.length ?? 0) > 0) {
-                this.FormBuilderAgentId = result.Results[0].ID;
+            await AIEngineBase.Instance.Config(false);
+            const agent = AIEngineBase.Instance.Agents
+                ?.find(a => a.Name?.trim().toLowerCase() === 'form builder');
+            if (agent) {
+                this.FormBuilderAgentId = agent.ID;
                 this.cdr.markForCheck();
+            } else {
+                LogError(`FormBuilderResource.resolveFormBuilderAgentId: 'Form Builder' agent not found in AIEngineBase cache`);
             }
         } catch (err) {
             LogError(`FormBuilderResource.resolveFormBuilderAgentId: ${err instanceof Error ? err.message : String(err)}`);
@@ -354,31 +544,60 @@ export class FormBuilderResourceComponent
             return;
         }
         const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<{
+        const user = this.currentUser;
+
+        // Batch both queries — Components for the form list + the
+        // current user's overrides on those Components — so we don't
+        // pay two round-trips. The override join is keyed on
+        // ComponentID and filtered to the calling user's User-scope
+        // rows (the only ones the cockpit can edit anyway).
+        const [componentsResult, overridesResult] = await rv.RunViews([
+            {
+                EntityName: 'MJ: Components',
+                ExtraFilter: "Type='Form' OR Namespace LIKE 'Forms/%' OR Namespace LIKE '%/Forms/%'",
+                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description'],
+                OrderBy: 'Name',
+                MaxRows: 500,
+                ResultType: 'simple',
+            },
+            ...(user ? [{
+                EntityName: 'MJ: Entity Form Overrides',
+                ExtraFilter: `UserID='${user.ID}' AND Scope='User'`,
+                Fields: ['ComponentID', 'Status'],
+                MaxRows: 500,
+                ResultType: 'simple' as const,
+            }] : []),
+        ], user ?? undefined);
+
+        if (!componentsResult.Success) {
+            LogError(`FormBuilderResource.loadExistingForms (components): ${componentsResult.ErrorMessage}`);
+            this.ExistingForms = [];
+            return;
+        }
+        // Build a quick lookup ComponentID → override Status. If the
+        // override query failed we fall through with an empty map and
+        // every form just shows no override badge — degrades cleanly.
+        const overrideStatusByComponentID = new Map<string, 'Active' | 'Inactive' | 'Pending'>();
+        if (overridesResult?.Success) {
+            for (const row of (overridesResult.Results ?? []) as Array<{ ComponentID: string; Status: string }>) {
+                if (row.Status === 'Active' || row.Status === 'Inactive' || row.Status === 'Pending') {
+                    overrideStatusByComponentID.set(NormalizeUUID(row.ComponentID), row.Status);
+                }
+            }
+        }
+
+        this.ExistingForms = ((componentsResult.Results ?? []) as Array<{
             ID: string;
             Name: string;
             Namespace: string | null;
             Status: string | null;
             Description: string | null;
-        }>({
-            EntityName: 'MJ: Components',
-            ExtraFilter: "Type='Form' OR Namespace LIKE 'Forms/%' OR Namespace LIKE '%/Forms/%'",
-            Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description'],
-            OrderBy: 'Name',
-            MaxRows: 500,
-            ResultType: 'simple',
-        }, this.currentUser ?? undefined);
-
-        if (!result.Success) {
-            LogError(`FormBuilderResource.loadExistingForms: ${result.ErrorMessage}`);
-            this.ExistingForms = [];
-            return;
-        }
-        this.ExistingForms = (result.Results ?? []).map(r => ({
+        }>).map(r => ({
             ID: r.ID,
             Name: r.Name,
             Namespace: r.Namespace,
             Status: r.Status,
+            OverrideStatus: overrideStatusByComponentID.get(NormalizeUUID(r.ID)) ?? null,
             Description: r.Description,
             TargetEntityName: null,
         }));
@@ -530,13 +749,30 @@ export class FormBuilderResourceComponent
     public TogglePreviewPicker(): void {
         this.PreviewPickerOpen = !this.PreviewPickerOpen;
         this.cdr.markForCheck();
+        // Auto-populate the dropdown with the top N records on open so the
+        // user sees something to click immediately. Search-as-you-type
+        // narrows from there. Without this, the dropdown opens to an empty
+        // "Start typing…" hint, which is dead UX for entities where the
+        // user just wants to flip between a handful of records.
+        if (this.PreviewPickerOpen && this.TargetEntityName && this.PreviewSearchResults.length === 0) {
+            void this.loadPreviewPickerResults('');
+        }
     }
 
     /** Search-as-you-type for the preview record picker. */
     public async OnPreviewSearchInput(event: Event): Promise<void> {
         const term = (event.target as HTMLInputElement).value ?? '';
         this.PreviewSearchTerm = term;
-        if (!this.TargetEntityName || term.trim().length === 0) {
+        await this.loadPreviewPickerResults(term);
+    }
+
+    /**
+     * Shared loader for the preview record picker. Empty term → top N
+     * by name. Non-empty term → `LIKE %term%` on the name field. Both
+     * paths share the result-mapping logic so the dropdown looks the same.
+     */
+    private async loadPreviewPickerResults(term: string): Promise<void> {
+        if (!this.TargetEntityName) {
             this.PreviewSearchResults = [];
             this.cdr.markForCheck();
             return;
@@ -550,12 +786,16 @@ export class FormBuilderResourceComponent
             this.PreviewSearchResults = [];
             return;
         }
-        const safe = term.replace(/'/g, "''");
+        const trimmed = term.trim();
+        const filter = trimmed.length === 0
+            ? '' // no filter — engine returns top N ordered by name field
+            : `${nameField} LIKE '%${trimmed.replace(/'/g, "''")}%'`;
         try {
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<BaseEntity>({
                 EntityName: this.TargetEntityName,
-                ExtraFilter: `${nameField} LIKE '%${safe}%'`,
+                ExtraFilter: filter,
+                OrderBy: `${nameField} ASC`,
                 MaxRows: 8,
                 ResultType: 'entity_object',
             }, user);
@@ -565,7 +805,7 @@ export class FormBuilderResourceComponent
             }));
             this.cdr.markForCheck();
         } catch (err) {
-            LogError(`FormBuilderResource.OnPreviewSearchInput: ${err instanceof Error ? err.message : String(err)}`);
+            LogError(`FormBuilderResource.loadPreviewPickerResults: ${err instanceof Error ? err.message : String(err)}`);
         }
     }
 
@@ -631,6 +871,105 @@ export class FormBuilderResourceComponent
     public OnChatPendingMessageConsumed(): void {
         this.ChatPendingMessage = null;
         this.ChatPendingAttachments = null;
+        this.cdr.markForCheck();
+    }
+
+    // ── Chat surface event wiring ────────────────────────────────────
+    // The embedded <mj-conversation-chat-area> emits the same outbound
+    // events the main workspace listens for; without handlers, clicks
+    // inside the chat (entity record links, artifact links, task
+    // navigation, thread drill-down) silently do nothing. Each handler
+    // below mirrors the workspace's behavior but routes through
+    // NavigationService so the target opens as an Explorer tab.
+
+    /**
+     * Chat-area emitted `openEntityRecord` — user clicked an entity link
+     * inside an agent reply. Open the record as a new Explorer tab via
+     * NavigationService (same as the workspace's actionable-command
+     * path, but executed directly here since the cockpit has no
+     * intermediate workspace shell).
+     */
+    public OnChatOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+        try {
+            this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
+        } catch (err) {
+            LogError(`FormBuilderResource.OnChatOpenEntityRecord: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Chat-area emitted a generic `navigationRequest` (cross-resource
+     * navigation, e.g. "go to Collections with this artifact"). Route
+     * via NavigationService.OpenNavItemByName.
+     */
+    public OnChatNavigationRequest(event: NavigationRequest): void {
+        void this.navigationService.OpenNavItemByName(
+            event.navItemName,
+            event.params,
+            event.appId
+        );
+    }
+
+    /**
+     * Chat-area emitted `taskClicked` — user clicked a task pill in an
+     * agent reply. The workspace switches to its Tasks tab; the cockpit
+     * has no Tasks tab, so open the task record directly.
+     */
+    public OnChatTaskClicked(task: MJTaskEntity): void {
+        try {
+            const key = CompositeKey.FromID(task.ID);
+            this.navigationService.OpenEntityRecord('MJ: Tasks', key);
+        } catch (err) {
+            LogError(`FormBuilderResource.OnChatTaskClicked: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Chat-area emitted `artifactLinkClicked` — user clicked an artifact
+     * link inside a message. Conversation-type links point at another
+     * conversation in main Chat; collection-type links point at a
+     * collection. Both route into the main Chat / Collections app via
+     * NavigationService so the artifact opens in its native context
+     * (the cockpit is form-authoring focused, not the right surface to
+     * render arbitrary artifacts inline).
+     */
+    public OnChatArtifactLinkClicked(event: { type: 'conversation' | 'collection'; id: string }): void {
+        const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
+        const paramKey = event.type === 'conversation' ? 'conversationId' : 'collectionId';
+        void this.navigationService.OpenNavItemByName(navItemName, { [paramKey]: event.id });
+    }
+
+    /** Chat-area emitted `conversationRenamed` — purely informational for the cockpit (no convo list to animate). */
+    public OnChatConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+        // Mirror the locally-held conversation reference so the header
+        // title in the chat-area stays in sync if we ever re-render. The
+        // chat-area updates its own title via the conversation entity,
+        // but we keep this hook here for parity with the workspace shell.
+        if (this.ChatConversation && this.ChatConversation.ID === event.conversationId) {
+            this.ChatConversation.Name = event.name;
+            if (event.description !== undefined) {
+                this.ChatConversation.Description = event.description;
+            }
+            this.cdr.markForCheck();
+        }
+    }
+
+    /** Thread drill-down: chat-area opened a sub-thread. Track ID so the chat-area renders it. */
+    public OnChatThreadOpened(threadId: string): void {
+        this.ChatThreadId = threadId;
+        this.cdr.markForCheck();
+    }
+
+    /** Thread drill-down: chat-area closed the sub-thread. Clear ID. */
+    public OnChatThreadClosed(): void {
+        this.ChatThreadId = null;
+        this.cdr.markForCheck();
+    }
+
+    /** Pending artifact handed off to the chat-area (e.g. via deep link) has been consumed. */
+    public OnChatPendingArtifactConsumed(): void {
+        this.ChatPendingArtifactId = null;
+        this.ChatPendingArtifactVersionNumber = null;
         this.cdr.markForCheck();
     }
 
@@ -926,22 +1265,132 @@ export class FormBuilderResourceComponent
      * the bound entity's name. Used by `OnFormPicked` to recover the target
      * entity for forms that have been activated against a real entity.
      */
+    /**
+     * Override metadata for the active form — captured at form-load time so
+     * the agent context can carry it inline (no `Get Active Form For Entity`
+     * round-trip needed). The Form Builder agent prompt's lifecycle rules
+     * branch on whether an active override exists and what its scope/status
+     * is; passing this snapshot upfront lets the agent jump straight to
+     * `Modify Interactive Form` instead of guessing.
+     */
+    public ActiveOverrideID: string | null = null;
+    public ActiveOverrideScope: string | null = null;
+    public ActiveOverrideStatus: string | null = null;
+
+    /** Whether the cockpit's override-status popover is open. */
+    public OverrideStatusPickerOpen = false;
+    /** Inline saving flag — disables the picker buttons mid-save. */
+    public OverrideStatusSaving = false;
+
+    /**
+     * Allowed values for `EntityFormOverride.Status` mirrored from the
+     * DB CHECK constraint / EntityFieldValue rows. Hardcoded for two
+     * reasons: (a) they're stable schema enums, and (b) the picker UI
+     * needs them statically to render labels + icons without round-trip.
+     */
+    public readonly OverrideStatusOptions: ReadonlyArray<{
+        value: 'Active' | 'Inactive' | 'Pending';
+        label: string;
+        description: string;
+        icon: string;
+    }> = [
+        { value: 'Active',   label: 'Active',   icon: 'fa-solid fa-circle-check',  description: 'Eligible for resolution — users see this form.' },
+        { value: 'Inactive', label: 'Inactive', icon: 'fa-solid fa-circle-pause',  description: 'Ignored by the resolver — users fall back to the next match.' },
+        { value: 'Pending',  label: 'Pending',  icon: 'fa-solid fa-hourglass-half', description: 'AI-authored, awaiting human activation. Resolver treats as Inactive.' },
+    ];
+
+    /** Toggle the override status popover. No-op when no override is loaded. */
+    public ToggleOverrideStatusPicker(): void {
+        if (!this.ActiveOverrideID) return;
+        this.OverrideStatusPickerOpen = !this.OverrideStatusPickerOpen;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Persist a new status on the currently-loaded EntityFormOverride.
+     * Loads the entity, sets the status, saves, then mirrors the new
+     * value onto the cockpit's local snapshot fields so the agent
+     * context + UI stay in sync. The BaseEntity event subscription
+     * above will also fire as a side effect, but our local guard
+     * (`ActiveOverrideStatus` already up to date) keeps the cockpit
+     * from triggering a spurious refresh.
+     */
+    public async OnOverrideStatusPicked(next: 'Active' | 'Inactive' | 'Pending'): Promise<void> {
+        if (!this.ActiveOverrideID || this.ActiveOverrideStatus === next) {
+            this.OverrideStatusPickerOpen = false;
+            this.cdr.markForCheck();
+            return;
+        }
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user) {
+            this.notifications.CreateSimpleNotification(
+                'No provider or user — cannot update status.', 'error', 4000);
+            return;
+        }
+        this.OverrideStatusSaving = true;
+        this.cdr.markForCheck();
+        try {
+            const override = await provider.GetEntityObject<MJEntityFormOverrideEntity>(
+                'MJ: Entity Form Overrides', user);
+            const loaded = await override.Load(this.ActiveOverrideID);
+            if (!loaded) {
+                this.notifications.CreateSimpleNotification(
+                    'Could not load override row.', 'error', 4000);
+                return;
+            }
+            override.Status = next;
+            const saved = await override.Save();
+            if (!saved) {
+                this.notifications.CreateSimpleNotification(
+                    override.LatestResult?.CompleteMessage ?? 'Save failed.',
+                    'error', 5000);
+                return;
+            }
+            this.ActiveOverrideStatus = next;
+            this.OverrideStatusPickerOpen = false;
+            this.registerAgentContext(); // push updated status into agent context
+            this.notifications.CreateSimpleNotification(
+                `Override is now ${next}.`, 'success', 3000);
+        } catch (err) {
+            LogError(`FormBuilderResource.OnOverrideStatusPicked: ${err instanceof Error ? err.message : String(err)}`);
+            this.notifications.CreateSimpleNotification(
+                `Failed to update status: ${err instanceof Error ? err.message : String(err)}`,
+                'error', 5000);
+        } finally {
+            this.OverrideStatusSaving = false;
+            this.cdr.markForCheck();
+        }
+    }
+
     private async lookupEntityForComponent(componentID: string): Promise<string | null> {
         const provider = this.provider;
         if (!provider) return null;
         const rv = RunView.FromMetadataProvider(provider);
-        const result = await rv.RunView<{ EntityID: string }>({
+        // Pull the override row's full identity (ID + EntityID + Scope +
+        // Status) in one shot so callers also get the OverrideID snapshot
+        // for the agent context. Top-1 by created-at DESC matches the prior
+        // behavior — the most recently-stamped override for this Component.
+        const result = await rv.RunView<{ ID: string; EntityID: string; Scope: string; Status: string }>({
             EntityName: 'MJ: Entity Form Overrides',
-            Fields: ['EntityID'],
+            Fields: ['ID', 'EntityID', 'Scope', 'Status'],
             ExtraFilter: `ComponentID='${componentID}'`,
             OrderBy: '__mj_CreatedAt DESC',
             MaxRows: 1,
             ResultType: 'simple',
             BypassCache: true,
         }, this.currentUser ?? undefined);
-        const entityID = result.Success ? result.Results?.[0]?.EntityID : null;
-        if (!entityID) return null;
-        const entityInfo = provider.Entities?.find(e => UUIDsEqual(e.ID, entityID));
+        const row = result.Success ? result.Results?.[0] : null;
+        if (!row) {
+            this.ActiveOverrideID = null;
+            this.ActiveOverrideScope = null;
+            this.ActiveOverrideStatus = null;
+            return null;
+        }
+        this.ActiveOverrideID = row.ID ?? null;
+        this.ActiveOverrideScope = row.Scope ?? null;
+        this.ActiveOverrideStatus = row.Status ?? null;
+        const entityInfo = provider.Entities?.find(e => UUIDsEqual(e.ID, row.EntityID));
         return entityInfo?.Name ?? null;
     }
 
@@ -1432,6 +1881,45 @@ export class FormBuilderResourceComponent
         this.cdr.markForCheck();
     }
 
+    /**
+     * Compact list of the active entity's relationships, used to seed
+     * the agent's context so it knows which related entities are
+     * available to link to this form (sub-tables, lookups, etc.).
+     *
+     * Intentionally **summary-only** — name, relationship type, and
+     * join fields. Full schemas for any related entity are still a
+     * single `Get Entity Schema For Form` tool call away. Keeping this
+     * list compact (~20-50 entries × ~80 chars = a few KB) avoids
+     * token bloat while still giving the agent enough to plan without
+     * asking the user "what entity links to this?".
+     */
+    private buildRelatedEntitiesSummary(): ReadonlyArray<{
+        RelatedEntity: string;
+        Type: string;
+        EntityKeyField: string | null;
+        RelatedEntityJoinField: string | null;
+        DisplayName?: string;
+    }> {
+        const provider = this.provider;
+        if (!provider || !this.TargetEntityName) return [];
+        const entity = provider.EntityByName?.(this.TargetEntityName);
+        if (!entity) return [];
+        const rels = entity.RelatedEntities ?? [];
+        return rels.map(r => {
+            // Resolve RelatedEntity name from the ID. EntityRelationshipInfo
+            // doesn't carry the friendly name directly; look it up from
+            // the provider's cached entity list.
+            const related = provider.Entities?.find(e => e.ID === r.RelatedEntityID);
+            return {
+                RelatedEntity: related?.Name ?? '(unknown)',
+                Type: r.Type ?? 'One-to-Many',
+                EntityKeyField: r.EntityKeyField ?? null,
+                RelatedEntityJoinField: r.RelatedEntityJoinField ?? null,
+                DisplayName: r.DisplayName ?? undefined,
+            };
+        });
+    }
+
     private registerAgentContext(): void {
         try {
             const ctx: Record<string, unknown> = {
@@ -1441,6 +1929,33 @@ export class FormBuilderResourceComponent
                         FormName: this.SelectedFormName,
                         SectionCount: this.Canvas?.sections.length ?? 0,
                         IsDirty: this.DirtyFlag,
+                        // Identity of the currently-loaded Component +
+                        // EntityFormOverride row, so the Form Builder
+                        // agent can call `Modify Interactive Form` with
+                        // the right OverrideID immediately — instead of
+                        // calling `Create Interactive Form` and getting
+                        // ALREADY_EXISTS, or having to round-trip through
+                        // `Get Active Form For Entity` first. Null when
+                        // the cockpit is mid-creation of a new form.
+                        ComponentID: this.SelectedFormID,
+                        OverrideID: this.ActiveOverrideID,
+                        OverrideScope: this.ActiveOverrideScope,
+                        OverrideStatus: this.ActiveOverrideStatus,
+                        // Curated, LLM-friendly schema for the entity this
+                        // form binds to (resolved FKs, value-list enums,
+                        // stripped audit fields). Pre-built when the form
+                        // loaded — see `buildCuratedFormSchema`. Including
+                        // it inline means the agent doesn't have to spend
+                        // a tool-call turn fetching schema for the obvious
+                        // entity it's editing.
+                        Schema: this.Schema ?? null,
+                        // Lightweight relationship summary — just enough
+                        // for the agent to know what related-entity tables
+                        // / lookups / sub-forms it COULD add to this form.
+                        // Full schemas for any of these are still one
+                        // `Get Entity Schema For Form` action call away;
+                        // we keep this list compact to avoid token bloat.
+                        RelatedEntities: this.buildRelatedEntitiesSummary(),
                     }
                     : null,
             };

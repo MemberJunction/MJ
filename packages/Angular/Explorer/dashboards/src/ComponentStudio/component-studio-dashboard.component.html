@@ -192,16 +192,14 @@
       }
     </div>
 
-    <!-- Resize Handle: Center <-> Right -->
-    @if (!state.IsAIPanelCollapsed) {
+    <!-- Right panel — only renders when the user has actively selected a
+         component (form palette OR AI assistant). Showing an empty chat
+         against no component is more noise than help, so we collapse the
+         whole pane in that case. The collapse-button state is still
+         honored: user can also explicitly hide. -->
+    @if (!state.IsAIPanelCollapsed && state.SelectedComponent) {
+      <!-- Resize Handle: Center <-> Right -->
       <div class="resize-handle" (mousedown)="OnRightResizeStart($event)"></div>
-    }
-
-    <!-- Right Panel: Field palette + property inspector for form-role
-         Components, else AI Assistant. The Form Builder tab in the editor
-         strip is the canvas surface; this panel is its palette/inspector
-         sidekick. Everything non-form falls through to the AI panel. -->
-    @if (!state.IsAIPanelCollapsed) {
       <div class="panel panel-right" [style.width.px]="rightPanelWidth">
         @if (IsFormRoleComponent) {
           <mj-form-builder-right-panel

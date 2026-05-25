@@ -15,6 +15,7 @@
       "RetryStrategy": "Fixed",
       "PromptRole": "System",
       "PromptPosition": "First",
+      "EffortLevel": 1,
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
@@ -22,46 +23,91 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Opus 4.7",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "Priority": 1
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 60
           },
           "primaryKey": {
             "ID": "AE1C4554-DEB0-403C-AA8D-CBB170E14258"
           },
           "sync": {
-            "lastModified": "2026-05-25T15:38:17.604Z",
-            "checksum": "573eddfe69caff97996e60f9f4b6c5729ec6b61a35b50f62441cdc3553a01997"
+            "lastModified": "2026-05-25T20:13:26.682Z",
+            "checksum": "16f27391a2596ae6ed79504326f571be3b9c68507bd4a2a463ce0f8d4beb83de"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 2
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 50
           },
           "primaryKey": {
             "ID": "55B110E4-5F23-4594-B1EF-936ABD0C4336"
           },
           "sync": {
-            "lastModified": "2026-05-25T15:38:17.618Z",
-            "checksum": "01e36c8872a50dfa8f8f93dff375bfa034eb7bab08bee197c41d86c56a5ba862"
+            "lastModified": "2026-05-25T20:13:26.697Z",
+            "checksum": "7d72370681dbe2be1da15ae0ace5946b42bc2333676b2cc61c21d09f7b428048"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Pro",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 3
+            "Priority": 40
           },
           "primaryKey": {
             "ID": "CEB719E9-84E2-4F10-BB06-AB9C6B43DA41"
           },
           "sync": {
-            "lastModified": "2026-05-25T15:38:17.629Z",
-            "checksum": "cff60e36f7f4ff663b3854f0bd36f6a96382b9968d415e445ffde7b980c17940"
+            "lastModified": "2026-05-25T20:13:26.710Z",
+            "checksum": "615128d192595828b88cdc4cf766079c8c7213bed7943341483c163c9347c42a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 30
+          },
+          "primaryKey": {
+            "ID": "AE953F11-45CB-458E-83AA-95AFF4F4FB4A"
+          },
+          "sync": {
+            "lastModified": "2026-05-25T20:13:26.619Z",
+            "checksum": "8057f709db4fa3ae7d500b0c7f7bed66cb6d0c7e953fb85a9f69c62c1920d2c3"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 4.6",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "E3C51192-DBC7-402F-8B7F-953DEE953D23"
+          },
+          "sync": {
+            "lastModified": "2026-05-25T20:13:26.636Z",
+            "checksum": "c15669351856c2c2e3416ecc431ae12edb52d7c8a4e121443ca888a239f5684a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "4101D16A-02FD-44FC-BCCD-DA85AF8C5916"
+          },
+          "sync": {
+            "lastModified": "2026-05-25T20:13:26.651Z",
+            "checksum": "37f43da54f681af5bd4b1bb3c532e67781777c2ce76f43e55894336bf84554de"
           }
         }
       ]
@@ -70,8 +116,8 @@
       "ID": "7BC3C3EE-FDBD-4D83-96BD-69F846D040FD"
     },
     "sync": {
-      "lastModified": "2026-05-25T15:38:17.531Z",
-      "checksum": "46e7e7eaec28092f5822b7946260e2e6e4de5c2f2faea788726ea8ee635a0803"
+      "lastModified": "2026-05-25T20:22:14.428Z",
+      "checksum": "29dab0a5d604a6c2516e3e8a100d83ae39c84fb7aa55c4053837f05cffb3563c"
     }
   }
 ]

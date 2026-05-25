@@ -2,6 +2,7 @@ import { Injectable, Type } from '@angular/core';
 import { IMetadataProvider, RunView, UserInfo, EntityInfo, LogError } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
  * Slim row shape for an `EntityFormOverride` lookup. Resolution doesn't need
@@ -29,7 +30,20 @@ export type FormResolution =
     | { kind: 'class'; subClass: Type<BaseFormComponent>; variants: EntityFormOverrideRow[] }
     | { kind: 'none'; variants: EntityFormOverrideRow[] };
 
-const VARIANT_STORAGE_PREFIX = 'mj.formVariant.';
+/**
+ * UserInfoEngine setting-key prefix for per-user, per-entity form-variant
+ * preferences. Persisted to `MJ: User Settings` so the choice follows the
+ * user across browsers and devices — localStorage is intentionally NOT used.
+ *
+ * Key format: `mj.formVariant.<entityname-lowercased>`.
+ *
+ * Value is one of:
+ *   - an `EntityFormOverride.ID` (UUID) → use that specific override
+ *   - {@link FormResolverService.EXPLICIT_DEFAULT_SENTINEL} → user picked
+ *     the CodeGen Angular fallback explicitly; resolver skips all overrides
+ *   - (key absent) → no preference, apply auto-pick rules
+ */
+const VARIANT_SETTING_PREFIX = 'mj.formVariant.';
 
 /**
  * Picks the form to render for an entity record and exposes the full list of
@@ -89,25 +103,70 @@ export class FormResolverService {
     }
 
     /**
-     * Persist the user's variant choice for an entity. Session-local
-     * (localStorage). Pass `null` to clear the selection and revert to the
-     * default-picking rules.
+     * Sentinel stored in localStorage when the user **explicitly picks the
+     * "Default form"** option from the variant picker. Distinct from a
+     * missing localStorage key (= "no preference, use auto-pick rules")
+     * and from an override UUID. Without this sentinel, picking "Default"
+     * cleared the preference and `pickActive` re-applied the auto-pick —
+     * which always selects the first Active override, making the
+     * CodeGen/Angular fallback unreachable from the UI.
+     *
+     * Format: a leading `__` makes it visually distinct from a UUID and
+     * impossible to collide with one (UUIDs don't contain underscores).
      */
-    SetSelectedVariant(entityName: string, overrideID: string | null): void {
-        if (typeof window === 'undefined' || !window.localStorage) return;
-        const key = VARIANT_STORAGE_PREFIX + entityName.toLowerCase();
-        if (overrideID) {
-            window.localStorage.setItem(key, overrideID);
-        } else {
-            window.localStorage.removeItem(key);
-        }
+    public static readonly EXPLICIT_DEFAULT_SENTINEL = '__codegen-default__';
+
+    /**
+     * Build the per-entity setting key. Lowercased so case variants of
+     * the entity name collapse onto a single record in `MJ: User Settings`.
+     */
+    private settingKey(entityName: string): string {
+        return VARIANT_SETTING_PREFIX + entityName.toLowerCase();
     }
 
-    /** Read a previously-saved variant choice for the entity, or null. */
+    /**
+     * Persist a specific override choice. Pass the override UUID. Writes
+     * via `UserInfoEngine.SetSettingDebounced` so rapid successive picks
+     * don't hammer the DB. Use {@link SetExplicitDefault} to record "user
+     * wants the CodeGen Angular fallback" and {@link ClearSelectedVariant}
+     * to wipe the preference entirely (revert to auto-pick).
+     */
+    SetSelectedVariant(entityName: string, overrideID: string): void {
+        UserInfoEngine.Instance.SetSettingDebounced(this.settingKey(entityName), overrideID);
+    }
+
+    /**
+     * Record that the user explicitly picked the "Default form" row in
+     * the picker. `pickActive` reads this sentinel and returns null even
+     * when Active overrides exist for the entity, so the form-loading
+     * path falls back to CodeGen's `@RegisterClass` lookup.
+     */
+    SetExplicitDefault(entityName: string): void {
+        UserInfoEngine.Instance.SetSettingDebounced(
+            this.settingKey(entityName),
+            FormResolverService.EXPLICIT_DEFAULT_SENTINEL,
+        );
+    }
+
+    /**
+     * Wipe the user's stored preference for this entity. Next load
+     * applies the auto-pick rules (first Active override in tier order).
+     * Called internally when a saved override ID is no longer valid.
+     * Fire-and-forget — the resolver doesn't need to await the delete.
+     */
+    ClearSelectedVariant(entityName: string): void {
+        void UserInfoEngine.Instance.DeleteSetting(this.settingKey(entityName))
+            .catch(err => LogError(`FormResolverService.ClearSelectedVariant: ${err instanceof Error ? err.message : String(err)}`));
+    }
+
+    /**
+     * Read the user's previously-saved variant choice for the entity.
+     * Synchronous because `UserInfoEngine` keeps the user-settings table
+     * in memory after bootstrap. Returns the stored UUID, the explicit-
+     * default sentinel, or null when no preference exists.
+     */
     GetSelectedVariant(entityName: string): string | null {
-        if (typeof window === 'undefined' || !window.localStorage) return null;
-        const key = VARIANT_STORAGE_PREFIX + entityName.toLowerCase();
-        return window.localStorage.getItem(key) || null;
+        return UserInfoEngine.Instance.GetSetting(this.settingKey(entityName)) ?? null;
     }
 
     // ── internals ────────────────────────────────────────────────────────
@@ -161,10 +220,13 @@ export class FormResolverService {
      * and the user's stored selection (if any).
      *
      * Selection rules:
-     *   - If the user has a saved variant ID for this entity AND that variant
-     *     is in the applicable list AND it's Active → use it.
-     *   - Else → first Active row in tier+priority order (the original
-     *     default-picking behaviour).
+     *   - If the user explicitly picked the "Default form" row in the
+     *     variant picker (sentinel in localStorage) → return null so the
+     *     form-loading path falls back to CodeGen's `@RegisterClass` lookup.
+     *     This is what makes the Angular fallback reachable from the UI.
+     *   - Else if the user has a saved variant ID AND that variant is in
+     *     the applicable list AND it's Active → use it.
+     *   - Else → first Active row in tier+priority order (auto-pick).
      *   - Else → null (fall back to CodeGen/@RegisterClass path).
      */
     private pickActive(
@@ -172,11 +234,14 @@ export class FormResolverService {
         variants: EntityFormOverrideRow[],
     ): EntityFormOverrideRow | null {
         const selectedID = this.GetSelectedVariant(entity.Name);
+        if (selectedID === FormResolverService.EXPLICIT_DEFAULT_SENTINEL) {
+            return null;
+        }
         if (selectedID) {
             const sel = variants.find(v => v.Status === 'Active' && UUIDsEqual(v.ID, selectedID));
             if (sel) return sel;
-            // Selection no longer valid — clear it so future loads use the default
-            this.SetSelectedVariant(entity.Name, null);
+            // Selection no longer valid — wipe it so future loads auto-pick.
+            this.ClearSelectedVariant(entity.Name);
         }
         return variants.find(v => v.Status === 'Active') ?? null;
     }

@@ -726,6 +726,48 @@
                   "lastModified": "2026-05-25T15:38:26.641Z",
                   "checksum": "0c305464740d2a349af2d504472025b786237a343dd8f3a11e1250b2bad12840"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Get Active Form For Entity",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "98C3673E-32FE-420C-B142-422918EBAD84"
+                },
+                "sync": {
+                  "lastModified": "2026-05-25T20:29:27.243Z",
+                  "checksum": "19c8adea0c304dbfcd561a26794032595bcaec6b25ce30df892ce4a64814b200"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Modify Interactive Form",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B4C0D786-A85C-43D3-8E4B-4E615F4DAB0F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-25T20:29:27.257Z",
+                  "checksum": "2ab655b803d8f080f79be871272f6d7735ec213693c585f758b07624776e45dd"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:MJ: Actions.Name=Revert Interactive Form",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0103C6F6-FEEA-4FFD-A955-1BD71276016B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-25T20:29:27.268Z",
+                  "checksum": "80b7e975ada3f700220c7de9052d8af846bea49d83cda078a723e0e9c440526c"
+                }
               }
             ],
             "MJ: AI Agent Modalities": [

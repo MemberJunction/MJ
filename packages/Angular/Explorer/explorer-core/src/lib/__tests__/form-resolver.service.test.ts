@@ -10,17 +10,24 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ----- Module mocks -------------------------------------------------------
 
-// Vitest env is 'node' for this package — no browser globals. Stub a minimal
-// in-memory localStorage so the resolver's session-selection paths work.
-const storageBacking: Record<string, string> = {};
-const localStorageStub = {
-    getItem: (k: string) => storageBacking[k] ?? null,
-    setItem: (k: string, v: string) => { storageBacking[k] = v; },
-    removeItem: (k: string) => { delete storageBacking[k]; },
-    clear: () => { for (const k of Object.keys(storageBacking)) delete storageBacking[k]; },
-};
-(globalThis as unknown as { window?: { localStorage: typeof localStorageStub } }).window =
-    { localStorage: localStorageStub };
+// Mock UserInfoEngine — the resolver's variant preferences now persist via
+// the user-settings table (cross-device, cross-browser) instead of
+// localStorage. In-memory map mirrors the engine's cache behavior.
+const settingsBacking: Record<string, string> = {};
+vi.mock('@memberjunction/core-entities', () => ({
+    UserInfoEngine: {
+        Instance: {
+            GetSetting: (key: string) => settingsBacking[key],
+            SetSettingDebounced: (key: string, value: string) => {
+                settingsBacking[key] = value;
+            },
+            DeleteSetting: async (key: string) => {
+                delete settingsBacking[key];
+                return true;
+            },
+        },
+    },
+}));
 
 vi.mock('@angular/core', () => ({
     Injectable: () => (target: Function) => target,
@@ -89,6 +96,7 @@ beforeEach(async () => {
     runViewCalls.length = 0;
     runViewResponse = { Success: true, Results: [] };
     classFactoryReg = null;
+    for (const k of Object.keys(settingsBacking)) delete settingsBacking[k];
     vi.clearAllMocks();
     const mod = await import('../services/form-resolver.service');
     service = new mod.FormResolverService();
@@ -232,11 +240,23 @@ describe('FormResolverService session-local variant selection', () => {
         expect(service.GetSelectedVariant(entity.Name)).toBeNull();
     });
 
-    it('SetSelectedVariant(name, null) clears the stored choice', () => {
+    it('ClearSelectedVariant wipes the stored choice', () => {
         service.SetSelectedVariant(entity.Name, 'v1');
         expect(service.GetSelectedVariant(entity.Name)).toBe('v1');
-        service.SetSelectedVariant(entity.Name, null);
+        service.ClearSelectedVariant(entity.Name);
         expect(service.GetSelectedVariant(entity.Name)).toBeNull();
+    });
+
+    it('SetExplicitDefault stores the sentinel so pickActive returns null even when Active overrides exist', async () => {
+        // Hardcoded — matches FormResolverService.EXPLICIT_DEFAULT_SENTINEL.
+        const SENTINEL = '__codegen-default__';
+        service.SetExplicitDefault(entity.Name);
+        expect(service.GetSelectedVariant(entity.Name)).toBe(SENTINEL);
+        runViewResponse = { Success: true, Results: [overrideRow({ ID: 'v-active', Scope: 'Global', Status: 'Active' })] };
+        const result = await service.ResolveFormForEntity(entity, user({}), provider);
+        // Even with an Active override in the variants list, the sentinel
+        // forces a fall-through to the CodeGen / Angular fallback.
+        expect(result.kind).not.toBe('interactive');
     });
 
     it('is case-insensitive on the entity name', () => {

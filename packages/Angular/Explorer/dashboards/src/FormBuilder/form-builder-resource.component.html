@@ -77,9 +77,21 @@
                     [class.active]="form.ID === SelectedFormID"
                     (click)="OnFormPicked(form)">
               <div class="fb-rail-item-name">{{ form.Name }}</div>
-              @if (form.Status) {
+              <!-- Badge shows the CURRENT USER's override status on this
+                   Component (Active / Inactive / Pending) — matches the
+                   top-bar status pill so the two surfaces line up. We
+                   intentionally don't show Component.Status here; that's
+                   a separate axis (Draft/Published/Deprecated) the
+                   runtime doesn't read. -->
+              @if (form.OverrideStatus) {
                 <div class="fb-rail-item-meta">
-                  <span class="fb-rail-badge" [class.is-active]="form.Status === 'Published'">{{ form.Status }}</span>
+                  <span class="fb-rail-badge"
+                        [class.fb-rail-badge--active]="form.OverrideStatus === 'Active'"
+                        [class.fb-rail-badge--inactive]="form.OverrideStatus === 'Inactive'"
+                        [class.fb-rail-badge--pending]="form.OverrideStatus === 'Pending'">
+                    <i class="fa-solid fa-circle-dot"></i>
+                    {{ form.OverrideStatus }}
+                  </span>
                 </div>
               }
             </button>
@@ -193,6 +205,42 @@
         }
       </div>
 
+      <!-- Override status pill — only meaningful when an existing
+           override is loaded. Controls EntityFormOverride.Status
+           (Active / Inactive / Pending). The forms-runtime resolver
+           reads this to decide whether to use this form for the user. -->
+      @if (ActiveOverrideID && ActiveOverrideStatus) {
+        <div class="fb-status-picker" [class.open]="OverrideStatusPickerOpen">
+          <button type="button"
+                  class="fb-status-pill"
+                  [class.fb-status-pill--active]="ActiveOverrideStatus === 'Active'"
+                  [class.fb-status-pill--inactive]="ActiveOverrideStatus === 'Inactive'"
+                  [class.fb-status-pill--pending]="ActiveOverrideStatus === 'Pending'"
+                  [disabled]="OverrideStatusSaving"
+                  (click)="ToggleOverrideStatusPicker()"
+                  [title]="'Override status: ' + ActiveOverrideStatus + ' — click to change'">
+            <i class="fa-solid fa-circle-dot"></i>
+            <span>{{ ActiveOverrideStatus }}</span>
+            <i class="fa-solid fa-chevron-down chev"></i>
+          </button>
+          @if (OverrideStatusPickerOpen) {
+            <div class="fb-status-popover" (click)="$event.stopPropagation()">
+              @for (opt of OverrideStatusOptions; track opt.value) {
+                <button type="button"
+                        class="fb-status-option"
+                        [class.fb-status-option--selected]="ActiveOverrideStatus === opt.value"
+                        [disabled]="OverrideStatusSaving"
+                        (click)="OnOverrideStatusPicked(opt.value)">
+                  <i [class]="opt.icon"></i>
+                  <span class="fb-status-option-label">{{ opt.label }}</span>
+                  <span class="fb-status-option-desc">{{ opt.description }}</span>
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
+
       <span class="fb-spacer"></span>
 
       <!-- Center-pane view-mode segmented control -->
@@ -213,11 +261,22 @@
                 (click)="SetCenterPaneMode('code')">
           <i class="fa-solid fa-code"></i> Code
         </button>
+        <!-- Layout tab is disabled when the code has diverged from what
+             the canvas can represent (hand-authored JSX, computed
+             constructs, etc.). The canvas can't safely round-trip such
+             code, so editing on Layout and re-emitting would overwrite
+             the user's hand-written bits. CanvasDiverged is set by
+             `parseCanvasFromCode` when it sees `hasUnknownConstructs`
+             or a parse failure. -->
         <button type="button"
                 role="tab"
                 class="fb-modeseg-btn"
                 [class.active]="CenterPaneMode === 'layout'"
                 [attr.aria-selected]="CenterPaneMode === 'layout'"
+                [disabled]="CanvasDiverged"
+                [title]="CanvasDiverged
+                    ? 'Layout is disabled — the form has hand-authored code the drag-drop canvas cannot round-trip. Edit in Code instead.'
+                    : 'Drag-and-drop canvas editor'"
                 (click)="SetCenterPaneMode('layout')">
           <i class="fa-solid fa-table-cells"></i> Layout
         </button>
@@ -293,7 +352,7 @@
                 } @else if (PreviewSearchTerm.length > 0) {
                   <div class="fb-preview-picker-empty">No matches.</div>
                 } @else {
-                  <div class="fb-preview-picker-empty">Start typing to search.</div>
+                  <div class="fb-preview-picker-empty">No records in this entity.</div>
                 }
               </div>
             }
@@ -394,7 +453,11 @@
        wraps). Collapses to a strip rendered OUTSIDE the splitter so the
        drag handle doesn't appear next to a collapsed pane.
        ══════════════════════════════════════════════════════════════════ -->
-  @if (!ChatPaneCollapsed) {
+  <!-- Chat pane only renders when a form is actively being shown. Empty
+       cockpit (no form selected, no "New Form" in progress) hides the
+       chat surface entirely so we don't show an agent shell against no
+       subject. The collapsed strip below is gated on the same flag. -->
+  @if (!ChatPaneCollapsed && HasActiveForm) {
   <as-split-area [size]="ChatPanePct" [minSize]="15">
   <aside class="fb-chat-pane">
     <div class="fb-rail-header">
@@ -455,9 +518,23 @@
             [showArtifactIndicator]="false"
             [appContext]="$any(ChatAppContext)"
             [defaultAgentId]="FormBuilderAgentId"
+            [showAgentPicker]="false"
+            [applicationScope]="'Application'"
+            [applicationId]="CockpitApplicationId"
+            [threadId]="ChatThreadId"
+            [pendingArtifactId]="ChatPendingArtifactId"
+            [pendingArtifactVersionNumber]="ChatPendingArtifactVersionNumber"
             [emptyStateGreeting]="'How can I help with this form?'"
             (conversationCreated)="OnChatConversationCreated($event)"
-            (pendingMessageConsumed)="OnChatPendingMessageConsumed()">
+            (pendingMessageConsumed)="OnChatPendingMessageConsumed()"
+            (openEntityRecord)="OnChatOpenEntityRecord($event)"
+            (navigationRequest)="OnChatNavigationRequest($event)"
+            (taskClicked)="OnChatTaskClicked($event)"
+            (artifactLinkClicked)="OnChatArtifactLinkClicked($event)"
+            (conversationRenamed)="OnChatConversationRenamed($event)"
+            (threadOpened)="OnChatThreadOpened($event)"
+            (threadClosed)="OnChatThreadClosed()"
+            (pendingArtifactConsumed)="OnChatPendingArtifactConsumed()">
           </mj-conversation-chat-area>
         } @else {
           <div class="fb-chat-context fb-chat-context--empty">
@@ -474,7 +551,7 @@
 
   <!-- Collapsed strip (chat). Same OUTSIDE-the-splitter pattern as the
        left rail's strip. -->
-  @if (ChatPaneCollapsed) {
+  @if (ChatPaneCollapsed && HasActiveForm) {
     <div class="fb-collapsed-strip" role="region" aria-label="Form Builder AI (collapsed)">
       <button class="fb-rail-collapse" type="button" (click)="ToggleChatPane()"
               aria-label="Expand Form Builder AI">

@@ -36,7 +36,30 @@ import { BaseFormComponent } from '../base-form-component';
 })
 export class InteractiveFormComponent extends BaseFormComponent implements OnInit, OnDestroy {
 
-    @Input() public override record!: BaseEntity;
+    /**
+     * The bound record. Backed by a setter so swapping records *after*
+     * the component has mounted (e.g. Form Builder cockpit preview record
+     * picker) triggers a fresh `originalSnapshot` capture + a
+     * `formHostProps` rebuild — without this, the React form keeps
+     * rendering the original record's values even after the input
+     * changes. Guarded on `_recordInitialized` so the post-mount path
+     * doesn't fire during the first input assignment (handled by
+     * `ngOnInit`, which sets both `originalSnapshot` and `formHostProps`).
+     */
+    private _record!: BaseEntity;
+    private _recordInitialized = false;
+
+    @Input()
+    public override set record(value: BaseEntity) {
+        if (this._record === value) return;
+        this._record = value;
+        if (this._recordInitialized && value) {
+            this.originalSnapshot = value.GetAll();
+            this.rebuildFormHostProps();
+            this.cdr.markForCheck();
+        }
+    }
+    public override get record(): BaseEntity { return this._record; }
 
     /**
      * The Component row ID resolved for this (entity, user, roles) tuple. Set
@@ -135,6 +158,12 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             this.originalSnapshot = this.record.GetAll();
             this.rebuildFormHostProps();
         }
+        // Mark init complete so the `record` setter rebuilds on subsequent
+        // input changes (post-mount record swaps from the Form Builder
+        // cockpit preview picker, etc.). Before this flag flips, the setter
+        // intentionally does nothing because ngOnInit already handles the
+        // initial assignment.
+        this._recordInitialized = true;
         // Direct-spec path (artifact viewer) takes precedence; DB fetch only
         // when no spec was supplied and we have an ID to look up.
         if (!this.componentSpec && this.ComponentID) {
