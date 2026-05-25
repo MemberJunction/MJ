@@ -1609,19 +1609,18 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
             : new Map<string, CachedRunViewResult | null>();
 
-        // Pre-build index Map for server results lookup to avoid O(N^2) complexity in the loop below
-        const serverResultsMap = new Map<number, RunViewWithCacheCheckResult<T>>();
+        // Pre-build index Map for server results lookup — avoids O(N^2) .find() scans below.
+        const serverResultsByViewIndex = new Map<number, RunViewWithCacheCheckResult<T>>();
         if (response.results) {
-            for (let i = 0; i < response.results.length; i++) {
-                const r = response.results[i];
-                serverResultsMap.set(r.viewIndex, r);
+            for (const r of response.results) {
+                serverResultsByViewIndex.set(r.viewIndex, r);
             }
         }
 
         // Process all results in parallel — 'current' entries now read from the
         // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, serverResultsMap.get(i), preResolvedCache, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, serverResultsByViewIndex.get(i), preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -2737,6 +2736,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param settings - Array of entity settings metadata
      * @returns Processed array of EntityInfo instances with all relationships established
      */
+    /**
+     * Groups items into a Map keyed by a NormalizeUUID-transformed value.
+     * Single-pass O(N) helper used to build pre-indexed lookup maps for
+     * metadata post-processing, replacing repeated O(N*M) filter scans.
+     */
+    private groupByNormalizedUUID<T>(items: T[], keyFn: (item: T) => string): Map<string, T[]> {
+        const map = new Map<string, T[]>();
+        for (const item of items) {
+            const key = NormalizeUUID(keyFn(item));
+            let list = map.get(key);
+            if (!list) {
+                list = [];
+                map.set(key, list);
+            }
+            list.push(item);
+        }
+        return map;
+    }
+
     protected PostProcessEntityMetadata(entities: any[], fields: any[], fieldValues: any[], permissions: any[], relationships: any[], settings: any[], organicKeys?: any[], organicKeyRelatedEntities?: any[]): any[] {
         const result: any[] = [];
 
@@ -2745,119 +2763,40 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
 
         if (fieldValues && fieldValues.length > 0) {
-            const fieldValuesMap = new Map<string, any[]>();
-            for (let i = 0; i < fieldValues.length; i++) {
-                const fv = fieldValues[i];
-                const key = NormalizeUUID(fv.EntityFieldID);
-                let list = fieldValuesMap.get(key);
-                if (!list) {
-                    list = [];
-                    fieldValuesMap.set(key, list);
-                }
-                list.push(fv);
-            }
-            for (let i = 0; i < fields.length; i++) {
-                const f = fields[i];
-                f.EntityFieldValues = fieldValuesMap.get(NormalizeUUID(f.ID)) || [];
+            const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
+            for (const f of fields) {
+                f.EntityFieldValues = fieldValuesByFieldId.get(NormalizeUUID(f.ID)) || [];
             }
         }
 
         // Link organic key related entities to their parent organic keys
         if (organicKeys && organicKeyRelatedEntities && organicKeyRelatedEntities.length > 0) {
-            const okreMap = new Map<string, any[]>();
-            for (let i = 0; i < organicKeyRelatedEntities.length; i++) {
-                const okre = organicKeyRelatedEntities[i];
-                const key = NormalizeUUID(okre.EntityOrganicKeyID);
-                let list = okreMap.get(key);
-                if (!list) {
-                    list = [];
-                    okreMap.set(key, list);
-                }
-                list.push(okre);
-            }
-            for (let i = 0; i < organicKeys.length; i++) {
-                const ok = organicKeys[i];
-                ok.EntityOrganicKeyRelatedEntities = okreMap.get(NormalizeUUID(ok.ID)) || [];
+            const okreByOrganicKeyId = this.groupByNormalizedUUID(organicKeyRelatedEntities, okre => okre.EntityOrganicKeyID);
+            for (const ok of organicKeys) {
+                ok.EntityOrganicKeyRelatedEntities = okreByOrganicKeyId.get(NormalizeUUID(ok.ID)) || [];
             }
         }
 
-        const fieldsMap = new Map<string, any[]>();
-        for (let i = 0; i < fields.length; i++) {
-            const f = fields[i];
-            const key = NormalizeUUID(f.EntityID);
-            let list = fieldsMap.get(key);
-            if (!list) {
-                list = [];
-                fieldsMap.set(key, list);
-            }
-            list.push(f);
-        }
+        const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
+        const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
+        const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
+        const settingsByEntityId = this.groupByNormalizedUUID(settings, s => s.EntityID);
+        const activeOrganicKeysByEntityId = organicKeys
+            ? this.groupByNormalizedUUID(organicKeys.filter(ok => ok.Status === 'Active'), ok => ok.EntityID)
+            : new Map<string, unknown[]>();
 
-        const permissionsMap = new Map<string, any[]>();
-        for (let i = 0; i < permissions.length; i++) {
-            const p = permissions[i];
-            const key = NormalizeUUID(p.EntityID);
-            let list = permissionsMap.get(key);
-            if (!list) {
-                list = [];
-                permissionsMap.set(key, list);
-            }
-            list.push(p);
-        }
-
-        const relationshipsMap = new Map<string, any[]>();
-        for (let i = 0; i < relationships.length; i++) {
-            const r = relationships[i];
-            const key = NormalizeUUID(r.EntityID);
-            let list = relationshipsMap.get(key);
-            if (!list) {
-                list = [];
-                relationshipsMap.set(key, list);
-            }
-            list.push(r);
-        }
-
-        const settingsMap = new Map<string, any[]>();
-        for (let i = 0; i < settings.length; i++) {
-            const s = settings[i];
-            const key = NormalizeUUID(s.EntityID);
-            let list = settingsMap.get(key);
-            if (!list) {
-                list = [];
-                settingsMap.set(key, list);
-            }
-            list.push(s);
-        }
-
-        const organicKeysMap = new Map<string, any[]>();
-        if (organicKeys) {
-            for (let i = 0; i < organicKeys.length; i++) {
-                const ok = organicKeys[i];
-                if (ok.Status === 'Active') {
-                    const key = NormalizeUUID(ok.EntityID);
-                    let list = organicKeysMap.get(key);
-                    if (!list) {
-                        list = [];
-                        organicKeysMap.set(key, list);
-                    }
-                    list.push(ok);
-                }
-            }
-        }
-
-        for (let i = 0; i < sortedEntities.length; i++) {
-            const e = sortedEntities[i];
+        for (const e of sortedEntities) {
             const entityIdKey = NormalizeUUID(e.ID);
 
-            const entityFields = fieldsMap.get(entityIdKey) || [];
+            const entityFields = fieldsByEntityId.get(entityIdKey) || [];
             e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
-            e.EntityPermissions = permissionsMap.get(entityIdKey) || [];
-            e.EntityRelationships = relationshipsMap.get(entityIdKey) || [];
-            e.EntitySettings = settingsMap.get(entityIdKey) || [];
+            e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
+            e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
+            e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];
 
             // Link active organic keys to the entity
             if (organicKeys) {
-                e.EntityOrganicKeys = organicKeysMap.get(entityIdKey) || [];
+                e.EntityOrganicKeys = activeOrganicKeysByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e));
         }

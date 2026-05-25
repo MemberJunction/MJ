@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { LocalCacheManager } from '../generic/localCacheManager';
 import { ProviderConfigDataBase, ILocalStorageProvider } from '../generic/interfaces';
-import { MJGlobal } from '@memberjunction/global';
+import { GetGlobalObjectStore } from '@memberjunction/global';
+
+function resetLocalCacheManager() {
+    const g = GetGlobalObjectStore();
+    delete g['___SINGLETON__LocalCacheManager'];
+}
 
 describe('Core Performance Optimizations', () => {
     describe('PostProcessEntityMetadata Map Lookups', () => {
@@ -158,14 +163,17 @@ describe('Core Performance Optimizations', () => {
                 }
             } as any;
 
-            // Reset singleton and initialize
-            const store = {};
-            vi.spyOn(MJGlobal.Instance, 'GetGlobalObjectStore').mockReturnValue(store);
+            // Reset the singleton via the global object store (canonical pattern used
+            // throughout the MJCore test suite). vi.spyOn doesn't work here because
+            // BaseSingleton resolves the store at construction time — if another test
+            // already instantiated LocalCacheManager, the spy would be a no-op and we'd
+            // be operating on shared state from a previous test.
+            resetLocalCacheManager();
             await LocalCacheManager.Instance.Initialize(mockStorageProvider, { enabled: true });
         });
 
         afterEach(() => {
-            vi.restoreAllMocks();
+            resetLocalCacheManager();
         });
 
         it('should correctly register and invalidate entity cache fingerprints using index lookups', async () => {

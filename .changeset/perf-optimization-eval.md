@@ -3,6 +3,6 @@
 ---
 
 Optimize metadata loading and caching performance in MJCore:
-- Group fields, values, permissions, settings, and organic keys in `PostProcessEntityMetadata` using Maps to reduce time complexity from $O(N \times M)$ to $O(N + M)$.
-- Pre-index batch results in `executeSmartCacheCheck` for direct Map lookups, optimizing lookup from $O(N^2)$ to $O(N)$.
-- Use a pre-populated reverse index Map in `InvalidateEntityCaches` to resolve fingerprints in $O(1)$ time rather than scanning the registry array.
+- Group fields, values, permissions, settings, and organic keys in `PostProcessEntityMetadata` using pre-indexed Maps, reducing the linking phase from `O(N × M)` to `O(N + M)`.
+- Pre-index batch results in `executeSmartCacheCheck` for direct Map lookups, reducing per-batch lookup cost from `O(N²)` to `O(N)`.
+- `InvalidateEntityCaches` now consults the existing entity→fingerprint reverse index (with remote-storage fallback) instead of linearly scanning the full cache registry, so invalidation cost scales with matched entries rather than total registry size.
