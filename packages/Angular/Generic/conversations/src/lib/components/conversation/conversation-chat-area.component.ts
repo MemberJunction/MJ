@@ -119,6 +119,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
   @Input() appContext: Record<string, unknown> | null = null;
 
+  /**
+   * Optional default agent ID for the conversation. Forwarded to
+   * `<mj-message-input>` as its `[defaultAgentId]` so the first message
+   * routes directly to this agent instead of Sage. See
+   * `MessageInputComponent.routeMessage` priority rules — explicit
+   * @mention and prior-agent continuity still take precedence.
+   *
+   * Embedded chat surfaces (Form Builder cockpit, future domain chats)
+   * set this to the specialist agent's ID; the main Chat app leaves it
+   * unset to preserve the Sage-fronted UX.
+   */
+  @Input() defaultAgentId: string | null = null;
+
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() emptyStateGreeting: string = 'How can I help you?';
 

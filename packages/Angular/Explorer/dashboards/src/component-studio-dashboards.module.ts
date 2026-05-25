@@ -12,6 +12,14 @@ import { MarkdownModule } from '@memberjunction/ng-markdown';
 // cockpit's Preview tab. The cockpit binds a working spec + a real Top-1
 // record into it so the user sees the form rendering live as they edit.
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
+// ConversationsModule supplies <mj-conversation-chat-area> — the same
+// interior component the floating chat overlay wraps. The Form Builder
+// cockpit's right-pane AI surface mounts this directly instead of routing
+// through the overlay (per user feedback: chat should live in-pane).
+import { ConversationsModule } from '@memberjunction/ng-conversations';
+// angular-split for the cockpit's resizable 3-pane shell (forms-list /
+// center / chat-embed). Sizes persisted via UserInfoEngine.
+import { AngularSplitModule } from 'angular-split';
 
 // Component Studio Components
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
@@ -78,6 +86,8 @@ import { FormBuilderResourceComponent } from './FormBuilder/form-builder-resourc
     SharedGenericModule,
     MarkdownModule,
     BaseFormsModule,
+    ConversationsModule,
+    AngularSplitModule,
     MJButtonDirective,
     MJDialogComponent,
     MJDialogTitlebarComponent,

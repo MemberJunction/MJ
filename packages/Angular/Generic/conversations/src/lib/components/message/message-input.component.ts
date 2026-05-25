@@ -50,6 +50,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() emptyStateMode: boolean = false; // When true, emits emptyStateSubmit instead of creating messages directly
   @Input() appContext: Record<string, unknown> | null = null; // Application context for AI agent awareness
 
+  /**
+   * Optional default agent ID for the conversation. When set, the FIRST
+   * message routes directly to this agent — skipping Sage's default
+   * delegation — provided the user did not @mention a different agent
+   * and there is no prior agent in the conversation history. After the
+   * first message, the existing "last non-Sage agent" continuity rule
+   * keeps subsequent messages on the same agent.
+   *
+   * Used by embedded chat surfaces (Form Builder cockpit, future
+   * domain-specific chats) that have an obvious specialist agent for the
+   * context and don't need Sage to route. Leave unset to preserve the
+   * standard Sage-fronted UX of the main Chat app.
+   */
+  @Input() defaultAgentId: string | null = null;
+
   // Initial message to send automatically - using getter/setter for precise control
   private _initialMessage: string | null = null;
   private _initialAttachments: PendingAttachment[] | null = null;
@@ -648,8 +663,9 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
-   * Routes the message to the appropriate agent or Sage based on context
-   * Priority: @mention > intent check > Sage
+   * Routes the message to the appropriate agent or Sage based on context.
+   * Priority: explicit @mention > prior-agent continuity > embedder-supplied
+   * default agent > Sage fallback.
    */
   private async routeMessage(
     messageDetail: MJConversationDetailEntity,
@@ -666,6 +682,19 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const lastAgentId = this.findLastNonSageAgentId();
     if (lastAgentId) {
       await this.handleAgentContinuity(messageDetail, lastAgentId, mentionResult, isFirstMessage);
+      return;
+    }
+
+    // Priority 3: Embedder-supplied default agent. Set by chat surfaces
+    // that have a specialist agent for the context (e.g. Form Builder
+    // cockpit). Only kicks in when nothing more explicit is present —
+    // @mention always wins, conversation continuity always wins. The
+    // intent is to skip Sage's default delegation when the embedder
+    // already knows what agent owns this conversation.
+    if (this.defaultAgentId) {
+      await this.handleAgentContinuity(
+        messageDetail, this.defaultAgentId, mentionResult, isFirstMessage,
+      );
       return;
     }
 

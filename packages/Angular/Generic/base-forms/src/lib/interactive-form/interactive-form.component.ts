@@ -58,6 +58,20 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
      */
     @Input() public componentSpec: ComponentSpec | null = null;
 
+    /**
+     * When true, render the React component **without** the
+     * `<mj-record-form-container>` wrapper — i.e. no toolbar (no Save /
+     * Cancel / Edit / Delete / History / Tags / Lists).
+     *
+     * Used by the Form Builder cockpit's Preview tab where the toolbar's
+     * actions don't apply (Save would save the *record*, but the cockpit's
+     * own Save button saves the *spec*; History/Tags assume a real
+     * persistent record, but the preview record can be a synthetic
+     * NewRecord). Keeping just the form body produces a clean "this is
+     * what the form looks like" view.
+     */
+    @Input() public previewMode = false;
+
     /** FormHostProps passed to the React component. Recomputed when record or mode changes. */
     public formHostProps: FormHostProps | null = null;
 

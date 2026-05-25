@@ -8,12 +8,14 @@ import {
 } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { ResourceData } from '@memberjunction/core-entities';
-import type { MJComponentEntity, MJEntityFormOverrideEntity } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
+import type { MJComponentEntity, MJEntityFormOverrideEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import type { ComponentSpec } from '@memberjunction/interactive-component-types';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
+import { Subscription } from 'rxjs';
 import {
     buildCuratedFormSchema,
     buildDefaultFormScaffold,
@@ -32,6 +34,31 @@ import { EntityFormOverrideService } from '../ComponentStudio/services/entity-fo
 import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { joinVersionsWithOverrides, pickActiveVersionID } from './form-builder-version-rail.helpers';
 import type { FormOverrideDialogResult } from '../ComponentStudio/components/form-override-dialog.component';
+
+/**
+ * UserInfoEngine setting key for the Form Builder cockpit's persisted UI
+ * preferences. Single key holds a JSON-serialized {@link FormBuilderPrefs}.
+ * Namespaced under `mj.formBuilder.*` so admin-tier setting browsers can
+ * filter for app-specific prefs at a glance.
+ */
+const FORM_BUILDER_PREFS_KEY = 'mj.formBuilder.cockpitPrefs.v1';
+
+/**
+ * Persisted shape for the cockpit's resizable-pane sizes + collapse state.
+ * Versioned via the storage key (`v1`) so future schema changes can read +
+ * migrate older JSON without breaking on shape drift.
+ */
+export interface FormBuilderPrefs {
+    /** Percent (0-100) widths of the three top-level shell panes. */
+    leftPanePct?: number;
+    centerPanePct?: number;
+    chatPanePct?: number;
+    /** Collapse flags persist across reloads. */
+    leftCollapsed?: boolean;
+    chatCollapsed?: boolean;
+    /** Last center-pane tab used (Preview / Code / Layout). */
+    lastCenterPaneMode?: 'preview' | 'code' | 'layout';
+}
 
 /**
  * One Component version in the active form's Name lineage. The version rail
@@ -156,6 +183,70 @@ export class FormBuilderResourceComponent
     public PreviewSearchTerm = '';
     public PreviewSearchResults: Array<{ ID: string; Label: string }> = [];
 
+    /**
+     * AppContext snapshot fed to the embedded `<mj-conversation-chat-area>`
+     * so the agent sees the cockpit's current form + entity. Sourced from
+     * `NavigationService.AppContextSnapshot$` — the same snapshot the floating
+     * overlay uses — so both surfaces see identical context. Our cockpit-
+     * specific state is pushed in via `SetAgentContext()` (which the Explorer
+     * app shell merges into the snapshot's `AdditionalContext`).
+     */
+    public ChatAppContext: AppContextSnapshot | null = null;
+
+    /**
+     * Resolved ID of the Form Builder agent. Looked up once at init via
+     * RunView. Bound to `<mj-conversation-chat-area>`'s `[defaultAgentId]`
+     * so messages route directly to the Form Builder agent instead of going
+     * through Sage — Sage doesn't author forms, the Form Builder agent does.
+     * Null until the lookup resolves (or if the agent isn't installed); in
+     * that case the chat falls back to Sage routing.
+     */
+    public FormBuilderAgentId: string | null = null;
+
+    private appContextSubscription: Subscription | null = null;
+
+    /**
+     * Conversation state for the embedded chat. Initially null/new; when the
+     * user sends the first message, the chat-area emits `conversationCreated`
+     * and we flip these so subsequent renders keep the same conversation.
+     * Without this binding, the chat appears "stuck" on the welcome message
+     * because the wrapper never picks up the new conversation ID.
+     */
+    public ChatConversation: MJConversationEntity | null = null;
+    public ChatConversationId: string | null = null;
+    public ChatIsNewConversation = true;
+
+    /**
+     * Pending message + attachments that came back on `conversationCreated`.
+     * The chat-area emits these as part of its atomic state-handoff so the
+     * parent can re-feed them after the conversation has an ID. The
+     * chat-area's `pendingMessageConsumed` event tells us when to clear.
+     * Without this loop, the user's first message creates the conversation
+     * but never actually posts.
+     */
+    public ChatPendingMessage: string | null = null;
+    public ChatPendingAttachments: unknown[] | null = null;
+
+    /**
+     * Environment ID for the embedded chat-area. Resource components in
+     * Explorer accept this via ResourceData.Configuration; we fall back to
+     * the default environment when not supplied.
+     */
+    public get ChatEnvironmentId(): string {
+        return (this.Data?.Configuration?.['environmentId'] as string | undefined)
+            || MJEnvironmentEntityExtended.DefaultEnvironmentID;
+    }
+
+    /**
+     * Pane sizes (percent) for the 3-pane horizontal split. Initialized
+     * from {@link FormBuilderPrefs} loaded out of UserInfoEngine on init;
+     * mutated by the splitter's drag-end event; written back via
+     * {@link savePrefs}.
+     */
+    public LeftPanePct = 22;
+    public CenterPanePct = 56;
+    public ChatPanePct = 22;
+
     public SelectedFormID: string | null = null;
     public SelectedFormName = '';
     public IsNewForm = false;
@@ -185,23 +276,35 @@ export class FormBuilderResourceComponent
         return this.ProviderToUse;
     }
 
-    private get currentUser(): UserInfo | null {
+    // Public so the template can bind it to <mj-conversation-chat-area>'s
+    // [currentUser] input. The chat-area requires a UserInfo at mount time;
+    // we gate it with @if(currentUser) in the template to avoid a null bind.
+    public get currentUser(): UserInfo | null {
         return this.provider?.CurrentUser ?? null;
     }
 
     public async ngAfterViewInit(): Promise<void> {
         try {
             this.refreshEntityChoices();
-            // Restore chat-pane collapse state per-user across sessions.
-            try {
-                if (typeof window !== 'undefined' && window.localStorage) {
-                    const stored = window.localStorage.getItem('mj.formBuilder.chatPaneCollapsed');
-                    if (stored === 'true') this.ChatPaneCollapsed = true;
-                }
-            } catch {
-                // localStorage unavailable — fall through with default
-            }
+            // Restore cockpit UI prefs (pane sizes, collapse, last tab)
+            // from UserInfoEngine. Single JSON blob under FORM_BUILDER_PREFS_KEY.
+            this.loadPrefs();
             await this.loadExistingForms();
+            // Resolve the Form Builder agent ID once. Fire-and-forget — if it
+            // doesn't resolve before the user opens chat, [defaultAgentId]
+            // stays null and the chat falls back to Sage routing (degrades
+            // gracefully rather than blocking init).
+            void this.resolveFormBuilderAgentId();
+            // Subscribe to the shell's published AppContextSnapshot so the
+            // embedded chat-area sees the same {App, ActiveNavItem, User,
+            // AdditionalContext} shape the floating overlay sees. Our
+            // cockpit-specific state lands inside AdditionalContext via
+            // `SetAgentContext()` below.
+            this.appContextSubscription = this.navigationService.AppContextSnapshot$
+                .subscribe(snapshot => {
+                    this.ChatAppContext = snapshot;
+                    this.cdr.markForCheck();
+                });
         } catch (err) {
             LogError(`FormBuilderResource.ngAfterViewInit: ${err instanceof Error ? err.message : String(err)}`);
         } finally {
@@ -213,7 +316,35 @@ export class FormBuilderResourceComponent
     }
 
     public override ngOnDestroy(): void {
+        this.appContextSubscription?.unsubscribe();
+        this.appContextSubscription = null;
         super.ngOnDestroy();
+    }
+
+    /**
+     * One-shot lookup of the Form Builder agent's ID. Used to bind the
+     * chat-area's `[defaultAgentId]` so the cockpit's chat skips Sage routing
+     * and addresses messages directly to the form-authoring specialist.
+     */
+    private async resolveFormBuilderAgentId(): Promise<void> {
+        const provider = this.provider;
+        if (!provider) return;
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<{ ID: string }>({
+                EntityName: 'AI Agents',
+                ExtraFilter: `Name='Form Builder'`,
+                Fields: ['ID'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            }, this.currentUser ?? undefined);
+            if (result.Success && (result.Results?.length ?? 0) > 0) {
+                this.FormBuilderAgentId = result.Results[0].ID;
+                this.cdr.markForCheck();
+            }
+        } catch (err) {
+            LogError(`FormBuilderResource.resolveFormBuilderAgentId: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     private async loadExistingForms(): Promise<void> {
@@ -268,6 +399,7 @@ export class FormBuilderResourceComponent
 
     public ToggleLeftRail(): void {
         this.LeftRailCollapsed = !this.LeftRailCollapsed;
+        this.savePrefs();
         this.cdr.markForCheck();
     }
 
@@ -278,18 +410,13 @@ export class FormBuilderResourceComponent
 
     public ToggleChatPane(): void {
         this.ChatPaneCollapsed = !this.ChatPaneCollapsed;
-        try {
-            if (typeof window !== 'undefined' && window.localStorage) {
-                window.localStorage.setItem('mj.formBuilder.chatPaneCollapsed', String(this.ChatPaneCollapsed));
-            }
-        } catch {
-            // localStorage unavailable — fine, just don't persist
-        }
+        this.savePrefs();
         this.cdr.markForCheck();
     }
 
     public SetCenterPaneMode(mode: 'preview' | 'code' | 'layout'): void {
         this.CenterPaneMode = mode;
+        this.savePrefs();
         this.cdr.markForCheck();
         if (mode === 'preview' && this.TargetEntityName && !this.PreviewRecord) {
             // Lazy-load on first switch — avoids the RunView on every form
@@ -468,15 +595,116 @@ export class FormBuilderResourceComponent
     }
 
     /**
-     * Direct-edit handler for the Code pane's textarea. Marks the form dirty
-     * so the Save button activates; the Layout-tab canvas is *not* re-derived
-     * from this code unless the user explicitly re-syncs (avoids destructive
-     * round-trips when the JSX has hand-authored bits the canvas can't model).
+     * Direct-edit handler used by `<mj-code-editor>` via ngModelChange.
+     * Receives the new editor value as a string. Marks the form dirty so
+     * the Save button activates; the Layout-tab canvas is *not* re-derived
+     * here (avoids destructive round-trips when the JSX has hand-authored
+     * bits the canvas-parser can't model).
      */
-    public OnEditableCodeInput(event: Event): void {
-        const next = (event.target as HTMLTextAreaElement).value ?? '';
-        if (next === this.EditableCode) return;
-        this.EditableCode = next;
+    /**
+     * Chat-area emitted `conversationCreated` after the user sent the first
+     * message — switch the embedded chat out of "new conversation" mode so
+     * subsequent renders show the live conversation thread. Without this,
+     * the chat appears stuck on its welcome screen.
+     */
+    public OnChatConversationCreated(event: {
+        conversation: MJConversationEntity;
+        pendingMessage?: string;
+        pendingAttachments?: unknown[];
+    }): void {
+        // Atomic state-flip matching the overlay's pattern: set conversation
+        // identity AND re-feed the pending message/attachments in the same
+        // change-detection cycle. The chat-area picks them up on the next
+        // render and actually delivers the message.
+        this.ChatPendingMessage = event.pendingMessage ?? null;
+        this.ChatPendingAttachments = (event.pendingAttachments ?? null) as unknown[] | null;
+        this.ChatConversation = event.conversation;
+        this.ChatConversationId = event.conversation.ID;
+        this.ChatIsNewConversation = false;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Chat-area finished delivering the pending message — clear the buffer
+     * so a re-render doesn't try to send it again.
+     */
+    public OnChatPendingMessageConsumed(): void {
+        this.ChatPendingMessage = null;
+        this.ChatPendingAttachments = null;
+        this.cdr.markForCheck();
+    }
+
+    // ── Persisted UI preferences (UserInfoEngine) ────────────────────
+
+    /**
+     * Load cockpit prefs from UserInfoEngine. Called once during
+     * ngAfterViewInit. Missing / unparseable values fall through to the
+     * defaults declared at field-init time — never throws.
+     */
+    private loadPrefs(): void {
+        try {
+            const raw = UserInfoEngine.Instance.GetSetting(FORM_BUILDER_PREFS_KEY);
+            if (!raw) return;
+            const prefs = JSON.parse(raw) as FormBuilderPrefs;
+            if (typeof prefs.leftPanePct === 'number')   this.LeftPanePct   = prefs.leftPanePct;
+            if (typeof prefs.centerPanePct === 'number') this.CenterPanePct = prefs.centerPanePct;
+            if (typeof prefs.chatPanePct === 'number')   this.ChatPanePct   = prefs.chatPanePct;
+            if (typeof prefs.leftCollapsed === 'boolean')  this.LeftRailCollapsed = prefs.leftCollapsed;
+            if (typeof prefs.chatCollapsed === 'boolean')  this.ChatPaneCollapsed = prefs.chatCollapsed;
+            if (prefs.lastCenterPaneMode === 'preview' ||
+                prefs.lastCenterPaneMode === 'code' ||
+                prefs.lastCenterPaneMode === 'layout') {
+                this.CenterPaneMode = prefs.lastCenterPaneMode;
+            }
+        } catch (err) {
+            LogError(`FormBuilderResource.loadPrefs: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Write the current cockpit UI state back to UserInfoEngine, debounced
+     * (the engine handles debouncing internally). Called from the splitter's
+     * drag-end event, the collapse toggles, and the center-pane mode setter.
+     */
+    private savePrefs(): void {
+        const prefs: FormBuilderPrefs = {
+            leftPanePct: this.LeftPanePct,
+            centerPanePct: this.CenterPanePct,
+            chatPanePct: this.ChatPanePct,
+            leftCollapsed: this.LeftRailCollapsed,
+            chatCollapsed: this.ChatPaneCollapsed,
+            lastCenterPaneMode: this.CenterPaneMode,
+        };
+        try {
+            UserInfoEngine.Instance.SetSettingDebounced(FORM_BUILDER_PREFS_KEY, JSON.stringify(prefs));
+        } catch (err) {
+            LogError(`FormBuilderResource.savePrefs: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Splitter drag-end handler. `sizes` from angular-split is an array of
+     * `SplitAreaSize` values (number | '*' for auto-size); for our
+     * percent-unit splitter only numbers come through, but the union forces
+     * us to filter. Order matches the visible-pane order: [left?, center, chat?].
+     */
+    public OnSplitterDragEnd(event: { sizes: ReadonlyArray<number | '*'> }): void {
+        const sizes = event.sizes ?? [];
+        const numeric = (i: number): number | undefined => {
+            const v = sizes[i];
+            return typeof v === 'number' ? v : undefined;
+        };
+        let i = 0;
+        if (!this.LeftRailCollapsed)  this.LeftPanePct   = numeric(i++) ?? this.LeftPanePct;
+        this.CenterPanePct = numeric(i++) ?? this.CenterPanePct;
+        if (!this.ChatPaneCollapsed)  this.ChatPanePct   = numeric(i++) ?? this.ChatPanePct;
+        this.savePrefs();
+    }
+
+    public OnEditableCodeChange(next: string | null | undefined): void {
+        const value = next ?? '';
+        if (value === this.EditableCode) return;
+        this.EditableCode = value;
         this.DirtyFlag = true;
         this.cdr.markForCheck();
     }
@@ -1206,7 +1434,7 @@ export class FormBuilderResourceComponent
 
     private registerAgentContext(): void {
         try {
-            this.navigationService.SetAgentContext(this, {
+            const ctx: Record<string, unknown> = {
                 ActiveForm: this.TargetEntityName
                     ? {
                         EntityName: this.TargetEntityName,
@@ -1215,7 +1443,14 @@ export class FormBuilderResourceComponent
                         IsDirty: this.DirtyFlag,
                     }
                     : null,
-            });
+            };
+            // Push cockpit-specific state to NavigationService. The Explorer
+            // shell merges this into the published AppContextSnapshot's
+            // AdditionalContext, then re-publishes — our subscription in
+            // ngAfterViewInit picks it up and refreshes `ChatAppContext` so
+            // the embedded chat-area sees the latest form state. Same flow
+            // the floating overlay uses; both surfaces stay in sync.
+            this.navigationService.SetAgentContext(this, ctx);
             this.navigationService.SetAgentClientTools(this, [
                 {
                     Name: 'UpdateForm',

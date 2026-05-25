@@ -423,24 +423,55 @@
    Both side rails collapse to a strip. Center always claims the slack.
    ════════════════════════════════════════════════════════════════════ */
 
+/* ── Cockpit shell — flex row with the angular-split inside ──────── */
 .fb-cockpit {
-  display: grid;
-  grid-template-columns: 280px 1fr 320px;
-  grid-template-rows: 1fr;
+  display: flex;
+  flex-direction: row;
   height: 100%;
   min-height: 0;
-  gap: 1px;
   background: var(--mj-border-default);
 }
-.fb-cockpit.left-collapsed  { grid-template-columns: 44px 1fr 320px; }
-.fb-cockpit.chat-collapsed  { grid-template-columns: 280px 1fr 44px;  }
-.fb-cockpit.left-collapsed.chat-collapsed { grid-template-columns: 44px 1fr 44px; }
+.fb-splitter {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+/* Each split-area is a column flex container so its inner aside/section
+ * can flex-grow to fill. */
+:host as-split-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+/* Collapsed strip — 44px column rendered outside the splitter when the
+ * left or chat pane is collapsed. Shows only the expand chevron + a
+ * tiny icon hint to remind the user what's hidden. */
+.fb-collapsed-strip {
+  width: 44px;
+  flex: 0 0 44px;
+  background: var(--mj-bg-surface);
+  border-right: 1px solid var(--mj-border-default);
+  border-left: 1px solid var(--mj-border-default);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+.fb-collapsed-strip-label {
+  color: var(--mj-text-muted);
+  font-size: 14px;
+}
 
 .fb-forms-rail,
 .fb-chat-pane {
   background: var(--mj-bg-surface);
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
@@ -632,21 +663,20 @@
 .fb-code-host {
   flex: 1;
   min-height: 0;
-  background: #0f172a;
   display: flex;
 }
-.fb-code-editor {
-  flex: 1;
-  background: #0f172a;
-  color: #e2e8f0;
-  border: none;
-  outline: none;
-  resize: none;
-  padding: 14px 18px;
-  font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.6;
-  caret-color: var(--mj-brand-primary);
+/* mj-code-editor (CodeMirror) handles its own theming + caret + colors.
+ * We just need to make sure it fills the available space. */
+.fb-code-editor,
+mj-code-editor.fb-code-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+}
+.fb-code-editor :where(.cm-editor) {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* ── Chat pane (right) ────────────────────────────────────────────── */
@@ -864,3 +894,27 @@
 .fb-version-activate-label {
   font-weight: 600;
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   EMBEDDED CHAT (replaces the prior Refine-with-AI CTA panel)
+   The chat-area component grows to fill whatever's left after the
+   context strip. The pane itself is already a flex column, so we just
+   need the embed slot to flex-grow and the host child to fill 100%.
+   ════════════════════════════════════════════════════════════════════ */
+.fb-chat-embed {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.fb-chat-embed mj-conversation-chat-area {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* The legacy `.fb-chat-body / .fb-chat-refine-btn / .fb-chat-tips` rules
+   above target the old CTA layout. They no longer apply (DOM removed)
+   but stay in place harmlessly — kept so any css-encapsulation snapshot
+   tests don't break. Safe to delete in a follow-up cleanup. */

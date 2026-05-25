@@ -1,4 +1,26 @@
 @if (record) {
+@if (previewMode) {
+    <!-- Preview mode — no toolbar wrap. Just the form body for clean
+         "what the form looks like" previews (Form Builder cockpit). -->
+    @if (loadError) {
+        <div class="mj-error-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>{{ loadError }}</span>
+        </div>
+    } @else if (componentSpec && formHostProps) {
+        <mj-react-component
+            #reactComponent
+            [component]="componentSpec"
+            [componentProps]="formHostProps"
+            (componentEvent)="OnReactComponentEvent($event)">
+        </mj-react-component>
+    } @else {
+        <div class="mj-loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Loading form…</span>
+        </div>
+    }
+} @else {
 <mj-record-form-container
     [Record]="record"
     [FormComponent]="this"
@@ -28,4 +50,5 @@
     }
 
 </mj-record-form-container>
+}
 }

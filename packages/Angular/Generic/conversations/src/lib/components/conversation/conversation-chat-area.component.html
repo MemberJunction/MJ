@@ -165,6 +165,7 @@
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
+                    [defaultAgentId]="defaultAgentId"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
                     [enableAttachments]="enableAttachments"

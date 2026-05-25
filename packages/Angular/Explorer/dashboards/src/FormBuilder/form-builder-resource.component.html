@@ -9,6 +9,31 @@
      [class.left-collapsed]="LeftRailCollapsed"
      [class.chat-collapsed]="ChatPaneCollapsed">
 
+  <!-- Collapsed strip (left). Rendered OUTSIDE the splitter so the
+       splitter only ever contains expanded panes. Click the chevron to
+       re-expand; persisted via UserInfoEngine. -->
+  @if (LeftRailCollapsed) {
+    <div class="fb-collapsed-strip" role="region" aria-label="Forms list (collapsed)">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleLeftRail()"
+              aria-label="Expand forms list">
+        <i class="fa-solid fa-chevron-right"></i>
+      </button>
+      <div class="fb-collapsed-strip-label"><i class="fa-solid fa-table-list"></i></div>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SPLITTER — wraps the visible (expanded) panes. Percentage-based;
+       drag-end persists sizes via OnSplitterDragEnd → savePrefs.
+       ══════════════════════════════════════════════════════════════════ -->
+  <as-split direction="horizontal"
+            class="fb-splitter"
+            unit="percent"
+            gutterSize="6"
+            (dragEnd)="OnSplitterDragEnd($event)">
+
+  @if (!LeftRailCollapsed) {
+  <as-split-area [size]="LeftPanePct" [minSize]="12">
   <!-- ══════════════════════════════════════════════════════════════════
        LEFT — Forms list (existing form-role Components, with version rail
        below). Collapses to a strip.
@@ -118,10 +143,13 @@
       }
     }
   </aside>
+  </as-split-area>
+  }
 
   <!-- ══════════════════════════════════════════════════════════════════
        CENTER — Tabbed (Preview / Code / Layout) + toolbar
        ══════════════════════════════════════════════════════════════════ -->
+  <as-split-area [size]="CenterPanePct" [minSize]="30">
   <section class="fb-center">
 
     <div class="fb-toolbar">
@@ -289,9 +317,14 @@
                   error pane instead of only appearing inline inside the
                   React component.
                 -->
+                <!-- previewMode=true → no toolbar wrap; just the form
+                     body. Cockpit's own toolbar already handles saving
+                     the spec; the form's own Save/Cancel/Edit/Delete are
+                     not relevant in preview. -->
                 <mj-interactive-form
                   [componentSpec]="PreviewSpec"
                   [record]="PreviewRecord"
+                  [previewMode]="true"
                   (LoadErrorChanged)="OnPreviewLoadError($event)">
                 </mj-interactive-form>
               } @else {
@@ -306,12 +339,16 @@
 
         @if (CenterPaneMode === 'code') {
           <div class="fb-code-host">
-            <textarea class="fb-code-editor"
-                      spellcheck="false"
-                      [value]="EditableCode"
-                      (input)="OnEditableCodeInput($event)"
-                      placeholder="// JSX for your form-role component">
-            </textarea>
+            <!-- mj-code-editor (CodeMirror under the hood). The 'javascript'
+                 language extension enables full JS + JSX highlighting —
+                 enough for the form-role component spec the agent emits. -->
+            <mj-code-editor
+              class="fb-code-editor"
+              [ngModel]="EditableCode"
+              (ngModelChange)="OnEditableCodeChange($event)"
+              [language]="'javascript'"
+              [indentWithTab]="true">
+            </mj-code-editor>
           </div>
         }
 
@@ -348,14 +385,17 @@
       }
     </div>
   </section>
+  </as-split-area>
 
   <!-- ══════════════════════════════════════════════════════════════════
        CHAT PANE — Form Builder AI cockpit-mate
-       Embedded right pane that always sits next to the editor. Collapses
-       to a strip. Does NOT host the full chat experience itself — clicking
-       "Refine with AI" attaches the form context and lets the user pop
-       the chat overlay from anywhere in the app.
+       Embedded right pane that always sits next to the editor. Mounts the
+       chat-area component directly (same interior the floating overlay
+       wraps). Collapses to a strip rendered OUTSIDE the splitter so the
+       drag handle doesn't appear next to a collapsed pane.
        ══════════════════════════════════════════════════════════════════ -->
+  @if (!ChatPaneCollapsed) {
+  <as-split-area [size]="ChatPanePct" [minSize]="15">
   <aside class="fb-chat-pane">
     <div class="fb-rail-header">
       @if (!ChatPaneCollapsed) {
@@ -370,42 +410,79 @@
     </div>
 
     @if (!ChatPaneCollapsed) {
-      <div class="fb-chat-body">
-        @if (SelectedFormID && TargetEntityName) {
-          <div class="fb-chat-context">
-            <div class="fb-chat-context-label">Editing</div>
-            <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
-            <div class="fb-chat-context-sub">{{ TargetEntityName }}</div>
-          </div>
+      <!-- Context strip — small label above the chat so the user always
+           sees which form the agent has context on. -->
+      @if (SelectedFormID && TargetEntityName) {
+        <div class="fb-chat-context">
+          <div class="fb-chat-context-label">Editing</div>
+          <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
+          <div class="fb-chat-context-sub">{{ TargetEntityName }}</div>
+        </div>
+      } @else {
+        <div class="fb-chat-context fb-chat-context--empty">
+          <div class="fb-chat-context-sub">Pick or create a form to start.</div>
+        </div>
+      }
+
+      <!-- Embedded chat-area — same interior component the floating overlay
+           wraps. Mounting it directly here means the chat lives in the
+           cockpit's right pane (no overlay popping). `appContext` carries
+           the ActiveForm shape so Sage / Form Builder agent sees the
+           cockpit state with every message. -->
+      <div class="fb-chat-embed">
+        @if (currentUser) {
+          <!-- conversationCreated must be wired — without it the chat
+               stays stuck on the welcome screen after the user sends the
+               first message (we never flip out of new-conversation mode). -->
+          <!-- pendingMessage + pendingAttachments are the atomic-handoff
+               buffer the chat-area emits as part of `conversationCreated`.
+               Feeding them back as inputs is what actually posts the
+               user's first message after the conversation is created;
+               without this, the chat creates the conversation but
+               appears stuck on the welcome screen. -->
+          <mj-conversation-chat-area
+            [Provider]="Provider"
+            [environmentId]="ChatEnvironmentId"
+            [currentUser]="currentUser"
+            [conversationId]="ChatConversationId"
+            [conversation]="ChatConversation"
+            [isNewConversation]="ChatIsNewConversation"
+            [pendingMessage]="ChatPendingMessage"
+            [pendingAttachments]="$any(ChatPendingAttachments)"
+            [overlayMode]="true"
+            [showExportButton]="false"
+            [showShareButton]="false"
+            [showArtifactIndicator]="false"
+            [appContext]="$any(ChatAppContext)"
+            [defaultAgentId]="FormBuilderAgentId"
+            [emptyStateGreeting]="'How can I help with this form?'"
+            (conversationCreated)="OnChatConversationCreated($event)"
+            (pendingMessageConsumed)="OnChatPendingMessageConsumed()">
+          </mj-conversation-chat-area>
         } @else {
           <div class="fb-chat-context fb-chat-context--empty">
-            <div class="fb-chat-context-sub">Pick or create a form to start.</div>
+            <div class="fb-chat-context-sub">Loading…</div>
           </div>
         }
-
-        <button type="button"
-                class="fb-chat-refine-btn"
-                [disabled]="!SelectedFormID || !TargetEntityName"
-                (click)="OnOpenInChat()">
-          <i class="fa-solid fa-comments"></i>
-          Refine with AI
-        </button>
-
-        <div class="fb-chat-tips">
-          <h4>What the agent can do</h4>
-          <ul>
-            <li>Generate a brand-new form from the entity's schema</li>
-            <li>Modify your active form (split fields, add charts, hide system fields)</li>
-            <li>Produce a new version as Pending — your live form stays untouched</li>
-          </ul>
-          <p class="fb-muted">
-            Refinements land as <strong>Pending</strong> versions. Activate the one you want
-            from the Versions rail on the left.
-          </p>
-        </div>
       </div>
     }
   </aside>
+  </as-split-area>
+  }
+
+  </as-split>
+
+  <!-- Collapsed strip (chat). Same OUTSIDE-the-splitter pattern as the
+       left rail's strip. -->
+  @if (ChatPaneCollapsed) {
+    <div class="fb-collapsed-strip" role="region" aria-label="Form Builder AI (collapsed)">
+      <button class="fb-rail-collapse" type="button" (click)="ToggleChatPane()"
+              aria-label="Expand Form Builder AI">
+        <i class="fa-solid fa-chevron-left"></i>
+      </button>
+      <div class="fb-collapsed-strip-label"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+    </div>
+  }
 
   <!-- ══════════════════════════════════════════════════════════════════
        POST-SAVE OVERRIDE DIALOG (unchanged)
