@@ -127,13 +127,20 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * @param onProgress - optional callback for UI progress updates
      */
     public async ExtractTextAndProcessWithLLM(
-        contentItems: MJContentItemEntity[],
+        contentItems: MJContentItemEntity[] | AsyncIterable<MJContentItemEntity>,
         contextUser: UserInfo,
         processRun?: MJContentProcessRunEntity,
         config?: MJContentProcessRunEntity_IContentProcessRunConfiguration,
         onProgress?: (processed: number, total: number, currentItem?: string) => void
     ): Promise<void> {
-        if (!contentItems || contentItems.length === 0) {
+        // Accept either a materialized array (backwards-compatible) or an
+        // AsyncIterable that yields items as they're discovered. The stream
+        // form lets the crawl and LLM phases overlap — items pipeline through
+        // as soon as change-detection clears them, instead of waiting for all
+        // sources to finish crawling first.
+        const isArray = Array.isArray(contentItems);
+
+        if (isArray && (contentItems as MJContentItemEntity[]).length === 0) {
             LogStatus('[Autotag] No content items to process');
             return;
         }
@@ -142,30 +149,69 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const errorThreshold = config?.Pipeline?.ErrorThresholdPercent ?? 20;
         const delayMs = config?.Pipeline?.DelayBetweenBatchesMs ?? 0;
 
-        // Resume from cursor if available
+        // Resume from cursor if available. For arrays we slice; for streams we
+        // drain the first N items as they yield.
         const resumeOffset = processRun?.LastProcessedOffset ?? 0;
-        const itemsToProcess = resumeOffset > 0
-            ? contentItems.slice(resumeOffset)
-            : contentItems;
+
+        // When the source is an array we know the total upfront. For streams
+        // we don't — `totalKnown` becomes null and progress reports use the
+        // running processed count as both numerator and denominator until the
+        // stream closes (UI sees an indeterminate-progress shape).
+        const totalKnown: number | null = isArray ? (contentItems as MJContentItemEntity[]).length : null;
 
         if (resumeOffset > 0) {
-            LogStatus(`[Autotag] Resuming from offset ${resumeOffset} (${itemsToProcess.length} remaining of ${contentItems.length})`);
+            if (totalKnown != null) {
+                const remaining = Math.max(0, totalKnown - resumeOffset);
+                LogStatus(`[Autotag] Resuming from offset ${resumeOffset} (${remaining} remaining of ${totalKnown})`);
+            } else {
+                LogStatus(`[Autotag] Resuming from offset ${resumeOffset} (stream — total unknown)`);
+            }
         }
 
-        LogStatus(`[Autotag] Processing ${itemsToProcess.length} items in batches of ${batchSize}`);
+        LogStatus(`[Autotag] Processing items in batches of ${batchSize}${totalKnown != null ? ` (~${totalKnown} expected)` : ' (streaming — total unknown)'}`);
+
         let totalSuccesses = 0;
         let totalFailures = 0;
         let totalProcessed = resumeOffset;
+        let batchNum = 0;
+        let firstSourceID: string | null = null;
+        let anyItemsProcessed = false;
 
-        for (let i = 0; i < itemsToProcess.length; i += batchSize) {
-            const batch = itemsToProcess.slice(i, i + batchSize);
-            const batchNum = Math.floor(i / batchSize) + 1;
-            let batchOk = 0;
-            let batchFail = 0;
+        // Normalize both forms to a single async iterator so the inner loop
+        // has one shape. For arrays, wrap in a generator that yields items.
+        const iterator = isArray
+            ? (async function*() {
+                for (const item of contentItems as MJContentItemEntity[]) yield item;
+            })()
+            : (contentItems as AsyncIterable<MJContentItemEntity>)[Symbol.asyncIterator]();
 
-            // Rate limit before each batch of parallel LLM calls
+        let skipsRemaining = resumeOffset;
+        let buffer: MJContentItemEntity[] = [];
+        let streamDone = false;
+
+        while (!streamDone || buffer.length > 0) {
+            // Fill the buffer to batchSize (or until the stream closes).
+            while (buffer.length < batchSize && !streamDone) {
+                const { value, done } = await iterator.next();
+                if (done) { streamDone = true; break; }
+                if (!value) continue;
+                if (skipsRemaining > 0) { skipsRemaining--; continue; }
+                if (!firstSourceID) firstSourceID = value.ContentSourceID;
+                buffer.push(value);
+            }
+
+            if (buffer.length === 0) break;
+
+            const batch = buffer;
+            buffer = [];
+            batchNum++;
+            anyItemsProcessed = true;
+
+            // Rate limit before each batch of parallel LLM calls.
             await this.LLMRateLimiter.Acquire();
 
+            let batchOk = 0;
+            let batchFail = 0;
             const batchPromises = batch.map(async (contentItem) => {
                 try {
                     const processingParams = await this.buildProcessingParams(contentItem, contextUser);
@@ -181,10 +227,15 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             totalSuccesses += batchOk;
             totalFailures += batchFail;
             totalProcessed += batch.length;
-            onProgress?.(totalProcessed, contentItems.length);
-            LogStatus(`[Autotag] Batch ${batchNum}: ${batchOk}/${batch.length} ok (${totalProcessed}/${contentItems.length} total, ${totalFailures} errors)`);
 
-            // Checkpoint: update cursor and check for cancellation
+            // For streams we don't know the total — report processed as both
+            // values so UIs that compute `processed/total` show 100% (which
+            // is at least non-misleading; arrays still get a real total).
+            const progressTotal = totalKnown ?? totalProcessed;
+            onProgress?.(totalProcessed, progressTotal);
+            LogStatus(`[Autotag] Batch ${batchNum}: ${batchOk}/${batch.length} ok (${totalProcessed}${totalKnown != null ? `/${totalKnown}` : ''} total, ${totalFailures} errors)`);
+
+            // Checkpoint: update cursor and check for cancellation.
             if (processRun) {
                 const shouldContinue = await this.UpdateBatchCursor(processRun, totalProcessed, totalFailures);
                 if (!shouldContinue) {
@@ -212,7 +263,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 }
             }
 
-            // Circuit breaker: halt if error rate exceeds threshold
+            // Circuit breaker: halt if error rate exceeds threshold.
             if (totalProcessed > 0 && totalFailures > 0) {
                 const errorRate = (totalFailures / totalProcessed) * 100;
                 if (errorRate > errorThreshold) {
@@ -225,13 +276,19 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 }
             }
 
-            // Optional delay between batches (throttling)
-            if (delayMs > 0 && i + batchSize < itemsToProcess.length) {
+            // Optional delay between batches (throttling). Only sleep if there
+            // is more work coming — don't add latency to the final flush.
+            if (delayMs > 0 && (!streamDone || buffer.length > 0)) {
                 await new Promise(resolve => setTimeout(resolve, delayMs));
             }
         }
 
-        LogStatus(`[Autotag] LLM tagging complete: ${totalSuccesses} succeeded, ${totalFailures} failed of ${contentItems.length}`);
+        if (!anyItemsProcessed) {
+            LogStatus('[Autotag] No content items were processed (stream produced no items past resume offset)');
+            return;
+        }
+
+        LogStatus(`[Autotag] LLM tagging complete: ${totalSuccesses} succeeded, ${totalFailures} failed${totalKnown != null ? ` of ${totalKnown}` : ''}`);
 
         // Post-pipeline hook: recompute tag co-occurrence if TagCoOccurrenceEngine is available
         await this.recomputeCoOccurrenceIfAvailable(contextUser);
@@ -239,12 +296,12 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         // Only create a legacy process run record if no external run tracking is active.
         // When the pipeline is invoked via RunAutotagPipeline, the resolver creates and
         // manages the ContentProcessRun record — creating another one here would be a duplicate.
-        if (!processRun && !this.ExternalRunTrackingActive) {
+        if (!processRun && !this.ExternalRunTrackingActive && firstSourceID) {
             const processRunParams = new ProcessRunParams();
-            processRunParams.sourceID = contentItems[0].ContentSourceID;
+            processRunParams.sourceID = firstSourceID;
             processRunParams.startTime = new Date();
             processRunParams.endTime = new Date();
-            processRunParams.numItemsProcessed = contentItems.length;
+            processRunParams.numItemsProcessed = totalProcessed - resumeOffset;
             await this.saveProcessRun(processRunParams, contextUser);
         }
     }

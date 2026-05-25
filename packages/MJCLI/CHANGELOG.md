@@ -1,5 +1,28 @@
 # Change Log - @memberjunction/cli
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [baf3032]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/codegen-lib@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-cli@5.37.0
+  - @memberjunction/db-auto-doc@5.37.0
+  - @memberjunction/metadata-sync@5.37.0
+  - @memberjunction/query-gen@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/open-app-engine@5.37.0
+  - @memberjunction/testing-cli@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/installer@5.37.0
+  - @memberjunction/sql-converter@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

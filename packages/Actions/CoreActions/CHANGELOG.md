@@ -1,5 +1,46 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.37.0
+
+### Patch Changes
+
+- e32f21f: Route `RunAdhocQueryAction.ensureRowLimit` through `QueryPagingEngine.WrapWithMaxRows` instead of the regex it had been using. The prior regex produced invalid T-SQL for `SELECT DISTINCT …` inputs (injecting `TOP N` between `SELECT` and `DISTINCT`, but T-SQL requires `SELECT DISTINCT TOP N`), silently dropped the cap on `WITH`/CTE-headed inputs, and only capped the first branch of `UNION`/`INTERSECT`/`EXCEPT` queries. The agent's "Run Ad-hoc Query" tool routinely emits DISTINCT and was getting stuck in retry loops because every SQL it generated got mangled. Delegating to the AST-based path picks up the full DISTINCT / set-op / CTE / TOP-PERCENT / WITH-TIES handling already in place for saved queries via `RenderPipeline`, plus the hard-ceiling enforcement added on this branch.
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-agent-manager@5.37.0
+  - @memberjunction/ai-agents@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/ai-vector-sync@5.37.0
+  - @memberjunction/content-autotagging@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/ai-mcp-client@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/code-execution@5.37.0
+  - @memberjunction/communication-types@5.37.0
+  - @memberjunction/communication-engine@5.37.0
+  - @memberjunction/external-change-detection@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/lists@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/search-engine@5.37.0
+  - @memberjunction/geo-core@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ai-betty-bot@5.37.0
+  - @memberjunction/lists-base@5.37.0
+  - @memberjunction/export-engine@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes
