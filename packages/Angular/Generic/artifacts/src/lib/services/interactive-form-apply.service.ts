@@ -127,10 +127,15 @@ export class InteractiveFormApplyService {
                 return { Success: false, Message: `Action '${actionName}' not found.` };
             }
             const result = await client.RunAction(actionId, params);
+            // ActionResult.Result is the MJActionResultCodeEntity carrying
+            // the string ResultCode; surface it on the failure path for
+            // diagnostic messaging. ActionResult itself doesn't expose
+            // ResultCode directly.
+            const resultCode = (result as { Result?: { ResultCode?: string } })?.Result?.ResultCode;
             return {
                 Success: !!result.Success,
                 Message: result.Message ?? undefined,
-                ResultCode: result.ResultCode ?? undefined,
+                ResultCode: resultCode ?? undefined,
             };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -171,18 +176,23 @@ export class InteractiveFormApplyService {
         const content = hasExistingActive
             ? `You already have an active custom form for <strong>${escape(entityName)}</strong> (v${escape(currentVersion ?? '?')}). Applying this artifact will create a <strong>new Pending version</strong> — your live form stays active until you explicitly activate the new version in Form Builder.`
             : `This will create a custom form for <strong>${escape(entityName)}</strong> scoped to your user. Other users will continue to see the default form.`;
+        // MJDialogAction surface is {text, primary?, themeColor?}; the
+        // dialog's Result observable emits the entire clicked action (or
+        // undefined for backdrop/X dismissal). Detect intent via the
+        // `primary` flag — Apply / Create Pending are the primary actions;
+        // Cancel and dismissal both resolve false.
         const ref = this.dialog.Open({
             title: hasExistingActive ? 'Apply as new Pending version?' : 'Apply this form?',
             content,
             width: 540,
             actions: [
-                { text: hasExistingActive ? 'Create Pending' : 'Apply', primary: true, themeColor: 'primary', result: 'apply' },
-                { text: 'Cancel', result: 'cancel' },
+                { text: hasExistingActive ? 'Create Pending' : 'Apply', primary: true, themeColor: 'primary' },
+                { text: 'Cancel' },
             ],
         });
         return new Promise<boolean>(resolve => {
             ref.Result.subscribe((res: unknown) => {
-                resolve((res as { result?: string })?.result === 'apply');
+                resolve((res as { primary?: boolean })?.primary === true);
             });
         });
     }
