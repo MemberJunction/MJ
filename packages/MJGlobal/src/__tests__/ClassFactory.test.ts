@@ -532,4 +532,100 @@ describe('ClassFactory', () => {
       expect(instance).toBeNull();
     });
   });
+
+  describe('Metadata on registrations', () => {
+    it('persists metadata on the ClassRegistration when provided to Register()', () => {
+      factory.Register(Animal, Dog, 'fido', 0, true, false, { trainer: 'alice', tags: ['indoor'] });
+      const regs = factory.GetAllRegistrations(Animal, 'fido');
+      expect(regs).toHaveLength(1);
+      expect(regs[0].Metadata).toEqual({ trainer: 'alice', tags: ['indoor'] });
+    });
+
+    it('leaves Metadata undefined when not provided (backwards compat)', () => {
+      factory.Register(Animal, Dog, 'pre-metadata');
+      const reg = factory.GetRegistration(Animal, 'pre-metadata');
+      expect(reg?.Metadata).toBeUndefined();
+    });
+  });
+
+  describe('GetAllRegistrationsByKeyPrefix', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'breed:retriever');
+      factory.Register(Animal, Dog, 'breed:poodle');
+      factory.Register(Animal, Cat, 'breed:tabby');
+      factory.Register(Animal, Cat, 'color:black');
+    });
+
+    it('returns only registrations whose key starts with the prefix', () => {
+      const breed = factory.GetAllRegistrationsByKeyPrefix(Animal, 'breed:');
+      expect(breed.map(r => r.Key).sort()).toEqual(['breed:poodle', 'breed:retriever', 'breed:tabby']);
+    });
+
+    it('is case-insensitive and trims whitespace on the prefix', () => {
+      const breed = factory.GetAllRegistrationsByKeyPrefix(Animal, '  BREED:  ');
+      expect(breed).toHaveLength(3);
+    });
+
+    it('returns empty array when nothing matches', () => {
+      expect(factory.GetAllRegistrationsByKeyPrefix(Animal, 'zzz:')).toEqual([]);
+    });
+
+    it('returns empty array when baseClass is falsy', () => {
+      expect(factory.GetAllRegistrationsByKeyPrefix(null, 'breed:')).toEqual([]);
+    });
+
+    it('scopes to the requested base class', () => {
+      factory.Register(Vehicle, Car, 'breed:something-weird');
+      const animalBreed = factory.GetAllRegistrationsByKeyPrefix(Animal, 'breed:');
+      expect(animalBreed.every(r => r.BaseClass === Animal)).toBe(true);
+    });
+  });
+
+  describe('GetAllRegistrationsByKeyPattern', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'panel-a');
+      factory.Register(Animal, Cat, 'panel-b');
+      factory.Register(Animal, GoldenRetriever, 'widget-1');
+    });
+
+    it('returns registrations whose key matches the regex', () => {
+      const panels = factory.GetAllRegistrationsByKeyPattern(Animal, /^panel-/);
+      expect(panels.map(r => r.Key).sort()).toEqual(['panel-a', 'panel-b']);
+    });
+
+    it('returns empty array when baseClass or pattern is falsy', () => {
+      expect(factory.GetAllRegistrationsByKeyPattern(null, /./)).toEqual([]);
+      // null pattern intentionally caught by truthy check
+      expect(factory.GetAllRegistrationsByKeyPattern(Animal, null as unknown as RegExp)).toEqual([]);
+    });
+  });
+
+  describe('GetAllRegistrationsByMetadata', () => {
+    beforeEach(() => {
+      factory.Register(Animal, Dog, 'fido', 0, true, false, { entity: 'X', slot: 'after-fields', sortKey: 100 });
+      factory.Register(Animal, Cat, 'whiskers', 0, true, false, { entity: 'X', slot: 'after-fields', sortKey: 50 });
+      factory.Register(Animal, GoldenRetriever, 'goldie', 0, true, false, { entity: 'Y', slot: 'after-fields' });
+      factory.Register(Animal, Dog, 'rex'); // no metadata at all
+    });
+
+    it('passes the metadata bag (or undefined) to the predicate', () => {
+      const matches = factory.GetAllRegistrationsByMetadata(Animal, (m) => m?.entity === 'X' && m?.slot === 'after-fields');
+      expect(matches.map(r => r.Key).sort()).toEqual(['fido', 'whiskers']);
+    });
+
+    it('handles registrations with no metadata (passes undefined)', () => {
+      const noMeta = factory.GetAllRegistrationsByMetadata(Animal, (m) => m === undefined);
+      expect(noMeta.map(r => r.Key)).toEqual(['rex']);
+    });
+
+    it('also exposes the full registration to the predicate', () => {
+      const highPriority = factory.GetAllRegistrationsByMetadata(Animal, (m, r) => (m?.sortKey as number ?? 0) >= 100 && r.Key === 'fido');
+      expect(highPriority).toHaveLength(1);
+    });
+
+    it('returns empty array when baseClass or predicate is missing', () => {
+      expect(factory.GetAllRegistrationsByMetadata(null, () => true)).toEqual([]);
+      expect(factory.GetAllRegistrationsByMetadata(Animal, null as unknown as () => boolean)).toEqual([]);
+    });
+  });
 });

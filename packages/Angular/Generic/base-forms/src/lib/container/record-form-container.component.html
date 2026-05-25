@@ -67,6 +67,23 @@
       <div class="mj-forms-all-panels">
         <ng-content></ng-content>
 
+        <!--
+          Container-provided fallback slot. ALWAYS present — last in document
+          order — so any panel whose registered slot isn't found in the current
+          form falls through here via FormSlotCoordinator's chain. Downstream
+          consumers that haven't rerun CodeGen against the slot-emitting
+          template still see every panel; they just render at the bottom
+          instead of at their preferred position.
+        -->
+        @if (Record && FormComponent) {
+          <mj-form-panel-slot
+            [Entity]="Record.EntityInfo.Name"
+            Slot="after-everything"
+            [Record]="Record"
+            [FormComponent]="FormComponent">
+          </mj-form-panel-slot>
+        }
+
         <!-- Empty state when no sections match search -->
         @if (EffectiveSearchFilter && VisibleSectionCount === 0) {
           <div class="mj-forms-empty-search-state">

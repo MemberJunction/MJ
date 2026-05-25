@@ -594,6 +594,28 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public FormSourceEmbeddingModelID = '';
     public FormSourceVectorIndexID = '';
 
+    // Slide-in is the QUICK-EDIT surface for content sources. We only expose the
+    // most-useful subset of the new knobs here; the full surface (other budgets,
+    // URL pattern, root URL, taxonomy mode, thresholds, …) lives on the entity
+    // form opened via the "Open Advanced settings →" link below.
+    //
+    // Decisions:
+    //   - MaxItemsPerRun: the single most-asked-for cap → always shown
+    //   - MaxDepth + the two crawl toggles: Website-only, the symptom that
+    //     started this whole work
+    //   - Everything else: too niche for the quick-edit surface
+    public FormMaxItemsPerRun: number | null = null;
+    public FormMaxDepth: number | null = null;
+    public FormCrawlSitesInLowerLevelDomain: boolean = true;
+    public FormCrawlOtherSitesInTopLevelDomain: boolean = false;
+
+    /** True when the form's selected source type is Website — gates the crawler knobs. */
+    public get IsWebsiteSourceTypeSelected(): boolean {
+        if (!this.FormSourceTypeID) return false;
+        const t = this.SourceTypeOptions.find(o => UUIDsEqual(o.ID, this.FormSourceTypeID));
+        return t != null && t.Name?.trim().toLowerCase() === 'website';
+    }
+
     // ── Schedule dialog ──
     /** Whether the schedule creation dialog is visible */
     public ShowScheduleDialog = false;
@@ -1865,17 +1887,42 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceVectorIndexID = card.VectorIndexID ?? '';
         this.EditingSourceID = card.ID;
 
-        // Populate FormSourceSpecificConfig from existing Configuration JSON
+        // Populate quick-edit knobs + FormSourceSpecificConfig from Configuration JSON.
+        // Reset to defaults first so a previously-edited source's values don't leak in.
         this.FormSourceSpecificConfig = {};
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
         const rawSource = this.contentSourcesRaw.find(s => UUIDsEqual(s['ID'] as string, card.ID));
         if (rawSource) {
             const configStr = rawSource['Configuration'] as string | null;
             if (configStr) {
                 try {
-                    const parsed = JSON.parse(configStr);
-                    const specific = parsed?.SourceSpecificConfiguration as Record<string, string> | undefined;
+                    const parsed = JSON.parse(configStr) as Record<string, unknown> | null;
+                    const specific = parsed?.['SourceSpecificConfiguration'] as Record<string, string> | undefined;
                     if (specific) {
                         this.FormSourceSpecificConfig = { ...specific };
+                    }
+                    // Run-budget knob — pulled directly off the typed Configuration.
+                    const items = parsed?.['MaxItemsPerRun'];
+                    if (typeof items === 'number' && Number.isFinite(items)) {
+                        this.FormMaxItemsPerRun = items;
+                    }
+                    // Website sub-object — only populates the inputs when present
+                    // (matches the autotagger's "unset = default" semantics).
+                    const website = parsed?.['Website'] as Record<string, unknown> | undefined;
+                    if (website) {
+                        const depth = website['MaxDepth'];
+                        if (typeof depth === 'number' && Number.isFinite(depth)) {
+                            this.FormMaxDepth = depth;
+                        }
+                        if (typeof website['CrawlSitesInLowerLevelDomain'] === 'boolean') {
+                            this.FormCrawlSitesInLowerLevelDomain = website['CrawlSitesInLowerLevelDomain'] as boolean;
+                        }
+                        if (typeof website['CrawlOtherSitesInTopLevelDomain'] === 'boolean') {
+                            this.FormCrawlOtherSitesInTopLevelDomain = website['CrawlOtherSitesInTopLevelDomain'] as boolean;
+                        }
                     }
                 } catch {
                     // Configuration not valid JSON, ignore
@@ -1885,6 +1932,22 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
         this.FormMode = 'edit-source';
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Open the full entity form for the source currently being edited in the
+     * slide-in. Quick-edit covers the most-used knobs; the entity form (with
+     * the dynamically-mounted BaseFormPanel slots) exposes everything else
+     * — taxonomy mode, thresholds, all five run-budget caps, URL pattern,
+     * root URL, etc.
+     */
+    public async OpenAdvancedSourceSettings(): Promise<void> {
+        if (!this.EditingSourceID) return;
+        this.CloseForm();
+        await this.navigationService.OpenEntityRecord(
+            'MJ: Content Sources',
+            CompositeKey.FromID(this.EditingSourceID),
+        );
     }
 
     public async SaveSource(): Promise<void> {
@@ -1979,6 +2042,32 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             // Store the full SourceSpecificConfiguration in the Configuration JSON
             const currentConfig = entity.ConfigurationObject ?? {};
             currentConfig.SourceSpecificConfiguration = { ...this.FormSourceSpecificConfig };
+
+            // Persist the quick-edit knobs that don't have their own DB columns
+            // (the rest live on the typed Configuration JSON sub-objects). The
+            // advanced settings flow on the entity form can override more fields
+            // — we only touch the keys the slide-in exposes so we don't clobber
+            // unrelated values an operator set there earlier.
+            if (this.FormMaxItemsPerRun != null && Number.isFinite(this.FormMaxItemsPerRun)) {
+                currentConfig.MaxItemsPerRun = this.FormMaxItemsPerRun;
+            } else {
+                // Empty input = "unlimited" — strip the key so the autotagger
+                // sees no cap (rather than 0 = "process zero items").
+                delete currentConfig.MaxItemsPerRun;
+            }
+
+            if (this.IsWebsiteSourceTypeSelected) {
+                const website = { ...(currentConfig.Website ?? {}) };
+                if (this.FormMaxDepth != null && Number.isFinite(this.FormMaxDepth)) {
+                    website.MaxDepth = this.FormMaxDepth;
+                } else {
+                    delete website.MaxDepth;
+                }
+                website.CrawlSitesInLowerLevelDomain = this.FormCrawlSitesInLowerLevelDomain;
+                website.CrawlOtherSitesInTopLevelDomain = this.FormCrawlOtherSitesInTopLevelDomain;
+                currentConfig.Website = website;
+            }
+
             entity.ConfigurationObject = currentConfig;
 
             entity.EmbeddingModelID = this.FormSourceEmbeddingModelID || null;
@@ -2873,6 +2962,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.FormSourceVectorIndexID = '';
         this.EditingSourceID = '';
         this.FormSourceSpecificConfig = {};
+        // Quick-edit knobs — defaults match the autotagger's runtime defaults.
+        this.FormMaxItemsPerRun = null;
+        this.FormMaxDepth = null;
+        this.FormCrawlSitesInLowerLevelDomain = true;
+        this.FormCrawlOtherSitesInTopLevelDomain = false;
     }
 
     private resetTypeForm(): void {
