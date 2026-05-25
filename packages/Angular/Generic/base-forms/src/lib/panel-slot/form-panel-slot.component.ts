@@ -54,6 +54,12 @@ import { FormSlotCoordinator } from './form-slot-coordinator.service';
     standalone: false,
     selector: 'mj-form-panel-slot',
     template: `<ng-container #anchor></ng-container>`,
+    // `display: contents` makes the host element disappear from the layout
+    // tree so the mounted panels (children) participate directly in the
+    // parent's flex/grid layout. Without this, the parent's gap/spacing
+    // rules treat all mounted panels as a SINGLE child (the slot host),
+    // collapsing the spacing between them.
+    styles: [`:host { display: contents; }`],
 })
 export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     /** The entity name (e.g., `"MJ: Content Sources"`) being edited. */
@@ -73,6 +79,9 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     private mounted: ComponentRef<BaseFormPanel>[] = [];
     private readonly destroy$ = new Subject<void>();
     private registeredSlot: FormPanelSlot | null = null;
+    /** Tracks synchronous re-entry depth into remount() so a future refactor
+     *  that reintroduces a remount loop surfaces loudly instead of freezing. */
+    private remountDepth = 0;
 
     constructor(@Optional() private readonly coordinator?: FormSlotCoordinator) {}
 
@@ -89,9 +98,29 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         }
     }
 
-    ngOnChanges(_changes: SimpleChanges): void {
+    ngOnChanges(changes: SimpleChanges): void {
         if (!this.Entity || !this.Slot || !this.Record || !this.FormComponent) {
             // Inputs still being wired — wait for the next pass.
+            return;
+        }
+
+        // Only remount when something that affects WHICH panels to mount has
+        // changed. FormContext only flows through to mounted panels — pushing
+        // it to the existing panels avoids an unmount/remount cycle.
+        //
+        // Critical for performance: the host form often reconstructs
+        // formContext on every CD pass. Treating that as a structural change
+        // would loop (remount → detectChanges → another CD → new FormContext
+        // → remount again).
+        const meaningfulKeys = ['Entity', 'Slot', 'Record', 'FormComponent'];
+        const meaningfulChange = meaningfulKeys.some(k => changes[k]?.currentValue !== changes[k]?.previousValue);
+        if (!meaningfulChange && changes['FormContext'] && this.mounted.length > 0) {
+            for (const ref of this.mounted) {
+                ref.instance.FormContext = this.FormContext;
+            }
+            return;
+        }
+        if (!meaningfulChange && this.mounted.length > 0) {
             return;
         }
         this.remount();
@@ -108,6 +137,12 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
     }
 
     private remount(): void {
+        this.remountDepth++;
+        if (this.remountDepth > 5) {
+            console.error(`[mj-form-panel-slot] LOOP DETECTED — remount depth ${this.remountDepth} on slot=${this.Slot}. Bailing.`);
+            this.remountDepth--;
+            return;
+        }
         this.unmountAll();
 
         // 1. Direct matches: panels registered for THIS slot.
@@ -121,7 +156,10 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
         const orphans = this.findOrphans();
 
         const all = [...direct, ...orphans];
-        if (all.length === 0) return;
+        if (all.length === 0) {
+            this.remountDepth--;
+            return;
+        }
 
         // Sort: higher sortKey first, then higher Priority, then registration order.
         all.sort((a, b) => {
@@ -138,12 +176,17 @@ export class FormPanelSlotComponent implements OnInit, OnChanges, OnDestroy {
                 ref.instance.Record = this.Record;
                 ref.instance.FormComponent = this.FormComponent;
                 if (this.FormContext) ref.instance.FormContext = this.FormContext;
-                ref.changeDetectorRef.detectChanges();
+                // No detectChanges() — Angular's normal CD pass picks the new
+                // component up. Calling detectChanges() synchronously inside
+                // an ongoing CD cycle (which is when ngOnChanges → remount
+                // fires) can re-enter and cause an infinite loop if anything
+                // upstream is reconstructing inputs on each CD pass.
                 this.mounted.push(ref);
             } catch (e) {
                 LogError(`[mj-form-panel-slot] Failed to mount panel for ${this.Entity}:${this.Slot}: ${e instanceof Error ? e.message : String(e)}`);
             }
         }
+        this.remountDepth--;
     }
 
     /** Find registrations whose metadata declares this exact entity + slot. */

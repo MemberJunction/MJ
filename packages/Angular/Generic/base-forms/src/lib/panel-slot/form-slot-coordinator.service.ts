@@ -35,12 +35,15 @@ export const FORM_SLOT_CHAIN: FormPanelSlot[] = [
 export class FormSlotCoordinator {
     private readonly presentSlots = new Set<FormPanelSlot>();
     private readonly changes$ = new Subject<void>();
+    /** Tracks synchronous re-entry depth into safeEmit so an emit storm
+     *  caused by a future refactor surfaces loudly instead of freezing. */
+    private emitDepth = 0;
 
     /** Slot host calls this on init. Idempotent — safe if invoked twice. */
     public registerSlot(slot: FormPanelSlot): void {
         if (!this.presentSlots.has(slot)) {
             this.presentSlots.add(slot);
-            this.changes$.next();
+            this.safeEmit('registerSlot');
         }
     }
 
@@ -48,7 +51,7 @@ export class FormSlotCoordinator {
     public deregisterSlot(slot: FormPanelSlot): void {
         if (this.presentSlots.has(slot)) {
             this.presentSlots.delete(slot);
-            this.changes$.next();
+            this.safeEmit('deregisterSlot');
         }
     }
 
@@ -80,5 +83,23 @@ export class FormSlotCoordinator {
     /** RxJS stream that fires whenever a slot registers or deregisters. */
     public get changes() {
         return this.changes$.asObservable();
+    }
+
+    /**
+     * Emit with re-entrancy detection. If we're already in the middle of an
+     * emit (i.e., a subscriber triggered another emit), log loudly so the loop
+     * is visible in the console instead of silently freezing the browser.
+     */
+    private safeEmit(cause: string): void {
+        if (this.emitDepth > 10) {
+            console.error(`[FormSlotCoordinator] LOOP DETECTED — emit depth ${this.emitDepth} from ${cause}. Bailing out to prevent freeze.`);
+            return;
+        }
+        this.emitDepth++;
+        try {
+            this.changes$.next();
+        } finally {
+            this.emitDepth--;
+        }
     }
 }
