@@ -49,6 +49,21 @@ export interface CreateConversationOptions {
     applicationId?: string | null;
     /** Optional per-conversation pinned default agent (e.g. Research Agent). */
     defaultAgentId?: string | null;
+    /**
+     * "What is this conversation about?" pointer — the Entity whose record
+     * this conversation references. Paired with {@link linkedRecordId} via
+     * the DB CHECK constraint `CK_Conversation_LinkBinding`: both NULL or
+     * both populated. Form Builder cockpit passes the MJ: Components
+     * entity ID + the active form's ComponentID so the cockpit can later
+     * filter "prior conversations about THIS form."
+     */
+    linkedEntityId?: string | null;
+    /**
+     * Primary key of the linked record, serialized as a string. Used with
+     * {@link linkedEntityId}. NVARCHAR(500) in the DB — handles any PK shape
+     * (UUID, int, composite).
+     */
+    linkedRecordId?: string | null;
 }
 
 export interface SharedByInfo {
@@ -472,6 +487,19 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
         if (options?.defaultAgentId !== undefined) {
             conversation.DefaultAgentID = options.defaultAgentId;
+        }
+        // Linked-record binding — the DB CK_Conversation_LinkBinding CHECK
+        // requires both Linked* columns to be populated together or both
+        // null. We forward each caller-supplied value when explicitly
+        // provided (undefined = leave the field alone, null = explicit
+        // clear). If the caller supplies only one of the two, the DB
+        // rejects on save — surfacing the misconfiguration loudly rather
+        // than letting half a link silently land.
+        if (options?.linkedEntityId !== undefined) {
+            conversation.LinkedEntityID = options.linkedEntityId;
+        }
+        if (options?.linkedRecordId !== undefined) {
+            conversation.LinkedRecordID = options.linkedRecordId;
         }
 
         const saved = await conversation.Save();

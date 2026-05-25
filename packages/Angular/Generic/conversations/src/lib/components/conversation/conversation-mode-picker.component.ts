@@ -43,7 +43,6 @@ import { UUIDsEqual } from '@memberjunction/global';
                     [title]="ButtonTitle"
                     [disabled]="Disabled"
                     (click)="Toggle($event)">
-                    <i [class]="IconClassFor(CurrentPreset)"></i>
                     <span class="mj-cv-mode-picker__label">{{ CurrentLabel }}</span>
                     <i class="fa-solid fa-caret-down mj-cv-mode-picker__caret"></i>
                 </button>
@@ -57,7 +56,6 @@ import { UUIDsEqual } from '@memberjunction/global';
                                 [class.mj-cv-mode-picker__item--selected]="IsSelected(p)"
                                 [title]="p.Description || p.Name"
                                 (click)="PickPreset(p)">
-                                <i [class]="IconClassFor(p)"></i>
                                 <div class="mj-cv-mode-picker__item-text">
                                     <span class="mj-cv-mode-picker__item-name">{{ p.DisplayName || p.Name }}</span>
                                     @if (p.Description) {
@@ -104,10 +102,8 @@ import { UUIDsEqual } from '@memberjunction/global';
             padding: 8px 12px; background: transparent; border: none; cursor: pointer;
             color: var(--mj-text-primary); font-size: 13px; text-align: left;
         }
-        .mj-cv-mode-picker__item > i { margin-top: 2px; width: 16px; text-align: center; color: var(--mj-text-secondary); }
         .mj-cv-mode-picker__item:hover { background: var(--mj-bg-surface-hover); }
         .mj-cv-mode-picker__item--selected { background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent); }
-        .mj-cv-mode-picker__item--selected > i { color: var(--mj-brand-primary); }
         .mj-cv-mode-picker__item-text { flex: 1; display: flex; flex-direction: column; gap: 2px; }
         .mj-cv-mode-picker__item-name { font-weight: 600; }
         .mj-cv-mode-picker__item-desc { font-size: 11px; color: var(--mj-text-muted); }
@@ -159,19 +155,6 @@ export class ConversationModePickerComponent implements OnInit {
         const base = `Mode: ${this.CurrentLabel}`;
         const desc = this.CurrentPreset.Description ?? '';
         return desc ? `${base} — ${desc}\n\nClick to change. Applies to the NEXT message.` : `${base} — click to change`;
-    }
-
-    /**
-     * Heuristic icons by preset name — keeps the picker readable at a
-     * glance without needing per-preset config. Falls back to a generic
-     * gear when the name doesn't match a known pattern.
-     */
-    public IconClassFor(p: MJAIAgentConfigurationEntity | null): string {
-        const name = (p?.Name ?? '').toLowerCase();
-        if (name.includes('draft') || name.includes('fast')) return 'fa-solid fa-bolt';
-        if (name.includes('standard') || name.includes('balanced')) return 'fa-solid fa-scale-balanced';
-        if (name.includes('high') || name.includes('power') || name.includes('quality')) return 'fa-solid fa-brain';
-        return 'fa-solid fa-gear';
     }
 
     public IsSelected(p: MJAIAgentConfigurationEntity): boolean {

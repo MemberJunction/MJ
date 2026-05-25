@@ -58,6 +58,8 @@
         [defaultAgentId]="CodesmithAgentId"
         [applicationScope]="'Application'"
         [applicationId]="CockpitApplicationId"
+        [linkedEntityId]="ComponentsEntityID"
+        [linkedRecordId]="LinkedComponentID"
         [emptyStateGreeting]="'How can I help with this component?'"
         (conversationCreated)="OnConversationCreated($event)"
         (pendingMessageConsumed)="OnPendingMessageConsumed()"

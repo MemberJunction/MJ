@@ -151,6 +151,26 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   @Input() applicationId: string | null = null;
 
   /**
+   * "What is this conversation about?" — the Entity ID this conversation
+   * references. Forwarded to `ConversationEngine.CreateConversation` so
+   * the new row's `LinkedEntityID` is stamped at creation time. Paired
+   * with {@link linkedRecordId} (DB CHECK requires both populated or both
+   * null). Form Builder cockpit passes the MJ: Components entity ID;
+   * Component Studio's AI panel does the same. Surfaces use this to
+   * later list "prior conversations about THIS form/component."
+   * Has no effect on existing conversations.
+   */
+  @Input() linkedEntityId: string | null = null;
+
+  /**
+   * Primary key of the linked record, serialized as a string. Used with
+   * {@link linkedEntityId}. Form Builder cockpit passes the active
+   * form's ComponentID; Component Studio's AI panel passes the
+   * currently-selected component's ID.
+   */
+  @Input() linkedRecordId: string | null = null;
+
+  /**
    * Whether the conversation header should render the per-conversation
    * agent picker. Default true. The picker lets a user pin a default
    * agent on the active conversation (saved to
@@ -187,6 +207,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * Order: conversation-pinned default → embedder default → Sage.
    */
+  /**
+   * True when the chat header should render even before a conversation
+   * row exists. Currently means: the embedder has enabled the mode
+   * picker AND we resolved a target agent for it (so there's actually
+   * something to put in the header). Lets surfaces like the Form
+   * Builder cockpit show the mode picker on top of the empty-state
+   * instead of waiting for the first message to create a conversation.
+   */
+  public get HasPreConversationHeader(): boolean {
+    return this.showAgentModePicker && !!this.ModePickerTargetAgentId;
+  }
+
   public get ModePickerTargetAgentId(): string | null {
     return this.conversation?.DefaultAgentID
         ?? this.defaultAgentId
@@ -2194,6 +2226,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         (this.applicationScope !== 'Global' && !this.applicationId)
           ? 'Global'
           : this.applicationScope;
+      // Linked-record stamping — both columns must be populated together
+      // or both null (DB CHECK constraint CK_Conversation_LinkBinding).
+      // We only forward the pair when BOTH inputs are supplied; if the
+      // host bound one but not the other, treat as misconfiguration and
+      // skip the linkage rather than failing the save.
+      const hasLink = !!this.linkedEntityId && !!this.linkedRecordId;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
@@ -2204,6 +2242,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           applicationScope: effectiveScope,
           applicationId: effectiveScope === 'Global' ? null : this.applicationId,
           defaultAgentId: this.defaultAgentId,
+          linkedEntityId: hasLink ? this.linkedEntityId : null,
+          linkedRecordId: hasLink ? this.linkedRecordId : null,
         }
       );
 

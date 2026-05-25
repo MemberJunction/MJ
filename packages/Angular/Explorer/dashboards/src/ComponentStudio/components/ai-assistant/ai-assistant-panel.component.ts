@@ -96,6 +96,31 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
     /** Component Studio's Application ID — resolved from Metadata cache. */
     public CockpitApplicationId: string | null = null;
 
+    /**
+     * EntityID for `MJ: Components`. Stamped on every conversation
+     * created from this panel as the `LinkedEntityID`, paired with the
+     * currently-selected Component's ID. Enables "show prior conversations
+     * about THIS component" later. In-memory Metadata lookup; no RunView.
+     */
+    public ComponentsEntityID: string | null = null;
+
+    /**
+     * The DB-backed Component ID currently selected — null when the
+     * panel has nothing selected, or when the selection is a
+     * file-loaded (transient) component that has no persistent DB row
+     * to link conversations to. Used as `[linkedRecordId]` on the
+     * embedded chat-area. Pairs with {@link ComponentsEntityID}.
+     */
+    public get LinkedComponentID(): string | null {
+        const sel = this.State.SelectedComponent;
+        if (!sel) return null;
+        // FileLoadedComponent has `isFileLoaded === true` and a lower-case
+        // `id`; DbComponentSummary has the canonical `ID`. Discriminate by
+        // the flag rather than property presence to keep TS happy.
+        if ('isFileLoaded' in sel && sel.isFileLoaded === true) return null;
+        return (sel as { ID: string }).ID ?? null;
+    }
+
     private static readonly CODESMITH_AGENT_NAME = 'Codesmith Agent';
     private static readonly COCKPIT_APP_NAME = 'Component Studio';
 
@@ -136,6 +161,12 @@ export class AIAssistantPanelComponent extends BaseAngularComponent implements O
                 a => a.Name?.trim().toLowerCase() === AIAssistantPanelComponent.COCKPIT_APP_NAME.toLowerCase()
             );
             this.CockpitApplicationId = app?.ID ?? null;
+            // Resolve MJ: Components entity ID for conversation linkage.
+            const componentsEntity = md.EntityByName?.('MJ: Components');
+            if (!componentsEntity) {
+                LogError(`AIAssistantPanel: Entity 'MJ: Components' not found in Metadata cache — conversation linkage will be skipped.`);
+            }
+            this.ComponentsEntityID = componentsEntity?.ID ?? null;
 
             // Subscribe to the Explorer shell's app-context publisher so
             // the agent sees the same snapshot the floating overlay sees.

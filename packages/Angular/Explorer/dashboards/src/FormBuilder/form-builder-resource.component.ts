@@ -9,7 +9,7 @@ import {
 import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, MJEvent } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import type { MJComponentEntity, MJEntityFormOverrideEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -356,6 +356,15 @@ export class FormBuilderResourceComponent
      */
     public CockpitApplicationId: string | null = null;
 
+    /**
+     * EntityID for `MJ: Components`, resolved from `Metadata.Entities` at
+     * init. Bound to `<mj-conversation-chat-area>`'s `[linkedEntityId]`
+     * so conversations created in the cockpit are stamped as "about a
+     * Component" — enabling the future "show prior conversations about
+     * THIS form" surface. In-memory lookup, no RunView.
+     */
+    public ComponentsEntityID: string | null = null;
+
     private get provider(): IMetadataProvider {
         return this.ProviderToUse;
     }
@@ -382,6 +391,22 @@ export class FormBuilderResourceComponent
                 LogError(`FormBuilderResource: Application '${FormBuilderResourceComponent.COCKPIT_APP_NAME}' not found in Metadata cache — conversations will fall back to Global scope.`);
             }
             this.CockpitApplicationId = app?.ID ?? null;
+            // Resolve the MJ: Components entity ID once. Used to stamp
+            // every cockpit-created conversation's LinkedEntityID so we
+            // can later answer "show prior conversations about this form."
+            const componentsEntity = md.EntityByName?.('MJ: Components');
+            if (!componentsEntity) {
+                LogError(`FormBuilderResource: Entity 'MJ: Components' not found in Metadata cache — conversation linkage will be skipped.`);
+            }
+            this.ComponentsEntityID = componentsEntity?.ID ?? null;
+            // Warm the ComponentMetadataEngine so the available-libraries
+            // catalog is in memory by the time we first publish agent
+            // context. The engine caches all MJ: Component Libraries
+            // (~60 rows); we only need the Active ones at injection time.
+            // Fire-and-forget: if it hasn't loaded by first publish, the
+            // libraries list will just be empty for that turn — degrades
+            // gracefully.
+            void ComponentMetadataEngine.Instance.Config(false, this.currentUser ?? undefined, this.provider);
             // Restore cockpit UI prefs (pane sizes, collapse, last tab)
             // from UserInfoEngine. Single JSON blob under FORM_BUILDER_PREFS_KEY.
             this.loadPrefs();
@@ -1613,6 +1638,11 @@ export class FormBuilderResourceComponent
         this.SelectedSectionId = this.Canvas?.sections[0]?.id ?? null;
         this.regenerateCode();
         this.markDirty();
+        // Re-publish AppContextSnapshot: TargetEntityName + Schema just
+        // populated, so the agent context that was null during OnNewForm
+        // needs to refresh. Otherwise a chat sent before the user clicks
+        // Save races with the stale-context publish (ActiveForm=null).
+        this.registerAgentContext();
         this.cdr.markForCheck();
     }
 
@@ -1838,6 +1868,10 @@ export class FormBuilderResourceComponent
 
             this.SelectedFormID = componentEntity.ID;
             this.DirtyFlag = false;
+            // Cache the just-saved spec so PreviewSpec and registerAgentContext
+            // see the persisted shape on the next read — instead of relying
+            // on whatever was last loaded (or null for a brand-new form).
+            this.SavedSpec = specToSave;
             await this.loadExistingForms();
             this.notifications.CreateSimpleNotification(
                 `Saved ${componentEntity.Name}.`, 'success', 3000);
@@ -1846,6 +1880,13 @@ export class FormBuilderResourceComponent
             this.PendingOverrideComponentName = componentEntity.Name;
             this.PendingOverrideEntityName = this.TargetEntityName;
             this.ShowFormOverrideDialog = true;
+            // Re-publish the AppContextSnapshot now that this is a real
+            // persisted form. Without this, a brand-new form's first chat
+            // turn ships ActiveForm=null because the cockpit's last publish
+            // happened during OnNewForm (when TargetEntityName/SelectedFormID
+            // were still empty). Agent then has to discover everything via
+            // tool calls — exactly the round-trip we just removed.
+            this.registerAgentContext();
             this.cdr.markForCheck();
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
@@ -1981,6 +2022,53 @@ export class FormBuilderResourceComponent
      * token bloat while still giving the agent enough to plan without
      * asking the user "what entity links to this?".
      */
+    /**
+     * Compact catalog of **Active** Component Libraries the agent can
+     * declare in `ComponentSpec.libraries`. Read from
+     * `ComponentMetadataEngine` (cached at cockpit init). Same shape Skip
+     * uses to inform Codesmith Agent — Form Builder forms run in the
+     * exact same React runtime, so any Active library is fair game.
+     *
+     * Per-library payload is kept lean: Name (npm package), Category
+     * (UI / Charting / Utility / Other), GlobalVariable (the runtime
+     * binding the agent uses inside JSX), Description (one-liner), and
+     * Version. UsageInstructions are included only when present AND
+     * short (<500 chars) — longer docs would balloon the prompt.
+     *
+     * Result sorted by Category then Name so the agent sees related
+     * libraries grouped together (all Charting options adjacent, all UI,
+     * etc.).
+     */
+    private buildAvailableLibraries(): ReadonlyArray<{
+        Name: string;
+        Category: string | null;
+        GlobalVariable: string | null;
+        Description: string | null;
+        Version: string | null;
+        UsageInstructions?: string;
+    }> {
+        const libs = ComponentMetadataEngine.Instance.ComponentLibraries ?? [];
+        return libs
+            .filter(l => l.Status === 'Active')
+            .map(l => {
+                const entry: {
+                    Name: string; Category: string | null; GlobalVariable: string | null;
+                    Description: string | null; Version: string | null; UsageInstructions?: string;
+                } = {
+                    Name: l.Name,
+                    Category: l.Category ?? null,
+                    GlobalVariable: l.GlobalVariable ?? null,
+                    Description: l.Description ?? null,
+                    Version: l.Version ?? null,
+                };
+                if (l.UsageInstructions && l.UsageInstructions.length > 0 && l.UsageInstructions.length < 500) {
+                    entry.UsageInstructions = l.UsageInstructions;
+                }
+                return entry;
+            })
+            .sort((a, b) => (a.Category ?? '').localeCompare(b.Category ?? '') || a.Name.localeCompare(b.Name));
+    }
+
     private buildRelatedEntitiesSummary(): ReadonlyArray<{
         RelatedEntity: string;
         Type: string;
@@ -2015,6 +2103,13 @@ export class FormBuilderResourceComponent
                     ? {
                         EntityName: this.TargetEntityName,
                         FormName: this.SelectedFormName,
+                        // Human-authored description of THIS form (what it
+                        // does, when to use it). Pulled from the saved
+                        // ComponentSpec.description so the agent has a
+                        // running narrative of the form's intent across
+                        // turns — handy when the user asks "make it more
+                        // X" without re-explaining what the form is.
+                        Description: this.SavedSpec?.description ?? null,
                         SectionCount: this.Canvas?.sections.length ?? 0,
                         IsDirty: this.DirtyFlag,
                         // Identity of the currently-loaded Component +
@@ -2029,6 +2124,19 @@ export class FormBuilderResourceComponent
                         OverrideID: this.ActiveOverrideID,
                         OverrideScope: this.ActiveOverrideScope,
                         OverrideStatus: this.ActiveOverrideStatus,
+                        // **Live source code** of the form, NOT a stale
+                        // snapshot. We ship `EditableCode` (the in-memory
+                        // editor state) rather than `SavedSpec.code`
+                        // because the user may have typed edits since
+                        // last save. The agent must operate on what the
+                        // user is actually looking at. This is the
+                        // largest piece of context — a few KB to ~15KB
+                        // per turn — but it's worth every byte: shipping
+                        // it inline eliminates the `Get Active Form For
+                        // Entity` round-trip that otherwise burned a
+                        // 5–7-second tool call on EVERY turn just to
+                        // re-fetch code we already had in memory.
+                        Code: this.EditableCode || null,
                         // Curated, LLM-friendly schema for the entity this
                         // form binds to (resolved FKs, value-list enums,
                         // stripped audit fields). Pre-built when the form
@@ -2041,11 +2149,22 @@ export class FormBuilderResourceComponent
                         // for the agent to know what related-entity tables
                         // / lookups / sub-forms it COULD add to this form.
                         // Full schemas for any of these are still one
-                        // `Get Entity Schema For Form` action call away;
-                        // we keep this list compact to avoid token bloat.
+                        // `Get Entity Schema For Form` action call away
+                        // (called WHEN drilling into a related entity,
+                        // not pre-emptively); we keep this list compact
+                        // to avoid token bloat.
                         RelatedEntities: this.buildRelatedEntitiesSummary(),
                     }
                     : null,
+                // Cockpit-wide catalog of libraries the form-runtime
+                // already supports — agent uses these as the source of
+                // truth for `ComponentSpec.libraries` declarations. Sits
+                // alongside ActiveForm rather than nested inside, since
+                // it's not per-form state — it's the same catalog
+                // regardless of which form is open. See
+                // `buildAvailableLibraries` for the payload shape and
+                // sorting rules.
+                AvailableLibraries: this.buildAvailableLibraries(),
             };
             // Push cockpit-specific state to NavigationService. The Explorer
             // shell merges this into the published AppContextSnapshot's
