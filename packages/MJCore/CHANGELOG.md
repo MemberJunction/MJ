@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.37.0
+
+### Minor Changes
+
+- 4f15f31: Add Feedback Explorer dashboard with 1–10 conversation-rating modal persisting to ConversationDetail, plus a migration granting the UI role Create/Update on MJ: User Settings so user-scoped preferences (e.g. Agent Feedback consent) stop silently failing.
+
+### Patch Changes
+
+- @memberjunction/global@5.37.0
+- @memberjunction/sql-dialect@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

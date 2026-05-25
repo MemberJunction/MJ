@@ -1,5 +1,18 @@
 # @memberjunction/search-engine
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/storage@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

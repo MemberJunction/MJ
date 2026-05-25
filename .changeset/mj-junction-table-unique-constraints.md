@@ -1,5 +1,0 @@
----
-"@memberjunction/codegen-lib": minor
----
-
-Add UNIQUE constraints to 17 pure junction tables in `__mj` so duplicate natural-key pairs fail loudly instead of silently accumulating. `__mj.Entity` has long had `UQ_Entity_Name` protecting its natural key, but the closely-related junction tables (ApplicationEntity, UserApplicationEntity, ActionLibrary, AIAgentArtifactType, AIModelAction, APIKeyApplication, AuthorizationRole, ComponentDependency, ComponentLibraryLink, EmployeeRole, EmployeeSkill, EntityAction, EntityCommunicationMessageType, FileEntityRecordLink, QueryPermission, ActionAuthorization, ActionContext) had no equivalent enforcement — CodeGen's blind `INSERT` paths and other writers could (and did, in production) accumulate semantic duplicates when input gating failed (entity delete/recreate cycles, parallel CodeGen runs, manual bootstrap scripts). Migration assumes the affected tables are free of duplicate `(FK1, FK2)` pairs before running; verified zero dups on the reference environment but databases with pre-existing duplicates must dedup before applying. Tightening change — writes producing duplicates now error rather than silently succeed.

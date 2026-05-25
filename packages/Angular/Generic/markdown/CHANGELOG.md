@@ -1,5 +1,7 @@
 # @memberjunction/ng-markdown
 
+## 5.37.0
+
 ## 5.36.0
 
 ## 5.35.0

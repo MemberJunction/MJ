@@ -1,5 +1,37 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.37.0
+
+### Minor Changes
+
+- baf3032: Add UNIQUE constraints to 17 pure junction tables in `__mj` so duplicate natural-key pairs fail loudly instead of silently accumulating. `__mj.Entity` has long had `UQ_Entity_Name` protecting its natural key, but the closely-related junction tables (ApplicationEntity, UserApplicationEntity, ActionLibrary, AIAgentArtifactType, AIModelAction, APIKeyApplication, AuthorizationRole, ComponentDependency, ComponentLibraryLink, EmployeeRole, EmployeeSkill, EntityAction, EntityCommunicationMessageType, FileEntityRecordLink, QueryPermission, ActionAuthorization, ActionContext) had no equivalent enforcement — CodeGen's blind `INSERT` paths and other writers could (and did, in production) accumulate semantic duplicates when input gating failed (entity delete/recreate cycles, parallel CodeGen runs, manual bootstrap scripts). Migration assumes the affected tables are free of duplicate `(FK1, FK2)` pairs before running; verified zero dups on the reference environment but databases with pre-existing duplicates must dedup before applying. Tightening change — writes producing duplicates now error rather than silently succeed.
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/postgresql-dataprovider@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes
