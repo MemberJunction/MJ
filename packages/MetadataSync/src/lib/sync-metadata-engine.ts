@@ -71,9 +71,6 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   /** Reverse index used to scope lookup invalidation on delete: entity name → set of lookup keys touching that entity. */
   private lookupKeysByEntity: Map<string, Set<string>> = new Map();
 
-  /** Reverse index from lookup key → resolved PK, used to drop only the lookups that pointed at a deleted record. */
-  private lookupValuesByKey: Map<string, string> = new Map();
-
   public initializeEngine(syncEngine: SyncEngine): void {
     this.syncEngine = syncEngine;
   }
@@ -127,12 +124,12 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    */
   protected override canUseImmediateMutation(
     config: BaseEnginePropertyConfig,
-    _skipAdditionalLoadingCheck: boolean = false
+    skipAdditionalLoadingCheck: boolean = false
   ): boolean {
     if (config.PropertyName?.startsWith(CACHED_ENTITY_PROP_PREFIX)) {
       return true;
     }
-    return super.canUseImmediateMutation(config, _skipAdditionalLoadingCheck);
+    return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck);
   }
 
   public markEntityAsPreloaded(entityName: string): void {
@@ -173,7 +170,17 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       slot[propName] = [];
     }
     const list = slot[propName] as BaseEntity[];
-    const index = list.findIndex(e => e === entity || e.PrimaryKey.Equals(entity.PrimaryKey));
+    // `PrimaryKey.Equals` requires the entity to have a populated composite
+    // key; if either side is missing one we fall back to reference equality
+    // only (the entity might not be saved yet, in which case no dedup is
+    // possible anyway).
+    const incomingKey = entity.PrimaryKey;
+    const index = list.findIndex(e => {
+      if (e === entity) return true;
+      const existingKey = e.PrimaryKey;
+      if (!incomingKey || !existingKey) return false;
+      return existingKey.Equals(incomingKey);
+    });
     if (index >= 0) {
       list[index] = entity;
     } else {
@@ -203,7 +210,6 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
   public setCachedLookup(key: string, id: string, entityName?: string): void {
     this.lookupCache.set(key, id);
-    this.lookupValuesByKey.set(key, id);
     if (entityName) {
       const normalized = entityName.toLowerCase();
       let bucket = this.lookupKeysByEntity.get(normalized);
@@ -218,7 +224,6 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   public clearLookupCache(): void {
     this.lookupCache.clear();
     this.lookupKeysByEntity.clear();
-    this.lookupValuesByKey.clear();
   }
 
   /**
@@ -236,7 +241,6 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     if (!bucket) return;
     for (const key of bucket) {
       this.lookupCache.delete(key);
-      this.lookupValuesByKey.delete(key);
     }
     this.lookupKeysByEntity.delete(normalized);
   }
@@ -337,10 +341,19 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
         list.push(primaryKey);
       }
 
-      const relatedEntities = record.relatedEntities as Record<string, Array<Record<string, unknown>>> | undefined;
+      const relatedEntities = record.relatedEntities as Record<string, unknown> | undefined;
       if (relatedEntities) {
         for (const [relatedEntityName, relatedRecords] of Object.entries(relatedEntities)) {
-          this.extractPrimaryKeysRecursive(relatedRecords, relatedEntityName, keysByEntity);
+          // Defensive: a malformed metadata file could carry a non-array value
+          // here. Skip silently instead of throwing — validation will surface
+          // the shape error elsewhere; preload should be best-effort.
+          if (Array.isArray(relatedRecords)) {
+            this.extractPrimaryKeysRecursive(
+              relatedRecords as Array<Record<string, unknown>>,
+              relatedEntityName,
+              keysByEntity
+            );
+          }
         }
       }
     }

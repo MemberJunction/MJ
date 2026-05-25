@@ -53,6 +53,18 @@ interface SyncEngineStub {
  * without us depending on the framework's full BaseEntity initialization.
  */
 function makeFakeEntity(fields: Record<string, unknown>): BaseEntity {
+  // PrimaryKey carries the field bag explicitly so Equals can compare by value.
+  // Production BaseEntity wires this up via CompositeKey; we just need shape
+  // parity for the dedup paths the tests exercise.
+  const primaryKey = {
+    fields,
+    Equals(other: unknown) {
+      if (!other || typeof other !== 'object') return false;
+      const otherFields = (other as { fields?: Record<string, unknown> }).fields;
+      if (!otherFields) return false;
+      return JSON.stringify(otherFields) === JSON.stringify(fields);
+    }
+  };
   return {
     Get(name: string) {
       return fields[name];
@@ -60,14 +72,7 @@ function makeFakeEntity(fields: Record<string, unknown>): BaseEntity {
     GetAll() {
       return { ...fields };
     },
-    PrimaryKey: {
-      Equals(other: unknown) {
-        if (!other || typeof other !== 'object') return false;
-        const o = other as { ToString?: () => string; KeyValuePairs?: Array<{ FieldName: string; Value: unknown }> };
-        // Trivial equality: same field bag
-        return JSON.stringify(o) === JSON.stringify(this);
-      }
-    }
+    PrimaryKey: primaryKey
   } as unknown as BaseEntity;
 }
 
@@ -273,6 +278,29 @@ describe('SyncMetadataEngine', () => {
       expect(engine.getCachedEntities('TestEntity')).toHaveLength(0);
       expect(engine.getCachedLookup('test-lookup')).toBeUndefined();
       expect(engine.getCachedLookup('other-lookup')).toBe('other-id');
+    });
+
+    it('deduplicates on re-add via PrimaryKey.Equals', () => {
+      // Our fake Equals compares the whole field bag (the test fake doesn't
+      // know which fields are PK), so we use identical fields here — the
+      // realistic BaseEntity.PrimaryKey.Equals would do the same when the
+      // PK is the only shared field.
+      const e1 = makeFakeEntity({ ID: 'id-1' });
+      const e2 = makeFakeEntity({ ID: 'id-1' });
+      engine.addEntityToCache('TestEntity', e1);
+      engine.addEntityToCache('TestEntity', e2);
+
+      const cached = engine.getCachedEntities('TestEntity');
+      expect(cached).toHaveLength(1);
+      // The second add should replace the first by-key.
+      expect(cached[0]).toBe(e2);
+    });
+
+    it('does not throw when an entity has no PrimaryKey populated', () => {
+      // Simulates an in-flight, not-yet-saved entity. We can't dedup it but
+      // we shouldn't blow up either.
+      const halfBuilt = { Get: () => undefined, GetAll: () => ({}), PrimaryKey: undefined } as unknown as BaseEntity;
+      expect(() => engine.addEntityToCache('TestEntity', halfBuilt)).not.toThrow();
     });
   });
 });
