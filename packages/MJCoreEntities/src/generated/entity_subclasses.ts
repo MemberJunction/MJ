@@ -11895,7 +11895,7 @@ export const MJConversationSchema = z.object({
         * * Description: The type or category of conversation (Skip, Support, Chat, etc.).`),
     IsArchived: z.boolean().describe(`
         * * Field Name: IsArchived
-        * * Display Name: Archived
+        * * Display Name: Is Archived
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation has been archived and should not appear in active lists.`),
@@ -11947,7 +11947,7 @@ export const MJConversationSchema = z.object({
         * * Related Entity/Foreign Key: MJ: Projects (vwProjects.ID)`),
     IsPinned: z.boolean().describe(`
         * * Field Name: IsPinned
-        * * Display Name: Pinned
+        * * Display Name: Is Pinned
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this conversation is pinned to the top of lists`),
@@ -11957,13 +11957,36 @@ export const MJConversationSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Test Runs (vwTestRuns.ID)
         * * Description: Optional Foreign Key - Links this conversation to a test run if this conversation was generated as part of a test. Enables tracking test conversations separately from production conversations.`),
+    ApplicationScope: z.union([z.literal('Application'), z.literal('Both'), z.literal('Global')]).describe(`
+        * * Field Name: ApplicationScope
+        * * Display Name: Application Scope
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Both
+    *   * Global
+        * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.`),
+    ApplicationID: z.string().nullable().describe(`
+        * * Field Name: ApplicationID
+        * * Display Name: Application
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+        * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.`),
+    DefaultAgentID: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentID
+        * * Display Name: Default Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+        * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.`),
     User: z.string().describe(`
         * * Field Name: User
         * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     LinkedEntity: z.string().nullable().describe(`
         * * Field Name: LinkedEntity
-        * * Display Name: Linked Entity Type
+        * * Display Name: Linked Entity Name
         * * SQL Data Type: nvarchar(255)`),
     DataContext: z.string().nullable().describe(`
         * * Field Name: DataContext
@@ -11980,6 +12003,14 @@ export const MJConversationSchema = z.object({
     TestRun: z.string().nullable().describe(`
         * * Field Name: TestRun
         * * Display Name: Test Run Name
+        * * SQL Data Type: nvarchar(255)`),
+    Application: z.string().nullable().describe(`
+        * * Field Name: Application
+        * * Display Name: Application Name
+        * * SQL Data Type: nvarchar(100)`),
+    DefaultAgent: z.string().nullable().describe(`
+        * * Field Name: DefaultAgent
+        * * Display Name: Default Agent Name
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -57553,7 +57584,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
+ * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -58634,6 +58665,46 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Records with a 'Global' scope must not have an application assigned, while records scoped to 'Application' or 'Both' must have a valid application ID to ensure correct scoping.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateApplicationIDBasedOnScope(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Records with a 'Global' scope must not have an application assigned, while records scoped to 'Application' or 'Both' must have a valid application ID to ensure correct scoping.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApplicationIDBasedOnScope(result: ValidationResult) {
+    	if (this.ApplicationScope === 'Global' && this.ApplicationID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"Application ID must be empty when the Application Scope is set to 'Global'.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if ((this.ApplicationScope === 'Application' || this.ApplicationScope === 'Both') && this.ApplicationID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"An Application ID must be provided when the Application Scope is set to 'Application' or 'Both'.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -58712,7 +58783,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsArchived
-    * * Display Name: Archived
+    * * Display Name: Is Archived
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation has been archived and should not appear in active lists.
@@ -58830,7 +58901,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: IsPinned
-    * * Display Name: Pinned
+    * * Display Name: Is Pinned
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: Indicates if this conversation is pinned to the top of lists
@@ -58857,6 +58928,53 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     }
 
     /**
+    * * Field Name: ApplicationScope
+    * * Display Name: Application Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Both
+    *   * Global
+    * * Description: Controls where this conversation surfaces in the UI. Global = appears in the main Chat app (no application binding). Application = scoped to a specific Application's embedded chat surface (e.g. the Form Builder cockpit); hidden from the main chat list by default. Both = explicitly promoted to appear in BOTH the main chat list and the bound Application's embedded surface. Defaults to Global so pre-existing conversations stay visible in main chat. Paired with ApplicationID via a cross-column CHECK constraint: Global => ApplicationID IS NULL; Application or Both => ApplicationID IS NOT NULL.
+    */
+    get ApplicationScope(): 'Application' | 'Both' | 'Global' {
+        return this.Get('ApplicationScope');
+    }
+    set ApplicationScope(value: 'Application' | 'Both' | 'Global') {
+        this.Set('ApplicationScope', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Optional Application this conversation is bound to. Required when ApplicationScope is 'Application' or 'Both'; must be NULL when ApplicationScope is 'Global'. Enforced by the CK_Conversation_ScopeAppBinding cross-column CHECK. Used by embedded chat surfaces (e.g. the Form Builder cockpit) to filter their conversation list to just their own application's conversations.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: DefaultAgentID
+    * * Display Name: Default Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional per-conversation default AI agent. When set, the message router targets this agent for non-mention, non-continuity messages instead of falling through to the embedder-supplied default (e.g. Form Builder) or to Sage. Lets a user pin a conversation to a specific specialist agent (e.g. Research Agent) so Sage is never invoked for that thread. Routing precedence: @mention > continuity (last responder) > Conversation.DefaultAgentID > embedder's defaultAgentId input > Sage fallback.
+    */
+    get DefaultAgentID(): string | null {
+        return this.Get('DefaultAgentID');
+    }
+    set DefaultAgentID(value: string | null) {
+        this.Set('DefaultAgentID', value);
+    }
+
+    /**
     * * Field Name: User
     * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
@@ -58867,7 +58985,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: LinkedEntity
-    * * Display Name: Linked Entity Type
+    * * Display Name: Linked Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get LinkedEntity(): string | null {
@@ -58908,6 +59026,24 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     get TestRun(): string | null {
         return this.Get('TestRun');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: DefaultAgent
+    * * Display Name: Default Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultAgent(): string | null {
+        return this.Get('DefaultAgent');
     }
 }
 

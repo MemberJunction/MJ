@@ -14,7 +14,7 @@
     <mj-collapsible-panel
         SectionKey="conversationCore"
         SectionName="Conversation Core"
-        Icon="fa fa-comment"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -72,7 +72,7 @@
     <mj-collapsible-panel
         SectionKey="participantsReferences"
         SectionName="Participants & References"
-        Icon="fa fa-users"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -116,7 +116,7 @@
     <mj-collapsible-panel
         SectionKey="contextualScope"
         SectionName="Contextual Scope"
-        Icon="fa fa-sitemap"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -153,13 +153,49 @@
     <mj-collapsible-panel
         SectionKey="testRunDetails"
         SectionName="Test Run Details"
-        Icon="fa fa-flask"
+        Icon="fa fa-align-left"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="false"
             FieldName="TestRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Application Binding Section -->
+    <mj-collapsible-panel
+        SectionKey="applicationBinding"
+        SectionName="Application Binding"
+        Icon="fa fa-plug"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ApplicationScope"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ApplicationID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultAgentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"

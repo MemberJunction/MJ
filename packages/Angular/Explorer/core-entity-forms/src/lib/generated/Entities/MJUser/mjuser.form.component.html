@@ -2662,8 +2662,6 @@
         }
     </mj-collapsible-panel>
 
-    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
-
     <!-- Entity Form Overrides Section -->
     <mj-collapsible-panel
         SectionKey="mJEntityFormOverrides"
@@ -2688,5 +2686,7 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
