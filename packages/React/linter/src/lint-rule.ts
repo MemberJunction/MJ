@@ -32,7 +32,6 @@ import { TypeContext } from './type-context';
  * }
  * ```
  */
-@RegisterClass(BaseLintRule)
 export abstract class BaseLintRule {
   /**
    * Unique name of the rule (e.g., 'no-import-statements').
