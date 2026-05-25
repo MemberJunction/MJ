@@ -2575,7 +2575,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       const componentArtifactIds = new Set(
         (artifactsResult.Results as Array<{ ID: string; TypeID: string | null }>)
-          .filter((a) => a.TypeID === componentType.ID)
+          .filter((a) => UUIDsEqual(a.TypeID, componentType.ID))
           .map((a) => a.ID),
       );
       if (componentArtifactIds.size === 0) return null;
