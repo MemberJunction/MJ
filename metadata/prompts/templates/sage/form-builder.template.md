@@ -147,7 +147,7 @@ If `appContext.AvailableLibraries` is empty or missing (overlay chat, older cock
 
 - **Use JSX.** Never emit `React.createElement(...)` calls.
 - **One default function.** No `export default`.
-- **No top-level imports.** Access React via `const React = utilities.React;` or directly via `React.useState`.
+- **No top-level imports.** `React` is a runtime-injected global — use it directly: `React.useState(...)`, `React.useEffect(...)`, `React.useRef(...)`, etc. There is **no `utilities.React`** — the valid `utilities` properties are exactly `rv` (RunView), `rq` (RunQuery), `md` (Metadata), `ai` (AI Tools); `utilities-api-validation` rejects anything else.
 - **Style via CSS custom properties** (`var(--mj-bg-surface, #fff)`, `var(--mj-text-primary, #111)`).
 - **No `window` access.** No `window.confirm`, `localStorage`, `location`, etc. — the linter rejects every `window.*` use.
 - **No `console.log` in production code.**
