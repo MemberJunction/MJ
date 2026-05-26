@@ -202,7 +202,7 @@ export class MessageInputBoxComponent {
   AddArtifactAttachment(artifact: {
     fileID: string; fileName: string; mimeType: string;
     sizeBytes: number; artifactVersionId?: string;
-  }): void {
-    this.mentionEditor?.AddArtifactAttachment(artifact);
+  }): PendingAttachment | undefined {
+    return this.mentionEditor?.AddArtifactAttachment(artifact);
   }
 }

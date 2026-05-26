@@ -39,3 +39,10 @@ export * from './lib/explorer-entity-data-grid.component';
 export * from './lib/isa-related-panel/isa-hierarchy-utils';
 export * from './lib/isa-related-panel/isa-related-card.component';
 export * from './lib/isa-related-panel/isa-related-panel.component';
+
+// Dynamic slot-injection extension point for form panels.
+// See packages/Angular/Generic/base-forms/PANELS.md for the architecture +
+// authoring guide.
+export * from './lib/panel-slot/base-form-panel';
+export * from './lib/panel-slot/form-panel-slot.component';
+export * from './lib/panel-slot/form-slot-coordinator.service';

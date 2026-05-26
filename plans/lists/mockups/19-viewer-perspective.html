@@ -1,0 +1,78 @@
+<!doctype html><html><head><meta charset="utf-8"><title>19 — Viewer Perspective</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main">
+  <div class="app-header">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mj-btn mj-btn-ghost"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="entity-icon" style="width:44px; height:44px;"><i class="fa-solid fa-list"></i></div>
+      <div>
+        <h1 style="font-size:20px; margin:0; display:flex; align-items:center; gap:8px;">Strategic Accounts <span class="badge badge-brand"><i class="fa-solid fa-eye"></i> Viewer</span></h1>
+        <div class="muted" style="font-size:12.5px;">Accounts · 42 items · Shared by CEO · You have <strong>read-only</strong> access</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <button class="mj-btn"><i class="fa-solid fa-file-excel"></i> Export</button>
+    <button class="mj-btn"><i class="fa-solid fa-star"></i> Add to Favorites</button>
+  </div>
+
+  <div style="padding:10px 14px; background:var(--mj-status-info-bg); border:1px solid var(--mj-status-info-border); color:var(--mj-status-info-text); border-radius:8px; font-size:12.5px; margin-bottom:16px;">
+    <i class="fa-solid fa-circle-info"></i> You have <strong>Viewer</strong> permission on this list. Adding, removing, refreshing, sharing, and editing are disabled. Request elevated access from the owner if needed.
+  </div>
+
+  <div style="display:grid; grid-template-columns: 1fr 280px; gap: 16px;">
+    <div class="mj-panel">
+      <div class="mj-panel-header">
+        <h3><i class="fa-solid fa-users"></i>Members</h3>
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <div class="mj-search"><i class="fa-solid fa-search icon"></i><input class="mj-input mj-btn-sm" placeholder="Filter…" style="padding-left:32px; height:32px;"></div>
+          <button class="mj-btn mj-btn-sm" disabled style="opacity:0.45;"><i class="fa-solid fa-plus"></i> Add Records <i class="fa-solid fa-lock" style="font-size:9px; margin-left:4px;"></i></button>
+        </div>
+      </div>
+      <div class="mj-panel-body" style="padding:0;">
+        <table class="mj-table" style="border:none; border-radius:0;">
+          <thead><tr><th>Account</th><th>Industry</th><th>Status</th><th>Region</th></tr></thead>
+          <tbody>
+            <tr><td>Acme Corp</td><td>Manufacturing</td><td><span class="badge badge-success">Active</span></td><td>North</td></tr>
+            <tr><td>Globex Industries</td><td>Tech</td><td><span class="badge badge-success">Active</span></td><td>West</td></tr>
+            <tr><td>Initech</td><td>Software</td><td><span class="badge badge-warning">Pending</span></td><td>South</td></tr>
+            <tr><td>Massive Dynamic</td><td>R&amp;D</td><td><span class="badge badge-success">Active</span></td><td>East</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="col gap-12">
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-info-circle"></i>Details</h3></div>
+        <div class="mj-panel-body">
+          <div class="label">Description</div>
+          <div style="margin-top:4px; font-size:13px;">Top accounts for executive sponsorship.</div>
+          <div class="divider"></div>
+          <div class="label">Owner</div>
+          <div class="mt-8" style="font-size:13px;">CEO Office</div>
+          <div class="divider"></div>
+          <div class="label">My Permission</div>
+          <div class="mt-8"><span class="badge badge-brand"><i class="fa-solid fa-eye"></i> Viewer (read-only)</span></div>
+          <button class="mj-btn mt-12" style="width:100%;"><i class="fa-solid fa-hand"></i> Request Editor Access</button>
+        </div>
+      </div>
+      <div class="mj-panel">
+        <div class="mj-panel-header"><h3><i class="fa-solid fa-ban"></i>Disabled Actions</h3></div>
+        <div class="mj-panel-body" style="font-size:12.5px;">
+          <div class="muted">Hidden from you in this view because you're a Viewer:</div>
+          <ul style="margin:8px 0 0; padding-left:20px;">
+            <li>Add / remove members</li>
+            <li>Refresh from source</li>
+            <li>Edit list metadata</li>
+            <li>Share with others</li>
+            <li>Delete list</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</div></body></html>

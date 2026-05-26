@@ -1,293 +1,317 @@
 import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJConversationDetailRatingEntity, RatingJSON } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, RunView, UserInfo } from '@memberjunction/core';
+import { RatingJSON, UserInfoEngine } from '@memberjunction/core-entities';
+import { DialogService } from '../../services/dialog.service';
+
+const FEEDBACK_CONSENT_KEY = 'agent-feedback-share-consent';
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+const FEEDBACK_ROLE_IDS = [
+  'deafccec-6a37-ef11-86d4-000d3a4e707e', // Developer
+  'dfafccec-6a37-ef11-86d4-000d3a4e707e'  // Integration
+];
+
+/** Minimal shape we use against the loaded entity. All MJ entity subclasses
+ *  implement `Load(ID)` via codegen but the base `BaseEntity<unknown>` type
+ *  doesn't expose it, so we narrow here to keep the call generic across
+ *  entity names without resorting to `any`. */
+type LoadableEntity = BaseEntity<unknown> & {
+  Load(KeyValuePairs: CompositeKey | string, EntityRelationshipsToLoad?: string[]): Promise<boolean>;
+};
 
 /**
- * Component for displaying and managing multi-user ratings on conversation messages.
- * Shows aggregate ratings and allows users to provide their own rating.
- * Uses optimistic updates — UI reflects the change immediately while DB saves in background.
+ * Single-rating-per-message rating UI for an AI conversation response.
+ *
+ * Storage model: the rating + free-form comment live directly on the
+ * ConversationDetail row, in `UserRating` (1-10, nullable) and `UserFeedback`
+ * (nvarchar(max), nullable). This matches MJ's own pattern on
+ * `__mj.ConversationDetail` and Skip's matching columns on
+ * `Skip.ConversationDetail`. The host app picks the entity via @Input.
  */
 @Component({
   standalone: false,
-    selector: 'mj-conversation-message-rating',
-    template: `
-        <div class="rating-container">
-          @if (totalRatings > 0) {
-            <div class="aggregate-rating" [title]="getRatingsTooltip()">
-              <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
-                👍 {{ thumbsUpCount }}
-              </span>
-              <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
-                👎 {{ thumbsDownCount }}
-              </span>
-              <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
-            </div>
-          }
-
-          <div class="user-rating" [class.has-rated]="currentUserRating != null">
-            <button
-              class="rating-button thumbs-up-btn"
-              [class.active]="currentUserRating != null && currentUserRating >= 8"
-              [disabled]="isSaving"
-              (click)="RateThumbsUp()"
-              title="This was helpful"
-              type="button">
-              👍
-            </button>
-            <button
-              class="rating-button thumbs-down-btn"
-              [class.active]="currentUserRating != null && currentUserRating <= 3"
-              [disabled]="isSaving"
-              (click)="RateThumbsDown()"
-              title="This was not helpful"
-              type="button">
-              👎
-            </button>
-          </div>
-        </div>
-        `,
-    styles: [`
-        .rating-container {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 4px 0;
+  selector: 'mj-conversation-message-rating',
+  template: `
+    <div class="rating-container">
+      <div class="user-rating">
+        @if (canEdit) {
+          <button
+            class="rating-button"
+            [class.has-rated]="currentUserRating != null"
+            [disabled]="isSaving"
+            (click)="OpenRatingDialog()"
+            [title]="currentUserRating != null ? 'Edit your rating' : 'Rate this response'"
+            type="button">
+            @if (currentUserRating != null) {
+              <i class="fa-solid fa-pen-to-square"></i>
+              <span class="my-rating">My rating: {{ currentUserRating }}/10</span>
+            } @else {
+              <i class="fa-regular fa-comment-dots"></i>
+              <span>Rate response</span>
+            }
+          </button>
+        } @else if (currentUserRating != null) {
+          <span class="rating-readonly"
+                title="Rating left by the conversation owner — read-only">
+            <i class="fa-solid fa-comment-dots"></i>
+            <span>Rated {{ currentUserRating }}/10</span>
+          </span>
         }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .rating-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 0;
+    }
 
-        .aggregate-rating {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 13px;
-            color: var(--mj-text-muted);
-        }
+    .user-rating {
+      display: flex;
+      gap: 4px;
+      margin-left: auto;
+    }
 
-        .thumbs-up, .thumbs-down {
-            opacity: 0.5;
-        }
+    .rating-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--mj-bg-surface);
+      border: 1px solid var(--mj-border-strong);
+      border-radius: 6px;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--mj-text-primary);
+      opacity: 0.85;
+      transition: all 0.15s ease;
+    }
 
-        .thumbs-up.has-votes, .thumbs-down.has-votes {
-            opacity: 1;
-        }
+    .rating-button:hover:not(:disabled) {
+      opacity: 1;
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+    }
 
-        .total-count {
-            font-size: 12px;
-            color: var(--mj-text-disabled);
-        }
+    .rating-button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
 
-        .user-rating {
-            display: flex;
-            gap: 4px;
-            margin-left: auto;
-        }
+    .rating-button.has-rated {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    }
 
-        .rating-button {
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-strong);
-            border-radius: 6px;
-            padding: 6px 10px;
-            cursor: pointer;
-            font-size: 16px;
-            opacity: 0.6;
-            transition: all 0.2s;
-            min-width: 36px;
-        }
+    .my-rating {
+      font-weight: 500;
+    }
 
-        .rating-button:hover:not(:disabled) {
-            opacity: 1;
-            border-color: var(--mj-text-muted);
-        }
-
-        .rating-button:disabled {
-            cursor: not-allowed;
-            opacity: 0.4;
-        }
-
-        .rating-button.active {
-            opacity: 1;
-        }
-
-        .thumbs-up-btn {
-            color: var(--mj-status-success);
-        }
-
-        .thumbs-up-btn:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
-        }
-
-        .thumbs-up-btn.active {
-            border-color: var(--mj-status-success);
-            background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
-        }
-
-        .thumbs-down-btn {
-            color: var(--mj-status-error);
-        }
-
-        .thumbs-down-btn:hover:not(:disabled) {
-            background: color-mix(in srgb, var(--mj-status-error) 8%, var(--mj-bg-surface));
-        }
-
-        .thumbs-down-btn.active {
-            border-color: var(--mj-status-error);
-            background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
-        }
-    `]
+    .rating-readonly {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--mj-text-secondary);
+      background: var(--mj-bg-surface-sunken);
+      cursor: default;
+    }
+  `]
 })
-export class ConversationMessageRatingComponent extends BaseAngularComponent implements OnInit  {
-    @Input() conversationDetailId!: string;
-    @Input() currentUser!: UserInfo;
-    @Input() ratingsData?: RatingJSON[];
+export class ConversationMessageRatingComponent extends BaseAngularComponent implements OnInit {
+  @Input() conversationDetailId!: string;
+  @Input() currentUser!: UserInfo;
 
-    thumbsUpCount = 0;
-    thumbsDownCount = 0;
-    totalRatings = 0;
-    currentUserRating: number | null = null;
-    isSaving = false;
+  /**
+   * When false, the rating UI renders as a read-only badge instead of an editable
+   * button. Set by the parent (MessageItemComponent) to `false` when the current
+   * user is not the conversation owner — the rating storage is a single field on
+   * the ConversationDetail row, so only the owner is allowed to mutate it.
+   */
+  @Input() canEdit: boolean = true;
 
-    private allRatings: RatingJSON[] = [];
-    private currentUserRatingId: string | null = null;
+  /**
+   * Entity name to load/update for the rating. Defaults to MJ's
+   * `MJ: Conversation Details` (which has `UserRating`/`UserFeedback`).
+   * Skip-Brain hosts pass `'Conversation Details__Skip'`.
+   */
+  @Input() ratingEntityName: string = 'MJ: Conversation Details';
 
-    private get currentUserId(): string {
-        return this.currentUser?.ID || '';
+  /** Column on the entity that stores the 1-10 rating. */
+  @Input() ratingField: string = 'UserRating';
+
+  /** Column on the entity that stores the free-form feedback. */
+  @Input() ratingCommentField: string = 'UserFeedback';
+
+  /**
+   * Optional: legacy pre-loaded ratings array (no longer used by storage; kept
+   * to preserve the input shape used by existing call sites like
+   * MessageItemComponent).
+   */
+  @Input() ratingsData?: RatingJSON[];
+
+  currentUserRating: number | null = null;
+  currentUserComments: string = '';
+  isSaving = false;
+
+  constructor(
+    private cdr: ChangeDetectorRef,
+    private dialogService: DialogService
+  ) {
+    super();
+  }
+
+  async ngOnInit() {
+    await this.loadRating();
+  }
+
+  async OpenRatingDialog(): Promise<void> {
+    if (this.isSaving) return;
+    if (!this.canEdit) return;
+
+    let consentAcknowledged = false;
+    try {
+      await UserInfoEngine.Instance.Config();
+      consentAcknowledged = UserInfoEngine.Instance.GetSetting(FEEDBACK_CONSENT_KEY) === 'true';
+    } catch (e) {
+      console.warn('[Rating] Could not read consent flag, will require acknowledgement', e);
     }
 
-    constructor(private cdr: ChangeDetectorRef) {
-    super();}
+    const result = await this.dialogService.rating({
+      title: this.currentUserRating != null ? 'Edit your rating' : 'Rate this response',
+      message: 'Rate the response on a 1-10 scale and (optionally) describe what was good or bad.',
+      initialRating: this.currentUserRating,
+      initialComments: this.currentUserComments,
+      okText: 'Submit',
+      requireConsent: !consentAcknowledged
+    });
 
-    async ngOnInit() {
-        if (this.ratingsData) {
-            this.processRatings(this.ratingsData);
-        } else {
-            await this.loadRatings();
+    if (result == null) return;
+
+    const conversationID = await this.saveRating(result.rating, result.comments);
+
+    if (result.consentNewlyAcknowledged) {
+      try {
+        const saved = await UserInfoEngine.Instance.SetSetting(FEEDBACK_CONSENT_KEY, 'true');
+        if (!saved) {
+          console.error(
+            `[Rating] Failed to persist consent acknowledgement under key "${FEEDBACK_CONSENT_KEY}" — ` +
+            `the dialog will re-prompt on next rating. Likely cause: the current user lacks ` +
+            `create/update permission on the "MJ: User Settings" entity.`
+          );
         }
+      } catch (e) {
+        console.error('[Rating] Could not persist consent flag', e);
+      }
     }
 
-    private processRatings(ratings: RatingJSON[] | MJConversationDetailRatingEntity[]): void {
-        this.allRatings = ratings as RatingJSON[];
-        this.thumbsUpCount = ratings.filter(r => r.Rating != null && r.Rating >= 8).length;
-        this.thumbsDownCount = ratings.filter(r => r.Rating != null && r.Rating <= 3).length;
-        this.totalRatings = ratings.length;
-
-        const mine = ratings.find(r => UUIDsEqual(r.UserID, this.currentUserId));
-        this.currentUserRating = mine?.Rating ?? null;
-        this.currentUserRatingId = mine ? (mine as RatingJSON).ID ?? null : null;
+    if (conversationID) {
+      await this.grantConversationAccess(conversationID);
     }
+  }
 
-    getRatingsTooltip(): string {
-        if (this.allRatings.length === 0) return '';
+  /**
+   * Grants the Integrations and Developer roles View access to the parent
+   * Conversation via `MJ: Resource Permissions`. Idempotent — existing
+   * permissions for the same role are not duplicated. Best-effort; any error
+   * is logged but does not roll back the rating itself.
+   */
+  private async grantConversationAccess(conversationID: string): Promise<void> {
+    try {
+      const md = this.ProviderToUse;
+      const rv = new RunView();
+      const existing = await rv.RunView({
+        EntityName: 'MJ: Resource Permissions',
+        ExtraFilter:
+          `ResourceTypeID='${CONVERSATIONS_RESOURCE_TYPE_ID}' AND ` +
+          `ResourceRecordID='${conversationID}' AND Type='Role' AND ` +
+          `RoleID IN ('${FEEDBACK_ROLE_IDS.join("','")}')`
+      });
 
-        const upUsers = this.allRatings
-            .filter(r => r.Rating != null && r.Rating >= 8)
-            .map(r => (r as RatingJSON).UserName || 'Unknown')
-            .join(', ');
+      const granted = new Set<string>(
+        (existing.Results || []).map((r: any) => (r.RoleID || '').toLowerCase())
+      );
 
-        const downUsers = this.allRatings
-            .filter(r => r.Rating != null && r.Rating <= 3)
-            .map(r => (r as RatingJSON).UserName || 'Unknown')
-            .join(', ');
-
-        const parts: string[] = [];
-        if (upUsers) parts.push(`👍 ${upUsers}`);
-        if (downUsers) parts.push(`👎 ${downUsers}`);
-        return parts.join('\n');
-    }
-
-    async RateThumbsUp(): Promise<void> {
-        await this.saveRating(10);
-    }
-
-    async RateThumbsDown(): Promise<void> {
-        await this.saveRating(1);
-    }
-
-    private async loadRatings(): Promise<void> {
-        try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<MJConversationDetailRatingEntity>({
-                EntityName: 'MJ: Conversation Detail Ratings',
-                ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
-                ResultType: 'entity_object'
-            });
-            if (result.Success && result.Results) {
-                this.processRatings(result.Results);
-                this.cdr.detectChanges();
-            }
-        } catch (error) {
-            console.error('Failed to load ratings:', error);
+      for (const roleID of FEEDBACK_ROLE_IDS) {
+        if (granted.has(roleID.toLowerCase())) continue;
+        const perm = await md.GetEntityObject('MJ: Resource Permissions');
+        perm.NewRecord();
+        perm.Set('ResourceTypeID', CONVERSATIONS_RESOURCE_TYPE_ID);
+        perm.Set('ResourceRecordID', conversationID);
+        perm.Set('Type', 'Role');
+        perm.Set('RoleID', roleID);
+        perm.Set('PermissionLevel', 'View');
+        perm.Set('Status', 'Approved');
+        const ok = await perm.Save();
+        if (!ok) {
+          console.warn('[Rating] Failed to create ResourcePermission for role', roleID, (perm as any).LatestResult);
         }
+      }
+    } catch (e) {
+      console.warn('[Rating] grantConversationAccess failed:', e);
     }
+  }
 
-    private applyOptimisticUpdate(rating: number): void {
-        const wasThumbsUp = this.currentUserRating != null && this.currentUserRating >= 8;
-        const wasThumbsDown = this.currentUserRating != null && this.currentUserRating <= 3;
-
-        // Adjust counts when switching from an existing rating
-        if (wasThumbsUp) this.thumbsUpCount--;
-        if (wasThumbsDown) this.thumbsDownCount--;
-        if (!wasThumbsUp && !wasThumbsDown) this.totalRatings++;
-
-        this.currentUserRating = rating;
-        if (rating >= 8) this.thumbsUpCount++;
-        else this.thumbsDownCount++;
-    }
-
-    private async saveRating(rating: number): Promise<void> {
-        if (this.isSaving) return;
-
-        // Ignore if user clicks the same rating they already have
-        if (this.currentUserRating === rating) return;
-
-        // Snapshot for rollback
-        const prevRating = this.currentUserRating;
-        const prevRatingId = this.currentUserRatingId;
-        const prevThumbsUp = this.thumbsUpCount;
-        const prevThumbsDown = this.thumbsDownCount;
-        const prevTotal = this.totalRatings;
-
-        // Optimistic update — UI reflects change instantly
-        this.isSaving = true;
-        this.applyOptimisticUpdate(rating);
+  private async loadRating(): Promise<void> {
+    if (!this.conversationDetailId) return;
+    try {
+      const md = this.ProviderToUse;
+      const entity = (await md.GetEntityObject(this.ratingEntityName)) as LoadableEntity;
+      const loaded = await entity.Load(this.conversationDetailId);
+      if (loaded) {
+        const rating = entity.Get(this.ratingField);
+        this.currentUserRating = rating != null ? Number(rating) : null;
+        this.currentUserComments = (entity.Get(this.ratingCommentField) ?? '') as string;
         this.cdr.detectChanges();
-
-        try {
-            await this.persistRating(rating, prevRatingId);
-        } catch (error) {
-            // Roll back to previous state on failure
-            console.error('Failed to save rating:', error);
-            this.currentUserRating = prevRating;
-            this.currentUserRatingId = prevRatingId;
-            this.thumbsUpCount = prevThumbsUp;
-            this.thumbsDownCount = prevThumbsDown;
-            this.totalRatings = prevTotal;
-            this.cdr.detectChanges();
-        } finally {
-            this.isSaving = false;
-            this.cdr.detectChanges();
-        }
+      }
+    } catch (error) {
+      // Silently swallow — message may not be persisted yet, or entity lookup failed.
+      console.warn('[ConversationMessageRating] Could not load existing rating:', error);
     }
+  }
 
-    private async persistRating(rating: number, prevRatingId: string | null): Promise<void> {
-        if (prevRatingId) {
-            // Update existing rating (switch thumbs up ↔ down)
-            const md = this.ProviderToUse;
-            const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
-            const loaded = await entity.Load(prevRatingId);
-            if (loaded) {
-                entity.Rating = rating;
-                await entity.Save();
-            }
-        } else {
-            // Create new rating
-            const md = this.ProviderToUse;
-            const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
-            entity.ConversationDetailID = this.conversationDetailId;
-            entity.UserID = this.currentUserId;
-            entity.Rating = rating;
-            await entity.Save();
-            this.currentUserRatingId = entity.ID;
-        }
+  private async saveRating(rating: number, comments: string): Promise<string | null> {
+    if (this.isSaving) return null;
+    if (rating < 1 || rating > 10) return null;
+    if (!this.conversationDetailId) return null;
+
+    const prevRating = this.currentUserRating;
+    const prevComments = this.currentUserComments;
+
+    this.isSaving = true;
+    this.currentUserRating = rating;
+    this.currentUserComments = comments;
+    this.cdr.detectChanges();
+
+    try {
+      const md = this.ProviderToUse;
+      const entity = (await md.GetEntityObject(this.ratingEntityName)) as LoadableEntity;
+      const loaded = await entity.Load(this.conversationDetailId);
+      if (!loaded) {
+        throw new Error(`ConversationDetail ${this.conversationDetailId} not found in ${this.ratingEntityName}`);
+      }
+      entity.Set(this.ratingField, rating);
+      entity.Set(this.ratingCommentField, comments || null);
+      const saveResult = await entity.Save();
+      if (!saveResult) {
+        throw new Error(`Save failed: ${(entity as any).LatestResult?.Message ?? 'unknown'}`);
+      }
+      const conversationID = entity.Get('ConversationID');
+      return typeof conversationID === 'string' ? conversationID : null;
+    } catch (error) {
+      console.error('[Rating] save failed:', error);
+      this.currentUserRating = prevRating;
+      this.currentUserComments = prevComments;
+      this.cdr.detectChanges();
+      return null;
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
     }
+  }
 }

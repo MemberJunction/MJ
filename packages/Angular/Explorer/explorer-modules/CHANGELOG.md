@@ -1,5 +1,32 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@5.37.0
+- @memberjunction/ng-explorer-core@5.37.0
+- @memberjunction/ng-explorer-settings@5.37.0
+- @memberjunction/ng-shared@5.37.0
+- @memberjunction/ng-workspace-initializer@5.37.0
+- @memberjunction/ng-link-directives@5.37.0
+- @memberjunction/ng-container-directives@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [4d16916]
+  - @memberjunction/ng-explorer-settings@5.36.0
+  - @memberjunction/ng-explorer-core@5.36.0
+  - @memberjunction/ng-core-entity-forms@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-workspace-initializer@5.36.0
+  - @memberjunction/ng-link-directives@5.36.0
+  - @memberjunction/ng-container-directives@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

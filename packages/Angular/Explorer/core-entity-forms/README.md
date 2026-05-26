@@ -132,6 +132,27 @@ The `MemberJunctionCoreEntityFormsModule` contains extended form components that
 2. `EntityActionExtendedFormComponent` - Enhanced form for EntityAction management
 3. `ActionTopComponentExtended` - Custom top section for Action forms
 
+## Extending Generated Forms — Two Patterns
+
+Before reaching for a full custom form override, check whether the lighter-weight `BaseFormPanel` slot system covers your need.
+
+### Pattern 1: `BaseFormPanel` slots (lightweight, additive)
+
+Standalone Angular components that extend `BaseFormPanel` and self-register via `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`. They mount into generated forms dynamically through `<mj-form-panel-slot>`. **No `*Extended` class, no restating the generated layout.** Panels live in `src/lib/panels/{entity-folder}/` in this package (see `panels/content-sources/` for the `TagPipelineConfigurationPanel` and `WebsiteCrawlerSettingsPanel` reference implementations).
+
+When you'd reach for this:
+- Adding governance / metrics / typed-config panels alongside generated fields.
+- Source-type-conditional panels (gate inside the panel template).
+- Anything that's "the generated form plus N extra sections."
+
+Full authoring guide + slot positions + fallback chain: [`packages/Angular/Generic/base-forms/PANELS.md`](../../Generic/base-forms/PANELS.md).
+
+### Pattern 2: Full custom form override (heavyweight, replaces layout)
+
+The classic pattern documented below. Use when the generated layout is the wrong starting point — you need to hide generated panels, restructure the toolbar, embed a fundamentally different UX (flow editor, Kanban board, wizard), or otherwise own the entire form's render. `AIAgentFormComponentExtended` is the canonical example: the flow editor isn't a "panel alongside fields," it IS the form.
+
+In doubt: "generated form + extras" → Pattern 1. "generated form is the wrong shape entirely" → Pattern 2.
+
 ## Custom Form Development Guide
 
 ### **Core Architecture & Setup**

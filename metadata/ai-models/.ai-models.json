@@ -14761,5 +14761,139 @@
       "lastModified": "2026-05-20T23:53:34.020Z",
       "checksum": "0b7f1bccc6fa67adb7ac1171530dab4d37c15e188be903e1f6a464006f0eef21"
     }
+  },
+  {
+    "fields": {
+      "Name": "Qwen 3.7 Max",
+      "PowerRank": 20,
+      "Description": "Alibaba Cloud's flagship Qwen 3.7 series 'Deep Thinking' (reasoning) model, made available via Alibaba Cloud Model Studio (snapshot qwen3.7-max-2026-05-20) and announced at the 2026 Alibaba Cloud Summit. Designed for the agent-centric era with strong programming, office and productivity, and long-horizon autonomous execution capabilities. Features a 1M token context window (991K max input standard / 983K in Thinking Mode), 64K max output, text-only input/output, native function calling, prefix continuation, web search, and explicit prompt caching. Structured Output, Batches, and Fine-tuning are not supported. Scores 57 on the Artificial Analysis Intelligence Index (#7 overall).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "952F762B-B6AB-4426-B97C-3BAEADA1407C"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:25:11.375Z",
+            "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "QwenLLM",
+            "APIName": "qwen3.7-max",
+            "MaxInputTokens": 991232,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "81276E48-263D-4C2B-BDA9-6872CC615485"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:25:11.397Z",
+            "checksum": "5a3dc0fe945ea0f1ea01a52f19d42d2e18f476f6b0990904e0c2a5b2705a3951"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "qwen/qwen3.7-max",
+            "MaxInputTokens": 991232,
+            "MaxOutputTokens": 65536,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "C3C8A989-0214-4102-A3F8-DE0876E90E08"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:25:11.468Z",
+            "checksum": "0b34edabf21750a5678faf55a90ffeaa46f25090298ca9d567643fc03412638c"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Alibaba Cloud",
+            "StartedAt": "2026-05-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Max pricing on Alibaba Cloud Model Studio (International region) as of May 19, 2026 API availability. $2.50/1M input, $7.50/1M output. Explicit cache: $3.125/1M create, $0.25/1M read. Tool calls: web_search $10/1K. Snapshot: qwen3.7-max-2026-05-20. Limits: 1M context window, 991K max input (983K in Thinking Mode), 64K max output, RPM 600, TPM 1M. Structured Output, Batches, and Fine-tuning are NOT supported. Sources: https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.7-max&serviceSite=international ; https://artificialanalysis.ai/models/qwen3-7-max"
+          },
+          "primaryKey": {
+            "ID": "C7467C37-F976-4E43-99E2-D6BF6B3275BA"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:25:11.509Z",
+            "checksum": "65ae5b50d75a2a9c0ff4b47e817580bc524948f5c8482617ead6f17c439cd750"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-05-19T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 2.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Qwen 3.7 Max on OpenRouter (passthrough pricing). Source: https://openrouter.ai/qwen/qwen3.7-max"
+          },
+          "primaryKey": {
+            "ID": "EA896356-AB09-4900-84A3-D4727B01DEF7"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:25:11.526Z",
+            "checksum": "29f930e0f8cf62e10cb8a7ba75ff6fae0cec58a6cc871441423c4f5b4e24c648"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CB2BDB91-9E18-4236-89F3-9D169DD3D063"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:25:01.106Z",
+      "checksum": "16c1cba3c18c4071c423cabf91d6b3c44fd977852bcbe4d1be37f280d8eb6fea"
+    }
   }
 ]

@@ -1,5 +1,63 @@
 # @memberjunction/core-entities-server
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/skip-types@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/tag-engine@5.37.0
+  - @memberjunction/ai-vectordb@5.37.0
+  - @memberjunction/ai-vector-dupe@5.37.0
+  - @memberjunction/ai-vectors-memory@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/doc-utils@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-converter@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/tag-engine@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/ai-vector-dupe@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/doc-utils@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/ai-vectordb@5.36.0
+  - @memberjunction/ai-vectors-memory@5.36.0
+  - @memberjunction/skip-types@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-converter@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

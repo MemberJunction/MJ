@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/tag-engine",
   "type": "module",
-  "version": "5.35.0",
+  "version": "5.37.0",
   "description": "MemberJunction: Tag Engine - server-only tag engine with semantic embedding support for tag resolution",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,14 +16,14 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/tag-engine-base": "5.35.0",
-    "@memberjunction/core": "5.35.0",
-    "@memberjunction/global": "5.35.0",
-    "@memberjunction/core-entities": "5.35.0",
-    "@memberjunction/ai": "5.35.0",
-    "@memberjunction/ai-vectors-memory": "5.35.0",
-    "@memberjunction/aiengine": "5.35.0",
-    "@memberjunction/ai-prompts": "5.35.0"
+    "@memberjunction/tag-engine-base": "5.37.0",
+    "@memberjunction/core": "5.37.0",
+    "@memberjunction/global": "5.37.0",
+    "@memberjunction/core-entities": "5.37.0",
+    "@memberjunction/ai": "5.37.0",
+    "@memberjunction/ai-vectors-memory": "5.37.0",
+    "@memberjunction/aiengine": "5.37.0",
+    "@memberjunction/ai-prompts": "5.37.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

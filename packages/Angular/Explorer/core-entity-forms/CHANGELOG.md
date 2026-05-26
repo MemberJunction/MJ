@@ -1,5 +1,102 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [0102dc6]
+- Updated dependencies [22b775f]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/ng-base-forms@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-shared@5.37.0
+  - @memberjunction/ng-testing@5.37.0
+  - @memberjunction/ng-actions@5.37.0
+  - @memberjunction/ng-ai-test-harness@5.37.0
+  - @memberjunction/ng-list-management@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-search@5.37.0
+  - @memberjunction/ng-versions@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ng-agents@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-link-directives@5.37.0
+  - @memberjunction/ng-action-gallery@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-code-editor@5.37.0
+  - @memberjunction/ng-deep-diff@5.37.0
+  - @memberjunction/ng-entity-relationship-diagram@5.37.0
+  - @memberjunction/ng-entity-viewer@5.37.0
+  - @memberjunction/ng-flow-editor@5.37.0
+  - @memberjunction/ng-join-grid@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/ng-timeline@5.37.0
+  - @memberjunction/ng-trees@5.37.0
+  - @memberjunction/templates-base-types@5.37.0
+  - @memberjunction/ng-tabstrip@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/ng-markdown@5.37.0
+  - @memberjunction/ng-ui-components@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 91036ee: Refreshable, shareable, taggable Lists with an agent-callable Actions surface.
+  - New `@memberjunction/lists` core: ListOperations (delta + drop-guard + materialize/refresh/set-op), ListSharing, AudienceResolver.
+  - `MJ: Lists` lineage fields (SourceViewID, SourceFilterSnapshot, LastRefreshedAt, RefreshMode, UseSnapshot) wired into Refresh-from-source.
+  - GraphQL: ListOperationsResolver + GraphQLListsClient. New `SendToAudience` in communication-engine.
+  - 12 new Actions covering materialize / refresh / share / invite / move / compose / resolve-audience / send-to-audience.
+  - UI: Save-as-List, mixed list+view operands, compose-into-target, Shared With Me tab, invitations + audit-log dialogs, viewer-perspective gating, bulk Move/Copy with delta-confirm, tag chips + filter, list-stats sidebar, audience picker, Communications New Message page, Excel/CSV/JSON column-picker export.
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [1c0fce9]
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/ng-ui-components@5.36.0
+  - @memberjunction/ng-base-forms@5.36.0
+  - @memberjunction/ng-entity-viewer@5.36.0
+  - @memberjunction/ng-list-management@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-shared@5.36.0
+  - @memberjunction/ng-testing@5.36.0
+  - @memberjunction/ng-actions@5.36.0
+  - @memberjunction/ng-ai-test-harness@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-search@5.36.0
+  - @memberjunction/ng-versions@5.36.0
+  - @memberjunction/ng-action-gallery@5.36.0
+  - @memberjunction/ng-entity-relationship-diagram@5.36.0
+  - @memberjunction/ng-join-grid@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-agents@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-code-editor@5.36.0
+  - @memberjunction/ng-flow-editor@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/ng-trees@5.36.0
+  - @memberjunction/templates-base-types@5.36.0
+  - @memberjunction/ng-link-directives@5.36.0
+  - @memberjunction/ng-deep-diff@5.36.0
+  - @memberjunction/ng-timeline@5.36.0
+  - @memberjunction/ng-tabstrip@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/ng-markdown@5.36.0
+  - @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes
