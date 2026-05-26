@@ -1,5 +1,21 @@
 # @memberjunction/ng-base-forms
 
+## 5.37.0
+
+### Patch Changes
+
+- 0102dc6: Fix related-entity grids fetching data on form open when a record is opened already-loaded (e.g. double-clicking a row in Data Explorer). `IsSectionExpanded()` fell through to the global expanded default when a section wasn't yet in `sectionMap`; because `initSections()` runs after `await super.ngOnInit()`, the grids could render in the first change-detection pass before the seeded collapsed defaults existed, so `[AllowLoad]="IsSectionExpanded(key)"` read `true` and fired a `RunView` on open. A not-yet-seeded section now resolves to collapsed, so a missing section can never report as expanded.
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-list-management@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-record-tags@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-entity-viewer@5.37.0
+  - @memberjunction/ng-record-changes@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Patch Changes

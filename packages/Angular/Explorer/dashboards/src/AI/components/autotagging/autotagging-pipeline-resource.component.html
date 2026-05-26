@@ -1420,6 +1420,50 @@
                         </select>
                         <span class="at-form-hint">Overrides Content Type default</span>
                     </div>
+
+                    <!--
+                        Quick-edit knobs. Slide-in is intentionally a SUBSET of the
+                        full entity form — operators who need the niche knobs (other
+                        budgets, URL pattern, root URL, taxonomy mode, thresholds)
+                        click "Open advanced settings →" to land in the full form,
+                        which surfaces every panel via the BaseFormPanel slot system.
+                    -->
+                    <div class="at-form-group">
+                        <label class="at-form-label">Max items per run</label>
+                        <input type="number" min="0" class="at-form-input"
+                               [(ngModel)]="FormMaxItemsPerRun" placeholder="unlimited">
+                        <span class="at-form-hint">
+                            Caps the number of content items handed to the LLM. Skipped (unchanged) items don't count.
+                            Paused work resumes on the next run.
+                        </span>
+                    </div>
+
+                    @if (IsWebsiteSourceTypeSelected) {
+                        <div class="at-form-group">
+                            <label class="at-form-label">Crawl depth</label>
+                            <input type="number" min="0" max="10" step="1" class="at-form-input"
+                                   [(ngModel)]="FormMaxDepth" placeholder="2 (default)">
+                            <span class="at-form-hint">
+                                Recursion ceiling for in-domain links. <code>0</code> = just the start URL.
+                                <code>2</code> (default) = root + sections + content pages.
+                            </span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlSitesInLowerLevelDomain">
+                                Crawl sites in lower-level domain
+                            </label>
+                            <span class="at-form-hint">When on (default), the depth-aware recursive crawler runs. Turn off to crawl only the seed page.</span>
+                        </div>
+                        <div class="at-form-group">
+                            <label class="at-form-label">
+                                <input type="checkbox" [(ngModel)]="FormCrawlOtherSitesInTopLevelDomain">
+                                Crawl other sites in top-level domain
+                            </label>
+                            <span class="at-form-hint">When on, also adds sibling-path URLs found on the seed page. Off by default to avoid accidental fan-out.</span>
+                        </div>
+                    }
+
                     <div class="at-form-actions">
                         <button class="at-action-btn at-primary-btn" (click)="SaveSource()" [disabled]="FormSaving">
                             @if (FormSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving... }
@@ -1427,6 +1471,15 @@
                         </button>
                         <button class="at-action-btn at-secondary-btn" (click)="CloseForm()">Cancel</button>
                     </div>
+
+                    @if (FormMode === 'edit-source' && EditingSourceID) {
+                        <div class="at-form-advanced-link">
+                            <a href="javascript:void(0)" (click)="OpenAdvancedSourceSettings()">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                                Open advanced settings — taxonomy mode, all budgets, URL pattern, &amp; more
+                            </a>
+                        </div>
+                    }
                 }
 
                 <!-- Content Type form -->

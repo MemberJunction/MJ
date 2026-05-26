@@ -1,5 +1,16 @@
 # @memberjunction/integration-connectors
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/integration-engine-base@5.37.0
+  - @memberjunction/global@5.37.0
+
 ## 5.36.0
 
 ### Minor Changes

@@ -1,5 +1,7 @@
 # @memberjunction/lists-base
 
+## 5.37.0
+
 ## 5.36.0
 
 ### Patch Changes
