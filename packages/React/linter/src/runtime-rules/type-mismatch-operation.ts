@@ -98,12 +98,16 @@ export class TypeMismatchOperationRule extends BaseLintRule {
         if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
           const methodName = node.callee.property.name;
 
-          // Array-specific methods
+          // Array-specific methods. Excludes `slice` and `concat` because
+          // both exist on String.prototype with identical signatures/semantics
+          // — flagging them on inferred-string types produces false positives
+          // (e.g. `someString.slice(1)`). The remaining names are genuinely
+          // array-only.
           const arrayOnlyMethods = [
-            'push', 'pop', 'shift', 'unshift', 'splice', 'slice',
+            'push', 'pop', 'shift', 'unshift', 'splice',
             'map', 'filter', 'reduce', 'reduceRight', 'forEach',
             'find', 'findIndex', 'some', 'every', 'flat', 'flatMap',
-            'sort', 'reverse', 'concat', 'join', 'fill', 'copyWithin',
+            'sort', 'reverse', 'join', 'fill', 'copyWithin',
           ];
 
           if (arrayOnlyMethods.includes(methodName)) {
