@@ -480,13 +480,19 @@ export class FormBuilderResourceComponent
             // Need a form actively loaded to compare against.
             if (!this.SelectedFormID && !this.ActiveOverrideID && !this.SelectedFormName) return;
 
-            const savedID = evt.baseEntity?.PrimaryKey?.ToConcatenatedString() ?? null;
+            // For local 'save' events `baseEntity` is the live instance; for
+            // 'remote-invalidate' events (server-side saves broadcast over
+            // GraphQL CacheInvalidation) `baseEntity` is null and the same
+            // data lives on `evt.payload.primaryKeyValues` (stringified
+            // `{ID: ...}`) + `evt.payload.recordData` (stringified row).
+            // Resolve both shapes to a common `{ savedID, savedName }`.
+            const resolved = this.resolveEntityEventIdentity(evt);
+            const { savedID, savedName } = resolved;
 
             if (entityName === 'MJ: Components') {
                 // Match: same Component (in-place Modify on Pending) OR
                 // same Name (Active path → new Pending sibling row in the
                 // form's lineage). Either way the cockpit should refresh.
-                const savedName = evt.baseEntity?.Get?.('Name') as string | undefined;
                 const sameID = savedID && this.SelectedFormID && UUIDsEqual(savedID, this.SelectedFormID);
                 const sameLineage = savedName && this.SelectedFormName && savedName === this.SelectedFormName;
                 if (sameID || sameLineage) {
@@ -508,6 +514,53 @@ export class FormBuilderResourceComponent
         } catch (err) {
             LogError(`FormBuilderResource.handleEntityEvent: ${err instanceof Error ? err.message : String(err)}`);
         }
+    }
+
+    /**
+     * Normalize the `{ID, Name}` we need to match a BaseEntity event against
+     * the active form, regardless of whether the event came from a local
+     * `Save()` (with a live `baseEntity` attached) or a server-broadcast
+     * `remote-invalidate` (where `baseEntity` is null and the row lives in
+     * `evt.payload.primaryKeyValues` + `evt.payload.recordData`, both
+     * JSON-stringified by `MJServer/src/index.ts:626-641`).
+     */
+    private resolveEntityEventIdentity(evt: BaseEntityEvent): { savedID: string | null; savedName: string | null } {
+        if (evt.baseEntity) {
+            const savedID = evt.baseEntity.PrimaryKey?.ToConcatenatedString() ?? null;
+            const savedName = (evt.baseEntity.Get?.('Name') as string | undefined) ?? null;
+            return { savedID, savedName };
+        }
+        const payload = evt.payload as { primaryKeyValues?: string | null; recordData?: string | null } | undefined;
+        if (!payload) return { savedID: null, savedName: null };
+        let savedID: string | null = null;
+        let savedName: string | null = null;
+        try {
+            if (payload.primaryKeyValues) {
+                const pk = JSON.parse(payload.primaryKeyValues) as Record<string, unknown> | unknown[];
+                // Server stringifies `entity.PrimaryKey.KeyValuePairs` — an
+                // array of `{FieldName, Value}` pairs in current versions,
+                // or a `{ID: '...'}` map in some older ones. Handle both.
+                if (Array.isArray(pk)) {
+                    const idPair = pk.find(p => (p as { FieldName?: string }).FieldName === 'ID') as { Value?: unknown } | undefined;
+                    if (idPair?.Value != null) savedID = String(idPair.Value);
+                } else if (pk && typeof pk === 'object' && 'ID' in pk) {
+                    const v = (pk as { ID?: unknown }).ID;
+                    if (v != null) savedID = String(v);
+                }
+            }
+        } catch {
+            // bad JSON — leave savedID null, caller will just skip the match
+        }
+        try {
+            if (payload.recordData) {
+                const row = JSON.parse(payload.recordData) as Record<string, unknown>;
+                if (typeof row?.Name === 'string') savedName = row.Name;
+                if (!savedID && typeof row?.ID === 'string') savedID = row.ID;
+            }
+        } catch {
+            // ditto
+        }
+        return { savedID, savedName };
     }
 
     /**
@@ -942,6 +995,7 @@ export class FormBuilderResourceComponent
         // identity AND re-feed the pending message/attachments in the same
         // change-detection cycle. The chat-area picks them up on the next
         // render and actually delivers the message.
+        console.log(`[FormBuilder.OnChatConversationCreated] convoID=${event.conversation.ID} linkedRecordID=${event.conversation.LinkedRecordID} currentSelectedFormID=${this.SelectedFormID}`);
         this.ChatPendingMessage = event.pendingMessage ?? null;
         this.ChatPendingAttachments = (event.pendingAttachments ?? null) as unknown[] | null;
         this.ChatConversation = event.conversation;
@@ -1140,6 +1194,112 @@ export class FormBuilderResourceComponent
      * EntityFormOverrides for the user. Tolerates missing user / empty results
      * — version rail just shows nothing in that case.
      */
+    /**
+     * Look up the most-recent conversation linked to the active form
+     * (LinkedEntityID=MJ:Components, LinkedRecordID=SelectedFormID) for
+     * the current user and bind it to the embedded chat. If none exists,
+     * reset to a fresh pre-conversation state — the suppressed empty-state
+     * path in <mj-conversation-chat-area> renders the normal header + mode
+     * picker + input so the user can start a new linked conversation in
+     * place. Errors are tolerated (chat just stays on the previous state).
+     */
+    private async loadLinkedConversationForActiveForm(): Promise<void> {
+        const provider = this.provider;
+        const user = this.currentUser;
+        const tag = '[FormBuilder.loadLinkedConvo]';
+        console.log(`${tag} ENTER SelectedFormID=${this.SelectedFormID} SelectedFormName=${this.SelectedFormName} ComponentsEntityID=${this.ComponentsEntityID} userID=${user?.ID}`);
+        // Always blank the chat first so the chat-area sees a clear
+        // input transition (B.ID -> null -> A.ID) when switching between
+        // forms.
+        this.resetChatToFresh();
+        this.cdr.detectChanges();
+        if (!provider || !user || !this.SelectedFormID || !this.ComponentsEntityID) {
+            console.warn(`${tag} BAIL — missing provider/user/SelectedFormID/ComponentsEntityID`);
+            return;
+        }
+        // Defer to the next macrotask so the React form-preview component
+        // (which remounts on every form switch and fires its own RunView
+        // calls during ngAfterViewInit) gets a chance to finish its render
+        // before our query lands on the shared provider. Without this
+        // delay, our params object is racing the React component's render
+        // wave and the provider's PreRunView pipeline trips over the
+        // concurrent failing calls.
+        await new Promise<void>(resolve => setTimeout(resolve, 0));
+        const targetFormID = this.SelectedFormID;
+        const filter = `LinkedEntityID='${this.ComponentsEntityID}' AND LinkedRecordID='${targetFormID}' AND UserID='${user.ID}'`;
+        const result = await this.runLinkedConvoQuery(provider, user, filter, tag);
+        if (!result) return;
+        if (targetFormID !== this.SelectedFormID) {
+            console.warn(`${tag} RACE — SelectedFormID changed during query (was=${targetFormID} now=${this.SelectedFormID}), discarding result`);
+            return;
+        }
+        if (result.Success && result.Results && result.Results.length > 0) {
+            const found = result.Results[0];
+            console.log(`${tag} BIND convoID=${found.ID} name="${found.Name}" linkedRecordID=${found.LinkedRecordID} updatedAt=${found.__mj_UpdatedAt}`);
+            this.ChatConversation = found;
+            this.ChatConversationId = found.ID;
+            this.ChatIsNewConversation = false;
+        } else {
+            console.log(`${tag} NO MATCH — leaving chat in fresh state`);
+        }
+        this.cdr.markForCheck();
+        console.log(`${tag} EXIT ChatConversationId=${this.ChatConversationId} ChatIsNewConversation=${this.ChatIsNewConversation}`);
+    }
+
+    /**
+     * One-shot retry wrapper around the conversation lookup. The shared
+     * GraphQLDataProvider occasionally throws "Entity null not found in
+     * metadata" when the React form-preview's own RunView wave is in
+     * flight concurrently — the failure is transient. Retrying once after
+     * a short delay clears it.
+     */
+    private async runLinkedConvoQuery(
+        provider: IMetadataProvider,
+        user: UserInfo,
+        filter: string,
+        tag: string,
+    ): Promise<{ Success: boolean; Results?: MJConversationEntity[]; ErrorMessage?: string } | null> {
+        const params = {
+            EntityName: 'MJ: Conversations',
+            ExtraFilter: filter,
+            OrderBy: '__mj_UpdatedAt DESC',
+            MaxRows: 1,
+            ResultType: 'entity_object' as const,
+        };
+        console.log(`${tag} QUERY ${filter}`);
+        const rv = RunView.FromMetadataProvider(provider);
+        try {
+            const result = await rv.RunView<MJConversationEntity>(params, user);
+            console.log(`${tag} RESULT Success=${result.Success} RowCount=${result.Results?.length ?? 0} Error=${result.ErrorMessage ?? '<none>'}`);
+            return result;
+        } catch (err) {
+            console.warn(`${tag} ATTEMPT 1 FAILED — retrying after delay`, err);
+            // Wait long enough for any concurrent React render wave to settle.
+            await new Promise<void>(resolve => setTimeout(resolve, 150));
+            try {
+                const rv2 = RunView.FromMetadataProvider(provider);
+                const result = await rv2.RunView<MJConversationEntity>(params, user);
+                console.log(`${tag} RETRY RESULT Success=${result.Success} RowCount=${result.Results?.length ?? 0} Error=${result.ErrorMessage ?? '<none>'}`);
+                return result;
+            } catch (err2) {
+                console.error(`${tag} RETRY ALSO FAILED`, err2);
+                LogError(`FormBuilderResource.loadLinkedConversationForActiveForm: ${err2 instanceof Error ? err2.message : String(err2)}`);
+                return null;
+            }
+        }
+    }
+
+    /** Reset embedded chat to the pre-conversation state for a new form. */
+    private resetChatToFresh(): void {
+        console.log(`[FormBuilder.resetChatToFresh] WAS ChatConvoID=${this.ChatConversationId} IsNew=${this.ChatIsNewConversation}`);
+        this.ChatConversation = null;
+        this.ChatConversationId = null;
+        this.ChatIsNewConversation = true;
+        this.ChatThreadId = null;
+        this.ChatPendingMessage = null;
+        this.ChatPendingAttachments = null;
+    }
+
     public async loadVersionsForActiveForm(): Promise<void> {
         if (!this.SelectedFormName) {
             this.Versions = [];
@@ -1316,7 +1476,11 @@ export class FormBuilderResourceComponent
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
-        if (this.DirtyFlag && !this.confirmDiscard()) return;
+        console.log(`[FormBuilder.OnFormPicked] ENTER form.ID=${form.ID} form.Name=${form.Name} priorSelectedFormID=${this.SelectedFormID} priorChatConvoID=${this.ChatConversationId} DirtyFlag=${this.DirtyFlag}`);
+        if (this.DirtyFlag && !this.confirmDiscard()) {
+            console.log(`[FormBuilder.OnFormPicked] BAIL — confirmDiscard cancelled`);
+            return;
+        }
         try {
             const provider = this.provider;
             if (!provider) return;
@@ -1355,6 +1519,11 @@ export class FormBuilderResourceComponent
             this.DirtyFlag = false;
             this.cdr.markForCheck();
             this.registerAgentContext();
+            // Auto-load the most recent conversation linked to this form
+            // (LinkedEntityID=MJ:Components, LinkedRecordID=form.ID). If
+            // none exists, reset to a fresh pre-conversation state so the
+            // mode picker + input render via the suppressed empty-state.
+            await this.loadLinkedConversationForActiveForm();
             // Populate the version rail (fire-and-forget — the rail shows
             // a loading spinner until this resolves).
             this.loadVersionsForActiveForm();

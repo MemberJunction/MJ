@@ -100,7 +100,7 @@ If you don't register these, the toolbar Save will bypass your React draft entir
 
 ## Component libraries (charts, tables, formatting — declare and use)
 
-Form components run inside the **same React runtime** as Skip components, which means **every Active library in `appContext.AvailableLibraries`** is available to declare in `ComponentSpec.libraries` and use inside your JSX. The runtime loads each declared library and exposes it on `components[<Name>]` or via its `GlobalVariable` — same loader contract Skip uses for its visualization components.
+Form components run inside the **same React runtime** as Skip components, which means **every Active library in `appContext.AvailableLibraries`** is available to declare in `ComponentSpec.libraries` and use inside your JSX. The runtime loads each declared library and exposes it on a **`libraries` prop** keyed by the library's `GlobalVariable` — distinct from the `components` prop (which is reserved for child components in `dependencies`).
 
 **When to reach for a library** (vs. inline HTML/SVG):
 
@@ -117,11 +117,11 @@ Form components run inside the **same React runtime** as Skip components, which 
 | Map | `leaflet` or `mapbox-gl` (check `appContext.AvailableLibraries[].Status`) |
 | Sanitizing user-supplied HTML | `DOMPurify` |
 
-**How to declare**: add an entry to `Spec.libraries` keyed by Name + Version + GlobalVariable from the catalog. Then use it inside your function:
+**How to declare**: add an entry to `Spec.libraries` keyed by Name + Version + GlobalVariable from the catalog. Then access it via the **`libraries` prop** inside your function (NOT via `components.X` — that lookup is reserved for child components defined in `dependencies` and will fail the `component-not-in-dependencies` lint rule):
 
 ```jsx
-function MyForm({ ..., components }) {
-  const ApexCharts = components.ApexCharts; // global binding
+function MyForm({ ..., utilities, components, libraries }) {
+  const ApexCharts = libraries.ApexCharts; // ← keyed by GlobalVariable
   const data = utilities.rv.RunView({ EntityName: '...', ... });
   return <ApexCharts options={...} series={...} />;
 }
@@ -139,7 +139,7 @@ function MyForm({ ..., components }) {
 - **Active-only.** If a library's `Status` is Disabled or Deprecated in the catalog, do NOT declare it. The runtime won't load it and the lint will reject.
 - **Don't reinvent.** If a chart is asked for, declare ApexCharts — don't hand-roll SVG paths. The user is unlikely to thank you for 200 lines of `<rect>` elements when ApexCharts does it in 20.
 - **Don't over-reach.** A form is still a form — don't bundle `three`, `framer-motion`, etc. unless the user explicitly asked for 3D / heavy animation.
-- **Use `GlobalVariable`, not import.** Top-level imports are banned (see JSX requirements below); the runtime injects the library as a global available via `components[GlobalVariable]` or directly on `window`.
+- **Access via the `libraries` prop, not `components`.** Top-level `import` statements are banned (see JSX requirements below). The runtime injects each declared library onto the `libraries` prop keyed by the catalog's `GlobalVariable` (e.g. `libraries.ApexCharts`, `libraries.dayjs`). `components.X` is reserved for child components in `dependencies` — using it for a library will fail lint.
 
 If `appContext.AvailableLibraries` is empty or missing (overlay chat, older cockpit version), fall back to the built-in JSX primitives — no library declarations.
 

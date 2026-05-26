@@ -48,13 +48,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private _conversationId: string | null = null;
   @Input()
   set conversationId(value: string | null) {
+    console.log(`[ChatArea.set conversationId] incoming=${value} prior=${this._conversationId} isInitialized=${this.isInitialized}`);
     if (value !== this._conversationId) {
       this._conversationId = value;
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
+        console.log(`[ChatArea.set conversationId] -> onConversationChanged(${value})`);
         this.onConversationChanged(value);
+      } else {
+        console.log(`[ChatArea.set conversationId] SKIP onConversationChanged — not yet initialized`);
       }
+    } else {
+      console.log(`[ChatArea.set conversationId] NO-OP (same value)`);
     }
   }
   get conversationId(): string | null {
@@ -63,6 +69,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
+
+  /**
+   * When true, render the normal message-list + message-input layout even
+   * before a conversation exists, instead of the centered empty-state
+   * welcome card. Lets host pages (e.g. Form Builder cockpit) put the chat
+   * header + mode picker front-and-center on first open and let the user
+   * pick a mode before typing. The first send still routes through
+   * MessageInputComponent and triggers conversationCreated as usual.
+   */
+  @Input() suppressNewConversationEmptyState = false;
+
+  /**
+   * Host-level cap for @-mention autocomplete (agents and users).
+   * Defaults true. Hosts addressing a single fixed agent (e.g. Form Builder
+   * cockpit pinned to the Form Builder agent) should set false so the user
+   * can't accidentally redirect a turn to a different agent.
+   */
+  @Input() allowMentions = true;
+
+  /**
+   * Host-level cap for attachments. Defaults true. When false, the host
+   * disables attachments regardless of agent modality support — useful for
+   * surfaces where attachments don't make sense (cockpit text-only flows).
+   * When true (default), attachment availability still depends on the
+   * agent's modality support, computed at runtime.
+   */
+  @Input() allowAttachments = true;
 
   private _isNewConversation: boolean = false;
   @Input()

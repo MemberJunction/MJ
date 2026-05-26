@@ -111,7 +111,7 @@
         <div class="conversation-loading-state">
           <mj-loading text="Loading conversation..." size="large"></mj-loading>
         </div>
-      } @else if (isNewConversation || !conversationId) {
+      } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- Empty State - No conversation selected OR new unsaved conversation -->
         <mj-conversation-empty-state
           [currentUser]="currentUser"
@@ -119,13 +119,37 @@
           [showSidebarToggle]="showSidebarToggle"
           [overlayMode]="overlayMode"
           [greeting]="emptyStateGreeting"
-          [enableAttachments]="enableAttachments"
+          [enableAttachments]="enableAttachments && allowAttachments"
+          [enableMentions]="allowMentions"
           [maxAttachments]="maxAttachments"
           [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
           [acceptedFileTypes]="acceptedFileTypes"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
+      } @else if ((isNewConversation || !conversationId) && suppressNewConversationEmptyState) {
+        <!-- Pre-conversation normal-view: empty message list + emptyStateMode input.
+             Used when host (e.g. Form Builder cockpit) wants the header + mode picker
+             visible on first open instead of the centered welcome card. First send
+             routes through onEmptyStateMessageSent which creates the conversation. -->
+        <div class="chat-messages-wrapper">
+          <div class="chat-messages-container"></div>
+          <div class="chat-input-container">
+            <div class="message-input-container-wrapper">
+              <mj-message-input
+                [emptyStateMode]="true"
+                [currentUser]="currentUser"
+                [disabled]="isProcessing"
+                [enableAttachments]="enableAttachments && allowAttachments"
+                [enableMentions]="allowMentions"
+                [maxAttachments]="maxAttachments"
+                [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                [acceptedFileTypes]="acceptedFileTypes"
+                (emptyStateSubmit)="onEmptyStateMessageSent($event)">
+              </mj-message-input>
+            </div>
+          </div>
+        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
@@ -202,7 +226,8 @@
                     [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
-                    [enableAttachments]="enableAttachments"
+                    [enableAttachments]="enableAttachments && allowAttachments"
+                    [enableMentions]="allowMentions"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"

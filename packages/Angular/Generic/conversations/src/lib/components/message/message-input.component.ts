@@ -41,6 +41,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() enableAttachments: boolean = true; // Whether to show attachment button (based on agent modality support)
+  @Input() enableMentions: boolean = true; // Whether to enable @-mention autocomplete (agents/users). Hosts addressing a single fixed agent (e.g. Form Builder cockpit) typically set false.
   @Input() maxAttachments: number = 10; // Maximum number of attachments per message
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024; // Maximum size per attachment (20MB default)
   @Input() acceptedFileTypes: string = 'image/*'; // Accepted MIME types pattern
