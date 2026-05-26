@@ -8,7 +8,8 @@ import sql from 'mssql';
 import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
-import { userEmailMap, apiKey, mj_core_schema } from './config.js';
+import { userEmailMap, apiKey, mj_core_schema, configInfo } from './config.js';
+import { buildBoundaryLogPayload } from './logging/structuralShape.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -324,7 +325,15 @@ export const contextFunction =
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
     if (operationName !== 'IntrospectionQuery') {
-      console.dir({ operationName }, { depth: null, breakLength: 200 });
+      // Structure-only echo when logVariables=true: field names, types, array lengths, nesting —
+      // but NEVER literal values. Encrypted fields, tokens, and user content stay out of stdout
+      // regardless of the flag. For literal values, read from the UI/Postman where they were submitted.
+      const payload = buildBoundaryLogPayload(
+        operationName,
+        reqAny.body?.variables,
+        configInfo.loggingSettings.graphql.logVariables,
+      );
+      console.dir(payload, { depth: null, breakLength: 200 });
     }
 
     // Auth already happened in the unified auth middleware — just read the result

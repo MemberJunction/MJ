@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx, Metadata } from '@memberjunction/core';
 import { QueryCompositionEngine } from '@memberjunction/generic-database-provider';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { NoLog } from '../logging/NoLog.js';
@@ -118,8 +118,10 @@ export class GetDataResolver {
     @Ctx() context: AppContext
     ): Promise<GetDataOutputType> {
         try { 
-            LogStatus(`GetDataResolver.GetData() ---- IMPORTANT - temporarily using the same connection as rest of the server, we need to separately create a READ ONLY CONNECTION and pass that in
-                       the AppContext so we can use that special connection here to ensure we are using a lower privileged connection for this operation to prevent mutation from being possible.`);
+            LogStatusEx({
+                message: `GetDataResolver.GetData() ---- IMPORTANT - temporarily using the same connection as rest of the server, we need to separately create a READ ONLY CONNECTION and pass that in the AppContext so we can use that special connection here to ensure we are using a lower privileged connection for this operation to prevent mutation from being possible.`,
+                verboseOnly: true,
+            });
             LogStatus(`GetData invoked: ${input.Queries.length} queries`);
 
             // validate the token

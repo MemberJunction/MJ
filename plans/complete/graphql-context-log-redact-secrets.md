@@ -8,16 +8,25 @@
 
 **Companion PRD**: [`plans/graphql-context-log-redact-secrets-PRD.md`](./graphql-context-log-redact-secrets-PRD.md)
 
-**Status**: Design locked, verified against code, revised after ultrareview. Ready to implement.
+**Status**: Implementation complete. Tests + smoke verification pending senior review.
 
 **Revision history**: Initial design framed the new middleware as the primary
 defense. Ultrareview pointed out that the actual leak fix is the **removal of
 the `variables` field from the always-on log line at `context.ts:345`**, and
-that the middleware is an additive, opt-in verbose echo with redaction. This
-revision restructures accordingly. It also revises the boot-audit scope (gated
-to verbose mode to avoid alert fatigue), is honest about which leak surface
-metadata redaction actually covers, and addresses several smaller points from
-the review.
+that the middleware is an additive, opt-in verbose echo with redaction. The
+first revision restructured accordingly. It also revised the boot-audit scope
+(gated to verbose mode to avoid alert fatigue), is honest about which leak
+surface metadata redaction actually covers, and addressed several smaller
+points from the review.
+
+A second revision (post-implementation) extends the boundary-line behavior:
+the line emits operation-name only in default config (the load-bearing leak
+fix), and in verbose mode (`MJ_LOG_GRAPHQL_VARIABLES=true`) emits an
+additional **structure-only** variables block — field names, array lengths,
+nesting, and type markers (`<string>`, `<number>`, `<Date>`) but never
+literal values. Lives in `packages/MJServer/src/logging/structuralShape.ts`
+as `describeStructure` + `buildBoundaryLogPayload`; 41 tests across two
+spec files (`structuralShape.test.ts`, `buildBoundaryLogPayload.test.ts`).
 
 ---
 
@@ -63,25 +72,50 @@ From the ultrareview's clarification:
 
 ### The primary fix (change 1)
 
-At [`context.ts:344-346`](../packages/MJServer/src/context.ts#L344-L346), the
-always-on log emits **operation name only**. The
-`variables: shortenForLog(reqAny.body?.variables)` field is removed. A 1-line
-edit. No flag, no module, no metadata lookup. After this change, the original
-incident no longer reproduces in default configuration — the leak surface from
-line 345 is gone.
+At [`context.ts:327`](../packages/MJServer/src/context.ts#L327), the boundary
+log call is wrapped in a flag-aware helper:
 
-This is the load-bearing change. Everything else in this doc is **additive** —
-provides a redacted alternative for developers who explicitly turn on verbose
-mode.
+```ts
+const payload = buildBoundaryLogPayload(
+  operationName,
+  reqAny.body?.variables,
+  configInfo.loggingSettings.graphql.logVariables,
+);
+console.dir(payload, { depth: null, breakLength: 200 });
+```
 
-### Two-layer logging (after the fix lands)
+`buildBoundaryLogPayload` is a pure function with two branches:
+- `logVariables=false` → returns `{ operationName }` only. The `variables`
+  key is not present in the output. **This is the load-bearing leak fix** —
+  the original incident's leak surface no longer exists in default config.
+- `logVariables=true` → returns `{ operationName, variables: describeStructure(variables) }`,
+  where `describeStructure` reduces the variables payload to a type-only
+  mirror: field names, array lengths, and nesting all preserved; every
+  primitive value replaced with its type marker (`'<string>'`, `'<number>'`,
+  `'<Date>'`, etc.). Literal values never reach stdout.
+
+Both helpers live in
+[`packages/MJServer/src/logging/structuralShape.ts`](../packages/MJServer/src/logging/structuralShape.ts).
+Pure functions, no MJ-server import surface, isolation-testable. 41 tests
+across two spec files. Everything else in this doc is **additive** — provides
+a metadata-driven redacted alternative for developers who explicitly turn on
+verbose mode (per-resolver middleware, see below).
+
+### Three-layer logging (after the fix lands)
 
 | Log content | Gate | Default | Where it lives |
 |---|---|---|---|
-| `GraphQL: <operationName>` (operation name only, no variables) | Always on, no flag | On | Stays at [`context.ts:344`](../packages/MJServer/src/context.ts#L344) — variables field removed from this line |
-| Full variables, with metadata-driven redaction applied | `loggingSettings.graphql.logVariables` | **Off** | New type-graphql `globalMiddlewares` entry |
+| `{ operationName: '<name>' }` — operation name only | Always on, no flag | On | [`context.ts:327`](../packages/MJServer/src/context.ts#L327), default branch of `buildBoundaryLogPayload` |
+| `{ operationName, variables: <structure-only> }` — same line, with structural shape added | `loggingSettings.graphql.logVariables` | **Off** | [`context.ts:327`](../packages/MJServer/src/context.ts#L327), verbose branch of `buildBoundaryLogPayload`; reduction via `describeStructure` |
+| `{ operation, args: <entity-aware-redacted> }` per root resolver | `loggingSettings.graphql.logVariables` | **Off** | New type-graphql `globalMiddlewares` entry (per-resolver middleware) |
 
-The variables-logging middleware fires **only on root resolvers**
+When `logVariables=true`, **two complementary log lines** fire per request:
+the boundary line shows the request shape as the HTTP body was received (no
+entity-binding, no value visibility), and the middleware line shows the
+resolved args with entity-aware redaction (non-encrypted values visible,
+encrypted fields masked). Different debug perspectives for different bugs.
+
+The per-resolver middleware fires **only on root resolvers**
 (`@Query` / `@Mutation` / `@Subscription`), detected via `info.path.prev === undefined`.
 Field resolvers are skipped to keep the log volume close to the current
 one-line-per-request shape rather than one-line-per-resolution-step.
@@ -125,6 +159,44 @@ environments; (b) the value is purely cosmetic — a future restructure can
 migrate all three areas together; (c) telemetry's `verbose` enum is a different
 shape (level enum vs boolean) and would need its own design pass. Defer to a
 future configuration-cleanup PR.
+
+### Boundary-log structural shape (the layer-1 path)
+
+`describeStructure(value, maxDepth = 5)` is a recursive type-only mirror of
+the input. Decision tree:
+
+1. `null` → `null` (preserved). `undefined` → `undefined` (preserved). Both
+   carry structural meaning (presence/absence) without value content.
+2. Primitives (`typeof` is `string` / `number` / `boolean` / `bigint` /
+   `symbol` / `function`) → `'<' + typeof + '>'`.
+3. Beyond `maxDepth` and value is an object → `'<object>'` (collapse to
+   prevent unbounded log output for pathological structures).
+4. Array → map each element recursively (depth + 1). Length preserved.
+5. Class instance / typed object (constructor is not plain `Object`) →
+   `'<' + constructor.name + '>'` (e.g. `'<Date>'`, `'<Map>'`, `'<Set>'`,
+   `'<Foo>'`). Not walked; treated as opaque typed value.
+6. Plain object (constructor is `Object`, or `Object.create(null)`) →
+   recurse into each `(key, value)`, depth + 1. Keys preserved.
+
+`buildBoundaryLogPayload(operationName, variables, logVariablesEnabled)` is
+the seam between `context.ts` and the structural shape:
+- `logVariablesEnabled=false` → `{ operationName }`. No `variables` key.
+- `logVariablesEnabled=true` → `{ operationName, variables: describeStructure(variables) }`.
+
+Both helpers live in
+[`packages/MJServer/src/logging/structuralShape.ts`](../packages/MJServer/src/logging/structuralShape.ts).
+Neither has any MJ-server import surface. Both are isolation-testable pure
+functions with 41 tests across
+[`structuralShape.test.ts`](../packages/MJServer/src/__tests__/structuralShape.test.ts)
+(30 tests) and
+[`buildBoundaryLogPayload.test.ts`](../packages/MJServer/src/__tests__/buildBoundaryLogPayload.test.ts)
+(11 tests). The latter includes explicit "no literal value appears in
+output" assertions against 5 different secret patterns under both flag states.
+
+**Security property**: in either flag state, the JSON-serialized form of the
+returned payload contains no literal value from the input variables payload.
+This is the layer-1 contract: structural visibility for debugging without
+ever emitting plaintext.
 
 ### Redaction rule (the metadata path)
 
@@ -369,9 +441,10 @@ walk + a `console.dir` — milliseconds, dominated by I/O, fine for dev.
 
 | Surface | Fix |
 |---|---|
-| `context.ts:345` always-on variables echo (the original incident's leak) | **Change 1** — 1-line edit removing the `variables` field. No flag. |
-| Verbose-echo path in dev when `logVariables=true`, on entity-bound CRUD inputs | Metadata redaction (module 1) |
-| Verbose-echo path in dev when `logVariables=true`, on custom resolvers | `@NoLog` discipline (module 2) + verbose-mode-gated boot audit (module 4) |
+| `context.ts:327` boundary echo, default config (the original incident's leak) | **Change 1a** — `buildBoundaryLogPayload` with `logVariables=false` returns `{ operationName }` only. `variables` key absent. |
+| `context.ts:327` boundary echo, verbose mode (`logVariables=true`) | **Change 1b** — structure-only variables block via `describeStructure`. Field names and array lengths visible; no literal values. |
+| Verbose-echo path in dev when `logVariables=true`, on entity-bound CRUD inputs (per-resolver) | Metadata-driven redaction (module 1) via `variablesLoggingMiddleware` |
+| Verbose-echo path in dev when `logVariables=true`, on custom resolvers (per-resolver) | `@NoLog` discipline (module 2) + verbose-mode-gated boot audit (module 4) |
 | `GetDataResolver.ts:121` `LogStatus(JSON.stringify(input))` | Edit to summary line + `@NoLog` on `Token` field |
 | `MCPResolver.ts:771` tool-args dump | Gate behind `logVariables`; drop `.substring(0, 200)` |
 
@@ -456,24 +529,45 @@ the codebase:
   override at
   [`apolloServer/index.ts`](../packages/MJServer/src/apolloServer/index.ts).
   Defaults apply.
+- `describeStructure` and `buildBoundaryLogPayload` exist at
+  [`packages/MJServer/src/logging/structuralShape.ts`](../packages/MJServer/src/logging/structuralShape.ts).
+  Both are pure functions with no MJ dependencies. Tests at
+  [`structuralShape.test.ts`](../packages/MJServer/src/__tests__/structuralShape.test.ts)
+  (30 cases) and
+  [`buildBoundaryLogPayload.test.ts`](../packages/MJServer/src/__tests__/buildBoundaryLogPayload.test.ts)
+  (11 cases) pass green. Wiring at
+  [`context.ts:327`](../packages/MJServer/src/context.ts#L327) calls
+  `buildBoundaryLogPayload`.
 
 ## Acceptance signal
 
 Per the original issue and per the ultrareview's clarification:
 
-- **Primary**: after change 1 (variables removed from `context.ts:345`), the
-  synthetic repro (`CreateMJCredential` with
-  `Values = "FAKE_SECRET_VALUE_DO_NOT_USE"`) must print no variables block at
-  all when MJAPI runs with default env settings.
-- **Primary**: the original incident's resolver
+- **Primary (default config)**: the synthetic repro (`CreateMJCredential`
+  with `Values = "FAKE_SECRET_VALUE_DO_NOT_USE"`) must print
+  `{ operationName: 'CreateMJCredential' }` with no `variables` field at all
+  when MJAPI runs with default env settings.
+- **Primary (default config)**: the original incident's resolver
   (`VoiceTestHubSpotCredential(accessToken: String!)`) also produces no
-  variables block in default config — closed by change 1, not by metadata
+  variables block in default config — closed by change 1a, not by metadata
   redaction.
-- **Verbose path**: when `MJ_LOG_GRAPHQL_VARIABLES=true`, the
-  `CreateMJCredential` repro must print `Values: "<redacted>"` (metadata
-  redaction). The `VoiceTestHubSpotCredential` resolver must print
-  `accessToken: "<redacted>"` **only if** the implementer applied `@NoLog` to
-  the `accessToken` parameter.
-- **Continuity**: the always-on operation-name log (`{ operation: '<name>' }`)
-  must continue to appear in default config, so that operators retain
-  incoming-request visibility without enabling verbose mode.
+- **Verbose path — boundary line (`MJ_LOG_GRAPHQL_VARIABLES=true`)**:
+  `CreateMJCredential` with `Values = "FAKE_SECRET_VALUE_DO_NOT_USE"` must
+  print a `variables` block of structural shape — `Values: '<string>'` (the
+  literal `"FAKE_SECRET_VALUE_DO_NOT_USE"` does NOT appear anywhere in
+  stdout). Field names and array lengths preserved.
+- **Verbose path — per-resolver middleware**: the same flag enables the
+  per-resolver redaction middleware, which prints
+  `{ operation: 'CreateMJCredential', args: { input: { Values: '<redacted>', ... } } }`
+  — entity-aware redaction of the encrypted `Values` field. The
+  `VoiceTestHubSpotCredential` resolver must print
+  `accessToken: '<redacted>'` only if `@NoLog` was applied to the parameter.
+- **Continuity**: the boundary-log operation-name line continues to appear in
+  default config (key `operationName`, unchanged from current behavior), so
+  that operators retain incoming-request visibility without enabling verbose
+  mode.
+- **Security invariant (both flag states)**: no literal value from the
+  GraphQL variables payload appears in stdout under any configuration.
+  Asserted by the structural-shape security tests (5 secret patterns × 2
+  flag states = 10 explicit "string not present in output" assertions) plus
+  the per-resolver middleware's entity-aware redaction.
