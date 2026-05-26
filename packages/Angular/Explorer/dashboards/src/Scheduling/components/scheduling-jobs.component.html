@@ -1,37 +1,47 @@
-<div class="jobs-container">
-  <!-- Toolbar -->
-  <div class="jobs-toolbar">
-    <div class="toolbar-left">
-      <div class="search-box">
-        <i class="fa-solid fa-search"></i>
-        <input type="text"
-          placeholder="Search jobs..."
-          [value]="SearchTerm"
-          (input)="OnSearchChange($any($event.target).value)" />
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduled Jobs"
+      Icon="fa-solid fa-calendar-check"
+      Subtitle="Configure and manage scheduled jobs">
+      <div meta>
+        <mj-stat-badge [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs"></mj-stat-badge>
       </div>
-      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-        <option value="">All Statuses</option>
-        @for (s of StatusOptions.slice(1); track s) {
-          <option [value]="s">{{s}}</option>
-        }
-      </select>
-      <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
-        <option value="">All Types</option>
-        @for (t of TypeOptions.slice(1); track t) {
-          <option [value]="t">{{t}}</option>
-        }
-      </select>
-    </div>
-    <div class="toolbar-right">
-      <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-      <button class="primary-btn" (click)="OpenCreateSlideout()">
-        <i class="fa-solid fa-plus"></i> New Job
-      </button>
-    </div>
-  </div>
+      <div actions>
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="JobsFilterFields"
+            [Values]="JobsFilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+        <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
+          <i class="fa-solid fa-plus"></i> New Job
+        </button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search jobs..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
+<div class="jobs-container">
 
   <!-- Loading -->
   @if (IsLoading) {
@@ -168,3 +178,4 @@
     (Deleted)="OnSlideoutSaved()">
   </mj-scheduled-job-slide-panel>
 </div>
+</ng-template>

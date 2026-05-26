@@ -1,5 +1,67 @@
 # @memberjunction/ng-base-forms
 
+## 5.37.0
+
+### Patch Changes
+
+- 0102dc6: Fix related-entity grids fetching data on form open when a record is opened already-loaded (e.g. double-clicking a row in Data Explorer). `IsSectionExpanded()` fell through to the global expanded default when a section wasn't yet in `sectionMap`; because `initSections()` runs after `await super.ngOnInit()`, the grids could render in the first change-detection pass before the seeded collapsed defaults existed, so `[AllowLoad]="IsSectionExpanded(key)"` read `true` and fired a `RunView` on open. A not-yet-seeded section now resolves to collapsed, so a missing section can never report as expanded.
+- Updated dependencies [4f15f31]
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-list-management@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ng-record-tags@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-entity-viewer@5.37.0
+  - @memberjunction/ng-record-changes@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- e215af2: Stop related-entity grid panels in generated forms from fetching data on form open, and decouple panel-height persistence from expansion state.
+  - `IsSectionExpanded()` now honors the collapsed default seeded by `initSections()` instead of falling back to the global expanded default, and the entity data grid defers its auto-load decision one microtask so a later `[AllowLoad]="false"` binding is applied before the load check runs.
+  - Fixed the underlying bug where persisting a panel's height silently marked the section expanded: a `ResizeObserver` fired on initial measurement and `updateSectionState` merged `DEFAULT_SECTION_STATE` (`isExpanded: true`) into a height-only write, so on the next form open that persisted value won over the seeded collapsed default. `FormSectionState.isExpanded` is now optional (`undefined` = no explicit user choice), `updateSectionState` no longer seeds the default, and the `ResizeObserver` skips its initial fire and only persists while expanded.
+  - Related-entity grids now lazy-load via an `IntersectionObserver` in `ExplorerEntityDataGridComponent`: a grid fetches only once its host scrolls into view, so off-screen and collapsed panels never fire a `RunView` on form open.
+  - CodeGen now seeds all field panels expanded by default (except System Metadata), with related-entity grids collapsed. **Visible UX change:** generated forms that previously opened with related-entity sections expanded will now show those sections collapsed. Regenerate forms to pick up the new defaults.
+
+- Updated dependencies [e215af2]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/ng-entity-viewer@5.36.0
+  - @memberjunction/ng-list-management@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ng-record-tags@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-record-changes@5.36.0
+  - @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/ng-base-types@5.35.0
+  - @memberjunction/ng-entity-viewer@5.35.0
+  - @memberjunction/ng-list-management@5.35.0
+  - @memberjunction/ng-notifications@5.35.0
+  - @memberjunction/ng-record-changes@5.35.0
+  - @memberjunction/ng-record-tags@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

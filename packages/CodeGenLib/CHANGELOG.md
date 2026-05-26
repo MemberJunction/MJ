@@ -1,5 +1,115 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.37.0
+
+### Minor Changes
+
+- baf3032: Add UNIQUE constraints to 17 pure junction tables in `__mj` so duplicate natural-key pairs fail loudly instead of silently accumulating. `__mj.Entity` has long had `UQ_Entity_Name` protecting its natural key, but the closely-related junction tables (ApplicationEntity, UserApplicationEntity, ActionLibrary, AIAgentArtifactType, AIModelAction, APIKeyApplication, AuthorizationRole, ComponentDependency, ComponentLibraryLink, EmployeeRole, EmployeeSkill, EntityAction, EntityCommunicationMessageType, FileEntityRecordLink, QueryPermission, ActionAuthorization, ActionContext) had no equivalent enforcement — CodeGen's blind `INSERT` paths and other writers could (and did, in production) accumulate semantic duplicates when input gating failed (entity delete/recreate cycles, parallel CodeGen runs, manual bootstrap scripts). Migration assumes the affected tables are free of duplicate `(FK1, FK2)` pairs before running; verified zero dups on the reference environment but databases with pre-existing duplicates must dedup before applying. Tightening change — writes producing duplicates now error rather than silently succeed.
+
+### Patch Changes
+
+- Updated dependencies [464f30c]
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/server-bootstrap-lite@5.37.0
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-prompts@5.37.0
+  - @memberjunction/core-entities-server@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/postgresql-dataprovider@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/config@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- e215af2: Stop related-entity grid panels in generated forms from fetching data on form open, and decouple panel-height persistence from expansion state.
+  - `IsSectionExpanded()` now honors the collapsed default seeded by `initSections()` instead of falling back to the global expanded default, and the entity data grid defers its auto-load decision one microtask so a later `[AllowLoad]="false"` binding is applied before the load check runs.
+  - Fixed the underlying bug where persisting a panel's height silently marked the section expanded: a `ResizeObserver` fired on initial measurement and `updateSectionState` merged `DEFAULT_SECTION_STATE` (`isExpanded: true`) into a height-only write, so on the next form open that persisted value won over the seeded collapsed default. `FormSectionState.isExpanded` is now optional (`undefined` = no explicit user choice), `updateSectionState` no longer seeds the default, and the `ResizeObserver` skips its initial fire and only persists while expanded.
+  - Related-entity grids now lazy-load via an `IntersectionObserver` in `ExplorerEntityDataGridComponent`: a grid fetches only once its host scrolls into view, so off-screen and collapsed panels never fire a `RunView` on form open.
+  - CodeGen now seeds all field panels expanded by default (except System Metadata), with related-entity grids collapsed. **Visible UX change:** generated forms that previously opened with related-entity sections expanded will now show those sections collapsed. Regenerate forms to pick up the new defaults.
+
+- Updated dependencies [1c0fce9]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/server-bootstrap-lite@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-prompts@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/core-entities-server@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/postgresql-dataprovider@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/config@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 207cba4: Scope the Developer delete-permission grant migration to the `__mj` schema so it never touches customer-defined schemas, and flip CodeGen's default `CanDelete` for the Developer role to `true` so newly registered entities ship with the Developer role's full CRUD permissions.
+- ac4b9a5: **Multi-tenant switching** (`@memberjunction/global`, `@memberjunction/ng-explorer-core`): Add `TenantChanged` event type to `MJEventType`. Add `clearCacheByPredicate()` on `ComponentCacheManager` for selective tenant-scoped cache clearing. Add `ClearComponentCache()` and `ReloadAllTabs()` on `TabContainerComponent` — destroys cached components and reloads the active tab immediately (inactive tabs reload lazily). Shell subscribes to `TenantChanged` with two-phase protocol: `TenantChanging` shows the loading screen, `TenantChanged` reloads tabs and hides it. Loading screen CSS made `position: fixed` with `z-index: 99999` to fully cover viewport during switches.
+
+  **Open App fixes** (`@memberjunction/open-app-engine`): Make `mj app upgrade` idempotent when already at target version. Allow mixed-case schema names in Open App manifest validation.
+
+  **CodeGen fix** (`@memberjunction/codegen-lib`): Emit `override` modifier on generated `Save()` method to satisfy strict TypeScript when entity subclasses override the base `Save()`.
+
+  **AI Agents dashboard** (`@memberjunction/ng-dashboards`): Fix category filter not filtering results, make category filter extraction defensive, fix Reset Filters button. Rename Actions `ExecutionMonitoringComponent` to avoid name collision with dashboards package.
+
+  **Scheduling** (`@memberjunction/server`): Warn loudly when a scheduled job is configured to run more often than every 5 minutes.
+
+  **Palette** (`@memberjunction/ng-ui-components`): Add ARIA labels to icon-only buttons in dialogs and slides for accessibility compliance.
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/server-bootstrap-lite@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/ai-prompts@5.35.0
+  - @memberjunction/core-entities-server@5.35.0
+  - @memberjunction/postgresql-dataprovider@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/ai-provider-bundle@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/config@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+  - @memberjunction/sql-parser@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

@@ -9,6 +9,8 @@
   overflow: hidden;
 }
 
+/* Slot passthrough now in <mj-page-header>; stat badges now via <mj-stat-badge>. */
+
 /* ---------------------------------------------------------------------------
    Container
    --------------------------------------------------------------------------- */

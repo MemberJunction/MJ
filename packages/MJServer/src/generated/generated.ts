@@ -7094,7 +7094,7 @@ export class MJAIAgentRunStep_ {
     @Field(() => Int, {description: `Sequential number of this step within the agent run, starting from 1`}) 
     StepNumber: number;
         
-    @Field({description: `Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`}) 
+    @Field({description: `Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation, ForEach, While, Tool`}) 
     @MaxLength(50)
     StepType: string;
         
@@ -9453,6 +9453,9 @@ if this limit is exceeded.`})
     @MaxLength(20)
     SearchScopeAccess: string;
         
+    @Field(() => Boolean, {description: `Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.`}) 
+    AcceptUnregisteredFiles: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -9763,6 +9766,9 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     SearchScopeAccess?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    AcceptUnregisteredFiles?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9961,6 +9967,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     SearchScopeAccess?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AcceptUnregisteredFiles?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -21569,6 +21578,16 @@ export class MJArtifactType_ {
     @MaxLength(100)
     ToolLibraryClass?: string;
         
+    @Field(() => Int, {description: `Deterministic tiebreaker when multiple Artifact Types match the same MIME pattern. Higher values win. Within a specificity tier (exact > subtype-wildcard), the resolver sorts by Priority desc, then SystemSupplied = false beats SystemSupplied = true, then lowest ID wins.`}) 
+    Priority: number;
+        
+    @Field({description: `How artifacts of this type are delivered to the LLM by default. Inline: emitted as an inline content block (image_url, audio_url, small text, etc.) when the model supports the modality and the size is under the inline cap. ToolsOnly: never inlined; the agent reaches the bytes only through tool calls (get_full, library-specific tools). Per-instance override is one-way via ConversationArtifactVersion.ForceToolsOnly — an instance can opt out of inline but never opt in when the type default is ToolsOnly.`}) 
+    @MaxLength(20)
+    DefaultDeliveryMode: string;
+        
+    @Field(() => Boolean, {description: `True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority.`}) 
+    SystemSupplied: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
@@ -21632,6 +21651,15 @@ export class CreateMJArtifactTypeInput {
     @Field({ nullable: true })
     ToolLibraryClass: string | null;
 
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    DefaultDeliveryMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SystemSupplied?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -21674,6 +21702,15 @@ export class UpdateMJArtifactTypeInput {
 
     @Field({ nullable: true })
     ToolLibraryClass?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    DefaultDeliveryMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    SystemSupplied?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22245,6 +22282,9 @@ export class MJArtifactVersion_ {
     @Field(() => Int, {nullable: true, description: `Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`}) 
     ContentSizeBytes?: number;
         
+    @Field(() => Boolean, {description: `One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.`}) 
+    ForceToolsOnly: boolean;
+        
     @Field() 
     @MaxLength(255)
     Artifact: string;
@@ -22268,6 +22308,9 @@ export class MJArtifactVersion_ {
     
     @Field(() => [MJConversationDetailArtifact_])
     MJConversationDetailArtifacts_ArtifactVersionIDArray: MJConversationDetailArtifact_[]; // Link to MJConversationDetailArtifacts
+    
+    @Field(() => [MJConversationDetailAttachment_])
+    MJConversationDetailAttachments_ArtifactVersionIDArray: MJConversationDetailAttachment_[]; // Link to MJConversationDetailAttachments
     
 }
 
@@ -22320,6 +22363,9 @@ export class CreateMJArtifactVersionInput {
 
     @Field(() => Int, { nullable: true })
     ContentSizeBytes: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ForceToolsOnly?: boolean;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -22375,6 +22421,9 @@ export class UpdateMJArtifactVersionInput {
 
     @Field(() => Int, { nullable: true })
     ContentSizeBytes?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    ForceToolsOnly?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -22477,6 +22526,16 @@ export class MJArtifactVersionResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationDetailArtifacts')} WHERE ${provider.QuoteIdentifier('ArtifactVersionID')}='${mjartifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Detail Artifacts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Detail Artifacts', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationDetailAttachment_])
+    async MJConversationDetailAttachments_ArtifactVersionIDArray(@Root() mjartifactversion_: MJArtifactVersion_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Detail Attachments', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwConversationDetailAttachments')} WHERE ${provider.QuoteIdentifier('ArtifactVersionID')}='${mjartifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Detail Attachments', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Detail Attachments', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -32772,7 +32831,7 @@ export class MJConversationDetailArtifactResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Conversation Detail Attachments
 //****************************************************************************
-@ObjectType({ description: `Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.` })
+@ObjectType({ description: `DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework\'s standard handling of Status=\'Deprecated\'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.` })
 export class MJConversationDetailAttachment_ {
     @Field() 
     @MaxLength(36)
@@ -32828,6 +32887,10 @@ export class MJConversationDetailAttachment_ {
     @Field({nullable: true, description: `Description of the attachment providing context about its content and purpose.`}) 
     Description?: string;
         
+    @Field({nullable: true, description: `Foreign key to the ArtifactVersion created alongside this attachment by the storage-unification path. When set, the agent resolver routes via the artifact path (manifest + tool dispatch) and skips inline embedding of the attachment to avoid double-processing. NULL for pre-v5.35 attachment rows authored before storage unification.`}) 
+    @MaxLength(36)
+    ArtifactVersionID?: string;
+        
     @Field() 
     ConversationDetail: string;
         
@@ -32838,6 +32901,10 @@ export class MJConversationDetailAttachment_ {
     @Field({nullable: true}) 
     @MaxLength(500)
     File?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ArtifactVersion?: string;
         
 }
 
@@ -32887,6 +32954,9 @@ export class CreateMJConversationDetailAttachmentInput {
 
     @Field({ nullable: true })
     Description: string | null;
+
+    @Field({ nullable: true })
+    ArtifactVersionID: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -32939,6 +33009,9 @@ export class UpdateMJConversationDetailAttachmentInput {
 
     @Field({ nullable: true })
     Description?: string | null;
+
+    @Field({ nullable: true })
+    ArtifactVersionID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -51872,6 +51945,27 @@ export class MJList_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`}) 
+    @MaxLength(36)
+    SourceViewID?: string;
+        
+    @Field({nullable: true, description: `JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.`}) 
+    SourceFilterSnapshot?: string;
+        
+    @Field({nullable: true, description: `Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`}) 
+    LastRefreshedAt?: Date;
+        
+    @Field({nullable: true, description: `User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`}) 
+    @MaxLength(36)
+    LastRefreshedByUserID?: string;
+        
+    @Field({description: `Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).`}) 
+    @MaxLength(20)
+    RefreshMode: string;
+        
+    @Field(() => Boolean, {description: `When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`}) 
+    UseSnapshot: boolean;
+        
     @Field() 
     @MaxLength(255)
     Entity: string;
@@ -51887,6 +51981,14 @@ export class MJList_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     CompanyIntegration?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    SourceView?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    LastRefreshedByUser?: string;
         
     @Field(() => [MJDuplicateRun_])
     MJDuplicateRuns_SourceListIDArray: MJDuplicateRun_[]; // Link to MJDuplicateRuns
@@ -51931,6 +52033,24 @@ export class CreateMJListInput {
     @Field({ nullable: true })
     CompanyIntegrationID: string | null;
 
+    @Field({ nullable: true })
+    SourceViewID: string | null;
+
+    @Field({ nullable: true })
+    SourceFilterSnapshot: string | null;
+
+    @Field({ nullable: true })
+    LastRefreshedAt: Date | null;
+
+    @Field({ nullable: true })
+    LastRefreshedByUserID: string | null;
+
+    @Field({ nullable: true })
+    RefreshMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UseSnapshot?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -51964,6 +52084,24 @@ export class UpdateMJListInput {
 
     @Field({ nullable: true })
     CompanyIntegrationID?: string | null;
+
+    @Field({ nullable: true })
+    SourceViewID?: string | null;
+
+    @Field({ nullable: true })
+    SourceFilterSnapshot?: string | null;
+
+    @Field({ nullable: true })
+    LastRefreshedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LastRefreshedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    RefreshMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    UseSnapshot?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -76853,6 +76991,9 @@ export class MJUserView_ {
     @Field(() => [MJUserViewRun_])
     MJUserViewRuns_UserViewIDArray: MJUserViewRun_[]; // Link to MJUserViewRuns
     
+    @Field(() => [MJList_])
+    MJLists_SourceViewIDArray: MJList_[]; // Link to MJLists
+    
 }
 
 //****************************************************************************
@@ -77097,6 +77238,16 @@ export class MJUserViewResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwUserViewRuns')} WHERE ${provider.QuoteIdentifier('UserViewID')}='${mjuserview_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: User View Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: User View Runs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJList_])
+    async MJLists_SourceViewIDArray(@Root() mjuserview_: MJUserView_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Lists', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('SourceViewID')}='${mjuserview_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77505,6 +77656,9 @@ export class MJUser_ {
     
     @Field(() => [MJAIAgent_])
     MJAIAgents_OwnerUserIDArray: MJAIAgent_[]; // Link to MJAIAgents
+    
+    @Field(() => [MJList_])
+    MJLists_LastRefreshedByUserIDArray: MJList_[]; // Link to MJLists
     
 }
 
@@ -78638,6 +78792,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgents')} WHERE ${provider.QuoteIdentifier('OwnerUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: AI Agents', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJList_])
+    async MJLists_LastRefreshedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Lists', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwLists')} WHERE ${provider.QuoteIdentifier('LastRefreshedByUserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Lists', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Lists', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

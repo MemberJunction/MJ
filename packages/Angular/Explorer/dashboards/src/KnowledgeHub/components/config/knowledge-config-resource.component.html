@@ -1,35 +1,51 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Configuration"
+    Icon="fa-solid fa-cogs"
+    Subtitle="Pipeline, vector store, search, and automation settings">
+    <div meta>
+      @if (HasUnsavedChanges) {
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-exclamation"
+          Label="Unsaved changes"
+          Variant="warning">
+        </mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      @if (HasUnsavedChanges) {
+        <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+        </button>
+        <button mjButton variant="primary" size="sm" (click)="SaveConfiguration()" [disabled]="IsSaving" title="Save all settings">
+          <i class="fa-solid fa-floppy-disk"></i> {{IsSaving ? 'Saving…' : 'Save'}}
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="config-loading">
         <mj-loading text="Loading configuration..." size="medium"></mj-loading>
     </div>
 } @else {
     <div class="config-layout">
-        <!-- Left Navigation -->
-        <nav class="config-nav">
-            <div class="config-nav-header">
-                <i class="fa-solid fa-cogs"></i>
-                <span>Configuration</span>
-            </div>
-            @for (section of Sections; track section.ID) {
-                <button
-                    class="config-nav-item"
-                    [class.config-nav-item-active]="ActiveSection === section.ID"
-                    (click)="SelectSection(section.ID)"
-                >
-                    <i [class]="section.Icon"></i>
-                    <span>{{ section.Label }}</span>
-                </button>
-            }
-        </nav>
+        <mj-left-nav
+            [Sections]="navSections"
+            [ActiveId]="ActiveSection"
+            (ItemClicked)="onNavItemClicked($event)">
+        </mj-left-nav>
 
-        <!-- Content Area -->
-        <div class="config-content">
+        <mj-left-nav-content>
+        <mj-page-header-interior
+            [Title]="currentSection?.Label || ''"
+            [Subtitle]="currentSection?.Description || ''">
+        </mj-page-header-interior>
+        <mj-page-body-interior>
             <!-- Pipeline Settings -->
             @if (ActiveSection === 'pipeline') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Pipeline Settings</h2>
-                    <p class="config-section-desc">Configure how the Knowledge Pipeline processes incoming content.</p>
-
                     <div class="config-group">
                         <label class="config-toggle-row">
                             <div class="config-toggle-info">
@@ -69,8 +85,6 @@
             <!-- Vector Database Settings -->
             @if (ActiveSection === 'vectordb') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Vector Database</h2>
-                    <p class="config-section-desc">Manage the shared vector index and database connection.</p>
 
                     <!-- Setup Progress -->
                     <div class="setup-progress">
@@ -279,8 +293,6 @@
             <!-- Full-Text Indexes -->
             @if (ActiveSection === 'fulltext') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Full-Text Search Entities</h2>
-                    <p class="config-section-desc">Configure which entities are included in full-text search. Entities with text fields (Name, Description, etc.) are automatically discovered.</p>
 
                     @if (IsLoadingFTSEntities) {
                         <mj-loading text="Discovering searchable entities..." size="medium"></mj-loading>
@@ -332,8 +344,6 @@
             <!-- Embedding Models -->
             @if (ActiveSection === 'embedding') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Embedding Models</h2>
-                    <p class="config-section-desc">AI models used for generating vector embeddings from text.</p>
 
                     @if (HasEmbeddingModel) {
                         <div class="config-group">
@@ -376,8 +386,6 @@
             <!-- Thresholds -->
             @if (ActiveSection === 'thresholds') {
                 <div class="config-section">
-                    <h2 class="config-section-title">Scoring Thresholds</h2>
-                    <p class="config-section-desc">Set the scoring thresholds used by search, duplicate detection, and autotagging.</p>
 
                     <div class="config-group">
                         <div class="config-field-row">
@@ -418,12 +426,6 @@
             <!-- Search Scopes Section -->
             @if (ActiveSection === 'search-scopes') {
                 <div class="config-section">
-                    <h2 class="config-section-title"><i class="fa-solid fa-compass-drafting"></i> Search Scopes</h2>
-                    <p class="config-section-desc">
-                        Define reusable search scopes that filter which providers, entities, external indexes, and storage accounts participate in a scoped search.
-                        Scopes can be assigned to AI agents for pre-execution RAG or agent-invoked search.
-                    </p>
-
                     <div class="scope-manager">
                         <!-- Scope list -->
                         <aside class="scope-manager-list">
@@ -615,8 +617,6 @@
             <!-- Search Analytics Section (P3.3) — driven by SearchExecutionLog -->
             @if (ActiveSection === 'search-analytics') {
                 <div class="config-section-content">
-                    <h2 class="config-section-title"><i class="fa-solid fa-chart-line"></i> Search Analytics</h2>
-                    <p class="config-section-desc">Aggregated metrics over the last 5,000 search invocations from <code>MJ: Search Execution Logs</code>. Use this to spot slow scopes, high-failure queries, or runaway reranker spend.</p>
 
                     @if (AnalyticsLoading) {
                         <mj-loading text="Loading analytics…" size="medium"></mj-loading>
@@ -722,11 +722,6 @@
             <!-- Permissions Audit Section (P2A.7) -->
             @if (ActiveSection === 'search-permissions') {
                 <div class="config-section-content">
-                    <h2 class="config-section-title"><i class="fa-solid fa-shield-halved"></i> Permissions</h2>
-                    <p class="config-section-desc">
-                        Cross-scope view of every <code>SearchScopePermission</code> row. Filter by scope, by user/role, or by permission level to answer "who has access to what". Read-only — to add or edit a grant, open the SearchScope's full form and use its Permissions panel.
-                    </p>
-
                     @if (PermissionsLoading) {
                         <div class="search-permissions-loading">
                             <i class="fa-solid fa-spinner fa-spin"></i> Loading permission rows...
@@ -797,10 +792,8 @@
             <!-- Scheduling Section -->
             @if (ActiveSection === 'scheduling') {
                 <div class="config-section-content">
-                    <h2 class="config-section-title"><i class="fa-solid fa-clock"></i> Scheduling</h2>
-                    <p class="config-section-desc">Manage automated pipeline schedules for content classification and vector sync. Create schedules here or manage all schedules in the dedicated Scheduling app.</p>
                     <div style="margin-top: 16px;">
-                        <app-scheduling-resource></app-scheduling-resource>
+                        <app-scheduling-resource [HideToolbar]="true"></app-scheduling-resource>
                     </div>
                 </div>
             }
@@ -821,6 +814,9 @@
                     </button>
                 </div>
             }
-        </div>
+        </mj-page-body-interior>
+        </mj-left-nav-content>
     </div>
 }
+  </mj-page-body>
+</mj-page-layout>

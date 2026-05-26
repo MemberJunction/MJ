@@ -382,6 +382,16 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     if (!upgradeCheck.Compatible) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, upgradeCheck.Message ?? 'Invalid upgrade version');
     }
+    if (upgradeCheck.AlreadyAtTarget) {
+      return {
+        Success: true,
+        Action: 'Upgrade',
+        AppName: options.AppName,
+        Version: targetVersion,
+        DurationSeconds: GetDurationSeconds(startTime),
+        Summary: upgradeCheck.Message ?? `Already at version ${targetVersion}`,
+      };
+    }
 
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
     const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions);

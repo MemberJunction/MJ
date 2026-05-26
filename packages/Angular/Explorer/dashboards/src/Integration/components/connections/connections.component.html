@@ -1,3 +1,22 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integrations"
+    Icon="fa-solid fa-plug"
+    Subtitle="Connected systems and data sources">
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         "Connections.length integrations" badge mirrored the visible card
+         grid row count. -->
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+      @if (!WizardOpen && !SelectedSummary) {
+        <button mjButton variant="primary" size="sm" (click)="OpenWizard()">
+          <i class="fa-solid fa-plus"></i> Add Integration
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <!-- Main container -->
 <div class="connections-container" [class.detail-active]="!!SelectedSummary"
      [class.editor-active]="!!EditorEntityMap">
@@ -6,18 +25,6 @@
        CARD GRID VIEW (shown when no wizard and no detail selected)
        ====================================================================== -->
   @if (!WizardOpen && !SelectedSummary) {
-    <!-- Header -->
-    <div class="connections-header">
-      <div class="header-left">
-        <h2 class="header-title">Integrations</h2>
-        <span class="header-count">{{ Connections.length }} integration{{ Connections.length !== 1 ? 's' : '' }}</span>
-      </div>
-      <button mjButton variant="primary" (click)="OpenWizard()" class="add-connection-btn">
-        <i class="fa-solid fa-plus"></i>
-        Add Integration
-      </button>
-    </div>
-
     <!-- Loading state -->
     @if (IsLoading) {
       <div class="loading-container">
@@ -1131,3 +1138,5 @@
     </div>
   </div>
 }
+  </mj-page-body>
+</mj-page-layout>

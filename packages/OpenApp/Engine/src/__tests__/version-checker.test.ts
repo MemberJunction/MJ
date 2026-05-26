@@ -114,10 +114,11 @@ describe('IsValidUpgrade', () => {
         expect(result.Compatible).toBe(true);
     });
 
-    it('should reject same version', () => {
+    it('should accept same version as already-at-target', () => {
         const result = IsValidUpgrade('1.0.0', '1.0.0');
-        expect(result.Compatible).toBe(false);
-        expect(result.Message).toContain('same');
+        expect(result.Compatible).toBe(true);
+        expect(result.AlreadyAtTarget).toBe(true);
+        expect(result.Message).toContain('Already at version');
     });
 
     it('should reject downgrade', () => {

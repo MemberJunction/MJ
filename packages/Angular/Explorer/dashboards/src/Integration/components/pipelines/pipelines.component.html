@@ -1,41 +1,36 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Pipelines"
+    Icon="fa-solid fa-diagram-project"
+    Subtitle="Data transformation and routing pipelines">
+    <!-- [meta] intentionally omitted — chrome slot discipline audit Task B.
+         Pipelines count mirrored the visible list; entity-maps count was
+         cross-aggregate reference info that didn't drive action on this page. -->
+    <div actions>
+      <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand All">
+        <i class="fa-solid fa-angles-down"></i>
+      </button>
+      <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse All">
+        <i class="fa-solid fa-angles-up"></i>
+      </button>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search integrations or entities..."
+        [Value]="GlobalSearch"
+        (ValueChange)="OnGlobalSearchValue($event)">
+      </mj-page-search>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 <div class="pipelines-container">
 
   <!-- ===================================================================== -->
   <!-- MAP LIST VIEW (hidden when editor is open)                            -->
   <!-- ===================================================================== -->
   @if (!VisualEditorOpen) {
-
-    <!-- Toolbar -->
-    <div class="pipelines-toolbar">
-      <div class="toolbar-left">
-        <h2 class="toolbar-title">
-          <i class="fa-solid fa-diagram-project"></i>
-          Pipelines
-        </h2>
-        <span class="toolbar-count-badge">{{ IntegrationCount }}</span>
-        <span class="toolbar-map-count">{{ TotalMapCount }} entity maps</span>
-      </div>
-      <div class="toolbar-right">
-        <div class="global-search">
-          <i class="fa-solid fa-search search-icon"></i>
-          <input type="text"
-                 class="search-input"
-                 placeholder="Search integrations or entities..."
-                 [value]="GlobalSearch"
-                 (input)="OnGlobalSearchChange($event)" />
-        </div>
-        <button class="toolbar-btn" (click)="ExpandAll()" title="Expand All">
-          <i class="fa-solid fa-angles-down"></i>
-        </button>
-        <button class="toolbar-btn" (click)="CollapseAll()" title="Collapse All">
-          <i class="fa-solid fa-angles-up"></i>
-        </button>
-        <div class="toolbar-divider"></div>
-        <button class="toolbar-btn" (click)="LoadData()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i>
-        </button>
-      </div>
-    </div>
 
     <!-- Main content area -->
     <div class="pipelines-content">
@@ -745,3 +740,5 @@
     </div>
   }
 </div>
+  </mj-page-body>
+</mj-page-layout>

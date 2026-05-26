@@ -17,7 +17,7 @@ export class MJEntityOrganicKeyRelatedEntityFormComponent extends BaseFormCompon
         this.initSections([
             { sectionKey: 'entityMapping', sectionName: 'Entity Mapping', isExpanded: true },
             { sectionKey: 'matchingConfiguration', sectionName: 'Matching Configuration', isExpanded: true },
-            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: false },
+            { sectionKey: 'displaySettings', sectionName: 'Display Settings', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

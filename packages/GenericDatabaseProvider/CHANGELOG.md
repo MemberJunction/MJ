@@ -1,5 +1,74 @@
 # @memberjunction/generic-database-provider
 
+## 5.37.0
+
+### Patch Changes
+
+- f5531e0: Refactor the SQL render pipeline's row-cap path to be AST-based. Add `SQLParser.StripComments`, a token-aware comment stripper that preserves string literals and quoted identifiers (including SQL Server brackets) and handles nested block comments. Replace the regex-based `applyMaxRows` in `RenderPipeline` with `QueryPagingEngine.WrapWithMaxRows`, which injects `TOP`/`LIMIT` via the AST and falls back to OFFSET/FETCH for parser-unsupported CTE shapes. Throw on `MaxRows + Paging` conflicts instead of silently overriding. Route `AdhocQueryResolver` through `RenderPipeline.Run` so composition macros, templates, and row capping run consistently with saved queries.
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/sql-parser@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/encryption@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/query-processor@5.37.0
+  - @memberjunction/geo-core@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/geo-core@5.36.0
+  - @memberjunction/query-processor@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+  - @memberjunction/sql-parser@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- 6f083dd: Rewrite `RenderPipeline.applyMaxRows` to inject the row cap (`TOP N` for SQL Server, `LIMIT N` for PostgreSQL) via an AST rewrite instead of a string-anchored regex. CTE queries (`WITH … SELECT …`) and queries whose CTE definitions contain their own `TOP N` now correctly receive the outer cap on the outermost SELECT. Queries that already specify an outermost `TOP` / `LIMIT` are left untouched, and shapes the parser can't represent at the top level (UNION/INTERSECT/EXCEPT, vendor-specific syntax, sqlify round-trip failures) fall back to a `SELECT TOP N * FROM (<original>) AS _capped` wrap.
+- aedd4dc: Bubble save SQL composition up to GenericDatabaseProvider as a single orchestrator; SQL Server and Postgres providers now contribute four dialect hooks instead of duplicating the generator. Fixes a PG UPDATE bug where PK wasn't tail appended
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [7332992]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/geo-core@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/encryption@5.35.0
+  - @memberjunction/queue@5.35.0
+  - @memberjunction/query-processor@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+  - @memberjunction/sql-parser@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

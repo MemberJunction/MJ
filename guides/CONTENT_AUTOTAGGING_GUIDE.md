@@ -315,18 +315,52 @@ Each `ContentSource` record has an optional `Configuration` JSON column (typed a
 | `TagMatchThreshold` | `number` | `0.9` | Minimum cosine similarity score (0--1) for semantic tag matching. Higher values require closer matches. |
 | `ShareTaxonomyWithLLM` | `boolean` | `true` | Whether to inject the existing tag taxonomy into the LLM prompt. Helps the LLM prefer existing tags. |
 | `EnableVectorization` | `boolean` | `false` | Whether to embed tagged content items into a vector index after tagging. |
+| `MaxItemsPerRun` | `number` | unlimited | Caps content items handed to the LLM per run. Items skipped by change-detection don't count. Pause is graceful; next run picks up where this one stopped (the change-detection short-circuit skips already-tagged pages). |
+| `MaxNewTagsPerRun` | `number` | unlimited | Caps auto-created tags per run. |
+| `MaxNewTagsPerItem` | `number` | unlimited | Per-item cap; extras route to the `MJ:Tag Suggestions` queue instead of being created. |
+| `MaxTokensPerRun` | `number` | unlimited | Cumulative LLM tokens (prompt + completion) before pause. |
+| `MaxCostPerRun` | `number` | unlimited | Cumulative USD before pause. |
+| `Website` | `IContentSourceWebsiteConfiguration` | — | Typed sub-object for Website-source crawler settings — see below. |
 
-Example configuration JSON on a ContentSource record:
+Run-budget priority (when multiple caps could trip the same batch): **items → tags → tokens → cost**. Items ranks first because it's the most user-intuitive cap and not tied to a specific model's pricing.
+
+### IContentSourceWebsiteConfiguration
+
+Sub-object on `Configuration.Website` for sources where `ContentSourceType = "Website"`. AutotagWebsite reads this first, then overlays any matching `ContentSourceParam` rows as a per-instance override (legacy storage / sharper-override path).
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MaxDepth` | `number` | `2` | Recursion ceiling for in-domain links. `0` = just the start URL. |
+| `CrawlSitesInLowerLevelDomain` | `boolean` | `true` | Recursive depth-aware crawler. Turn off for single-page-only behavior. |
+| `CrawlOtherSitesInTopLevelDomain` | `boolean` | `false` | Single-pass sibling-path discovery on the seed page. |
+| `URLPattern` | `string` (regex) | match-all | Only URLs matching the regex are added to the visited set. |
+| `RootURL` | `string` | derived from seed | URL prefix for the in-domain check. |
+
+Example configuration JSON on a Website ContentSource record:
 
 ```json
 {
     "TagTaxonomyMode": "auto-grow",
-    "TagRootID": "a1b2c3d4-...",
-    "TagMatchThreshold": 0.85,
-    "ShareTaxonomyWithLLM": true,
-    "EnableVectorization": false
+    "MaxItemsPerRun": 100,
+    "MaxCostPerRun": 5.00,
+    "Website": {
+        "MaxDepth": 3,
+        "URLPattern": "^https://example\\.com/blog/.*"
+    }
 }
 ```
+
+### UI: Editing Configuration via BaseFormPanel slots
+
+These knobs are surfaced in the MJ Explorer content-source edit form via two
+dynamically-injected panels in `@memberjunction/ng-core-entity-forms`:
+
+- **`TagPipelineConfigurationPanel`** — taxonomy mode, scope, thresholds, share-with-LLM toggle, vectorization toggle, and the five run-budget caps. Registered against `(MJ: Content Sources, after-fields)` with `sortKey: 100`.
+- **`WebsiteCrawlerSettingsPanel`** — the five `IContentSourceWebsiteConfiguration` fields. Registered against `(MJ: Content Sources, after-fields)` with `sortKey: 80`. Gates its own template on `IsWebsiteSourceType` so it renders nothing for non-Website sources.
+
+Both panels self-register via `@RegisterClassEx(BaseFormPanel, { metadata: {...} })` and mount automatically when a content source is opened in the entity form — no per-form template edits, no custom-form override. The Knowledge Hub dashboard's quick-edit slide-in surfaces a minimal subset (MaxItemsPerRun + MaxDepth + the two crawl toggles) with an "Open advanced settings →" link that routes to the full entity form for the rest.
+
+See [`packages/Angular/Generic/base-forms/PANELS.md`](../packages/Angular/Generic/base-forms/PANELS.md) for the full BaseFormPanel authoring guide and slot-system architecture.
 
 ### ContentType Settings
 

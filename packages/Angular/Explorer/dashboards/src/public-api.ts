@@ -88,7 +88,6 @@ export {
   // Action Explorer components
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,
@@ -98,8 +97,8 @@ export {
   ActionExplorerStateService
 } from './Actions';
 
-// Re-export Actions ExecutionMonitoringComponent with alias to avoid conflict with AI version
-export { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+// Re-export Actions ExecutionMonitoringComponent (renamed to avoid conflict with AI version)
+export { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 
 // Export Scheduling components as resources (BaseResourceComponent-based)
 export {
@@ -124,6 +123,10 @@ export {
 export {
   CommunicationTemplatesResourceComponent
 } from './Communication/communication-templates-resource.component';
+export {
+  CommunicationsNewMessageResource,
+  LoadCommunicationsNewMessageResource
+} from './Communication/communication-new-message-resource.component';
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {

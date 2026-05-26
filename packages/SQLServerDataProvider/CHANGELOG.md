@@ -1,5 +1,78 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+- Updated dependencies [f5531e0]
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/generic-database-provider@5.37.0
+  - @memberjunction/aiengine@5.37.0
+  - @memberjunction/ai-vector-dupe@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/encryption@5.37.0
+  - @memberjunction/queue@5.37.0
+  - @memberjunction/query-processor@5.37.0
+  - @memberjunction/ai-provider-bundle@5.37.0
+  - @memberjunction/ai@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/aiengine@5.36.0
+  - @memberjunction/ai-vector-dupe@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/encryption@5.36.0
+  - @memberjunction/generic-database-provider@5.36.0
+  - @memberjunction/queue@5.36.0
+  - @memberjunction/query-processor@5.36.0
+  - @memberjunction/ai-provider-bundle@5.36.0
+  - @memberjunction/ai@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- aedd4dc: Bubble save SQL composition up to GenericDatabaseProvider as a single orchestrator; SQL Server and Postgres providers now contribute four dialect hooks instead of duplicating the generator. Fixes a PG UPDATE bug where PK wasn't tail appended
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [6f083dd]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/generic-database-provider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/aiengine@5.35.0
+  - @memberjunction/ai-vector-dupe@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/encryption@5.35.0
+  - @memberjunction/queue@5.35.0
+  - @memberjunction/query-processor@5.35.0
+  - @memberjunction/ai-provider-bundle@5.35.0
+  - @memberjunction/ai@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

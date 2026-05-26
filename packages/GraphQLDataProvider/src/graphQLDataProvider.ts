@@ -477,7 +477,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     protected async InternalRunQuery(params: RunQueryParams, contextUser?: UserInfo): Promise<RunQueryResult> {
         // This is the internal implementation - pre/post processing is handled by ProviderBase.RunQuery()
         if (params.SQL) {
-            return this.RunAdhocQuery(params.SQL, params.MaxRows);
+            return this.RunAdhocQuery(params.SQL, params.MaxRows, undefined, params.StartRow);
         }
         else if (params.QueryID) {
             return this.RunQueryByID(params.QueryID, params.CategoryID, params.CategoryPath, contextUser, params.Parameters, params.MaxRows, params.StartRow);
@@ -494,7 +494,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
      * Executes an ad-hoc SQL query via the ExecuteAdhocQuery GraphQL resolver.
      * The server validates the SQL (SELECT/WITH only) and executes on a read-only connection.
      */
-    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number): Promise<RunQueryResult> {
+    protected async RunAdhocQuery(sql: string, maxRows?: number, timeoutSeconds?: number, startRow?: number): Promise<RunQueryResult> {
         const query = gql`
             query ExecuteAdhocQuery($input: AdhocQueryInput!) {
                 ExecuteAdhocQuery(input: $input) {
@@ -503,9 +503,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             }
         `;
 
-        const input: { SQL: string; TimeoutSeconds?: number } = { SQL: sql };
+        const input: { SQL: string; TimeoutSeconds?: number; MaxRows?: number; StartRow?: number } = { SQL: sql };
         if (timeoutSeconds !== undefined) {
             input.TimeoutSeconds = timeoutSeconds;
+        }
+        if (maxRows !== undefined) {
+            input.MaxRows = maxRows;
+        }
+        if (startRow !== undefined) {
+            input.StartRow = startRow;
         }
 
         const result = await this.ExecuteGQL(query, { input });
@@ -836,6 +842,13 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 innerParams.ResultType = params.ResultType ? params.ResultType : 'simple';
                 if (params.AuditLogDescription && params.AuditLogDescription.length > 0)
                     innerParams.AuditLogDescription = params.AuditLogDescription;
+                // BypassCache instructs the server to skip its RunView cache layer for this
+                // query — used for cross-entity subqueries the cache invalidator can't follow
+                // (e.g. WHERE … IN (SELECT … FROM vwListDetails …)) or for maintenance reads
+                // that need true DB state. Only forward when explicitly set so default behavior
+                // (server caching enabled) is unchanged.
+                if (params.BypassCache !== undefined)
+                    innerParams.BypassCache = params.BypassCache;
 
                 if (!dynamicView) {
                     innerParams.ExcludeUserViewRunID = params.ExcludeUserViewRunID ? params.ExcludeUserViewRunID : "";
@@ -1004,6 +1017,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
                         innerParam.AuditLogDescription = param.AuditLogDescription;
+                    }
+                    if (param.BypassCache !== undefined) {
+                        innerParam.BypassCache = param.BypassCache;
                     }
 
                     if (!dynamicView) {

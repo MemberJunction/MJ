@@ -8,7 +8,7 @@ import { Subscription } from "rxjs";
  * can take significant time. This is a safety net — if no completion
  * event arrives within this window, the client stops waiting.
  */
-const DEFAULT_TIMEOUT_MS = 15 * 60 * 1000;
+const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000;
 
 /**
  * Configuration for a fire-and-forget GraphQL mutation execution.

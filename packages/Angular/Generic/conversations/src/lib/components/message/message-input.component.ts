@@ -399,6 +399,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
           this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
 
+          let attachmentRejection: string | null = null;
           try {
             await this.attachmentService.saveAttachments(
               messageDetail.ID,
@@ -407,10 +408,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
             );
           } catch (attachmentError) {
             console.error('Failed to save attachments:', attachmentError);
-            this.toastService.error('Some attachments could not be saved');
+            attachmentRejection = attachmentError instanceof Error
+              ? attachmentError.message
+              : 'Some attachments could not be saved';
           } finally {
             this.isUploadingAttachments = false;
             this.uploadStateChanged.emit({ isUploading: false, message: '' });
+          }
+
+          // Plan §6: when attachments are rejected, the message itself must
+          // not go through. Roll back the ConversationDetail and notify the
+          // user with the server's rejection message so they can see exactly
+          // why and either remove the file or upload a supported one. The
+          // text and pending attachments stay in the input so the user can edit.
+          if (attachmentRejection) {
+            MJNotificationService.Instance?.CreateSimpleNotification(attachmentRejection, 'error', 5000);
+            try {
+              await messageDetail.Delete();
+            } catch (rollbackErr) {
+              console.error('Failed to roll back conversation detail after attachment rejection:', rollbackErr);
+            }
+            this.isSending = false;
+            return;
           }
         }
 
@@ -452,10 +471,30 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Send a message with custom text WITHOUT modifying the visible messageText input
    * Used for suggested responses and initial messages from empty state.
    * Also saves any pending attachments.
+   *
+   * `extraAttachments` is an escape hatch for callers that programmatically
+   * attached something via `AddArtifactAttachment` and want to send in the same
+   * tick — the `attachmentsChanged` event chain hasn't propagated yet, so
+   * `this.pendingAttachments` may not contain the attachment. Pass it in
+   * explicitly and we merge + dedupe (by `id`) before saving.
    */
-  public async sendMessageWithText(text: string): Promise<void> {
+  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<void> {
+    const merged: PendingAttachment[] = (() => {
+      if (!extraAttachments || extraAttachments.length === 0) {
+        return [...this.pendingAttachments];
+      }
+      const seen = new Set<string>();
+      const out: PendingAttachment[] = [];
+      for (const a of [...this.pendingAttachments, ...extraAttachments]) {
+        if (seen.has(a.id)) continue;
+        seen.add(a.id);
+        out.push(a);
+      }
+      return out;
+    })();
+
     const hasText = text && text.trim().length > 0;
-    const hasAttachments = this.pendingAttachments.length > 0;
+    const hasAttachments = merged.length > 0;
 
     if (!hasText && !hasAttachments) {
       return;
@@ -466,7 +505,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     this.isSending = true;
-    const attachmentsToSave = [...this.pendingAttachments];
+    const attachmentsToSave = merged;
 
     try {
       const detail = await this.dataCache.createConversationDetail(this.currentUser);
@@ -489,6 +528,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           this.uploadingMessage = `Uploading ${attachmentsToSave.length} attachment${attachmentsToSave.length > 1 ? 's' : ''}...`;
           this.uploadStateChanged.emit({ isUploading: true, message: this.uploadingMessage });
 
+          let attachmentRejection: string | null = null;
           try {
             await this.attachmentService.saveAttachments(
               detail.ID,
@@ -497,15 +537,37 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
             );
           } catch (attachmentError) {
             console.error('Failed to save attachments:', attachmentError);
-            this.toastService.error('Some attachments could not be saved');
+            attachmentRejection = attachmentError instanceof Error
+              ? attachmentError.message
+              : 'Some attachments could not be saved';
           } finally {
             this.isUploadingAttachments = false;
             this.uploadStateChanged.emit({ isUploading: false, message: '' });
+          }
+
+          // Plan §6: roll back the message when attachments are rejected so
+          // the user sees the rejection clearly instead of the agent answering
+          // a question that was supposed to include the file.
+          if (attachmentRejection) {
+            MJNotificationService.Instance?.CreateSimpleNotification(attachmentRejection, 'error', 5000);
+            try {
+              await detail.Delete();
+            } catch (rollbackErr) {
+              console.error('Failed to roll back conversation detail after attachment rejection:', rollbackErr);
+            }
+            this.isSending = false;
+            return;
           }
         }
 
         // Clear pending attachments after successful send
         this.pendingAttachments = [];
+
+        // Also clear the mention editor's content + its own attachments list.
+        // The user-initiated send path (MessageInputBoxComponent.onSendClick)
+        // calls mentionEditor.clear() — we bypass that path here, so the chips
+        // would otherwise stay on screen after the message goes out.
+        this.inputBox?.mentionEditor?.clear();
 
         this.messageSent.emit(detail);
 

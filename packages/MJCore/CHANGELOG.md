@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/core
 
+## 5.37.0
+
+### Minor Changes
+
+- 4f15f31: Add Feedback Explorer dashboard with 1–10 conversation-rating modal persisting to ConversationDetail, plus a migration granting the UI role Create/Update on MJ: User Settings so user-scoped preferences (e.g. Agent Feedback consent) stop silently failing.
+
+### Patch Changes
+
+- @memberjunction/global@5.37.0
+- @memberjunction/sql-dialect@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- 70fce34: Fix MJAPI heap leak by eliminating per-request `SQLServerDataProvider` retention in `BaseEngine` caches. `applyImmediateMutation` now clones entities before storing them so saver providers aren't pinned via `_provider` back-refs. The engine provider-instance cache is now keyed by `IMetadataProvider.InstanceConnectionString` (promoted onto the interface) instead of by provider object identity, and `SetProvider` is first-wins so transient per-request providers can't displace persistent ones.
+- 4d16916: Fix dashboard resource navigation to parse OpenEntityRecord recordId as a URL segment so single-PK composite keys round-trip correctly (was producing malformed `ID|ID|<value>` URLs and dropping the record ID), plus add regression tests for `CompositeKey.LoadFromURLSegment`.
+  - @memberjunction/global@5.36.0
+  - @memberjunction/sql-dialect@5.36.0
+
+## 5.35.0
+
+### Minor Changes
+
+- 6fa8e13: Grant the Developer role CanDelete on the ~218 entities where it previously had Create/Update but not Delete, restricted to developer-owned configuration and metadata. Audit logs, OAuth runtime state, global system config, and end-user-owned content remain locked.
+- c1f1cad: Add pluggable geocoding provider abstraction with Google, Geocod.io, and HERE implementations (expands GeoCodeSource enum and adds provider registry). Polish the Home dashboard pin empty state with a dismissible "Don't show this again" preference persisted via UserInfoEngine, and speed up the Add Pin panel by reading from cached DashboardEngine, UserViewEngine, QueryEngine, and ActionEngineBase singletons instead of firing fresh RunViews on every open, with background pre-warm on home load.
+- 207cba4: Scope the Developer delete-permission grant migration to the `__mj` schema so it never touches customer-defined schemas, and flip CodeGen's default `CanDelete` for the Developer role to `true` so newly registered entities ship with the Developer role's full CRUD permissions.
+
+### Patch Changes
+
+- 9580189: Fix keyset (AfterKey) pagination infinite loop in vector sync. `GenerateRunViewFingerprint` omitted `AfterKey`, so sequential keyset pages produced identical fingerprints and the dedup/linger layer returned page N's result for page N+1, freezing the seek cursor (observed on multi-page entities like a 2k-row Members table). The fingerprint now includes `AfterKey` (appended only when present, so non-keyset fingerprints are unchanged), fixing all keyset callers. The vectorizer's page reads now also set `BypassCache` since full-table sweeps read each page once, and `EntityVectorSyncer` halts with a clear error if the cursor ever fails to advance.
+- aedd4dc: Bubble save SQL composition up to GenericDatabaseProvider as a single orchestrator; SQL Server and Postgres providers now contribute four dialect hooks instead of duplicating the generator. Fixes a PG UPDATE bug where PK wasn't tail appended
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/global@5.35.0
+  - @memberjunction/sql-dialect@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

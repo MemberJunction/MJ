@@ -1,7 +1,19 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDropdownComponent,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
@@ -11,7 +23,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Actions Components
 import { ActionsOverviewComponent } from './Actions/components/actions-overview.component';
-import { ExecutionMonitoringComponent as ActionsExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
+import { ActionExecutionMonitoringComponent } from './Actions/components/execution-monitoring.component';
 import { ScheduledActionsComponent } from './Actions/components/scheduled-actions.component';
 import { CodeManagementComponent } from './Actions/components/code-management.component';
 import { EntityIntegrationComponent } from './Actions/components/entity-integration.component';
@@ -23,7 +35,6 @@ import { CategoriesListViewComponent } from './Actions/components/categories-lis
 import {
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,
@@ -38,7 +49,7 @@ import {
 @NgModule({
   declarations: [
     ActionsOverviewComponent,
-    ActionsExecutionMonitoringComponent,
+    ActionExecutionMonitoringComponent,
     ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
@@ -48,7 +59,6 @@ import {
     CategoriesListViewComponent,
     ActionExplorerComponent,
     ActionTreePanelComponent,
-    ActionToolbarComponent,
     ActionBreadcrumbComponent,
     ActionCardComponent,
     ActionListItemComponent,
@@ -60,7 +70,16 @@ import {
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJPageBodyComponent,
     MJDropdownComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ActionGalleryModule,
@@ -70,14 +89,13 @@ import {
   ],
   exports: [
     ActionsOverviewComponent,
-    ActionsExecutionMonitoringComponent,
+    ActionExecutionMonitoringComponent,
     ScheduledActionsComponent,
     CodeManagementComponent,
     EntityIntegrationComponent,
     SecurityPermissionsComponent,
     ActionExplorerComponent,
     ActionTreePanelComponent,
-    ActionToolbarComponent,
     ActionBreadcrumbComponent,
     ActionCardComponent,
     ActionListItemComponent,

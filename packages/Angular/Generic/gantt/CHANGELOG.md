@@ -1,5 +1,24 @@
 # @memberjunction/ng-gantt
 
+## 5.37.0
+
+### Patch Changes
+
+- @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- @memberjunction/global@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/global@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

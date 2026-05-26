@@ -1,5 +1,68 @@
 # @memberjunction/scheduling-engine
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [22b775f]
+- Updated dependencies [1af94d0]
+- Updated dependencies [4f15f31]
+  - @memberjunction/ai-core-plus@5.37.0
+  - @memberjunction/actions@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ai-agents@5.37.0
+  - @memberjunction/sqlserver-dataprovider@5.37.0
+  - @memberjunction/actions-base@5.37.0
+  - @memberjunction/integration-engine@5.37.0
+  - @memberjunction/scheduling-engine-base@5.37.0
+  - @memberjunction/global@5.37.0
+  - @memberjunction/scheduling-base-types@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ai-agents@5.36.0
+  - @memberjunction/ai-core-plus@5.36.0
+  - @memberjunction/actions-base@5.36.0
+  - @memberjunction/actions@5.36.0
+  - @memberjunction/integration-engine@5.36.0
+  - @memberjunction/sqlserver-dataprovider@5.36.0
+  - @memberjunction/scheduling-engine-base@5.36.0
+  - @memberjunction/global@5.36.0
+  - @memberjunction/scheduling-base-types@5.36.0
+
+## 5.35.0
+
+### Patch Changes
+
+- Updated dependencies [6fa8e13]
+- Updated dependencies [31f2a7f]
+- Updated dependencies [c1f1cad]
+- Updated dependencies [32c4a02]
+- Updated dependencies [9580189]
+- Updated dependencies [e9d4b1c]
+- Updated dependencies [207cba4]
+- Updated dependencies [aedd4dc]
+- Updated dependencies [ac4b9a5]
+  - @memberjunction/core@5.35.0
+  - @memberjunction/core-entities@5.35.0
+  - @memberjunction/ai-agents@5.35.0
+  - @memberjunction/ai-core-plus@5.35.0
+  - @memberjunction/sqlserver-dataprovider@5.35.0
+  - @memberjunction/global@5.35.0
+  - @memberjunction/actions-base@5.35.0
+  - @memberjunction/actions@5.35.0
+  - @memberjunction/integration-engine@5.35.0
+  - @memberjunction/scheduling-engine-base@5.35.0
+  - @memberjunction/scheduling-base-types@5.35.0
+
 ## 5.34.1
 
 ### Patch Changes

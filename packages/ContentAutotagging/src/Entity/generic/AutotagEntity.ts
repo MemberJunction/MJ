@@ -129,6 +129,7 @@ export class AutotagEntity extends AutotagBase {
 
             const cfg = source.ConfigurationObject;
             this.sourceBudgetMap.set(normalizedID, new RunBudget({
+                MaxItemsPerRun: cfg?.MaxItemsPerRun ?? null,
                 MaxNewTagsPerRun: cfg?.MaxNewTagsPerRun ?? null,
                 MaxNewTagsPerItem: cfg?.MaxNewTagsPerItem ?? null,
                 MaxTokensPerRun: cfg?.MaxTokensPerRun ?? null,
@@ -166,14 +167,18 @@ export class AutotagEntity extends AutotagBase {
         };
 
         // Per-batch budget gate — pause the run when any source's budget is exceeded.
+        // Tally items per source first so MaxItemsPerRun ticks; then check all budgets.
         this.engine.OnAfterBatch = async (batch, _totalProcessed) => {
-            const sourcesInBatch = new Set<string>();
+            const perSourceCounts = new Map<string, number>();
             for (const item of batch) {
-                if (item.ContentSourceID) sourcesInBatch.add(NormalizeUUID(item.ContentSourceID));
+                if (!item.ContentSourceID) continue;
+                const id = NormalizeUUID(item.ContentSourceID);
+                perSourceCounts.set(id, (perSourceCounts.get(id) ?? 0) + 1);
             }
-            for (const id of sourcesInBatch) {
+            for (const [id, count] of perSourceCounts) {
                 const budget = this.sourceBudgetMap.get(id);
                 if (!budget) continue;
+                budget.recordItemsProcessed(count);
                 const verdict = budget.checkBudgets();
                 if (!verdict.ok) {
                     return { continue: false, reason: `${verdict.reason}: ${verdict.details ?? ''}` };

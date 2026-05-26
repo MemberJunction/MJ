@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "Generic Binary",
+      "Description": "Minimal fallback for unregistered binary uploads. Only resolves when an agent has AcceptUnregisteredFiles = true. Exposes get_full (returns base64 bytes) and get_metadata (size + sha256). Use sparingly — uploads that match a real registered type always win.",
+      "ParentID": null,
+      "ContentType": "application/octet-stream",
+      "ToolLibraryClass": "GenericBinaryToolLibrary",
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "ToolsOnly",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-file-circle-question"
+    },
+    "primaryKey": {
+      "ID": "48909B66-0019-4CC5-B94D-568FE36E09BB"
+    },
+    "sync": {
+      "lastModified": "2026-05-20T01:27:07.852Z",
+      "checksum": "04fd9f778cf21bf37b761107ca9b55a5780c836f0d71c350f54dd7312a857d5b"
+    }
+  }
+]

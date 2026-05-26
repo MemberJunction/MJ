@@ -1131,6 +1131,15 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             userSearch || '_'        // User search string (generates LIKE/FTS clauses)
         ];
 
+        // Keyset (AfterKey) seek cursor MUST be part of the fingerprint. Each keyset page
+        // sends a different AfterKey but otherwise-identical params; without this, sequential
+        // pages collide on the same fingerprint and the dedup/linger layer hands page N+1 the
+        // result of page N — freezing the cursor and looping forever. Appended only when present
+        // so non-keyset fingerprints stay byte-for-byte identical (no cache invalidation).
+        if (params.AfterKey) {
+            parts.push(`ak:${params.AfterKey.ToString()}`);
+        }
+
         // Only include connection if provided
         if (connection) {
             parts.push(connection);
@@ -1735,14 +1744,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     public async InvalidateEntityCaches(entityName: string): Promise<void> {
         if (!this._storageProvider) return;
 
-        const normalizedName = entityName.toLowerCase().trim();
-        const toRemove: string[] = [];
-
-        for (const [key, entry] of this._registry.entries()) {
-            if (entry.type === 'runview' && entry.name.toLowerCase().trim() === normalizedName) {
-                toRemove.push(key);
-            }
-        }
+        const resolved = await this.resolveFingerprintsForEntity(entityName);
+        const toRemove = resolved ? Array.from(resolved) : [];
 
         if (toRemove.length > 0) {
             LogStatusEx({ message: `    🗑️ [Cache INVALIDATE-ENTITY] "${entityName}" — removing ${toRemove.length} entries: ${toRemove.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
@@ -1752,6 +1755,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             try {
                 await this._storageProvider.Remove(key, CacheCategory.RunViewCache);
                 this._registry.delete(key);
+                this.removeFromEntityIndex(key);
             } catch (e) {
                 LogError(`LocalCacheManager.InvalidateEntityCaches failed for key ${key}: ${e}`);
             }

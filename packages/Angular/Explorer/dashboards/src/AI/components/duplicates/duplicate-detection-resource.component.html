@@ -1,34 +1,30 @@
-<div class="duplicate-detection-container">
-    <!-- Header -->
-    <div class="page-header">
-        <div class="header-left">
-            <h2 class="page-title">
-                <i class="fa-solid fa-clone"></i> Duplicate Detection
-            </h2>
-        </div>
-        <div class="header-actions">
-            <div class="run-detection-controls">
-                <select class="entity-doc-select"
-                        [(ngModel)]="SelectedEntityDocumentID"
-                        [disabled]="IsDetecting">
-                    <option value="">Select entity document...</option>
-                    @for (doc of EntityDocuments; track doc.ID) {
-                        <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
-                    }
-                </select>
-                <button class="run-detection-btn"
-                        (click)="RunDetection()"
-                        [disabled]="IsDetecting || !SelectedEntityDocumentID">
-                    @if (IsDetecting) {
-                        <i class="fa-solid fa-spinner fa-spin"></i> Detecting...
-                    } @else {
-                        <i class="fa-solid fa-magnifying-glass"></i> Run Detection
-                    }
-                </button>
-            </div>
-        </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Duplicate Detection"
+    Icon="fa-solid fa-clone"
+    Subtitle="Find and merge near-duplicate records using semantic similarity">
+    <div actions>
+      <select class="mj-input kh-doc-select"
+              [(ngModel)]="SelectedEntityDocumentID"
+              [disabled]="IsDetecting">
+          <option value="">Select entity document…</option>
+          @for (doc of EntityDocuments; track doc.ID) {
+              <option [value]="doc.ID">{{ doc.Name }} ({{ doc.EntityName }})</option>
+          }
+      </select>
+      <button mjButton variant="primary" size="sm"
+              (click)="RunDetection()"
+              [disabled]="IsDetecting || !SelectedEntityDocumentID">
+          @if (IsDetecting) {
+              <i class="fa-solid fa-spinner fa-spin"></i> Detecting…
+          } @else {
+              <i class="fa-solid fa-magnifying-glass"></i> Run Detection
+          }
+      </button>
     </div>
+  </mj-page-header>
 
+  <mj-page-body [Flex]="true">
     <!-- Detection Progress (visible during run) -->
     @if (IsDetecting) {
         <div class="detection-progress-section">
@@ -791,4 +787,5 @@
         </div>
     }
 
-</div>
+  </mj-page-body>
+</mj-page-layout>

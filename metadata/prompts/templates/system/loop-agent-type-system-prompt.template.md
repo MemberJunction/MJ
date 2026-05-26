@@ -434,6 +434,29 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
   ]
 }
 ```
+
+### `client:capture-data-snapshot` — request a Data Snapshot of the user's current view of an artifact
+
+For analysis-class agents that need the user's actual on-screen state of the artifact they're discussing (filters, drill, sort, selection, etc.) to answer accurately but have no `Data Snapshot` artifact attached. The user clicks the button; the host captures a snapshot of the current artifact, persists it as a `Data Snapshot` input artifact on the conversation, and resumes the agent so it can answer with the snapshot now visible.
+
+Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snapshot is needed. Do NOT also terminate with `taskComplete: true` — the agent is pausing for the user, not finishing.
+
+```json
+{
+  "taskComplete": false,
+  "nextStep": { "type": "Chat" },
+  "message": "I need your current view of this artifact to answer accurately. Click below to capture and re-submit your filters / sort / drill state.",
+  "actionableCommands": [
+    {
+      "type": "client:capture-data-snapshot",
+      "label": "Capture & Submit Data Snapshot",
+      "icon": "fa-camera",
+      "artifactId": "<id of the artifact being discussed, if known>",
+      "followupMessage": "Now answer the original question using the captured snapshot."
+    }
+  ]
+}
+```
 {% endif %}
 
 # **CRITICAL**
@@ -576,14 +599,17 @@ Your private working memory. Manage via `scratchpad` in your response.
 ## Artifact Tools
 Explore artifacts attached to this conversation using `artifactToolCalls` in your response.
 Each call specifies an artifact ID (A, B, C, etc.), a tool name, and input parameters.
-Results appear in the next turn. Multiple calls can be batched in one response.
+Multiple calls can be batched in one response.
+
+**How results reach you:** the result of each tool call is delivered as a regular
+conversation message on your next turn (header `Artifact tool result:` /
+`Artifact tool results (...)`), not via this system prompt. Recent tool results
+are present verbatim in your conversation history. Older results may be
+compacted to a short preview to preserve context — if you need the full data
+back, re-call the tool. Don't re-call a tool whose result is still present in
+your visible history; just read it.
 
 {{ _ARTIFACT_MANIFEST | safe }}
 
 {{ _ARTIFACT_TOOLS | safe }}
-
-{% if _ARTIFACT_TOOL_RESULTS %}
-### Previous Results
-{{ _ARTIFACT_TOOL_RESULTS | safe }}
-{% endif %}
 {% endif %}

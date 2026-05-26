@@ -4,6 +4,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { CompositeKey } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import {
   SchedulingInstrumentationService,
   JobExecution,
@@ -22,6 +23,8 @@ type TimeRange = '24h' | '7d' | '30d' | '90d';
 })
 export class SchedulingActivityComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> = {};
+  /** When true, the inner toolbar is hidden — the parent shell is rendering it in `<mj-page-header>` instead. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   public Executions: JobExecution[] = [];
@@ -173,6 +176,65 @@ export class SchedulingActivityComponent implements OnInit, OnDestroy {
   public OnJobNameFilterChange(name: string): void {
     this.JobNameFilter = name;
     this.jobNameSubject.next(name);
+  }
+
+  public get ActivityFilterFields(): FilterFieldConfig[] {
+    const statusOptions = this.StatusOptions.map(s => ({
+      text: s === '' ? 'All Statuses' : s,
+      value: s
+    }));
+    const jobOptions = [
+      { text: 'All Jobs', value: '' },
+      ...this.UniqueJobNames.map(n => ({ text: n, value: n }))
+    ];
+    return [
+      {
+        key: 'statusFilter',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-circle-info',
+        placeholder: 'All Statuses',
+        options: statusOptions
+      },
+      {
+        key: 'jobNameFilter',
+        type: 'dropdown',
+        label: 'Job',
+        icon: 'fa-solid fa-tag',
+        placeholder: 'All Jobs',
+        filterable: true,
+        options: jobOptions
+      }
+    ];
+  }
+
+  public get ActivityFilterValues(): Record<string, unknown> {
+    return {
+      statusFilter: this.StatusFilter,
+      jobNameFilter: this.JobNameFilter
+    };
+  }
+
+  public get ActiveFilterCount(): number {
+    let count = 0;
+    if (this.StatusFilter) count++;
+    if (this.JobNameFilter) count++;
+    return count;
+  }
+
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
+    const next = (values ?? {}) as { statusFilter?: string; jobNameFilter?: string };
+    if ((next.statusFilter ?? '') !== this.StatusFilter) {
+      this.OnStatusFilterChange(next.statusFilter ?? '');
+    }
+    if ((next.jobNameFilter ?? '') !== this.JobNameFilter) {
+      this.OnJobNameFilterChange(next.jobNameFilter ?? '');
+    }
+  }
+
+  public ResetFilters(): void {
+    if (this.StatusFilter) this.OnStatusFilterChange('');
+    if (this.JobNameFilter) this.OnJobNameFilterChange('');
   }
 
   public ShouldShowLabel(index: number): boolean {
