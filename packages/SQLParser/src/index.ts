@@ -17,6 +17,8 @@ export type {
     MJParameterInfo,
     SQLParseResult,
     SQLParseOptions,
+    SQLStatementKind,
+    SQLOuterCap,
 } from './sql-parser.js';
 
 // Re-export node-sql-parser's AST type so consumers don't need a direct dependency

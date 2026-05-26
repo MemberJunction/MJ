@@ -105,7 +105,7 @@ export class QueryPagingEngine {
         // Both `wrap` and `unparseable` outcomes may try the outer-wrap path.
         // First, check for clauses that cannot legally appear inside a derived
         // table — wrapping such queries would produce invalid SQL.
-        const unwrappable = QueryPagingEngine.containsUnwrappableClause(cleanedSQL);
+        const unwrappable = SQLParser.HasUnwrappableTrailingClause(cleanedSQL, dialect);
 
         if (astResult.outcome === 'wrap') {
             if (unwrappable) return cleanedSQL;
@@ -141,75 +141,6 @@ export class QueryPagingEngine {
     }
 
     /**
-     * Token-aware scan for clauses that cannot legally appear inside a
-     * derived table — wrapping such a query would produce invalid SQL.
-     *
-     * Detects (case-insensitive, outside string literals and quoted
-     * identifiers):
-     *   - `FOR JSON …`
-     *   - `FOR XML …`
-     *   - `OPTION (…)`
-     *
-     * `SELECT INTO` and mutations are handled separately via the AST
-     * (`applyMaxRowsViaAST` returns `pass-through` for those).
-     */
-    private static containsUnwrappableClause(sql: string): boolean {
-        const len = sql.length;
-        let i = 0;
-
-        const isWordChar = (ch: string): boolean =>
-            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
-            (ch >= '0' && ch <= '9') || ch === '_';
-
-        const isWS = (ch: string): boolean =>
-            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
-
-        const matchWord = (start: number, word: string): boolean => {
-            if (start + word.length > len) return false;
-            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
-            const after = start + word.length;
-            return after === len || !isWordChar(sql[after]);
-        };
-
-        while (i < len) {
-            const c = sql[i];
-
-            // Skip string literals and quoted identifiers (single quote,
-            // bracket, double quote — all support doubled-delimiter escapes).
-            if (c === "'" || c === '[' || c === '"') {
-                const close = c === '[' ? ']' : c;
-                i++;
-                while (i < len) {
-                    if (sql[i] === close) {
-                        if (sql[i + 1] === close) { i += 2; continue; }
-                        i++; break;
-                    }
-                    i++;
-                }
-                continue;
-            }
-
-            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
-            if (!prevIsWord) {
-                if (matchWord(i, 'FOR')) {
-                    let j = i + 3;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
-                }
-                if (matchWord(i, 'OPTION')) {
-                    let j = i + 6;
-                    while (j < len && isWS(sql[j])) j++;
-                    if (j < len && sql[j] === '(') return true;
-                }
-            }
-
-            i++;
-        }
-
-        return false;
-    }
-
-    /**
      * AST-based row-cap injection.
      *   `capped`       — `sql` contains the input with TOP/LIMIT injected
      *                    or reduced to `min(existing, cap)`.
@@ -220,6 +151,9 @@ export class QueryPagingEngine {
      *                    the query (SELECT INTO, mutation).
      *   `unparseable`  — parser could not handle the input; caller may
      *                    attempt a CTE-fallback or outer wrap.
+     *
+     * All AST shape inspection is delegated to {@link SQLParser} primitives —
+     * this method contains no `node-sql-parser` field knowledge.
      */
     private static applyMaxRowsViaAST(
         sql: string,
@@ -234,50 +168,23 @@ export class QueryPagingEngine {
         const ast = SQLParser.ParseSQL(sql, dialect);
         if (!ast) return { outcome: 'unparseable' };
 
-        const rootNode = Array.isArray(ast) ? ast[0] : ast;
-        if (!rootNode) return { outcome: 'unparseable' };
-        const root = rootNode as unknown as Record<string, unknown>;
+        const kind = SQLParser.GetStatementKind(ast);
+        if (kind === 'mutation' || kind === 'select-into') return { outcome: 'pass-through' };
+        if (kind === 'set-op') return { outcome: 'unparseable' };
+        if (kind !== 'select') return { outcome: 'pass-through' };
 
-        if (root.type !== 'select') return { outcome: 'pass-through' };
+        const existing = SQLParser.GetOuterCap(ast);
 
-        const into = root.into as { position?: unknown } | undefined;
-        if (into && into.position) return { outcome: 'pass-through' };
-
-        if (root.set_op) return { outcome: 'unparseable' };
-
-        // Existing TOP — reduce to min(existing, cap). PERCENT and non-numeric
-        // values (e.g. TOP (@n)) can't be reasoned about as row counts; let
-        // the caller outer-wrap them.
-        const existingTop = root.top as { value: unknown; percent?: unknown } | null | undefined;
-        if (existingTop != null) {
-            if (existingTop.percent) return { outcome: 'wrap' };
-            const existingValue = typeof existingTop.value === 'number'
-                ? existingTop.value
-                : Number(existingTop.value);
-            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
-            if (existingValue <= cap) return { outcome: 'capped', sql };
-            root.top = { value: cap, percent: null };
-            try {
-                return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
-            } catch {
-                return { outcome: 'unparseable' };
-            }
+        // PERCENT and non-numeric caps can't be reasoned about as row counts;
+        // let the caller outer-wrap them.
+        if (existing && ('isPercent' in existing || 'isNonNumeric' in existing)) {
+            return { outcome: 'wrap' };
         }
 
-        // Existing LIMIT — reduce the LIMIT value (preserves OFFSET).
-        // node-sql-parser shape for SQL Server / PostgreSQL:
-        //   `LIMIT N`           → value=[{value:N}],         seperator=''
-        //   `LIMIT N OFFSET M`  → value=[{value:N},{value:M}], seperator='offset'
-        // The LIMIT value is always at index 0 for these dialects.
-        const existingLimit = root.limit as { value: { value: unknown }[]; seperator?: string } | null | undefined;
-        if (existingLimit != null && Array.isArray(existingLimit.value) && existingLimit.value.length > 0) {
-            const limitNode = existingLimit.value[0];
-            const existingValue = typeof limitNode.value === 'number'
-                ? limitNode.value
-                : Number(limitNode.value);
-            if (!Number.isFinite(existingValue)) return { outcome: 'wrap' };
-            if (existingValue <= cap) return { outcome: 'capped', sql };
-            existingLimit.value[0] = { type: 'number', value: cap } as { type: 'number'; value: number };
+        // Existing numeric cap — only modify when the requested cap is tighter.
+        if (existing) {
+            if (existing.value <= cap) return { outcome: 'capped', sql };
+            SQLParser.SetOuterCap(ast, cap, dialect);
             try {
                 return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
             } catch {
@@ -286,15 +193,7 @@ export class QueryPagingEngine {
         }
 
         // No existing cap — inject one.
-        if (dialect.PlatformKey === 'sqlserver') {
-            root.top = { value: cap, percent: null };
-        } else {
-            root.limit = {
-                seperator: '',
-                value: [{ type: 'number', value: cap }],
-            };
-        }
-
+        SQLParser.SetOuterCap(ast, cap, dialect);
         try {
             return { outcome: 'capped', sql: SQLParser.SqlifyAST(ast, dialect) };
         } catch {

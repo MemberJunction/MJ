@@ -129,6 +129,44 @@ export interface SQLParseOptions {
     dialect?: SQLParserDialect;
 }
 
+/**
+ * High-level classification of the statement at the root of a parsed AST.
+ *
+ * Callers that need to decide whether a statement can be safely modified
+ * (row caps, paging, etc.) use this in preference to inspecting AST shapes
+ * directly.
+ */
+export type SQLStatementKind =
+    /** Plain SELECT */
+    | 'select'
+    /** SELECT … INTO #tmp FROM … — a write disguised as a SELECT */
+    | 'select-into'
+    /** UNION / INTERSECT / EXCEPT */
+    | 'set-op'
+    /** INSERT / UPDATE / DELETE / MERGE / etc. */
+    | 'mutation'
+    /** Anything else or an unrecognized shape */
+    | 'other';
+
+/**
+ * Describes the outermost row cap on a parsed SELECT.
+ *
+ * Distinguishes between values that can be reasoned about as a row count
+ * (numeric) and values that cannot (PERCENT, non-numeric expressions like
+ * `TOP (@n)`). Returned by {@link SQLParser.GetOuterCap}.
+ */
+export type SQLOuterCap =
+    /** Numeric SQL Server `TOP N` */
+    | { kind: 'top'; value: number }
+    /** `TOP N PERCENT` — semantically a fraction of rows, not a row count */
+    | { kind: 'top'; isPercent: true }
+    /** `TOP (@var)` / `TOP (subquery)` — value not statically known */
+    | { kind: 'top'; isNonNumeric: true }
+    /** Numeric `LIMIT N` (with optional `OFFSET M`) */
+    | { kind: 'limit'; value: number; offset: number | null }
+    /** `LIMIT $1` etc. — value not statically known */
+    | { kind: 'limit'; isNonNumeric: true };
+
 // ═══════════════════════════════════════════════════
 // SQLParser class
 // ═══════════════════════════════════════════════════
@@ -232,6 +270,216 @@ export class SQLParser {
         const parser = new Parser();
         const sql = parser.sqlify(Array.isArray(ast) ? ast[0] : ast, { database: dialect.ParserDialect });
         return SQLParser.fixMaxTypeSerialization(sql);
+    }
+
+    // ─── AST shape primitives ──────────────────────────
+    //
+    // These methods hide node-sql-parser's AST shape behind typed accessors.
+    // Callers should prefer them over direct AST poking — the shape of `top`,
+    // `limit`, `into`, `set_op`, etc. is parser-version-specific, and these
+    // primitives are the only place that needs to track those details.
+
+    /**
+     * Returns the high-level classification of the statement at the AST root.
+     * Returns `'other'` for an empty / null / malformed AST.
+     */
+    static GetStatementKind(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): SQLStatementKind {
+        const root = SQLParser.unwrapRoot(ast);
+        if (!root) return 'other';
+        const type = root.type;
+        if (type !== 'select') {
+            if (type === 'insert' || type === 'update' || type === 'delete' || type === 'merge') {
+                return 'mutation';
+            }
+            return 'other';
+        }
+        const into = root.into as { position?: unknown } | undefined;
+        if (into && into.position) return 'select-into';
+        if (root.set_op) return 'set-op';
+        return 'select';
+    }
+
+    /**
+     * Returns the outermost row cap on a SELECT (TOP on SQL Server, LIMIT on
+     * PostgreSQL / MySQL), or `null` when none is present.
+     *
+     * Distinguishes between numeric values (reducible) and PERCENT /
+     * non-numeric values (callers must either preserve them or strip them
+     * before applying a new cap).
+     */
+    static GetOuterCap(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): SQLOuterCap | null {
+        const root = SQLParser.unwrapRoot(ast);
+        if (!root || root.type !== 'select') return null;
+
+        const top = root.top as { value?: unknown; percent?: unknown } | null | undefined;
+        if (top != null) {
+            if (top.percent) return { kind: 'top', isPercent: true };
+            const v = typeof top.value === 'number' ? top.value : Number(top.value);
+            if (!Number.isFinite(v)) return { kind: 'top', isNonNumeric: true };
+            return { kind: 'top', value: v };
+        }
+
+        const limit = root.limit as { value?: { value: unknown }[]; seperator?: string } | null | undefined;
+        if (limit != null && Array.isArray(limit.value) && limit.value.length > 0) {
+            // node-sql-parser shape for SQL Server / PostgreSQL:
+            //   LIMIT N          → value=[{value:N}]            (seperator='')
+            //   LIMIT N OFFSET M → value=[{value:N}, {value:M}] (seperator='offset')
+            // The LIMIT value is always at index 0 in these dialects.
+            const limitNode = limit.value[0];
+            const v = typeof limitNode.value === 'number' ? limitNode.value : Number(limitNode.value);
+            if (!Number.isFinite(v)) return { kind: 'limit', isNonNumeric: true };
+            let offset: number | null = null;
+            if (limit.value.length > 1) {
+                const offsetNode = limit.value[1];
+                const o = typeof offsetNode.value === 'number' ? offsetNode.value : Number(offsetNode.value);
+                offset = Number.isFinite(o) ? o : null;
+            }
+            return { kind: 'limit', value: v, offset };
+        }
+
+        return null;
+    }
+
+    /**
+     * Sets the outermost row cap. The form (TOP vs LIMIT) is dialect-driven:
+     * SQL Server emits `TOP N`, every other dialect emits `LIMIT N`. Any
+     * existing OFFSET is preserved on LIMIT-style dialects.
+     *
+     * If the AST root isn't a SELECT this is a no-op.
+     */
+    static SetOuterCap(
+        ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null,
+        cap: number,
+        dialect: SQLParserDialect,
+    ): void {
+        const root = SQLParser.unwrapRoot(ast);
+        if (!root || root.type !== 'select') return;
+        if (SQLParser.isSQLServerDialect(dialect)) {
+            root.top = { value: cap, percent: null } as unknown as never;
+        } else {
+            const existing = root.limit as { value?: { value: unknown }[]; seperator?: string } | null | undefined;
+            const offsetNode = existing?.value && existing.value.length > 1 ? existing.value[1] : null;
+            if (offsetNode) {
+                root.limit = {
+                    seperator: 'offset',
+                    value: [{ type: 'number', value: cap }, offsetNode],
+                } as unknown as never;
+            } else {
+                root.limit = {
+                    seperator: '',
+                    value: [{ type: 'number', value: cap }],
+                } as unknown as never;
+            }
+        }
+    }
+
+    /**
+     * Detects whether the dialect emits SQL Server-style `TOP` rather than
+     * the generic `LIMIT` row cap. Uses the same identifier-quoting probe
+     * that {@link StripComments} uses for bracket detection.
+     */
+    private static isSQLServerDialect(dialect: SQLParserDialect): boolean {
+        return dialect.QuoteIdentifier('x').startsWith('[');
+    }
+
+    /**
+     * Removes the outermost row cap from a SELECT (both `TOP` and `LIMIT`
+     * forms). Idempotent — calling on an AST with no cap is a no-op.
+     */
+    static ClearOuterCap(ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null): void {
+        const root = SQLParser.unwrapRoot(ast);
+        if (!root || root.type !== 'select') return;
+        root.top = null as unknown as never;
+        root.limit = null as unknown as never;
+    }
+
+    /**
+     * Internal helper: unwrap the root statement from an AST (or AST array)
+     * and present it as a mutable record. Returns `null` if the input is null
+     * or empty.
+     */
+    private static unwrapRoot(
+        ast: NodeSqlParser.AST | NodeSqlParser.AST[] | null,
+    ): Record<string, unknown> | null {
+        if (!ast) return null;
+        const root = Array.isArray(ast) ? ast[0] : ast;
+        if (!root) return null;
+        return root as unknown as Record<string, unknown>;
+    }
+
+    /**
+     * Token-aware scan for SQL clauses that cannot legally appear inside a
+     * derived table — wrapping a query that contains one of these in
+     * `SELECT ... FROM (<sql>) AS t` would produce invalid SQL.
+     *
+     * Detects (case-insensitive, outside string literals and quoted
+     * identifiers):
+     *   - `FOR JSON …`
+     *   - `FOR XML …`
+     *   - `OPTION (…)`
+     *
+     * The dialect determines which identifier quoting styles are recognized
+     * (`[…]` for SQL Server, `` `…` `` for MySQL, `"…"` always).
+     */
+    static HasUnwrappableTrailingClause(sql: string, dialect: SQLParserDialect): boolean {
+        const quoteSample = dialect.QuoteIdentifier('x');
+        const recognizeBrackets = quoteSample.startsWith('[');
+        const recognizeBackticks = quoteSample.startsWith('`');
+
+        const len = sql.length;
+        let i = 0;
+
+        const isWordChar = (ch: string): boolean =>
+            (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') ||
+            (ch >= '0' && ch <= '9') || ch === '_';
+
+        const isWS = (ch: string): boolean =>
+            ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r';
+
+        const matchWord = (start: number, word: string): boolean => {
+            if (start + word.length > len) return false;
+            if (sql.substring(start, start + word.length).toUpperCase() !== word) return false;
+            const after = start + word.length;
+            return after === len || !isWordChar(sql[after]);
+        };
+
+        const skipQuoted = (close: string): void => {
+            i++;
+            while (i < len) {
+                if (sql[i] === close) {
+                    if (i + 1 < len && sql[i + 1] === close) { i += 2; continue; }
+                    i++; break;
+                }
+                i++;
+            }
+        };
+
+        while (i < len) {
+            const c = sql[i];
+
+            if (c === "'") { skipQuoted("'"); continue; }
+            if (recognizeBrackets && c === '[') { skipQuoted(']'); continue; }
+            if (c === '"') { skipQuoted('"'); continue; }
+            if (recognizeBackticks && c === '`') { skipQuoted('`'); continue; }
+
+            const prevIsWord = i > 0 && isWordChar(sql[i - 1]);
+            if (!prevIsWord) {
+                if (matchWord(i, 'FOR')) {
+                    let j = i + 3;
+                    while (j < len && isWS(sql[j])) j++;
+                    if (matchWord(j, 'JSON') || matchWord(j, 'XML')) return true;
+                }
+                if (matchWord(i, 'OPTION')) {
+                    let j = i + 6;
+                    while (j < len && isWS(sql[j])) j++;
+                    if (j < len && sql[j] === '(') return true;
+                }
+            }
+
+            i++;
+        }
+
+        return false;
     }
 
     /**
