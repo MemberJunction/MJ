@@ -53,6 +53,13 @@
                   "Description": "Remote MJ primary key for the Conversation. Maps to MJ: Conversations.ExternalID on the destination side.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CD351DB1-B2E0-4D6C-BE8E-6E969AE8C537"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.416Z",
+                  "checksum": "9408e4aa64a986309b53d412f6bc0dd14babc23a26e09bcf2c3a1a44d40da7bc"
                 }
               },
               {
@@ -69,6 +76,13 @@
                   "Description": "Conversation title/topic. Maps to MJ: Conversations.Name.",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0FEE0343-A76F-4F65-8488-7BBE502E4593"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.485Z",
+                  "checksum": "fe6712f8b4f68f100bfe7db6cd7ce5c45feb1b9cb7ca7347bcde4d0c25035fdc"
                 }
               },
               {
@@ -85,6 +99,13 @@
                   "Description": "Long-form description of the conversation.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3EFB0F94-AA26-4C90-8EDB-B8943F6A305C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.553Z",
+                  "checksum": "6763b9b2e25f68d5b127063054dfae173a7d8e0123567fd920310d56d7fb0586"
                 }
               },
               {
@@ -101,6 +122,13 @@
                   "Description": "FK to Users — the owner of the conversation on the remote instance.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A0131176-CBDB-4C7C-9D61-7F5452D9C066"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.622Z",
+                  "checksum": "4cebab6c53a52e431e9565c958fa3be526d1ff1f85a24a16a8eb0c113038e77d"
                 }
               },
               {
@@ -117,6 +145,13 @@
                   "Description": "External identifier from yet another system (if the remote MJ was itself syncing conversations from elsewhere). Not used for mapping on the destination side.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C7152CF7-5C00-4AD7-A151-DA7B6AE740F7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.693Z",
+                  "checksum": "c685520d6cac6e20aa63acbf400b91d7b5e0d2cd87b998a85a6a08a6e01edec3"
                 }
               },
               {
@@ -133,6 +168,13 @@
                   "Description": "FK to MJ: Data Contexts (on remote). Typically not synced across instances — data contexts are per-environment.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CD14F6D3-6E98-4136-B548-57B579C15735"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.761Z",
+                  "checksum": "21b653cc241cb11323e50901fda7739712a582b87afd4558a9d6cfae44f201ae"
                 }
               },
               {
@@ -149,6 +191,13 @@
                   "Description": "Conversation type (Skip, Support, Chat, etc.). Maps to MJ: Conversations.Type.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "483D5BF1-1359-41DF-B730-A7F23F866FA0"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.834Z",
+                  "checksum": "957b839949cf4d637f4ff9b1e836691136c111fa3ee6c73fe11d32bc535232f0"
                 }
               },
               {
@@ -165,6 +214,13 @@
                   "Description": "Processing status on the remote MJ: Available / Processing. Maps to MJ: Conversations.Status.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8AC7B13E-9E83-4DF2-AE39-AC6D6203696A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.903Z",
+                  "checksum": "d3e4e81a8dbb7b423e729f61da370c0a7eb354518aff49ded03555720e097084"
                 }
               },
               {
@@ -181,6 +237,13 @@
                   "Description": "FK to MJ: Entities on remote — if the conversation is linked to a specific entity type.",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "79B6947A-2C38-4401-A67E-F2B469DC6AF8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:18.974Z",
+                  "checksum": "8d80d19f7ac76100b88bcbb833c632f2f9a75bcdb3a642da4a0d626d72b41f10"
                 }
               },
               {
@@ -197,6 +260,13 @@
                   "Description": "ID of a related record the conversation pertains to (ticket, order, etc.).",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "DCE64DDF-8017-4CD4-AA4D-74B8D4005889"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.043Z",
+                  "checksum": "b43e98c6b6d3f855ddc66df47d1e17cebdbdbdee49c4115b53c64378e612fe99"
                 }
               },
               {
@@ -212,6 +282,13 @@
                   "Description": "True if archived on the remote MJ — consider filtering these out at mapping time.",
                   "Sequence": 11,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5849844C-5224-4980-93C2-6C884EEB170D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.152Z",
+                  "checksum": "3e51323e939f858955338c8cc81e5e83b1e3646fff6b9cc69c567de3c545f3bc"
                 }
               },
               {
@@ -227,6 +304,13 @@
                   "Description": "True if pinned on the remote MJ UI.",
                   "Sequence": 12,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "7C0CA17A-B4CB-4D4D-8333-D6A9F8D2D2B9"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.224Z",
+                  "checksum": "2007477e5b4211082842ecd6638b9cab8ec751aee6cdbd1c748bb06a4ffdea77"
                 }
               },
               {
@@ -242,6 +326,13 @@
                   "Description": "Row creation timestamp on the remote MJ (BaseEntity field).",
                   "Sequence": 13,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4FF494F6-8B96-426D-A0DE-91610A46C675"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.295Z",
+                  "checksum": "6305a41bf4774b43a2b69b316d4ba65057aa286f7a163b42ef7d766aacefd64f"
                 }
               },
               {
@@ -257,9 +348,23 @@
                   "Description": "Last modification timestamp on the remote MJ — used as the incremental-sync watermark.",
                   "Sequence": 14,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5529C714-202B-48BB-AA2C-5CBE3DF8DE95"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.366Z",
+                  "checksum": "65d1711cdf9d302b21b70ca7c53133bf65f7fa78d58495c800b105781d52dca3"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "551BCDCF-E25A-48FC-8F26-409F5F7D970B"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.257Z",
+            "checksum": "1268917a0cc045d23b41392685d589e9e475e3f6d2f43525c2d3fd764dcffcbf"
           }
         },
         {
@@ -302,6 +407,13 @@
                   "Description": "Remote MJ primary key for the Conversation Detail. Maps to MJ: Conversation Details.ExternalID on the destination side.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6FDCFAD2-65BE-4E20-B9E6-604B218B6528"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.439Z",
+                  "checksum": "3386fdefc6e380cd669452889871c2d866c539b317f7cb49116918dec2196f5b"
                 }
               },
               {
@@ -318,6 +430,13 @@
                   "Description": "FK to Conversations.ID on remote. Maps at sync time to the local MJ: Conversations.ID by joining on the synced ExternalID.",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "746FC75B-CE4E-4365-AF35-CB6EE4833C29"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.514Z",
+                  "checksum": "6bf6b033aeae5fec2550e499fa8bcff26d89c3347f9ca7dc74a7ffe780f3f715"
                 }
               },
               {
@@ -334,6 +453,13 @@
                   "Description": "External identifier from yet another system (rarely used).",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FC87F308-EB37-453D-865F-91959BE47882"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.588Z",
+                  "checksum": "fe069f2de2d47eb769e9d98d0a1577afa9f2665e942c660a350a2f2eaa9d59de"
                 }
               },
               {
@@ -350,6 +476,13 @@
                   "Description": "Message role: AI / Error / User. Maps directly to MJ: Conversation Details.Role.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B8FBF16E-C201-4007-8F9E-0D644FCA3CF6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.660Z",
+                  "checksum": "d4dc8f04d209cfcded164c7fb026557a2b286852547062bad0181e2e45301ddc"
                 }
               },
               {
@@ -366,6 +499,13 @@
                   "Description": "Message body text. Maps to MJ: Conversation Details.Message.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "73064718-3031-4467-8BE6-84579CAD75AE"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.738Z",
+                  "checksum": "78498f2149f372bec8b2c0ed13ca5e0b553cb8bd7be49f3891e4f1fe56260958"
                 }
               },
               {
@@ -382,6 +522,13 @@
                   "Description": "Error text if this turn failed. Maps to MJ: Conversation Details.Error.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0455EE94-CBC5-4E90-9183-B5CB3453F197"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.805Z",
+                  "checksum": "a3ece02f5dd1c69cfeb68a4f31820296f68f67d4131a9e397ec384bc3a552d0a"
                 }
               },
               {
@@ -397,6 +544,13 @@
                   "Description": "True for system / function / tool-call messages the user never saw. Maps to MJ: Conversation Details.HiddenToUser.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F6624620-D1C8-4909-A979-6DE367040C5E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.930Z",
+                  "checksum": "06e292f2f73c512fffa9115b81fc68fe4c9d246a37ba0ed7d455a7de263ec03e"
                 }
               },
               {
@@ -413,6 +567,13 @@
                   "Description": "Processing status of the message: Complete / In-Progress / Error. Maps to MJ: Conversation Details.Status.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6AAEB435-3645-437C-8144-8E7631995E01"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:19.998Z",
+                  "checksum": "fad5b3218b73826393254607b8cade6cf2552d30dc3ca089e192d8b9ea68b547"
                 }
               },
               {
@@ -429,6 +590,13 @@
                   "Description": "Optional override user for this message (normally derived from the parent conversation).",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3D957E09-3D25-4A21-8506-17EBF32AA624"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.071Z",
+                  "checksum": "69fca16c8ed12689091fa7b9f500ca90ff77d7eff185b8d27a975d056efaf567"
                 }
               },
               {
@@ -445,6 +613,13 @@
                   "Description": "FK to AIAgents on remote — denormalized agent identifier for quick display.",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C5F2669D-ABDA-4C6E-A3FA-991643E8604D"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.141Z",
+                  "checksum": "cbe8fd4cb98892639b0a10ac40ffde14fdb3117354bdeaa992540fdbdea0c868"
                 }
               },
               {
@@ -460,6 +635,13 @@
                   "Description": "Duration in milliseconds for the AI response at this turn.",
                   "Sequence": 11,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "860AB874-1C2D-47C8-BC4A-060B361E4ECC"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.210Z",
+                  "checksum": "f9e32f29478d5a92b57061cf05f2c338b13810a4ad325e3dd8abb8cfe0301631"
                 }
               },
               {
@@ -476,6 +658,13 @@
                   "Description": "FK to ConversationDetails.ID on remote for threaded messages. NULL for top-level messages.",
                   "Sequence": 12,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "611FE5DF-4476-4ACB-A06A-A8B792D89F7A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.275Z",
+                  "checksum": "c90da9e6d93839a6035d2f82514df40e45662fb63e4ed5b41bfa55289a49b013"
                 }
               },
               {
@@ -491,6 +680,13 @@
                   "Description": "Row creation timestamp on remote.",
                   "Sequence": 13,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3B106AED-9D83-4BC2-BC84-C1FDDD3B2A25"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.343Z",
+                  "checksum": "402eea9acb2579260d54d61a768550394274de8fc79620f564f3e8fed4a87d5c"
                 }
               },
               {
@@ -506,9 +702,23 @@
                   "Description": "Last modification timestamp on remote — incremental-sync watermark.",
                   "Sequence": 14,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F332A091-32AF-4655-9D5B-750B233035EF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.409Z",
+                  "checksum": "9b350ad98321829e55556485b95493bd990c7c8b45c47191b2bae99a8f722709"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "31859D95-5E73-4273-B27A-17E76F0334BB"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.279Z",
+            "checksum": "9fcfd86743a2a8e2b65b0087f10c9677f07cbd47af6fa2ed82f6e6e1c583a30a"
           }
         },
         {
@@ -551,6 +761,13 @@
                   "Description": "Remote MJ AI Agent primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A3039E7F-49D7-42B3-90CD-D01F39325C84"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.479Z",
+                  "checksum": "c831b4c50c3d55220488ea0fce7ed78b08cc025614be2e0c4f29f89e381ad9fd"
                 }
               },
               {
@@ -567,6 +784,13 @@
                   "Description": "Agent name (e.g., 'Skip', 'Sage').",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0DCB42E6-F2F9-4EAF-839E-18901D228F89"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.545Z",
+                  "checksum": "7dfddc20d59e80135ded811e5c9984e97e8d7b4c11b78cb876d9b8fde02fce16"
                 }
               },
               {
@@ -583,6 +807,13 @@
                   "Description": "Agent description.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2F08AEDF-8482-4D58-9B3C-E9033415DC8B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.649Z",
+                  "checksum": "c823183515597893e8e37887dce6a14933e9bd5e5fef7037649d0c7253892382"
                 }
               },
               {
@@ -599,6 +830,13 @@
                   "Description": "FK to AIAgents — parent in the agent hierarchy. NULL for root agents.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AC0B93F2-727D-49A7-AD93-8D0613F1E8B1"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.718Z",
+                  "checksum": "6071f04acd17c4f306ef78aa3faa95e6e0a6a8e4e45ed922498b528bd8af897d"
                 }
               },
               {
@@ -615,6 +853,13 @@
                   "Description": "FK to MJ: AI Agent Types on remote (Loop, etc.).",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D7C08700-668E-471F-9461-E3C2315C18F4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.789Z",
+                  "checksum": "9b7ba8f5afc6850de0840b113d09929168f5e9f658976ed1048af882503d6215"
                 }
               },
               {
@@ -631,6 +876,13 @@
                   "Description": "Agent status on remote: Active / Disabled / Pending.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F62D6B3-9CD9-465B-A851-4400EEFF02CF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.857Z",
+                  "checksum": "761efc62f11be2d5d446ca4ede8fa86dacd168d1fefba9ca02159aa7199f784d"
                 }
               },
               {
@@ -646,6 +898,13 @@
                   "Description": "Whether the agent can be invoked as an action by other agents.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BB8DD889-7BD9-4534-BE02-0758227B1BC4"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.929Z",
+                  "checksum": "7606c3b0dd027a86e9b8b526830a19e1a7f763612691fb962a66b276719d3b6c"
                 }
               },
               {
@@ -662,6 +921,13 @@
                   "Description": "Agent logo URL or data URI.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4C4D0FF2-60DC-4103-B789-EFD2904C9D48"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:20.997Z",
+                  "checksum": "200188945392cd3aa107179f7df68ac7290a2717774b389a318ea59b80b278c3"
                 }
               },
               {
@@ -677,6 +943,13 @@
                   "Description": "Row creation timestamp on remote.",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "17631472-581D-4C86-AFBE-783AB40417F8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.068Z",
+                  "checksum": "9a594811ed7d17b516db3aaa060dedfbff9c0a3ba925e9f2d57528e749f522c9"
                 }
               },
               {
@@ -692,9 +965,23 @@
                   "Description": "Last modification timestamp on remote — watermark candidate.",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "080C1595-26C0-41EA-9184-A8664A8218D5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.139Z",
+                  "checksum": "6e193a7645f53134796c2862d49ca073d627256bdf53cb6e201d4765196517e8"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "051B9C9D-D470-4A34-8523-7E17B5F6E1E5"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.300Z",
+            "checksum": "f0947a788a651a27aff79ed75ae9b62ee68d8e5f7034cce2656853cf977882ce"
           }
         },
         {
@@ -737,6 +1024,13 @@
                   "Description": "Remote MJ Agent Run primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8C21E027-EF74-437A-9E14-226928C16256"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.210Z",
+                  "checksum": "a729e59931912e3c1bd9fa7d495a019847c4f58d61667474c69a267bb3af9e44"
                 }
               },
               {
@@ -753,6 +1047,13 @@
                   "Description": "FK to AIAgents.",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3DC9B36E-5677-4FCE-84E4-17EED2494BC5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.279Z",
+                  "checksum": "f016295c0833697ed52d02a57f7e67b6056612cbd4c3dd3ccd667935e512472e"
                 }
               },
               {
@@ -769,6 +1070,13 @@
                   "Description": "Parent agent run for sub-agent execution hierarchies.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "6CB6D35D-D722-4498-9681-57E6FF4F4DD8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.390Z",
+                  "checksum": "3fb27f49b6b7f32c72d3d2e57c46acd055c2d535fb7ff39c7a1283b0889905f4"
                 }
               },
               {
@@ -785,6 +1093,13 @@
                   "Description": "Run status: Running / Completed / Failed / Cancelled / Paused / AwaitingFeedback.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A3FE6E1D-2F4D-4BD0-ACC2-786867586899"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.458Z",
+                  "checksum": "fb9e95f33d4b06e31df11e9effcf01a09c1ed67c41973e16b7bc997ed7616ec9"
                 }
               },
               {
@@ -800,6 +1115,13 @@
                   "Description": "Timestamp when the agent run began.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "54227DC0-307E-428C-8E98-20D145CDC172"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.528Z",
+                  "checksum": "a080859fd76efccde866da081befbe977406926228f675639410d65e2347a979"
                 }
               },
               {
@@ -815,6 +1137,13 @@
                   "Description": "Timestamp when the agent run completed. NULL for active runs.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "884FB7D7-3B7E-4164-9FEC-F43893F62441"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.596Z",
+                  "checksum": "0314bf2f749c9c9099b2aa544533ac80f0effbf0368e2889ef4f56d621260092"
                 }
               },
               {
@@ -830,6 +1159,13 @@
                   "Description": "True/False once complete; NULL while running.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5DB46DBA-61B0-422E-8E73-D7E496349FA7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.664Z",
+                  "checksum": "9ea1435afa25f60cf448dfc4f31e367e55869d82aa06db7b2090510e3daf6c60"
                 }
               },
               {
@@ -846,6 +1182,13 @@
                   "Description": "Failure message if the run did not succeed.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "E31CE757-131D-48BB-AB05-67B353B09E96"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.732Z",
+                  "checksum": "275c129180a5574c554de4771f3734ee93e5ea49b433d58652c56790c8450e91"
                 }
               },
               {
@@ -862,6 +1205,13 @@
                   "Description": "FK to Conversations on remote — ties the run to a chat session.",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "17478EF0-FD03-4632-B259-6AFC38411079"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.799Z",
+                  "checksum": "5cf535547d6e71aee83b5ebf5ab89959fabe0aae3b36d28fd1c54dd777a16911"
                 }
               },
               {
@@ -878,6 +1228,13 @@
                   "Description": "FK to Users on remote — who triggered the run.",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BC4B8E05-6A07-47C6-B83F-E604E5CC6359"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.869Z",
+                  "checksum": "4acffd62b83e792d2702afd16adf58c9522b27d63c7fcc159474b7c76850a4fb"
                 }
               },
               {
@@ -894,6 +1251,13 @@
                   "Description": "Final agent result (JSON or text).",
                   "Sequence": 11,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B7AFE05A-9EFB-4B0B-A836-A3A9CF90CEF2"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:21.939Z",
+                  "checksum": "f2c76e723c6a5e4328b93a1a15d32ec5500a5437f2f02b2abea7578cf1a77dfd"
                 }
               },
               {
@@ -909,6 +1273,13 @@
                   "Description": "Total LLM tokens consumed by this run.",
                   "Sequence": 12,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "728B9ADA-6246-4F1B-A2E2-F3A7AF9B1D58"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.010Z",
+                  "checksum": "be28b4853a0d70cfa50605f5c701491724e61a2e0091293725762134b5f9a5fb"
                 }
               },
               {
@@ -926,6 +1297,13 @@
                   "Description": "Estimated cost for this agent run.",
                   "Sequence": 13,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "72525B16-6523-4684-A87F-FE436CCD974C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.119Z",
+                  "checksum": "c93f17654bfcfb0952febad6b451d5446872fd993e3bd2a4d8609714cf41c80b"
                 }
               },
               {
@@ -941,6 +1319,13 @@
                   "Description": "Row creation timestamp on remote.",
                   "Sequence": 14,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1A4A343F-C5CC-4668-9452-0AE45E334778"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.189Z",
+                  "checksum": "019a665522f857c512006e3802af2021c082c8195990533c1628d2070b3b5ae4"
                 }
               },
               {
@@ -956,9 +1341,23 @@
                   "Description": "Last modification timestamp on remote — watermark.",
                   "Sequence": 15,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9A8A158C-021C-4144-8A8D-4DB8D8701798"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.260Z",
+                  "checksum": "fe31213b9a19e21dca89e51208a0fd68fa272d560da2e4273e89f1d980e4d712"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "F43826B7-C687-4C31-8786-3A2DF212959A"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.323Z",
+            "checksum": "f69a482ad515035d9cdff86ed1629443dc068fe984f2f0821aa9909bf31f4d5a"
           }
         },
         {
@@ -1001,6 +1400,13 @@
                   "Description": "Remote MJ Agent Run Step primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8D6416DC-E9DD-4EA3-8570-988EA57FA474"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.338Z",
+                  "checksum": "60bf0ad3c81a1277aad826bcc70a14a148960492a1d84e61ba7de89fb4da1160"
                 }
               },
               {
@@ -1017,6 +1423,13 @@
                   "Description": "FK to AIAgentRuns — the parent run this step belongs to.",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3A4E7C2A-3988-4FDD-A5B8-565CCB50EC98"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.410Z",
+                  "checksum": "cd477d042b61966961c95d1c8cc65301fa894dc51d457e9cfded2cf5afdc9b7f"
                 }
               },
               {
@@ -1032,6 +1445,13 @@
                   "Description": "1-based sequential step number within the run.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D30EE67D-364E-4B60-9D9C-8F050F0E9D87"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.479Z",
+                  "checksum": "7c966e857a1c7b49f212ad541ce977a7ac92874e013413b0aa7e271d90cfa899"
                 }
               },
               {
@@ -1048,6 +1468,13 @@
                   "Description": "One of: Actions, Chat, Decision, ForEach, Prompt, Sub-Agent, Validation, While.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0D14D1DF-DE9F-46F7-B596-22BBE4890725"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.551Z",
+                  "checksum": "ff6562eef19a44402760a2099e0e966245a04557faae9ed2c6e58540e6df434a"
                 }
               },
               {
@@ -1064,6 +1491,13 @@
                   "Description": "Human-readable label for the step.",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "230C5106-E543-4B42-BE57-05DB73AD3819"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.622Z",
+                  "checksum": "de0d02eaee7a86170c3c252fe6d8ad600ba3ae41379aa8f33d6fc6339880f208"
                 }
               },
               {
@@ -1080,6 +1514,13 @@
                   "Description": "Polymorphic FK to the target (AIPrompt, AIAction, AIAgent, etc.).",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "BB91A99C-579D-4439-ACE1-E260E5980A60"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.691Z",
+                  "checksum": "7e8a6c09f02cca4fbf34b1cd40f6c79f4efdc12cacb50451dde06850f14b99c4"
                 }
               },
               {
@@ -1096,6 +1537,13 @@
                   "Description": "Running / Completed / Failed / Cancelled.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "67F2A9A5-C7D7-4A35-AE78-D9FBB4AC21B1"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.758Z",
+                  "checksum": "3ad8fe34c17865c048ba633e42b58a5650fcd00ff2b19b79c1ff6a51ac5fcb8a"
                 }
               },
               {
@@ -1111,6 +1559,13 @@
                   "Description": "Timestamp when the step began.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "88C89DF9-8D36-4433-B90E-5F749B243CFD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.866Z",
+                  "checksum": "2efb3bfb7cbdd776ae095bd47b18431be76377c5df086e1344933c539a406346"
                 }
               },
               {
@@ -1126,6 +1581,13 @@
                   "Description": "Timestamp when the step finished.",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "5C5C7874-948B-4822-8E06-027C1CDFE0F8"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:22.941Z",
+                  "checksum": "d5ae592c404aa0b3516933aeca10be6ecac5798fca5ba4e9d3e3f69d3e5ad305"
                 }
               },
               {
@@ -1141,6 +1603,13 @@
                   "Description": "True/False when complete.",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "31890F10-EBBF-46F2-9D00-79C31DE75909"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.013Z",
+                  "checksum": "20b893b34c0067ab6b70e628f3973f4325d119d753cea76a2d9dc17de98afbf3"
                 }
               },
               {
@@ -1157,6 +1626,13 @@
                   "Description": "Failure message if the step failed.",
                   "Sequence": 11,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4642E19A-99CB-444F-A3D5-2EE497C83A53"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.083Z",
+                  "checksum": "ebbbdabf7b28cc6f74375f26662987abea5a1362aa196cb4e363f9f26b9ce9d0"
                 }
               },
               {
@@ -1173,6 +1649,13 @@
                   "Description": "JSON serialization of the step input.",
                   "Sequence": 12,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D7193F20-47E0-4399-93A6-202220C2513B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.155Z",
+                  "checksum": "7c7d38c86654faed0c8871eb6d5c9a533bc551f9ca448f2eaba11f0ff3e8d37b"
                 }
               },
               {
@@ -1189,6 +1672,13 @@
                   "Description": "JSON serialization of the step output.",
                   "Sequence": 13,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "65C5A365-A9BB-4B92-959E-194C48A4D0E7"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.225Z",
+                  "checksum": "a9b06f8290005330508c0c69bcbd953853c5b0714e95f75261b8921cfe5c77c2"
                 }
               },
               {
@@ -1205,6 +1695,13 @@
                   "Description": "FK to AIAgentRunSteps for hierarchical step relationships.",
                   "Sequence": 14,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "0E69CDE4-CD6A-4BAB-B6F9-98AB62E2D34B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.298Z",
+                  "checksum": "4d0afda8205979b952f545c576122bca42727f50d63ba1cbbf9b67c3d94b0efe"
                 }
               },
               {
@@ -1220,6 +1717,13 @@
                   "Description": "Row creation timestamp on remote.",
                   "Sequence": 15,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "55758BBC-F8F8-4A4E-8763-412E64353934"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.367Z",
+                  "checksum": "496181570bf9fe0ef858282d0b469916cad81836935e06ce4b287cd4c3e87eed"
                 }
               },
               {
@@ -1235,9 +1739,23 @@
                   "Description": "Last modification timestamp on remote — watermark.",
                   "Sequence": 16,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "CB17AB3F-9E9C-4286-BA1E-2FC8E8EB0EF5"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.438Z",
+                  "checksum": "b48be8144827172794c494c1fdcc19b60d8a766f092cf8f2f6a47864e9e745bc"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "E4ADE71A-D6C1-427B-8B91-6CA06DD3A822"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.343Z",
+            "checksum": "4e1eca76945f26262ac45cebc37cdbce5e7455f9b0c2dbec4553a8d07763a563"
           }
         },
         {
@@ -1280,6 +1798,13 @@
                   "Description": "Remote MJ User primary key.",
                   "Sequence": 1,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "28910DB1-71A5-4EDA-82EF-795A97193B0C"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.512Z",
+                  "checksum": "d0bfc13c7a6e6999ccabead3801dd3b5fda0c14fec244790d28f5e918f1c23e4"
                 }
               },
               {
@@ -1296,6 +1821,13 @@
                   "Description": "Full name or account name.",
                   "Sequence": 2,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "24E7794B-EF99-42F2-A3A1-0D1B9319BB17"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.618Z",
+                  "checksum": "8d6a418b7c0e1475d1717e6b53c81a4635b863270949621dc13f74ae937bd989"
                 }
               },
               {
@@ -1312,6 +1844,13 @@
                   "Description": "User first name.",
                   "Sequence": 3,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "3D227D76-B6F6-4F37-A06B-6A2BF375DDFF"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.688Z",
+                  "checksum": "0db20f5e6ca4a2f8f3a6c51e0ba6ffe2b9020c7e360cf252a7319f79fa940097"
                 }
               },
               {
@@ -1328,6 +1867,13 @@
                   "Description": "User last name.",
                   "Sequence": 4,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "84BC7620-90E1-461A-88B8-A21151891660"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.759Z",
+                  "checksum": "e1c8eccac4cc335d21b96b3195091f4b412956d1b748b46c0f051047b3b6cd7a"
                 }
               },
               {
@@ -1344,6 +1890,13 @@
                   "Description": "User email (unique on remote).",
                   "Sequence": 5,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "EDAE0C6B-9D0A-4143-BBC3-52800870F29A"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.829Z",
+                  "checksum": "49ecdff6228c5e89018ed2efd06c29ce72f614391a9f5f0f9b3d0d65ccd03293"
                 }
               },
               {
@@ -1360,6 +1913,13 @@
                   "Description": "User title or salutation.",
                   "Sequence": 6,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "47DE4FA2-BDD3-4E66-91C2-F19A44F6B1FD"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.900Z",
+                  "checksum": "3c63a20d1e5a89b19971d9059e0ef441c102c4735fd8989673d74f7e466195ca"
                 }
               },
               {
@@ -1376,6 +1936,13 @@
                   "Description": "User account type — Owner or User on remote.",
                   "Sequence": 7,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "D9D25C6D-17AF-46A5-8B02-92494E117F0F"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:23.968Z",
+                  "checksum": "94b937216ddf4181ec7995730760125d30f1700ed156396a70227b0c3eb52cca"
                 }
               },
               {
@@ -1391,6 +1958,13 @@
                   "Description": "Whether the user account is active on remote.",
                   "Sequence": 8,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8F62202D-B506-44B8-BCB6-CD44B417286E"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:24.040Z",
+                  "checksum": "3d9ee6910941c96a17d2838e55f936a1c3800feb9cb94e9ca296de8253a9ceeb"
                 }
               },
               {
@@ -1406,6 +1980,13 @@
                   "Description": "Row creation timestamp on remote.",
                   "Sequence": 9,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "8D7C625A-2200-4EEE-AC58-0A2F2CE4E72B"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:24.113Z",
+                  "checksum": "9a594811ed7d17b516db3aaa060dedfbff9c0a3ba925e9f2d57528e749f522c9"
                 }
               },
               {
@@ -1421,12 +2002,33 @@
                   "Description": "Last modification timestamp on remote — watermark.",
                   "Sequence": 10,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "FE77ABE5-54C4-4EB7-B71A-8056CCE359B6"
+                },
+                "sync": {
+                  "lastModified": "2026-05-21T22:30:24.185Z",
+                  "checksum": "d25e3049d0957fb5b8ce11ef07280bee1c2b27eb9cfb926b3302ccf954389e66"
                 }
               }
             ]
+          },
+          "primaryKey": {
+            "ID": "6C93D93B-3248-41EF-A8FE-1DC7D1A5DA13"
+          },
+          "sync": {
+            "lastModified": "2026-05-21T22:30:18.361Z",
+            "checksum": "4ff783036391a6908d601b5ef9e4fd258bcfd8651802b6259a6851ef722d3148"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "5438D664-BE0F-4DED-AAF0-B1C3EBC69E18"
+    },
+    "sync": {
+      "lastModified": "2026-05-21T22:30:18.217Z",
+      "checksum": "da8b0ce6194c644bd2479ff116f963f1c4c28e20bb5306432470acced2aaf844"
     }
   }
 ]

@@ -1078,4 +1078,82 @@ describe('AutotagBaseEngine', () => {
       acquireSpy.mockRestore();
     });
   });
+
+  describe('Streaming pipeline (AsyncIterable input)', () => {
+    const mockUser = { ID: 'user-1' } as never;
+
+    function makeItem(id: string, sourceID = 'src-1'): Record<string, unknown> {
+      return {
+        ID: id, Name: `Item ${id}`, Text: `text ${id}`,
+        ContentSourceID: sourceID, ContentSourceTypeID: 'st1',
+        ContentFileTypeID: 'ft1', ContentTypeID: 'ct1',
+        TaggingStatus: 'Pending', EmbeddingStatus: 'Pending',
+      };
+    }
+
+    async function* yieldItems(items: Record<string, unknown>[]): AsyncIterable<never> {
+      for (const item of items) yield item as never;
+    }
+
+    it('accepts an AsyncIterable and batches items by Pipeline.BatchSize', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 5 items, batch size 2 → batches of [2, 2, 1] → 3 rate-limiter acquires.
+      // Critical invariant: the partial final batch still flushes (we don't
+      // drop items because the stream closed mid-batch).
+      expect(acquireSpy.mock.calls.length).toBe(3);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces zero batches when the stream is empty', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const config = { Pipeline: { BatchSize: 10, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems([]), mockUser, undefined, config);
+
+      expect(acquireSpy).not.toHaveBeenCalled();
+      acquireSpy.mockRestore();
+    });
+
+    it('handles a stream smaller than batchSize as one partial batch', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = [makeItem('only-one')];
+      const config = { Pipeline: { BatchSize: 50, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 1 item < 50 batchSize → one batch, one acquire.
+      expect(acquireSpy.mock.calls.length).toBe(1);
+      acquireSpy.mockRestore();
+    });
+
+    it('produces N batches when stream has N*batchSize items exactly', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 6 }, (_, i) => makeItem(`s-${i}`));
+      const config = { Pipeline: { BatchSize: 3, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      await engine.ExtractTextAndProcessWithLLM(yieldItems(items), mockUser, undefined, config);
+
+      // 6 items, batch size 3 → exactly 2 full batches, no straggler flush.
+      expect(acquireSpy.mock.calls.length).toBe(2);
+      acquireSpy.mockRestore();
+    });
+
+    it('preserves array-form behavior (backwards compatibility)', async () => {
+      const acquireSpy = vi.spyOn(engine.LLMRateLimiter, 'Acquire');
+      const items = Array.from({ length: 5 }, (_, i) => makeItem(`s-${i}`)) as never[];
+      const config = { Pipeline: { BatchSize: 2, ErrorThresholdPercent: 100, DelayBetweenBatchesMs: 0 } };
+
+      // Same shape as the streaming case (5 items, batchSize 2 → 3 batches),
+      // exercised through the array path that pre-existing callers use.
+      await engine.ExtractTextAndProcessWithLLM(items, mockUser, undefined, config);
+
+      expect(acquireSpy.mock.calls.length).toBe(3);
+      acquireSpy.mockRestore();
+    });
+  });
 });

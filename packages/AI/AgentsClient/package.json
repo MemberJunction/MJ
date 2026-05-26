@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ai-agent-client",
   "type": "module",
-  "version": "5.35.0",
+  "version": "5.37.0",
   "description": "MemberJunction: Framework-agnostic Agent Client SDK - transport, tool registry, session management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "5.35.0",
-    "@memberjunction/core": "5.35.0",
-    "@memberjunction/graphql-dataprovider": "5.35.0",
+    "@memberjunction/global": "5.37.0",
+    "@memberjunction/core": "5.37.0",
+    "@memberjunction/graphql-dataprovider": "5.37.0",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {

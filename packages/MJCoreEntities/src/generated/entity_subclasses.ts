@@ -17799,27 +17799,30 @@ export type MJListShareEntityType = z.infer<typeof MJListShareSchema>;
 export const MJListSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)`),
     ExternalSystemRecordID: z.string().nullable().describe(`
@@ -17829,7 +17832,7 @@ export const MJListSchema = z.object({
         * * Description: Identifier for this list in an external system, used for synchronization.`),
     CompanyIntegrationID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationID
-        * * Display Name: Company Integration ID
+        * * Display Name: Company Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -17842,22 +17845,68 @@ export const MJListSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SourceViewID: z.string().nullable().describe(`
+        * * Field Name: SourceViewID
+        * * Display Name: Source View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`),
+    SourceFilterSnapshot: z.string().nullable().describe(`
+        * * Field Name: SourceFilterSnapshot
+        * * Display Name: Source Filter Snapshot
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.`),
+    LastRefreshedAt: z.date().nullable().describe(`
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    LastRefreshedByUserID: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUserID
+        * * Display Name: Last Refreshed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    RefreshMode: z.union([z.literal('Additive'), z.literal('Sync')]).describe(`
+        * * Field Name: RefreshMode
+        * * Display Name: Refresh Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+        * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).`),
+    UseSnapshot: z.boolean().describe(`
+        * * Field Name: UseSnapshot
+        * * Display Name: Use Snapshot
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Company Integration
+        * * Display Name: Company Integration Name
         * * SQL Data Type: nvarchar(255)`),
+    SourceView: z.string().nullable().describe(`
+        * * Field Name: SourceView
+        * * Display Name: Source View Name
+        * * SQL Data Type: nvarchar(100)`),
+    LastRefreshedByUser: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUser
+        * * Display Name: Last Refreshed By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJListEntityType = z.infer<typeof MJListSchema>;
@@ -55989,6 +56038,19 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      */
     SuggestThreshold?: number;
     /**
+     * Maximum number of content items the autotagger may PROCESS (hand to the LLM) per run
+     * before the run is paused via the existing CancellationRequested machinery. Does not
+     * include items skipped by change-detection — those are free. NULL/unset = unlimited.
+     *
+     * Most intuitive "do at most N this run, do the rest next time" knob. When checking
+     * budgets after a batch, this is evaluated FIRST (before tag / token / cost caps) because
+     * it is the most user-facing and not tied to a specific model's pricing or tokenization.
+     *
+     * Pause is graceful — the next invocation re-crawls, change-detection skips the items
+     * already tagged in DB, and the remaining items get processed.
+     */
+    MaxItemsPerRun?: number;
+    /**
      * Maximum number of new tags the autotagger may auto-create across an entire run before
      * the run is paused via the existing CancellationRequested machinery. NULL/unset = unlimited.
      * Pause is graceful — the run resumes from `LastProcessedOffset` when restarted.
@@ -56018,9 +56080,55 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
      * - RSS Feed: { URL: "https://example.com/feed.xml" }
      * - Cloud Storage: { FileStorageProviderKey: "Azure Blob Storage", PathPrefix: "/documents" }
      * - Local File System: { Path: "/var/data/documents" }
-     * - Website: { URL: "https://example.com", CrawlDepth: 2 }
+     * - Website: { URL: "https://example.com" } — see Website sub-object below for crawl knobs
      */
     SourceSpecificConfiguration?: Record<string, unknown>;
+    /**
+     * Website-crawler settings — only meaningful for content sources whose ContentSourceType is
+     * "Website". Replaces the legacy per-key ContentSourceParam rows; AutotagWebsite reads from
+     * this sub-object first and falls back to ContentSourceParam rows for sources configured
+     * before this field existed.
+     *
+     * In the future, source-type-specific knobs like these may move to a pluggable per-source-type
+     * sub-interface scheme (one named property per source type). This is the first opt-in
+     * implementation; other source types will follow the same pattern as their knobs grow.
+     */
+    Website?: MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+}
+
+/**
+ * Per-source crawl/discovery settings specific to AutotagWebsite. All optional with
+ * runtime defaults; an empty object is valid and produces the standard behavior
+ * (MaxDepth=2, recursive crawl on, sibling-domain fan-out off, no URL filter).
+ */
+export interface MJContentSourceEntity_IContentSourceWebsiteConfiguration {
+    /**
+     * Recursion ceiling for in-domain links. `0` = just the start URL; `2` (the default) =
+     * root + section pages + their child content pages. Higher values combine multiplicatively
+     * with the per-page 1-second crawl delay.
+     */
+    MaxDepth?: number;
+    /**
+     * When true (default), the recursive depth-aware crawler runs. Setting false disables it
+     * (single-page behavior, retrieved-as-discovered-from-the-seed-URL only).
+     */
+    CrawlSitesInLowerLevelDomain?: boolean;
+    /**
+     * When true, also adds sibling-path URLs found on the seed page (single-pass, no recursion).
+     * Off by default to avoid accidental fan-out across paths the operator didn't intend.
+     */
+    CrawlOtherSitesInTopLevelDomain?: boolean;
+    /**
+     * Regex string. Only URLs matching this pattern are added to the visited set. Use to scope
+     * to e.g. `^https://example\.com/blog/.*`. Unset = match everything.
+     */
+    URLPattern?: string;
+    /**
+     * URL prefix used for the in-domain check. When unset, derived as the parent directory of
+     * the seed URL. Override to expand or constrain the crawl boundary (e.g., set to the bare
+     * origin to crawl the whole site).
+     */
+    RootURL?: string;
 }
 
 /**
@@ -57339,7 +57447,7 @@ export class MJConversationDetailArtifactEntity extends BaseEntity<MJConversatio
  * * Schema: __mj
  * * Base Table: ConversationDetailAttachment
  * * Base View: vwConversationDetailAttachments
- * * @description Stores attachments (images, videos, audio, documents) for conversation messages. Supports both inline base64 storage for small files and reference to MJStorage for large files.
+ * * @description DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -73377,6 +73485,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -73389,6 +73498,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -73400,6 +73510,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -73411,7 +73522,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -73424,7 +73535,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -73437,7 +73548,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)
     */
@@ -73463,7 +73574,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationID
-    * * Display Name: Company Integration ID
+    * * Display Name: Company Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
     */
@@ -73495,8 +73606,94 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     }
 
     /**
+    * * Field Name: SourceViewID
+    * * Display Name: Source View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.
+    */
+    get SourceViewID(): string | null {
+        return this.Get('SourceViewID');
+    }
+    set SourceViewID(value: string | null) {
+        this.Set('SourceViewID', value);
+    }
+
+    /**
+    * * Field Name: SourceFilterSnapshot
+    * * Display Name: Source Filter Snapshot
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.
+    */
+    get SourceFilterSnapshot(): string | null {
+        return this.Get('SourceFilterSnapshot');
+    }
+    set SourceFilterSnapshot(value: string | null) {
+        this.Set('SourceFilterSnapshot', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedAt
+    * * Display Name: Last Refreshed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedAt(): Date | null {
+        return this.Get('LastRefreshedAt');
+    }
+    set LastRefreshedAt(value: Date | null) {
+        this.Set('LastRefreshedAt', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUserID
+    * * Display Name: Last Refreshed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedByUserID(): string | null {
+        return this.Get('LastRefreshedByUserID');
+    }
+    set LastRefreshedByUserID(value: string | null) {
+        this.Set('LastRefreshedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RefreshMode
+    * * Display Name: Refresh Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+    * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).
+    */
+    get RefreshMode(): 'Additive' | 'Sync' {
+        return this.Get('RefreshMode');
+    }
+    set RefreshMode(value: 'Additive' | 'Sync') {
+        this.Set('RefreshMode', value);
+    }
+
+    /**
+    * * Field Name: UseSnapshot
+    * * Display Name: Use Snapshot
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.
+    */
+    get UseSnapshot(): boolean {
+        return this.Get('UseSnapshot');
+    }
+    set UseSnapshot(value: boolean) {
+        this.Set('UseSnapshot', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -73505,7 +73702,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -73514,7 +73711,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(100)
     */
     get Category(): string | null {
@@ -73523,11 +73720,29 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Company Integration
+    * * Display Name: Company Integration Name
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
+    }
+
+    /**
+    * * Field Name: SourceView
+    * * Display Name: Source View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceView(): string | null {
+        return this.Get('SourceView');
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUser
+    * * Display Name: Last Refreshed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastRefreshedByUser(): string | null {
+        return this.Get('LastRefreshedByUser');
     }
 }
 

@@ -18,9 +18,9 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'runExecutionCore', sectionName: 'Run Execution Core', isExpanded: true },
             { sectionKey: 'promptResultContent', sectionName: 'Prompt & Result Content', isExpanded: true },
-            { sectionKey: 'performanceCostMetrics', sectionName: 'Performance & Cost Metrics', isExpanded: false },
-            { sectionKey: 'modelParametersSettings', sectionName: 'Model Parameters & Settings', isExpanded: false },
-            { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: false },
+            { sectionKey: 'performanceCostMetrics', sectionName: 'Performance & Cost Metrics', isExpanded: true },
+            { sectionKey: 'modelParametersSettings', sectionName: 'Model Parameters & Settings', isExpanded: true },
+            { sectionKey: 'validationRetryDetails', sectionName: 'Validation & Retry Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJContentProcessRunPromptRuns', sectionName: 'Content Process Run Prompt Runs', isExpanded: false },
             { sectionKey: 'mJAIPromptRunMedias', sectionName: 'AI Prompt Run Medias', isExpanded: false },

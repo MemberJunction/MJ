@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/ng-shared
 
+## 5.37.0
+
+### Patch Changes
+
+- Updated dependencies [dadbde9]
+- Updated dependencies [4f15f31]
+  - @memberjunction/graphql-dataprovider@5.37.0
+  - @memberjunction/core@5.37.0
+  - @memberjunction/core-entities@5.37.0
+  - @memberjunction/ng-notifications@5.37.0
+  - @memberjunction/ai-engine-base@5.37.0
+  - @memberjunction/ng-base-application@5.37.0
+  - @memberjunction/ng-base-types@5.37.0
+  - @memberjunction/ng-shared-generic@5.37.0
+  - @memberjunction/entity-communications-base@5.37.0
+  - @memberjunction/global@5.37.0
+
+## 5.36.0
+
+### Patch Changes
+
+- Updated dependencies [f29b7c0]
+- Updated dependencies [91036ee]
+- Updated dependencies [70fce34]
+- Updated dependencies [4d16916]
+  - @memberjunction/graphql-dataprovider@5.36.0
+  - @memberjunction/core-entities@5.36.0
+  - @memberjunction/core@5.36.0
+  - @memberjunction/ng-notifications@5.36.0
+  - @memberjunction/ai-engine-base@5.36.0
+  - @memberjunction/ng-base-application@5.36.0
+  - @memberjunction/ng-base-types@5.36.0
+  - @memberjunction/ng-shared-generic@5.36.0
+  - @memberjunction/entity-communications-base@5.36.0
+  - @memberjunction/global@5.36.0
+
 ## 5.35.0
 
 ### Patch Changes

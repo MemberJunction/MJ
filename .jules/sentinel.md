@@ -6,3 +6,7 @@
 **Vulnerability:** XSS vulnerability through unsafe regex string replacement bound to innerHTML.
 **Learning:** Applying string replacement (like wrapping a search term with a `<mark>` tag) directly on text that is then bound to Angular's `[innerHTML]` exposes the application to XSS. Escaping the string *before* replacement breaks the entity codes when the regex attempts a match and wraps part of the entity.
 **Prevention:** Always escape text segments *individually* after the string match and before concatenating the highlighted parts together.
+## 2024-05-18 - Proper XSS Escaping in Highlight Functions
+**Vulnerability:** XSS vulnerability through unsafe regex string replacement bound to innerHTML.
+**Learning:** Applying string replacement (like wrapping a search term with a `<mark>` tag) directly on text that is then bound to Angular's `[innerHTML]` exposes the application to XSS. Escaping the string *before* replacement breaks the entity codes when the regex attempts a match and wraps part of the entity.
+**Prevention:** Always escape text segments *individually* after the string match and before concatenating the highlighted parts together. Use the centralized `HighlightSearchMatches` function from `@memberjunction/global` instead of rolling custom highlight functions.

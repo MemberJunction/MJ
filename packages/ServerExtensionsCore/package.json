@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/server-extensions-core",
-  "version": "5.35.0",
+  "version": "5.37.0",
   "description": "MemberJunction: Server Extension framework - plugin architecture for MJServer that enables auto-discovery and lifecycle management of extension modules",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,8 +17,8 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "5.35.0",
-    "@memberjunction/core": "5.35.0",
+    "@memberjunction/global": "5.37.0",
+    "@memberjunction/core": "5.37.0",
     "express": "^5.2.1"
   },
   "devDependencies": {

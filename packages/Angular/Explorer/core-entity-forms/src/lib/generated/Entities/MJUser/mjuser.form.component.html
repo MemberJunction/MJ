@@ -5,6 +5,8 @@
     (HistoryRequested)="OnHistoryRequested()"
     (ListManagementRequested)="OnListManagementRequested()">
 
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="before-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
@@ -228,6 +230,8 @@
         ></mj-form-field>
 
     </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 
     <!-- ========================================
          RELATED ENTITY PANELS
@@ -485,23 +489,23 @@
 
     <!-- Lists Section -->
     <mj-collapsible-panel
-        SectionKey="mJLists"
+        SectionKey="mJListsUserID"
         SectionName="Lists"
         Icon="fa fa-list-ul"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJLists')"
+        [BadgeCount]="GetSectionRowCount('mJListsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Lists','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Lists')"
-                [AllowLoad]="IsSectionExpanded('mJLists')"
+                [AllowLoad]="IsSectionExpanded('mJListsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJLists', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJListsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2632,5 +2636,32 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Lists (Last Refreshed By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJListsLastRefreshedByUserID"
+        SectionName="Lists (Last Refreshed By User ID)"
+        Icon="fa fa-list-ul"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJListsLastRefreshedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Lists','LastRefreshedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Lists')"
+                [AllowLoad]="IsSectionExpanded('mJListsLastRefreshedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJListsLastRefreshedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

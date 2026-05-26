@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { MJDialogService, MJDialogRef, MJDialogAction } from '@memberjunction/ng-ui-components';
 import { Observable } from 'rxjs';
 import { InputDialogComponent } from '../components/dialogs/input-dialog.component';
+import { RatingDialogComponent } from '../components/dialogs/rating-dialog.component';
 
 export interface DialogButton {
   text: string;
@@ -31,6 +32,27 @@ export interface ConfirmDialogOptions {
   okText?: string;
   cancelText?: string;
   dangerous?: boolean;
+}
+
+export interface RatingDialogOptions {
+  title?: string;
+  message?: string;
+  initialRating?: number | null;
+  initialComments?: string;
+  okText?: string;
+  cancelText?: string;
+  /** When true, the rating dialog shows a consent checkbox the user must
+   *  accept before submitting (first-time-only authorization). */
+  requireConsent?: boolean;
+}
+
+export interface RatingDialogResult {
+  rating: number;
+  comments: string;
+  /** True only when the user *just* acknowledged consent in this dialog —
+   *  i.e. `requireConsent` was true and they checked the box. The caller
+   *  should persist the acknowledgement so consent isn't requested again. */
+  consentNewlyAcknowledged: boolean;
 }
 
 /**
@@ -167,6 +189,52 @@ export class DialogService {
               // Single input - return string for backward compatibility
               resolve(value);
             }
+          }
+        } else {
+          resolve(null);
+        }
+      });
+    });
+  }
+
+  /**
+   * Show a rating dialog (1-10 + free-form comments).
+   * @returns Promise<RatingDialogResult | null> — null if cancelled or no rating selected.
+   */
+  rating(options: RatingDialogOptions = {}): Promise<RatingDialogResult | null> {
+    return new Promise((resolve) => {
+      const okText = options.okText || 'Submit';
+      const cancelText = options.cancelText || 'Cancel';
+
+      const dialogRef = this.mjDialogService.open({
+        title: options.title || 'Rate this response',
+        content: RatingDialogComponent,
+        actions: [
+          { text: okText, primary: true },
+          { text: cancelText, primary: false }
+        ],
+        width: 560,
+        minWidth: 320
+      });
+
+      const componentInstance = dialogRef.Content!.instance as unknown as RatingDialogComponent;
+      componentInstance.message = options.message ?? '';
+      componentInstance.initialRating = options.initialRating ?? null;
+      componentInstance.initialComments = options.initialComments ?? '';
+      componentInstance.requireConsent = options.requireConsent ?? false;
+
+      dialogRef.Result.subscribe((result) => {
+        const action = result as MJDialogAction | undefined;
+        if (action && 'text' in action && action.text === okText) {
+          const rating = componentInstance.getRating();
+          if (rating == null || !componentInstance.isConsentValid()) {
+            resolve(null);
+          } else {
+            resolve({
+              rating,
+              comments: componentInstance.getComments(),
+              consentNewlyAcknowledged: componentInstance.wasConsentNewlyAcknowledged()
+            });
           }
         } else {
           resolve(null);

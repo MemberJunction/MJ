@@ -18,7 +18,7 @@ export class MJAIPromptRunMediaFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'association', sectionName: 'Association', isExpanded: true },
             { sectionKey: 'mediaMetadata', sectionName: 'Media Metadata', isExpanded: false },
-            { sectionKey: 'contentData', sectionName: 'Content Data', isExpanded: false },
+            { sectionKey: 'contentData', sectionName: 'Content Data', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentRunMedias', sectionName: 'AI Agent Run Medias', isExpanded: false }
         ]);

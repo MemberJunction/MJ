@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/geo-core",
   "type": "module",
-  "version": "5.35.0",
+  "version": "5.37.0",
   "description": "MemberJunction: Core geo-spatial types, interfaces, and GeoCodeSyncService for geocoding lifecycle management",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,9 +17,9 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "5.35.0",
-    "@memberjunction/core": "5.35.0",
-    "@memberjunction/core-entities": "5.35.0"
+    "@memberjunction/global": "5.37.0",
+    "@memberjunction/core": "5.37.0",
+    "@memberjunction/core-entities": "5.37.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
