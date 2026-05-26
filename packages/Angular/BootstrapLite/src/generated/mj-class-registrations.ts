@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (347 classes)
+// @memberjunction/core-entities (348 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -341,6 +341,7 @@ import {
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
+    MJUserFeedbackSubmissionEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
     MJUserNotificationTypeEntity,
@@ -806,6 +807,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
+    MJUserFeedbackSubmissionEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
     MJUserNotificationTypeEntity,
@@ -901,7 +903,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 413;
+export const CLASS_REGISTRATIONS_COUNT = 414;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
