@@ -114,6 +114,16 @@ export class ScaffoldPhase {
       Message: 'Extracting release...',
     });
 
+    // The bootstrap ZIP ships a stub `install.config.json` (empty template
+    // values, legacy camelCase shape). If the user already populated their
+    // own `install.config.json` in the target dir before running `mj install`
+    // (or before re-running with `--no-resume`), `ExtractZip` would
+    // unconditionally overwrite it. Preserve it across extraction.
+    const userConfigPath = path.join(context.Dir, 'install.config.json');
+    const savedUserConfig = (await this.fileSystem.FileExists(userConfigPath))
+      ? await this.fileSystem.ReadText(userConfigPath)
+      : null;
+
     try {
       await this.fileSystem.ExtractZip(zipPath, context.Dir);
     } catch (err) {
@@ -123,6 +133,15 @@ export class ScaffoldPhase {
         `Failed to extract ZIP: ${err instanceof Error ? err.message : String(err)}`,
         'Download the release ZIP manually and extract it into the target directory.'
       );
+    }
+
+    if (savedUserConfig !== null) {
+      await this.fileSystem.WriteText(userConfigPath, savedUserConfig);
+      emitter.Emit('step:progress', {
+        Type: 'step:progress',
+        Phase: 'scaffold',
+        Message: 'Preserved existing install.config.json across release extraction.',
+      });
     }
 
     // Step 5: Clean up temp ZIP
