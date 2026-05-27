@@ -15,9 +15,8 @@
   ],
 
   "archive": {
-    "configFile": "/app/docker/regression/configs/archive-local.config.cjs",
-    "tag": "byo-loopback",
-    "source": "byo-app-demo"
+    "tag": "byo-app",
+    "source": "mode-d-byo"
   },
 
   "notes": "The BYO app has TWO intentional bugs: the counter decrements when you click '+1', and the contact-form Submit handler is a no-op. Both shipped tests EXPECT to fail against this version. Used to demonstrate that the regression suite catches real defects. Pointed at a corrected app (fix counter.component.ts + contact.component.ts), both should pass."

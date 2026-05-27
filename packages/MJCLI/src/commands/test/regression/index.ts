@@ -10,6 +10,7 @@ export default class TestRegression extends Command {
     '<%= config.bin %> <%= command.id %> down       # Tear down + wipe DB volumes',
     '<%= config.bin %> <%= command.id %> gen-forms  # Regenerate Angular entity forms',
     '<%= config.bin %> <%= command.id %> compare    # Diff the two most recent runs',
+    '<%= config.bin %> <%= command.id %> export     # Export a run as a portable standalone HTML',
     '<%= config.bin %> <%= command.id %> remote --target=staging-mj  # Mode B/C/D against a remote URL',
     '<%= config.bin %> <%= command.id %> init generic-web            # Scaffold one of the example dirs',
   ];
@@ -22,6 +23,7 @@ export default class TestRegression extends Command {
     this.log('  mj test regression down               Stop the stack and wipe DB volumes');
     this.log('  mj test regression gen-forms          One-shot: regenerate Angular entity forms');
     this.log('  mj test regression compare            Compare the two most recent run-*/results.json');
+    this.log('  mj test regression export             Export a run as a portable standalone HTML report');
     this.log('  mj test regression remote --target=X  Run against a remote URL (Mode B/C/D)');
     this.log('  mj test regression init <name>        Scaffold a starter example into the cwd');
     this.log('');

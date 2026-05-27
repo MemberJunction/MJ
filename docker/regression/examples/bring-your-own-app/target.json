@@ -15,7 +15,6 @@
   ],
 
   "archive": {
-    "configFile": "/app/docker/regression/configs/archive-local.config.cjs",
     "tag": "byo-loopback",
     "source": "byo-app-demo"
   },

@@ -16,5 +16,10 @@
     "/app/docker/regression/examples/generic-web/metadata"
   ],
 
-  "oraclesModule": "/app/docker/regression/examples/generic-web/oracles/mdn-oracles.cjs"
+  "oraclesModule": "/app/docker/regression/examples/generic-web/oracles/mdn-oracles.cjs",
+
+  "archive": {
+    "tag": "generic-web-mdn",
+    "source": "mode-c-mdn"
+  }
 }

@@ -107,6 +107,23 @@ echo "Running pre-flight diagnostics..."
 node "$SCRIPTS/preflight-checks.cjs" 2>&1
 echo ""
 
+# ─── 4b. Archive destination pre-flight ─────────────────────────────────────
+# When ARCHIVE_DB_DATABASE is set, validate the destination MJ instance up
+# front so we fail fast (~5s) instead of discovering misconfiguration after
+# the 10-minute suite. Tracks success in ARCHIVE_PREFLIGHT_OK so § 8 below can
+# decide whether to attempt the push.
+ARCHIVE_PREFLIGHT_OK=0
+if [ -n "${ARCHIVE_DB_DATABASE:-}" ]; then
+    echo "Running archive destination pre-flight..."
+    if node "$SCRIPTS/archive-preflight.cjs" 2>&1; then
+        ARCHIVE_PREFLIGHT_OK=1
+    else
+        echo "  Archive destination pre-flight FAILED — the archive step will be skipped."
+        echo "  Fix the issues above and re-run, or unset ARCHIVE_DB_DATABASE to disable archiving."
+    fi
+    echo ""
+fi
+
 # Each run writes into its own timestamped folder so runs don't overwrite
 # each other. Structure:
 #   test-results/run-YYYYMMDDTHHMMSSZ/{results.json,report.md,report.html,
@@ -183,56 +200,10 @@ echo "Generating HTML screenshot gallery..."
 RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
 
 # ─── 8. Optional archive: pull this suite-run + children + push to archive MJ ─
-# Enabled when ARCHIVE_MJ_CONFIG points at a mj.config.cjs for the destination
-# MJ instance. The pull uses the entity-cascade config in
-# docker/regression/archive/ to externalize InlineData screenshots; the push
-# uses MJ_CONFIG_FILE to swap providers without disturbing the local mj.config.
-#
-# Skipped silently when ARCHIVE_MJ_CONFIG is unset.
-if [ -n "${ARCHIVE_MJ_CONFIG:-}" ]; then
-    echo ""
-    echo "Archiving suite run to ${ARCHIVE_MJ_CONFIG}..."
-
-    # Pull the suite run's ID from results.json so we can filter the pull.
-    SUITE_RUN_ID=$(node -e "const r=require('${RUN_DIR}/results.json'); console.log(r.suiteRunId || '');" 2>/dev/null || echo "")
-    if [ -z "$SUITE_RUN_ID" ]; then
-        echo "  WARNING: Could not read suiteRunId from results.json — skipping archive"
-    elif [ ! -f "$ARCHIVE_MJ_CONFIG" ]; then
-        echo "  WARNING: ARCHIVE_MJ_CONFIG file not found: $ARCHIVE_MJ_CONFIG — skipping archive"
-    else
-        # 8a. Copy the archive template (.mj-sync.json files describing the
-        # entity cascade + externalization) into the run dir.
-        ARCHIVE_DIR="${RUN_DIR}/archive"
-        mkdir -p "${ARCHIVE_DIR}"
-        cp -R /app/docker/regression/archive/. "${ARCHIVE_DIR}/"
-
-        # 8b. Pull the suite run + cascading children into the archive dir.
-        # Uses the LOCAL mj.config.cjs (default cosmiconfig search) to pull
-        # from the docker SQL Server.
-        echo "  Pulling suite run + children to ${ARCHIVE_DIR}..."
-        (cd "${ARCHIVE_DIR}" && npx mj sync pull \
-            --entity="MJ: Test Suite Runs" \
-            --filter="ID='${SUITE_RUN_ID}'" 2>&1) \
-            || echo "  WARNING: Archive pull failed"
-
-        # 8c. Tag the pulled records (Tags field, optional MachineName overlay).
-        ARCHIVE_TAG="${ARCHIVE_TAG:-${TEST_SUITE_NAME:-}}" \
-        ARCHIVE_SOURCE="${ARCHIVE_SOURCE:-}" \
-        RUN_DIR="${RUN_DIR}" \
-            node "$SCRIPTS/tag-archive.cjs" 2>&1 || echo "  WARNING: Tagging failed"
-
-        # 8d. Push to the archive MJ. Swap mj.config.cjs via MJ_CONFIG_FILE
-        # so the push targets a different DB than the pull. --ci flag avoids
-        # the interactive "continue anyway?" prompt that hangs in a non-TTY
-        # container; validation errors fail the push outright.
-        echo "  Pushing archive to destination MJ..."
-        MJ_CONFIG_FILE="${ARCHIVE_MJ_CONFIG}" \
-            npx mj sync push --dir="${ARCHIVE_DIR}" --ci 2>&1 \
-            || echo "  WARNING: Archive push failed"
-
-        echo "  Archive complete."
-    fi
-fi
+# Shared with the remote entrypoint — see scripts/archive-run.sh for the full
+# env-var contract. Sourced so it runs in this shell with RUN_DIR / SCRIPTS /
+# ARCHIVE_PREFLIGHT_OK / TEST_SUITE_NAME / EXTRA_METADATA_DIRS already set.
+source "$SCRIPTS/archive-run.sh"
 
 # Maintain a "latest" symlink pointing at this run's directory.
 # `mj test compare --from-json docker/regression/test-results` discovers

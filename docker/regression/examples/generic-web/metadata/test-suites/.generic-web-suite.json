@@ -12,6 +12,13 @@
           "TestID": "@lookup:MJ: Tests.Name=GW01 - MDN Home Loads",
           "Sequence": 1,
           "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "EE53002B-DCD5-49AC-AE16-211254BCE6FE"
+        },
+        "sync": {
+          "lastModified": "2026-05-17T23:05:53.394Z",
+          "checksum": "09664d1aa1dba6101156b1ad5cb56893aa025fee4b4569ecd1f3e86325617d6f"
         }
       },
       {
@@ -20,16 +27,22 @@
           "TestID": "@lookup:MJ: Tests.Name=GW02 - Search Array.prototype.map",
           "Sequence": 2,
           "Status": "Active"
-        }
-      },
-      {
-        "fields": {
-          "SuiteID": "@parent:ID",
-          "TestID": "@lookup:MJ: Tests.Name=GW03 - Navigate References Section",
-          "Sequence": 3,
-          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DB858A9C-BA30-40E1-9FAA-1452A48611F2"
+        },
+        "sync": {
+          "lastModified": "2026-05-17T23:05:53.408Z",
+          "checksum": "db7b7b0e7106adcae9bcbf9d1c06c2d4175b70fad2dd6d2282ea44d9d93e3cd4"
         }
       }
     ]
+  },
+  "primaryKey": {
+    "ID": "3C13E3D6-F022-409A-A6FE-B5857BCE7FA4"
+  },
+  "sync": {
+    "lastModified": "2026-05-17T23:05:53.359Z",
+    "checksum": "b6ac99fec8087fb090387e0869228705c4ed7e36dcae2ef667e729ede0101bba"
   }
 }

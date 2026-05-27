@@ -17,6 +17,8 @@ export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
 export const GEN_FORMS_SCRIPT = `${REGRESSION_DIR}/gen-forms.sh`;
 export const EXAMPLES_DIR = `${REGRESSION_DIR}/examples`;
+export const RESULTS_DIR = `${REGRESSION_DIR}/test-results`;
+export const INLINE_REPORT_SCRIPT = `${REGRESSION_DIR}/scripts/inline-report.cjs`;
 
 /**
  * The pinned runner image tag used when `init` (and future external invocations)

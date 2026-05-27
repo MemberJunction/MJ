@@ -126,7 +126,6 @@ function main() {
 
     if (profile.archive && typeof profile.archive === 'object') {
         const a = profile.archive;
-        if (a.configFile) setIfPresent(out, 'ARCHIVE_MJ_CONFIG', a.configFile);
         if (a.tag) setIfPresent(out, 'ARCHIVE_TAG', a.tag);
         if (a.source) setIfPresent(out, 'ARCHIVE_SOURCE', a.source);
     }

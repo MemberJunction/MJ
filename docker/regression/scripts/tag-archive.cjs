@@ -78,12 +78,26 @@ for (const filename of candidates) {
 
         let changed = false;
 
-        // Append ARCHIVE_TAG to Tags (keeping any existing comma-separated values)
+        // Append ARCHIVE_TAG to Tags. Stored as a JSON array STRING so the
+        // downstream `mj test compare --tag=<name>` filter can LIKE-match the
+        // quoted form ['%"<name>"%'] without false positives from substrings
+        // (e.g. tag "prod" matching "production"). See compare.ts § 144-152.
         if (ARCHIVE_TAG) {
-            const existing = typeof fields.Tags === 'string' ? fields.Tags.trim() : '';
-            const tags = existing ? `${existing},${ARCHIVE_TAG}` : ARCHIVE_TAG;
-            if (fields.Tags !== tags) {
-                fields.Tags = tags;
+            // Tags is always stored as a JSON-array string (this script is the
+            // only writer). Parse it back; treat anything else as empty.
+            let existing = [];
+            if (Array.isArray(fields.Tags)) {
+                existing = fields.Tags.filter((t) => typeof t === 'string');
+            } else if (typeof fields.Tags === 'string' && fields.Tags.trim().startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(fields.Tags);
+                    if (Array.isArray(parsed)) existing = parsed.filter((t) => typeof t === 'string');
+                } catch { /* malformed — start fresh */ }
+            }
+            if (!existing.includes(ARCHIVE_TAG)) existing.push(ARCHIVE_TAG);
+            const next = JSON.stringify(existing);
+            if (fields.Tags !== next) {
+                fields.Tags = next;
                 changed = true;
             }
         }

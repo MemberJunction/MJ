@@ -18,7 +18,7 @@
       "maxSteps": 10,
       "judgeValidationCriteria": [
         "Page rendered without errors",
-        "Main navigation visible (References, Guides, or similar)",
+        "Main navigation visible (HTML, CSS, Learn, Tools, etc)", 
         "MDN branding is present"
       ]
     },
@@ -33,9 +33,27 @@
       "judgePromptName": "Computer Use - Judge",
       "judgeFrequency": "EveryNSteps:3",
       "oracles": [
-        { "type": "goal-completion", "weight": 0.5, "config": { "minConfidence": 0.7 } },
-        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^https?://(www\\.)?developer\\.mozilla\\.org/?" } },
-        { "type": "step-count", "weight": 0.2, "config": { "maxSteps": 10 } }
+        {
+          "type": "goal-completion",
+          "weight": 0.5,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^https?://(www\\.)?developer\\.mozilla\\.org/?"
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.2,
+          "config": {
+            "maxSteps": 10
+          }
+        }
       ],
       "scoringWeights": {
         "goal-completion": 0.5,
@@ -45,5 +63,12 @@
     },
     "Status": "Active",
     "Tags": "P0,generic-web,smoke"
+  },
+  "primaryKey": {
+    "ID": "C21C91DF-8EC8-4741-9251-EB14187A2532"
+  },
+  "sync": {
+    "lastModified": "2026-05-17T23:05:53.299Z",
+    "checksum": "cd52d0df6d51b2d14f5559cd9c2bb8894b29f7343733673fd618687db8506876"
   }
 }

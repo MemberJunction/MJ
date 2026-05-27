@@ -6,7 +6,7 @@
 #                            (the caller's bind-mounted cwd). Used by
 #                            `mj test regression init` and direct docker invocations.
 #   run                      Run the test suite. Reads TEST_SUITE_NAME, MJ_TEST_VAR_*,
-#                            EXTRA_METADATA_DIRS, ORACLES_MODULE, ARCHIVE_MJ_CONFIG.
+#                            EXTRA_METADATA_DIRS, ORACLES_MODULE, ARCHIVE_DB_*.
 #                            Defaults to "MJ Explorer Regression Suite" for parity
 #                            with the legacy test-runner image.
 #   exec <cmd…>              Pass-through to the underlying shell. Useful for

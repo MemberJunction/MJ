@@ -16,7 +16,6 @@
   "suite": "MJ Explorer Regression Suite",
 
   "archive": {
-    "configFile": "/app/docker/regression/configs/archive-mj.config.cjs",
     "tag": "remote-mj-nightly",
     "source": "remote-mj"
   }

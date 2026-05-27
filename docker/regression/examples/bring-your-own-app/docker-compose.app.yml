@@ -59,12 +59,12 @@ services:
       # Drive {{baseUrl}} and {{allowedDomains}} substitution in BYO test JSONs
       MJ_TEST_VAR_baseUrl: "http://byo-app:3000"
       MJ_TEST_VAR_allowedDomains: "[\"byo-app\"]"
-      # Phase 3 archive flow — push the suite run + cascading children to an
-      # archive MJ via mj-sync. Loopback config writes to the same docker DB
-      # for verification; in production this points at a separate MJ instance.
-      ARCHIVE_MJ_CONFIG: "/app/docker/regression/configs/archive-local.config.cjs"
-      ARCHIVE_TAG: "byo-loopback"
-      ARCHIVE_SOURCE: "byo-app-demo"
+      # Archive flow: inherit ARCHIVE_DB_* from .env.test (env-var-driven path)
+      # so this Mode D overlay archives to the same destination as Mode A.
+      # Override only the tag + source so Mode D rows can be distinguished from
+      # Mode A rows in the archive DB.
+      ARCHIVE_TAG: "byo-app"
+      ARCHIVE_SOURCE: "mode-d-byo"
     volumes:
       # NOT read-only: mj-sync writes auto-generated primaryKey + sync state back
       # to the JSON files after autoCreateMissingRecords. Subsequent runs reuse

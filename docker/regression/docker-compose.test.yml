@@ -172,6 +172,12 @@ services:
       mjexplorer:
         condition: service_started
         required: false
+    # Make the host machine reachable from inside the container as
+    # `host.docker.internal` on every platform. Auto-set on Docker Desktop
+    # (Mac/Windows) but missing on Linux — declaring it here makes the
+    # `ARCHIVE_DB_HOST=host.docker.internal` archive flow portable.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       <<: *db-env
       AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
@@ -184,14 +190,24 @@ services:
       BASE_URL: "http://mjexplorer:4200"
       API_URL: "http://mjapi:4000"
       MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
-      # Optional archive flow — when ARCHIVE_MJ_CONFIG is set to a config file
-      # path, the entrypoint pulls the suite run + children and pushes them
-      # to the destination MJ instance defined in that config. ARCHIVE_TAG and
-      # ARCHIVE_SOURCE flow through to scripts/tag-archive.cjs for per-source
-      # filtering in `mj test compare --tag=...`.
-      ARCHIVE_MJ_CONFIG: "${ARCHIVE_MJ_CONFIG:-}"
+      # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
+      # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
+      # pulls the suite run + children, and pushes them to that destination MJ
+      # instance. ARCHIVE_TAG and ARCHIVE_SOURCE flow through to
+      # scripts/tag-archive.cjs for per-source filtering in
+      # `mj test compare --tag=...`.
       ARCHIVE_TAG: "${ARCHIVE_TAG:-}"
       ARCHIVE_SOURCE: "${ARCHIVE_SOURCE:-}"
+      # Destination DB connection — consumed by scripts/archive-config-gen.cjs
+      # to build the push-side config at runtime.
+      ARCHIVE_DB_HOST: "${ARCHIVE_DB_HOST:-}"
+      ARCHIVE_DB_PORT: "${ARCHIVE_DB_PORT:-}"
+      ARCHIVE_DB_DATABASE: "${ARCHIVE_DB_DATABASE:-}"
+      ARCHIVE_DB_USERNAME: "${ARCHIVE_DB_USERNAME:-}"
+      ARCHIVE_DB_PASSWORD: "${ARCHIVE_DB_PASSWORD:-}"
+      ARCHIVE_DB_TRUST_CERT: "${ARCHIVE_DB_TRUST_CERT:-}"
+      ARCHIVE_USER_EMAIL: "${ARCHIVE_USER_EMAIL:-}"
+      ARCHIVE_MJ_CORE_SCHEMA: "${ARCHIVE_MJ_CORE_SCHEMA:-}"
       # Suite selector — defaults to MJ Explorer Regression Suite in the
       # entrypoint; overridden by `mj test regression remote` via the target
       # profile's "suite" field. Used by the BYO overlay too.
@@ -229,9 +245,6 @@ services:
       # Archive entity-cascade config templates (.mj-sync.json files). The
       # entrypoint copies these into each run's archive dir before pulling.
       - ./archive:/app/docker/regression/archive:ro
-      # Archive config(s) — mj.config.cjs files for destination MJ instances.
-      # Files are bind-mounted but only read when ARCHIVE_MJ_CONFIG points at one.
-      - ./configs:/app/docker/regression/configs:ro
       # Target profile JSONs for Modes B/C/D (read-only — the runner only
       # consumes them, the loader runs on the host).
       - ./targets:/app/docker/regression/targets:ro

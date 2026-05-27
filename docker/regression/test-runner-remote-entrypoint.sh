@@ -21,7 +21,7 @@
 # Optional:
 #   MJ_TEST_VAR_authUsername / authPassword / authDomains
 #   EXTRA_METADATA_DIRS       — comma-separated dirs of test/suite JSON to push
-#   ARCHIVE_MJ_CONFIG         — mj.config.cjs path for archive destination
+#   ARCHIVE_DB_DATABASE       — destination DB for the archive flow (+ ARCHIVE_DB_*)
 #
 set -e
 
@@ -85,6 +85,21 @@ if [ -n "${EXTRA_METADATA_DIRS:-}" ]; then
     done
 fi
 
+# ─── 1b. Archive destination pre-flight ─────────────────────────────────────
+# Mirrors § 4b of test-runner-entrypoint.sh. Fails fast (~5s) if the destination
+# is misconfigured, rather than discovering it after the suite finishes.
+ARCHIVE_PREFLIGHT_OK=0
+if [ -n "${ARCHIVE_DB_DATABASE:-}" ]; then
+    echo "Running archive destination pre-flight..."
+    if node "$SCRIPTS/archive-preflight.cjs" 2>&1; then
+        ARCHIVE_PREFLIGHT_OK=1
+    else
+        echo "  Archive destination pre-flight FAILED — the archive step will be skipped."
+        echo "  Fix the issues above and re-run, or unset ARCHIVE_DB_DATABASE to disable archiving."
+    fi
+    echo ""
+fi
+
 # ─── 2. Per-run output directory ─────────────────────────────────────────────
 TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
 RUN_DIR="/app/test-results/run-${TIMESTAMP}"
@@ -134,41 +149,10 @@ echo "Generating HTML report..."
 RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
 
 # ─── 5. Optional archive ─────────────────────────────────────────────────────
-# Same shape as the full-stack entrypoint. Pulls SuiteRun + children to a
-# local folder via mj-sync, tags them, then pushes to ARCHIVE_MJ_CONFIG.
-if [ -n "${ARCHIVE_MJ_CONFIG:-}" ]; then
-    echo ""
-    echo "Archiving suite run to ${ARCHIVE_MJ_CONFIG}..."
-
-    SUITE_RUN_ID=$(node -e "const r=require('${RUN_DIR}/results.json'); console.log(r.suiteRunId || '');" 2>/dev/null || echo "")
-    if [ -z "$SUITE_RUN_ID" ]; then
-        echo "  WARNING: Could not read suiteRunId from results.json — skipping archive"
-    elif [ ! -f "$ARCHIVE_MJ_CONFIG" ]; then
-        echo "  WARNING: ARCHIVE_MJ_CONFIG file not found: $ARCHIVE_MJ_CONFIG — skipping archive"
-    else
-        ARCHIVE_DIR="${RUN_DIR}/archive"
-        mkdir -p "${ARCHIVE_DIR}"
-        cp -R /app/docker/regression/archive/. "${ARCHIVE_DIR}/"
-
-        echo "  Pulling suite run + children to ${ARCHIVE_DIR}..."
-        (cd "${ARCHIVE_DIR}" && npx mj sync pull \
-            --entity="MJ: Test Suite Runs" \
-            --filter="ID='${SUITE_RUN_ID}'" 2>&1) \
-            || echo "  WARNING: Archive pull failed"
-
-        ARCHIVE_TAG="${ARCHIVE_TAG:-${TEST_SUITE_NAME:-}}" \
-        ARCHIVE_SOURCE="${ARCHIVE_SOURCE:-}" \
-        RUN_DIR="${RUN_DIR}" \
-            node "$SCRIPTS/tag-archive.cjs" 2>&1 || echo "  WARNING: Tagging failed"
-
-        echo "  Pushing archive to destination MJ..."
-        MJ_CONFIG_FILE="${ARCHIVE_MJ_CONFIG}" \
-            npx mj sync push --dir="${ARCHIVE_DIR}" --ci 2>&1 \
-            || echo "  WARNING: Archive push failed"
-
-        echo "  Archive complete."
-    fi
-fi
+# Shared with the full-stack entrypoint — see scripts/archive-run.sh for the
+# full env-var contract. Sourced so it runs in this shell with RUN_DIR /
+# SCRIPTS / ARCHIVE_PREFLIGHT_OK / TEST_SUITE_NAME / EXTRA_METADATA_DIRS set.
+source "$SCRIPTS/archive-run.sh"
 
 # ─── 6. Latest symlink ───────────────────────────────────────────────────────
 ln -sfn "run-${TIMESTAMP}" /app/test-results/latest \

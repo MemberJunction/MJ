@@ -27,7 +27,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },
@@ -45,8 +45,8 @@
       "ID": "35FF7A4B-B64A-4052-AD78-9DA8FBCF021A"
     },
     "sync": {
-      "lastModified": "2026-04-20T23:53:41.172Z",
-      "checksum": "ed3d31c862828b19ef813bd9507a5ffeb8094e179a6307b9e857a7f7f8542eb8"
+      "lastModified": "2026-05-15T22:28:49.766Z",
+      "checksum": "35a8f496d4ee1526470e9983eb54256f912ac01314409a27b1b829e5453ee61d"
     }
   },
   {
@@ -77,7 +77,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Pro",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 1
           },

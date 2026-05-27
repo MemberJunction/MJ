@@ -56,7 +56,7 @@ Behind the scenes:
 3. The runner pushes test metadata to the ephemeral DB, then invokes
    `mj test suite --name "MJ Explorer Regression Suite"`.
 4. Reports land in `docker/regression/test-results/run-{TIMESTAMP}/`.
-5. If `archive.configFile` is set in the target, the suite run + children are
+5. If the `ARCHIVE_DB_*` env vars are set, the suite run + children are
    pulled to a JSON folder and pushed to the destination MJ via `mj sync`.
 
 ## ⚠️ Prerequisite — variable substitution
