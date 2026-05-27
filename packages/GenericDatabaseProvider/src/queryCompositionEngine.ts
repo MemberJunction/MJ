@@ -1,8 +1,26 @@
 import { UUIDsEqual } from "@memberjunction/global";
 import { GetDialect, type SQLDialect } from "@memberjunction/sql-dialect";
 import { SQLParser, AnalyzeTopLevelOrderBy } from "@memberjunction/sql-parser";
-import { Metadata, QueryInfo, DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
+import { DatabasePlatform, UserInfo, QueryDependencySpec } from "@memberjunction/core";
+import { MJQueryEntityExtended, QueryEngine } from "@memberjunction/core-entities";
 import { SymbolTable } from "./symbolTable.js";
+
+/**
+ * Minimal contract for queries flowing through the composition engine.
+ * `MJQueryEntityExtended` satisfies this structurally; synthetic inline
+ * dependency queries satisfy it via a plain-object literal with stubs.
+ */
+export interface IComposableQuery {
+    ID: string;
+    Name: string;
+    SQL: string | null;
+    UsesTemplate: boolean | null;
+    Reusable: boolean | null;
+    Status: string | null;
+    IsApproved: boolean;
+    UserCanRun(user: UserInfo): boolean;
+    GetPlatformSQL(platform: DatabasePlatform): string;
+}
 
 /**
  * Maximum depth for recursive query composition resolution.
@@ -83,8 +101,8 @@ interface ParsedParameter {
  * The `IsInline` flag tells callers whether to skip governance validation.
  */
 interface QueryLookupResult {
-    /** The resolved QueryInfo (real or synthetic for inline deps) */
-    Query: QueryInfo;
+    /** The resolved query (real MJQueryEntityExtended or synthetic for inline deps) */
+    Query: IComposableQuery;
     /** True if this query was resolved from inline dependencies (skip validation) */
     IsInline: boolean;
     /** For inline deps, the nested dependencies for recursive resolution */
@@ -378,7 +396,7 @@ export class QueryCompositionEngine {
         if (inlineDependencies && inlineDependencies.length > 0) {
             const inlineMatch = this.findInlineDependency(token, inlineDependencies);
             if (inlineMatch) {
-                const syntheticQuery = this.buildSyntheticQueryInfo(inlineMatch);
+                const syntheticQuery = this.buildSyntheticQuery(inlineMatch);
                 return {
                     Query: syntheticQuery,
                     IsInline: true,
@@ -418,31 +436,40 @@ export class QueryCompositionEngine {
     }
 
     /**
-     * Builds a synthetic QueryInfo from an inline dependency spec.
-     * Sets flags so that GetPlatformSQL returns the inline SQL directly.
+     * Builds a synthetic IComposableQuery from an inline dependency spec.
+     * Returns a plain object (not a BaseEntity) since we cannot construct
+     * MJQueryEntityExtended directly. Inline queries skip governance
+     * validation, so only the fields needed for composition resolution
+     * (ID, Name, SQL, UsesTemplate, GetPlatformSQL) are meaningful.
      */
-    private buildSyntheticQueryInfo(dep: QueryDependencySpec): QueryInfo {
-        const synthetic = new QueryInfo();
-        // Use a deterministic synthetic ID based on name+path to support cycle detection and deduplication
-        synthetic.ID = `__inline__${dep.CategoryPath}${dep.Name}`.toLowerCase();
-        synthetic.Name = dep.Name;
-        synthetic.SQL = dep.SQL;
-        synthetic.UsesTemplate = dep.UsesTemplate ?? false;
-        synthetic.Reusable = true;
-        synthetic.Status = 'Approved';
-        return synthetic;
+    private buildSyntheticQuery(dep: QueryDependencySpec): IComposableQuery {
+        const sql = dep.SQL;
+        return {
+            // Use a deterministic synthetic ID based on name+path to support cycle detection and deduplication
+            ID: `__inline__${dep.CategoryPath}${dep.Name}`.toLowerCase(),
+            Name: dep.Name,
+            SQL: sql,
+            UsesTemplate: dep.UsesTemplate ?? false,
+            Reusable: true,
+            Status: 'Approved',
+            get IsApproved(): boolean { return true; },
+            UserCanRun(): boolean { return true; },
+            GetPlatformSQL(): string { return sql; },
+        };
     }
 
     /**
-     * Looks up a query by category path + name from the metadata provider only.
+     * Looks up a query by category path + name from QueryEngine.
      */
-    private lookupQueryFromMetadata(token: ParsedCompositionToken): QueryInfo {
-        const allQueries = Metadata.Provider.Queries; // global-provider-ok: data provider implementation, owns its provider context
+    private lookupQueryFromMetadata(token: ParsedCompositionToken): MJQueryEntityExtended {
+        const allQueries = QueryEngine.Instance.Queries;
         const queryName = token.QueryName.toLowerCase();
 
-        // If category segments provided, build expected category path
+        // If category segments provided, build expected category path.
+        // MJQueryEntityExtended.CategoryPath uses slash-separated segments
+        // without leading/trailing slashes (e.g. "Sales/Reports").
         if (token.CategorySegments.length > 0) {
-            const expectedPath = `/${token.CategorySegments.join('/')}/`;
+            const expectedPath = token.CategorySegments.join('/');
             const match = allQueries.find(q =>
                 q.Name.toLowerCase() === queryName &&
                 q.CategoryPath.toLowerCase() === expectedPath.toLowerCase()
@@ -475,7 +502,7 @@ export class QueryCompositionEngine {
      * Validates that a referenced query is eligible for composition.
      */
     private validateQueryComposable(
-        query: QueryInfo,
+        query: IComposableQuery,
         token: ParsedCompositionToken,
         contextUser: UserInfo
     ): void {
@@ -573,7 +600,7 @@ export class QueryCompositionEngine {
     /**
      * Generates a SQL-safe CTE name from the query name + short hash for uniqueness.
      */
-    private generateCTEName(query: QueryInfo, params: Record<string, string>, platform: DatabasePlatform): string {
+    private generateCTEName(query: IComposableQuery, params: Record<string, string>, platform: DatabasePlatform): string {
         // Sanitize query name: remove non-alphanumeric chars, replace spaces with underscores
         const sanitized = query.Name
             .replace(/[^a-zA-Z0-9_ ]/g, '')
