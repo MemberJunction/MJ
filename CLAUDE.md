@@ -880,6 +880,23 @@ const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent 
 
 MemberJunction's multi-tier caching system is a cornerstone of server performance. **Always consult [guides/CACHING_AND_PUBSUB_GUIDE.md](guides/CACHING_AND_PUBSUB_GUIDE.md)** when working on caching, RunView optimization, or data loading patterns.
 
+### Reactive UIs over entity caches — use `BaseEngine` + `ObserveProperty`
+
+**Before you build a new "reload after mutation" loop in Angular, check whether a `BaseEngine` subclass already caches the entity.** If one does, subscribe to its observable instead of polling/reloading. If one doesn't and the entity-set is small enough to cache (a few dozen rows, not 100MB+), **build a new engine** — it's the canonical MJ pattern and gives you reactivity for free.
+
+The key APIs (see [packages/MJCore/src/generic/baseEngine.ts](packages/MJCore/src/generic/baseEngine.ts)):
+
+- **`ObserveProperty<E>(propertyName): Observable<E[]>`** — lazy-created BehaviorSubject for any engine array property. Subscribers receive the current array on subscribe, then auto-receive it again on save / delete / remote-invalidate. Zero cost if no one observes.
+- **`DataChange$: Observable<EngineDataChangeEvent>`** — engine-wide observable for any refresh.
+- **`Configs` entries auto-subscribe to BaseEntity events** for the configured `EntityName`. Save / delete / remote-invalidate on a matching row triggers an in-place array mutation (or full refresh when filters/orderby prevent in-place updates) and emits to all `ObserveProperty` subscribers. **You don't write invalidation code yourself.**
+- **Lazy-load pattern**: every caller does `await MyEngine.Instance.Config(false, user, provider)` at entry — no-op when already loaded; never penalizes users who don't touch the feature.
+
+**Reference implementations**: `ConversationEngine`, `InteractiveFormsEngine`, `ComponentMetadataEngine`, `UserInfoEngine`, `KnowledgeHubMetadataEngine`. Copy the shape — `Config()` declares `BaseEnginePropertyConfig[]`; engine exposes `get Forms` (sync array) and `get Forms$` (RxJS observable). Angular components use `async` pipe on the observable.
+
+**Caching boundary**: If the entity has a huge column (e.g., `Specification` text) AND many rows, don't bulk-load — punt to `RunView` with targeted filters (see `ComponentMetadataEngine`'s comment about why `MJ: Components` isn't fully cached there). If the entity is small or you can narrow with `Filter`, do cache it.
+
+See [guides/CACHING_AND_PUBSUB_GUIDE.md § BaseEngine Integration](guides/CACHING_AND_PUBSUB_GUIDE.md#baseengine-integration) for the full pattern + the cross-server invalidation flow.
+
 Key principles:
 - **Server trusts its cache completely** (`TrustLocalCacheCompletely = true`) — BaseEntity event-driven invalidation guarantees freshness
 - **All RunView/RunViews calls check the server cache first** — even without explicit `CacheLocal`, if data is in cache it's returned with zero DB queries

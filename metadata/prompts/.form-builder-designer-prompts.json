@@ -1,0 +1,154 @@
+[
+  {
+    "fields": {
+      "Name": "Form Builder - Designer",
+      "Description": "System prompt for the Form Builder Designer sub-agent. Produces a complete ComponentSpec + Intent envelope from a user's natural-language request. Never calls Create/Modify actions — the Builder sub-agent persists. Termination is gated by validateSuccessNextStep in code.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/form-builder/designer.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "EffortLevel": 1,
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 60
+          },
+          "primaryKey": {
+            "ID": "E8F7645F-1B27-4781-A170-6DB630711CD1"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.654Z",
+            "checksum": "16f27391a2596ae6ed79504326f571be3b9c68507bd4a2a463ce0f8d4beb83de"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 40
+          },
+          "primaryKey": {
+            "ID": "A7624F09-3B07-4BED-9043-9A00778B359B"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.668Z",
+            "checksum": "615128d192595828b88cdc4cf766079c8c7213bed7943341483c163c9347c42a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 4.6",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 20
+          },
+          "primaryKey": {
+            "ID": "C1393FB4-E6E4-4A9A-B9F3-7E86D9A8F248"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.682Z",
+            "checksum": "c15669351856c2c2e3416ecc431ae12edb52d7c8a4e121443ca888a239f5684a"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "BF247001-8C0D-4D72-B6DD-325E5BD78DF2"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.696Z",
+            "checksum": "37f43da54f681af5bd4b1bb3c532e67781777c2ce76f43e55894336bf84554de"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9B7FB37D-3CBA-4748-830D-123D853760C3"
+    },
+    "sync": {
+      "lastModified": "2026-05-27T14:34:34.491Z",
+      "checksum": "1bd97667a160c2f49093da61cc372cd011a3f5e06819d05fdcbb88164287517c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Form Builder - Lint Fix",
+      "Description": "Single-shot repair prompt invoked by FormBuilderBuilderAgent when a Create / Modify Interactive Form action returns LINT_FAILED or LINEAGE_NAME_MISMATCH. Receives the failing ComponentSpec + the lint error and returns the smallest corrected spec. NOT an agent prompt — runs via AIPromptRunner.ExecutePrompt directly from the Builder.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/form-builder/lint-fix.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 1,
+      "RetryDelayMS": 500,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "User",
+      "PromptPosition": "First",
+      "EffortLevel": 1,
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Sonnet 4.6",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 60
+          },
+          "primaryKey": {
+            "ID": "CA7E603B-7533-4B35-8FE1-118A0CDB7823"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.710Z",
+            "checksum": "a4fe17849545087d723d7d5a2c97918b6895aaaeb23abfe8ce3427564544f301"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 40
+          },
+          "primaryKey": {
+            "ID": "41103B81-86DC-4493-9020-2031247078B6"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T13:58:13.723Z",
+            "checksum": "dee55166a021768afd7ad2946f6a4b7a69311f9a67b80abf99113a06f858a0ae"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1B5B018B-909B-4316-882B-9B58E6FB87AC"
+    },
+    "sync": {
+      "lastModified": "2026-05-27T13:58:13.565Z",
+      "checksum": "7add32bc72fe7a881e8c7040633a8c4a1d430487fdde5d5f7c8d404101b54258"
+    }
+  }
+]

@@ -62,6 +62,27 @@ export interface FormBuilderPrefs {
     chatCollapsed?: boolean;
     /** Last center-pane tab used (Preview / Code / Layout). */
     lastCenterPaneMode?: 'preview' | 'code' | 'layout';
+
+    // — Left-rail inner layout (forms list vs versions panel) —
+    /** Height percent (0-100) for the forms-list section inside the left rail.
+     *  The versions panel takes the remainder. Drag the splitter to change. */
+    formsListHeightPct?: number;
+    /** Inner-panel collapse flags (VS-Code-style). When true, that section
+     *  shrinks to a header bar and the sibling takes full height. */
+    formsListCollapsed?: boolean;
+    versionsCollapsed?: boolean;
+
+    // — Forms list display preferences —
+    /** 'list' (flat) | 'tree' (Schema → Entity → Forms). */
+    formsViewMode?: 'list' | 'tree';
+    /** Entity filter selection ('All' or specific entity name). */
+    formsEntityFilter?: string;
+    /** Status filter chips. Forms whose OverrideStatus is in this set show. */
+    formsStatusFilter?: ReadonlyArray<'Active' | 'Pending' | 'Inactive'>;
+    /** Sort mode. */
+    formsSortMode?: 'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc';
+    /** Component IDs the user has pinned to the top of the list. */
+    pinnedFormIds?: ReadonlyArray<string>;
 }
 
 /**
@@ -111,6 +132,19 @@ interface FormComponentSummary {
     OverrideStatus: 'Active' | 'Inactive' | 'Pending' | null;
     Description: string | null;
     TargetEntityName: string | null;
+    /** Entity ID extracted from the user's override (when present) — used to
+     *  resolve EntityInfo for icon/schema/name lookups. Null when no
+     *  user-scope override binds to this Component. */
+    TargetEntityID?: string | null;
+    /** Cached entity display name (resolved via provider.EntityByName at
+     *  loadExistingForms time). Used as the per-row entity subtitle. */
+    TargetEntityDisplayName?: string | null;
+    /** Cached entity icon class (Font Awesome) from EntityInfo.Icon. */
+    TargetEntityIcon?: string | null;
+    /** Cached entity schema name — drives tree-view grouping. */
+    TargetEntitySchemaName?: string | null;
+    /** Component row's last-modified timestamp — for "edited 2h ago" sorts. */
+    UpdatedAt?: Date | null;
 }
 
 /**
@@ -153,6 +187,43 @@ export class FormBuilderResourceComponent
     public IsLoading = true;
     public ExistingForms: FormComponentSummary[] = [];
     public LeftRailFilter = '';
+
+    // ── Left-rail inner layout (forms list ↕ versions panel) ─────────
+    /** Percent (0-100) height of the forms-list section within the left
+     *  rail. The versions panel takes the remainder. */
+    public FormsListHeightPct = 65;
+    public FormsListCollapsed = false;
+    public VersionsCollapsed = false;
+
+    // ── Forms list display preferences ───────────────────────────────
+    public FormsViewMode: 'list' | 'tree' = 'list';
+    /** Selected entity filter. Empty string = "All entities". */
+    public FormsEntityFilter = '';
+    /** Status chips currently enabled. Active+Pending+Inactive by default
+     *  so the list shows everything. Toggle a chip OFF to hide that bucket. */
+    public FormsStatusFilter: Set<'Active' | 'Pending' | 'Inactive'> =
+        new Set(['Active', 'Pending', 'Inactive']);
+    public FormsSortMode: 'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc' = 'updated-desc';
+    /** Pinned form Component IDs (kept sticky at the top of the list). */
+    public PinnedFormIds: Set<string> = new Set();
+    /** Right-click context-menu state. */
+    public ContextMenuForm: FormComponentSummary | null = null;
+    public ContextMenuX = 0;
+    public ContextMenuY = 0;
+    public ContextMenuOpen = false;
+    /** Entity-filter dropdown open state. */
+    public EntityFilterDropdownOpen = false;
+    public EntityFilterSearch = '';
+
+    // ── Version diff state ──────────────────────────────────────────
+    /** When the user starts a diff via right-click on a version row,
+     *  this holds the first selection. Click another row to compare. */
+    public DiffSourceVersionID: string | null = null;
+    /** When set, render the diff modal showing both specs side-by-side. */
+    public DiffTargetVersionID: string | null = null;
+    public DiffSourceCode = '';
+    public DiffTargetCode = '';
+    public ShowDiffDialog = false;
 
     /**
      * Center-pane view mode for the cockpit. Default is 'preview' because the
@@ -249,6 +320,14 @@ export class FormBuilderResourceComponent
      */
     public ChatConversation: MJConversationEntity | null = null;
     public ChatConversationId: string | null = null;
+    /**
+     * Lightweight list of all conversations across the active form's
+     * lineage — feeds the chat header's "N conversations" dropdown so the
+     * user can switch back to a prior thread instead of being locked into
+     * just the most-recent one. Populated alongside loadLinkedConversation.
+     */
+    public LineageConversations: Array<{ ID: string; Name: string | null; UpdatedAt: Date | null }> = [];
+    public ConversationHistoryDropdownOpen = false;
     public ChatIsNewConversation = true;
 
     /**
@@ -327,10 +406,49 @@ export class FormBuilderResourceComponent
     public EntityPickerSearch = '';
     public EntityChoices: ReadonlyArray<{ Name: string; DisplayName: string }> = [];
 
+    // ── In-app confirm dialog (replaces window.confirm) ─────────────────
+    /**
+     * State for the cockpit's reusable confirm dialog. Replaces the
+     * browser-native `window.confirm()` calls (delete form, discard
+     * unsaved edits) with a styled in-app dialog. Three reasons for the
+     * switch: (a) consistent visual language with the override + diff
+     * dialogs, (b) confirm/cancel button order matches MJ convention
+     * (primary left), (c) browser confirm is blocked by some browsers /
+     * tools when triggered from event handlers without recent user
+     * gesture (e.g. agent-driven flows).
+     *
+     * Hold the resolver callback alongside the state so multiple confirm
+     * call-sites can share the same dialog without each one re-binding.
+     */
+    public ConfirmDialog: {
+        Open: boolean;
+        Title: string;
+        Body: string;
+        ConfirmLabel: string;
+        CancelLabel: string;
+        Danger: boolean;
+        OnConfirm: () => void | Promise<void>;
+        OnCancel?: () => void;
+    } | null = null;
+
     public ShowFormOverrideDialog = false;
     public PendingOverrideComponentID: string | null = null;
     public PendingOverrideComponentName = '';
     public PendingOverrideEntityName = '';
+    /** Pre-fill values forwarded to the override dialog. Populated by
+     *  OnSave (for post-save flow) or OpenEditFormDetailsDialog (for the
+     *  edit-existing-override flow). */
+    public PendingOverrideInitialName: string | null = null;
+    public PendingOverrideInitialDescription: string | null = null;
+    public PendingOverrideInitialNotes: string | null = null;
+    public PendingOverrideInitialStatus: 'Active' | 'Inactive' | 'Pending' | null = null;
+    public PendingOverrideInitialScope: 'User' | 'Role' | 'Global' | null = null;
+    public PendingOverrideInitialRoleID: string | null | undefined = undefined;
+    public PendingOverrideInitialPriority: number | undefined = undefined;
+    /** Edit-mode flag — when true, the dialog updates the existing
+     *  override (`EditingOverrideID`) instead of creating a new one. */
+    public FormOverrideDialogEditMode = false;
+    public EditingOverrideID: string | null = null;
 
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly notifications = inject(MJNotificationService);
@@ -647,7 +765,7 @@ export class FormBuilderResourceComponent
             {
                 EntityName: 'MJ: Components',
                 ExtraFilter: "Type='Form' OR Namespace LIKE 'Forms/%' OR Namespace LIKE '%/Forms/%'",
-                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description', 'VersionSequence'],
+                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description', 'VersionSequence', '__mj_UpdatedAt'],
                 OrderBy: 'Name, VersionSequence DESC',
                 MaxRows: 500,
                 ResultType: 'simple',
@@ -655,7 +773,7 @@ export class FormBuilderResourceComponent
             ...(user ? [{
                 EntityName: 'MJ: Entity Form Overrides',
                 ExtraFilter: `UserID='${user.ID}' AND Scope='User'`,
-                Fields: ['ComponentID', 'Status'],
+                Fields: ['ComponentID', 'Status', 'EntityID'],
                 MaxRows: 500,
                 ResultType: 'simple' as const,
             }] : []),
@@ -666,14 +784,19 @@ export class FormBuilderResourceComponent
             this.ExistingForms = [];
             return;
         }
-        // Build a quick lookup ComponentID → override Status. If the
-        // override query failed we fall through with an empty map and
-        // every form just shows no override badge — degrades cleanly.
+        // Build a quick lookup ComponentID → override Status + EntityID.
+        // If the override query failed we fall through with empty maps
+        // and every form just shows no override badge / no entity —
+        // degrades cleanly.
         const overrideStatusByComponentID = new Map<string, 'Active' | 'Inactive' | 'Pending'>();
+        const overrideEntityIDByComponentID = new Map<string, string>();
         if (overridesResult?.Success) {
-            for (const row of (overridesResult.Results ?? []) as Array<{ ComponentID: string; Status: string }>) {
+            for (const row of (overridesResult.Results ?? []) as Array<{ ComponentID: string; Status: string; EntityID: string | null }>) {
                 if (row.Status === 'Active' || row.Status === 'Inactive' || row.Status === 'Pending') {
                     overrideStatusByComponentID.set(NormalizeUUID(row.ComponentID), row.Status);
+                }
+                if (row.EntityID) {
+                    overrideEntityIDByComponentID.set(NormalizeUUID(row.ComponentID), row.EntityID);
                 }
             }
         }
@@ -700,6 +823,7 @@ export class FormBuilderResourceComponent
             Status: string | null;
             Description: string | null;
             VersionSequence: number | null;
+            __mj_UpdatedAt: string | Date | null;
         };
         const componentsByName = new Map<string, RawComponent[]>();
         for (const row of (componentsResult.Results ?? []) as RawComponent[]) {
@@ -731,28 +855,308 @@ export class FormBuilderResourceComponent
         }
         representatives.sort((a, b) => (a.Name ?? '').localeCompare(b.Name ?? ''));
 
-        this.ExistingForms = representatives.map(r => ({
-            ID: r.ID,
-            Name: r.Name,
-            Namespace: r.Namespace,
-            Status: r.Status,
-            OverrideStatus: overrideStatusByComponentID.get(NormalizeUUID(r.ID)) ?? null,
-            Description: r.Description,
-            TargetEntityName: null,
-        }));
+        this.ExistingForms = representatives.map(r => {
+            const norm = NormalizeUUID(r.ID);
+            const entityID = overrideEntityIDByComponentID.get(norm) ?? null;
+            const entity = entityID ? provider.Entities?.find(e => UUIDsEqual(e.ID, entityID)) : null;
+            const updatedRaw = r.__mj_UpdatedAt;
+            const updatedAt = updatedRaw ? (updatedRaw instanceof Date ? updatedRaw : new Date(updatedRaw)) : null;
+            return {
+                ID: r.ID,
+                Name: r.Name,
+                Namespace: r.Namespace,
+                Status: r.Status,
+                OverrideStatus: overrideStatusByComponentID.get(norm) ?? null,
+                Description: r.Description,
+                TargetEntityName: entity?.Name ?? null,
+                TargetEntityID: entityID,
+                TargetEntityDisplayName: entity?.DisplayName ?? null,
+                TargetEntityIcon: entity?.Icon ?? null,
+                TargetEntitySchemaName: entity?.SchemaName ?? null,
+                UpdatedAt: updatedAt,
+            };
+        });
     }
 
+    /**
+     * Forms list filtered + sorted per the user's left-rail prefs.
+     * Pipeline: search text → entity filter → status chips → sort →
+     * pinned-first. The result drives both the flat-list view and is
+     * grouped by schema/entity for the tree view.
+     */
     public get filteredForms(): ReadonlyArray<FormComponentSummary> {
         const q = this.LeftRailFilter.trim().toLowerCase();
-        if (!q) return this.ExistingForms;
-        return this.ExistingForms.filter(f =>
-            f.Name.toLowerCase().includes(q) ||
-            (f.Namespace?.toLowerCase().includes(q) ?? false));
+        const entityFilter = this.FormsEntityFilter.trim();
+        const statusSet = this.FormsStatusFilter;
+        const filtered = this.ExistingForms.filter(f => {
+            // Text search (name + namespace + entity display).
+            if (q && !(
+                f.Name.toLowerCase().includes(q) ||
+                (f.Namespace?.toLowerCase().includes(q) ?? false) ||
+                (f.TargetEntityName?.toLowerCase().includes(q) ?? false) ||
+                (f.TargetEntityDisplayName?.toLowerCase().includes(q) ?? false)
+            )) return false;
+            // Entity filter — exact match on EntityName (or no filter).
+            if (entityFilter && f.TargetEntityName !== entityFilter) return false;
+            // Status filter — show only if its override status is in the
+            // enabled set. Forms with no override status are shown when
+            // ALL three status chips are on (the default), hidden otherwise.
+            if (f.OverrideStatus) {
+                if (!statusSet.has(f.OverrideStatus)) return false;
+            } else {
+                if (statusSet.size < 3) return false;
+            }
+            return true;
+        });
+        // Sort by current mode.
+        const sorted = [...filtered].sort((a, b) => {
+            switch (this.FormsSortMode) {
+                case 'updated-desc':
+                    return (b.UpdatedAt?.getTime() ?? 0) - (a.UpdatedAt?.getTime() ?? 0);
+                case 'updated-asc':
+                    return (a.UpdatedAt?.getTime() ?? 0) - (b.UpdatedAt?.getTime() ?? 0);
+                case 'name-asc':
+                    return a.Name.localeCompare(b.Name);
+                case 'name-desc':
+                    return b.Name.localeCompare(a.Name);
+            }
+        });
+        // Pinned items float to the top, in pin-set insertion order.
+        const pinned: FormComponentSummary[] = [];
+        const unpinned: FormComponentSummary[] = [];
+        for (const f of sorted) {
+            if (this.PinnedFormIds.has(NormalizeUUID(f.ID))) pinned.push(f);
+            else unpinned.push(f);
+        }
+        return [...pinned, ...unpinned];
+    }
+
+    /**
+     * Tree-view groups: forms grouped by SchemaName → EntityName. Falls
+     * back to a synthetic "(no entity)" group for forms without a
+     * user-scope override bound to an entity.
+     */
+    public get treeGroups(): ReadonlyArray<{
+        schema: string;
+        entities: ReadonlyArray<{ entity: string; entityDisplay: string; icon: string | null; forms: ReadonlyArray<FormComponentSummary> }>;
+    }> {
+        const bySchema = new Map<string, Map<string, FormComponentSummary[]>>();
+        for (const f of this.filteredForms) {
+            const schema = f.TargetEntitySchemaName ?? '(no schema)';
+            const entity = f.TargetEntityName ?? '(no entity)';
+            let byEntity = bySchema.get(schema);
+            if (!byEntity) { byEntity = new Map(); bySchema.set(schema, byEntity); }
+            const bucket = byEntity.get(entity);
+            if (bucket) bucket.push(f); else byEntity.set(entity, [f]);
+        }
+        const out: Array<{ schema: string; entities: Array<{ entity: string; entityDisplay: string; icon: string | null; forms: FormComponentSummary[] }> }> = [];
+        const schemas = Array.from(bySchema.keys()).sort();
+        for (const schema of schemas) {
+            const byEntity = bySchema.get(schema)!;
+            const entityKeys = Array.from(byEntity.keys()).sort();
+            const entities = entityKeys.map(entity => {
+                const forms = byEntity.get(entity)!;
+                const firstWithDisplay = forms.find(f => f.TargetEntityDisplayName);
+                const firstWithIcon = forms.find(f => f.TargetEntityIcon);
+                return {
+                    entity,
+                    entityDisplay: firstWithDisplay?.TargetEntityDisplayName ?? entity,
+                    icon: firstWithIcon?.TargetEntityIcon ?? null,
+                    forms,
+                };
+            });
+            out.push({ schema, entities });
+        }
+        return out;
+    }
+
+    /**
+     * Distinct entity names that appear in the current forms list — used
+     * to populate the entity-filter dropdown. Empty string ("") = "All
+     * entities", added at the top. Search-text-filtered when the user
+     * is typing into the dropdown's own search box.
+     */
+    public get entityFilterOptions(): ReadonlyArray<{ name: string; display: string; icon: string | null; count: number }> {
+        const counts = new Map<string, { name: string; display: string; icon: string | null; count: number }>();
+        for (const f of this.ExistingForms) {
+            if (!f.TargetEntityName) continue;
+            const existing = counts.get(f.TargetEntityName);
+            if (existing) existing.count++;
+            else counts.set(f.TargetEntityName, {
+                name: f.TargetEntityName,
+                display: f.TargetEntityDisplayName ?? f.TargetEntityName,
+                icon: f.TargetEntityIcon ?? null,
+                count: 1,
+            });
+        }
+        const list = Array.from(counts.values()).sort((a, b) => a.display.localeCompare(b.display));
+        const q = this.EntityFilterSearch.trim().toLowerCase();
+        if (!q) return list;
+        return list.filter(o => o.display.toLowerCase().includes(q) || o.name.toLowerCase().includes(q));
     }
 
     public OnLeftRailFilterChange(event: Event): void {
         this.LeftRailFilter = (event.target as HTMLInputElement).value;
         this.cdr.markForCheck();
+    }
+
+    public ToggleFormsViewMode(): void {
+        this.FormsViewMode = this.FormsViewMode === 'list' ? 'tree' : 'list';
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public ToggleEntityFilterDropdown(): void {
+        this.EntityFilterDropdownOpen = !this.EntityFilterDropdownOpen;
+        if (this.EntityFilterDropdownOpen) this.EntityFilterSearch = '';
+        this.cdr.markForCheck();
+    }
+
+    public OnEntityFilterSearch(e: Event): void {
+        this.EntityFilterSearch = (e.target as HTMLInputElement).value;
+        this.cdr.markForCheck();
+    }
+
+    public PickEntityFilter(entityName: string): void {
+        this.FormsEntityFilter = entityName;
+        this.EntityFilterDropdownOpen = false;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public ToggleStatusFilter(status: 'Active' | 'Pending' | 'Inactive'): void {
+        const next = new Set(this.FormsStatusFilter);
+        if (next.has(status)) next.delete(status); else next.add(status);
+        // Never let the user disable everything — re-enable if they tried.
+        if (next.size === 0) next.add(status);
+        this.FormsStatusFilter = next;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public SetFormsSortMode(mode: 'updated-desc' | 'updated-asc' | 'name-asc' | 'name-desc'): void {
+        this.FormsSortMode = mode;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public TogglePinForm(form: FormComponentSummary, event?: Event): void {
+        event?.stopPropagation();
+        const next = new Set(this.PinnedFormIds);
+        const id = NormalizeUUID(form.ID);
+        if (next.has(id)) next.delete(id); else next.add(id);
+        this.PinnedFormIds = next;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public IsFormPinned(form: FormComponentSummary): boolean {
+        return this.PinnedFormIds.has(NormalizeUUID(form.ID));
+    }
+
+    public ToggleFormsListCollapsed(): void {
+        this.FormsListCollapsed = !this.FormsListCollapsed;
+        // If both inner panels would be collapsed, expand the other one.
+        if (this.FormsListCollapsed && this.VersionsCollapsed) this.VersionsCollapsed = false;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    public ToggleVersionsCollapsed(): void {
+        this.VersionsCollapsed = !this.VersionsCollapsed;
+        if (this.VersionsCollapsed && this.FormsListCollapsed) this.FormsListCollapsed = false;
+        this.savePrefs();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Drag-end handler for the inner vertical splitter between the forms
+     * list and the versions panel inside the left rail. Persists the
+     * percent split so the user's preferred layout sticks across reloads.
+     */
+    public OnInnerSplitterDragEnd(event: { sizes: ReadonlyArray<number | '*'> }): void {
+        const sizes = event?.sizes ?? [];
+        const numeric = (i: number): number | null => {
+            const v = sizes[i];
+            return typeof v === 'number' ? v : null;
+        };
+        const top = numeric(0);
+        if (top !== null) this.FormsListHeightPct = top;
+        this.savePrefs();
+    }
+
+    /** Right-click context menu on a form row. Opens at click coords. */
+    public OnFormRowContextMenu(form: FormComponentSummary, event: MouseEvent): void {
+        event.preventDefault();
+        this.ContextMenuForm = form;
+        this.ContextMenuX = event.clientX;
+        this.ContextMenuY = event.clientY;
+        this.ContextMenuOpen = true;
+        this.cdr.markForCheck();
+    }
+
+    public CloseContextMenu(): void {
+        this.ContextMenuOpen = false;
+        this.ContextMenuForm = null;
+        this.cdr.markForCheck();
+    }
+
+    public async ContextMenuDuplicate(): Promise<void> {
+        const form = this.ContextMenuForm;
+        this.CloseContextMenu();
+        if (!form) return;
+        // Duplicate the form by loading its spec and creating a new one
+        // via Save — straightforward; user gets a "(Copy)" suffix.
+        await this.OnFormPicked(form);
+        if (!this.SelectedFormID) return;
+        this.SelectedFormName = `${form.Name} (Copy)`;
+        this.SelectedFormID = null;
+        this.IsNewForm = true;
+        this.markDirty();
+        this.notifications.CreateSimpleNotification(
+            `Duplicating "${form.Name}". Click Save to persist the copy.`, 'info', 5000);
+    }
+
+    public async ContextMenuDelete(): Promise<void> {
+        const form = this.ContextMenuForm;
+        this.CloseContextMenu();
+        if (!form) return;
+        if (this.SelectedFormID !== form.ID) await this.OnFormPicked(form);
+        await this.OnDelete();
+    }
+
+    public ContextMenuCopyID(): void {
+        const id = this.ContextMenuForm?.ID;
+        this.CloseContextMenu();
+        if (!id) return;
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            void navigator.clipboard.writeText(id);
+            this.notifications.CreateSimpleNotification(`Copied ${id}`, 'success', 2000);
+        }
+    }
+
+    public ContextMenuExportSpec(): void {
+        const form = this.ContextMenuForm;
+        this.CloseContextMenu();
+        if (!form) return;
+        if (this.SelectedFormID !== form.ID) {
+            this.notifications.CreateSimpleNotification(
+                `Open "${form.Name}" first, then export from there.`, 'info', 4000);
+            return;
+        }
+        const spec = this.SavedSpec ?? null;
+        const json = spec ? JSON.stringify(spec, null, 2) : this.EditableCode;
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+            void navigator.clipboard.writeText(json);
+            this.notifications.CreateSimpleNotification('Spec copied to clipboard.', 'success', 3000);
+        }
+    }
+
+    public ContextMenuTogglePin(): void {
+        const form = this.ContextMenuForm;
+        this.CloseContextMenu();
+        if (!form) return;
+        this.TogglePinForm(form);
     }
 
     public ToggleLeftRail(): void {
@@ -883,6 +1287,23 @@ export class FormBuilderResourceComponent
     public OnPreviewLoadError(message: string | null): void {
         this.PreviewError = message;
         this.cdr.markForCheck();
+    }
+
+    /**
+     * Open the preview record (the entity row currently bound to
+     * `<mj-interactive-form>`) in a fresh Explorer tab. Useful sanity-check
+     * — render the form against this same record in the production
+     * resolver path to confirm the cockpit's preview matches reality.
+     */
+    public OpenPreviewRecord(): void {
+        if (!this.PreviewRecord || !this.PreviewRecordIsReal || !this.TargetEntityName) return;
+        try {
+            const pk = this.PreviewRecord.PrimaryKey;
+            if (!pk) return;
+            this.navigationService.OpenEntityRecord(this.TargetEntityName, pk);
+        } catch (err) {
+            LogError(`OpenPreviewRecord: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     public TogglePreviewPicker(): void {
@@ -1134,6 +1555,24 @@ export class FormBuilderResourceComponent
                 prefs.lastCenterPaneMode === 'layout') {
                 this.CenterPaneMode = prefs.lastCenterPaneMode;
             }
+            // ── Inner left-rail layout ─────────────────────────────────
+            if (typeof prefs.formsListHeightPct === 'number') this.FormsListHeightPct = prefs.formsListHeightPct;
+            if (typeof prefs.formsListCollapsed === 'boolean') this.FormsListCollapsed = prefs.formsListCollapsed;
+            if (typeof prefs.versionsCollapsed === 'boolean')  this.VersionsCollapsed  = prefs.versionsCollapsed;
+            // ── Forms list display ─────────────────────────────────────
+            if (prefs.formsViewMode === 'list' || prefs.formsViewMode === 'tree') this.FormsViewMode = prefs.formsViewMode;
+            if (typeof prefs.formsEntityFilter === 'string') this.FormsEntityFilter = prefs.formsEntityFilter;
+            if (Array.isArray(prefs.formsStatusFilter)) {
+                const valid = prefs.formsStatusFilter.filter(s => s === 'Active' || s === 'Pending' || s === 'Inactive');
+                if (valid.length > 0) this.FormsStatusFilter = new Set(valid);
+            }
+            if (prefs.formsSortMode === 'updated-desc' || prefs.formsSortMode === 'updated-asc'
+                || prefs.formsSortMode === 'name-asc' || prefs.formsSortMode === 'name-desc') {
+                this.FormsSortMode = prefs.formsSortMode;
+            }
+            if (Array.isArray(prefs.pinnedFormIds)) {
+                this.PinnedFormIds = new Set(prefs.pinnedFormIds.map(id => NormalizeUUID(id)));
+            }
         } catch (err) {
             LogError(`FormBuilderResource.loadPrefs: ${err instanceof Error ? err.message : String(err)}`);
         }
@@ -1152,6 +1591,14 @@ export class FormBuilderResourceComponent
             leftCollapsed: this.LeftRailCollapsed,
             chatCollapsed: this.ChatPaneCollapsed,
             lastCenterPaneMode: this.CenterPaneMode,
+            formsListHeightPct: this.FormsListHeightPct,
+            formsListCollapsed: this.FormsListCollapsed,
+            versionsCollapsed: this.VersionsCollapsed,
+            formsViewMode: this.FormsViewMode,
+            formsEntityFilter: this.FormsEntityFilter,
+            formsStatusFilter: Array.from(this.FormsStatusFilter),
+            formsSortMode: this.FormsSortMode,
+            pinnedFormIds: Array.from(this.PinnedFormIds),
         };
         try {
             UserInfoEngine.Instance.SetSettingDebounced(FORM_BUILDER_PREFS_KEY, JSON.stringify(prefs));
@@ -1227,6 +1674,7 @@ export class FormBuilderResourceComponent
         // input transition (B.ID -> null -> A.ID) when switching between
         // forms.
         this.resetChatToFresh();
+        this.LineageConversations = [];
         this.cdr.detectChanges();
         if (!provider || !user || !this.SelectedFormID || !this.ComponentsEntityID) return;
         // Defer to the next macrotask so the React form-preview component
@@ -1238,18 +1686,65 @@ export class FormBuilderResourceComponent
         await new Promise<void>(resolve => setTimeout(resolve, 0));
         const targetFormID = this.SelectedFormID;
         const filter = this.buildLinkedConvoFilter(provider, user.ID, targetFormID);
-        const result = await this.runLinkedConvoQuery(provider, user, filter);
+        // Pull all lineage conversations (not just the most recent) so the
+        // chat header's "N conversations" dropdown has the full list.
+        // MaxRows: 25 — anything more than 25 chats per form/user is rare.
+        const result = await this.runLinkedConvoQuery(provider, user, filter, 25);
         if (!result) return;
         // Race guard — if the user switched forms again mid-query, drop
         // this stale result rather than clobbering the newer load.
         if (targetFormID !== this.SelectedFormID) return;
         if (result.Success && result.Results && result.Results.length > 0) {
+            // Build the lineage summary list for the header dropdown.
+            this.LineageConversations = result.Results.map(c => ({
+                ID: c.ID,
+                Name: c.Name,
+                UpdatedAt: c.__mj_UpdatedAt ? new Date(c.__mj_UpdatedAt) : null,
+            }));
+            // Bind the most-recent (first) to the chat area.
             const found = result.Results[0];
             this.ChatConversation = found;
             this.ChatConversationId = found.ID;
             this.ChatIsNewConversation = false;
         }
         this.cdr.markForCheck();
+    }
+
+    public ToggleConversationHistoryDropdown(): void {
+        this.ConversationHistoryDropdownOpen = !this.ConversationHistoryDropdownOpen;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Switch the embedded chat to a different conversation in the same
+     * lineage. Used by the header's "N conversations" dropdown.
+     */
+    public async PickLineageConversation(c: { ID: string; Name: string | null }): Promise<void> {
+        this.ConversationHistoryDropdownOpen = false;
+        if (c.ID === this.ChatConversationId) {
+            this.cdr.markForCheck();
+            return;
+        }
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user) return;
+        try {
+            const entity = await provider.GetEntityObject<MJConversationEntity>(
+                'MJ: Conversations', user);
+            const loaded = await entity.Load(c.ID);
+            if (!loaded) {
+                this.notifications.CreateSimpleNotification(
+                    `Could not load conversation ${c.ID}.`, 'error', 4000);
+                return;
+            }
+            this.ChatConversation = entity;
+            this.ChatConversationId = entity.ID;
+            this.ChatIsNewConversation = false;
+            this.ChatThreadId = null;
+            this.cdr.markForCheck();
+        } catch (err) {
+            LogError(`PickLineageConversation: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**
@@ -1298,12 +1793,13 @@ export class FormBuilderResourceComponent
         provider: IMetadataProvider,
         user: UserInfo,
         filter: string,
+        maxRows: number = 1,
     ): Promise<{ Success: boolean; Results?: MJConversationEntity[]; ErrorMessage?: string } | null> {
         const params = {
             EntityName: 'MJ: Conversations',
             ExtraFilter: filter,
             OrderBy: '__mj_UpdatedAt DESC',
-            MaxRows: 1,
+            MaxRows: maxRows,
             ResultType: 'entity_object' as const,
         };
         const rv = RunView.FromMetadataProvider(provider);
@@ -1505,6 +2001,68 @@ export class FormBuilderResourceComponent
             TargetEntityName: null,
         };
         await this.OnFormPicked(summary);
+    }
+
+    /**
+     * Begin a diff selection from the version rail. The clicked version
+     * becomes the "source"; the next clicked version becomes the "target"
+     * and we render a side-by-side diff modal.
+     *
+     * Click the same version twice → cancels the selection.
+     */
+    public async OnVersionDiffClick(v: ComponentVersionRow, event: Event): Promise<void> {
+        event.stopPropagation();
+        if (!this.DiffSourceVersionID) {
+            this.DiffSourceVersionID = v.ID;
+            this.notifications.CreateSimpleNotification(
+                `Diff: now pick a second version to compare with v${v.Version}.`, 'info', 5000);
+            this.cdr.markForCheck();
+            return;
+        }
+        if (this.DiffSourceVersionID === v.ID) {
+            // Same version clicked again — cancel selection.
+            this.DiffSourceVersionID = null;
+            this.cdr.markForCheck();
+            return;
+        }
+        // Second selection — load both specs and open the modal.
+        const targetID = v.ID;
+        const sourceID = this.DiffSourceVersionID;
+        try {
+            const provider = this.provider;
+            const user = this.currentUser;
+            if (!provider || !user) return;
+            const [src, tgt] = await Promise.all([
+                provider.GetEntityObject<MJComponentEntity>('MJ: Components', user).then(async e => { await e.Load(sourceID); return e; }),
+                provider.GetEntityObject<MJComponentEntity>('MJ: Components', user).then(async e => { await e.Load(targetID); return e; }),
+            ]);
+            const srcSpec = this.parseSpec(src.Specification);
+            const tgtSpec = this.parseSpec(tgt.Specification);
+            this.DiffSourceCode = srcSpec?.code ?? src.Specification ?? '';
+            this.DiffTargetCode = tgtSpec?.code ?? tgt.Specification ?? '';
+            this.DiffSourceVersionID = sourceID;
+            this.DiffTargetVersionID = targetID;
+            this.ShowDiffDialog = true;
+            this.cdr.markForCheck();
+        } catch (err) {
+            LogError(`OnVersionDiffClick: ${err instanceof Error ? err.message : String(err)}`);
+            this.notifications.CreateSimpleNotification('Failed to load diff.', 'error', 4000);
+        }
+    }
+
+    public CloseDiffDialog(): void {
+        this.ShowDiffDialog = false;
+        this.DiffSourceVersionID = null;
+        this.DiffTargetVersionID = null;
+        this.DiffSourceCode = '';
+        this.DiffTargetCode = '';
+        this.cdr.markForCheck();
+    }
+
+    /** Helper: lookup the version row for a given ID, used in the diff title. */
+    public versionByID(id: string | null): ComponentVersionRow | null {
+        if (!id) return null;
+        return this.Versions.find(v => UUIDsEqual(v.ID, id)) ?? null;
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
@@ -2047,10 +2605,22 @@ export class FormBuilderResourceComponent
                 // identifier in the emitted code matches `spec.name` exactly.
                 this.regenerateCode();
             }
+            // Build the persisted spec. CRITICAL: enforce the form-role
+            // contract — `componentRole: 'form'` + `location: 'embedded'`
+            // — even when the inherited `existingSpec` is missing them
+            // (brand-new forms have `existingSpec === null`). Without this
+            // the saved Component fails `isFormRole()` at live-render time
+            // with "Component X does not declare componentRole='form'".
+            // PreviewSpec applies the same defaults; OnSave was the only
+            // path that diverged, producing valid-in-preview / invalid-in-
+            // runtime forms.
             const specToSave: ComponentSpec = {
                 ...(existingSpec ?? {}),
                 name: componentEntity.Name,
                 code: this.EditableCode,
+                componentRole: 'form',
+                location: existingSpec?.location ?? 'embedded',
+                title: componentEntity.Title ?? this.SelectedFormName ?? componentEntity.Name,
             } as ComponentSpec;
             componentEntity.Specification = JSON.stringify(specToSave, null, 2);
 
@@ -2076,6 +2646,23 @@ export class FormBuilderResourceComponent
             this.PendingOverrideComponentID = componentEntity.ID;
             this.PendingOverrideComponentName = componentEntity.Name;
             this.PendingOverrideEntityName = this.TargetEntityName;
+            // Pre-fill from the cockpit state so the user doesn't re-type
+            // the form name they just typed into the dashboard. Description
+            // comes from the saved spec; Notes default empty for the post-
+            // save flow (the user fills them in if they want).
+            this.PendingOverrideInitialName = this.SelectedFormName?.trim() || componentEntity.Name;
+            this.PendingOverrideInitialDescription = this.SavedSpec?.description ?? null;
+            this.PendingOverrideInitialNotes = null;
+            // Default Status='Pending' for the post-save flow — matches the
+            // Create-Pending policy so the agent's first Modify can iterate
+            // in-place instead of bumping a new version. User explicitly
+            // promotes to Active via the dialog or the rail's Activate button.
+            this.PendingOverrideInitialStatus = 'Pending';
+            this.PendingOverrideInitialScope = 'User';
+            this.PendingOverrideInitialRoleID = null;
+            this.PendingOverrideInitialPriority = 0;
+            this.FormOverrideDialogEditMode = false;
+            this.EditingOverrideID = null;
             this.ShowFormOverrideDialog = true;
             // Re-publish the AppContextSnapshot now that this is a real
             // persisted form. Without this, a brand-new form's first chat
@@ -2178,14 +2765,37 @@ export class FormBuilderResourceComponent
 
     public async OnFormOverrideDialogConfirm(result: FormOverrideDialogResult): Promise<void> {
         this.ShowFormOverrideDialog = false;
-        if (!this.PendingOverrideComponentID) {
-            this.cdr.markForCheck();
-            return;
-        }
         const user = this.currentUser;
         if (!user) {
             this.notifications.CreateSimpleNotification(
-                'No current user — cannot create override.', 'error', 4000);
+                'No current user — cannot save.', 'error', 4000);
+            return;
+        }
+        // Two paths: edit an existing override row, or create a new one.
+        if (this.FormOverrideDialogEditMode && this.EditingOverrideID) {
+            const updated = await this.updateOverrideFromDialog(this.EditingOverrideID, result, user);
+            if (updated) {
+                this.notifications.CreateSimpleNotification(
+                    `Form details updated.`, 'success', 3000);
+                // Refresh the rail + the active-override fields so the cockpit
+                // chrome (status pill, etc.) reflects the new values.
+                await this.loadExistingForms();
+                if (this.SelectedFormID) {
+                    void this.loadVersionsForActiveForm();
+                    void this.refreshActiveOverrideMetadata(this.SelectedFormID);
+                }
+            } else {
+                this.notifications.CreateSimpleNotification(
+                    'Failed to update override details.', 'warning', 6000);
+            }
+            this.resetOverrideDialogState();
+            this.cdr.markForCheck();
+            return;
+        }
+        // Default path — create a new override for the just-saved Component.
+        if (!this.PendingOverrideComponentID) {
+            this.resetOverrideDialogState();
+            this.cdr.markForCheck();
             return;
         }
         const writeResult = await this.overrideService.CreateOverride(
@@ -2197,14 +2807,138 @@ export class FormBuilderResourceComponent
             this.notifications.CreateSimpleNotification(
                 writeResult.Error ?? 'Failed to create override.', 'warning', 6000);
         }
-        this.PendingOverrideComponentID = null;
+        this.resetOverrideDialogState();
         this.cdr.markForCheck();
     }
 
     public OnFormOverrideDialogDismiss(): void {
         this.ShowFormOverrideDialog = false;
-        this.PendingOverrideComponentID = null;
+        this.resetOverrideDialogState();
         this.cdr.markForCheck();
+    }
+
+    private resetOverrideDialogState(): void {
+        this.PendingOverrideComponentID = null;
+        this.PendingOverrideInitialName = null;
+        this.PendingOverrideInitialDescription = null;
+        this.PendingOverrideInitialNotes = null;
+        this.PendingOverrideInitialStatus = null;
+        this.PendingOverrideInitialScope = null;
+        this.PendingOverrideInitialRoleID = undefined;
+        this.PendingOverrideInitialPriority = undefined;
+        this.FormOverrideDialogEditMode = false;
+        this.EditingOverrideID = null;
+    }
+
+    /**
+     * Open the form-override dialog in EDIT MODE — pre-fills all fields
+     * from the active override row so the user can rename, retag, or
+     * adjust scope/priority/status without retyping. On confirm, the
+     * existing override is updated in place rather than a new one being
+     * created.
+     *
+     * Available from the cockpit's toolbar via the "Edit details" pencil
+     * icon next to the form name.
+     */
+    public async OpenEditFormDetailsDialog(): Promise<void> {
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user || !this.ActiveOverrideID) {
+            this.notifications.CreateSimpleNotification(
+                'No active override to edit. Save the form first.', 'info', 4000);
+            return;
+        }
+        try {
+            const override = await provider.GetEntityObject<MJEntityFormOverrideEntity>(
+                'MJ: Entity Form Overrides', user);
+            const loaded = await override.Load(this.ActiveOverrideID);
+            if (!loaded) {
+                this.notifications.CreateSimpleNotification(
+                    `Could not load override ${this.ActiveOverrideID} for editing.`, 'error', 4000);
+                return;
+            }
+            this.PendingOverrideComponentID = override.ComponentID ?? this.SelectedFormID;
+            this.PendingOverrideComponentName = this.SelectedFormName || override.Name || '';
+            this.PendingOverrideEntityName = this.TargetEntityName ?? '';
+            this.PendingOverrideInitialName = override.Name ?? this.SelectedFormName;
+            this.PendingOverrideInitialDescription = override.Description ?? null;
+            this.PendingOverrideInitialNotes = (override as unknown as { Notes?: string | null }).Notes ?? null;
+            this.PendingOverrideInitialStatus =
+                (override.Status as 'Active' | 'Inactive' | 'Pending' | null) ?? null;
+            this.PendingOverrideInitialScope =
+                (override.Scope as 'User' | 'Role' | 'Global' | null) ?? null;
+            this.PendingOverrideInitialRoleID = override.RoleID ?? null;
+            this.PendingOverrideInitialPriority = override.Priority ?? 0;
+            this.FormOverrideDialogEditMode = true;
+            this.EditingOverrideID = this.ActiveOverrideID;
+            this.ShowFormOverrideDialog = true;
+            this.cdr.markForCheck();
+        } catch (err) {
+            LogError(`FormBuilderResource.OpenEditFormDetailsDialog: ${err instanceof Error ? err.message : String(err)}`);
+        }
+    }
+
+    /**
+     * Update an existing EntityFormOverride row's editable fields from the
+     * dialog result. Returns true on success, false on save failure.
+     */
+    private async updateOverrideFromDialog(
+        overrideID: string,
+        result: FormOverrideDialogResult,
+        user: UserInfo,
+    ): Promise<boolean> {
+        const provider = this.provider;
+        if (!provider) return false;
+        try {
+            const override = await provider.GetEntityObject<MJEntityFormOverrideEntity>(
+                'MJ: Entity Form Overrides', user);
+            const loaded = await override.Load(overrideID);
+            if (!loaded) return false;
+            override.Name = result.Name;
+            override.Description = result.Description;
+            (override as unknown as { Notes?: string | null }).Notes = result.Notes;
+            override.Scope = result.Scope;
+            override.RoleID = result.Scope === 'Role' ? result.RoleID : null;
+            override.UserID = result.Scope === 'User' ? user.ID : null;
+            override.Priority = result.Priority;
+            override.Status = result.Status;
+            const saved = await override.Save();
+            if (!saved) {
+                LogError(`updateOverrideFromDialog: save failed: ${override.LatestResult?.CompleteMessage ?? 'unknown'}`);
+            }
+            return saved;
+        } catch (err) {
+            LogError(`updateOverrideFromDialog: ${err instanceof Error ? err.message : String(err)}`);
+            return false;
+        }
+    }
+
+    /**
+     * Refresh `ActiveOverride*` fields after an edit so the cockpit chrome
+     * picks up the new Status/Scope. Used by the edit-details dialog flow.
+     */
+    private async refreshActiveOverrideMetadata(componentID: string): Promise<void> {
+        const provider = this.provider;
+        const user = this.currentUser;
+        if (!provider || !user) return;
+        try {
+            const rv = RunView.FromMetadataProvider(provider);
+            const result = await rv.RunView<MJEntityFormOverrideEntity>({
+                EntityName: 'MJ: Entity Form Overrides',
+                ExtraFilter: `ComponentID='${componentID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+            if (result.Success && result.Results?.[0]) {
+                const ovr = result.Results[0];
+                this.ActiveOverrideID = ovr.ID;
+                this.ActiveOverrideScope = ovr.Scope ?? null;
+                this.ActiveOverrideStatus = (ovr.Status as 'Active' | 'Inactive' | 'Pending' | null) ?? null;
+                this.cdr.markForCheck();
+            }
+        } catch (err) {
+            LogError(`refreshActiveOverrideMetadata: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 
     /**

@@ -46,6 +46,10 @@
       </button>
       @if (!LeftRailCollapsed) {
         <h3 class="fb-rail-title">Forms</h3>
+        <button class="fb-rail-icon-btn" type="button" (click)="ToggleFormsViewMode()"
+                [title]="FormsViewMode === 'list' ? 'Switch to tree view (Schema → Entity → Form)' : 'Switch to flat list'">
+          <i class="fa-solid" [class.fa-list]="FormsViewMode === 'list'" [class.fa-folder-tree]="FormsViewMode === 'tree'"></i>
+        </button>
         <button class="fb-rail-new" type="button" (click)="OnNewForm()" title="New form">
           <i class="fa-solid fa-plus"></i>
           <span>New</span>
@@ -54,124 +58,294 @@
     </div>
 
     @if (!LeftRailCollapsed) {
-      <div class="fb-rail-search">
-        <i class="fa-solid fa-search"></i>
-        <input type="text"
-               placeholder="Search forms…"
-               [value]="LeftRailFilter"
-               (input)="OnLeftRailFilterChange($event)" />
-      </div>
 
-      <div class="fb-rail-list">
-        @if (IsLoading) {
-          <div class="fb-rail-empty">Loading…</div>
-        } @else if (filteredForms.length === 0) {
-          <div class="fb-rail-empty">
-            <i class="fa-solid fa-table-list"></i>
-            <p>No forms yet. Click <strong>New</strong> to start.</p>
-          </div>
-        } @else {
-          @for (form of filteredForms; track form.ID) {
-            <button class="fb-rail-item"
-                    type="button"
-                    [class.active]="form.ID === SelectedFormID"
-                    (click)="OnFormPicked(form)">
-              <div class="fb-rail-item-name">{{ form.Name }}</div>
-              <!-- Badge shows the CURRENT USER's override status on this
-                   Component (Active / Inactive / Pending) — matches the
-                   top-bar status pill so the two surfaces line up. We
-                   intentionally don't show Component.Status here; that's
-                   a separate axis (Draft/Published/Deprecated) the
-                   runtime doesn't read. -->
-              @if (form.OverrideStatus) {
-                <div class="fb-rail-item-meta">
-                  <span class="fb-rail-badge"
-                        [class.fb-rail-badge--active]="form.OverrideStatus === 'Active'"
-                        [class.fb-rail-badge--inactive]="form.OverrideStatus === 'Inactive'"
-                        [class.fb-rail-badge--pending]="form.OverrideStatus === 'Pending'">
-                    <i class="fa-solid fa-circle-dot"></i>
-                    {{ form.OverrideStatus }}
-                  </span>
-                </div>
-              }
-            </button>
-          }
-        }
+    <!-- Inner vertical splitter: forms list ↕ versions panel.
+         Persisted via `formsListHeightPct` in cockpit prefs. When either
+         inner panel is collapsed, only the other one renders (no
+         splitter), matching VS-Code's panel collapse behavior. -->
+    @if (FormsListCollapsed) {
+      <!-- Forms list collapsed → just show the header strip + full versions -->
+      <div class="fb-inner-panel-header" (click)="ToggleFormsListCollapsed()">
+        <i class="fa-solid fa-chevron-right"></i>
+        <span>Forms</span>
+        <span class="fb-inner-panel-count">{{ ExistingForms.length }}</span>
       </div>
-
-      <!-- ───── Version rail (history for the active form) ─────────────── -->
+      <ng-container *ngTemplateOutlet="versionsPanel"></ng-container>
+    } @else if (VersionsCollapsed) {
+      <!-- Versions collapsed → full forms list + header strip for versions -->
+      <ng-container *ngTemplateOutlet="formsPanel"></ng-container>
       @if (SelectedFormID) {
-        <div class="fb-versions-header">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-          <h4>Versions</h4>
+        <div class="fb-inner-panel-header" (click)="ToggleVersionsCollapsed()">
+          <i class="fa-solid fa-chevron-right"></i>
+          <span>Versions</span>
           @if (Versions.length > 0) {
-            <span class="fb-versions-count">{{ Versions.length }}</span>
-          }
-        </div>
-        <div class="fb-versions-list">
-          @if (VersionsLoading) {
-            <div class="fb-rail-empty">Loading…</div>
-          } @else if (Versions.length === 0) {
-            <div class="fb-rail-empty"><p>No version history yet.</p></div>
-          } @else {
-            @for (v of Versions; track v.ID) {
-              <!-- Click a row to LOAD that version into the editor (preview /
-                   code / layout). Doesn't change which version is Active for
-                   the runtime — that's still the Active override. To promote
-                   an older row, use its Activate / Restore button. -->
-              <div class="fb-version-row"
-                   [class.is-active]="v.IsActive"
-                   [class.is-pending]="v.IsPending"
-                   [class.is-selected]="v.ID === SelectedFormID"
-                   role="button"
-                   tabindex="0"
-                   [title]="'Load v' + v.Version + ' into the editor'"
-                   (click)="OnVersionRowClick(v)"
-                   (keydown.enter)="OnVersionRowClick(v)"
-                   (keydown.space)="OnVersionRowClick(v); $event.preventDefault()">
-                <!-- Lifecycle marker: green = Active (runtime serves this),
-                     amber = Pending (AI refinement awaiting activation),
-                     muted = Inactive. Separate from the row's selected
-                     state, which uses a blue background tint. -->
-                <span class="fb-version-marker" aria-hidden="true">
-                  <i class="fa-solid fa-circle"></i>
-                </span>
-                <div class="fb-version-row-main">
-                  <div class="fb-version-label">
-                    v{{ v.Version }}
-                    @if (v.IsActive) {
-                      <span class="fb-version-tag is-active">Active</span>
-                    } @else if (v.IsPending) {
-                      <span class="fb-version-tag is-pending">Pending</span>
-                    } @else {
-                      <span class="fb-version-tag">Inactive</span>
-                    }
-                  </div>
-                  <div class="fb-version-meta">
-                    @if (v.UpdatedAt) { {{ v.UpdatedAt | date:'short' }} } @else { (no timestamp) }
-                  </div>
-                </div>
-                <!--
-                  Retrospective fix #9: disambiguate the rail-row action.
-                  Pending → "Activate" (promote new work).
-                  Inactive → "Restore" (roll back to an older version).
-                  stopPropagation so the button's click doesn't also trigger
-                  the row-level "load this version" handler above.
-                -->
-                @if (!v.IsActive) {
-                  <button class="fb-version-activate" type="button"
-                          (click)="$event.stopPropagation(); OnActivateVersion(v)"
-                          [title]="v.IsPending ? 'Activate this Pending version' : 'Restore: roll back to this version'">
-                    <i class="fa-solid" [class.fa-circle-check]="v.IsPending" [class.fa-rotate-left]="!v.IsPending"></i>
-                    <span class="fb-version-activate-label">{{ v.IsPending ? 'Activate' : 'Restore' }}</span>
-                  </button>
-                }
-              </div>
-            }
+            <span class="fb-inner-panel-count">{{ Versions.length }}</span>
           }
         </div>
       }
+    } @else {
+      <!-- Both panels open — use a vertical splitter between them. -->
+      <as-split direction="vertical"
+                class="fb-inner-splitter"
+                unit="percent"
+                gutterSize="6"
+                (dragEnd)="OnInnerSplitterDragEnd($event)">
+        <as-split-area [size]="SelectedFormID ? FormsListHeightPct : 100" [minSize]="20">
+          <ng-container *ngTemplateOutlet="formsPanel"></ng-container>
+        </as-split-area>
+        @if (SelectedFormID) {
+          <as-split-area [size]="100 - FormsListHeightPct" [minSize]="15">
+            <ng-container *ngTemplateOutlet="versionsPanel"></ng-container>
+          </as-split-area>
+        }
+      </as-split>
     }
+
+    <!-- ─── Forms-list panel template ────────────────────────────── -->
+    <ng-template #formsPanel>
+      <div class="fb-inner-panel">
+        <div class="fb-inner-panel-header fb-inner-panel-header--open" (click)="ToggleFormsListCollapsed()">
+          <i class="fa-solid fa-chevron-down"></i>
+          <span>Forms</span>
+          <span class="fb-inner-panel-count">{{ filteredForms.length }} / {{ ExistingForms.length }}</span>
+        </div>
+        <div class="fb-rail-search-row">
+          <div class="fb-rail-search">
+            <i class="fa-solid fa-search"></i>
+            <input type="text"
+                   placeholder="Search forms…"
+                   [value]="LeftRailFilter"
+                   (input)="OnLeftRailFilterChange($event)" />
+          </div>
+          <div class="fb-entity-filter" [class.open]="EntityFilterDropdownOpen">
+            <button type="button" class="fb-entity-filter-btn" (click)="ToggleEntityFilterDropdown()"
+                    [title]="FormsEntityFilter ? 'Entity: ' + FormsEntityFilter : 'All entities'">
+              <i class="fa-solid fa-table"></i>
+              <span>{{ FormsEntityFilter || 'All entities' }}</span>
+              <i class="fa-solid fa-chevron-down chev"></i>
+            </button>
+            @if (EntityFilterDropdownOpen) {
+              <div class="fb-entity-filter-popover" (click)="$event.stopPropagation()">
+                <input type="text" class="fb-entity-filter-search"
+                       placeholder="Search entities…"
+                       [value]="EntityFilterSearch"
+                       (input)="OnEntityFilterSearch($event)" />
+                <ul class="fb-entity-filter-list">
+                  <li class="fb-entity-filter-item"
+                      [class.fb-entity-filter-item--selected]="!FormsEntityFilter"
+                      (click)="PickEntityFilter('')">
+                    <i class="fa-solid fa-asterisk"></i>
+                    <span>All entities</span>
+                    <span class="fb-entity-filter-count">{{ ExistingForms.length }}</span>
+                  </li>
+                  @for (opt of entityFilterOptions; track opt.name) {
+                    <li class="fb-entity-filter-item"
+                        [class.fb-entity-filter-item--selected]="FormsEntityFilter === opt.name"
+                        (click)="PickEntityFilter(opt.name)">
+                      @if (opt.icon) { <i [class]="opt.icon"></i> } @else { <i class="fa-solid fa-table"></i> }
+                      <span>{{ opt.display }}</span>
+                      <span class="fb-entity-filter-count">{{ opt.count }}</span>
+                    </li>
+                  }
+                </ul>
+              </div>
+            }
+          </div>
+        </div>
+        <!-- Status filter chips + sort -->
+        <div class="fb-rail-chips">
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Active')"
+                  (click)="ToggleStatusFilter('Active')"
+                  title="Show forms with Active overrides">
+            <i class="fa-solid fa-circle-dot"></i>Active
+          </button>
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Pending')"
+                  (click)="ToggleStatusFilter('Pending')"
+                  title="Show forms with Pending (draft) overrides">
+            <i class="fa-solid fa-circle-dot"></i>Pending
+          </button>
+          <button type="button"
+                  class="fb-chip"
+                  [class.fb-chip--on]="FormsStatusFilter.has('Inactive')"
+                  (click)="ToggleStatusFilter('Inactive')"
+                  title="Show forms with Inactive overrides">
+            <i class="fa-solid fa-circle-dot"></i>Inactive
+          </button>
+          <span class="fb-spacer"></span>
+          <select class="fb-rail-sort" [value]="FormsSortMode"
+                  (change)="SetFormsSortMode($any($event.target).value)" title="Sort">
+            <option value="updated-desc">Recently edited</option>
+            <option value="updated-asc">Oldest edits</option>
+            <option value="name-asc">Name A→Z</option>
+            <option value="name-desc">Name Z→A</option>
+          </select>
+        </div>
+        <div class="fb-rail-list">
+          @if (IsLoading) {
+            <div class="fb-rail-empty">Loading…</div>
+          } @else if (filteredForms.length === 0) {
+            <div class="fb-rail-empty">
+              <i class="fa-solid fa-table-list"></i>
+              @if (LeftRailFilter || FormsEntityFilter || FormsStatusFilter.size < 3) {
+                <p>No forms match the current filters.</p>
+              } @else {
+                <p>No forms yet. Click <strong>New</strong> to start.</p>
+              }
+            </div>
+          } @else if (FormsViewMode === 'tree') {
+            <!-- Tree view: Schema → Entity → Forms -->
+            @for (g of treeGroups; track g.schema) {
+              <div class="fb-tree-schema">
+                <div class="fb-tree-schema-header">
+                  <i class="fa-solid fa-database"></i>
+                  <span>{{ g.schema }}</span>
+                </div>
+                @for (e of g.entities; track e.entity) {
+                  <div class="fb-tree-entity">
+                    <div class="fb-tree-entity-header" [title]="e.entity">
+                      @if (e.icon) { <i [class]="e.icon"></i> } @else { <i class="fa-solid fa-table"></i> }
+                      <span>{{ e.entityDisplay }}</span>
+                      <span class="fb-tree-entity-count">{{ e.forms.length }}</span>
+                    </div>
+                    @for (form of e.forms; track form.ID) {
+                      <ng-container *ngTemplateOutlet="formRow; context: { $implicit: form, treeIndent: true }"></ng-container>
+                    }
+                  </div>
+                }
+              </div>
+            }
+          } @else {
+            <!-- Flat list view -->
+            @for (form of filteredForms; track form.ID) {
+              <ng-container *ngTemplateOutlet="formRow; context: { $implicit: form }"></ng-container>
+            }
+          }
+        </div>
+      </div>
+    </ng-template>
+
+    <!-- ─── Form row template (used by both list + tree) ─────────── -->
+    <ng-template #formRow let-form let-treeIndent="treeIndent">
+      <button class="fb-rail-item"
+              type="button"
+              [class.active]="form.ID === SelectedFormID"
+              [class.fb-rail-item--tree]="treeIndent"
+              [class.fb-rail-item--dirty]="form.ID === SelectedFormID && DirtyFlag"
+              (click)="OnFormPicked(form)"
+              (contextmenu)="OnFormRowContextMenu(form, $event)">
+        <button class="fb-rail-pin"
+                type="button"
+                [class.fb-rail-pin--on]="IsFormPinned(form)"
+                (click)="TogglePinForm(form, $event)"
+                [attr.aria-label]="IsFormPinned(form) ? 'Unpin' : 'Pin'"
+                [title]="IsFormPinned(form) ? 'Unpin from top' : 'Pin to top'">
+          <i class="fa-solid fa-thumbtack"></i>
+        </button>
+        <div class="fb-rail-item-icon">
+          @if (form.TargetEntityIcon) { <i [class]="form.TargetEntityIcon"></i> } @else { <i class="fa-solid fa-table-list"></i> }
+        </div>
+        <div class="fb-rail-item-body">
+          <div class="fb-rail-item-name">
+            {{ form.Name }}
+            @if (form.ID === SelectedFormID && DirtyFlag) { <span class="fb-rail-item-dirty-dot" title="Unsaved changes">●</span> }
+          </div>
+          <div class="fb-rail-item-sub">
+            @if (form.TargetEntityName) {
+              <span class="fb-rail-item-entity">{{ form.TargetEntityName }}</span>
+            }
+            @if (form.UpdatedAt) {
+              <span class="fb-rail-item-time">· {{ form.UpdatedAt | date:'short' }}</span>
+            }
+          </div>
+        </div>
+        @if (form.OverrideStatus) {
+          <span class="fb-rail-badge"
+                [class.fb-rail-badge--active]="form.OverrideStatus === 'Active'"
+                [class.fb-rail-badge--inactive]="form.OverrideStatus === 'Inactive'"
+                [class.fb-rail-badge--pending]="form.OverrideStatus === 'Pending'"
+                [title]="form.OverrideStatus + ' override'">
+            <i class="fa-solid fa-circle-dot"></i>
+          </span>
+        }
+      </button>
+    </ng-template>
+
+    <!-- ─── Versions-panel template ──────────────────────────────── -->
+    <ng-template #versionsPanel>
+      @if (SelectedFormID) {
+        <div class="fb-inner-panel">
+          <div class="fb-inner-panel-header fb-inner-panel-header--open" (click)="ToggleVersionsCollapsed()">
+            <i class="fa-solid fa-chevron-down"></i>
+            <span>Versions</span>
+            @if (Versions.length > 0) {
+              <span class="fb-inner-panel-count">{{ Versions.length }}</span>
+            }
+          </div>
+          <div class="fb-versions-list">
+            @if (VersionsLoading) {
+              <div class="fb-rail-empty">Loading…</div>
+            } @else if (Versions.length === 0) {
+              <div class="fb-rail-empty"><p>No version history yet.</p></div>
+            } @else {
+              @for (v of Versions; track v.ID) {
+                <div class="fb-version-row"
+                     [class.is-active]="v.IsActive"
+                     [class.is-pending]="v.IsPending"
+                     [class.is-selected]="v.ID === SelectedFormID"
+                     [class.is-diff-source]="v.ID === DiffSourceVersionID"
+                     role="button"
+                     tabindex="0"
+                     [title]="'Load v' + v.Version + ' into the editor. Right-click for more.'"
+                     (click)="OnVersionRowClick(v)"
+                     (keydown.enter)="OnVersionRowClick(v)"
+                     (keydown.space)="OnVersionRowClick(v); $event.preventDefault()">
+                  <span class="fb-version-marker" aria-hidden="true">
+                    <i class="fa-solid fa-circle"></i>
+                  </span>
+                  <div class="fb-version-row-main">
+                    <div class="fb-version-label">
+                      v{{ v.Version }}
+                      @if (v.IsActive) {
+                        <span class="fb-version-tag is-active">Active</span>
+                      } @else if (v.IsPending) {
+                        <span class="fb-version-tag is-pending">Pending</span>
+                      } @else {
+                        <span class="fb-version-tag">Inactive</span>
+                      }
+                      @if (v.ID === DiffSourceVersionID) {
+                        <span class="fb-version-tag fb-version-tag--diff">Diff: A</span>
+                      }
+                    </div>
+                    <div class="fb-version-meta">
+                      @if (v.UpdatedAt) { {{ v.UpdatedAt | date:'short' }} } @else { (no timestamp) }
+                    </div>
+                  </div>
+                  <button class="fb-version-action fb-version-action--diff" type="button"
+                          (click)="OnVersionDiffClick(v, $event)"
+                          [title]="DiffSourceVersionID ? (DiffSourceVersionID === v.ID ? 'Click another version to compare. Click again to cancel.' : 'Compare with selected version') : 'Start diff: pick this as source, then click another version'">
+                    <i class="fa-solid fa-code-compare"></i>
+                  </button>
+                  @if (!v.IsActive) {
+                    <button class="fb-version-activate" type="button"
+                            (click)="$event.stopPropagation(); OnActivateVersion(v)"
+                            [title]="v.IsPending ? 'Activate this Pending version' : 'Restore: roll back to this version'">
+                      <i class="fa-solid" [class.fa-circle-check]="v.IsPending" [class.fa-rotate-left]="!v.IsPending"></i>
+                      <span class="fb-version-activate-label">{{ v.IsPending ? 'Activate' : 'Restore' }}</span>
+                    </button>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </ng-template>
+
+    } <!-- end if !LeftRailCollapsed -->
   </aside>
   </as-split-area>
   }
@@ -314,6 +488,13 @@
         </button>
       </div>
 
+      @if (SelectedFormID && ActiveOverrideID) {
+        <button type="button" class="fb-action" (click)="OpenEditFormDetailsDialog()"
+                title="Edit form details: name, description, scope, priority, status">
+          <i class="fa-solid fa-pen"></i>
+          <span>Details</span>
+        </button>
+      }
       @if (SelectedFormID) {
         <button type="button" class="fb-action fb-action--danger" (click)="OnDelete()"
                 title="Delete this form and its overrides">
@@ -358,7 +539,31 @@
         </div>
       }
 
-      @if (!TargetEntityName) {
+      @if (!SelectedFormID && !IsNewForm) {
+        <!-- No form picked or being created — invite the user to pick or
+             create one. Lists recently-edited forms for quick access. -->
+        <div class="fb-empty fb-empty--landing">
+          <i class="fa-solid fa-pen-ruler"></i>
+          <h3>Form Builder</h3>
+          <p>Pick a form on the left or click <strong>+ New</strong> above the list to start a new one. The Form Builder agent on the right will help you author and refine via natural language.</p>
+          @if (ExistingForms.length > 0) {
+            <div class="fb-empty-recent">
+              <div class="fb-empty-recent-label">Recently edited</div>
+              <div class="fb-empty-recent-list">
+                @for (form of filteredForms.slice(0, 5); track form.ID) {
+                  <button class="fb-empty-recent-item" type="button" (click)="OnFormPicked(form)">
+                    @if (form.TargetEntityIcon) { <i [class]="form.TargetEntityIcon"></i> } @else { <i class="fa-solid fa-table-list"></i> }
+                    <div class="fb-empty-recent-meta">
+                      <div class="fb-empty-recent-name">{{ form.Name }}</div>
+                      <div class="fb-empty-recent-entity">{{ form.TargetEntityName }}</div>
+                    </div>
+                  </button>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      } @else if (!TargetEntityName) {
         <div class="fb-empty">
           <i class="fa-solid fa-table-list"></i>
           <h3>Pick an entity to start</h3>
@@ -388,6 +593,14 @@
                 <i class="fa-solid fa-chevron-down"></i>
               </button>
               <span class="fb-preview-chip-entity">{{ TargetEntityName }}</span>
+              @if (PreviewRecord && PreviewRecordIsReal) {
+                <button type="button" class="fb-preview-open-record"
+                        (click)="OpenPreviewRecord()"
+                        title="Open this record in a new tab">
+                  <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                  <span>Open record</span>
+                </button>
+              }
               @if (PreviewError) {
                 <span class="fb-preview-warning" [title]="PreviewError">
                   <i class="fa-solid fa-triangle-exclamation"></i>
@@ -536,12 +749,56 @@
 
     @if (!ChatPaneCollapsed) {
       <!-- Context strip — small label above the chat so the user always
-           sees which form the agent has context on. -->
+           sees which form the agent has context on. Shows the override
+           status + version too so the user knows what state they're
+           editing (Active live vs Pending draft vs Inactive historical). -->
       @if (SelectedFormID && TargetEntityName) {
         <div class="fb-chat-context">
-          <div class="fb-chat-context-label">Editing</div>
-          <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
+          <div class="fb-chat-context-row">
+            <div class="fb-chat-context-label">Editing</div>
+            <div class="fb-chat-context-value">{{ SelectedFormName }}</div>
+            @if (CurrentSelectedVersion) {
+              <span class="fb-chat-context-version">v{{ CurrentSelectedVersion.Version }}</span>
+            }
+            @if (ActiveOverrideStatus) {
+              <span class="fb-rail-badge"
+                    [class.fb-rail-badge--active]="ActiveOverrideStatus === 'Active'"
+                    [class.fb-rail-badge--inactive]="ActiveOverrideStatus === 'Inactive'"
+                    [class.fb-rail-badge--pending]="ActiveOverrideStatus === 'Pending'">
+                <i class="fa-solid fa-circle-dot"></i>
+                {{ ActiveOverrideStatus }}
+              </span>
+            }
+          </div>
           <div class="fb-chat-context-sub">{{ TargetEntityName }}</div>
+          @if (LineageConversations.length > 1) {
+            <div class="fb-chat-context-row">
+              <button class="fb-chat-context-history"
+                      type="button"
+                      (click)="ToggleConversationHistoryDropdown()"
+                      title="Switch to another conversation about this form">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>{{ LineageConversations.length }} conversations</span>
+                <i class="fa-solid fa-chevron-down"></i>
+              </button>
+              @if (ConversationHistoryDropdownOpen) {
+                <div class="fb-chat-context-history-popover" (click)="$event.stopPropagation()">
+                  @for (c of LineageConversations; track c.ID) {
+                    <button type="button"
+                            class="fb-chat-context-history-item"
+                            [class.fb-chat-context-history-item--active]="c.ID === ChatConversationId"
+                            (click)="PickLineageConversation(c)">
+                      <i class="fa-solid fa-message"></i>
+                      <span class="fb-chat-context-history-name">{{ c.Name || '(unnamed)' }}</span>
+                      @if (c.UpdatedAt) {
+                        <span class="fb-chat-context-history-time">{{ c.UpdatedAt | date:'short' }}</span>
+                      }
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
         </div>
       } @else {
         <div class="fb-chat-context fb-chat-context--empty">
@@ -635,6 +892,14 @@
     [Visible]="ShowFormOverrideDialog"
     [ComponentName]="PendingOverrideComponentName"
     [EntityName]="PendingOverrideEntityName"
+    [InitialName]="PendingOverrideInitialName"
+    [InitialDescription]="PendingOverrideInitialDescription"
+    [InitialNotes]="PendingOverrideInitialNotes"
+    [InitialStatus]="PendingOverrideInitialStatus"
+    [InitialScope]="PendingOverrideInitialScope"
+    [InitialRoleID]="PendingOverrideInitialRoleID"
+    [InitialPriority]="PendingOverrideInitialPriority"
+    [EditMode]="FormOverrideDialogEditMode"
     (confirmed)="OnFormOverrideDialogConfirm($event)"
     (dismissed)="OnFormOverrideDialogDismiss()">
   </mj-form-override-dialog>
@@ -643,4 +908,78 @@
        Preview / Code modes it stays hidden (the field palette is only useful
        in the canvas surface). When we resurrect it as a pop-out, this is
        where it'll re-mount. -->
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       RIGHT-CLICK CONTEXT MENU on form rows
+       ══════════════════════════════════════════════════════════════════ -->
+  @if (ContextMenuOpen && ContextMenuForm) {
+    <div class="fb-context-menu-backdrop" (click)="CloseContextMenu()" (contextmenu)="CloseContextMenu(); $event.preventDefault()"></div>
+    <div class="fb-context-menu"
+         [style.left.px]="ContextMenuX"
+         [style.top.px]="ContextMenuY"
+         (click)="$event.stopPropagation()">
+      <div class="fb-context-menu-header">{{ ContextMenuForm.Name }}</div>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuTogglePin()">
+        <i class="fa-solid fa-thumbtack"></i>
+        <span>{{ IsFormPinned(ContextMenuForm) ? 'Unpin from top' : 'Pin to top' }}</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuDuplicate()">
+        <i class="fa-solid fa-copy"></i>
+        <span>Duplicate</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuCopyID()">
+        <i class="fa-solid fa-fingerprint"></i>
+        <span>Copy Component ID</span>
+      </button>
+      <button type="button" class="fb-context-menu-item" (click)="ContextMenuExportSpec()">
+        <i class="fa-solid fa-file-export"></i>
+        <span>Export Spec JSON</span>
+      </button>
+      <hr class="fb-context-menu-divider" />
+      <button type="button" class="fb-context-menu-item fb-context-menu-item--danger" (click)="ContextMenuDelete()">
+        <i class="fa-solid fa-trash"></i>
+        <span>Delete</span>
+      </button>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       VERSION DIFF DIALOG
+       ══════════════════════════════════════════════════════════════════ -->
+  @if (ShowDiffDialog) {
+    <div class="fb-diff-backdrop" (click)="CloseDiffDialog()">
+      <div class="fb-diff-modal" (click)="$event.stopPropagation()">
+        <header class="fb-diff-header">
+          <h3>
+            <i class="fa-solid fa-code-compare"></i>
+            Compare versions
+          </h3>
+          <button class="fb-diff-close" type="button" (click)="CloseDiffDialog()" aria-label="Close">
+            <i class="fa-solid fa-times"></i>
+          </button>
+        </header>
+        <div class="fb-diff-body">
+          <div class="fb-diff-pane">
+            <div class="fb-diff-pane-label">
+              <span class="fb-diff-pane-tag">A</span>
+              <span>v{{ versionByID(DiffSourceVersionID)?.Version }}</span>
+              <span class="fb-diff-pane-meta">{{ versionByID(DiffSourceVersionID)?.UpdatedAt | date:'short' }}</span>
+            </div>
+            <pre class="fb-diff-code">{{ DiffSourceCode }}</pre>
+          </div>
+          <div class="fb-diff-pane">
+            <div class="fb-diff-pane-label">
+              <span class="fb-diff-pane-tag fb-diff-pane-tag--b">B</span>
+              <span>v{{ versionByID(DiffTargetVersionID)?.Version }}</span>
+              <span class="fb-diff-pane-meta">{{ versionByID(DiffTargetVersionID)?.UpdatedAt | date:'short' }}</span>
+            </div>
+            <pre class="fb-diff-code">{{ DiffTargetCode }}</pre>
+          </div>
+        </div>
+        <footer class="fb-diff-footer">
+          <button class="btn" type="button" (click)="CloseDiffDialog()">Close</button>
+        </footer>
+      </div>
+    </div>
+  }
 </div>

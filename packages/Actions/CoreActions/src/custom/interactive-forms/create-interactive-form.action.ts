@@ -73,6 +73,17 @@ export class CreateInteractiveFormAction extends BaseAction {
             const lintFail = await lintFormSpec(inputs.Spec, user);
             if (lintFail) return lintFail;
 
+            // Create v1.0.0 as Pending (NOT Active). The cockpit / agent
+            // workflow is iterative — the user will refine via the chat
+            // before they're ready to flip the form live. Creating Active
+            // here would either (a) push an empty scaffold into production
+            // as the user's actual form, or (b) force the agent's first
+            // Modify to bump a new version, leaving behind a useless
+            // v1.0.0 placeholder. Pending means the agent's first Modify
+            // hits the in-place branch and overwrites this row — no
+            // wasted version, no premature publication. The user
+            // explicitly Activates from the Form Builder dashboard when
+            // they're happy with the result.
             const componentInsert = await insertComponent({
                 provider, user,
                 spec: inputs.Spec,
@@ -80,7 +91,7 @@ export class CreateInteractiveFormAction extends BaseAction {
                 description: inputs.Description,
                 version: "1.0.0",
                 versionSequence: 1,
-                componentStatus: 'Active',
+                componentStatus: 'Pending',
             });
             if ('error' in componentInsert) return componentInsert.error;
             const componentID = componentInsert.id;
@@ -92,7 +103,7 @@ export class CreateInteractiveFormAction extends BaseAction {
                 name: inputs.Name,
                 description: inputs.Description,
                 notes: inputs.Notes,
-                status: 'Active',
+                status: 'Pending',
                 priority: 0,
             });
             if ('error' in overrideInsert) {
@@ -112,7 +123,7 @@ export class CreateInteractiveFormAction extends BaseAction {
                     OverrideID: overrideInsert.id,
                     EntityName: inputs.EntityName,
                     Scope: "User",
-                    Status: "Active",
+                    Status: "Pending",
                     Version: "1.0.0",
                 }),
             };

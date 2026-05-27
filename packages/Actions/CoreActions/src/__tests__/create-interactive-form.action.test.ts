@@ -334,7 +334,7 @@ describe('CreateInteractiveFormAction', () => {
     });
 
     describe('successful persistence', () => {
-        it('writes Component with Type=Form, Status=Published, stringified Spec', async () => {
+        it('writes Component with Type=Form, Status=Draft (Pending lifecycle), stringified Spec', async () => {
             await run(new CreateInteractiveFormAction(), mkParams({
                 EntityName: 'MJ: Applications',
                 Spec: validSpec({ title: 'Compact Apps' }),
@@ -347,7 +347,9 @@ describe('CreateInteractiveFormAction', () => {
             expect(comp.Saved).toBe(true);
             expect(comp.fields.Name).toBe('CompactApplicationForm');
             expect(comp.fields.Type).toBe('Form');
-            expect(comp.fields.Status).toBe('Published');
+            // Component table uses 'Draft' for the Pending lifecycle.
+            // See mapToComponentStatus in _shared.ts.
+            expect(comp.fields.Status).toBe('Draft');
             expect(comp.fields.Title).toBe('Compact Apps');
             expect(comp.fields.Description).toBe('CSR variant');
             expect(typeof comp.fields.Specification).toBe('string');
@@ -355,7 +357,7 @@ describe('CreateInteractiveFormAction', () => {
             expect(reparsed.componentRole).toBe('form');
         });
 
-        it('writes Override at Scope=User, Status=Active, UserID=caller, Priority=0', async () => {
+        it('writes Override at Scope=User, Status=Pending, UserID=caller, Priority=0', async () => {
             await run(new CreateInteractiveFormAction(), mkParams({
                 EntityName: 'MJ: Applications',
                 Spec: validSpec(),
@@ -368,7 +370,9 @@ describe('CreateInteractiveFormAction', () => {
             expect(ovr.fields.Scope).toBe('User');
             expect(ovr.fields.UserID).toBe('USER-CALLER-001');
             expect(ovr.fields.RoleID).toBeNull();
-            expect(ovr.fields.Status).toBe('Active');
+            // v1.0.0 is now Pending — the user explicitly Activates from
+            // the cockpit when satisfied. See create action's comment.
+            expect(ovr.fields.Status).toBe('Pending');
             expect(ovr.fields.Priority).toBe(0);
             expect(ovr.fields.EntityID).toBe('ENT-APPS-0000');
             expect(ovr.fields.ComponentID).toBe('COMPONENT-NEW-0001');

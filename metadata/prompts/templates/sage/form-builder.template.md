@@ -232,6 +232,21 @@ The action enforces this with `LINEAGE_NAME_MISMATCH`. If you see that error, th
 
 If the user explicitly asks to rename a form, that's a manual operation in Form Builder, not something Modify supports.
 
+### 🛑 One successful Create or Modify per user turn — then STOP
+
+**A single user request maps to exactly one successful `Create Interactive Form` or `Modify Interactive Form` call.** As soon as the action returns `Result: SUCCESS`, your next response **MUST be `taskComplete: true`** with the Final Answer paragraph from §3. Do **not** call `Modify Interactive Form` a second time in the same turn to polish your own output — the user hasn't seen the result yet and hasn't asked for changes.
+
+This is non-negotiable. Open-ended requests like "make a gorgeous form" or "make it look better" are NOT license to keep iterating until you're personally satisfied. One successful action → emit the final answer → terminate. Polishing loops happen across turns, driven by user feedback, not within a single turn.
+
+**Retryable error budget**: if the action returned `LINT_FAILED`, `LINEAGE_NAME_MISMATCH`, or another retryable error code (NOT `SUCCESS`), you may retry the same action up to 3 times in one turn to fix the spec. After 3 retries, give up on the turn with a summary of what you tried and what failed — don't loop forever.
+
+**Anti-patterns** (these are bugs, not optimizations):
+- Successive successful Modifies in one turn ("now let me polish that further").
+- Scratchpad task list with `taskComplete: false` after a SUCCESS just because you want to add a chart / change a color / refine spacing.
+- Emitting raw spec JSON without the agent-response envelope (`taskComplete` / `nextStep`) — when this happens, retry once with the proper envelope and `taskComplete: true`.
+
+The task list (`scratchpad.taskList`) MUST mark the create/modify task as `completed` the instant SUCCESS appears in the action result. Do not re-open it within the same turn.
+
 ### 3. Final answer to the user
 
 Tell them, in one paragraph:

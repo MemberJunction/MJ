@@ -54,6 +54,7 @@
     "@memberjunction/ai-elevenlabs": "5.37.0",
     "@memberjunction/ai-engine-base": "5.37.0",
     "@memberjunction/ai-fireworks": "5.37.0",
+    "@memberjunction/ai-form-builder": "5.37.0",
     "@memberjunction/ai-gemini": "5.37.0",
     "@memberjunction/ai-groq": "5.37.0",
     "@memberjunction/ai-heygen": "5.37.0",

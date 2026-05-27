@@ -6,6 +6,8 @@ import {
     ChangeDetectionStrategy,
     ChangeDetectorRef,
     OnInit,
+    OnChanges,
+    SimpleChanges,
     inject,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -18,13 +20,17 @@ import { RoleInfo } from '@memberjunction/core';
  */
 export type OverrideScope = 'User' | 'Role' | 'Global';
 
-/** Active iff the resolver returns this row; Inactive ignored entirely. */
-export type OverrideStatus = 'Active' | 'Inactive';
+/**
+ * Override row status. Active = runtime serves this; Pending = AI / user
+ * draft awaiting activation; Inactive = historical, never served.
+ */
+export type OverrideStatus = 'Active' | 'Inactive' | 'Pending';
 
 /** Payload emitted by {@link FormOverrideDialogComponent} on confirm. */
 export interface FormOverrideDialogResult {
     Name: string;
     Description: string | null;
+    Notes: string | null;
     EntityName: string;
     Scope: OverrideScope;
     RoleID: string | null;
@@ -52,16 +58,22 @@ export interface FormOverrideDialogResult {
 <div class="modal-backdrop" (click)="OnCancelClick()">
     <div class="modal" (click)="$event.stopPropagation()">
         <header class="modal-header">
-            <h3>Activate this form</h3>
+            <h3>{{ EditMode ? 'Edit form details' : 'Activate this form' }}</h3>
             <button class="close-btn" (click)="OnCancelClick()" aria-label="Close">
                 <i class="fa-solid fa-times"></i>
             </button>
         </header>
         <div class="modal-body">
             <p class="hint">
-                Create an Entity Form Override so MemberJunction renders this
-                Component instead of the default form for matching users.
-                Skip to keep the Component saved but inactive.
+                @if (EditMode) {
+                    Update the override's name, description, scope, priority, or status.
+                    Component code is edited from the cockpit's main editor — this dialog
+                    covers the override-row metadata only.
+                } @else {
+                    Create an Entity Form Override so MemberJunction renders this
+                    Component instead of the default form for matching users.
+                    Skip to keep the Component saved but inactive.
+                }
             </p>
 
             <div class="field">
@@ -73,6 +85,12 @@ export interface FormOverrideDialogResult {
                 <label>Description</label>
                 <textarea [value]="Description ?? ''" (input)="OnDescriptionInput($event)" rows="2"
                           placeholder="Optional — what's special about this variant?"></textarea>
+            </div>
+
+            <div class="field">
+                <label>Notes</label>
+                <textarea [value]="Notes ?? ''" (input)="OnNotesInput($event)" rows="2"
+                          placeholder="Optional — private notes about this version, e.g. why you forked, what changed."></textarea>
             </div>
 
             <div class="field">
@@ -117,8 +135,12 @@ export interface FormOverrideDialogResult {
                     <label>Status</label>
                     <div class="status-options">
                         <label class="radio">
+                            <input type="radio" name="status" [checked]="Status === 'Pending'" (change)="Status = 'Pending'" />
+                            Pending <span class="muted">(draft)</span>
+                        </label>
+                        <label class="radio">
                             <input type="radio" name="status" [checked]="Status === 'Active'" (change)="Status = 'Active'" />
-                            Active
+                            Active <span class="muted">(live)</span>
                         </label>
                         <label class="radio">
                             <input type="radio" name="status" [checked]="Status === 'Inactive'" (change)="Status = 'Inactive'" />
@@ -133,8 +155,8 @@ export interface FormOverrideDialogResult {
             }
         </div>
         <footer class="modal-footer">
-            <button class="btn btn-primary" (click)="OnConfirmClick()">Create Override</button>
-            <button class="btn" (click)="OnCancelClick()">Skip</button>
+            <button class="btn btn-primary" (click)="OnConfirmClick()">{{ EditMode ? 'Save changes' : 'Create Override' }}</button>
+            <button class="btn" (click)="OnCancelClick()">{{ EditMode ? 'Cancel' : 'Skip' }}</button>
         </footer>
     </div>
 </div>
@@ -164,21 +186,51 @@ export interface FormOverrideDialogResult {
         .btn-primary { background: var(--mj-brand-primary, #5B4FE9); color: #fff; border-color: var(--mj-brand-primary, #5B4FE9); font-weight: 500; }
     `],
 })
-export class FormOverrideDialogComponent extends BaseAngularComponent implements OnInit {
+export class FormOverrideDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
 
+    /**
+     * Plain `@Input()`. Per-open re-sync of editable state happens in
+     * `ngOnChanges` — that's the only Angular hook that fires AFTER all
+     * inputs in a single change-detection cycle are bound. The earlier
+     * setter-based approach fired BEFORE peer inputs (`InitialName`,
+     * `InitialDescription`, etc.) were set, so the dialog rendered with
+     * stale or empty pre-fill values.
+     */
     @Input() Visible = false;
+
     @Input() ComponentName = '';
     @Input() EntityName = '';
+    /** Pre-fill for the Description textarea (cockpit's input value). */
+    @Input() InitialDescription: string | null = null;
+    /** Pre-fill for the Name input (defaults to ComponentName). */
+    @Input() InitialName: string | null = null;
+    /** Pre-fill for the Notes textarea (when present in the cockpit). */
+    @Input() InitialNotes: string | null = null;
+    /** Pre-fill for the Status radio group. Default: 'Pending'. */
+    @Input() InitialStatus: OverrideStatus | null = null;
+    /** Pre-fill for the Scope radio group. Default: 'User'. */
+    @Input() InitialScope: OverrideScope | null = null;
+    /** Pre-fill for the Role select (when Scope='Role'). */
+    @Input() InitialRoleID: string | null | undefined = undefined;
+    /** Pre-fill for the Priority numeric input. Default: 0. */
+    @Input() InitialPriority: number | undefined = undefined;
+    /**
+     * When true, render the dialog as "Edit form details" instead of
+     * "Activate this form" — same fields, different framing. The
+     * confirm button reads "Save changes" and the explanatory hint adapts.
+     */
+    @Input() EditMode = false;
 
     @Output() confirmed = new EventEmitter<FormOverrideDialogResult>();
     @Output() dismissed = new EventEmitter<void>();
 
     public Name = '';
     public Description: string | null = null;
+    public Notes: string | null = null;
     public Scope: OverrideScope = 'User';
     public RoleID: string | null = null;
     public Priority = 0;
-    public Status: OverrideStatus = 'Active';
+    public Status: OverrideStatus = 'Pending';
     public validationError: string | null = null;
 
     public availableRoles: RoleInfo[] = [];
@@ -186,13 +238,45 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     private readonly cd = inject(ChangeDetectorRef);
 
     ngOnInit(): void {
-        // Pre-fill the override Name from the Component's name.
-        if (this.ComponentName && !this.Name) {
-            this.Name = this.ComponentName;
-        }
         // Load roles eagerly — small list, used only when Scope='Role'.
         const provider = this.ProviderToUse;
         this.availableRoles = provider?.Roles ?? [];
+    }
+
+    /**
+     * Re-sync editable state every time `Visible` flips false→true, AFTER
+     * Angular has bound all the peer `@Input()`s for the same change-
+     * detection cycle. The previous setter-based approach fired BEFORE
+     * sibling inputs (`InitialName`, etc.) had landed, leaving the dialog
+     * pre-fill empty.
+     */
+    ngOnChanges(changes: SimpleChanges): void {
+        const visChange = changes['Visible'];
+        if (!visChange) return;
+        const becameVisible = !visChange.previousValue && visChange.currentValue;
+        if (becameVisible) {
+            this.resetFromInputs();
+        }
+    }
+
+    /**
+     * Sync editable state from `@Input()`s. Called on first open AND on
+     * every subsequent Visible: false → true transition so the dialog
+     * doesn't show stale data from a previous invocation.
+     */
+    private resetFromInputs(): void {
+        this.Name = (this.InitialName?.trim() || this.ComponentName || '').trim();
+        this.Description = this.InitialDescription?.trim() || null;
+        this.Notes = this.InitialNotes?.trim() || null;
+        this.validationError = null;
+        // Default Status to Pending — matches the new "create as draft,
+        // activate later" workflow. Edit-mode callers will override via
+        // InitialStatus.
+        if (this.InitialStatus) this.Status = this.InitialStatus;
+        if (this.InitialScope) this.Scope = this.InitialScope;
+        if (this.InitialRoleID !== undefined) this.RoleID = this.InitialRoleID;
+        if (this.InitialPriority !== undefined) this.Priority = this.InitialPriority;
+        this.cd.markForCheck();
     }
 
     public OnNameInput(e: Event): void {
@@ -202,6 +286,11 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
     public OnDescriptionInput(e: Event): void {
         const v = (e.target as HTMLTextAreaElement).value;
         this.Description = v.trim().length > 0 ? v : null;
+    }
+
+    public OnNotesInput(e: Event): void {
+        const v = (e.target as HTMLTextAreaElement).value;
+        this.Notes = v.trim().length > 0 ? v : null;
     }
 
     public OnScopeChange(scope: OverrideScope): void {
@@ -238,6 +327,7 @@ export class FormOverrideDialogComponent extends BaseAngularComponent implements
         this.confirmed.emit({
             Name: this.Name.trim(),
             Description: this.Description,
+            Notes: this.Notes,
             EntityName: this.EntityName,
             Scope: this.Scope,
             RoleID: this.RoleID,

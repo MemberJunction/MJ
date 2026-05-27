@@ -2,10 +2,10 @@
   {
     "fields": {
       "Name": "Form Builder - System Prompt",
-      "Description": "System prompt for the Form Builder sub-agent, which generates runtime entity forms (Component + EntityFormOverride rows) from a user's natural-language requirements and an entity's curated schema.",
+      "Description": "DEPRECATED — superseded by 'Form Builder - Designer' as part of the Designer+Builder rearchitecture. Kept in DB as historical record; no longer referenced by any agent. Safe to delete in a future migration. Status set to Disabled so it does not appear in active prompt lookups.",
       "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
       "TemplateText": "@file:templates/sage/form-builder.template.md",
-      "Status": "Active",
+      "Status": "Disabled",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Highest",
@@ -164,8 +164,8 @@
       "ID": "7BC3C3EE-FDBD-4D83-96BD-69F846D040FD"
     },
     "sync": {
-      "lastModified": "2026-05-27T11:46:13.157Z",
-      "checksum": "84a62c6820e74273d009db9240745c481147a8b5de12af52c51c499e39ae933c"
+      "lastModified": "2026-05-27T13:58:13.810Z",
+      "checksum": "c1b46ec2257ff0ca30e955b48138296e0b048aff39dfc680cc41de4024993b41"
     }
   }
 ]
