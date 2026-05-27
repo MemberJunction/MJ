@@ -49,6 +49,18 @@ vi.mock('@memberjunction/ai', () => {
     };
 });
 
+const { mockRegistrations, mockStartupManagerInstance } = vi.hoisted(() => {
+    const registrations: any[] = [];
+    return {
+        mockRegistrations: registrations,
+        mockStartupManagerInstance: {
+            Register: (reg: any) => registrations.push(reg),
+            GetRegistrations: () => registrations,
+            Reset: () => { registrations.length = 0; }
+        }
+    };
+});
+
 vi.mock('@memberjunction/core', () => ({
     BaseEntity: class BaseEntity {
         Get(field: string) { return ''; }
@@ -66,8 +78,27 @@ vi.mock('@memberjunction/core', () => ({
     },
     BaseEnginePropertyConfig: class BaseEnginePropertyConfig {},
     RunView: class RunView {},
-    RegisterForStartup: () => (target: unknown) => target,
+    RegisterForStartup: (constructorOrOptions: any) => {
+        if (typeof constructorOrOptions === 'function') {
+            mockStartupManagerInstance.Register({
+                constructor: constructorOrOptions,
+                options: {}
+            });
+            return constructorOrOptions;
+        }
+        const options = constructorOrOptions || {};
+        return function(constructor: any) {
+            mockStartupManagerInstance.Register({
+                constructor,
+                options
+            });
+            return constructor;
+        };
+    },
     IStartupSink: class IStartupSink {},
+    StartupManager: {
+        Instance: mockStartupManagerInstance
+    }
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -1041,6 +1072,21 @@ describe('AIEngine', () => {
 
         it('should have correct LocalEmbeddingModelVendorName', () => {
             expect(engine.LocalEmbeddingModelVendorName).toBe('LocalEmbeddings');
+        });
+    });
+
+    // ======================================================================
+    // Startup Registration & delayed startup
+    // ======================================================================
+    describe('Startup Registration', () => {
+        it('should be registered with StartupManager as a deferred engine with a 15s delay', () => {
+            const registrations = mockStartupManagerInstance.GetRegistrations();
+            const aiEngineReg = registrations.find((r: any) => r.constructor.name === 'AIEngine');
+            
+            expect(aiEngineReg).toBeDefined();
+            expect(aiEngineReg.options.deferred).toBe(true);
+            expect(aiEngineReg.options.deferredDelay).toBe(15000);
+            expect(aiEngineReg.options.description).toContain('Server-side AI Engine and Embeddings Pre-Warming');
         });
     });
 });
