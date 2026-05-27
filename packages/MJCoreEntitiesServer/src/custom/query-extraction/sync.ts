@@ -4,6 +4,7 @@ import {
     MJQueryFieldEntity,
     MJQueryEntityEntity,
     MJQueryDependencyEntity,
+    QueryEngine,
 } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import type {
@@ -96,7 +97,7 @@ export async function SyncParameters(
     const filteredParams = extractedParams.filter(p => p.name !== 'query');
 
     try {
-        const existingParams = await loadExistingRecords<MJQueryParameterEntity>(
+        const existingParams = loadExistingRecords<MJQueryParameterEntity>(
             'MJ: Query Parameters', queryID, runViewProvider, contextUser, isSaved
         );
 
@@ -228,7 +229,7 @@ export async function SyncFields(
     isSaved: boolean
 ): Promise<void> {
     try {
-        const existingFields = await loadExistingRecords<MJQueryFieldEntity>(
+        const existingFields = loadExistingRecords<MJQueryFieldEntity>(
             'MJ: Query Fields', queryID, runViewProvider, contextUser, isSaved
         );
 
@@ -411,7 +412,7 @@ export async function SyncEntities(
     isSaved: boolean
 ): Promise<void> {
     try {
-        const existingEntities = await loadExistingRecords<MJQueryEntityEntity>(
+        const existingEntities = loadExistingRecords<MJQueryEntityEntity>(
             'MJ: Query Entities', queryID, runViewProvider, contextUser, isSaved
         );
 
@@ -490,7 +491,7 @@ export async function SyncDependencies(
     }));
 
     try {
-        const existingDeps = await loadExistingRecords<MJQueryDependencyEntity>(
+        const existingDeps = loadExistingRecords<MJQueryDependencyEntity>(
             'MJ: Query Dependencies', queryID, runViewProvider, contextUser, isSaved
         );
 
@@ -623,24 +624,31 @@ export async function RemoveAllRecords(
  * Loads all existing records of a given entity type for a query.
  * Returns an empty array if the query has not been saved yet.
  */
-async function loadExistingRecords<T>(
+/**
+ * Loads existing child records for a query from QueryEngine's in-memory cache.
+ * This avoids redundant RunView calls — QueryEngine already has all query child
+ * data loaded and auto-refreshes via BaseEntity events.
+ */
+function loadExistingRecords<T extends { QueryID: string }>(
     entityName: string,
     queryID: string,
-    runViewProvider: IRunViewProvider,
-    contextUser: UserInfo,
+    _runViewProvider: IRunViewProvider,
+    _contextUser: UserInfo,
     isSaved: boolean
-): Promise<T[]> {
+): T[] {
     if (!isSaved) return [];
 
-    const result = await runViewProvider.RunView<T>({
-        EntityName: entityName,
-        ExtraFilter: `QueryID='${queryID}'`,
-        ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!result.Success) {
-        throw new Error(`Failed to load existing ${entityName}: ${result.ErrorMessage}`);
+    const qe = QueryEngine.Instance;
+    switch (entityName) {
+        case 'MJ: Query Parameters':
+            return qe.GetQueryParameters(queryID) as unknown as T[];
+        case 'MJ: Query Fields':
+            return qe.GetQueryFields(queryID) as unknown as T[];
+        case 'MJ: Query Entities':
+            return qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, queryID)) as unknown as T[];
+        case 'MJ: Query Dependencies':
+            return qe.Dependencies.filter(d => UUIDsEqual(d.QueryID, queryID)) as unknown as T[];
+        default:
+            return [];
     }
-
-    return result.Results || [];
 }

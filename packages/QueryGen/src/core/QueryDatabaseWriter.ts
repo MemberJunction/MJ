@@ -6,10 +6,11 @@
  * of the SQL template during the Save() operation.
  */
 
-import { DatabaseProviderBase, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, UserInfo } from '@memberjunction/core';
 import {
   MJQueryEntity,
-  MJQueryCategoryEntity
+  MJQueryCategoryEntity,
+  QueryEngine
 } from '@memberjunction/core-entities';
 import { ValidatedQuery, WriteResult } from '../data/schema';
 import { extractErrorMessage } from '../utils/error-handlers';
@@ -143,29 +144,19 @@ export class QueryDatabaseWriter {
     description: string,
     contextUser: UserInfo
   ): Promise<string> {
-    const rv = new RunView();
-
-    // Build filter to match both name and parent
-    let filter = `Name='${categoryName.replace(/'/g, "''")}'`;
-    if (parentCategoryId) {
-      filter += ` AND ParentID='${parentCategoryId}'`;
-    } else {
-      filter += ` AND ParentID IS NULL`;
-    }
-
-    const result = await rv.RunView<MJQueryCategoryEntity>({
-      EntityName: 'MJ: Query Categories',
-      ExtraFilter: filter,
-      ResultType: 'entity_object'
-    }, contextUser);
-
-    if (!result.Success) {
-      throw new Error(`Failed to search for category: ${result.ErrorMessage}`);
-    }
+    // Look up from QueryEngine's cached categories instead of hitting the DB
+    const nameLower = categoryName.trim().toLowerCase();
+    const existing = QueryEngine.Instance.Categories.find(c => {
+      if (c.Name.trim().toLowerCase() !== nameLower) return false;
+      if (parentCategoryId) {
+        return c.ParentID?.trim().toLowerCase() === parentCategoryId.trim().toLowerCase();
+      }
+      return c.ParentID == null;
+    });
 
     // If found, return existing category ID
-    if (result.Results && result.Results.length > 0) {
-      return result.Results[0].ID;
+    if (existing) {
+      return existing.ID;
     }
 
     // Category doesn't exist, create it

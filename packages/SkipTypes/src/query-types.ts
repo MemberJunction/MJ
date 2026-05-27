@@ -277,6 +277,20 @@ export class SkipQueryInfo implements IQueryInfoBase {
      * are eligible for composition.
      */
     Reusable: boolean = false;
+    /**
+     * Foreign key to the SQL dialect this query's SQL is written in
+     */
+    SQLDialectID: string | null = null;
+    /**
+     * Whether the SQL uses Nunjucks template markers
+     */
+    UsesTemplate: boolean = false;
+    /**
+     * Whether this query has been formally approved for production use
+     */
+    get IsApproved(): boolean {
+        return this.Status === 'Approved';
+    }
 
     CacheEnabled: boolean = false;
     CacheMaxSize: number;
