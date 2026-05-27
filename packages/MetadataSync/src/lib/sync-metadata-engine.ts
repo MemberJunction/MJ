@@ -348,6 +348,24 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     );
   }
 
+  /**
+   * Skip preload for any record whose `primaryKey` still carries an
+   * unresolved metadata reference (`@lookup:`, `@parent:`, `@root:`,
+   * `@file:`, `@env:`, `@template:`). Those values resolve to real IDs
+   * later in SyncEngine's per-record path; if we let them through here
+   * we'd inline the literal `@lookup:...` string into a `WHERE ID = '...'`
+   * filter and SQL Server would (correctly) reject the cast to
+   * uniqueidentifier.
+   */
+  private hasUnresolvedReference(primaryKey: Record<string, unknown>): boolean {
+    for (const value of Object.values(primaryKey)) {
+      if (typeof value === 'string' && /^@(lookup|parent|root|file|env|template):/.test(value)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private extractPrimaryKeysRecursive(
     records: Array<Record<string, unknown>>,
     entityName: string,
@@ -367,7 +385,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       }
 
       const primaryKey = record.primaryKey as Record<string, unknown> | undefined;
-      if (primaryKey && Object.keys(primaryKey).length > 0) {
+      if (primaryKey && Object.keys(primaryKey).length > 0 && !this.hasUnresolvedReference(primaryKey)) {
         list.push(primaryKey);
       }
 
