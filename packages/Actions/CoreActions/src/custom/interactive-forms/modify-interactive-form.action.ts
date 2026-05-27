@@ -14,7 +14,8 @@ import {
  * Modify an existing interactive-form override.
  *
  * Behavior is driven by the **`VersionBumpKind` input** and the **source
- * Component's status**:
+ * Override's status** (Override is the canonical "is this live" signal —
+ * Component.Status can drift independently):
  *
  * | Source Status | VersionBumpKind        | Behavior                                                                                                                                            |
  * |---------------|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -22,9 +23,12 @@ import {
  * | Pending       | `patch` / `minor` / `major` | **Demote** the existing Pending → Inactive, then insert a new Pending Component v(bumped) + new Pending Override pointing at it. Creates rollback. |
  * | Active        | `in-place`             | **Rejected** — would corrupt the live Active row. Returns `INVALID_BUMP_FOR_STATUS`.                                                                |
  * | Active        | `patch` / `minor` (default) / `major` | Insert new Pending Component v(bumped) + new Pending Override. Active is untouched — user explicitly Activates later.                  |
+ * | Inactive      | `in-place`             | **Rejected** — overwriting a dead row achieves nothing. Use 'Revert Interactive Form' to re-activate first, or supply a bump kind.                  |
+ * | Inactive      | `patch` (default) / `minor` / `major` | Branch-from-historical. Insert new Pending Component v(bumped) sourced from this Inactive spec. The Inactive source is left alone (already historical). |
  *
- * **Defaults** preserve the historical behavior: omit `VersionBumpKind` and
- * Pending sources stay in-place, Active sources bump minor.
+ * **Defaults** preserve historical behavior: omit `VersionBumpKind` and
+ * Pending sources stay in-place, Active sources bump minor, Inactive
+ * sources bump patch (the conservative branch-from-historical case).
  *
  * **Security clamp.** Modify *always* writes a User-scope Pending Override,
  * regardless of the original override's scope. Even if the caller is
@@ -129,10 +133,6 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 overrideStatus === 'Active' ? 'Active' :
                 overrideStatus === 'Pending' ? 'Pending' : 'Inactive';
             const isPendingSource = sourceStatus === 'Pending';
-            if (sourceStatus === 'Inactive') {
-                return failure("INVALID_SOURCE_STATUS",
-                    `Override ${override.ID} has Status='${overrideStatus}' — Modify only operates on Active or Pending overrides. Use 'Revert Interactive Form' to re-activate an inactive version first.`);
-            }
             const rawKind = getStringParam(params, "VersionBumpKind");
             let bumpKind: VersionBumpKind;
             if (rawKind) {
@@ -143,14 +143,20 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 }
                 bumpKind = parsed;
             } else {
-                bumpKind = isPendingSource ? 'in-place' : 'minor';
+                // Default behavior by source status. Inactive defaults to
+                // 'patch' (the conservative branch-from-historical case);
+                // any explicit kind still wins above.
+                bumpKind = isPendingSource ? 'in-place' : (sourceStatus === 'Inactive' ? 'patch' : 'minor');
             }
 
-            // Guard: 'in-place' against an Active source would corrupt the
-            // live form. Reject loudly so the caller corrects intent.
+            // 'in-place' is only meaningful against a Pending source — it
+            // overwrites the iteration's Spec on the same row. Against
+            // Active (would clobber live) or Inactive (overwriting a dead
+            // row achieves nothing — won't re-activate it; use Revert for
+            // that) we reject loudly so the caller corrects intent.
             if (bumpKind === 'in-place' && !isPendingSource) {
                 return failure("INVALID_BUMP_FOR_STATUS",
-                    `'in-place' is only valid when the source Component is Pending (got Status='${existingComponent.Status}'). Use 'patch', 'minor', or 'major' to snapshot a new version.`);
+                    `'in-place' is only valid against a Pending Override (got Status='${overrideStatus}'). Use 'patch', 'minor', or 'major' to snapshot a new Pending version from this source; use 'Revert Interactive Form' to re-activate an Inactive historical version.`);
             }
 
             if (bumpKind === 'in-place') {
@@ -189,10 +195,12 @@ export class ModifyInteractiveFormAction extends BaseAction {
             }
 
             // ── new-version path: snapshot to a new Pending Component +
-            // sibling Override. Works for both Active sources (preserves the
-            // live Active row) and Pending sources (where we demote the
-            // existing Pending → Inactive to keep the rollback history
-            // without producing two concurrent Pendings).
+            // sibling Override. Works for Active sources (preserves the
+            // live Active row), Pending sources (where we demote the existing
+            // Pending → Inactive to keep the rollback history without producing
+            // two concurrent Pendings), and Inactive sources (branch-from-
+            // historical — no demote needed since source is already Inactive,
+            // and the user explicitly opened it to fork from there).
             const newVersion = bumpVersion(existingComponent.Version, bumpKind);
             const newSequence = (existingComponent.VersionSequence ?? 0) + 1;
             const componentInsert = await insertComponent({

@@ -511,6 +511,84 @@ describe('ModifyInteractiveFormAction', () => {
         expect(hoisted.newOverrides.length).toBe(0);
     });
 
+    it('Inactive Override + VersionBumpKind=patch → branch-from-historical (new Pending, source untouched)', async () => {
+        hoisted.overrides.set('OVER-INACTIVE', {
+            record: {
+                ID: 'OVER-INACTIVE', EntityID: 'ENT-1', ComponentID: 'COMP-INACTIVE',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Inactive',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-INACTIVE', {
+            record: {
+                ID: 'COMP-INACTIVE', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Deprecated', Version: '0.9.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-INACTIVE');
+        params.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'patch' });
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.Success).toBe(true);
+        expect(result.Message).toMatch(/new-version/);
+        expect(result.Message).toMatch(/"PreviousSourceStatus":"Inactive"/);
+        expect(result.Message).toMatch(/"Version":"0\.9\.1"/);
+        // Inactive source MUST NOT be demoted again — it was already Inactive.
+        // Output's Demoted* should be null/absent since we never touched it.
+        expect(result.Message).toMatch(/"DemotedComponentID":null/);
+        expect(result.Message).toMatch(/"DemotedOverrideID":null/);
+        // New rows should exist.
+        expect(hoisted.newComponents.length).toBe(1);
+        expect(hoisted.newOverrides.length).toBe(1);
+    });
+
+    it('Inactive Override + default (no VersionBumpKind) → defaults to patch (branch-from-historical)', async () => {
+        hoisted.overrides.set('OVER-INACTIVE-DEFAULT', {
+            record: {
+                ID: 'OVER-INACTIVE-DEFAULT', EntityID: 'ENT-1', ComponentID: 'COMP-INACTIVE-DEFAULT',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Inactive',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-INACTIVE-DEFAULT', {
+            record: {
+                ID: 'COMP-INACTIVE-DEFAULT', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Deprecated', Version: '1.2.3', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const result = await run(new ModifyInteractiveFormAction(), mkParams('OVER-INACTIVE-DEFAULT'));
+        expect(result.Success).toBe(true);
+        expect(result.Message).toMatch(/"BumpKind":"patch"/);
+        expect(result.Message).toMatch(/"Version":"1\.2\.4"/);
+    });
+
+    it('Inactive Override + in-place → rejected with INVALID_BUMP_FOR_STATUS', async () => {
+        hoisted.overrides.set('OVER-INACTIVE-INPLACE', {
+            record: {
+                ID: 'OVER-INACTIVE-INPLACE', EntityID: 'ENT-1', ComponentID: 'COMP-INACTIVE-INPLACE',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Inactive',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-INACTIVE-INPLACE', {
+            record: {
+                ID: 'COMP-INACTIVE-INPLACE', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Deprecated', Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-INACTIVE-INPLACE');
+        params.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'in-place' });
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.ResultCode).toBe('INVALID_BUMP_FOR_STATUS');
+        expect(hoisted.newComponents.length).toBe(0);
+        expect(hoisted.newOverrides.length).toBe(0);
+    });
+
     it('INVALID_BUMP_KIND for unknown VersionBumpKind value', async () => {
         hoisted.overrides.set('OVER-BAD-KIND', {
             record: {

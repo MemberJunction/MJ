@@ -630,7 +630,7 @@
   {
     "fields": {
       "Name": "Modify Interactive Form",
-      "Description": "Modify an existing interactive-form override. Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version, demoting any prior Pending in the same lineage to Inactive so rollback history is preserved. Active sources reject 'in-place' (would corrupt the live row) and default to 'minor' for back-compat. Scope is preserved from the existing override.",
+      "Description": "Modify an existing interactive-form override. Routes off the source Override's status (not the underlying Component). Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version. Pending sources with a bump demote the prior Pending to Inactive (preserves rollback history). Active sources reject 'in-place' (would corrupt the live row) and default to 'minor'. Inactive sources reject 'in-place' (use Revert to re-activate first) but accept patch/minor/major as a branch-from-historical operation — default 'patch'; the Inactive source row is left untouched. Scope is preserved from the existing override.",
       "DriverClass": "__ModifyInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -841,14 +841,14 @@
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_BUMP_FOR_STATUS",
-            "Description": "VersionBumpKind='in-place' is only valid when the source Override is Pending. Use 'patch', 'minor', or 'major' against Active sources."
+            "Description": "VersionBumpKind='in-place' is only valid when the source Override is Pending. Use 'patch', 'minor', or 'major' against Active or Inactive sources (Inactive sources branch-from-historical; the source row is left alone)."
           },
           "primaryKey": {
             "ID": "E9B9ABB6-D130-48F2-9B3C-BA1287FE710C"
           },
           "sync": {
-            "lastModified": "2026-05-27T02:10:10.367Z",
-            "checksum": "7984c74e4799d1adfd723a3317cee6455f94be65f7bff378958c0b202b8e0f15"
+            "lastModified": "2026-05-27T11:45:57.348Z",
+            "checksum": "1c6d60dfef554bf3f3b96726a96823a5515a85aaf82352826e245d3c1197c275"
           }
         },
         {
@@ -863,20 +863,6 @@
           "sync": {
             "lastModified": "2026-05-27T02:10:10.314Z",
             "checksum": "b704adeba05afab0b9cae388b19506f14a770cd0e3933607c27a438aff1468c7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "ResultCode": "INVALID_SOURCE_STATUS",
-            "Description": "Modify only operates on Active or Pending overrides. Use 'Revert Interactive Form' to re-activate an inactive historical version first."
-          },
-          "primaryKey": {
-            "ID": "5E2E8457-4D3E-4974-9FFD-B5607D22F660"
-          },
-          "sync": {
-            "lastModified": "2026-05-27T02:10:10.336Z",
-            "checksum": "27545f7f601a29d566d93c77ec2a1bb7cdbd4d6aed39d8835bff1c375dd694cc"
           }
         },
         {
@@ -941,8 +927,8 @@
       "ID": "1AEAC96B-5578-4099-BC40-E9D02E590DB4"
     },
     "sync": {
-      "lastModified": "2026-05-27T01:40:51.898Z",
-      "checksum": "f83235d558714e280723de16c37a2ea93da416b7ab26ad06a244dcd7bb88b771"
+      "lastModified": "2026-05-27T11:45:57.172Z",
+      "checksum": "b84ff866d9ad9b48ce582ecf1a994b5e5d77b9509844bc2a0e611b34b5055c25"
     }
   },
   {

@@ -2236,61 +2236,105 @@ export class FormBuilderResourceComponent
      * libraries grouped together (all Charting options adjacent, all UI,
      * etc.).
      */
-    private buildAvailableLibraries(): ReadonlyArray<{
-        Name: string;
-        Category: string | null;
-        GlobalVariable: string | null;
-        Description: string | null;
-        Version: string | null;
-        UsageInstructions?: string;
-    }> {
-        const libs = ComponentMetadataEngine.Instance.ComponentLibraries ?? [];
-        return libs
+    /**
+     * Pre-render the AvailableLibraries catalog as markdown for the agent
+     * prompt. Token-efficient vs the previous JSON-array shape: nested
+     * heading structure that LLMs parse natively, ~40-50% fewer tokens on
+     * a typical 25-30 library catalog, and easier to skim in agent-run
+     * logs. Grouped by Category (UI, Charting, etc.) with library entries
+     * as `### Name (Category)` and per-library bullets for description,
+     * version, GlobalVariable, and short usage instructions.
+     */
+    private buildAvailableLibrariesMarkdown(): string {
+        const libs = (ComponentMetadataEngine.Instance.ComponentLibraries ?? [])
             .filter(l => l.Status === 'Active')
-            .map(l => {
-                const entry: {
-                    Name: string; Category: string | null; GlobalVariable: string | null;
-                    Description: string | null; Version: string | null; UsageInstructions?: string;
-                } = {
-                    Name: l.Name,
-                    Category: l.Category ?? null,
-                    GlobalVariable: l.GlobalVariable ?? null,
-                    Description: l.Description ?? null,
-                    Version: l.Version ?? null,
-                };
-                if (l.UsageInstructions && l.UsageInstructions.length > 0 && l.UsageInstructions.length < 500) {
-                    entry.UsageInstructions = l.UsageInstructions;
-                }
-                return entry;
-            })
             .sort((a, b) => (a.Category ?? '').localeCompare(b.Category ?? '') || a.Name.localeCompare(b.Name));
+        if (libs.length === 0) return '';
+        const lines: string[] = ['## Available Libraries'];
+        let lastCategory: string | null | undefined = undefined;
+        for (const l of libs) {
+            const cat = l.Category ?? 'Other';
+            if (cat !== lastCategory) {
+                lines.push(`### ${cat}`);
+                lastCategory = cat;
+            }
+            const parts: string[] = [`#### ${l.Name}`];
+            if (l.GlobalVariable) parts.push(`- GlobalVariable: \`${l.GlobalVariable}\``);
+            if (l.Version) parts.push(`- Version: ${l.Version}`);
+            if (l.Description) parts.push(`- ${l.Description}`);
+            if (l.UsageInstructions && l.UsageInstructions.length > 0 && l.UsageInstructions.length < 500) {
+                parts.push(`- Usage: ${l.UsageInstructions}`);
+            }
+            lines.push(...parts);
+        }
+        return lines.join('\n');
     }
 
-    private buildRelatedEntitiesSummary(): ReadonlyArray<{
-        RelatedEntity: string;
-        Type: string;
-        EntityKeyField: string | null;
-        RelatedEntityJoinField: string | null;
-        DisplayName?: string;
-    }> {
+    /**
+     * Pre-render the active form's curated schema as markdown for the
+     * agent prompt. Replaces the JSON Schema payload — same information,
+     * roughly half the tokens, and easier to read in logs.
+     *
+     * Field names are wrapped in inline code (`` `name` ``) so underscores
+     * (e.g. `__mj_Internal`) don't get parsed as emphasis. Other text is
+     * left raw — LLMs tolerate minor markdown imperfections in description
+     * prose fine.
+     */
+    private buildSchemaMarkdown(): string {
+        if (!this.Schema) return '';
+        const s = this.Schema;
+        const lines: string[] = [];
+        lines.push(`## Schema: ${s.displayName} (\`${s.entityName}\`)`);
+        if (s.description) lines.push(s.description);
+        if (s.nameField) lines.push(`Name field: \`${s.nameField}\``);
+        lines.push('### Fields');
+        for (const f of s.fields) {
+            const flags: string[] = [f.type];
+            if (f.required) flags.push('required');
+            if (f.isPrimaryKey) flags.push('primary key');
+            if (f.maxLength != null) flags.push(`max ${f.maxLength}`);
+            const label = f.displayName && f.displayName !== f.name ? `${f.displayName} (\`${f.name}\`)` : `\`${f.name}\``;
+            lines.push(`#### ${label}`);
+            lines.push(`- ${flags.join(', ')}`);
+            if (f.description) lines.push(`- ${f.description}`);
+            if (f.allowedValues?.length) lines.push(`- Allowed values: ${f.allowedValues.join(', ')}`);
+            if (f.references) {
+                const dispField = f.references.displayField ? `.${f.references.displayField}` : '';
+                lines.push(`- References: \`${f.references.entity}${dispField}\``);
+            }
+        }
+        return lines.join('\n');
+    }
+
+    /**
+     * Pre-render the active entity's related-entities summary as markdown.
+     * Compact one-line-per-related entry — agent sees what tables it could
+     * pull in (lookups, sub-grids, related-record cards) without paying the
+     * token cost of full schemas (those are still one `Get Entity Schema
+     * For Form` action call away).
+     */
+    private buildRelatedEntitiesMarkdown(): string {
         const provider = this.provider;
-        if (!provider || !this.TargetEntityName) return [];
+        if (!provider || !this.TargetEntityName) return '';
         const entity = provider.EntityByName?.(this.TargetEntityName);
-        if (!entity) return [];
+        if (!entity) return '';
         const rels = entity.RelatedEntities ?? [];
-        return rels.map(r => {
+        if (rels.length === 0) return '';
+        const lines: string[] = ['## Related Entities'];
+        for (const r of rels) {
             // Resolve RelatedEntity name from the ID. EntityRelationshipInfo
             // doesn't carry the friendly name directly; look it up from
             // the provider's cached entity list.
             const related = provider.Entities?.find(e => e.ID === r.RelatedEntityID);
-            return {
-                RelatedEntity: related?.Name ?? '(unknown)',
-                Type: r.Type ?? 'One-to-Many',
-                EntityKeyField: r.EntityKeyField ?? null,
-                RelatedEntityJoinField: r.RelatedEntityJoinField ?? null,
-                DisplayName: r.DisplayName ?? undefined,
-            };
-        });
+            const name = related?.Name ?? '(unknown)';
+            const type = (r.Type ?? 'One To Many').trim();
+            const display = r.DisplayName && r.DisplayName !== name ? ` — ${r.DisplayName}` : '';
+            const parts = [`### \`${name}\`${display}`, `- Type: ${type}`];
+            if (r.EntityKeyField) parts.push(`- Local key: \`${r.EntityKeyField}\``);
+            if (r.RelatedEntityJoinField) parts.push(`- Join field on related: \`${r.RelatedEntityJoinField}\``);
+            lines.push(...parts);
+        }
+        return lines.join('\n');
     }
 
     private registerAgentContext(): void {
@@ -2336,32 +2380,28 @@ export class FormBuilderResourceComponent
                         Code: this.EditableCode || null,
                         // Curated, LLM-friendly schema for the entity this
                         // form binds to (resolved FKs, value-list enums,
-                        // stripped audit fields). Pre-built when the form
-                        // loaded — see `buildCuratedFormSchema`. Including
-                        // it inline means the agent doesn't have to spend
-                        // a tool-call turn fetching schema for the obvious
-                        // entity it's editing.
-                        Schema: this.Schema ?? null,
-                        // Lightweight relationship summary — just enough
-                        // for the agent to know what related-entity tables
-                        // / lookups / sub-forms it COULD add to this form.
-                        // Full schemas for any of these are still one
-                        // `Get Entity Schema For Form` action call away
-                        // (called WHEN drilling into a related entity,
-                        // not pre-emptively); we keep this list compact
-                        // to avoid token bloat.
-                        RelatedEntities: this.buildRelatedEntitiesSummary(),
+                        // stripped audit fields), pre-rendered as nested
+                        // markdown. LLMs parse this natively and roughly
+                        // half the tokens of the prior JSON shape. The
+                        // agent doesn't need to spend a tool-call turn
+                        // fetching schema for the entity it's editing.
+                        SchemaMarkdown: this.buildSchemaMarkdown() || null,
+                        // Related-entities summary as markdown — just
+                        // enough for the agent to know what tables it
+                        // could pull in (lookups, sub-forms, related-
+                        // record cards). Full schemas are still one
+                        // `Get Entity Schema For Form` call away when
+                        // the agent actually drills into one.
+                        RelatedEntitiesMarkdown: this.buildRelatedEntitiesMarkdown() || null,
                     }
                     : null,
                 // Cockpit-wide catalog of libraries the form-runtime
                 // already supports — agent uses these as the source of
                 // truth for `ComponentSpec.libraries` declarations. Sits
                 // alongside ActiveForm rather than nested inside, since
-                // it's not per-form state — it's the same catalog
-                // regardless of which form is open. See
-                // `buildAvailableLibraries` for the payload shape and
-                // sorting rules.
-                AvailableLibraries: this.buildAvailableLibraries(),
+                // it's not per-form state. Markdown-rendered (grouped by
+                // Category) for token efficiency.
+                AvailableLibrariesMarkdown: this.buildAvailableLibrariesMarkdown() || null,
             };
             // Push cockpit-specific state to NavigationService. The Explorer
             // shell merges this into the published AppContextSnapshot's
