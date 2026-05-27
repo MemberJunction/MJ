@@ -196,18 +196,46 @@ Three branches:
 
 1. Read `Active.Spec` from the response above. That's the current live form.
 2. Apply the user's requirements as deltas to that spec (don't start from scaffold — preserve user customizations from prior cycles).
-3. Call **`Modify Interactive Form`** with the existing `OverrideID` from `Active.OverrideID`, the new `Spec`, and an optional `Notes` argument summarizing what changed.
+3. Call **`Modify Interactive Form`** with the existing `OverrideID` from `Active.OverrideID`, the new `Spec`, an optional `Notes` argument summarizing what changed, and a **`VersionBumpKind`** (see policy below — default `minor`).
 4. The action will create a **new Component v(N+1)** with Status='Pending' and a sibling Pending Override. The user's live Active form stays untouched until they explicitly activate.
 
 #### Branch C — Pending sibling already exists in `Variants`
 
-The user is mid-iteration. Pick the Pending Override (look in `Variants` for `Status === 'Pending'`), call **`Modify Interactive Form`** with its `OverrideID`. The action will **overwrite the Pending Component row in place** — no new version. This is what keeps a chat-refinement loop from producing dozens of dead versions.
+The user is mid-iteration. Pick the Pending Override (look in `Variants` for `Status === 'Pending'`), call **`Modify Interactive Form`** with its `OverrideID`. By default the action will **overwrite the Pending Component row in place** — no new version, no rollback point. Use that for tight chat-refinement loops where you're polishing a single iteration. **When the user has accepted the current Pending and is asking for the next thing**, pass an explicit `VersionBumpKind` of `patch` / `minor` / `major` instead — the action will demote the current Pending to Inactive (still visible in the rail, still re-Activatable) and create a new Pending with the bumped version, giving them a checkpoint to roll back to.
+
+### Version-bump policy (Branches B and C)
+
+`Modify Interactive Form` accepts an optional `VersionBumpKind` input that drives whether a new version is created and how the number is bumped. Pick the value based on the **user's stated intent**, not the size of the JSON diff:
+
+| Intent | VersionBumpKind | Effect |
+|---|---|---|
+| Fix a defect — typo, broken validation, wrong field label, layout bug | `patch` (or `in-place` if the user said "no, just fix it on this version") | `1.2.3` → `1.2.4` |
+| Add something new — a field, a section, a chart, a tab, a related-records card | `patch` | `1.2.3` → `1.2.4` |
+| Restructure visibly — new layout, reordered sections, new tabbed structure | `minor` (default for Active sources) | `1.2.3` → `1.3.0` |
+| Radical redesign / "rewrite" / "start over" / user explicitly says "new major version" | `major` | `1.2.3` → `2.0.0` |
+| User says "no, that was wrong, try again on the same Pending" (Branch C only) | `in-place` | overwrite same row, no new version |
+
+**Rules of thumb**:
+- Default to **`patch`** when you're unsure between patch and minor. Patch versions accumulate cheaply; a wasted minor bump is harder to undo.
+- **`in-place`** is only valid against a Pending source. Against Active sources the action will reject with `INVALID_BUMP_FOR_STATUS` — bumping is mandatory when starting from Active because overwriting the live form is never the right behavior.
+- **Bias toward creating versions** rather than burning state. Users have asked for rollback ergonomics; `in-place` should be the exception, not the rule. Reach for it when you're mid-conversation polishing a single iteration and the user clearly hasn't accepted the current Pending yet.
+
+### ⚠️ Never change `spec.name` between Modify calls
+
+Component **lineage is identified by `Name`**. Two Components with different Names are two completely separate forms in the version rail — no rollback link between them. The user sees the old one disappear and a "brand new form" appear.
+
+The function declaration inside `spec.code` MUST match `spec.name` (lint rule `component-name-mismatch`). So when an earlier attempt fails lint because the function name has spaces or invalid chars, **sanitize the function name to match the existing `spec.name`** — never rewrite `spec.name` to match the sanitized function name.
+
+The action enforces this with `LINEAGE_NAME_MISMATCH`. If you see that error, the recovery is always: set `spec.name = <existing Component.Name>` AND `spec.code` declares `function <existing Component.Name>(...) { ... }`. If `appContext.ActiveForm` is populated, the existing name is at `appContext.ActiveForm.FormName` (or read from a fresh `Get Active Form For Entity` response — look at `Active.ComponentName` or `Variants[].ComponentName`).
+
+If the user explicitly asks to rename a form, that's a manual operation in Form Builder, not something Modify supports.
 
 ### 3. Final answer to the user
 
 Tell them, in one paragraph:
-- Whether it was a brand-new form (Branch A), a new version (Branch B), or an in-place tweak (Branch C).
-- For B and C: that the change is **Pending** — to activate it, they open Form Builder, find the version in the rail, and click "Make Active". Their currently-Active form is untouched.
+- Whether it was a brand-new form (Branch A), a new version (Branch B, or Branch C with a patch/minor/major bump), or an in-place tweak (Branch C with `in-place`).
+- For new versions: name the resulting version (the action's `Version` output) and tell them the change is **Pending** — to activate it, they open Form Builder, find the version in the rail, and click "Make Active". Their currently-Active form is untouched.
+- For in-place tweaks: tell them you updated the same Pending version in place (no new rollback point) so the version number didn't change.
 - What's special about the form: "split system fields into their own section", "added a chart of payment history", whatever the requirement was.
 
 **Use the exact canonical entity name** returned by the action (e.g. `"MJ: Users"`, not `"Users"`). The chat builds an "Open record" CTA by exact name match against the entity registry; using the display name breaks the link.

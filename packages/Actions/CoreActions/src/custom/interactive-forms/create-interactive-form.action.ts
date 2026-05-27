@@ -50,21 +50,23 @@ export class CreateInteractiveFormAction extends BaseAction {
                     `Entity '${inputs.EntityName}' is not registered with the active metadata provider.`);
             }
 
-            // Guard: don't silently create a duplicate Active override.
-            // Pending siblings are fine — they're an in-flight cycle and the
-            // caller should know to use Modify on those.
+            // Guard: don't silently create a duplicate override. We match
+            // BOTH Active and Pending sibling overrides — either is grounds
+            // to switch to Modify on that row instead of creating a second
+            // override. (Two overrides for the same entity/user would race
+            // each other at form-resolution time.)
             const rv = RunView.FromMetadataProvider(provider);
-            const dupResult = await rv.RunView<{ ID: string }>({
+            const dupResult = await rv.RunView<{ ID: string; Status: string }>({
                 EntityName: "MJ: Entity Form Overrides",
-                ExtraFilter: `EntityID='${entityInfo.ID}' AND Scope='User' AND UserID='${user.ID}' AND Status='Active'`,
-                Fields: ['ID'],
+                ExtraFilter: `EntityID='${entityInfo.ID}' AND Scope='User' AND UserID='${user.ID}' AND Status IN ('Active', 'Pending')`,
+                Fields: ['ID', 'Status'],
                 ResultType: 'simple',
                 MaxRows: 1,
             }, user);
             if (dupResult.Success && (dupResult.Results ?? []).length > 0) {
-                const existingID = dupResult.Results![0].ID;
+                const existing = dupResult.Results![0];
                 return failure("ALREADY_EXISTS",
-                    `An Active User-scope override already exists for entity '${inputs.EntityName}' (OverrideID=${existingID}). Use 'Modify Interactive Form' to refine it, or 'Revert Interactive Form' to switch to a different version.`);
+                    `A ${existing.Status} User-scope override already exists for entity '${inputs.EntityName}' (OverrideID=${existing.ID}). Use 'Modify Interactive Form' on this OverrideID to refine it (with a VersionBumpKind of 'patch' / 'minor' / 'major' to snapshot a new version, or 'in-place' against a Pending row to keep iterating on the same version). Use 'Revert Interactive Form' to switch to a different historical version.`);
             }
 
             // Lint before any persistence — fail-hard.

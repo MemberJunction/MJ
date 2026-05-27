@@ -200,12 +200,12 @@ vi.mock('@memberjunction/core', async () => {
 
 import { ModifyInteractiveFormAction } from '../custom/interactive-forms/modify-interactive-form.action';
 
-function validSpec(): Record<string, unknown> {
+function validSpec(name: string = 'CompactForm'): Record<string, unknown> {
     return {
-        name: 'F',
+        name,
         componentRole: 'form',
         location: 'embedded',
-        code: 'function F() { return null; }',
+        code: `function ${name}() { return null; }`,
     };
 }
 
@@ -327,13 +327,13 @@ describe('ModifyInteractiveFormAction', () => {
         hoisted.overrides.set('OVER-OTHER', {
             record: {
                 ID: 'OVER-OTHER', EntityID: 'ENT-1', ComponentID: 'COMP-OTHER',
-                Name: 'F', Scope: 'User', UserID: 'OTHER-USER', RoleID: null,
+                Name: 'CompactForm', Scope: 'User', UserID: 'OTHER-USER', RoleID: null,
                 Priority: 0, Status: 'Active',
             },
             saveOutcome: true, loaded: false,
         });
         hoisted.components.set('COMP-OTHER', {
-            record: { ID: 'COMP-OTHER', Name: 'F', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
+            record: { ID: 'COMP-OTHER', Name: 'CompactForm', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
             saveOutcome: true, loaded: false,
         });
         const result = await run(new ModifyInteractiveFormAction(), mkParams('OVER-OTHER'));
@@ -351,13 +351,13 @@ describe('ModifyInteractiveFormAction', () => {
         hoisted.overrides.set('OVER-ROLE', {
             record: {
                 ID: 'OVER-ROLE', EntityID: 'ENT-1', ComponentID: 'COMP-ROLE',
-                Name: 'F', Scope: 'Role', UserID: null, RoleID: 'R1',
+                Name: 'CompactForm', Scope: 'Role', UserID: null, RoleID: 'R1',
                 Priority: 0, Status: 'Active',
             },
             saveOutcome: true, loaded: false,
         });
         hoisted.components.set('COMP-ROLE', {
-            record: { ID: 'COMP-ROLE', Name: 'F', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
+            record: { ID: 'COMP-ROLE', Name: 'CompactForm', Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}' },
             saveOutcome: true, loaded: false,
         });
         const params = mkParams('OVER-ROLE');
@@ -379,14 +379,14 @@ describe('ModifyInteractiveFormAction', () => {
         hoisted.overrides.set('OVER-1', {
             record: {
                 ID: 'OVER-1', EntityID: 'ENT-1', ComponentID: 'COMP-1',
-                Name: 'F', Scope: 'User', UserID: 'U1', RoleID: null,
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
                 Priority: 0, Status: 'Active',
             },
             saveOutcome: true, loaded: false,
         });
         hoisted.components.set('COMP-1', {
             record: {
-                ID: 'COMP-1', Name: 'F', Status: 'Published',
+                ID: 'COMP-1', Name: 'CompactForm', Status: 'Published',
                 Version: '1.0.0', VersionSequence: 1, Specification: '{}',
             },
             saveOutcome: true, loaded: false,
@@ -400,5 +400,136 @@ describe('ModifyInteractiveFormAction', () => {
         // Nothing should have been persisted.
         expect(hoisted.newComponents.length).toBe(0);
         expect(hoisted.newOverrides.length).toBe(0);
+    });
+
+    it('LINEAGE_NAME_MISMATCH when spec.name differs from existing Component.Name', async () => {
+        hoisted.overrides.set('OVER-LINEAGE', {
+            record: {
+                ID: 'OVER-LINEAGE', EntityID: 'ENT-1', ComponentID: 'COMP-LINEAGE',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Active',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-LINEAGE', {
+            record: {
+                ID: 'COMP-LINEAGE', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        // Agent submits a renamed spec — would silently fork the lineage.
+        const result = await run(new ModifyInteractiveFormAction(), mkParams('OVER-LINEAGE', validSpec('RenamedForm')));
+        expect(result.ResultCode).toBe('LINEAGE_NAME_MISMATCH');
+        expect(result.Message).toMatch(/CompactForm/);
+        // Nothing should have been written.
+        expect(hoisted.newComponents.length).toBe(0);
+        expect(hoisted.newOverrides.length).toBe(0);
+    });
+
+    it('routes off Override.Status not Component.Status (drift scenario)', async () => {
+        // Setup: Override is Active (live), Component is Draft (Pending lifecycle).
+        // The original implementation routed off Component.Status and would have
+        // gone into the in-place branch, silently overwriting the live form.
+        // The fix routes off Override.Status, so this MUST snapshot to a new
+        // Pending version (default 'minor' bump since Active source) and leave
+        // the original Active override untouched.
+        hoisted.overrides.set('OVER-DRIFT', {
+            record: {
+                ID: 'OVER-DRIFT', EntityID: 'ENT-1', ComponentID: 'COMP-DRIFT',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Active',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-DRIFT', {
+            record: {
+                ID: 'COMP-DRIFT', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Draft', // <- drift: Override is Active but underlying is Draft
+                Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const result = await run(new ModifyInteractiveFormAction(), mkParams('OVER-DRIFT'));
+        expect(result.Success).toBe(true);
+        expect(result.Message).toMatch(/new-version/);
+        expect(result.Message).toMatch(/"PreviousSourceStatus":"Active"/);
+        expect(hoisted.newComponents.length).toBe(1);
+        expect(hoisted.newOverrides.length).toBe(1);
+    });
+
+    it('Pending Override + VersionBumpKind=patch → snapshot + demote prior Pending', async () => {
+        hoisted.overrides.set('OVER-PEND-PATCH', {
+            record: {
+                ID: 'OVER-PEND-PATCH', EntityID: 'ENT-1', ComponentID: 'COMP-PEND-PATCH',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Pending',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-PEND-PATCH', {
+            record: {
+                ID: 'COMP-PEND-PATCH', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Draft', Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-PEND-PATCH');
+        params.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'patch' });
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.Success).toBe(true);
+        expect(result.Message).toMatch(/new-version/);
+        expect(result.Message).toMatch(/"BumpKind":"patch"/);
+        expect(result.Message).toMatch(/"Version":"1\.0\.1"/);
+        // The prior Pending Override should have been demoted to Inactive.
+        expect(result.Message).toMatch(/"DemotedOverrideID":"OVER-PEND-PATCH"/);
+        expect(hoisted.newComponents.length).toBe(1);
+        expect(hoisted.newOverrides.length).toBe(1);
+    });
+
+    it('rejects in-place against Active source', async () => {
+        hoisted.overrides.set('OVER-ACTIVE-INPLACE', {
+            record: {
+                ID: 'OVER-ACTIVE-INPLACE', EntityID: 'ENT-1', ComponentID: 'COMP-ACTIVE-INPLACE',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Active',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-ACTIVE-INPLACE', {
+            record: {
+                ID: 'COMP-ACTIVE-INPLACE', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Published', Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-ACTIVE-INPLACE');
+        params.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'in-place' });
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.ResultCode).toBe('INVALID_BUMP_FOR_STATUS');
+        expect(hoisted.newComponents.length).toBe(0);
+        expect(hoisted.newOverrides.length).toBe(0);
+    });
+
+    it('INVALID_BUMP_KIND for unknown VersionBumpKind value', async () => {
+        hoisted.overrides.set('OVER-BAD-KIND', {
+            record: {
+                ID: 'OVER-BAD-KIND', EntityID: 'ENT-1', ComponentID: 'COMP-BAD-KIND',
+                Name: 'CompactForm', Scope: 'User', UserID: 'U1', RoleID: null,
+                Priority: 0, Status: 'Pending',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        hoisted.components.set('COMP-BAD-KIND', {
+            record: {
+                ID: 'COMP-BAD-KIND', Name: 'CompactForm', Title: 'CompactForm',
+                Status: 'Draft', Version: '1.0.0', VersionSequence: 1, Specification: '{}',
+            },
+            saveOutcome: true, loaded: false,
+        });
+        const params = mkParams('OVER-BAD-KIND');
+        params.Params.push({ Name: 'VersionBumpKind', Type: 'Input', Value: 'bump-it' });
+        const result = await run(new ModifyInteractiveFormAction(), params);
+        expect(result.ResultCode).toBe('INVALID_BUMP_KIND');
     });
 });

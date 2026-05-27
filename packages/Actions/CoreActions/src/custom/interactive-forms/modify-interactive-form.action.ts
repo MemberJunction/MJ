@@ -4,31 +4,27 @@ import { Metadata, LogError } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import type { ComponentSpec } from "@memberjunction/interactive-component-types";
 import {
-    addOutput, bumpMinorVersion, checkOverrideOwnership, failure, getStringParam,
+    addOutput, bumpVersion, checkOverrideOwnership, failure, getStringParam,
     insertComponent, insertOverride, lintFormSpec, loadComponent, loadOverride,
-    mapFromComponentStatus, parseSpecParam,
+    mapToComponentStatus, parseSpecParam, parseVersionBumpKind,
+    type VersionBumpKind,
 } from "./_shared";
 
 /**
  * Modify an existing interactive-form override.
  *
- * Behaviour branches on the **status of the Component the override points
- * at**:
+ * Behavior is driven by the **`VersionBumpKind` input** and the **source
+ * Component's status**:
  *
- *   - Component.Status === 'Pending'
- *       The current override is itself the in-flight refinement target.
- *       Modify the Component row **in place** — overwrite `Specification`,
- *       bump `__mj_UpdatedAt` (automatic). No new Component row, no new
- *       Override row. This is what prevents back-and-forth chat refinement
- *       from spawning a tower of untouched draft versions.
+ * | Source Status | VersionBumpKind        | Behavior                                                                                                                                            |
+ * |---------------|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------|
+ * | Pending       | `in-place` (default)   | Overwrite the existing Pending Component row in place. No new version. Iteration-loop behavior.                                                     |
+ * | Pending       | `patch` / `minor` / `major` | **Demote** the existing Pending → Inactive, then insert a new Pending Component v(bumped) + new Pending Override pointing at it. Creates rollback. |
+ * | Active        | `in-place`             | **Rejected** — would corrupt the live Active row. Returns `INVALID_BUMP_FOR_STATUS`.                                                                |
+ * | Active        | `patch` / `minor` (default) / `major` | Insert new Pending Component v(bumped) + new Pending Override. Active is untouched — user explicitly Activates later.                  |
  *
- *   - Component.Status === 'Active' (or anything else)
- *       The current override points at the live form. Insert a **new
- *       Component row** with the same `Name`, bumped Version + VersionSequence,
- *       `Status='Pending'`. Insert a **new EntityFormOverride row** with
- *       `Status='Pending'` pointing at the new Component. The existing
- *       Active override is untouched — users must explicitly Activate the
- *       new version before it takes effect.
+ * **Defaults** preserve the historical behavior: omit `VersionBumpKind` and
+ * Pending sources stay in-place, Active sources bump minor.
  *
  * **Security clamp.** Modify *always* writes a User-scope Pending Override,
  * regardless of the original override's scope. Even if the caller is
@@ -47,12 +43,13 @@ import {
  *   - `OverrideID` (required, string) — the override to modify
  *   - `Spec` (required, ComponentSpec | string) — the new form spec
  *   - `Notes` (optional, string) — appended to the override's Notes column
+ *   - `VersionBumpKind` (optional, 'in-place' | 'patch' | 'minor' | 'major') — see table above
  *
  * Outputs:
- *   - `ComponentID` — the Component row (new or existing-Pending) that now holds the spec
- *   - `OverrideID` — the Override row that points at it (new or unchanged)
+ *   - `ComponentID` — the Component row that now holds the spec (new for snapshots, same for in-place)
+ *   - `OverrideID` — the Override row that points at it
  *   - `Mode` — 'in-place' or 'new-version'
- *   - `Version` — the Component's Version string (helpful for UX)
+ *   - `Version` — the Component's resulting Version string
  */
 @RegisterClass(BaseAction, "__ModifyInteractiveForm")
 export class ModifyInteractiveFormAction extends BaseAction {
@@ -92,12 +89,71 @@ export class ModifyInteractiveFormAction extends BaseAction {
                     `Override ${overrideID} points at Component ${override.ComponentID} which no longer exists.`);
             }
 
-            // Lint before any persistence — fail-hard.
+            // Lineage identity guard. Component lineage is collapsed by Name
+            // in the Form Builder version rail — different Name = different
+            // lineage, no rollback link between them. The agent must NOT
+            // rename across Modify calls (e.g. sanitizing "Contemporary AI
+            // Models Form" → "ContemporaryAIModelsForm" to satisfy
+            // component-name-mismatch lint silently forks the user's form
+            // into a phantom new lineage). Reject mismatches with a clear
+            // error so the agent retries with the right name. The function
+            // name inside spec.code MUST match spec.name (enforced by
+            // component-name-mismatch lint) — keep spec.name pinned to the
+            // existing Component.Name and sanitize the function name to
+            // match, never the other way around.
+            if (spec.name && spec.name !== existingComponent.Name) {
+                return failure("LINEAGE_NAME_MISMATCH",
+                    `Modify requires spec.name to match the existing Component name '${existingComponent.Name}', got '${spec.name}'. Modify operates on a Component lineage — its identity is the Name and cannot change between versions. Update spec.name and the function declaration in spec.code to '${existingComponent.Name}' and retry. (If the user wants a renamed form, that's a Create on the new entity or a manual rename in Form Builder, not a Modify.)`);
+            }
+            // Pin Name and Title to the existing row regardless — covers
+            // the case where the agent omitted spec.name entirely.
+            spec.name = existingComponent.Name;
+            if (existingComponent.Title && !spec.title) spec.title = existingComponent.Title;
+
+            // Lint AFTER the lineage guard so any name/title pinning is
+            // visible to the linter (function-name match, etc.).
             const lintFail = await lintFormSpec(spec, user);
             if (lintFail) return lintFail;
 
-            const isPending = mapFromComponentStatus(existingComponent.Status) === 'Pending';
-            if (isPending) {
+            // Resolve VersionBumpKind: explicit param wins; otherwise default
+            // by source status to preserve historical behavior — Pending →
+            // in-place (iteration loop), Active → minor (snapshot).
+            //
+            // Route off the OVERRIDE's status, not the Component's. The Override
+            // is what determines whether a form is live; Component.Status can
+            // drift independently (manual edits, partial activations) and using
+            // it for routing risks demoting an Active override on the assumption
+            // it's a Pending iteration.
+            const overrideStatus = (override as unknown as { Status?: string }).Status ?? 'Pending';
+            const sourceStatus: 'Active' | 'Pending' | 'Inactive' =
+                overrideStatus === 'Active' ? 'Active' :
+                overrideStatus === 'Pending' ? 'Pending' : 'Inactive';
+            const isPendingSource = sourceStatus === 'Pending';
+            if (sourceStatus === 'Inactive') {
+                return failure("INVALID_SOURCE_STATUS",
+                    `Override ${override.ID} has Status='${overrideStatus}' — Modify only operates on Active or Pending overrides. Use 'Revert Interactive Form' to re-activate an inactive version first.`);
+            }
+            const rawKind = getStringParam(params, "VersionBumpKind");
+            let bumpKind: VersionBumpKind;
+            if (rawKind) {
+                const parsed = parseVersionBumpKind(rawKind);
+                if (!parsed) {
+                    return failure("INVALID_BUMP_KIND",
+                        `Unknown VersionBumpKind '${rawKind}'. Expected one of: 'in-place', 'patch', 'minor', 'major'.`);
+                }
+                bumpKind = parsed;
+            } else {
+                bumpKind = isPendingSource ? 'in-place' : 'minor';
+            }
+
+            // Guard: 'in-place' against an Active source would corrupt the
+            // live form. Reject loudly so the caller corrects intent.
+            if (bumpKind === 'in-place' && !isPendingSource) {
+                return failure("INVALID_BUMP_FOR_STATUS",
+                    `'in-place' is only valid when the source Component is Pending (got Status='${existingComponent.Status}'). Use 'patch', 'minor', or 'major' to snapshot a new version.`);
+            }
+
+            if (bumpKind === 'in-place') {
                 // ── in-place modify of the Pending Component ─────────────
                 existingComponent.Specification = JSON.stringify(spec);
                 // Refresh Title/Description if the new spec moves them.
@@ -132,8 +188,12 @@ export class ModifyInteractiveFormAction extends BaseAction {
                 };
             }
 
-            // ── new-version path: existing is Active, snapshot a new version ──
-            const newVersion = bumpMinorVersion(existingComponent.Version);
+            // ── new-version path: snapshot to a new Pending Component +
+            // sibling Override. Works for both Active sources (preserves the
+            // live Active row) and Pending sources (where we demote the
+            // existing Pending → Inactive to keep the rollback history
+            // without producing two concurrent Pendings).
+            const newVersion = bumpVersion(existingComponent.Version, bumpKind);
             const newSequence = (existingComponent.VersionSequence ?? 0) + 1;
             const componentInsert = await insertComponent({
                 provider, user, spec,
@@ -165,6 +225,36 @@ export class ModifyInteractiveFormAction extends BaseAction {
                     `${overrideInsert.error.Message} (Component ${newComponentID} was persisted; its sibling override row failed to write.)`);
             }
 
+            // Demote the prior Pending source — both the Component row and
+            // its Override row — to Inactive. This preserves the rollback
+            // history (the row stays in the version rail and can be
+            // re-Activated later) without leaving two concurrent Pendings
+            // for the same lineage. Failures here are non-fatal: the new
+            // version is already persisted, so we log and continue rather
+            // than tearing down what we just wrote.
+            let demotedComponentID: string | null = null;
+            let demotedOverrideID: string | null = null;
+            if (isPendingSource) {
+                // Component table uses 'Draft'/'Published'/'Deprecated' —
+                // map our 'Inactive' lifecycle to the table's 'Deprecated'.
+                try {
+                    existingComponent.Status = mapToComponentStatus('Inactive');
+                    const ok = await existingComponent.Save();
+                    if (ok) demotedComponentID = existingComponent.ID;
+                    else LogError(`ModifyInteractiveFormAction: failed to demote prior Pending Component ${existingComponent.ID}: ${existingComponent.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                } catch (err) {
+                    LogError(`ModifyInteractiveFormAction: error demoting prior Pending Component ${existingComponent.ID}: ${err instanceof Error ? err.message : String(err)}`);
+                }
+                try {
+                    (override as unknown as { Status?: string }).Status = 'Inactive';
+                    const ok = await override.Save();
+                    if (ok) demotedOverrideID = override.ID;
+                    else LogError(`ModifyInteractiveFormAction: failed to demote prior Pending Override ${override.ID}: ${override.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                } catch (err) {
+                    LogError(`ModifyInteractiveFormAction: error demoting prior Pending Override ${override.ID}: ${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+
             addOutput(params, "ComponentID", newComponentID);
             addOutput(params, "OverrideID", overrideInsert.id);
             addOutput(params, "Mode", "new-version");
@@ -176,8 +266,12 @@ export class ModifyInteractiveFormAction extends BaseAction {
                     ComponentID: newComponentID,
                     OverrideID: overrideInsert.id,
                     Version: newVersion,
-                    PreviousActiveOverrideID: override.ID,
-                    PreviousActiveComponentID: existingComponent.ID,
+                    BumpKind: bumpKind,
+                    PreviousComponentID: existingComponent.ID,
+                    PreviousOverrideID: override.ID,
+                    PreviousSourceStatus: sourceStatus,
+                    DemotedComponentID: demotedComponentID,
+                    DemotedOverrideID: demotedOverrideID,
                 }),
             };
         } catch (err) {

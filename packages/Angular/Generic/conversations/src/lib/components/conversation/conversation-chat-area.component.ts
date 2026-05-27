@@ -48,19 +48,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private _conversationId: string | null = null;
   @Input()
   set conversationId(value: string | null) {
-    console.log(`[ChatArea.set conversationId] incoming=${value} prior=${this._conversationId} isInitialized=${this.isInitialized}`);
     if (value !== this._conversationId) {
       this._conversationId = value;
       // Trigger change handler after initialization is complete
       // Only skip during Angular's initial binding before ngOnInit completes
       if (this.isInitialized) {
-        console.log(`[ChatArea.set conversationId] -> onConversationChanged(${value})`);
         this.onConversationChanged(value);
-      } else {
-        console.log(`[ChatArea.set conversationId] SKIP onConversationChanged — not yet initialized`);
       }
-    } else {
-      console.log(`[ChatArea.set conversationId] NO-OP (same value)`);
     }
   }
   get conversationId(): string | null {

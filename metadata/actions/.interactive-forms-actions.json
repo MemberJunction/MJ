@@ -630,7 +630,7 @@
   {
     "fields": {
       "Name": "Modify Interactive Form",
-      "Description": "Modify an existing interactive-form override. Branches on the pointed-to Component's status: Pending → modify the Component row in place (no new row, avoids version-proliferation during chat refinement); Active → insert a new Component v(N+1) with Status='Pending' and a new Pending Override pointing at it, leaving the live Active row untouched. The user explicitly activates the new version later via 'Activate Interactive Form Version'. Scope is preserved from the existing override.",
+      "Description": "Modify an existing interactive-form override. Behavior is driven by the optional VersionBumpKind input: 'in-place' (default for Pending sources) overwrites the Pending Component row with no new version; 'patch'/'minor'/'major' snapshot a new Pending Component + sibling Override using the bumped version, demoting any prior Pending in the same lineage to Inactive so rollback history is preserved. Active sources reject 'in-place' (would corrupt the live row) and default to 'minor' for back-compat. Scope is preserved from the existing override.",
       "DriverClass": "__ModifyInteractiveForm",
       "Type": "Custom",
       "Status": "Active",
@@ -696,6 +696,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "VersionBumpKind",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional. One of 'in-place' | 'patch' | 'minor' | 'major'. Drives versioning intent. 'in-place' (default for Pending sources) overwrites the Pending row; 'patch' bumps the patch component (1.0.0 → 1.0.1) — use for small/defect edits that deserve a rollback checkpoint; 'minor' (default for Active sources) bumps minor (1.0.0 → 1.1.0) — use for feature additions; 'major' bumps major (1.7.3 → 2.0.0) — use for radical redesigns or when the user explicitly asks. Any non-in-place value against a Pending source demotes the existing Pending to Inactive and creates a new Pending with the bumped version. 'in-place' is rejected against Active sources.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3F87CFE7-1095-4D98-BAE3-43BA824B2E0F"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T01:40:52.234Z",
+            "checksum": "f620c48721fbd6f4a5b3aac85b7c245916246cefa5b3c47cf4a3975bc7d2851b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "ComponentID",
             "Type": "Output",
             "ValueType": "Scalar",
@@ -718,15 +736,15 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "'in-place' (Pending modified in place) or 'new-version' (new Pending Component + Override created).",
+            "Description": "'in-place' (Pending modified in place) or 'new-version' (new Pending Component + Override created — for both Active sources and explicit Pending → snapshot via VersionBumpKind).",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "05DE9EDD-2759-4419-934F-AFE53BBE3742"
           },
           "sync": {
-            "lastModified": "2026-05-25T22:35:44.839Z",
-            "checksum": "9481a6cbb4b7cca4888a6ff04cf8af86966879b4f828fb2b9f08dec5d965b365"
+            "lastModified": "2026-05-27T01:40:52.295Z",
+            "checksum": "e61d80b46d18ecce0327a7f00c15a8436b302fa1eb04b36fb627ca7223b518b1"
           }
         },
         {
@@ -808,6 +826,62 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_BUMP_KIND",
+            "Description": "VersionBumpKind value not one of: 'in-place' | 'patch' | 'minor' | 'major'."
+          },
+          "primaryKey": {
+            "ID": "FED5CD00-4033-44A8-9D33-32F1E184B714"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T01:40:52.396Z",
+            "checksum": "f956b76b3f25a64fcaf67e6a35833cb14993dc095eeecf078979ee104d888ece"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_BUMP_FOR_STATUS",
+            "Description": "VersionBumpKind='in-place' is only valid when the source Override is Pending. Use 'patch', 'minor', or 'major' against Active sources."
+          },
+          "primaryKey": {
+            "ID": "E9B9ABB6-D130-48F2-9B3C-BA1287FE710C"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T02:10:10.367Z",
+            "checksum": "7984c74e4799d1adfd723a3317cee6455f94be65f7bff378958c0b202b8e0f15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LINEAGE_NAME_MISMATCH",
+            "Description": "spec.name differs from the existing Component.Name. Modify operates on a Component lineage — its identity is the Name and cannot change between versions. Retry with spec.name (and the function declaration in spec.code) set to the existing Component.Name."
+          },
+          "primaryKey": {
+            "ID": "614B57CA-8D12-4D5A-AD2A-7F06D54BA38B"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T02:10:10.314Z",
+            "checksum": "b704adeba05afab0b9cae388b19506f14a770cd0e3933607c27a438aff1468c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_SOURCE_STATUS",
+            "Description": "Modify only operates on Active or Pending overrides. Use 'Revert Interactive Form' to re-activate an inactive historical version first."
+          },
+          "primaryKey": {
+            "ID": "5E2E8457-4D3E-4974-9FFD-B5607D22F660"
+          },
+          "sync": {
+            "lastModified": "2026-05-27T02:10:10.336Z",
+            "checksum": "27545f7f601a29d566d93c77ec2a1bb7cdbd4d6aed39d8835bff1c375dd694cc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "ResultCode": "LINT_FAILED",
             "Description": "Spec failed schema or code-level validation."
           },
@@ -867,8 +941,8 @@
       "ID": "1AEAC96B-5578-4099-BC40-E9D02E590DB4"
     },
     "sync": {
-      "lastModified": "2026-05-25T22:35:43.706Z",
-      "checksum": "e0293cc4a0bebea71db6de78d0523c318a8acb66399ee77e9864597dcb6c1287"
+      "lastModified": "2026-05-27T01:40:51.898Z",
+      "checksum": "f83235d558714e280723de16c37a2ea93da416b7ab26ad06a244dcd7bb88b771"
     }
   },
   {

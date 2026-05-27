@@ -995,7 +995,6 @@ export class FormBuilderResourceComponent
         // identity AND re-feed the pending message/attachments in the same
         // change-detection cycle. The chat-area picks them up on the next
         // render and actually delivers the message.
-        console.log(`[FormBuilder.OnChatConversationCreated] convoID=${event.conversation.ID} linkedRecordID=${event.conversation.LinkedRecordID} currentSelectedFormID=${this.SelectedFormID}`);
         this.ChatPendingMessage = event.pendingMessage ?? null;
         this.ChatPendingAttachments = (event.pendingAttachments ?? null) as unknown[] | null;
         this.ChatConversation = event.conversation;
@@ -1196,54 +1195,96 @@ export class FormBuilderResourceComponent
      */
     /**
      * Look up the most-recent conversation linked to the active form
-     * (LinkedEntityID=MJ:Components, LinkedRecordID=SelectedFormID) for
-     * the current user and bind it to the embedded chat. If none exists,
-     * reset to a fresh pre-conversation state — the suppressed empty-state
-     * path in <mj-conversation-chat-area> renders the normal header + mode
-     * picker + input so the user can start a new linked conversation in
-     * place. Errors are tolerated (chat just stays on the previous state).
+     * (LinkedEntityID=MJ:Components, LinkedRecordID anywhere in the form's
+     * Component lineage for this entity) for the current user and bind it
+     * to the embedded chat.
+     *
+     * **Lineage-aware**: a Form Builder conversation belongs to "this form"
+     * (the Component.Name lineage), not to a single Component version. When
+     * the agent does a `patch`/`minor`/`major` bump via Modify Interactive
+     * Form, prior conversations were stamped with the old ComponentID — a
+     * naive `LinkedRecordID = SelectedFormID` lookup would orphan them. We
+     * expand the lookup to all Components in the same lineage by joining
+     * `vwComponents.Name = SelectedFormName` with
+     * `vwEntityFormOverrides.EntityID = TargetEntityID` inside an `IN`
+     * subquery so it stays one round-trip.
+     *
+     * Note: this is ONLY about which prior conversation to show in the
+     * cockpit chat. New conversations are still stamped with the current
+     * SelectedFormID; the lineage join on read picks them up across
+     * version bumps. Runtime form resolution is completely unaffected.
+     *
+     * If none exists, reset to a fresh pre-conversation state — the
+     * suppressed empty-state path in <mj-conversation-chat-area> renders
+     * the normal header + mode picker + input so the user can start a
+     * new linked conversation in place. Errors are tolerated (chat just
+     * stays on the previous state).
      */
     private async loadLinkedConversationForActiveForm(): Promise<void> {
         const provider = this.provider;
         const user = this.currentUser;
-        const tag = '[FormBuilder.loadLinkedConvo]';
-        console.log(`${tag} ENTER SelectedFormID=${this.SelectedFormID} SelectedFormName=${this.SelectedFormName} ComponentsEntityID=${this.ComponentsEntityID} userID=${user?.ID}`);
         // Always blank the chat first so the chat-area sees a clear
         // input transition (B.ID -> null -> A.ID) when switching between
         // forms.
         this.resetChatToFresh();
         this.cdr.detectChanges();
-        if (!provider || !user || !this.SelectedFormID || !this.ComponentsEntityID) {
-            console.warn(`${tag} BAIL — missing provider/user/SelectedFormID/ComponentsEntityID`);
-            return;
-        }
+        if (!provider || !user || !this.SelectedFormID || !this.ComponentsEntityID) return;
         // Defer to the next macrotask so the React form-preview component
         // (which remounts on every form switch and fires its own RunView
-        // calls during ngAfterViewInit) gets a chance to finish its render
-        // before our query lands on the shared provider. Without this
-        // delay, our params object is racing the React component's render
-        // wave and the provider's PreRunView pipeline trips over the
-        // concurrent failing calls.
+        // calls during ngAfterViewInit) finishes rendering before our
+        // query lands on the shared provider. Without this, our params
+        // race the React component's render wave and the provider's
+        // PreRunView pipeline trips over the concurrent failing calls.
         await new Promise<void>(resolve => setTimeout(resolve, 0));
         const targetFormID = this.SelectedFormID;
-        const filter = `LinkedEntityID='${this.ComponentsEntityID}' AND LinkedRecordID='${targetFormID}' AND UserID='${user.ID}'`;
-        const result = await this.runLinkedConvoQuery(provider, user, filter, tag);
+        const filter = this.buildLinkedConvoFilter(provider, user.ID, targetFormID);
+        const result = await this.runLinkedConvoQuery(provider, user, filter);
         if (!result) return;
-        if (targetFormID !== this.SelectedFormID) {
-            console.warn(`${tag} RACE — SelectedFormID changed during query (was=${targetFormID} now=${this.SelectedFormID}), discarding result`);
-            return;
-        }
+        // Race guard — if the user switched forms again mid-query, drop
+        // this stale result rather than clobbering the newer load.
+        if (targetFormID !== this.SelectedFormID) return;
         if (result.Success && result.Results && result.Results.length > 0) {
             const found = result.Results[0];
-            console.log(`${tag} BIND convoID=${found.ID} name="${found.Name}" linkedRecordID=${found.LinkedRecordID} updatedAt=${found.__mj_UpdatedAt}`);
             this.ChatConversation = found;
             this.ChatConversationId = found.ID;
             this.ChatIsNewConversation = false;
-        } else {
-            console.log(`${tag} NO MATCH — leaving chat in fresh state`);
         }
         this.cdr.markForCheck();
-        console.log(`${tag} EXIT ChatConversationId=${this.ChatConversationId} ChatIsNewConversation=${this.ChatIsNewConversation}`);
+    }
+
+    /**
+     * Build the ExtraFilter for the lineage-aware conversation lookup.
+     * Falls back to single-version filtering when the lineage signals
+     * (SelectedFormName, TargetEntityName→ID, or the schema/view metadata
+     * for Components/Overrides) aren't available — degrades to the
+     * original behavior rather than breaking the chat.
+     */
+    private buildLinkedConvoFilter(provider: IMetadataProvider, userID: string, targetFormID: string): string {
+        const singleVersion = `LinkedEntityID='${this.ComponentsEntityID}' AND UserID='${userID}' AND LinkedRecordID='${targetFormID}'`;
+        if (!this.SelectedFormName || !this.TargetEntityName) return singleVersion;
+        const entityInfo = provider.EntityByName(this.TargetEntityName);
+        if (!entityInfo?.ID) return singleVersion;
+        const componentsEntity = provider.EntityByName('MJ: Components');
+        const overridesEntity = provider.EntityByName('MJ: Entity Form Overrides');
+        if (!componentsEntity?.SchemaName || !componentsEntity?.BaseView
+            || !overridesEntity?.SchemaName || !overridesEntity?.BaseView) {
+            return singleVersion;
+        }
+        const escapedName = this.SelectedFormName.replace(/'/g, "''");
+        // Inline subquery against the MJ views — Component.Name + Override.EntityID
+        // collapses to the same lineage that the version rail uses, but we don't
+        // need to fetch and round-trip the IDs first. ExtraFilter is appended into
+        // the resolver's SQL, so subqueries against vwComponents / vwEntityFormOverrides
+        // are valid here (same escape hatch loadVersionsForActiveForm uses).
+        // Schema + view names resolved dynamically from EntityInfo so we don't
+        // hardcode `__mj` — survives schema renames in custom MJ deployments.
+        const cRef = `[${componentsEntity.SchemaName}].[${componentsEntity.BaseView}]`;
+        const oRef = `[${overridesEntity.SchemaName}].[${overridesEntity.BaseView}]`;
+        return `LinkedEntityID='${this.ComponentsEntityID}' AND UserID='${userID}' AND LinkedRecordID IN (
+            SELECT c.ID FROM ${cRef} c
+            INNER JOIN ${oRef} o ON o.ComponentID = c.ID
+            WHERE c.Name = '${escapedName}' AND o.EntityID = '${entityInfo.ID}'
+        )`;
     }
 
     /**
@@ -1257,7 +1298,6 @@ export class FormBuilderResourceComponent
         provider: IMetadataProvider,
         user: UserInfo,
         filter: string,
-        tag: string,
     ): Promise<{ Success: boolean; Results?: MJConversationEntity[]; ErrorMessage?: string } | null> {
         const params = {
             EntityName: 'MJ: Conversations',
@@ -1266,23 +1306,16 @@ export class FormBuilderResourceComponent
             MaxRows: 1,
             ResultType: 'entity_object' as const,
         };
-        console.log(`${tag} QUERY ${filter}`);
         const rv = RunView.FromMetadataProvider(provider);
         try {
-            const result = await rv.RunView<MJConversationEntity>(params, user);
-            console.log(`${tag} RESULT Success=${result.Success} RowCount=${result.Results?.length ?? 0} Error=${result.ErrorMessage ?? '<none>'}`);
-            return result;
-        } catch (err) {
-            console.warn(`${tag} ATTEMPT 1 FAILED — retrying after delay`, err);
+            return await rv.RunView<MJConversationEntity>(params, user);
+        } catch {
             // Wait long enough for any concurrent React render wave to settle.
             await new Promise<void>(resolve => setTimeout(resolve, 150));
             try {
                 const rv2 = RunView.FromMetadataProvider(provider);
-                const result = await rv2.RunView<MJConversationEntity>(params, user);
-                console.log(`${tag} RETRY RESULT Success=${result.Success} RowCount=${result.Results?.length ?? 0} Error=${result.ErrorMessage ?? '<none>'}`);
-                return result;
+                return await rv2.RunView<MJConversationEntity>(params, user);
             } catch (err2) {
-                console.error(`${tag} RETRY ALSO FAILED`, err2);
                 LogError(`FormBuilderResource.loadLinkedConversationForActiveForm: ${err2 instanceof Error ? err2.message : String(err2)}`);
                 return null;
             }
@@ -1291,7 +1324,6 @@ export class FormBuilderResourceComponent
 
     /** Reset embedded chat to the pre-conversation state for a new form. */
     private resetChatToFresh(): void {
-        console.log(`[FormBuilder.resetChatToFresh] WAS ChatConvoID=${this.ChatConversationId} IsNew=${this.ChatIsNewConversation}`);
         this.ChatConversation = null;
         this.ChatConversationId = null;
         this.ChatIsNewConversation = true;
@@ -1476,11 +1508,7 @@ export class FormBuilderResourceComponent
     }
 
     public async OnFormPicked(form: FormComponentSummary): Promise<void> {
-        console.log(`[FormBuilder.OnFormPicked] ENTER form.ID=${form.ID} form.Name=${form.Name} priorSelectedFormID=${this.SelectedFormID} priorChatConvoID=${this.ChatConversationId} DirtyFlag=${this.DirtyFlag}`);
-        if (this.DirtyFlag && !this.confirmDiscard()) {
-            console.log(`[FormBuilder.OnFormPicked] BAIL — confirmDiscard cancelled`);
-            return;
-        }
+        if (this.DirtyFlag && !this.confirmDiscard()) return;
         try {
             const provider = this.provider;
             if (!provider) return;

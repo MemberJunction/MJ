@@ -323,16 +323,79 @@ export async function insertOverride(opts: {
 }
 
 /**
+ * Discrete intent for how the next version should be derived. Callers
+ * (Modify Interactive Form) accept this as an explicit input parameter so
+ * the agent can express defect-vs-feature-vs-rewrite intent rather than
+ * inferring it from the source row's status.
+ */
+export type VersionBumpKind = 'in-place' | 'patch' | 'minor' | 'major';
+
+function parseSemver(current: string | null | undefined): { major: number; minor: number; patch: number } {
+    if (!current) return { major: 1, minor: 0, patch: 0 };
+    const m = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(current.trim());
+    if (!m) return { major: 1, minor: 0, patch: 0 };
+    return {
+        major: Number(m[1]),
+        minor: Number(m[2]),
+        patch: m[3] ? Number(m[3]) : 0,
+    };
+}
+
+/**
+ * "1.0.0" → "1.0.1", "1.7.3" → "1.7.4". Used for small/defect-style edits
+ * that deserve a rollback checkpoint but aren't a meaningful UX change.
+ */
+export function bumpPatchVersion(current: string | null | undefined): string {
+    const v = parseSemver(current);
+    return `${v.major}.${v.minor}.${v.patch + 1}`;
+}
+
+/**
  * Compute the next semver-minor bump for an existing version string.
- * "1.0.0" → "1.1.0", "1.7.3" → "1.8.0", "2.0" → "2.1.0", unparseable → "1.1.0".
- * We always bump the minor, never patch — these are visible AI-author-cycle
- * iterations, not internal hotfixes.
+ * "1.0.0" → "1.1.0", "1.7.3" → "1.8.0". Used for feature additions —
+ * new fields, sections, charts, tabs.
  */
 export function bumpMinorVersion(current: string | null | undefined): string {
-    if (!current) return "1.1.0";
-    const m = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(current.trim());
-    if (!m) return "1.1.0";
-    const major = Number(m[1]);
-    const minor = Number(m[2]);
-    return `${major}.${minor + 1}.0`;
+    const v = parseSemver(current);
+    return `${v.major}.${v.minor + 1}.0`;
+}
+
+/**
+ * "1.7.3" → "2.0.0", "3.4.5" → "4.0.0". Used for radical redesigns or
+ * when the user explicitly asks for a new major version.
+ */
+export function bumpMajorVersion(current: string | null | undefined): string {
+    const v = parseSemver(current);
+    return `${v.major + 1}.0.0`;
+}
+
+/**
+ * Dispatch a version bump based on the caller's stated intent.
+ * `'in-place'` returns the same version unchanged — caller should branch
+ * separately (no new Component row is written).
+ */
+export function bumpVersion(current: string | null | undefined, kind: VersionBumpKind): string {
+    switch (kind) {
+        case 'patch': return bumpPatchVersion(current);
+        case 'minor': return bumpMinorVersion(current);
+        case 'major': return bumpMajorVersion(current);
+        case 'in-place': return current ?? '1.0.0';
+    }
+}
+
+/**
+ * Parse and normalize a VersionBumpKind value from a string. Accepts the
+ * canonical lowercase forms plus a few common phrasings. Returns null if
+ * the input doesn't map to a known kind, so callers can decide whether
+ * to default or reject.
+ */
+export function parseVersionBumpKind(raw: unknown): VersionBumpKind | null {
+    if (raw == null) return null;
+    const s = String(raw).trim().toLowerCase();
+    if (!s) return null;
+    if (s === 'in-place' || s === 'inplace' || s === 'in_place') return 'in-place';
+    if (s === 'patch') return 'patch';
+    if (s === 'minor') return 'minor';
+    if (s === 'major') return 'major';
+    return null;
 }
