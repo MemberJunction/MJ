@@ -991,6 +991,17 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Toggle maximize/restore state for artifact panel
    */
+  /**
+   * Apply-to-my-form handler. This deprecated workspace component is no
+   * longer the live chat surface — the real handler lives on
+   * ConversationChatAreaComponent. This stub exists only so the template
+   * binding compiles. New consumers should use the resource components in
+   * @memberjunction/ng-explorer-core instead of this workspace.
+   */
+  onApplyFormRequested(_event: { spec: unknown; entityName: string }): void {
+    console.warn('Workspace.onApplyFormRequested: workspace is deprecated; use the per-feature resource components instead.');
+  }
+
   toggleMaximizeArtifactPanel(): void {
     if (this.isArtifactPanelMaximized) {
       // Restore to previous width

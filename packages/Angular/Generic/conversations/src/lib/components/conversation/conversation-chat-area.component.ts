@@ -19,7 +19,8 @@ import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService, InteractiveFormApplyService } from '@memberjunction/ng-artifacts';
+import type { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
@@ -62,6 +63,33 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   @Input() conversation: MJConversationEntity | null = null;
   @Input() threadId: string | null = null;
+
+  /**
+   * When true, render the normal message-list + message-input layout even
+   * before a conversation exists, instead of the centered empty-state
+   * welcome card. Lets host pages (e.g. Form Builder cockpit) put the chat
+   * header + mode picker front-and-center on first open and let the user
+   * pick a mode before typing. The first send still routes through
+   * MessageInputComponent and triggers conversationCreated as usual.
+   */
+  @Input() suppressNewConversationEmptyState = false;
+
+  /**
+   * Host-level cap for @-mention autocomplete (agents and users).
+   * Defaults true. Hosts addressing a single fixed agent (e.g. Form Builder
+   * cockpit pinned to the Form Builder agent) should set false so the user
+   * can't accidentally redirect a turn to a different agent.
+   */
+  @Input() allowMentions = true;
+
+  /**
+   * Host-level cap for attachments. Defaults true. When false, the host
+   * disables attachments regardless of agent modality support — useful for
+   * surfaces where attachments don't make sense (cockpit text-only flows).
+   * When true (default), attachment availability still depends on the
+   * agent's modality support, computed at runtime.
+   */
+  @Input() allowAttachments = true;
 
   private _isNewConversation: boolean = false;
   @Input()
@@ -117,6 +145,124 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Application context snapshot for AI agent awareness. Included in agent execution data. */
   @Input() appContext: Record<string, unknown> | null = null;
+
+  /**
+   * Optional default agent ID for the conversation. Forwarded to
+   * `<mj-message-input>` as its `[defaultAgentId]` so the first message
+   * routes directly to this agent instead of Sage. See
+   * `MessageInputComponent.routeMessage` priority rules — explicit
+   * @mention and prior-agent continuity still take precedence.
+   *
+   * Embedded chat surfaces (Form Builder cockpit, future domain chats)
+   * set this to the specialist agent's ID; the main Chat app leaves it
+   * unset to preserve the Sage-fronted UX.
+   */
+  @Input() defaultAgentId: string | null = null;
+
+  /**
+   * Scope to apply when this surface CREATES a new conversation. Forwarded
+   * to `ConversationEngine.CreateConversation` so the new row's
+   * `ApplicationScope` column is stamped correctly. Embedded surfaces
+   * (e.g. the Form Builder cockpit) set this to `'Application'` so their
+   * conversations don't pollute the main Chat app list. Main Chat leaves
+   * it as the default `'Global'`. Has no effect on existing conversations.
+   */
+  @Input() applicationScope: 'Global' | 'Application' | 'Both' = 'Global';
+
+  /**
+   * Application ID to bind a newly-created conversation to. REQUIRED when
+   * `applicationScope` is 'Application' or 'Both' (DB CHECK constraint
+   * enforces it). Used by embedded chat surfaces to scope their
+   * conversations to their owning Application.
+   */
+  @Input() applicationId: string | null = null;
+
+  /**
+   * "What is this conversation about?" — the Entity ID this conversation
+   * references. Forwarded to `ConversationEngine.CreateConversation` so
+   * the new row's `LinkedEntityID` is stamped at creation time. Paired
+   * with {@link linkedRecordId} (DB CHECK requires both populated or both
+   * null). Form Builder cockpit passes the MJ: Components entity ID;
+   * Component Studio's AI panel does the same. Surfaces use this to
+   * later list "prior conversations about THIS form/component."
+   * Has no effect on existing conversations.
+   */
+  @Input() linkedEntityId: string | null = null;
+
+  /**
+   * Primary key of the linked record, serialized as a string. Used with
+   * {@link linkedEntityId}. Form Builder cockpit passes the active
+   * form's ComponentID; Component Studio's AI panel passes the
+   * currently-selected component's ID.
+   */
+  @Input() linkedRecordId: string | null = null;
+
+  /**
+   * Whether the conversation header should render the per-conversation
+   * agent picker. Default true. The picker lets a user pin a default
+   * agent on the active conversation (saved to
+   * `MJConversationEntity.DefaultAgentID`), so non-mention messages route
+   * to that agent instead of through Sage. Surfaces with no meaningful
+   * agent-choice UX can set this to false to hide the widget.
+   */
+  @Input() showAgentPicker: boolean = true;
+
+  /**
+   * Whether the chat header should render the per-agent mode/quality
+   * picker (Draft / Standard / High, etc.). Default true. The picker
+   * auto-hides when the bound agent has fewer than 2 configured
+   * presets, so embedders rarely need to set this explicitly — turn
+   * off only when the surface should never expose model-tier choice
+   * (kiosks, specialty embeds).
+   */
+  @Input() showAgentModePicker: boolean = true;
+
+  /**
+   * The mode/preset picker's selected configuration ID, forwarded to
+   * `<mj-message-input>` so non-mention routes apply it on the next
+   * send. Past messages are NOT retroactively re-routed — the picker
+   * only affects subsequent requests. Updated when the user picks a
+   * row in the mode picker; the picker itself persists the choice
+   * per-user, per-agent via UserInfoEngine.
+   */
+  public ActiveAgentConfigurationPresetId: string | null = null;
+
+  /**
+   * Agent the mode picker should target. Mirrors the routing precedence
+   * minus message-history continuity (the picker is persistent UI; it
+   * shouldn't flip as the user scrolls history).
+   *
+   * Order: conversation-pinned default → embedder default → Sage.
+   */
+  /**
+   * True when the chat header should render even before a conversation
+   * row exists. Currently means: the embedder has enabled the mode
+   * picker AND we resolved a target agent for it (so there's actually
+   * something to put in the header). Lets surfaces like the Form
+   * Builder cockpit show the mode picker on top of the empty-state
+   * instead of waiting for the first message to create a conversation.
+   */
+  public get HasPreConversationHeader(): boolean {
+    return this.showAgentModePicker && !!this.ModePickerTargetAgentId;
+  }
+
+  public get ModePickerTargetAgentId(): string | null {
+    return this.conversation?.DefaultAgentID
+        ?? this.defaultAgentId
+        ?? this.conversationManagerAgent?.ID
+        ?? null;
+  }
+
+  /**
+   * Mode picker emitted a new selection. Store it; the next message's
+   * route picks it up via `<mj-message-input>`'s
+   * `[agentConfigurationPresetId]` binding. Past messages stay routed
+   * as they were — the change is forward-only.
+   */
+  public OnAgentModePresetChanged(presetId: string | null): void {
+    this.ActiveAgentConfigurationPresetId = presetId;
+    this.cdr.markForCheck();
+  }
 
   /** Greeting message shown in the empty state when no conversation is active */
   @Input() emptyStateGreeting: string = 'How can I help you?';
@@ -308,9 +454,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     private confirmDialog: ConversationsDialogService,
     private bridge: ConversationBridgeService,
     private analyzeArtifactService: AnalyzeArtifactService,
-    private uiCommandHandler: UICommandHandlerService
+    private uiCommandHandler: UICommandHandlerService,
+    private interactiveFormApplyService: InteractiveFormApplyService
   ) {
   super();}
+
+  /**
+   * Apply a form-role artifact's spec as an EntityFormOverride for the
+   * current user. The service handles the Create-vs-Modify decision (based
+   * on whether an Active override already exists), confirms via dialog,
+   * and surfaces success/failure via notification.
+   */
+  async OnApplyFormRequested(event: { spec: unknown; entityName: string }): Promise<void> {
+    await this.interactiveFormApplyService.ConfirmAndApply(
+      event.spec as ComponentSpec,
+      event.entityName,
+      this.ProviderToUse,
+    );
+  }
 
   async ngOnInit() {
     // Bind provider-aware services to this component's provider so multi-server
@@ -2076,11 +2237,41 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     try {
       this.isProcessing = true;
 
-      // Create a new conversation using the engine
+      // Create a new conversation using the engine. applicationScope +
+      // applicationId let embedded surfaces (e.g. the Form Builder cockpit)
+      // stamp their conversations as 'Application'-scoped so they don't
+      // leak into the main chat list. defaultAgentId pins the routing
+      // target for the first message — it's the same value forwarded to
+      // <mj-message-input> as [defaultAgentId].
+      //
+      // Safety net: the DB CHECK constraint rejects ('Application' || 'Both')
+      // without an ApplicationID. If the embedder hasn't resolved its app
+      // ID yet (or it's missing from the Metadata cache), demote to
+      // 'Global' so the save doesn't blow up. The conversation lands in
+      // the main list — visible but not silently lost.
+      const effectiveScope: 'Global' | 'Application' | 'Both' =
+        (this.applicationScope !== 'Global' && !this.applicationId)
+          ? 'Global'
+          : this.applicationScope;
+      // Linked-record stamping — both columns must be populated together
+      // or both null (DB CHECK constraint CK_Conversation_LinkBinding).
+      // We only forward the pair when BOTH inputs are supplied; if the
+      // host bound one but not the other, treat as misconfiguration and
+      // skip the linkage rather than failing the save.
+      const hasLink = !!this.linkedEntityId && !!this.linkedRecordId;
       const newConversation = await this.engine.CreateConversation(
         'New Conversation', // Temporary name - will be auto-named after first message
         this.environmentId,
-        this.currentUser
+        this.currentUser,
+        undefined,
+        undefined,
+        {
+          applicationScope: effectiveScope,
+          applicationId: effectiveScope === 'Global' ? null : this.applicationId,
+          defaultAgentId: this.defaultAgentId,
+          linkedEntityId: hasLink ? this.linkedEntityId : null,
+          linkedRecordId: hasLink ? this.linkedRecordId : null,
+        }
       );
 
       if (!newConversation) {

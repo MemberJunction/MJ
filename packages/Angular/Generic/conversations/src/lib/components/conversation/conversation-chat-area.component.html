@@ -1,6 +1,12 @@
 <div class="chat-area">
-  <!-- Fixed Header -->
-  @if (conversation) {
+  <!-- Fixed Header — also renders BEFORE a conversation exists when the
+       embedder has pre-conversation chrome to surface (currently just the
+       mode picker — agent / share / export / members / artifacts all
+       require a conversation row and stay hidden). Lets embedded surfaces
+       like the Form Builder cockpit show the mode picker above the
+       empty-state on a fresh chat instead of waiting for the first
+       message to round-trip. -->
+  @if (conversation || HasPreConversationHeader) {
     <div class="chat-header">
       <div class="chat-info" [class.with-sidebar-toggle]="showSidebarToggle">
         @if (showSidebarToggle) {
@@ -10,21 +16,23 @@
             <i class="fas fa-table-columns"></i>
           </button>
         }
-        <div class="chat-title">{{ conversation.Name || '' }}</div>
+        @if (conversation) {
+          <div class="chat-title">{{ conversation.Name || '' }}</div>
+        }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
             <i class="fas fa-share-nodes"></i>
             <span>Shared by {{ sharedByBadge.display }}</span>
           </span>
         }
-        @if (conversation.ProjectID) {
+        @if (conversation?.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project">
             <i class="fas fa-folder"></i>
-            <span>{{ conversation.Project || 'Project' }}</span>
+            <span>{{ conversation!.Project || 'Project' }}</span>
           </button>
         }
-        @if (conversation.TestRunID) {
-          <button class="test-indicator" (click)="viewTestRun(conversation.TestRunID)" title="View Test Run">
+        @if (conversation?.TestRunID) {
+          <button class="test-indicator" (click)="viewTestRun(conversation!.TestRunID!)" title="View Test Run">
             <i class="fas fa-flask"></i>
             <span>Test</span>
           </button>
@@ -48,6 +56,30 @@
             <i class="fas fa-users"></i>
             <span class="members-badge">{{ memberCount }}</span>
           </button>
+        }
+        @if (showAgentModePicker && ModePickerTargetAgentId) {
+          <!-- Per-agent mode/quality picker (Draft / Standard / High).
+               Targets the agent the next non-mention message will route
+               to. Auto-hides when that agent has fewer than 2 configured
+               presets. Choice persists per-user, per-agent via
+               UserInfoEngine; emits the picked configuration ID up so
+               <mj-message-input> can forward it on the next route. -->
+          <mj-conversation-mode-picker
+            [AgentID]="ModePickerTargetAgentId"
+            [Disabled]="isProcessing"
+            (PresetChanged)="OnAgentModePresetChanged($event)">
+          </mj-conversation-mode-picker>
+        }
+        @if (showAgentPicker && conversation) {
+          <!-- Per-conversation default-agent pin. When set, non-mention
+               messages route to this agent instead of Sage. Persists to
+               MJConversationEntity.DefaultAgentID. Hidden when no
+               conversation is loaded or when the embedder disables it. -->
+          <mj-conversation-agent-picker
+            [Conversation]="conversation"
+            [CurrentUser]="currentUser"
+            [Disabled]="isReadOnlyView">
+          </mj-conversation-agent-picker>
         }
         @if (showExportButton) {
           <button mjButton variant="flat" size="sm" (click)="exportConversation()" title="Export conversation">
@@ -79,7 +111,7 @@
         <div class="conversation-loading-state">
           <mj-loading text="Loading conversation..." size="large"></mj-loading>
         </div>
-      } @else if (isNewConversation || !conversationId) {
+      } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- Empty State - No conversation selected OR new unsaved conversation -->
         <mj-conversation-empty-state
           [currentUser]="currentUser"
@@ -87,13 +119,37 @@
           [showSidebarToggle]="showSidebarToggle"
           [overlayMode]="overlayMode"
           [greeting]="emptyStateGreeting"
-          [enableAttachments]="enableAttachments"
+          [enableAttachments]="enableAttachments && allowAttachments"
+          [enableMentions]="allowMentions"
           [maxAttachments]="maxAttachments"
           [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
           [acceptedFileTypes]="acceptedFileTypes"
           (sidebarToggleClicked)="sidebarToggleClicked.emit()"
           (messageSent)="onEmptyStateMessageSent($event)">
         </mj-conversation-empty-state>
+      } @else if ((isNewConversation || !conversationId) && suppressNewConversationEmptyState) {
+        <!-- Pre-conversation normal-view: empty message list + emptyStateMode input.
+             Used when host (e.g. Form Builder cockpit) wants the header + mode picker
+             visible on first open instead of the centered welcome card. First send
+             routes through onEmptyStateMessageSent which creates the conversation. -->
+        <div class="chat-messages-wrapper">
+          <div class="chat-messages-container"></div>
+          <div class="chat-input-container">
+            <div class="message-input-container-wrapper">
+              <mj-message-input
+                [emptyStateMode]="true"
+                [currentUser]="currentUser"
+                [disabled]="isProcessing"
+                [enableAttachments]="enableAttachments && allowAttachments"
+                [enableMentions]="allowMentions"
+                [maxAttachments]="maxAttachments"
+                [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
+                [acceptedFileTypes]="acceptedFileTypes"
+                (emptyStateSubmit)="onEmptyStateMessageSent($event)">
+              </mj-message-input>
+            </div>
+          </div>
+        </div>
       } @else {
         <!-- Normal Message View -->
         <div class="chat-messages-wrapper">
@@ -165,9 +221,13 @@
                     [systemArtifactsByDetailId]="inputRef.conversationId === conversationId ? systemArtifactsByDetailId : emptyArtifactsMap"
                     [agentRunsByDetailId]="inputRef.conversationId === conversationId ? agentRunsByDetailId : emptyAgentRunsMap"
                     [appContext]="appContext"
+                    [defaultAgentId]="defaultAgentId"
+                    [conversationDefaultAgentId]="inputRef.conversationId === conversationId ? (conversation?.DefaultAgentID ?? null) : null"
+                    [agentConfigurationPresetId]="inputRef.conversationId === conversationId ? ActiveAgentConfigurationPresetId : null"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
-                    [enableAttachments]="enableAttachments"
+                    [enableAttachments]="enableAttachments && allowAttachments"
+                    [enableMentions]="allowMentions"
                     [maxAttachments]="maxAttachments"
                     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"
                     [acceptedFileTypes]="acceptedFileTypes"
@@ -217,7 +277,8 @@
           (maximizeToggled)="toggleMaximizeArtifactPane()"
           (openEntityRecord)="onOpenEntityRecord($event)"
           (navigationRequest)="onNavigationRequest($event)"
-          (analyzeRequested)="OnAnalyzeArtifact($event)">
+          (analyzeRequested)="OnAnalyzeArtifact($event)"
+          (applyFormRequested)="OnApplyFormRequested($event)">
         </mj-artifact-viewer-panel>
       </div>
     }

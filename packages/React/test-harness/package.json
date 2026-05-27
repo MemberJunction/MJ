@@ -38,6 +38,7 @@
     "@memberjunction/core-entities-server": "5.37.0",
     "@memberjunction/global": "5.37.0",
     "@memberjunction/interactive-component-types": "5.37.0",
+    "@memberjunction/react-linter": "5.37.0",
     "@memberjunction/react-runtime": "5.37.0",
     "@playwright/test": "^1.58.1",
     "chalk": "^5.6.2",
