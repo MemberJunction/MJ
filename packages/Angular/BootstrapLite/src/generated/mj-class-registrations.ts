@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (347 classes)
+// @memberjunction/core-entities (349 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -206,6 +206,7 @@ import {
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -264,6 +265,7 @@ import {
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -402,13 +404,14 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (10 classes)
+// @memberjunction/ng-artifacts (11 classes)
 import {
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
@@ -671,6 +674,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -729,6 +733,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -850,6 +855,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
@@ -901,7 +907,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 413;
+export const CLASS_REGISTRATIONS_COUNT = 415;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

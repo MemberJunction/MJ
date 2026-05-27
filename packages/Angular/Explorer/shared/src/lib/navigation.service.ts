@@ -2,7 +2,8 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
 import { CompositeKey } from '@memberjunction/core';
-import { fromEvent, Subject, Subscription, Observable } from 'rxjs';
+import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
+import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { map, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from './base-resource-component';
@@ -168,6 +169,39 @@ export class NavigationService implements OnDestroy {
    * push changes to the chat overlay's AppContextSnapshot.DashboardContext.
    */
   public readonly AgentContextUpdated$ = new Subject<AgentContextUpdate>();
+
+  /**
+   * Latest `AppContextSnapshot` published by the Explorer app shell.
+   *
+   * Why: any embedded `<mj-conversation-chat-area>` instance outside the
+   * floating chat overlay (Form Builder cockpit, future domain dashboards
+   * that pop their own AI pane) needs to feed the SAME context the overlay
+   * does so the agent sees what app + view + dashboard state the user is
+   * looking at. Without this, the agent only sees the embedder's narrow
+   * `AdditionalContext` slice and treats the user as if they have no app
+   * context at all — which is the bug we just fixed.
+   *
+   * `MJExplorerAppComponent` is the canonical publisher (it owns the
+   * snapshot construction); consumers SUBSCRIBE and bind the value to
+   * their chat-area's `[appContext]`. Non-Explorer apps (custom MJ apps
+   * that don't include explorer-app at all) build their own snapshot via
+   * `BuildAppContextSnapshot()` in `@memberjunction/ai-core-plus`.
+   *
+   * Initial value is `null`; the publisher emits the first real snapshot
+   * after the active app + nav state resolve on bootstrap.
+   */
+  public readonly AppContextSnapshot$ = new BehaviorSubject<AppContextSnapshot | null>(null);
+
+  /**
+   * Push a fresh AppContextSnapshot. Called by MJExplorerAppComponent
+   * after each (a) app/tab change, (b) `handleAgentContextUpdate`
+   * merging in `AdditionalContext` from a dashboard. Idempotent — no
+   * de-duplication; embedders should treat the stream as "the latest
+   * value is canonical."
+   */
+  public PublishAppContextSnapshot(snapshot: AppContextSnapshot | null): void {
+    this.AppContextSnapshot$.next(snapshot);
+  }
 
   /**
    * Report the current agent-visible state from a resource component.

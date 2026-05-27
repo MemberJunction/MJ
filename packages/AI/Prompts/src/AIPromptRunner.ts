@@ -769,6 +769,7 @@ export class AIPromptRunner {
       if (promptRun) {
         promptRun.CompletedAt = endTime;
         promptRun.ExecutionTimeMS = executionTimeMS;
+        promptRun.Success = false;
         promptRun.Result = `ERROR: ${error.message}`;
         
         // Set Status and Cancelled based on error type
@@ -1258,8 +1259,37 @@ export class AIPromptRunner {
 
 
   /**
+   * If a nunjucks render error message contains `[Line N, Column M]`,
+   * return that line of the template source (1-based) with a caret pointer
+   * for the column. Returns null when we can't parse the location, the
+   * template text is missing, or the line is out of range. Surfaces the
+   * actual offending source in child-template failure messages so the
+   * server log + prompt run + agent step record point at the exact spot
+   * instead of just "render failed".
+   */
+  private extractTemplateSourceExcerpt(
+    templateText: string | null | undefined,
+    nunjucksError: string | null | undefined,
+  ): string | null {
+    if (!templateText || !nunjucksError) return null;
+    const match = /\[Line (\d+),\s*Column (\d+)\]/.exec(nunjucksError);
+    if (!match) return null;
+    const lineNum = parseInt(match[1], 10);
+    const colNum = parseInt(match[2], 10);
+    if (!Number.isFinite(lineNum) || !Number.isFinite(colNum)) return null;
+    const lines = templateText.split('\n');
+    if (lineNum < 1 || lineNum > lines.length) return null;
+    const line = lines[lineNum - 1];
+    // Trim very long lines to keep log noise reasonable.
+    const trimmed = line.length > 240 ? line.slice(0, 240) + '…' : line;
+    const caret = ' '.repeat(Math.max(0, colNum - 1)) + '^';
+    return `L${lineNum}:${colNum} ${trimmed}\n        ${caret}`;
+  }
+
+
+  /**
    * Renders child prompt templates in a depth-first manner, composing them into a final template.
-   * 
+   *
    * @param childPrompts - Array of child prompts to render templates for
    * @param params - Original execution parameters for context
    * @param cancellationToken - Cancellation token for aborting rendering
@@ -1338,11 +1368,34 @@ export class AIPromptRunner {
           });
           
           if (!childRenderResult.Success) {
-            console.error(`[ChildTemplateRender] FAILED for "${childPrompt.Name}": ${childRenderResult.Message}`);
-            console.error(`[ChildTemplateRender] Data keys: ${Object.keys(mergedChildData).join(', ')}`);
-            throw new Error(`Failed to render child template for prompt ${childPrompt.Name}: ${childRenderResult.Message}`);
+            // Surface as much diagnostic detail as we have. The nunjucks
+            // error string usually carries `[Line X, Column Y]` already;
+            // we add the template name, content ID, and the surrounding
+            // line of template source so the server log doubles as a
+            // "what line in which template" pointer instead of just
+            // "render failed".
+            const tplContent = template.GetHighestPriorityContent();
+            const sourceExcerpt = this.extractTemplateSourceExcerpt(
+                tplContent?.TemplateText,
+                childRenderResult.Message,
+            );
+            const dataKeys = Object.keys(mergedChildData).join(', ');
+            const detail =
+                `child="${childPrompt.Name}" ` +
+                `placeholder="${childParam.parentPlaceholder}" ` +
+                `templateId=${childPrompt.TemplateID} ` +
+                `contentId=${tplContent?.ID ?? 'n/a'} ` +
+                `dataKeys=[${dataKeys}]` +
+                (sourceExcerpt ? `\n  near: ${sourceExcerpt}` : '');
+            console.error(`[ChildTemplateRender] FAILED — ${childRenderResult.Message}`);
+            console.error(`[ChildTemplateRender] Context: ${detail}`);
+            throw new Error(
+                `Failed to render child template for prompt "${childPrompt.Name}" ` +
+                `(placeholder="${childParam.parentPlaceholder}"): ${childRenderResult.Message}` +
+                (sourceExcerpt ? `\n  near: ${sourceExcerpt}` : ''),
+            );
           }
-          
+
           renderedChildTemplate = childRenderResult.Output;
         } else {
           // If no template, use empty string (child might be using conversation messages)
@@ -1353,23 +1406,31 @@ export class AIPromptRunner {
         return {
           placeholder: childParam.parentPlaceholder,
           renderedTemplate: renderedChildTemplate,
-          success: true
+          success: true,
+          errorMessage: undefined as string | undefined,
         };
 
       } catch (error) {
         this.logError(error, {
           category: 'ChildTemplateRendering',
           metadata: {
-            placeholder: childParam.parentPlaceholder
+            placeholder: childParam.parentPlaceholder,
+            childPromptName: childParam.childPrompt.prompt.Name,
+            childPromptId: childParam.childPrompt.prompt.ID,
           },
           maxErrorLength: params.maxErrorLength
         });
-        
-        // Return error result but allow other children to continue
+
+        // Return error result but allow other children to continue. The
+        // underlying error message is preserved on `errorMessage` so the
+        // aggregator below can throw a *useful* error instead of just a
+        // placeholder-name list.
+        const errMsg = error instanceof Error ? error.message : String(error);
         return {
           placeholder: childParam.parentPlaceholder,
-          renderedTemplate: `ERROR: ${error.message}`,
-          success: false
+          renderedTemplate: `ERROR: ${errMsg}`,
+          success: false,
+          errorMessage: errMsg,
         };
       }
     });
@@ -1380,19 +1441,34 @@ export class AIPromptRunner {
     // Check if any critical errors occurred
     const failedChildren = childResults.filter(r => !r.success);
     if (failedChildren.length > 0) {
+      // Compose a single error message that includes the underlying
+      // error from each failed child. Previously this threw just a list
+      // of placeholder names ("agentSpecificPrompt") — opaque. Now the
+      // thrown error carries the nunjucks message (with [Line X, Column Y])
+      // and prompt names, so it propagates into `promptRun.Result` /
+      // `promptRun.ErrorDetails` and the agent step's error surface.
+      const childErrorDetails = failedChildren
+        .map(fc => `  - ${fc.placeholder}: ${fc.errorMessage ?? 'unknown error'}`)
+        .join('\n');
+
       this.logError(`${failedChildren.length} out of ${childResults.length} child prompt templates failed to render`, {
         category: 'ChildTemplateFailures',
         severity: 'critical',
         metadata: {
           failedCount: failedChildren.length,
           totalCount: childResults.length,
-          failedPlaceholders: failedChildren.map(fc => fc.placeholder)
+          failedPlaceholders: failedChildren.map(fc => fc.placeholder),
+          failures: failedChildren.map(fc => ({
+            placeholder: fc.placeholder,
+            error: fc.errorMessage,
+          })),
         },
         maxErrorLength: params.maxErrorLength
       });
 
-      // any child render failure means we must throw an error
-      throw new Error(`Failed to render ${failedChildren.length} child prompt templates: ${failedChildren.map(fc => fc.placeholder).join(', ')}`);
+      throw new Error(
+        `Failed to render ${failedChildren.length} child prompt template(s):\n${childErrorDetails}`,
+      );
     }
 
     // Build rendered templates map
@@ -2842,8 +2918,23 @@ export class AIPromptRunner {
 
       //LogStatus(`🔧 Rendering template '${template.Name}' with ${Object.keys(systemPlaceholders).length} system placeholders`);
 
-      // Render the template
-      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData);
+      // Render the template with validation **downgraded to warnings**.
+      // The previous default (SkipValidation=false) hard-failed on any
+      // declared-required template param that wasn't supplied — including
+      // the surprising case where a system placeholder like `_OUTPUT_EXAMPLE`
+      // resolves to `''` for prompts that don't define an OutputExample
+      // (ValidateTemplateInput treats trim-empty strings as "not provided").
+      // That made "render failure" the dominant failure mode for any prompt
+      // that referenced a system placeholder it didn't populate, which is
+      // an authoring trap rather than a real correctness issue.
+      //
+      // With SkipValidation=true + SuppressWarnings=false, missing required
+      // params produce a server-side warning log but rendering proceeds —
+      // nunjucks itself substitutes empty for undefined data, which is
+      // almost always what the author meant. If real param validation is
+      // needed (e.g., catching typos at template-author time), it should
+      // live in the authoring tools, not in the runtime render path.
+      return await this._templateEngine.RenderTemplate(template, templateContent, mergedData, true, false);
     } catch (error) {
       this.logError(error, {
         category: 'TemplateRendering',

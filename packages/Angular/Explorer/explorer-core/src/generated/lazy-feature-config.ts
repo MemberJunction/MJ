@@ -25,7 +25,7 @@ const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-da
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (7 entries) ---
 const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/communication-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
+// --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (3 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./core-dashboards.module (26 entries) ---
@@ -106,6 +106,8 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
   // @memberjunction/ng-dashboards → ./component-studio-dashboards.module
   'BaseDashboard::ComponentStudioDashboard': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::ComponentStudioResource': loadComponentStudioDashboardsModule,
+  'BaseResourceComponent::FormBuilderResource': loadComponentStudioDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadCoreDashboardsModule,
@@ -201,4 +203,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 98;
+export const LAZY_FEATURE_CONFIG_COUNT = 100;

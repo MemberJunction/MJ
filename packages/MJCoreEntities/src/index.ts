@@ -11,12 +11,14 @@ export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';
 export * from './custom/MJTemplateEntityExtended';
 export * from './custom/MJConversationDetailEntityExtended';
+export * from './custom/MJQueryEntityExtended';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
 export * from './custom/ResourcePermissions/MJResourcePermissionEntityExtended';
 export * from './custom/ResourcePermissions/ResourceData';
 
 export * from './engines/component-metadata';
+export * from './engines/interactive-forms';
 export * from './engines/TypeTablesCache';
 export * from './engines/artifacts';
 export * from './engines/artifact-mime-resolver';

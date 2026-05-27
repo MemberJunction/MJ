@@ -2947,66 +2947,39 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public get AuthorizationRoles(): AuthorizationRoleInfo[] {
         return this._localMetadata.AllAuthorizationRoles;
     }
-    /**
-     * Gets all saved queries in the system.
-     * @returns Array of QueryInfo objects representing stored queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get Queries(): QueryInfo[] {
         return this._localMetadata.AllQueries;
     }
-    /**
-     * Gets all query category definitions.
-     * @returns Array of QueryCategoryInfo objects for query organization
-     */
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryCategories(): QueryCategoryInfo[] {
         return this._localMetadata.AllQueryCategories;
     }
-    /**
-     * Gets all query field definitions.
-     * @returns Array of QueryFieldInfo objects defining query result columns
-     */
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryFields(): QueryFieldInfo[] {
         return this._localMetadata.AllQueryFields;
     }
-    /**
-     * Gets all query permission assignments.
-     * @returns Array of QueryPermissionInfo objects defining query access
-     */
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryPermissions(): QueryPermissionInfo[] {
         return this._localMetadata.AllQueryPermissions;
     }
-    /**
-     * Gets all query entity associations.
-     * @returns Array of QueryEntityInfo objects linking queries to entities
-     */
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryEntities(): QueryEntityInfo[] {
         return this._localMetadata.AllQueryEntities;
     }
-    /**
-     * Gets all query parameter definitions.
-     * @returns Array of QueryParameterInfo objects for parameterized queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryParameters(): QueryParameterInfo[] {
         return this._localMetadata.AllQueryParameters;
     }
-    /**
-     * Gets all query dependency records tracking composition references between queries.
-     * @returns Array of QueryDependencyInfo objects representing query-to-query dependencies
-     */
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QueryDependencies(): QueryDependencyInfo[] {
         return this._localMetadata.AllQueryDependencies;
     }
-    /**
-     * Gets all SQL dialect definitions.
-     * @returns Array of SQLDialectInfo objects representing supported SQL dialects
-     */
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get SQLDialects(): SQLDialectInfo[] {
         return this._localMetadata.AllSQLDialects;
     }
-    /**
-     * Gets all query SQL dialect variants.
-     * @returns Array of QuerySQLInfo objects containing dialect-specific SQL for queries
-     */
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities`. Will be removed in v6.x. */
     public get QuerySQLs(): QuerySQLInfo[] {
         return this._localMetadata.AllQuerySQLs;
     }

@@ -327,43 +327,43 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     
     getStatusColor(): string {
         if (!this.record) return '#6c757d';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return '#ffc107'; // Yellow (still running — CompletedAt is the authority)
+        } else if (this.record.Success === true) {
             return '#28a745'; // Green
         } else if (this.record.Success === false) {
             return '#dc3545'; // Red
-        } else if (this.record.CompletedAt) {
-            return '#17a2b8'; // Blue (completed but no success flag)
         } else {
-            return '#ffc107'; // Yellow (running)
+            return '#17a2b8'; // Blue (completed but no success flag)
         }
     }
-    
+
     getStatusIcon(): string {
         if (!this.record) return 'fa-circle';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return 'fa-spinner fa-spin';
+        } else if (this.record.Success === true) {
             return 'fa-check-circle';
         } else if (this.record.Success === false) {
             return 'fa-times-circle';
-        } else if (this.record.CompletedAt) {
-            return 'fa-info-circle';
         } else {
-            return 'fa-spinner fa-spin';
+            return 'fa-info-circle';
         }
     }
-    
+
     getStatusText(): string {
         if (!this.record) return 'Unknown';
-        
-        if (this.record.Success === true) {
+
+        if (!this.record.CompletedAt) {
+            return 'Running';
+        } else if (this.record.Success === true) {
             return 'Success';
         } else if (this.record.Success === false) {
             return 'Failed';
-        } else if (this.record.CompletedAt) {
-            return 'Completed';
         } else {
-            return 'Running';
+            return 'Completed';
         }
     }
     

@@ -60,3 +60,71 @@ export interface AppContextSnapshot {
      */
     AdditionalContext?: Record<string, unknown>;
 }
+
+/**
+ * Inputs accepted by {@link BuildAppContextSnapshot}. Looser shape than
+ * `AppContextSnapshot` so callers can omit pieces they don't have — the
+ * builder fills in safe defaults.
+ *
+ * `App.Name` is the only truly required field; without it, the consumer
+ * (the agent's prompt template) won't render an app-context section.
+ */
+export interface AppContextSnapshotInputs {
+    App: { Name: string; Description?: string };
+    ActiveNavItem?: { Name: string; Description?: string; ResourceType?: string };
+    OtherNavItems?: ReadonlyArray<{ Name: string; Description?: string }>;
+    User?: { Name?: string; Roles?: ReadonlyArray<string> };
+    AdditionalContext?: Record<string, unknown>;
+}
+
+/**
+ * Assemble an `AppContextSnapshot` from loose inputs.
+ *
+ * **The canonical place to build the snapshot shape consumed by the agent
+ * runtime** (`buildAppContextSection` in `base-agent.ts` reads exactly this
+ * shape). Any host embedding `<mj-conversation-chat-area>` outside the
+ * MJ Explorer floating chat overlay should produce its `[appContext]`
+ * value via this helper so the agent's prompt sees consistent data.
+ *
+ * Today MJExplorer's app shell builds the snapshot inline; this helper
+ * centralizes the construction so:
+ *   - Embedded chats in custom (non-Explorer) apps build a correct snapshot
+ *     without copy-pasting the shape from Explorer.
+ *   - Future schema changes to `AppContextSnapshot` happen in one place
+ *     instead of every embedder.
+ *
+ * Defaults applied:
+ *   - `App.Description`     → ''
+ *   - `ActiveNavItem`       → `{ Name: '(none)' }` if omitted
+ *   - `OtherNavItems`       → []
+ *   - `User.Name`           → ''
+ *   - `User.Roles`          → []
+ *   - `AdditionalContext`   → omitted from the result when undefined
+ */
+export function BuildAppContextSnapshot(inputs: AppContextSnapshotInputs): AppContextSnapshot {
+    const snap: AppContextSnapshot = {
+        App: {
+            Name: inputs.App.Name,
+            Description: inputs.App.Description ?? '',
+        },
+        ActiveNavItem: inputs.ActiveNavItem
+            ? {
+                Name: inputs.ActiveNavItem.Name,
+                Description: inputs.ActiveNavItem.Description,
+                ResourceType: inputs.ActiveNavItem.ResourceType,
+            }
+            : { Name: '(none)' },
+        OtherNavItems: (inputs.OtherNavItems ?? []).map(n => ({
+            Name: n.Name,
+            Description: n.Description,
+        })),
+        User: {
+            Name: inputs.User?.Name ?? '',
+            Roles: [...(inputs.User?.Roles ?? [])],
+        },
+    };
+    if (inputs.AdditionalContext) {
+        snap.AdditionalContext = inputs.AdditionalContext;
+    }
+    return snap;
+}
