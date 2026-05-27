@@ -288,6 +288,9 @@ export class PushService {
       callbacks?.onLog?.('⚡ Preloading metadata and caching files...');
       this.syncMetadataEngine.setEntityDirs(entityDirs);
       await this.syncMetadataEngine.Config(true, this.contextUser, this.syncEngine.getProvider());
+      for (const warning of this.syncMetadataEngine.drainWarnings()) {
+        callbacks?.onWarn?.(`   ⚠️  ${warning}`);
+      }
       callbacks?.onLog?.('✓ Preload completed successfully\n');
       
       if (options.verbose) {

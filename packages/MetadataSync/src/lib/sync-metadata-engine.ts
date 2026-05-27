@@ -33,7 +33,8 @@ import {
   IMetadataProvider,
   UserInfo
 } from '@memberjunction/core';
-import { IsUuidSQLType } from '@memberjunction/sql-dialect';
+import { GetDialect, IsUuidSQLType, SQLDialect } from '@memberjunction/sql-dialect';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import fastGlob from 'fast-glob';
 import fs from 'fs-extra';
 import { JsonPreprocessor } from './json-preprocessor';
@@ -43,7 +44,13 @@ import { SyncEngine } from './sync-engine';
 /** Prefix used to namespace the dynamic per-entity cache properties on the engine instance. */
 const CACHED_ENTITY_PROP_PREFIX = 'cached_';
 
-/** Max number of PK predicates per `RunView` filter — large filters hurt the query planner and can hit SQL Server's expression limit. */
+/**
+ * Soft cap on PKs we'll pack into a single preload filter. Above this we skip
+ * preload for that entity entirely (cache is best-effort; the per-record path
+ * still works). The realistic sync workload stays well under this; the cap
+ * exists to keep us off SQL Server's expression-tree limit and the planner's
+ * worst-case OR-explosion paths.
+ */
 const MAX_PKS_PER_BULK_FILTER = 500;
 
 /** Concurrency cap for parallel file reads during preload. */
@@ -71,12 +78,22 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   /** Reverse index used to scope lookup invalidation on delete: entity name → set of lookup keys touching that entity. */
   private lookupKeysByEntity: Map<string, Set<string>> = new Map();
 
+  /** Non-fatal warnings collected during preload (malformed shapes, skipped entities). Drained by the caller after `Config()`. */
+  private warnings: string[] = [];
+
   public initializeEngine(syncEngine: SyncEngine): void {
     this.syncEngine = syncEngine;
   }
 
   public setEntityDirs(dirs: string[]): void {
     this.entityDirs = dirs;
+  }
+
+  /** Returns and clears the warnings collected during the last preload run. */
+  public drainWarnings(): string[] {
+    const out = this.warnings;
+    this.warnings = [];
+    return out;
   }
 
   /**
@@ -282,19 +299,25 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   /**
-   * Build a SQL `WHERE` fragment matching every PK in `uniquePks`. The
-   * caller is responsible for chunking — see {@link MAX_PKS_PER_BULK_FILTER}
-   * and {@link buildBulkFilterChunks}.
+   * Build a SQL `WHERE` fragment matching every PK in `uniquePks`.
+   *
+   * String/UUID/date values are quoted via the active dialect's
+   * `QuoteStringLiteral` (centralizes the `''` doubling rule). Numeric and
+   * boolean PKs are shape-validated before being inlined so a malformed
+   * metadata file can't smuggle arbitrary SQL through an unquoted PK slot.
+   *
+   * Throws on a non-numeric value for a non-quoted PK type. Callers in this
+   * file catch and skip preload for that entity — the per-record path still
+   * works.
    */
   public buildBulkFilter(entityInfo: EntityInfo, uniquePks: Array<Record<string, unknown>>): string {
+    const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
     const filterParts: string[] = [];
     for (const pk of uniquePks) {
       const pkParts: string[] = [];
       for (const pkField of entityInfo.PrimaryKeys) {
-        const val = pk[pkField.Name];
-        const quotes = pkField.NeedsQuotes ? "'" : '';
-        const escapedVal = pkField.NeedsQuotes && typeof val === 'string' ? val.replace(/'/g, "''") : val;
-        pkParts.push(`${pkField.Name} = ${quotes}${escapedVal}${quotes}`);
+        const literal = this.formatPKLiteral(pkField, pk[pkField.Name], dialect);
+        pkParts.push(`${pkField.Name} = ${literal}`);
       }
       filterParts.push(`(${pkParts.join(' AND ')})`);
     }
@@ -302,27 +325,34 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   }
 
   /**
-   * Split `uniquePks` into filter strings of at most {@link MAX_PKS_PER_BULK_FILTER}
-   * predicates each. Avoids enormous OR clauses that confuse the query planner
-   * or push past SQL Server's expression-tree limit.
+   * Format a single PK field value as a SQL literal. NeedsQuotes drives the
+   * branch — quoted types go through the dialect's escape; unquoted types
+   * must shape-check as numeric/boolean.
    */
-  public buildBulkFilterChunks(
-    entityInfo: EntityInfo,
-    uniquePks: Array<Record<string, unknown>>,
-    chunkSize: number = MAX_PKS_PER_BULK_FILTER
-  ): string[] {
-    const chunks: string[] = [];
-    for (let i = 0; i < uniquePks.length; i += chunkSize) {
-      const slice = uniquePks.slice(i, i + chunkSize);
-      chunks.push(this.buildBulkFilter(entityInfo, slice));
+  private formatPKLiteral(pkField: EntityFieldInfo, val: unknown, dialect: SQLDialect): string {
+    if (pkField.NeedsQuotes) {
+      const strVal = val !== undefined && val !== null ? String(val) : '';
+      return dialect.QuoteStringLiteral(strVal);
     }
-    return chunks;
+    if (typeof val === 'number' && Number.isFinite(val)) {
+      return String(val);
+    }
+    if (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val)) {
+      return val;
+    }
+    if (typeof val === 'boolean') {
+      return val ? '1' : '0';
+    }
+    throw new Error(
+      `Invalid primary key value for ${pkField.Name} (type ${pkField.Type}): expected numeric/boolean, got ${typeof val} (${JSON.stringify(val)})`
+    );
   }
 
   private extractPrimaryKeysRecursive(
     records: Array<Record<string, unknown>>,
     entityName: string,
-    keysByEntity: Map<string, Array<Record<string, unknown>>>
+    keysByEntity: Map<string, Array<Record<string, unknown>>>,
+    filePath: string
   ): void {
     let list = keysByEntity.get(entityName);
     if (!list) {
@@ -344,14 +374,20 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       const relatedEntities = record.relatedEntities as Record<string, unknown> | undefined;
       if (relatedEntities) {
         for (const [relatedEntityName, relatedRecords] of Object.entries(relatedEntities)) {
-          // Defensive: a malformed metadata file could carry a non-array value
-          // here. Skip silently instead of throwing — validation will surface
-          // the shape error elsewhere; preload should be best-effort.
           if (Array.isArray(relatedRecords)) {
             this.extractPrimaryKeysRecursive(
               relatedRecords as Array<Record<string, unknown>>,
               relatedEntityName,
-              keysByEntity
+              keysByEntity,
+              filePath
+            );
+          } else {
+            // Malformed shape: relatedEntities[X] must be an array. Validation
+            // will catch this eventually, but if preload runs first the user
+            // gets confusing cache-miss behavior instead of a pointer to the
+            // bad file. Surface it now.
+            this.warnings.push(
+              `Skipped preload for relatedEntities['${relatedEntityName}'] in ${filePath}: expected an array, got ${typeof relatedRecords}.`
             );
           }
         }
@@ -392,15 +428,34 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       const uniquePks = this.getUniquePrimaryKeys(entityInfo, pks);
       if (uniquePks.length === 0) continue;
 
-      this.markEntityAsPreloaded(entityName);
-
       // BaseEngine writes each load into a single property slot, so we use
-      // one config per entity. {@link buildBulkFilterChunks} exists for
-      // callers that need to chunk manually (e.g. > MAX_PKS_PER_BULK_FILTER
-      // PKs in a single entity); the realistic sync workload stays under
-      // that limit today so we issue one filter here.
+      // one config per entity. Above the threshold we skip preload for this
+      // entity (no config pushed, not marked preloaded) — the per-record
+      // path in SyncEngine will resolve lookups/loads against the DB the
+      // old way. Slower than preload, but correct, and avoids submitting a
+      // pathologically large OR clause.
+      if (uniquePks.length > MAX_PKS_PER_BULK_FILTER) {
+        this.warnings.push(
+          `Skipped preload for '${entityName}': ${uniquePks.length} primary keys exceeds threshold of ${MAX_PKS_PER_BULK_FILTER}. Falling back to per-record lookups for this entity.`
+        );
+        continue;
+      }
+
+      let filter: string;
+      try {
+        filter = this.buildBulkFilter(entityInfo, uniquePks);
+      } catch (err) {
+        // A malformed PK in any one record poisons the whole filter — skip
+        // preload for the entity and let the per-record path surface the
+        // real error against the offending record.
+        this.warnings.push(
+          `Skipped preload for '${entityName}': ${err instanceof Error ? err.message : String(err)}. Falling back to per-record lookups.`
+        );
+        continue;
+      }
+
+      this.markEntityAsPreloaded(entityName);
       const propName = this.getPropertyNameForEntity(entityName);
-      const filter = this.buildBulkFilter(entityInfo, uniquePks);
       configs.push({
         PropertyName: propName,
         EntityName: entityName,
@@ -430,7 +485,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       for (const { filePath, rawData, fileData } of parsed) {
         this.cacheFile(filePath, rawData, fileData);
         const records = Array.isArray(fileData) ? fileData : [fileData];
-        this.extractPrimaryKeysRecursive(records as Array<Record<string, unknown>>, entityName, keysByEntity);
+        this.extractPrimaryKeysRecursive(records as Array<Record<string, unknown>>, entityName, keysByEntity, filePath);
       }
     }
   }

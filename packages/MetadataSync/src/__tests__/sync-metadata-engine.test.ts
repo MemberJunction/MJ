@@ -199,17 +199,17 @@ describe('SyncMetadataEngine', () => {
     });
   });
 
-  describe('buildBulkFilterChunks', () => {
-    it('splits PK lists into chunks of the requested size', () => {
+  describe('buildBulkFilter validation', () => {
+    it('throws on a non-numeric value for an unquoted PK type', () => {
       const entityInfo: TestEntityInfo = {
         Name: 'X',
-        PrimaryKeys: [{ Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true }]
+        PrimaryKeys: [{ Name: 'ID', Type: 'int', NeedsQuotes: false }]
       };
-      const pks = Array.from({ length: 7 }, (_, i) => ({ ID: `id${i}` }));
-      const chunks = engine.buildBulkFilterChunks(entityInfo as unknown as EntityInfo, pks, 3);
-      expect(chunks).toHaveLength(3);
-      expect(chunks[0]).toBe("(ID = 'id0') OR (ID = 'id1') OR (ID = 'id2')");
-      expect(chunks[2]).toBe("(ID = 'id6')");
+      // Smuggling a string into an int PK should fail loudly rather than
+      // produce malformed/injectable SQL.
+      expect(() =>
+        engine.buildBulkFilter(entityInfo as unknown as EntityInfo, [{ ID: '1; DROP TABLE Users' }])
+      ).toThrow(/Invalid primary key value/);
     });
   });
 
