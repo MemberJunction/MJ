@@ -2,10 +2,10 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJConversationDetailAttachmentEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -309,63 +309,34 @@ export class ConversationAgentService {
 
     // Create lookup maps
     const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
-    const attachmentsByDetailId = new Map<string, AttachmentData[]>(); // DetailID -> array of AttachmentData
+    // attachmentsByDetailId removed — artifact junction is the single source of truth
+    // after the backfill migration. Multimodal content handled server-side.
 
     if (messageIds.length > 0) {
       const rv = RunView.FromMetadataProvider(this.Provider);
 
-      // Load artifacts and attachments in parallel
-      const [artifactsLoaded, attachmentsLoaded] = await Promise.all([
-        this.loadArtifactsForMessages(rv, messageIds, artifactsByDetailId),
-        this.loadAttachmentsForMessages(rv, messageIds, attachmentsByDetailId)
-      ]);
+      // Load artifacts for messages. Since the backfill migration
+      // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
+      // ConversationDetailAttachment rows to artifact pairs, the artifact
+      // junction is the single source of truth. Multimodal content (images,
+      // audio, video) is handled server-side by the resolver's artifact path.
+      const artifactsLoaded = await this.loadArtifactsForMessages(rv, messageIds, artifactsByDetailId);
 
       if (artifactsLoaded) {
         console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages`);
       }
-      if (attachmentsLoaded) {
-        console.log(`🖼️ Loaded ${attachmentsByDetailId.size} attachment groups for ${messageIds.length} messages`);
-      }
     }
 
-    // Build messages with proper multimodal content
+    // Build messages with artifact context
     for (const msg of recentHistory) {
       const messageText = msg.Message || '';
       const artifacts = artifactsByDetailId.get(msg.ID);
-      const attachments = attachmentsByDetailId.get(msg.ID);
 
-      // Build content - may be string or ChatMessageContentBlock[]
-      let content: ChatMessageContent;
+      let content: ChatMessageContent = messageText;
 
-      if (attachments && attachments.length > 0) {
-        // Use BuildChatMessageContent to create proper content blocks for multimodal
-        content = await ConversationUtility.BuildChatMessageContent(messageText, attachments);
-
-        // Append artifacts to text content if present
-        if (artifacts && artifacts.length > 0) {
-          const artifactText = artifacts.map(json => `\n\n# Artifact\n${json}\n`).join('');
-
-          if (typeof content === 'string') {
-            content = content + artifactText;
-          } else if (Array.isArray(content)) {
-            // Find or create text block and append artifacts
-            const textBlock = content.find(b => b.type === 'text');
-            if (textBlock && textBlock.content) {
-              textBlock.content += artifactText;
-            } else {
-              content.push({ type: 'text', content: artifactText });
-            }
-          }
-        }
-      } else {
-        // No attachments - use simple string content
-        content = messageText;
-
-        // Append artifacts
-        if (artifacts && artifacts.length > 0) {
-          for (const artifactJson of artifacts) {
-            content += `\n\n# Artifact\n${artifactJson}\n`;
-          }
+      if (artifacts && artifacts.length > 0) {
+        for (const artifactJson of artifacts) {
+          content += `\n\n# Artifact\n${artifactJson}\n`;
         }
       }
 
@@ -425,93 +396,6 @@ export class ConversationAgentService {
       console.error('Error loading artifacts for conversation context:', error);
     }
     return false;
-  }
-
-  /**
-   * Load attachments for messages and convert to AttachmentData format
-   */
-  private async loadAttachmentsForMessages(
-    rv: RunView,
-    messageIds: string[],
-    attachmentsByDetailId: Map<string, AttachmentData[]>
-  ): Promise<boolean> {
-    console.log('[AgentService] loadAttachmentsForMessages - querying for messageIds:', messageIds);
-    try {
-      const filter = `ConversationDetailID IN ('${messageIds.join("','")}')`;
-      console.log('[AgentService] loadAttachmentsForMessages - filter:', filter);
-
-      const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
-        EntityName: 'MJ: Conversation Detail Attachments',
-        ExtraFilter: filter,
-        OrderBy: 'DisplayOrder ASC, __mj_CreatedAt ASC',
-        ResultType: 'entity_object'
-      });
-
-      console.log('[AgentService] loadAttachmentsForMessages - query result:', {
-        success: attachmentResult.Success,
-        count: attachmentResult.Results?.length || 0,
-        error: attachmentResult.ErrorMessage
-      });
-
-      if (attachmentResult.Success && attachmentResult.Results && attachmentResult.Results.length > 0) {
-        for (const att of attachmentResult.Results) {
-          console.log('[AgentService] loadAttachmentsForMessages - processing attachment:', {
-            id: att.ID,
-            detailId: att.ConversationDetailID,
-            mimeType: att.MimeType,
-            hasInlineData: !!att.InlineData,
-            hasFileID: !!att.FileID
-          });
-          // Convert to AttachmentData format
-          const attachmentData = this.convertToAttachmentData(att);
-          if (attachmentData) {
-            const existing = attachmentsByDetailId.get(att.ConversationDetailID) || [];
-            existing.push(attachmentData);
-            attachmentsByDetailId.set(att.ConversationDetailID, existing);
-          }
-        }
-        return true;
-      }
-    } catch (error) {
-      console.error('Error loading attachments for conversation context:', error);
-    }
-    return false;
-  }
-
-  /**
-   * Convert a MJConversationDetailAttachmentEntity to AttachmentData format
-   */
-  private convertToAttachmentData(att: MJConversationDetailAttachmentEntity): AttachmentData | null {
-    // Get the content - either inline data or file URL
-    let content: string | null = null;
-
-    if (att.InlineData) {
-      // Create data URL from inline base64 data
-      content = `data:${att.MimeType};base64,${att.InlineData}`;
-    } else if (att.FileID) {
-      // TODO: Get pre-authenticated URL from MJStorage
-      // For now, skip attachments stored in external storage
-      console.warn(`Attachment ${att.ID} uses FileID storage - external URLs not yet supported`);
-      return null;
-    }
-
-    if (!content) {
-      return null;
-    }
-
-    // Determine attachment type from modality or MIME type
-    const attachmentType = ConversationUtility.GetAttachmentTypeFromMime(att.MimeType);
-
-    return {
-      type: attachmentType,
-      mimeType: att.MimeType,
-      fileName: att.FileName ?? undefined,
-      sizeBytes: att.FileSizeBytes ?? undefined,
-      width: att.Width ?? undefined,
-      height: att.Height ?? undefined,
-      durationSeconds: att.DurationSeconds ?? undefined,
-      content: content
-    };
   }
 
   /**

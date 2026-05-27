@@ -1593,78 +1593,10 @@ export class AgentRunner {
                 }
             }
 
-            // Back-compat path: gather ConversationDetailAttachment rows authored
-            // BEFORE storage unification — those have ArtifactVersionID = NULL
-            // and aren't represented in the junction query above. New uploads
-            // (server hook created the artifact pair) come through the junction
-            // path with ArtifactVersionID set; we skip them here to avoid
-            // double-counting.
-            //
-            // Resolution is via the Artifact Type registry (wildcard-aware), not
-            // a hardcoded MIME prefix list — same source of truth as the upload
-            // gate in MJConversationDetailAttachmentEntityServer.
-            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
-
-            const attachments = await rv.RunView<{
-                ID: string;
-                MimeType: string | null;
-                FileID: string | null;
-                FileName: string | null;
-                InlineData: string | null;
-                ArtifactVersionID: string | null;
-            }>(
-                {
-                    EntityName: 'MJ: Conversation Detail Attachments',
-                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}') AND ArtifactVersionID IS NULL`,
-                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData', 'ArtifactVersionID'],
-                    ResultType: 'simple',
-                },
-                contextUser,
-            );
-
-            if (attachments.Success && attachments.Results.length > 0) {
-                for (const att of attachments.Results) {
-                    const mime = att.MimeType ?? '';
-                    const ext = att.FileName?.includes('.') ? att.FileName.split('.').pop() : undefined;
-                    const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mime, ext);
-                    if (!artifactType) continue; // Unsupported MIME — agent has no tools for it.
-
-                    let content: string | Buffer = '';
-                    if (att.FileID) {
-                        const downloaded = await this.downloadArtifactFileContent(att.FileID, contextUser);
-                        if (downloaded) {
-                            content = downloaded;
-                        } else {
-                            LogError(`[AgentRunner] Failed to download attachment file "${att.FileName}" (FileID: ${att.FileID})`);
-                            continue;
-                        }
-                    } else if (att.InlineData) {
-                        // InlineData is base64-encoded — decode for binary files, keep as string for text
-                        if (mime.startsWith('text/') || mime === 'application/json') {
-                            content = Buffer.from(att.InlineData, 'base64').toString('utf-8');
-                        } else {
-                            content = Buffer.from(att.InlineData, 'base64');
-                        }
-                    } else {
-                        continue; // No content available
-                    }
-
-                    inputArtifacts.push({
-                        name: att.FileName || 'Uploaded File',
-                        typeName: artifactType.Name,
-                        content,
-                        mimeType: mime || undefined,
-                        ...(artifactType.ToolLibraryClass ? { toolLibraryClass: artifactType.ToolLibraryClass } : {}),
-                        deliveryMode: artifactType.DefaultDeliveryMode,
-                        forceToolsOnly: false,
-                    });
-                }
-            }
-
             if (inputArtifacts.length > 0) {
                 LogStatus(`[AgentRunner] Gathered ${inputArtifacts.length} input artifact(s) for conversation ${conversationId}: ${inputArtifacts.map(a => `${a.typeName}:"${a.name}" (${a.mimeType || 'no mime'})`).join(', ')}`);
             } else {
-                LogStatus(`[AgentRunner] No input artifacts found for conversation ${conversationId} (${junctions.Results.length} artifact junction(s), ${attachments.Success ? attachments.Results.length : 0} attachment(s) checked)`);
+                LogStatus(`[AgentRunner] No input artifacts found for conversation ${conversationId} (${junctions.Results.length} artifact junction(s) checked)`);
             }
 
             return inputArtifacts;
