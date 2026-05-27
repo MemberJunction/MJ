@@ -482,42 +482,61 @@ These apply to every component objective (4–13). Don't re-read per objective �
 
 ## Effort summary
 
-| # | Objective | Effort | Depends on | Validated |
-|---|-----------|--------|------------|-----------|
-| 1 | Measurement | 2 hours | — | ✅ Done |
-| 2 | CI gates | 1–2 hours | — | ✅ Patterns exist to clone |
-| 3 | Claude Skills | 1 hour | — | ✅ Just markdown docs |
-| 4 | Empty-state | 1½–2 days | 1, 2 | ✅ 95% identical markup |
-| 5 | Detail-drawer | 5 days | 2 | ✅ 12 panels, no CDK Overlay |
-| 6 | Confirm-dialog | 1–1½ days | 2 | ✅ 29 of 31 migratable |
-| 7 | Status-indicator | 3–4 days | 2 | ✅ 151 CSS classes, 14 vocabularies |
-| 8 | Collapsible-section | 1–1½ days | 2 | ✅ Only 11 of 51 actually collapsible |
-| 9 | Badge | 2½–3 days | 2 | ✅ 7 component families |
-| 10 | Alert + toast | 1 day | 2 | ✅ 5 patterns + toast relocation |
-| 11 | Stat-tile | 3–4 days | 2 | ✅ 5 layout patterns, needs 2-3 modes |
-| 12 | Form-section | 1–1½ days | 2 | ✅ 22 files, 85% consistent |
-| 13 | Selector-dialog (Tier 1) | 3–4 days | 2 | ✅ Scoped to 3 of 9 pickers |
-| 14 | Buttons to 100% | 2–2½ days | 1, 2 | ✅ 249 files, AG Grid exceptions |
-| 15 | Switches + loading + inputs | 2½–3 days | 1, 2 | ✅ Input count 55% higher |
-| 16 | Brand + icons | 1 day | 4–15 | — |
-| 17 | Typography + spacing tokens | 1½ days | 4–15 | — |
-| 18 | Dark-mode audit | 1 day | 16, 17 | — |
-| 19 | Card design foundation | 3 days | 2 | ✅ 150+ CSS files, 5 archetypes |
-| 20 | Card component consolidation | 5–7 days | 19 | ✅ 60% of card usage = Archetype A |
-| | **Total** | **~45–50 days** | | |
+| # | Objective | Effort | Quarter | Validated |
+|---|-----------|--------|---------|-----------|
+| 1 | Measurement | 2 hours | Q2 | ✅ Done |
+| 2 | CI gates | 1–2 hours | Q2 | ✅ Patterns exist to clone |
+| 3 | Claude Skills | 1 hour | Q2 | ✅ Just markdown docs |
+| 4 | Empty-state | 1½–2 days | Q2 | ✅ 95% identical markup |
+| 6 | Confirm-dialog | 1–1½ days | Q2 | ✅ 29 of 31 migratable |
+| 8 | Collapsible-section | 1–1½ days | Q2 | ✅ Only 11 of 51 actually collapsible |
+| 10 | Alert + toast | 1 day | Q2 | ✅ 5 patterns + toast relocation |
+| 5 | Detail-drawer | 5 days | Q3 | ✅ 12 panels, no CDK Overlay |
+| 7 | Status-indicator | 3–4 days | Q3 | ✅ 151 CSS classes, 14 vocabularies |
+| 9 | Badge | 2½–3 days | Q3 | ✅ 7 component families |
+| 11 | Stat-tile | 3–4 days | Q3 | ✅ 5 layout patterns, needs 2-3 modes |
+| 12 | Form-section | 1–1½ days | Q3 | ✅ 22 files, 85% consistent |
+| 13 | Selector-dialog (Tier 1) | 3–4 days | Q3 | ✅ Scoped to 3 of 9 pickers |
+| 14 | Buttons to 100% | 2–2½ days | Q3 | ✅ 249 files, AG Grid exceptions |
+| 15 | Switches + loading + inputs | 2½–3 days | Q3 | ✅ Input count 55% higher |
+| 19 | Card design foundation | 3 days | Q3 | ✅ 150+ CSS files, 5 archetypes |
+| 20 | Card component consolidation | 5–7 days | Q3 | ✅ 60% of card usage = Archetype A |
+| 16 | Brand + icons | 1 day | Q3 | — |
+| 17 | Typography + spacing tokens | 1½ days | Q3 | — |
+| 18 | Dark-mode audit | 1 day | Q3 | — |
+| | **Q2 total** | **~6 days** | | |
+| | **Q3 total** | **~39–44 days** | | |
+| | **Grand total** | **~45–50 days** | | |
 
 ---
 
 ## Sequencing
 
+### Q2 2026 (May 27–June 30)
+
+Foundation + quick component wins. ~1-2 weeks available after other commitments.
+
 ```
-Week 1 (May 27):  1 → 2 → 3 (foundation — all done in 1 day)
-                       ↓
-June–July:        4, 5, 6, 7, 8, 9, 10, 11, 12, 13 (components — largely parallel)
-                  14, 15 (adoption push — can run alongside component work)
-                  19 → 20 (card consolidation — 19 first, then 20 builds on it)
-                       ↓
-August:           16 → 17 → 18 (polish — sequential, each validates the prior)
+KR1:  1 → 2 → 3 (foundation — all done in 1 day)
+           ↓
+KR2:  4 (empty-state), 8 (collapsible), 6 (confirm), 10 (alert+toast)
+      (4 quick components — ~5-6 days total)
 ```
 
-Objectives 4–15, 19 are independent of each other (they all just depend on 1+2). O20 depends on O19. Pick them in any order based on what feels highest leverage that day.
+### Q3 2026 (July–September)
+
+Finish components + adoption push + cards + visual polish.
+
+```
+KR2:  5 (detail-drawer), 7 (status), 9 (badge), 11 (stat-tile),
+      12 (form-section), 13 (selector-dialog)
+      (6 remaining components — ~18-22 days)
+           ↓
+KR3:  14 (buttons), 15 (switches+loading+inputs)
+      (adoption push — ~5 days, can interleave with KR2)
+           ↓
+KR4:  19 → 20 (card foundation then consolidation — ~8-10 days)
+      16 → 17 → 18 (brand, tokens, dark-mode — ~3.5 days, sequential)
+```
+
+Objectives within each KR are independent of each other (they all just depend on KR1). O20 depends on O19. Pick them in any order based on what feels highest leverage that day.
