@@ -1,18 +1,11 @@
 import {
     BaseEntity,
-    CompositeKey,
     EntitySaveOptions,
     IMetadataProvider,
     LogError,
-    Metadata,
-    QueryEntityInfo,
-    QueryFieldInfo,
-    QueryParameterInfo,
-    QueryPermissionInfo,
     SimpleEmbeddingResult,
-    SQLDialectInfo,
 } from "@memberjunction/core";
-import { MJQueryEntity, MJQuerySQLEntity } from "@memberjunction/core-entities";
+import { MJQuerySQLEntity, MJQueryEntityExtended, MJSQLDialectEntity, QueryEngine } from "@memberjunction/core-entities";
 import { RegisterClass, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { EmbedTextLocalHelper } from "./util";
 import {
@@ -22,34 +15,18 @@ import {
 } from "./query-extraction";
 import type { QuerySyncContext } from "./query-extraction";
 
+/**
+ * Server-side query entity with embedding generation, SQL extraction pipeline,
+ * and dialect auto-conversion. Extends `MJQueryEntityExtended` which provides
+ * child-relationship getters and business logic available on both client and server.
+ */
 @RegisterClass(BaseEntity, 'MJ: Queries')
-export class MJQueryEntityServer extends MJQueryEntity {
-    private _queryEntities: QueryEntityInfo[] = [];
-    private _queryFields: QueryFieldInfo[] = [];
-    private _queryParameters: QueryParameterInfo[] = [];
-    private _queryPermissions: QueryPermissionInfo[] = [];
-
+export class MJQueryEntityServer extends MJQueryEntityExtended {
     /** Optional caller-provided parameter sample values. When set, these override
      *  LLM-generated sampleValues during the extraction pipeline. Use this to pass
      *  tested/validated values from the calling system.
      *  Keys are parameter names, values are the tested sample values. */
     public ParameterHints?: Map<string, string>;
-
-    public get QueryEntities(): QueryEntityInfo[] {
-        return this._queryEntities;
-    }
-
-    public get QueryFields(): QueryFieldInfo[] {
-        return this._queryFields;
-    }
-
-    public get QueryParameters(): QueryParameterInfo[] {
-        return this._queryParameters;
-    }
-
-    public get QueryPermissions(): QueryPermissionInfo[] {
-        return this._queryPermissions;
-    }
 
     // ─── Embedding Methods ───────────────────────────────────────────────────────
 
@@ -114,11 +91,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
             if (shouldExtractData && this.SQL && this.SQL.trim().length > 0) {
                 await this.extractAndSyncDataAsync();
                 await this.autoConvertDialectsAsync();
-                await this.RefreshRelatedMetadata(true);
             } else if (!this.SQL || this.SQL.trim().length === 0) {
                 this.UsesTemplate = false;
                 await this.cleanupEmptyQueryAsync();
-                await this.RefreshRelatedMetadata(true);
             }
 
             return true;
@@ -135,10 +110,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             if (!deleteResult) {
                 return false;
             }
-
-            // Refresh metadata cache after deletion to prevent stale query references
-            await this.RefreshRelatedMetadata(true);
-            return true;
+            return deleteResult;
         } catch (e) {
             LogError('Failed to delete query:', e);
             this.LatestResult?.Errors.push(e);
@@ -147,25 +119,6 @@ export class MJQueryEntityServer extends MJQueryEntity {
     }
 
     // ─── Pipeline Delegation ─────────────────────────────────────────────────────
-
-    /**
-     * Builds a category path string from a CategoryID by walking up the category hierarchy.
-     * Returns a slash-delimited path like "Ground-Truth-Queries/Sales" or "Ground-Truth-Queries".
-     */
-    public BuildCategoryPathFromID(categoryID: string): string {
-        const categories = (this.ProviderToUse as unknown as IMetadataProvider).QueryCategories;
-        const segments: string[] = [];
-        let currentID: string | null = categoryID;
-
-        while (currentID) {
-            const cat = categories.find(c => c.ID.toLowerCase() === currentID!.toLowerCase());
-            if (!cat) break;
-            segments.unshift(cat.Name);
-            currentID = cat.ParentID;
-        }
-
-        return segments.join('/');
-    }
 
     /**
      * Builds the QuerySyncContext from this entity instance for use by the extraction pipeline.
@@ -248,8 +201,8 @@ export class MJQueryEntityServer extends MJQueryEntity {
                 return;
             }
 
-            const md = this.ProviderToUse as unknown as IMetadataProvider;
-            const dialects = md.SQLDialects;
+            const qe = QueryEngine.Instance;
+            const dialects = qe.SQLDialects;
 
             const sourceDialect = this.SQLDialectID
                 ? dialects.find(d => UUIDsEqual(d.ID, this.SQLDialectID))
@@ -261,7 +214,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             }
 
             for (const targetPlatformKey of config.targetPlatforms) {
-                await this.convertToTargetDialect(sourceDialect, targetPlatformKey, md, dialects);
+                await this.convertToTargetDialect(sourceDialect, targetPlatformKey, dialects);
             }
         } catch (e) {
             console.warn(`Query "${this.Name}" - Auto-convert dialects failed:`, e);
@@ -272,10 +225,9 @@ export class MJQueryEntityServer extends MJQueryEntity {
      * Converts and persists SQL for a single target dialect. Logs warnings on skip/failure.
      */
     private async convertToTargetDialect(
-        sourceDialect: SQLDialectInfo,
+        sourceDialect: MJSQLDialectEntity,
         targetPlatformKey: string,
-        md: IMetadataProvider,
-        dialects: SQLDialectInfo[]
+        dialects: MJSQLDialectEntity[]
     ): Promise<void> {
         try {
             if (targetPlatformKey === sourceDialect.PlatformKey) {
@@ -294,7 +246,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             }
 
             const convertedSQL = ConvertTSQLToPostgreSQL(this.SQL);
-            await this.upsertQuerySQLRecord(targetDialect, convertedSQL, md);
+            await this.upsertQuerySQLRecord(targetDialect, convertedSQL);
         } catch (platformError) {
             console.warn(`Query "${this.Name}" - Auto-convert to "${targetPlatformKey}" failed:`, platformError);
         }
@@ -304,11 +256,11 @@ export class MJQueryEntityServer extends MJQueryEntity {
      * Creates or updates a QuerySQL record for the given dialect.
      */
     private async upsertQuerySQLRecord(
-        targetDialect: SQLDialectInfo,
+        targetDialect: MJSQLDialectEntity,
         convertedSQL: string,
-        md: IMetadataProvider
     ): Promise<void> {
         const rv = this.RunViewProviderToUse;
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
 
         const existingResult = await rv.RunView<MJQuerySQLEntity>({
             EntityName: 'MJ: Query SQLs',
@@ -364,47 +316,5 @@ export class MJQueryEntityServer extends MJQueryEntity {
         } catch (e) {
             console.warn(`Query "${this.Name}" - Failed to remove QuerySQL records:`, e);
         }
-    }
-
-    // ─── Load Overrides ──────────────────────────────────────────────────────────
-
-    override async Load(ID: string, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
-        const result = await super.Load(ID, EntityRelationshipsToLoad);
-        await this.RefreshRelatedMetadata(false);
-        return result;
-    }
-
-    override async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad?: string[]): Promise<boolean> {
-        const result = await super.InnerLoad(CompositeKey, EntityRelationshipsToLoad);
-        await this.RefreshRelatedMetadata(false);
-        return result;
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- BaseEntity.LoadFromData uses `any` for the data parameter
-    override async LoadFromData(data: any, _replaceOldValues?: boolean): Promise<boolean> {
-        const result = await super.LoadFromData(data, _replaceOldValues);
-        await this.RefreshRelatedMetadata(false);
-        return result;
-    }
-
-    // ─── Metadata Refresh ────────────────────────────────────────────────────────
-
-    /**
-     * Refreshes this record's related metadata from the provider, refreshing
-     * all the way up from the database if refreshFromDB is true, otherwise from cache.
-     */
-    public async RefreshRelatedMetadata(refreshFromDB: boolean): Promise<void> {
-        const md = this.ProviderToUse as unknown as IMetadataProvider;
-        if (refreshFromDB) {
-            const globalMetadataProvider = Metadata.Provider; // global-provider-ok: explicit refresh from canonical global metadata
-            await globalMetadataProvider.Refresh(md);
-            if (globalMetadataProvider !== md) {
-                await md.Refresh();
-            }
-        }
-        this._queryPermissions = md.QueryPermissions.filter(p => UUIDsEqual(p.QueryID, this.ID));
-        this._queryEntities = md.QueryEntities.filter(e => UUIDsEqual(e.QueryID, this.ID));
-        this._queryFields = md.QueryFields.filter(f => UUIDsEqual(f.QueryID, this.ID));
-        this._queryParameters = md.QueryParameters.filter(p => UUIDsEqual(p.QueryID, this.ID));
     }
 }

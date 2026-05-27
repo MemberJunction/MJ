@@ -1,8 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus, QueryFieldInfo, QueryParameterInfo, QueryEntityInfo, QueryPermissionInfo } from '@memberjunction/core';
+import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { MJQueryCategoryEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
+import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
@@ -301,12 +301,9 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
                 if (input.Permissions && input.Permissions.length > 0) {
                     await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
-                    await record.RefreshRelatedMetadata(true); // force DB update since we just created new permissions
+
                 }
 
-                // Refresh metadata cache to include the newly created query
-                // This ensures subsequent operations can find the query without additional DB calls
-                await provider.Refresh();
 
                 return this.buildSuccessResult(record);
             }
@@ -365,7 +362,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         };
     }
 
-    private mapFields(fields: QueryFieldInfo[]): MJQueryField_[] {
+    private mapFields(fields: MJQueryFieldEntity[]): MJQueryField_[] {
         return fields.map(f => ({
             ID: f.ID,
             QueryID: f.QueryID,
@@ -389,7 +386,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryField_);
     }
 
-    private mapParameters(params: QueryParameterInfo[]): MJQueryParameter_[] {
+    private mapParameters(params: MJQueryParameterEntity[]): MJQueryParameter_[] {
         return params.map(p => ({
             ID: p.ID,
             QueryID: p.QueryID,
@@ -408,7 +405,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryParameter_);
     }
 
-    private mapEntities(entities: QueryEntityInfo[]): MJQueryEntity_[] {
+    private mapEntities(entities: MJQueryEntityEntity[]): MJQueryEntity_[] {
         return entities.map(e => ({
             ID: e.ID,
             QueryID: e.QueryID,
@@ -422,7 +419,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
         }) as MJQueryEntity_);
     }
 
-    private mapPermissions(permissions: QueryPermissionInfo[]): MJQueryPermission_[] {
+    private mapPermissions(permissions: MJQueryPermissionEntity[]): MJQueryPermission_[] {
         return permissions.map(p => ({
             ID: p.ID,
             QueryID: p.QueryID,
@@ -544,9 +541,6 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
                 // Create new permissions
                 await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
-                
-                // Refresh the metadata to get updated permissions
-                await queryEntity.RefreshRelatedMetadata(true);
             }
 
             return this.buildSuccessResult(queryEntity);

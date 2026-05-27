@@ -5,7 +5,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { Metadata, QueryInfo, QueryCategoryInfo, CompositeKey } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntity } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
     QueryRowClickEvent
@@ -167,9 +167,9 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            // Force re-fetch from server when explicitly refreshing
+            // Force QueryEngine refresh when explicitly refreshing (user clicked Refresh)
             if (forceRefresh) {
-                await this.metadata.Refresh();
+                await QueryEngine.Instance.Config(true);
             }
 
             // Load all queries the user has permission to run (regardless of status)

@@ -25,7 +25,7 @@ import {
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
 import { IMetadataProvider, UserInfo, LogStatus, LogError, Metadata, RunQuery, RunView, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJConversationDetailEntity, QueryEngine } from '@memberjunction/core-entities';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -483,15 +483,15 @@ export class SkipSDK {
      * Build saved queries for Skip
      */
     private buildQueries(status: "Pending" | "In-Review" | "Approved" | "Rejected" | "Obsolete" = 'Approved'): SkipQueryInfo[] {
-        const md = this.Provider;
-        const approvedQueries = md.Queries.filter((q) => q.Status === status);
+        const qe = QueryEngine.Instance;
+        const approvedQueries = qe.Queries.filter((q) => q.Status === status);
 
         return approvedQueries.map((q) => ({
             ID: q.ID,
             Name: q.Name,
             Description: q.Description,
             Category: q.Category,
-            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID),
+            CategoryPath: this.buildQueryCategoryPath(qe, q.CategoryID),
             CategoryID: q.CategoryID,
             SQL: q.SQL,
             Status: q.Status,
@@ -501,7 +501,7 @@ export class SkipSDK {
             EmbeddingModelID: q.EmbeddingModelID,
             EmbeddingModelName: q.EmbeddingModel,
             TechnicalDescription: q.TechnicalDescription,
-            Fields: q.Fields.map((f) => ({
+            Fields: qe.GetQueryFields(q.ID).map((f) => ({
                 ID: f.ID,
                 QueryID: f.QueryID,
                 Name: f.Name,
@@ -517,7 +517,7 @@ export class SkipSDK {
                 IsSummary: f.IsSummary,
                 SummaryDescription: f.SummaryDescription
             })),
-            Parameters: q.Parameters.map((p) => ({
+            Parameters: qe.GetQueryParameters(q.ID).map((p) => ({
                 ID: p.ID,
                 QueryID: p.QueryID,
                 Name: p.Name,
@@ -528,7 +528,7 @@ export class SkipSDK {
                 SampleValue: p.SampleValue,
                 ValidationFilters: p.ValidationFilters
             })),
-            Entities: q.Entities.map((e) => ({
+            Entities: qe.QueryEntities.filter(e => UUIDsEqual(e.QueryID, q.ID)).map((e) => ({
                 ID: e.ID,
                 QueryID: e.QueryID,
                 EntityID: e.EntityID,
@@ -544,11 +544,11 @@ export class SkipSDK {
     /**
      * Recursively build category path for a query
      */
-    private buildQueryCategoryPath(md: IMetadataProvider, categoryID: string): string {
-        const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
+    private buildQueryCategoryPath(qe: QueryEngine, categoryID: string): string {
+        const cat = qe.Categories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
-        const parentPath = this.buildQueryCategoryPath(md, cat.ParentID);
+        const parentPath = this.buildQueryCategoryPath(qe, cat.ParentID);
         return parentPath ? `${parentPath}/${cat.Name}` : cat.Name;
     }
 
@@ -560,11 +560,11 @@ export class SkipSDK {
      * across all queries, not just approved ones.
      */
     private buildQueryCatalog(): SkipQueryCatalogEntry[] {
-        const md = this.Provider;
+        const qe = QueryEngine.Instance;
 
-        return md.Queries.map((q) => ({
+        return qe.Queries.map((q) => ({
             Name: q.Name,
-            CategoryPath: this.buildQueryCategoryPath(md, q.CategoryID)
+            CategoryPath: this.buildQueryCategoryPath(qe, q.CategoryID)
         }));
     }
 
