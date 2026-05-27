@@ -82,7 +82,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJContentSources', sectionName: 'Content Sources', isExpanded: false },
             { sectionKey: 'mJResourceTypesCategoryEntityID', sectionName: 'Resource Types (Category Entity ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
-            { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false }
+            { sectionKey: 'mJTestRuns', sectionName: 'Test Runs', isExpanded: false },
+            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false }
         ]);
     }
 }

@@ -25,7 +25,8 @@ export class MJApplicationFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserApplications', sectionName: 'User Applications', isExpanded: false },
             { sectionKey: 'mJDashboards', sectionName: 'Dashboards', isExpanded: false },
             { sectionKey: 'mJApplicationRoles', sectionName: 'Application Roles', isExpanded: false },
-            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false }
+            { sectionKey: 'mJDashboardUserPreferences', sectionName: 'Dashboard User Preferences', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }
