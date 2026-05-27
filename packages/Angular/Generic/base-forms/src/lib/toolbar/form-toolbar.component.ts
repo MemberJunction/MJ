@@ -120,6 +120,22 @@ export class MjFormToolbarComponent implements DoCheck {
   /** Optional template for additional toolbar actions */
   @Input() AdditionalActionsTemplate: TemplateRef<unknown> | null = null;
 
+  /**
+   * Available form variants for this entity. When the array has >1 entry
+   * and `Config.ShowFormVariantPicker` is true, the toolbar renders a
+   * right-side "form picker" button (icon) that opens a dropdown with
+   * the Default form + each variant. Picking emits {@link VariantPicked}
+   * with the override ID, or null for the CodeGen Angular default.
+   *
+   * Shape is intentionally minimal — Generic doesn't depend on the
+   * resolver row type. Hosts shape their data into this. See
+   * {@link VariantPickerItem} on the container for the canonical shape.
+   */
+  @Input() Variants: Array<{ ID: string; Label: string; Scope: 'User' | 'Role' | 'Global'; Status: 'Active' | 'Pending' | 'Inactive' }> = [];
+
+  /** The currently-applied variant ID, or null when the Default form is active. */
+  @Input() CurrentVariantID: string | null = null;
+
   // ---- Outputs ----
 
   /** Emitted for all navigation actions (record links, hierarchy clicks, etc.) */
@@ -166,6 +182,13 @@ export class MjFormToolbarComponent implements DoCheck {
 
   /** Request to show dirty field changes */
   @Output() ShowChangesRequested = new EventEmitter<void>();
+
+  /**
+   * Emitted when the user picks an item from the form-variant dropdown.
+   * Payload is the override ID for a specific variant, or `null` when the
+   * user picks the "Default form" row (CodeGen / Angular fallback).
+   */
+  @Output() VariantPicked = new EventEmitter<string | null>();
 
   /** Emitted when a custom toolbar button is clicked */
   @Output() CustomButtonClick = new EventEmitter<CustomToolbarButtonClickEventArgs>();
@@ -518,6 +541,64 @@ export class MjFormToolbarComponent implements DoCheck {
   OnShowChanges(): void {
     if (this.DispatchToFormRef('ShowChanges')) return;
     this.ShowChangesRequested.emit();
+  }
+
+  // ── Form-variant picker ─────────────────────────────────────────
+
+  /** Whether the variant-picker dropdown is currently open. */
+  public VariantMenuOpen = false;
+
+  /**
+   * True iff the toolbar should render the variant-picker button.
+   *
+   * Note the threshold is `>= 1`, NOT `> 1`. The picker menu always
+   * includes the "Default form" row (CodeGen / Angular fallback) — that
+   * row isn't in {@link Variants}; it's rendered unconditionally as the
+   * first row inside the menu. So any single variant still yields a real
+   * choice (Default vs that variant) and the picker should appear. The
+   * inline-strip implementation that this replaces used `> 1` and
+   * therefore hid the picker for entities with exactly one override,
+   * which made that override unreachable from the UI.
+   */
+  public get ShowVariantPickerButton(): boolean {
+    return !!this.Config.ShowFormVariantPicker && (this.Variants?.length ?? 0) >= 1;
+  }
+
+  /** Label for the currently-active variant, or "Default form" when none. */
+  public get CurrentVariantLabel(): string {
+    const v = this.Variants?.find(x => x.ID === this.CurrentVariantID);
+    return v?.Label ?? 'Default form';
+  }
+
+  /** Compact subtitle for a variant menu row: "Scope · Status". */
+  public VariantSubtitle(v: { Scope: string; Status: string }): string {
+    return `${v.Scope} · ${v.Status}`;
+  }
+
+  public ToggleVariantMenu(): void {
+    this.VariantMenuOpen = !this.VariantMenuOpen;
+    this.cdr.markForCheck();
+  }
+
+  public CloseVariantMenu(): void {
+    if (this.VariantMenuOpen) {
+      this.VariantMenuOpen = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * User picked a row in the variant menu. Closes the menu and emits
+   * `VariantPicked` (null → "Default form" / CodeGen Angular; UUID →
+   * specific override). No-op when the picked value matches the current.
+   */
+  public OnVariantClick(variantID: string | null): void {
+    this.VariantMenuOpen = false;
+    if (variantID === this.CurrentVariantID) {
+      this.cdr.markForCheck();
+      return;
+    }
+    this.VariantPicked.emit(variantID);
   }
 
   /**

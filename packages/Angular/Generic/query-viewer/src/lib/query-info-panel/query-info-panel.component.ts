@@ -12,7 +12,8 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { QueryInfo, QueryFieldInfo, QueryParameterInfo, QueryDependencyInfo } from '@memberjunction/core';
+import { MJQueryEntityExtended, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryDependencyEntity, QueryEngine } from '@memberjunction/core-entities';
+import { UUIDsEqual } from '@memberjunction/global';
 import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -68,7 +69,7 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
     // Inputs
     // ========================================
 
-    @Input() QueryInfo: QueryInfo | null = null;
+    @Input() QueryInfo: MJQueryEntityExtended | null = null;
     @Input() Visible: boolean = false;
     @Input() ShowOverlay: boolean = true;
 
@@ -139,10 +140,10 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
         this.CompositionTokenClick.emit(event);
     }
 
-    public OnDependentQueryClick(dep: QueryDependencyInfo): void {
+    public OnDependentQueryClick(dep: MJQueryDependencyEntity): void {
         // Navigate to the dependent (referencing) query
-        const depQuery = dep.QueryInfo;
-        const categoryPath = depQuery?.CategoryPath?.replace(/^\/|\/$/g, '') || '';
+        const depQuery = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, dep.QueryID));
+        const categoryPath = depQuery?.CategoryPath || '';
         const fullPath = categoryPath ? `${categoryPath}/${dep.Query}` : dep.Query;
         this.CompositionTokenClick.emit({
             FullToken: `{{query:"${fullPath}"}}`,
@@ -213,19 +214,19 @@ export class QueryInfoPanelComponent implements OnInit, OnDestroy {
     // Helpers
     // ========================================
 
-    public GetFieldTypeDisplay(field: QueryFieldInfo): string {
+    public GetFieldTypeDisplay(field: MJQueryFieldEntity): string {
         return field.SQLFullType || field.SQLBaseType || 'unknown';
     }
 
-    public GetParamTypeDisplay(param: QueryParameterInfo): string {
+    public GetParamTypeDisplay(param: MJQueryParameterEntity): string {
         return param.Type || 'string';
     }
 
-    public TrackByField(index: number, field: QueryFieldInfo): string {
+    public TrackByField(index: number, field: MJQueryFieldEntity): string {
         return field.Name;
     }
 
-    public TrackByParam(index: number, param: QueryParameterInfo): string {
+    public TrackByParam(index: number, param: MJQueryParameterEntity): string {
         return param.Name;
     }
 }

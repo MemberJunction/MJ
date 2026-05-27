@@ -107,13 +107,13 @@
               [class.fa-chevron-down]="IsSectionExpanded('fields')"
             [class.fa-chevron-right]="!IsSectionExpanded('fields')"></i>
             <span class="section-title">Fields</span>
-            <span class="section-count">({{ QueryInfo.Fields.length || 0 }})</span>
+            <span class="section-count">({{ QueryInfo.QueryFields.length || 0 }})</span>
           </div>
           @if (IsSectionExpanded('fields')) {
             <div class="section-content">
-              @if (QueryInfo.Fields.length) {
+              @if (QueryInfo.QueryFields.length) {
                 <div class="fields-list">
-                  @for (field of QueryInfo.Fields; track TrackByField($index, field)) {
+                  @for (field of QueryInfo.QueryFields; track TrackByField($index, field)) {
                     <div class="field-item">
                       <div class="field-header">
                         <span class="field-name">{{ field.Name }}</span>
@@ -153,13 +153,13 @@
               [class.fa-chevron-down]="IsSectionExpanded('parameters')"
             [class.fa-chevron-right]="!IsSectionExpanded('parameters')"></i>
             <span class="section-title">Parameters</span>
-            <span class="section-count">({{ QueryInfo.Parameters.length || 0 }})</span>
+            <span class="section-count">({{ QueryInfo.QueryParameters.length || 0 }})</span>
           </div>
           @if (IsSectionExpanded('parameters')) {
             <div class="section-content">
-              @if (QueryInfo.Parameters.length) {
+              @if (QueryInfo.QueryParameters.length) {
                 <div class="params-list">
-                  @for (param of QueryInfo.Parameters; track TrackByParam($index, param)) {
+                  @for (param of QueryInfo.QueryParameters; track TrackByParam($index, param)) {
                     <div class="param-item">
                       <div class="param-header">
                         <span class="param-name">
@@ -225,19 +225,19 @@
           }
         </div>
         <!-- Dependent Queries Section -->
-        @if (QueryInfo.Dependents.length > 0) {
+        @if (QueryInfo.QueryDependents.length > 0) {
           <div class="info-section" [class.expanded]="IsSectionExpanded('dependents')">
             <div class="section-header" (click)="ToggleSection('dependents')">
               <i class="fa-solid section-icon"
                 [class.fa-chevron-down]="IsSectionExpanded('dependents')"
                 [class.fa-chevron-right]="!IsSectionExpanded('dependents')"></i>
               <span class="section-title">Dependent Queries</span>
-              <span class="section-count">({{ QueryInfo.Dependents.length }})</span>
+              <span class="section-count">({{ QueryInfo.QueryDependents.length }})</span>
             </div>
             @if (IsSectionExpanded('dependents')) {
               <div class="section-content">
                 <div class="dependents-list">
-                  @for (dep of QueryInfo.Dependents; track dep.ID) {
+                  @for (dep of QueryInfo.QueryDependents; track dep.ID) {
                     <div class="dependent-item" (click)="OnDependentQueryClick(dep)">
                       <div class="dependent-header">
                         <i class="fa-solid fa-arrow-left dependent-icon"></i>

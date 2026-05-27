@@ -326,6 +326,53 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
+## Latency Optimizations & Concurrent Sub-Agent Execution
+
+To drastically reduce execution latency, the framework includes the following optimizations:
+
+### 1. In-Memory Query Embedding Caching
+In-memory caching is integrated into `AIEngine.EmbedText` to bypass redundant local ONNX embedding inference, eliminating CPU-bound event-loop blockages.
+* **Eviction**: Backed by `MJLruCache` from `@memberjunction/global` — a bounded LRU keeps hot queries warm across bursts (default capacity 5000 entries).
+* **Cache keys**: `${modelID}|sha256(text)` so a large text doesn't pin its full string in the cache map.
+* **Promise dedup**: Concurrent callers for the same `(model, text)` share a single in-flight inference promise — only one ONNX run happens even under fan-out load.
+* **Control**: Callers can supply options `{ bypassCache: true }` (re-calculates but caches the new result) or `{ noCache: true }` (bypasses and does not store the result).
+* **Empty input**: Empty/whitespace text short-circuits to `null` without invoking the embedding provider.
+* **Negative result eviction**: Failed or empty-vector responses are evicted so subsequent calls retry rather than returning a stale failure.
+* **Reset**: The cache can be manually cleared by calling `AIEngine.Instance.ClearEmbeddingCache()`.
+
+### 2. Parallel Data Source Preloading
+`AgentDataPreloader.PreloadAgentData` resolves agent data sources concurrently with a bounded concurrency cap (default 10 in-flight at once) so a long list of sources can't saturate the DB connection pool.
+
+### 3. Non-blocking Observability DB Logging
+Observability writes (`AIAgentRunStep` records) are completely non-blocking:
+* Step creation and finalization `.Save()` operations are queued immediately into `_pendingSaves` promises.
+* Sequenced queueing via `_stepSavePromises` chains saves on the *same* step ID to prevent database write races (e.g. executing a step `UPDATE` before its initial `INSERT` completes).
+* All pending logging writes are drained with `Promise.allSettled` inside `finalizeAgentRun()` and the queues are cleared, so a reused agent instance doesn't leak settled promises. Save failures (rejected promises OR `Save()===false`) are logged via `LogError` and a summary is folded into `agentRun.ErrorMessage` for visibility.
+
+### 4. Concurrent Sub-Agent Execution
+Loop agents can request multiple sub-agents to run in parallel by returning a `subAgents` array in their `nextStep` decision:
+* **Bounded fan-out**: Sub-agents dispatch with a configurable concurrency cap (default 5) so a misbehaving LLM can't spawn unbounded parallel runs.
+* **Deterministic transcript**: Delegation messages and progress events are pushed *synchronously* in the source order of the `subAgents` array — completion order doesn't reorder the conversation.
+* **Payload isolation**: Each child sub-agent receives a deep-cloned copy of its input payload, so in-flight mutations by one sibling can't be observed by another.
+* **State Merging**: Aggregates all media/file outputs and sequentially merges child/related sub-agent payloads back into the parent state via the `PayloadManager` to avoid race conditions.
+* **Per-sibling audit trail**: Each parallel sub-agent's `AIAgentRunStep` records *its own* contribution as `PayloadAtEnd` rather than the cumulative merged state, so forensic logs distinguish each sibling.
+* **Termination semantics**: Matches the single sub-agent path — if any dispatched child requested `terminateAfter: true`, the parent terminates regardless of whether that child succeeded. The parent's step is reported as `Failed` when any child failed, `Success` when terminating cleanly, and `Retry` otherwise.
+* **Context Preservation**: Appends an aggregated delegation and completion log to the parent conversation context once all parallel steps complete.
+
+#### Loop Response Schema
+```json
+{
+  "taskComplete": false,
+  "nextStep": {
+    "type": "Sub-Agent",
+    "subAgents": [
+      { "name": "DbAgent", "message": "Search the database", "terminateAfter": false },
+      { "name": "WebAgent", "message": "Gather details from web search", "terminateAfter": false }
+    ]
+  }
+}
+```
+
 ## Documentation
 
 Detailed guides are available in the [`docs/`](./docs/) directory:

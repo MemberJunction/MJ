@@ -14,6 +14,7 @@ export class ConversationEmptyStateComponent {
   @Input() disabled: boolean = false;
   @Input() showSidebarToggle: boolean = false;
   @Input() enableAttachments: boolean = false;
+  @Input() enableMentions: boolean = true;
   @Input() maxAttachments: number = 10;
   @Input() maxAttachmentSizeBytes: number = 20 * 1024 * 1024;
   @Input() acceptedFileTypes: string = 'image/*';

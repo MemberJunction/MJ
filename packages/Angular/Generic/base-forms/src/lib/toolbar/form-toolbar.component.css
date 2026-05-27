@@ -535,3 +535,109 @@
   from { transform: translateY(8px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* ============================================================ */
+/* FORM-VARIANT PICKER (toolbar-embedded; right-side)            */
+/* ============================================================ */
+
+.mj-form-variant-picker-host {
+  position: relative;
+  display: inline-flex;
+}
+
+.mj-form-variant-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+}
+
+.mj-form-variant-picker-trigger .chev {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.mj-form-variant-picker-current-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mj-form-variant-picker-host.open .mj-form-variant-picker-trigger {
+  background: var(--mj-bg-surface-hover);
+  border-color: var(--mj-border-focus);
+}
+
+.mj-form-variant-picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  min-width: 280px;
+  max-height: 360px;
+  overflow-y: auto;
+  background: var(--mj-bg-surface-elevated);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  padding: 4px 0;
+}
+
+.mj-form-variant-picker-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  color: var(--mj-text-primary);
+  font-size: 13px;
+  transition: background 120ms;
+}
+
+.mj-form-variant-picker-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.mj-form-variant-picker-row.current {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+}
+
+.mj-form-variant-picker-row.inactive {
+  opacity: 0.6;
+}
+
+.mj-form-variant-picker-row-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mj-form-variant-picker-row-title {
+  font-weight: 600;
+}
+
+.mj-form-variant-picker-row-sub {
+  font-size: 11px;
+  color: var(--mj-text-muted);
+}
+
+.mj-form-variant-picker-default-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--mj-text-muted);
+  margin-left: 4px;
+}
+
+.mj-form-variant-picker-default {
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-form-variant-picker-check {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
+  margin-top: 2px;
+}

@@ -408,6 +408,7 @@ import {
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -924,6 +925,13 @@ import {
     PlanningDesignerAgent,
 } from '@memberjunction/ai-agent-manager';
 
+// @memberjunction/ai-form-builder (3 classes)
+import {
+    FormBuilderAgent,
+    FormBuilderBuilderAgent,
+    FormBuilderDesignerAgent,
+} from '@memberjunction/ai-form-builder';
+
 // @memberjunction/content-autotagging (6 classes)
 import {
     AutotagBaseEngine,
@@ -1413,6 +1421,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -1779,6 +1788,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentArchitectAgent,
     AgentBuilderAgent,
     PlanningDesignerAgent,
+    FormBuilderAgent,
+    FormBuilderBuilderAgent,
+    FormBuilderDesignerAgent,
     AutotagBaseEngine,
     AutotagCloudStorage,
     AutotagEntity,
@@ -2015,6 +2027,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-agents',
     '@memberjunction/action-runtime-host',
     '@memberjunction/ai-agent-manager',
+    '@memberjunction/ai-form-builder',
     '@memberjunction/content-autotagging',
     '@memberjunction/core-actions',
     '@memberjunction/actions-content-autotag',

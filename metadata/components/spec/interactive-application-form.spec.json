@@ -1,0 +1,73 @@
+{
+  "name": "InteractiveApplicationForm",
+  "location": "embedded",
+  "code": "@file:../code/interactive-application-form.js",
+  "title": "Interactive Application Form",
+  "description": "Worked example for the Interactive Forms substrate (PR #2609). Renders MJ Application records via a React component, mounted by the Angular InteractiveFormComponent wrapper. Demonstrates the FormHostProps contract end-to-end: view/edit modes driven by host, dirty-field diff emitted via BeforeSave, mode toggles via EditModeChangeRequested.",
+  "type": "form",
+  "componentRole": "form",
+  "category": "Admin/Applications",
+  "properties": [
+    {
+      "name": "record",
+      "type": "object",
+      "required": true,
+      "description": "Plain snapshot of the BaseEntity (BaseEntity.GetAll() result). Read-only — mutations go through the host via BeforeSave."
+    },
+    {
+      "name": "mode",
+      "type": "string",
+      "required": true,
+      "description": "view | edit | create. Source of truth is the host; component requests changes via EditModeChangeRequested."
+    },
+    {
+      "name": "canEdit",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the current user has edit permission on this entity."
+    },
+    {
+      "name": "canDelete",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the current user has delete permission."
+    },
+    {
+      "name": "canCreate",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether the current user has create permission."
+    }
+  ],
+  "events": [
+    {
+      "name": "BeforeSave",
+      "description": "Component requests the host commit the dirty-field diff. Host applies to BaseEntity and calls Save().",
+      "cancelable": true,
+      "pairedEvent": "AfterSave",
+      "parameters": [
+        { "name": "dirtyFields", "type": "object", "description": "Map of field name -> new value for only fields that changed." }
+      ]
+    },
+    {
+      "name": "EditModeChangeRequested",
+      "description": "Component asks the host to enter/leave edit mode. Host flips state; new mode flows back via FormHostProps.mode.",
+      "cancelable": true,
+      "parameters": [
+        { "name": "requestedMode", "type": "string", "description": "'view' or 'edit'." }
+      ]
+    },
+    {
+      "name": "FieldChanged",
+      "description": "Component reports a single-field edit. Non-cancelable. Drives dirty-state tracking and downstream observers.",
+      "parameters": [
+        { "name": "fieldName", "type": "string", "description": "Name of the field that changed." },
+        { "name": "oldValue", "type": "any", "description": "Prior value." },
+        { "name": "newValue", "type": "any", "description": "New value." }
+      ]
+    }
+  ],
+  "exampleUsage": "Mounted automatically by InteractiveFormComponent when an EntityFormOverride row resolves to this component for an Applications record. Not consumed by other components directly.",
+  "functionalRequirements": "Render a single MJ Application record with Name, Description, Icon, DefaultForNewUser, and Status. View mode is read-only with an Edit button. Edit mode shows inputs + Save/Cancel; Save is disabled until at least one field is dirty. Header shows the application's icon, name, status badge, and 'Default for new users' badge when applicable. Always identify itself visibly as the PR #2609 example so a reviewer can tell it from the generated Angular form.",
+  "technicalDesign": "Function component. Receives FormHostProps (record, mode, canEdit/Delete/Create, entityMetadata) spread alongside the standard utilities/callbacks/styles/components props. Maintains a local `draft` object keyed by field name; `value(field)` reads from draft, falling back to record. Save emits NotifyEvent('BeforeSave', { dirtyFields, cancel: false }) and clears the local draft; the Angular wrapper handles the actual record.Save(). Mode is treated as host-owned — local UI never directly toggles it; instead EditModeChangeRequested asks the host to switch. Cancel clears the draft AND requests view mode. Styles use --mj-* design tokens with hardcoded fallbacks so the component still renders if loaded outside MJExplorer."
+}
