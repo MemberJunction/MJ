@@ -42,3 +42,4 @@ export * from './lib/components/file-artifact-toolbar.component';
 export * from './lib/components/plugins/pdf-artifact-viewer.component';
 export * from './lib/components/plugins/xlsx-artifact-viewer.component';
 export * from './lib/components/plugins/docx-artifact-viewer.component';
+export * from './lib/components/plugins/image-artifact-viewer.component';

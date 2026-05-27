@@ -29,6 +29,7 @@ import { FileArtifactToolbarComponent } from './components/file-artifact-toolbar
 import { PdfArtifactViewerComponent } from './components/plugins/pdf-artifact-viewer.component';
 import { XlsxArtifactViewerComponent } from './components/plugins/xlsx-artifact-viewer.component';
 import { DocxArtifactViewerComponent } from './components/plugins/docx-artifact-viewer.component';
+import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 
 // Import artifact type plugin viewer component
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
@@ -71,6 +72,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
   ],
   imports: [
     CommonModule,
@@ -108,6 +110,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     PdfArtifactViewerComponent,
     XlsxArtifactViewerComponent,
     DocxArtifactViewerComponent,
+    ImageArtifactViewerComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -128,6 +131,7 @@ export class ArtifactsModule {
       PdfArtifactViewerComponent,
       XlsxArtifactViewerComponent,
       DocxArtifactViewerComponent,
+      ImageArtifactViewerComponent,
     ];
 
     // PERF: Eagerly start downloading React, ReactDOM, and Babel from CDN in the background.
