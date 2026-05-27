@@ -190,6 +190,71 @@ describe('LoopAgentType', () => {
             // Validation catches this before reaching the switch — error comes from isValidLoopResponse
         });
 
+        // ── Parallel Sub-Agent ──────────────────────────────────────────
+
+        it('should return Sub-Agent with subAgents array details when type is "Sub-Agent" with subAgents', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                        subAgents: [
+                            { name: 'DbAgent', message: 'Query database', terminateAfter: false },
+                            { name: 'WebAgent', message: 'Search web', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('DbAgent');
+            expect(result.subAgents![0].message).toBe('Query database');
+            expect(result.subAgents![1].name).toBe('WebAgent');
+        });
+
+        it('should infer type "Sub-Agent" when type is missing but subAgents array is present', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        subAgents: [
+                            { name: 'HelperAgent1', message: 'Do task 1', terminateAfter: false },
+                            { name: 'HelperAgent2', message: 'Do task 2', terminateAfter: false }
+                        ],
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Sub-Agent');
+            expect(result.subAgents).toBeDefined();
+            expect(result.subAgents).toHaveLength(2);
+            expect(result.subAgents![0].name).toBe('HelperAgent1');
+        });
+
+        it('should return Retry when type is "Sub-Agent" but both subAgent and subAgents are missing', async () => {
+            const result = await agent.DetermineNextStep(
+                mockPromptResult({
+                    taskComplete: false,
+                    nextStep: {
+                        type: 'Sub-Agent',
+                    },
+                }),
+                stubParams,
+                stubPayload,
+                stubState,
+            );
+
+            expect(result.step).toBe('Retry');
+        });
+
         // ── Chat ───────────────────────────────────────────────────────
 
         it('should return Chat with terminate: true when type is "Chat" with message', async () => {

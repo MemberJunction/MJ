@@ -63,6 +63,9 @@
           "sync": {
             "lastModified": "2026-05-25T22:36:21.782Z",
             "checksum": "615128d192595828b88cdc4cf766079c8c7213bed7943341483c163c9347c42a"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -78,6 +81,9 @@
           "sync": {
             "lastModified": "2026-05-25T22:36:21.795Z",
             "checksum": "8057f709db4fa3ae7d500b0c7f7bed66cb6d0c7e953fb85a9f69c62c1920d2c3"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -98,7 +104,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 10
           },
@@ -106,8 +112,8 @@
             "ID": "4101D16A-02FD-44FC-BCCD-DA85AF8C5916"
           },
           "sync": {
-            "lastModified": "2026-05-25T22:36:21.820Z",
-            "checksum": "37f43da54f681af5bd4b1bb3c532e67781777c2ce76f43e55894336bf84554de"
+            "lastModified": "2026-05-27T17:58:52.544Z",
+            "checksum": "44b403e0be40d51992904b74d91f61f123bdd7f7956ca6849903b0ac9ee6f80c"
           }
         },
         {
