@@ -50,6 +50,7 @@
     "@memberjunction/api-keys": "5.37.0",
     "@memberjunction/auth-providers": "5.37.0",
     "@memberjunction/codegen-lib": "5.37.0",
+    "@memberjunction/communication-engine": "5.37.0",
     "@memberjunction/communication-ms-graph": "5.37.0",
     "@memberjunction/communication-sendgrid": "5.37.0",
     "@memberjunction/communication-types": "5.37.0",
@@ -96,6 +97,8 @@
     "@memberjunction/testing-engine": "5.37.0",
     "@memberjunction/testing-engine-base": "5.37.0",
     "@memberjunction/version-history": "5.37.0",
+    "@octokit/auth-app": "^7.1.5",
+    "@octokit/rest": "^21.1.1",
     "@types/compression": "^1.8.1",
     "@types/cors": "^2.8.19",
     "@types/jsonwebtoken": "9.0.10",
@@ -129,8 +132,6 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "@octokit/auth-app": "^7.1.5",
-    "@octokit/rest": "^21.1.1",
     "zod": "~3.24.4"
   },
   "devDependencies": {
