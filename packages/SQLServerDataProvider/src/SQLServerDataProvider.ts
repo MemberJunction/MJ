@@ -47,7 +47,6 @@ import {
   FieldChange,
   SaveSQLResult,
   DeleteSQLResult,
-  QueryInfo,
   RunViewWithCacheCheckParams,
   RunViewsWithCacheCheckResponse,
   RunViewWithCacheCheckResult,
@@ -61,6 +60,7 @@ import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 import { EntityAIActionParams } from '@memberjunction/aiengine';
 import { QueueManager } from '@memberjunction/queue';
 import { GenericDatabaseProvider, ExecuteSQLBatchOptions, SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from '@memberjunction/generic-database-provider';
+import { MJQueryEntityExtended } from '@memberjunction/core-entities';
 
 import sql from 'mssql';
 import { BehaviorSubject, Observable, Subject, concatMap, from, tap, catchError, of } from 'rxjs';
@@ -513,7 +513,7 @@ export class SQLServerDataProvider
    * Executes a batched cache status check for multiple queries using their CacheValidationSQL.
    */
   protected async getBatchedQueryCacheStatus(
-    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; queryInfo: QueryInfo }>,
+    items: Array<{ index: number; item: RunQueryWithCacheCheckParams; query: MJQueryEntityExtended }>,
     contextUser?: UserInfo
   ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
     const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
@@ -524,9 +524,9 @@ export class SQLServerDataProvider
 
     // Build array of SQL statements for batch execution
     const sqlStatements: string[] = [];
-    for (const { queryInfo } of items) {
+    for (const { query } of items) {
       // CacheValidationSQL should return MaxUpdatedAt and RowCount
-      sqlStatements.push(queryInfo.CacheValidationSQL!);
+      sqlStatements.push(query.CacheValidationSQL!);
     }
 
     try {
