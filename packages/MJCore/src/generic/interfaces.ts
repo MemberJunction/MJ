@@ -1441,14 +1441,23 @@ export class AllMetadata {
      * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
      */
     AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryCategories: QueryCategoryInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueries: QueryInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryFields: QueryFieldInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryPermissions: QueryPermissionInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryEntities: QueryEntityInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryParameters: QueryParameterInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQueryDependencies: QueryDependencyInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllSQLDialects: SQLDialectInfo[] = [];
+    /** @deprecated Query data now lives in QueryEngine. Will be removed in v6.x. */
     AllQuerySQLs: QuerySQLInfo[] = [];
     AllEntityDocumentTypes: EntityDocumentTypeInfo[] = [];
     AllLibraries: LibraryInfo[] = [];
