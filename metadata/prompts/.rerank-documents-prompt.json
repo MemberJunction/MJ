@@ -22,7 +22,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 4.1-mini",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5.5 Instant",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
           },
@@ -30,8 +30,8 @@
             "ID": "BB9E53A4-DE57-4F26-AFC8-D9DE2809496A"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:49:01.623Z",
-            "checksum": "9891ff90107e4d2c502cb884505068edd4b27f8bfe15c3106fd92c89c57ae9ac"
+            "lastModified": "2026-05-27T17:58:55.299Z",
+            "checksum": "0fbff8e055836faf4ae3e96e5e5a26f1a2665442185baa35f76e4675c832ada6"
           }
         },
         {
