@@ -2280,6 +2280,12 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Builds an ExtraFilter for direct organic key matching (field-to-field comparison).
+     *
+     * Per-column normalization: each side of the comparison uses its OWN normalization
+     * function (the spoke entity's organic key carries its own expression; the hub uses
+     * the parent organic key's expression). At runtime we look up the spoke entity's
+     * matching organic key (same Name) to find its expression. Falls back to the hub's
+     * expression on both sides if the spoke doesn't carry its own.
      */
     private static BuildDirectOrganicKeyFilter(
         record: BaseEntity,
@@ -2290,6 +2296,10 @@ export class EntityInfo extends BaseInfo {
         const relatedFields = relatedEntity.RelatedEntityFieldNamesArray;
         const conditions: string[] = [];
 
+        // Resolve the spoke entity's own organic key (matching by Name) to pull its
+        // per-column normalization. Falls back to the hub's expression if not found.
+        const spokeOrganicKey = EntityInfo.ResolveSpokeOrganicKey(relatedEntity, organicKey);
+
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2298,12 +2308,30 @@ export class EntityInfo extends BaseInfo {
             }
             const relatedField = relatedFields[i] || matchFields[i];
             const escapedValue = String(value).replace(/'/g, "''");
-            conditions.push(EntityInfo.WrapWithNormalization(
-                `[${relatedField}]`, organicKey, escapedValue
+            conditions.push(EntityInfo.WrapBothSidesWithNormalization(
+                `[${relatedField}]`, spokeOrganicKey ?? organicKey,
+                escapedValue, organicKey
             ));
         }
 
         return conditions.join(' AND ');
+    }
+
+    /**
+     * Look up the spoke entity's organic key matching the hub's by Name, so we can apply
+     * the spoke's own normalization function on the spoke side. Returns undefined if the
+     * spoke entity doesn't have a parallel organic key — caller falls back to the hub's.
+     */
+    private static ResolveSpokeOrganicKey(
+        relatedEntity: EntityOrganicKeyRelatedEntityInfo,
+        hubOrganicKey: EntityOrganicKeyInfo
+    ): EntityOrganicKeyInfo | undefined {
+        const md = Metadata.Provider;
+        if (!md) return undefined;
+        const spokeEntity = md.EntityByName?.(relatedEntity.RelatedEntity)
+            ?? md.Entities?.find?.((e: EntityInfo) => e.Name === relatedEntity.RelatedEntity);
+        if (!spokeEntity) return undefined;
+        return spokeEntity.OrganicKeys?.find((ok) => ok.Name === hubOrganicKey.Name);
     }
 
     /**
@@ -2318,6 +2346,9 @@ export class EntityInfo extends BaseInfo {
         const transitiveMatchFields = relatedEntity.TransitiveObjectMatchFieldNamesArray;
         const conditions: string[] = [];
 
+        // Transitive bridge values are normalized using the HUB's expression on both sides —
+        // the bridge view is a synthetic projection of hub-side values, not the spoke's raw
+        // column, so the spoke's own expression doesn't apply here.
         for (let i = 0; i < matchFields.length; i++) {
             const value = record.Get(matchFields[i]);
             if (value == null) {
@@ -2364,6 +2395,60 @@ export class EntityInfo extends BaseInfo {
             }
             default:
                 return `${fieldExpression} = '${escapedValue}'`;
+        }
+    }
+
+    /**
+     * Like WrapWithNormalization but takes a separate organic key for each side — so the
+     * spoke field uses the spoke entity's own expression while the literal value (sourced
+     * from the hub record) uses the hub's expression. Same canonical form on both sides
+     * when the expressions agree; different transforms applied independently when they
+     * don't (the per-column normalization case).
+     */
+    private static WrapBothSidesWithNormalization(
+        fieldExpression: string,
+        fieldOrganicKey: EntityOrganicKeyInfo,
+        escapedValue: string,
+        valueOrganicKey: EntityOrganicKeyInfo
+    ): string {
+        const leftSide = EntityInfo.NormalizeFieldExpression(fieldExpression, fieldOrganicKey);
+        const rightSide = EntityInfo.NormalizeLiteralExpression(escapedValue, valueOrganicKey);
+        return `${leftSide} = ${rightSide}`;
+    }
+
+    /** Apply an organic key's normalization to a SQL field expression (left side of compare). */
+    private static NormalizeFieldExpression(
+        fieldExpression: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM(${fieldExpression})))`;
+            case 'Trim':          return `LTRIM(RTRIM(${fieldExpression}))`;
+            case 'ExactMatch':    return fieldExpression;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return fieldExpression;
+                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+            }
+            default: return fieldExpression;
+        }
+    }
+
+    /** Apply an organic key's normalization to a quoted literal value (right side of compare). */
+    private static NormalizeLiteralExpression(
+        escapedValue: string,
+        organicKey: EntityOrganicKeyInfo
+    ): string {
+        switch (organicKey.NormalizationStrategy) {
+            case 'LowerCaseTrim': return `LOWER(LTRIM(RTRIM('${escapedValue}')))`;
+            case 'Trim':          return `LTRIM(RTRIM('${escapedValue}'))`;
+            case 'ExactMatch':    return `'${escapedValue}'`;
+            case 'Custom': {
+                const expr = organicKey.CustomNormalizationExpression;
+                if (!expr) return `'${escapedValue}'`;
+                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+            }
+            default: return `'${escapedValue}'`;
         }
     }
 
