@@ -534,6 +534,9 @@ export class SkipSDK {
                 EntityID: e.EntityID,
                 Entity: e.Entity
             })),
+            SQLDialectID: q.SQLDialectID,
+            UsesTemplate: q.UsesTemplate,
+            IsApproved: q.IsApproved,
             CacheEnabled: q.CacheEnabled,
             CacheMaxSize: q.CacheMaxSize,
             CacheTTLMinutes: q.CacheTTLMinutes,

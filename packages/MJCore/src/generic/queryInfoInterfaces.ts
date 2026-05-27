@@ -241,6 +241,20 @@ export interface IQueryInfoBase {
      * and parameter usage. Supports markdown content including mermaid diagrams.
      */
     TechnicalDescription: string | null;
+    /**
+     * Foreign key to the SQL dialect this query's SQL column is written in.
+     * Defaults to T-SQL for backward compatibility.
+     */
+    SQLDialectID: string | null;
+    /**
+     * Automatically set to true when the SQL column contains Nunjucks template markers like {{paramName}}
+     */
+    UsesTemplate: boolean;
+    /**
+     * Whether this query has been formally approved for production use.
+     * Derived from `Status === 'Approved'`.
+     */
+    readonly IsApproved: boolean;
 
     /**
      * Field metadata for this query

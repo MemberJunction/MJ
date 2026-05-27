@@ -1,4 +1,4 @@
-import { BaseEntity, UserInfo } from "@memberjunction/core";
+import { BaseEntity, UserInfo, QueryCacheConfig } from "@memberjunction/core";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import {
     MJQueryEntity,
@@ -166,5 +166,61 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         }
 
         return this.SQL;
+    }
+
+    // ─── Cache Configuration ────────────────────────────────────────────────────
+
+    private _cacheConfig: QueryCacheConfig | null = null;
+
+    /**
+     * Gets the cache configuration for this query.
+     * If the query has no explicit cache config but category inheritance is enabled,
+     * walks up the category tree to find inherited cache settings.
+     */
+    public get CacheConfig(): QueryCacheConfig {
+        if (this._cacheConfig !== null) {
+            return this._cacheConfig;
+        }
+
+        if (this.CacheEnabled) {
+            this._cacheConfig = {
+                enabled: true,
+                ttlMinutes: this.CacheTTLMinutes || 60,
+                maxCacheSize: this.CacheMaxSize || undefined,
+                cacheKey: 'exact'
+            };
+            return this._cacheConfig;
+        }
+
+        const inherited = this.getInheritedCacheConfig();
+        if (inherited) {
+            this._cacheConfig = inherited;
+            return this._cacheConfig;
+        }
+
+        this._cacheConfig = { enabled: false, ttlMinutes: 0 };
+        return this._cacheConfig;
+    }
+
+    private getInheritedCacheConfig(): QueryCacheConfig | null {
+        const categories = QueryEngine.Instance.Categories;
+        let catID = this.CategoryID;
+
+        while (catID) {
+            const cat = categories.find(c => UUIDsEqual(c.ID, catID!));
+            if (!cat) break;
+
+            if (cat.DefaultCacheEnabled && cat.CacheInheritanceEnabled) {
+                return {
+                    enabled: true,
+                    ttlMinutes: cat.DefaultCacheTTLMinutes || 60,
+                    maxCacheSize: cat.DefaultCacheMaxSize || undefined,
+                    cacheKey: 'exact',
+                    inheritFromCategory: true
+                };
+            }
+            catID = cat.ParentID;
+        }
+        return null;
     }
 }
