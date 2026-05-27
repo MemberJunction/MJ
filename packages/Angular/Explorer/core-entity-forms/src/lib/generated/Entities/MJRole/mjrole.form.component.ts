@@ -28,7 +28,8 @@ export class MJRoleFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMCPServerConnectionPermissions', sectionName: 'MCP Server Connection Permissions', isExpanded: false },
             { sectionKey: 'mJResourcePermissions', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentPermissions', sectionName: 'AI Agent Permissions', isExpanded: false },
-            { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false }
+            { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
+            { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false }
         ]);
     }
 }

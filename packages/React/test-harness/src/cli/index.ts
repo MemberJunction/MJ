@@ -6,7 +6,7 @@ import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
 import { ReactTestHarness } from '../lib/test-harness';
-import { Violation } from '../lib/component-linter';
+import { Violation } from '@memberjunction/react-linter';
 
 const program = new Command();
 

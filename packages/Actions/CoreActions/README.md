@@ -312,6 +312,24 @@ Orchestrate action execution with branching, iteration, parallelism, and retry l
 |---|---|---|
 | `__ExecuteCode` | `ExecuteCodeAction` | Execute sandboxed code snippets |
 
+### Interactive Forms (6 actions)
+
+The lifecycle for runtime-author entity forms (form-role
+`ComponentSpec` + `EntityFormOverride`). See
+[/plans/interactive-forms/phase-2-runtime-loop.md](../../../plans/interactive-forms/phase-2-runtime-loop.md)
+for the full architecture and security model. Mutation actions enforce
+ownership checks (User → caller, Role → membership, Global → admin).
+
+| Registration Name | Class | Description |
+|---|---|---|
+| `__GetEntitySchemaForForm` | `GetEntitySchemaForFormAction` | Read-only: returns the curated form-relevant schema for an entity (FKs resolved, value lists annotated, audit fields stripped). |
+| `__GetDefaultFormScaffoldForEntity` | `GetDefaultFormScaffoldForEntityAction` | Read-only: produces a working form-role `ComponentSpec` mirroring the CodeGen Angular default layout. The agent's baseline. |
+| `__GetActiveFormForEntity` | `GetActiveFormForEntityAction` | Read-only: returns the resolved Active override + full applicable-variants list for the (entity, calling-user) pair. |
+| `__CreateInteractiveForm` | `CreateInteractiveFormAction` | Net-new only. Inserts Component v1.0.0 + Active User-scope Override. Fails `ALREADY_EXISTS` if the user already has an Active override for the entity. |
+| `__ModifyInteractiveForm` | `ModifyInteractiveFormAction` | Branches on the pointed-to Component status: Pending → modify in place; Active → new Pending Component v(N+1) + sibling Pending Override. Always User-scope-clamped. |
+| `__ActivateInteractiveFormVersion` | `ActivateInteractiveFormVersionAction` | Promotes a Pending override to Active; atomically demotes the prior sibling Active. |
+| `__RevertInteractiveForm` | `RevertInteractiveFormAction` | Re-points an Active override at an older Component row in the same Name lineage. Pure UPDATE; no new rows. |
+
 ### Demo (6 actions)
 
 Reference implementations useful for testing and learning.

@@ -656,6 +656,10 @@ export class ParallelExecutionCoordinator {
         childPromptRun.CompletedAt = endTime;
         childPromptRun.ExecutionTimeMS = executionTimeMS;
         childPromptRun.Success = false;
+        childPromptRun.Status = isCancelled ? 'Cancelled' : 'Failed';
+        if (isCancelled) {
+          childPromptRun.Cancelled = true;
+        }
         childPromptRun.ErrorMessage = error.message;
         childPromptRun.Result = `ERROR: ${error.message}`;
         await childPromptRun.Save();
@@ -823,6 +827,7 @@ export class ParallelExecutionCoordinator {
         resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
         resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
         resultSelectorPromptRun.Success = judgeResult.success;
+        resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
         resultSelectorPromptRun.Result = judgeResult.rawResult || '';
         if (judgeResult.tokensUsed) {
           resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
@@ -1089,6 +1094,7 @@ export class ParallelExecutionCoordinator {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
       promptRun.Success = modelResult.success;
+      promptRun.Status = modelResult.success ? 'Completed' : 'Failed';
 
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';

@@ -51,7 +51,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIResultCache', sectionName: 'AI Result Cache', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false },
-            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false }
+            { sectionKey: 'mJActions', sectionName: 'Actions', isExpanded: false },
+            { sectionKey: 'mJConversations', sectionName: 'Conversations', isExpanded: false }
         ]);
     }
 }
