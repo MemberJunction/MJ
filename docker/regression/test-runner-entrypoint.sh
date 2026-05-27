@@ -38,6 +38,11 @@ curl -sf http://localhost:4200/ -o /dev/null \
 echo ""
 
 # ─── 2. Application + test metadata ──────────────────────────────────────────
+# Skipped entirely in bacpac mode: the imported DB is the customer's own, and
+# the user supplies their suite via EXTRA_METADATA_DIRS (pushed in § 2b below).
+# Seeding demo apps / the computeruse@ user / the standard 25 tests would be
+# wrong against their data.
+if [ -z "${BACPAC_FILE:-}" ]; then
 # Application sync must run first so that the SQL user-setup can find all
 # ApplicationEntity rows (with DefaultForNewUser=1) to create the matching
 # UserApplicationEntity rows.
@@ -78,7 +83,9 @@ npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
     echo "  WARNING: Suite metadata sync failed"
 }
 echo ""
+fi  # end: standard (non-bacpac) metadata seeding
 
+# ─── 2b. Extra metadata directories ──────────────────────────────────────────
 # Optional: extra metadata directories pushed in addition to the MJ metadata.
 # EXTRA_METADATA_DIRS=/app/byo-tests,/app/byo-suites would push two extra dirs
 # of test + suite JSON before running the suite. Used by Mode D overlays that

@@ -150,7 +150,6 @@ Three target kinds are supported via the `kind` field in the profile JSON:
   "suite": "MJ Explorer Regression Suite",
   "extraMetadataDirs": [],
   "archive": {
-    "configFile": "/app/docker/regression/configs/archive-mj.config.cjs",
     "tag": "staging-nightly",
     "source": "staging-mj"
   }
@@ -461,7 +460,7 @@ docker/regression/
 │   ├── extract-screenshots.cjs   # Pull per-step PNGs out of vwTestRunOutputs
 │   ├── generate-md-report.cjs    # Render report.md
 │   ├── generate-html-report.cjs  # Render report.html (lightbox gallery)
-│   └── inline-report.cjs         # Optional: inline screenshots into a portable HTML
+│   └── inline-report.cjs         # Backs `mj test regression export` — inline screenshots into a portable HTML
 │
 ├── test-metadata/                # Docker-only metadata (NOT pushed to dev DBs)
 │   └── users/
@@ -573,6 +572,49 @@ npx mj test run --name "T26 - My New Test" --dry-run
 
 The `--dry-run` flag only validates — it never invokes the Computer Use engine, so you can run it freely without any Auth0 setup or Anthropic credits.
 
+## Testing Against a `.bacpac` Database
+
+Instead of building the MJ database from scratch, you can import a `.bacpac` (a
+real MJ database export) and test the **current** MJExplorer build against it.
+This runs the full local stack (Mode A topology) with only the DB-init step
+swapped, driven by **your own** test suite (the standard 25 tests assume the
+AssociationDB demo data, which a customer bacpac won't have).
+
+```bash
+# Upgrade path (default): import → mj migrate → mj codegen → run your suite
+mj test regression up \
+    --bacpac=/path/to/db.bacpac \
+    --suite="My Suite" \
+    --metadata=/path/to/my-suite-metadata
+
+# Import-only (no migrate/codegen) — safe only if the bacpac is already current
+mj test regression up --bacpac=/path/to/db.bacpac --bacpac-no-upgrade --suite="My Suite" --metadata=...
+```
+
+Equivalent env-var form (set in `.env.test`, then add the overlay yourself):
+
+```bash
+BACPAC_DIR=/path/to            # dir containing the file
+BACPAC_FILE=/app/bacpac/db.bacpac
+BACPAC_UPGRADE=true            # false = import as-is
+USER_METADATA_DIR=/path/to/my-suite-metadata
+EXTRA_METADATA_DIRS=/app/user-metadata
+TEST_SUITE_NAME="My Suite"
+# docker compose -f docker-compose.test.yml -f docker-compose.bacpac.yml --profile full up
+```
+
+**How it works** ([db-setup-entrypoint.sh](db-setup-entrypoint.sh) bacpac branch):
+1. [scripts/import-bacpac.cjs](scripts/import-bacpac.cjs) drops the target DB if present, then `sqlpackage /Action:Import` into `MemberJunction_Test`.
+2. Upgrade mode runs `mj migrate` (Skyway applies only versions newer than the bacpac's `flyway_schema_history`) then `mj codegen`, bringing the schema to the current build.
+3. Computer Use prompts are pushed so the test engine can run.
+4. The test-runner skips the demo user / standard-25 seeding and pushes your `--metadata` dir, then runs `--suite`.
+
+**Requirements & caveats:**
+- The bacpac should come from a Flyway/Skyway-managed MJ instance (so it carries `flyway_schema_history`). Upgrade mode **aborts with a clear message** if `__mj` exists without that table, rather than mis-baselining.
+- If the bacpac has **encrypted** fields, set `MJ_BASE_ENCRYPTION_KEY` to the source instance's key or decryption fails.
+- New entities introduced by an upgrade fall back to **generic** forms (Explorer's entity forms are baked at image-build time, not regenerated here).
+- `--bacpac` builds a one-time amd64 db-setup image (for the x64 SqlPackage) via the `docker-compose.bacpac.yml` overlay; normal runs stay native.
+
 ## Comparing Runs
 
 Because the Docker SQL Server is wiped on `down -v`, regression comparisons use the per-run `results.json` artifacts on disk instead of the database:
@@ -604,6 +646,21 @@ You can also point `--from-json` at any directory with archived results — usef
 ```bash
 mj test compare --from-json /path/to/baseline-runs --from-json docker/regression/test-results/latest/results.json
 ```
+
+## Exporting a Portable Report
+
+`report.html` references screenshots as separate files under `screenshots/`, so it isn't self-contained. To produce a single shareable file (e.g. a CI artifact or an email attachment), export the run — every PNG is inlined as a base64 data URI into `report.standalone.html`:
+
+```bash
+# Export the most recent run (the `latest` symlink)
+mj test regression export
+
+# Export a specific run by folder name or path
+mj test regression export --run=run-20260526T220118Z
+mj test regression export --run=./some/other/run-dir
+```
+
+The resulting file is large (tens of MB for a full suite) but fully portable — no adjacent `screenshots/` directory required.
 
 ## Flaky Test Detection
 

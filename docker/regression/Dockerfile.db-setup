@@ -8,7 +8,7 @@
 FROM node:24-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential python3 curl gnupg ca-certificates \
+    build-essential python3 curl gnupg ca-certificates unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install sqlcmd (Microsoft ODBC + mssql-tools18)
@@ -18,6 +18,22 @@ RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor
     && apt-get update \
     && ACCEPT_EULA=Y apt-get install -y --no-install-recommends msodbcsql18 mssql-tools18 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install SqlPackage (used by the optional bacpac-import path — scripts/import-bacpac.cjs).
+# Only the x64 standalone build is fetched; the bacpac compose overlay pins db-setup to
+# linux/amd64 so this always runs under amd64. Skipped on other arches (where the bacpac
+# path never executes), keeping normal native builds lean.
+RUN ARCH="$(dpkg --print-architecture)"; \
+    if [ "$ARCH" = "amd64" ]; then \
+      curl -fsSL -o /tmp/sqlpackage.zip https://aka.ms/sqlpackage-linux \
+      && mkdir -p /opt/sqlpackage \
+      && unzip -q /tmp/sqlpackage.zip -d /opt/sqlpackage \
+      && chmod +x /opt/sqlpackage/sqlpackage \
+      && ln -s /opt/sqlpackage/sqlpackage /usr/local/bin/sqlpackage \
+      && rm /tmp/sqlpackage.zip; \
+    else \
+      echo "sqlpackage skipped on $ARCH (bacpac import runs under the amd64 overlay)"; \
+    fi
 
 ENV PATH="/opt/mssql-tools18/bin:$PATH"
 

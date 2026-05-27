@@ -256,6 +256,7 @@ definition serve both Mode A (waits for MJExplorer) and Modes B/C/D
   3. `mj codegen` — generates entity classes, views, stored procs, GraphQL resolvers, EntityField metadata
   4. `mj sync push` of `metadata/applications/`
   5. `mj sync push` of `metadata/prompts/` — picks up Computer Use controller/judge prompts
+- **Bacpac mode** (`BACPAC_FILE` set, via `--bacpac` + the `docker-compose.bacpac.yml` overlay): the entrypoint branches to [`import-bacpac.cjs`](scripts/import-bacpac.cjs) (SqlPackage `/Action:Import` into `MemberJunction_Test`) → optional `mj migrate` + `mj codegen` (gated by `BACPAC_UPGRADE`, default on; guarded against mis-baselining a DB with no `flyway_schema_history`) → push prompts. AssociationDB + the standard app/test seeding are skipped; the user supplies their suite via `EXTRA_METADATA_DIRS`. The overlay pins db-setup to `linux/amd64` so the x64 SqlPackage build runs.
 - **Why a separate container?** Migration + codegen + AssociationDB install takes ~2-3 minutes. Keeping them out of MJAPI's Dockerfile keeps the runtime image lean and lets `service_completed_successfully` block dependents until the DB is fully ready.
 
 ### mjapi
@@ -292,7 +293,6 @@ definition serve both Mode A (waits for MJExplorer) and Modes B/C/D
   - `./test-runner-remote-entrypoint.sh:/app/test-runner-remote-entrypoint.sh:ro`
   - `./scripts:/app/docker/regression/scripts:ro` — `.cjs` helpers
   - `./archive:/app/docker/regression/archive:ro` — archive entity-cascade configs
-  - `./configs:/app/docker/regression/configs:ro` — archive destination `mj.config.cjs` files
   - `./targets:/app/docker/regression/targets:ro` — target profiles
   - `./examples:/app/docker/regression/examples` (RW — mj-sync writes back primaryKey/sync)
   - `../../metadata:/app/metadata` (RW)
@@ -357,7 +357,7 @@ Used for Mode A. Big steps:
 12. **Extract screenshots** from `__mj.vwTestRunOutputs` → `screenshots/<test>/step_NN.png`
 13. **Generate markdown report:** `scripts/generate-md-report.cjs`
 14. **Generate HTML report:** `scripts/generate-html-report.cjs` (lightbox gallery)
-15. **Optional archive flow:** if `ARCHIVE_MJ_CONFIG` is set, pull the suite run + children to JSON, tag, push to destination MJ
+15. **Optional archive flow:** if `ARCHIVE_DB_DATABASE` is set, pull the suite run + children to JSON, tag, push to destination MJ
 16. **Update `test-results/latest` symlink**
 
 ### Remote entrypoint — `test-runner-remote-entrypoint.sh`
@@ -481,7 +481,7 @@ Here's a complete trace of what happens when a developer runs
 │  node scripts/extract-screenshots.cjs    # __mj.vwTestRunOutputs → PNG │
 │  node scripts/generate-md-report.cjs                                   │
 │  node scripts/generate-html-report.cjs                                 │
-│  if ARCHIVE_MJ_CONFIG set: mj sync pull + tag + push to archive MJ     │
+│  if ARCHIVE_DB_DATABASE set: mj sync pull + tag + push to archive MJ   │
 │  ln -sfn run-${TIMESTAMP} test-results/latest                          │
 │  exit ${suite_exit_code}                                               │
 │                                                                        │
@@ -534,8 +534,9 @@ deployments without modification.
   "oraclesModule": "/app/.../my-oracles.cjs",        // optional, path inside the container
 
   // ─── Where to forward results ────────────────────────
+  // The destination DB comes from the ARCHIVE_DB_* env vars (set in .env.test).
+  // The profile only carries the tag/source labels for `mj test compare`.
   "archive": {                                       // optional
-    "configFile": "/app/.../archive-mj.config.cjs",
     "tag": "staging-nightly",
     "source": "staging-mj"
   }
@@ -571,7 +572,6 @@ inspection.
 | `suite` | `TEST_SUITE_NAME` |
 | `extraMetadataDirs` | `EXTRA_METADATA_DIRS` (comma-joined) |
 | `oraclesModule` | `ORACLES_MODULE` |
-| `archive.configFile` | `ARCHIVE_MJ_CONFIG` |
 | `archive.tag` | `ARCHIVE_TAG` |
 | `archive.source` | `ARCHIVE_SOURCE` |
 | *(always)* | `TEST_RUNNER_MODE=remote`, `TEST_RUNNER_ENTRYPOINT=test-runner-remote-entrypoint.sh`, `TARGET_PROFILE_NAME`, `TARGET_PROFILE_KIND` |
@@ -846,23 +846,69 @@ Both opt-ins emit a one-time warning when used.
 ## 13. Archive Flow
 
 Optional pipeline that forwards a completed suite run + all child records to
-a destination MJ instance (an "archive MJ"). Triggered when
-`ARCHIVE_MJ_CONFIG` env var points at an `mj.config.cjs` file. Uses
-`mj-sync` for the wire protocol — no custom sink code.
+a destination MJ instance (an "archive MJ"). Triggered when the
+`ARCHIVE_DB_DATABASE` env var is set. Uses `mj-sync` for the wire protocol —
+no custom sink code.
+
+### Configuration contract
+
+The archive flow is **env-var driven** — no files to copy, no `.cjs` to edit.
+A transient `mj.config.cjs` is generated at runtime from the vars below.
+
+| Env var | Required? | Default | Notes |
+|---|---|---|---|
+| `ARCHIVE_DB_DATABASE` | yes | — | destination database name |
+| `ARCHIVE_DB_USERNAME` | yes | — | destination SQL user |
+| `ARCHIVE_DB_PASSWORD` | yes | — | destination SQL password |
+| `ARCHIVE_DB_HOST` | no | `host.docker.internal` | works for most setups; override for in-network or remote destinations |
+| `ARCHIVE_DB_PORT` | no | `1433` | |
+| `ARCHIVE_DB_TRUST_CERT` | no | `true` | |
+| `ARCHIVE_USER_EMAIL` | no | `not.set@nowhere.com` | user that owns the archived records; must exist in destination |
+| `ARCHIVE_MJ_CORE_SCHEMA` | no | `__mj` | schema name on destination |
+| `ARCHIVE_TAG` | no | `<TEST_SUITE_NAME>` | written into `TestSuiteRun.Tags` |
+| `ARCHIVE_SOURCE` | no | empty | written into `TestSuiteRun.MachineName` |
+
+### Network topology cheat-sheet
+
+| Where is the destination? | What to set |
+|---|---|
+| Another docker container on its own network | `docker network connect mj-regression_default <ctr>` then `ARCHIVE_DB_HOST=<ctr>` |
+| Your host machine (Mac/Windows/Linux) | keep `host.docker.internal` default + ensure destination publishes its port to the host |
+| A remote server | `ARCHIVE_DB_HOST=<fqdn-or-ip>` + open the firewall |
+
+The test-runner compose service declares `extra_hosts: host.docker.internal:host-gateway`,
+so the default works portably on Linux too (where Docker Desktop's auto-mapping doesn't apply).
 
 ### Pipeline
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                                                                         │
+│  PRE-FLIGHT (§ 4b of entrypoint, runs BEFORE the 10-minute suite):     │
+│    scripts/archive-preflight.cjs validates the destination:            │
+│      a. Required env vars present                                       │
+│      b. TCP connect to ARCHIVE_DB_HOST:ARCHIVE_DB_PORT                  │
+│      c. SQL auth as ARCHIVE_DB_USERNAME                                 │
+│      d. ARCHIVE_DB_DATABASE exists                                      │
+│      e. MJ core schema present (TestSuiteRun + TestRun + TestRunOutput  │
+│         + User tables in [ARCHIVE_MJ_CORE_SCHEMA])                      │
+│      f. ARCHIVE_USER_EMAIL exists in [<schema>].[User]                  │
+│    Fail-fast on any miss; sets ARCHIVE_PREFLIGHT_OK=1 on success.       │
+│                                                                         │
+│  POST-SUITE (scripts/archive-run.sh, only if ARCHIVE_PREFLIGHT_OK=1):   │
+│                                                                         │
 │  1. suite finishes, results.json written to test-results/run-${TS}/    │
 │                                                                         │
 │  2. read suiteRunId from results.json                                  │
 │                                                                         │
-│  3. copy archive entity-cascade config templates:                       │
+│  3. generate destination config:                                        │
+│       scripts/archive-config-gen.cjs writes a transient                 │
+│       /tmp/mj-archive-config.cjs from ARCHIVE_DB_* env vars            │
+│                                                                         │
+│  4. copy archive entity-cascade config templates:                       │
 │        cp -R docker/regression/archive/. ${RUN_DIR}/archive/           │
 │                                                                         │
-│  4. mj sync pull from local docker DB:                                  │
+│  5. mj sync pull from local docker DB (default mj.config.cjs):         │
 │        cd ${RUN_DIR}/archive                                            │
 │        npx mj sync pull \                                               │
 │            --entity="MJ: Test Suite Runs" \                             │
@@ -873,12 +919,16 @@ a destination MJ instance (an "archive MJ"). Triggered when
 │              relatedEntities → "MJ: Test Run Outputs" [...]             │
 │                externalizeFields: InlineData → screenshots/<id>.png     │
 │                                                                         │
-│  5. tag-archive.cjs writes Tags + MachineName into the pulled JSON:    │
+│      CRITICAL: do NOT set MJ_CONFIG_FILE for this step — it would       │
+│      redirect the pull to the destination DB, find 0 rows, and write    │
+│      an empty archive folder.                                           │
+│                                                                         │
+│  6. tag-archive.cjs writes Tags + MachineName into the pulled JSON:    │
 │        suite.Tags = JSON.stringify(["${ARCHIVE_TAG}"])                  │
 │        suite.MachineName = ${ARCHIVE_SOURCE}                            │
 │                                                                         │
-│  6. mj sync push to destination MJ:                                     │
-│        MJ_CONFIG_FILE=${ARCHIVE_MJ_CONFIG} \                            │
+│  7. mj sync push to destination MJ:                                     │
+│        MJ_CONFIG_FILE=${ARCHIVE_CONFIG_FILE} \                          │
 │            npx mj sync push --dir=${RUN_DIR}/archive --ci               │
 │      Upserts by primary key — idempotent across re-pushes.              │
 │                                                                         │
@@ -894,18 +944,26 @@ defines what to pull and how to externalize:
 - **`excludeFields`** at each level strips joined virtual columns (`Suite`, `Test`, `RunByUser`, `OutputType`) that aren't writable on push and would cause validation errors.
 - **`externalizeFields`** on `TestRunOutput.InlineData` writes base64 PNGs as files (`screenshots/{TestRunID}/{ID}.png`) instead of inlining them in the JSON. Keeps JSON files small and human-readable; survives a JSON round-trip.
 
-### Archive configs
+### Archive scripts
 
 | File | Use |
 |---|---|
-| [`configs/archive-mj.config.cjs.example`](configs/archive-mj.config.cjs.example) | Template for a real archive MJ destination (different DB host) |
-| [`configs/archive-local.config.cjs`](configs/archive-local.config.cjs) | Loopback variant — pushes to the same ephemeral docker DB; used for verifying the pipeline without a second MJ instance |
+| [`scripts/archive-run.sh`](scripts/archive-run.sh) | The post-suite archive orchestrator (config-gen → pre-seed → pull → tag → push). **Sourced** by both `test-runner-entrypoint.sh` (§8) and `test-runner-remote-entrypoint.sh` (§5) so the logic lives in one place |
+| [`scripts/archive-preflight.cjs`](scripts/archive-preflight.cjs) | Pre-flight validator. Runs ~5s before the suite; fails fast on misconfig |
+| [`scripts/archive-config-gen.cjs`](scripts/archive-config-gen.cjs) | Generates `/tmp/mj-archive-config.cjs` from `ARCHIVE_DB_*` env vars |
+| [`scripts/tag-archive.cjs`](scripts/tag-archive.cjs) | Writes `Tags` + `MachineName` into the pulled archive JSON before push |
 
 The `MJ_CONFIG_FILE` env override (added in
 [`packages/MetadataSync/src/lib/config-manager.ts`](../../packages/MetadataSync/src/lib/config-manager.ts))
 lets `mj sync push` use a non-default config without changing cwd — the
 pull uses the local config (cosmiconfig defaults), the push uses the
 explicit one.
+
+**⚠️ Common pitfall:** never set `MJ_CONFIG_FILE` as a container-wide env var
+(e.g., via `docker run -e MJ_CONFIG_FILE=...`). It must be scoped to the push
+command only, because the pull MUST use the local docker DB config. The
+entrypoint applies it inline for that reason; a container-wide setting would
+redirect the pull and silently produce an empty archive.
 
 ### Tag-based filtering on the destination
 
@@ -929,9 +987,11 @@ with shared helpers in
 |---|---|---|
 | `mj test regression build [services]` | Build images (incl. gen-forms on first run) | `docker compose --profile full build` |
 | `mj test regression up` | Run the full self-contained MJ stack (Mode A) | `docker compose --profile full up` |
+| `mj test regression up --bacpac=<f> [--no-upgrade] [--suite] [--metadata]` | Mode A, but import the DB from a `.bacpac` instead of building it | adds the `docker-compose.bacpac.yml` overlay (amd64 db-setup + SqlPackage import) |
 | `mj test regression down` | Stop the stack and wipe DB volumes | `docker compose --profile * down -v` |
 | `mj test regression gen-forms` | Regenerate Angular entity forms | `bash gen-forms.sh` |
 | `mj test regression compare [--tag] [--diff-only] …` | Diff the two most recent runs | `mj test compare --from-json <dir>` (or DB mode with `--tag`) |
+| `mj test regression export [--run=<X>]` | Export a run as a portable standalone HTML (screenshots inlined) | `node scripts/inline-report.cjs <run-dir>` |
 | `mj test regression remote --target=<X> [--overlay=Y] …` | Run against a remote URL (Mode B/C/D) | Loads target via loader, sets env, runs compose |
 | `mj test regression init <name> [--list] [--force-docker] [--image=Y]` | Scaffold an example into cwd | Local copy if inside monorepo, `docker run … init <name>` otherwise |
 
@@ -1043,7 +1103,7 @@ host) or via `docker run` (when invoked outside the monorepo).
 | `extract-screenshots.cjs` | Pulls per-step PNGs from `vwTestRunOutputs` to disk | test-runner container |
 | `generate-md-report.cjs` | Renders `report.md` (pass/fail table + oracles) | test-runner container |
 | `generate-html-report.cjs` | Renders `report.html` (lightbox gallery with action overlays) | test-runner container |
-| `inline-report.cjs` | Optional: inlines screenshots base64 into a portable HTML | test-runner container |
+| `inline-report.cjs` | Inlines screenshots base64 into a portable standalone HTML; exposed as `mj test regression export` | host (via CLI) |
 | `patch-test-api-config.cjs` | Bake-time MJAPI config flip (`autoCreateNewUsers`, etc.) | Dockerfile.api RUN step |
 | `gen-environment-ts.cjs` | Bake-time MJExplorer `environment.ts` generation | Dockerfile.explorer RUN step |
 | `tag-archive.cjs` | Sets `Tags` + `MachineName` on the pulled archive JSON before push | test-runner container (post-suite) |
@@ -1058,13 +1118,6 @@ host) or via `docker run` (when invoked outside the monorepo).
 | `byo-app.target.json` | Working target for the BYO Mode D example |
 | `*.example.target.json` | Committed scaffolds; copy to `<name>.target.json` and edit |
 | `.gitignore` | Allows `*.example.target.json` + `byo-app.target.json`; ignores other `*.target.json` |
-
-### `docker/regression/configs/`
-
-| File | Use |
-|---|---|
-| `archive-mj.config.cjs.example` | Template for a real archive destination |
-| `archive-local.config.cjs` | Loopback (pushes to the same docker DB) for testing the pipeline |
 
 ### `docker/regression/archive/`
 
@@ -1107,7 +1160,7 @@ Every run creates `docker/regression/test-results/run-{TIMESTAMP}/` with:
 | `preflight.json` | Pre-run diagnostics: MJAPI health, GraphQL reachability, nginx proxy, socat TCP, Auth0 OIDC discovery, memory snapshot. Captures the environment state at run start. |
 | `diagnostics.json` | Background health monitor log — probes every 10s during the suite |
 | `screenshots/<test-name>/` | Per-step PNGs + `steps.json` (reasoning + actions + URL per step) |
-| `archive/` | Only when `ARCHIVE_MJ_CONFIG` is set — the pulled entity-cascade JSON tree + externalized PNGs ready for `mj sync push` |
+| `archive/` | Only when `ARCHIVE_DB_DATABASE` is set — the pulled entity-cascade JSON tree + externalized PNGs ready for `mj sync push` |
 
 Plus a `latest` symlink at `docker/regression/test-results/latest →
 run-{TIMESTAMP}/` for convenience.

@@ -181,6 +181,21 @@ To adapt for your own app:
 3. Set `baseUrl` to `http://my-app:<port>` in the target profile
 4. Author test JSONs that drive your app's UI
 
+### Testing the current Explorer against a `.bacpac`
+
+Import a real MJ database export and run the **local** Explorer build against it
+(full stack, DB-init swapped). Drive it with your own suite:
+
+```bash
+mj test regression up --bacpac=/path/db.bacpac --suite="My Suite" --metadata=/path/suite-metadata
+```
+
+Default behavior upgrades the imported DB (`mj migrate` + `mj codegen`) to the
+current build; add `--bacpac-no-upgrade` to test it as-is. The bacpac should come
+from a Flyway-managed MJ instance, and `MJ_BASE_ENCRYPTION_KEY` must match the
+source if it has encrypted fields. Full details in
+[REGRESSION_TESTING.md](REGRESSION_TESTING.md#testing-against-a-bacpac-database).
+
 ---
 
 ## 6. Archiving results to a separate MJ (optional)
@@ -210,7 +225,7 @@ ARCHIVE_USER_EMAIL=you@example.com
 ```
 
 The default `ARCHIVE_DB_HOST=host.docker.internal` works when your destination
-publishes its port to the host. Override only when needed (see § 8 below).
+publishes its port to the host. Override only when needed (see § 7 below).
 
 ### Run and verify
 
@@ -264,40 +279,7 @@ filters comparison to only runs tagged that way.
 
 ---
 
-## 7. Verifying the framework itself (run the harnesses)
-
-Six regression-test-the-regression-suite harnesses ship in this repo. They run in
-~3 minutes total and cover the archive flow, CLI surface, target loader, variable
-substitution, compare command, and archive prerequisites.
-
-```bash
-# Quick CLI surface coverage (~30 s, no docker needed):
-bash docker/regression/scripts/test-cli-surface.sh
-
-# Pure-node logic tests (~5 s total, no docker needed):
-bash docker/regression/scripts/test-target-loader.sh
-bash docker/regression/scripts/test-variable-substitution.sh
-bash docker/regression/scripts/test-compare-edge-cases.sh
-
-# Archive prerequisites (needs mj-sqlserver or equivalent running):
-bash docker/regression/scripts/test-archive-prereqs.sh
-
-# Full archive flow internals (~2 min, spins up a one-shot test-runner container):
-docker compose \
-  -f docker/regression/docker-compose.test.yml \
-  -f docker/regression/examples/bring-your-own-app/docker-compose.app.yml \
-  --env-file docker/regression/.env.test \
-  --profile full \
-  run --rm --no-deps --entrypoint "" test-runner \
-  bash /app/docker/regression/scripts/test-archive-flow.sh
-```
-
-Run these after any change to the framework. They're fast and catch regressions
-before the much-slower full suite finds them.
-
----
-
-## 8. Common gotchas (real failures from real users)
+## 7. Common gotchas (real failures from real users)
 
 ### "Login failed for user 'sa'" connecting to destination
 
@@ -361,7 +343,7 @@ push command only — don't override it globally.
 
 ---
 
-## 9. Where to go next
+## 8. Where to go next
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — full design: four run modes, compose
   profile gating, archive cascade, browser context isolation, custom oracle plumbing,

@@ -12,6 +12,7 @@ import path from 'node:path';
 
 export const REGRESSION_DIR = 'docker/regression';
 export const COMPOSE_FILE = `${REGRESSION_DIR}/docker-compose.test.yml`;
+export const BACPAC_OVERLAY = `${REGRESSION_DIR}/docker-compose.bacpac.yml`;
 export const ENV_FILE = `${REGRESSION_DIR}/.env.test`;
 export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
