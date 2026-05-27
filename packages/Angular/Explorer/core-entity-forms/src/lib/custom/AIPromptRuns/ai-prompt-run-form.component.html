@@ -452,7 +452,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-inbox"></i>
                                         <p>No result data recorded</p>
-                                        @if (record.Status === 'Failed' || record.Success === false) {
+                                        @if (record.CompletedAt && (record.Status === 'Failed' || record.Success === false)) {
                                             <div class="error-info">
                                                 @if (record.Status) {
                                                     <p class="finish-reason">
@@ -632,9 +632,9 @@
                                     <div class="validation-summary">
                                         <div class="summary-header">
                                             <h4>Validation Summary</h4>
-                                            <div class="validation-status" [class.success]="record.FinalValidationPassed" [class.failed]="!record.FinalValidationPassed">
-                                                <i [class]="record.FinalValidationPassed ? 'fa-solid fa-check-circle' : 'fa-solid fa-times-circle'"></i>
-                                                {{ record.FinalValidationPassed ? 'Validation Passed' : 'Validation Failed' }}
+                                            <div class="validation-status" [class.success]="record.FinalValidationPassed === true" [class.failed]="record.FinalValidationPassed === false">
+                                                <i [class]="record.FinalValidationPassed === true ? 'fa-solid fa-check-circle' : (record.FinalValidationPassed === false ? 'fa-solid fa-times-circle' : 'fa-solid fa-hourglass-half')"></i>
+                                                {{ record.FinalValidationPassed === true ? 'Validation Passed' : (record.FinalValidationPassed === false ? 'Validation Failed' : 'Validation Pending') }}
                                             </div>
                                         </div>
                                         

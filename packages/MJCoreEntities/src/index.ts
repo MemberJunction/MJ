@@ -18,6 +18,7 @@ export * from './custom/ResourcePermissions/MJResourcePermissionEntityExtended';
 export * from './custom/ResourcePermissions/ResourceData';
 
 export * from './engines/component-metadata';
+export * from './engines/interactive-forms';
 export * from './engines/TypeTablesCache';
 export * from './engines/artifacts';
 export * from './engines/artifact-mime-resolver';
