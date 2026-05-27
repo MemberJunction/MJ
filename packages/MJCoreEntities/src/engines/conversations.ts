@@ -27,6 +27,45 @@ const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
  * "Shared by {email}" badges and gate actions (e.g., View-only recipients
  * can't send messages).
  */
+/**
+ * Optional scoping inputs to {@link ConversationEngine.CreateConversation}.
+ * Forwards to the new ApplicationScope / ApplicationID / DefaultAgentID
+ * columns on Conversation. All fields optional; omit for the default
+ * 'Global' main-chat behavior. Embedded chat surfaces (e.g. the Form
+ * Builder cockpit) should pass `applicationScope: 'Application'` plus an
+ * `applicationId` so the conversation doesn't pollute the main chat list.
+ */
+export interface CreateConversationOptions {
+    /**
+     * Where this conversation surfaces in the UI:
+     *  - 'Global'      → main Chat app (no app binding). Default.
+     *  - 'Application' → embedded surface only; hidden from main chat.
+     *  - 'Both'        → visible in both surfaces by default.
+     * DB CHECK constraint requires applicationId to match (Application/Both
+     * ⇒ applicationId NOT NULL; Global ⇒ applicationId NULL).
+     */
+    applicationScope?: 'Global' | 'Application' | 'Both';
+    /** The owning Application's ID. Required when scope is Application or Both. */
+    applicationId?: string | null;
+    /** Optional per-conversation pinned default agent (e.g. Research Agent). */
+    defaultAgentId?: string | null;
+    /**
+     * "What is this conversation about?" pointer — the Entity whose record
+     * this conversation references. Paired with {@link linkedRecordId} via
+     * the DB CHECK constraint `CK_Conversation_LinkBinding`: both NULL or
+     * both populated. Form Builder cockpit passes the MJ: Components
+     * entity ID + the active form's ComponentID so the cockpit can later
+     * filter "prior conversations about THIS form."
+     */
+    linkedEntityId?: string | null;
+    /**
+     * Primary key of the linked record, serialized as a string. Used with
+     * {@link linkedEntityId}. NVARCHAR(500) in the DB — handles any PK shape
+     * (UUID, int, composite).
+     */
+    linkedRecordId?: string | null;
+}
+
 export interface SharedByInfo {
     /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
     UserID: string | null;
@@ -275,7 +314,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
      * @param contextUser - The current user context
      * @param forceRefresh - If true, reloads even if data is already cached
      */
-    public async LoadConversations(environmentId: string, contextUser: UserInfo, forceRefresh: boolean = false): Promise<void> {
+    public async LoadConversations(
+        environmentId: string,
+        contextUser: UserInfo,
+        forceRefresh: boolean = false,
+        options?: { includeApplicationScoped?: boolean }
+    ): Promise<void> {
         // Skip if already loaded for this environment (unless forcing)
         if (!forceRefresh && this._lastEnvironmentId === environmentId && this._conversations$.value.length > 0) {
             return;
@@ -298,7 +342,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             sharedConversationIds.length > 0
                 ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
                 : '';
-        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)`;
+        // Default main-chat view shows Global + Both. App-scoped
+        // conversations live inside their owning Application's embedded
+        // surface and are filtered out here. Callers that want to surface
+        // them (e.g. an "Include app conversations" toggle) pass
+        // includeApplicationScoped=true to drop the scope predicate.
+        const scopeClause = options?.includeApplicationScoped
+            ? ''
+            : ` AND ApplicationScope IN ('Global', 'Both')`;
+        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)${scopeClause}`;
 
         const result = await rv.RunView<MJConversationEntity>(
             {
@@ -410,7 +462,8 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         environmentId: string,
         contextUser: UserInfo,
         description?: string,
-        projectId?: string
+        projectId?: string,
+        options?: CreateConversationOptions
     ): Promise<MJConversationEntity> {
         const md = this.ProviderToUse;
         const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
@@ -421,14 +474,50 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         if (description) conversation.Description = description;
         if (projectId) conversation.ProjectID = projectId;
 
+        // Application scoping — when set by an embedded chat surface (e.g.
+        // the Form Builder cockpit), keeps this conversation OUT of the main
+        // chat list by default. The DB CHECK constraint enforces that
+        // ApplicationID is set iff ApplicationScope is 'Application' or 'Both';
+        // we just forward the caller's choices and let the DB validate.
+        if (options?.applicationScope) {
+            conversation.ApplicationScope = options.applicationScope;
+        }
+        if (options?.applicationId !== undefined) {
+            conversation.ApplicationID = options.applicationId;
+        }
+        if (options?.defaultAgentId !== undefined) {
+            conversation.DefaultAgentID = options.defaultAgentId;
+        }
+        // Linked-record binding — the DB CK_Conversation_LinkBinding CHECK
+        // requires both Linked* columns to be populated together or both
+        // null. We forward each caller-supplied value when explicitly
+        // provided (undefined = leave the field alone, null = explicit
+        // clear). If the caller supplies only one of the two, the DB
+        // rejects on save — surfacing the misconfiguration loudly rather
+        // than letting half a link silently land.
+        if (options?.linkedEntityId !== undefined) {
+            conversation.LinkedEntityID = options.linkedEntityId;
+        }
+        if (options?.linkedRecordId !== undefined) {
+            conversation.LinkedRecordID = options.linkedRecordId;
+        }
+
         const saved = await conversation.Save();
         if (!saved) {
             throw new Error(conversation.LatestResult?.Message || 'Failed to create conversation');
         }
 
-        // Prepend to the list and emit
-        const updated = [conversation, ...this._conversations$.value];
-        this._conversations$.next(updated);
+        // The engine's cached list represents the main Chat app's view —
+        // 'Global' + 'Both' conversations. App-scoped conversations live
+        // outside that list (they surface in the embedded chat for their
+        // owning app), so don't prepend them. Without this guard, a
+        // cockpit-originated conversation would pop into main chat the
+        // moment it's created even though LoadConversations() filters it
+        // out on next refresh.
+        if (conversation.ApplicationScope !== 'Application') {
+            const updated = [conversation, ...this._conversations$.value];
+            this._conversations$.next(updated);
+        }
         return conversation;
     }
 

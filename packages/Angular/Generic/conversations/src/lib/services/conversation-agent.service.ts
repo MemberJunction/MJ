@@ -563,7 +563,8 @@ export class ConversationAgentService {
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
-    agentConfigurationPresetId?: string
+    agentConfigurationPresetId?: string,
+    appContext?: Record<string, unknown> | null
   ): Promise<ExecuteAgentResult | null> {
     try {
       // Ensure AIEngineBase is configured
@@ -607,7 +608,14 @@ export class ConversationAgentService {
         Data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
-          invocationReason: reasoning
+          invocationReason: reasoning,
+          // Pass the embedder's appContext through to the agent runtime
+          // so direct-routed sub-agents (e.g. Form Builder invoked via the
+          // cockpit's `defaultAgentId`) see the same `appContext` block in
+          // their system prompt that Sage-routed agents do. Without this,
+          // the ActiveForm/Schema/OverrideID context the embedder
+          // assembles is dropped on the floor for direct routing.
+          ...(appContext ? { appContext } : {}),
         },
         ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
