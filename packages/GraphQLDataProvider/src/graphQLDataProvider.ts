@@ -2674,9 +2674,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
-                connectionParams: {
+                // Function form: re-evaluated on every connection attempt (including
+                // retries after 4403 "Token expired"). This lets the client pick up a
+                // freshly-refreshed token instead of reusing the stale one.
+                connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
+                }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
                 shouldRetry: () => true,
