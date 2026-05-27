@@ -18,6 +18,7 @@ import {
  * Represents a SQL dialect (e.g., T-SQL, PostgreSQL) in the MemberJunction system.
  * Maps to the SQLDialect database table.
  */
+/** @deprecated Use `MJSQLDialectEntity` from `@memberjunction/core-entities` instead. */
 export class SQLDialectInfo extends BaseInfo {
     /** Unique identifier for this SQL dialect */
     public ID: string = null
@@ -54,6 +55,7 @@ export class SQLDialectInfo extends BaseInfo {
  * Stores dialect-specific SQL for a query. Each record pairs a Query with a SQLDialect
  * and provides the SQL text written in that dialect.
  * Maps to the QuerySQL database table.
+ * @deprecated Use `MJQuerySQLEntity` from `@memberjunction/core-entities` instead.
  */
 export class QuerySQLInfo extends BaseInfo {
     /** Unique identifier */
@@ -94,9 +96,12 @@ export class QuerySQLInfo extends BaseInfo {
 }
 
 /**
- * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused. 
+ * Catalog of stored queries. This is useful for any arbitrary query that is known to be performant and correct and can be reused.
  * Queries can be viewed/run by a user, used programatically via RunQuery, and also used by AI systems for improved reliability
  * instead of dynamically generated SQL. Queries can also improve security since they store the SQL instead of using dynamic SQL.
+ * @deprecated Use `MJQueryEntityExtended` from `@memberjunction/core-entities` instead.
+ * `MJQueryEntityExtended` provides the same child-relationship getters and business logic
+ * with event-driven cache invalidation via `QueryEngine`.
  */
 export class QueryInfo extends BaseInfo implements IQueryInfoBase {
     /**
@@ -525,6 +530,7 @@ export class QueryInfo extends BaseInfo implements IQueryInfoBase {
 
 /**
  * Organizes saved queries into categories for discovery and management, supporting folder-like organization of queries.
+ * @deprecated Use `MJQueryCategoryEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryCategoryInfo extends BaseInfo {
     /**
@@ -600,6 +606,7 @@ export class QueryCategoryInfo extends BaseInfo {
 
 /**
  * Stores field-level metadata for queries including display names, data types, and formatting rules for result presentation.
+ * @deprecated Use `MJQueryFieldEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
     /**
@@ -704,6 +711,7 @@ export class QueryFieldInfo extends BaseInfo implements IQueryFieldInfoBase {
 
 /**
  * Controls access to queries by defining which users and roles can run specific queries.
+ * @deprecated Use `MJQueryPermissionEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInfoBase {
     /**
@@ -744,6 +752,7 @@ export class QueryPermissionInfo extends BaseInfo implements IQueryPermissionInf
 /**
  * Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries
  * that can be executed and serve as examples for AI.
+ * @deprecated Use `MJQueryEntityEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
     /**
@@ -810,10 +819,11 @@ export class QueryEntityInfo extends BaseInfo implements IQueryEntityInfoBase {
 }
 
 /**
- * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value 
- * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer 
- * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a 
+ * Stores parameter definitions for parameterized queries that use Nunjucks templates. Each parameter represents a dynamic value
+ * that can be passed when executing the query. Parameters are automatically extracted from the query template by the MJQueryEntityServer
+ * using LLM analysis, or can be manually defined. The combination of parameter metadata and validation filters creates a
  * self-documenting, type-safe query execution system.
+ * @deprecated Use `MJQueryParameterEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoBase {
     /**
@@ -904,6 +914,7 @@ export class QueryParameterInfo extends BaseInfo implements IQueryParameterInfoB
  * Tracks which queries reference other queries via {{query:"..."}} composition syntax.
  * Auto-populated by the query save pipeline when SQL contains composition tokens.
  * Maps to the QueryDependency database table.
+ * @deprecated Use `MJQueryDependencyEntity` from `@memberjunction/core-entities` instead.
  */
 export class QueryDependencyInfo extends BaseInfo {
     /**
