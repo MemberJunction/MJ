@@ -47,6 +47,14 @@ vi.mock('@memberjunction/aiengine', () => {
                 return {
                     Agents: [...mockAgentsList, ...mockRelatedAgentsList],
                     AgentRelationships: mockRelationshipsList,
+                    AgentActions: [],
+                    GetSubAgents: (agentID: string, status?: string) => {
+                        // Mirror the real signature: returns sub-agents (ParentID === agentID)
+                        // filtered by Status when provided.
+                        return mockAgentsList.filter(a =>
+                            a.ParentID === agentID && (!status || a.Status === status)
+                        );
+                    }
                 };
             }
         }
@@ -97,6 +105,27 @@ class TestParallelAgent extends BaseAgent {
         parentStepId?: string
     ) {
         return await (this as any).processSubAgentStep(params, previousDecision, parentStepId);
+    }
+
+    // Expose validateSubAgentNextStep for testing
+    public async testValidateSubAgentNextStep(
+        params: ExecuteAgentParams<any>,
+        nextStep: BaseAgentNextStep<any, any>
+    ) {
+        // currentPayload / agentRun / currentStep are not read by the method's
+        // resolution logic; pass minimal stubs.
+        return await (this as any).validateSubAgentNextStep(
+            params,
+            nextStep,
+            {},
+            { ID: 'mock-run-id' },
+            { ID: 'mock-step-id' }
+        );
+    }
+
+    // Expose the protected helper for direct unit testing
+    public testGetRequestedSubAgents(nextStep: any) {
+        return (this as any).getRequestedSubAgents(nextStep);
     }
 
     // Expose queueStepSave for testing
@@ -641,7 +670,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             expect(stepEnds.every(s => Object.keys(s).length === 1)).toBe(true);
         });
 
-        it('should produce a Retry step (without throwing) when one sub-agent name is unresolved', async () => {
+        it('should produce a Failed step (without throwing) when one sub-agent name is unresolved', async () => {
             const params: ExecuteAgentParams<any> = {
                 agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
                 contextUser: { ID: 'user-1' } as any,
@@ -662,12 +691,181 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             });
 
             const result = await agent.testProcessSubAgentStep(params, previousDecision);
-            expect(result.step).toBe('Retry');
+            // Unresolved name is a synthetic failure; anyFailure → step='Failed'
+            // (matches single sub-agent path semantics).
+            expect(result.step).toBe('Failed');
             // The aggregated summary should mention the unresolved sibling.
             const summary = params.conversationMessages.find(m =>
                 typeof m.content === 'string' && m.content.includes('Parallel Sub-Agents Completed')
             );
             expect(summary?.content).toContain('DoesNotExist');
+        });
+    });
+
+    describe('getRequestedSubAgents helper', () => {
+        it('returns plural subAgents when populated', () => {
+            const result = agent.testGetRequestedSubAgents({
+                step: 'Sub-Agent',
+                subAgents: [
+                    { name: 'A', message: 'm1' },
+                    { name: 'B', message: 'm2' }
+                ]
+            });
+            expect(result).toHaveLength(2);
+            expect(result[0].name).toBe('A');
+            expect(result[1].name).toBe('B');
+        });
+
+        it('falls back to singular subAgent when subAgents is missing', () => {
+            const single = { name: 'Solo', message: 'm' };
+            const result = agent.testGetRequestedSubAgents({
+                step: 'Sub-Agent',
+                subAgent: single
+            });
+            expect(result).toHaveLength(1);
+            expect(result[0]).toBe(single);
+        });
+
+        it('falls back to singular subAgent when subAgents is empty array', () => {
+            const single = { name: 'Solo', message: 'm' };
+            const result = agent.testGetRequestedSubAgents({
+                step: 'Sub-Agent',
+                subAgent: single,
+                subAgents: []
+            });
+            expect(result).toHaveLength(1);
+            expect(result[0]).toBe(single);
+        });
+
+        it('prefers plural over singular when both are populated', () => {
+            const result = agent.testGetRequestedSubAgents({
+                step: 'Sub-Agent',
+                subAgent: { name: 'ShouldBeIgnored', message: 'x' },
+                subAgents: [{ name: 'A', message: 'm1' }]
+            });
+            expect(result).toHaveLength(1);
+            expect(result[0].name).toBe('A');
+        });
+
+        it('returns empty array when neither is set', () => {
+            expect(agent.testGetRequestedSubAgents({ step: 'Sub-Agent' })).toEqual([]);
+        });
+
+        it('returns empty array for null / undefined input', () => {
+            expect(agent.testGetRequestedSubAgents(undefined)).toEqual([]);
+            expect(agent.testGetRequestedSubAgents(null)).toEqual([]);
+        });
+    });
+
+    describe('validateSubAgentNextStep — singular vs plural request shape', () => {
+        const params: ExecuteAgentParams<any> = {
+            agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+            contextUser: { ID: 'user-1' } as any,
+            conversationMessages: [],
+            onProgress: vi.fn(),
+        };
+
+        it('passes when a single singular subAgent resolves to an active child', async () => {
+            const nextStep: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgent: { name: 'ChildAgent1', message: 'go', terminateAfter: false }
+            };
+            const result = await agent.testValidateSubAgentNextStep(params, nextStep);
+            // Validation passes through the original nextStep unchanged
+            expect(result.step).toBe('Sub-Agent');
+            expect(result).toBe(nextStep);
+        });
+
+        it('passes when plural subAgents all resolve to active children (regression: parallel fan-out)', async () => {
+            const nextStep: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'go 1', terminateAfter: false },
+                    { name: 'ChildAgent2', message: 'go 2', terminateAfter: false }
+                ]
+                // Note: no `subAgent` (singular). Before the fix this would have
+                // produced a `Retry` with "Sub-agent 'undefined' not found or not active".
+            };
+            const result = await agent.testValidateSubAgentNextStep(params, nextStep);
+            expect(result.step).toBe('Sub-Agent');
+            expect(result).toBe(nextStep);
+        });
+
+        it('returns Retry when neither subAgent nor subAgents is populated', async () => {
+            const nextStep: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {}
+                // Intentionally missing both subAgent and subAgents
+            };
+            const result = await agent.testValidateSubAgentNextStep(params, nextStep);
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain("'undefined'");
+            expect(result.errorMessage).toContain('not found or not active');
+        });
+
+        it('returns Retry when plural subAgents contains an unresolved name (one bad apple fails the lot)', async () => {
+            const nextStep: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'ok', terminateAfter: false },
+                    { name: 'DoesNotExist', message: 'bad', terminateAfter: false }
+                ]
+            };
+            const result = await agent.testValidateSubAgentNextStep(params, nextStep);
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain('DoesNotExist');
+            expect(result.errorMessage).toContain('not found or not active');
+        });
+
+        it('returns Retry when singular subAgent name is unknown', async () => {
+            const nextStep: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgent: { name: 'NoSuchAgent', message: 'x', terminateAfter: false }
+            };
+            const result = await agent.testValidateSubAgentNextStep(params, nextStep);
+            expect(result.step).toBe('Retry');
+            expect(result.errorMessage).toContain('NoSuchAgent');
+        });
+
+        it('routes to parallel executor when processSubAgentStep sees subAgents only (no singular)', async () => {
+            // End-to-end check that the validate→process pipeline does not
+            // get tripped up by the singular-only assumption.
+            agent.mockExecuteSubAgentResult = (name: string) => ({
+                success: true,
+                payload: { [name]: 'ok' },
+                agentRun: { FinalStep: 'Success' } as any
+            });
+
+            const previousDecision: BaseAgentNextStep<any, any> = {
+                step: 'Sub-Agent',
+                terminate: false,
+                newPayload: {},
+                subAgents: [
+                    { name: 'ChildAgent1', message: 'a', terminateAfter: false },
+                    { name: 'ChildAgent2', message: 'b', terminateAfter: false }
+                ]
+            };
+
+            const localParams: ExecuteAgentParams<any> = {
+                agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
+                contextUser: { ID: 'user-1' } as any,
+                conversationMessages: [],
+                onProgress: vi.fn(),
+            };
+            await agent.testProcessSubAgentStep(localParams, previousDecision);
+
+            expect(agent.executeSubAgentCallOrder).toContain('ChildAgent1');
+            expect(agent.executeSubAgentCallOrder).toContain('ChildAgent2');
+            expect(agent.executeSubAgentCallOrder).toHaveLength(2);
         });
     });
 

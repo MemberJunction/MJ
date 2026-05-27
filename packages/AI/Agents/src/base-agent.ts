@@ -2446,6 +2446,26 @@ export class BaseAgent {
      * @param nextStep 
      * @returns 
      */
+    /**
+     * Returns the list of sub-agent requests on a next-step decision, normalizing
+     * the singular (`subAgent`) and plural (`subAgents`) forms. Plural takes
+     * precedence when both are present (parallel fan-out); otherwise the singular
+     * form is wrapped into a single-element array. Empty if neither is set.
+     *
+     * Use this anywhere code needs to enumerate the sub-agents an LLM requested
+     * — keeps validation and execution paths consistent and avoids the regression
+     * where one path read `.subAgent?.name` and missed parallel requests.
+     */
+    protected getRequestedSubAgents<P, C>(
+        nextStep: BaseAgentNextStep<P, C> | undefined | null
+    ): AgentSubAgentRequest<C>[] {
+        if (!nextStep) return [];
+        if (nextStep.subAgents && nextStep.subAgents.length > 0) {
+            return nextStep.subAgents;
+        }
+        return nextStep.subAgent ? [nextStep.subAgent] : [];
+    }
+
     protected async validateSubAgentNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
@@ -2453,53 +2473,72 @@ export class BaseAgent {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // check to make sure the current agent can execute the specified sub-agent
-        const name = nextStep.subAgent?.name;
         const curAgentSubAgents = AIEngine.Instance.GetSubAgents(params.agent.ID, 'Active');
-        const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
-        
-        if (!name || !subAgent) {
-            this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+
+        // Collect requested sub-agents. Prefer plural `subAgents` (parallel fan-out);
+        // fall back to singular `subAgent` for the classic single-sub-agent next step.
+        const requested = this.getRequestedSubAgents<P, any>(nextStep);
+
+        if (requested.length === 0) {
+            this.logError(`Sub-agent 'undefined' not found or not active for agent '${params.agent.Name}'`, {
                 agent: params.agent,
                 category: 'SubAgentExecution'
             });
-            // Increment validation retry count since we're changing to Retry
             if (nextStep.step !== 'Retry') {
                 this._generalValidationRetryCount++;
             }
             return {
                 step: 'Retry',
-                terminate: false, // this will kick it back to the prompt to run again
-                errorMessage: `Sub-agent '${name}' not found or not active`
+                terminate: false,
+                errorMessage: `Sub-agent 'undefined' not found or not active`
             };
         }
 
-        // Check MaxExecutionsPerRun limit
-        if (subAgent.MaxExecutionsPerRun != null) {
-            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
-            if (executionCount >= subAgent.MaxExecutionsPerRun) {
-                this.logError(`Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`, {
+        // Validate each requested sub-agent: existence + MaxExecutionsPerRun
+        for (const req of requested) {
+            const name = req?.name;
+            const subAgent = curAgentSubAgents.find(a => a.Name.trim().toLowerCase() === name?.trim().toLowerCase());
+
+            if (!name || !subAgent) {
+                this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
                     agent: params.agent,
-                    category: 'SubAgentExecution',
-                    metadata: {
-                        subAgentName: name,
-                        executionCount,
-                        maxExecutions: subAgent.MaxExecutionsPerRun
-                    }
+                    category: 'SubAgentExecution'
                 });
-                // Increment validation retry count since we're changing to Retry
                 if (nextStep.step !== 'Retry') {
                     this._generalValidationRetryCount++;
                 }
                 return {
                     step: 'Retry',
                     terminate: false,
-                    errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`
+                    errorMessage: `Sub-agent '${name}' not found or not active`
                 };
+            }
+
+            if (subAgent.MaxExecutionsPerRun != null) {
+                const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
+                if (executionCount >= subAgent.MaxExecutionsPerRun) {
+                    this.logError(`Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`, {
+                        agent: params.agent,
+                        category: 'SubAgentExecution',
+                        metadata: {
+                            subAgentName: name,
+                            executionCount,
+                            maxExecutions: subAgent.MaxExecutionsPerRun
+                        }
+                    });
+                    if (nextStep.step !== 'Retry') {
+                        this._generalValidationRetryCount++;
+                    }
+                    return {
+                        step: 'Retry',
+                        terminate: false,
+                        errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`
+                    };
+                }
             }
         }
 
-        // if we get here, the next step is valid and we can return it
+        // All requested sub-agents are valid
         return nextStep;
     }
 
@@ -6901,7 +6940,10 @@ The context is now within limits. Please retry your request with the recovered c
             );
         }
 
-        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+        // Single sub-agent path. Use the helper so callers that populated `subAgents`
+        // with a single entry (instead of `subAgent`) still resolve correctly.
+        const requested = this.getRequestedSubAgents<SR, SC>(previousDecision);
+        const subAgentRequest = (requested[0] ?? previousDecision.subAgent) as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
         if (!name) {
             return {
