@@ -259,23 +259,16 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         targetDialect: MJSQLDialectEntity,
         convertedSQL: string,
     ): Promise<void> {
-        const rv = this.RunViewProviderToUse;
         const md = this.ProviderToUse as unknown as IMetadataProvider;
 
-        const existingResult = await rv.RunView<MJQuerySQLEntity>({
-            EntityName: 'MJ: Query SQLs',
-            ExtraFilter: `QueryID='${this.ID}' AND SQLDialectID='${targetDialect.ID}'`,
-            ResultType: 'entity_object'
-        }, this.ContextCurrentUser);
-
-        if (!existingResult.Success) {
-            console.warn(`Query "${this.Name}" - Failed to look up existing QuerySQL record: ${existingResult.ErrorMessage}`);
-            return;
-        }
+        // Look up existing record from QueryEngine cache instead of a RunView call
+        const existing = QueryEngine.Instance.QuerySQLs.find(
+            qs => UUIDsEqual(qs.QueryID, this.ID) && UUIDsEqual(qs.SQLDialectID, targetDialect.ID)
+        );
 
         let record: MJQuerySQLEntity;
-        if (existingResult.Results?.length > 0) {
-            record = existingResult.Results[0];
+        if (existing) {
+            record = existing;
         } else {
             record = await md.GetEntityObject<MJQuerySQLEntity>('MJ: Query SQLs', this.ContextCurrentUser);
             record.QueryID = this.ID;
@@ -297,19 +290,11 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
         try {
             if (!this.IsSaved) return;
 
-            const rv = this.RunViewProviderToUse;
-            const result = await rv.RunView<MJQuerySQLEntity>({
-                EntityName: 'MJ: Query SQLs',
-                ExtraFilter: `QueryID='${this.ID}'`,
-                ResultType: 'entity_object'
-            }, this.ContextCurrentUser);
+            const records = QueryEngine.Instance.QuerySQLs.filter(
+                qs => UUIDsEqual(qs.QueryID, this.ID)
+            );
 
-            if (!result.Success) {
-                console.warn(`Query "${this.Name}" - Failed to load QuerySQL records for cleanup: ${result.ErrorMessage}`);
-                return;
-            }
-
-            const deletePromises = (result.Results || []).map(r => r.Delete());
+            const deletePromises = records.map(r => r.Delete());
             if (deletePromises.length > 0) {
                 await Promise.all(deletePromises);
             }

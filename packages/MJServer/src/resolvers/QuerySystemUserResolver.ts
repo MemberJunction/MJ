@@ -1,8 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
+import { LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
-import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity } from '@memberjunction/core-entities';
+import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
@@ -525,18 +525,10 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // Handle permissions update if provided
             if (input.Permissions !== undefined) {
-                // Delete existing permissions
-                const rv = new RunView();
-                const existingPermissions = await rv.RunView<MJQueryPermissionEntity>({
-                    EntityName: 'MJ: Query Permissions',
-                    ExtraFilter: `QueryID='${queryID}'`,
-                    ResultType: 'entity_object'
-                }, context.userPayload.userRecord);
-
-                if (existingPermissions.Success && existingPermissions.Results) {
-                    for (const perm of existingPermissions.Results) {
-                        await perm.Delete();
-                    }
+                // Delete existing permissions (read from QueryEngine cache)
+                const existingPermissions = QueryEngine.Instance.GetQueryPermissions(queryID);
+                for (const perm of existingPermissions) {
+                    await perm.Delete();
                 }
 
                 // Create new permissions
