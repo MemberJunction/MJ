@@ -1,5 +1,6 @@
 import { ChangeDetectorRef, Component, EventEmitter, Input, OnDestroy, OnInit, Output, ViewChild, inject } from '@angular/core';
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
+import { InteractiveFormsEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     FormHostProps,
@@ -358,9 +359,15 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
 
     /**
      * Resolve the Component row, parse its `Specification`, and surface either
-     * the spec or an error. Uses a simple-row RunView (cheap, single record)
-     * and falls back to a clear error message if the spec is malformed or
-     * missing.
+     * the spec or an error. Backed by `InteractiveFormsEngine` (in-memory
+     * cache, BaseEntity event-driven invalidation) so this is a sub-ms JS
+     * lookup once the engine has loaded — the engine handles freshness
+     * via remote-invalidate events, replacing the prior RunView's
+     * `BypassCache: true` escape hatch. Falls through to a one-shot
+     * RunView only on engine-cache miss (defensive — the engine should
+     * always have a Type='Form' Component, but if a brand-new Component
+     * was just created on the server and the invalidation event hasn't
+     * propagated yet, we still want to render rather than blank-screen).
      */
     private async loadComponentSpec(): Promise<void> {
         if (!this.ComponentID) {
@@ -368,43 +375,61 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
             return;
         }
         try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const result = await rv.RunView<{ ID: string; Specification: string; Name: string }>({
-                EntityName: 'MJ: Components',
-                Fields: ['ID', 'Name', 'Specification'],
-                ExtraFilter: `ID='${this.ComponentID}'`,
-                MaxRows: 1,
-                ResultType: 'simple',
-                // Components have AllowCaching=1. The override row this
-                // wrapper is mounting in response to may point at a
-                // freshly-created Component (AI authoring path) — the
-                // session-side cache won't have it yet. Bypassing the
-                // cache for this one indexed lookup is cheap and avoids
-                // a "Component not found" stutter on first render.
-                BypassCache: true,
-            }, this.ProviderToUse.CurrentUser);
-
-            if (!result.Success || !result.Results?.length) {
-                this.loadError =`Component ${this.ComponentID} not found.`;
-                return;
+            const provider = this.ProviderToUse;
+            const user = provider.CurrentUser;
+            // Lazy-load the form-metadata cache. No-op when already loaded.
+            try {
+                await InteractiveFormsEngine.Instance.Config(false, user, provider);
+            } catch (err) {
+                LogError(`InteractiveFormComponent: InteractiveFormsEngine.Config failed: ${err instanceof Error ? err.message : String(err)}`);
+                // Fall through to RunView path below — engine miss isn't fatal.
             }
 
-            const row = result.Results[0];
+            let specJson: string | null = null;
+            let nameForError: string | undefined;
+
+            const cached = InteractiveFormsEngine.Instance.FindFormByID(this.ComponentID);
+            if (cached) {
+                specJson = cached.Specification;
+                nameForError = cached.Name;
+            } else {
+                // Engine miss — one-shot RunView fallback. This covers the
+                // narrow window where a freshly-created Component hasn't
+                // propagated to the engine yet (cross-process remote-invalidate
+                // is debounced ~1.5s). After the propagation lands subsequent
+                // form opens hit the cache.
+                const rv = RunView.FromMetadataProvider(provider);
+                const result = await rv.RunView<{ ID: string; Specification: string; Name: string }>({
+                    EntityName: 'MJ: Components',
+                    Fields: ['ID', 'Name', 'Specification'],
+                    ExtraFilter: `ID='${this.ComponentID}'`,
+                    MaxRows: 1,
+                    ResultType: 'simple',
+                    BypassCache: true,
+                }, user);
+                if (!result.Success || !result.Results?.length) {
+                    this.loadError =`Component ${this.ComponentID} not found.`;
+                    return;
+                }
+                specJson = result.Results[0].Specification;
+                nameForError = result.Results[0].Name;
+            }
+
             try {
-                this.componentSpec = JSON.parse(row.Specification ?? 'null') as ComponentSpec;
+                this.componentSpec = JSON.parse(specJson ?? 'null') as ComponentSpec;
             } catch (err) {
-                this.loadError =`Component ${row.Name ?? this.ComponentID} has invalid Specification JSON: ${err instanceof Error ? err.message : String(err)}`;
+                this.loadError =`Component ${nameForError ?? this.ComponentID} has invalid Specification JSON: ${err instanceof Error ? err.message : String(err)}`;
                 return;
             }
             if (!this.componentSpec) {
-                this.loadError =`Component ${row.Name ?? this.ComponentID} has an empty Specification.`;
+                this.loadError =`Component ${nameForError ?? this.ComponentID} has an empty Specification.`;
                 return;
             }
             // Validate the spec commits to the form-role contract. We use the
             // helper (whose signature is structural via Pick<>) so this stays
             // robust across ComponentSpec field additions.
             if (!isFormRole(this.componentSpec)) {
-                this.loadError =`Component ${row.Name ?? this.ComponentID} does not declare componentRole='form'.`;
+                this.loadError =`Component ${nameForError ?? this.ComponentID} does not declare componentRole='form'.`;
                 return;
             }
         } finally {

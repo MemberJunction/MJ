@@ -812,7 +812,16 @@
            the ActiveForm shape so Sage / Form Builder agent sees the
            cockpit state with every message. -->
       <div class="fb-chat-embed">
-        @if (currentUser) {
+        @if (IsNewForm && !SelectedFormID) {
+          <!-- New, unsaved form — disable chat until the form has an ID.
+               Without this, the chat would be bound to whatever conversation
+               was previously loaded (wrong subject), or would create a
+               conversation linked to a record that doesn't exist yet. -->
+          <div class="fb-chat-context fb-chat-context--empty">
+            <i class="fa-solid fa-lock" style="font-size: 1.5rem; opacity: 0.5; margin-bottom: 0.5rem;"></i>
+            <div class="fb-chat-context-sub">Save the form to start a conversation with the Form Builder agent.</div>
+          </div>
+        } @else if (currentUser) {
           <!-- conversationCreated must be wired — without it the chat
                stays stuck on the welcome screen after the user sends the
                first message (we never flip out of new-conversation mode). -->

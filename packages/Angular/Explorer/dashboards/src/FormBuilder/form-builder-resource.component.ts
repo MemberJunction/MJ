@@ -9,7 +9,7 @@ import {
 import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, MJEvent } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine, ComponentMetadataEngine, InteractiveFormsEngine } from '@memberjunction/core-entities';
 import type { MJComponentEntity, MJEntityFormOverrideEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
@@ -19,7 +19,8 @@ import type { MJTaskEntity } from '@memberjunction/core-entities';
 import type { NavigationRequest } from '@memberjunction/ng-conversations';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subscription } from 'rxjs';
+import { combineLatest, Subscription } from 'rxjs';
+import { skip } from 'rxjs/operators';
 import {
     buildCuratedFormSchema,
     buildDefaultFormScaffold,
@@ -310,6 +311,14 @@ export class FormBuilderResourceComponent
 
     private appContextSubscription: Subscription | null = null;
     private entityEventSubscription: Subscription | null = null;
+    /**
+     * Subscription to `InteractiveFormsEngine` Forms$/Overrides$. Fires
+     * whenever the engine's cache is mutated (local save, remote-invalidate,
+     * delete) and drives a sync recompute of {@link ExistingForms} and
+     * {@link Versions}. Replaces the old "call loadExistingForms after every
+     * mutation" pattern — engine + observable handle invalidation.
+     */
+    private engineSubscription: Subscription | null = null;
 
     /**
      * Conversation state for the embedded chat. Initially null/new; when the
@@ -528,7 +537,33 @@ export class FormBuilderResourceComponent
             // Restore cockpit UI prefs (pane sizes, collapse, last tab)
             // from UserInfoEngine. Single JSON blob under FORM_BUILDER_PREFS_KEY.
             this.loadPrefs();
+            // Lazy-load the interactive-forms cache. First caller pays the
+            // ~1 RunView per entity; subsequent components hit the in-memory
+            // cache. The cockpit doesn't survive without this — it's the
+            // source of truth for both ExistingForms and Versions.
+            try {
+                await InteractiveFormsEngine.Instance.Config(
+                    false,
+                    this.currentUser ?? undefined,
+                    this.provider,
+                );
+            } catch (err) {
+                LogError(`FormBuilderResource: InteractiveFormsEngine.Config failed: ${err instanceof Error ? err.message : String(err)}`);
+            }
             await this.loadExistingForms();
+            // Subscribe to the engine's reactive caches so any mutation
+            // (local save, agent save → remote-invalidate, delete) refreshes
+            // both the forms list and the version rail without an explicit
+            // reload. `skip(1)` drops the BehaviorSubject's initial replay —
+            // we already populated state via the awaited loadExistingForms()
+            // above, no need to re-run on the first emit.
+            this.engineSubscription = combineLatest([
+                InteractiveFormsEngine.Instance.Forms$,
+                InteractiveFormsEngine.Instance.Overrides$,
+            ]).pipe(skip(1)).subscribe(() => {
+                void this.loadExistingForms();
+                if (this.SelectedFormName) void this.loadVersionsForActiveForm();
+            });
             // Resolve the Form Builder agent ID once. Fire-and-forget — if it
             // doesn't resolve before the user opens chat, [defaultAgentId]
             // stays null and the chat falls back to Sage routing (degrades
@@ -570,6 +605,8 @@ export class FormBuilderResourceComponent
         this.appContextSubscription = null;
         this.entityEventSubscription?.unsubscribe();
         this.entityEventSubscription = null;
+        this.engineSubscription?.unsubscribe();
+        this.engineSubscription = null;
         super.ngOnDestroy();
     }
 
@@ -747,108 +784,90 @@ export class FormBuilderResourceComponent
         }
     }
 
+    /**
+     * Recompute the left-rail forms list from `InteractiveFormsEngine`'s
+     * in-memory caches. **Synchronous** in spirit — the `async` signature is
+     * kept for backwards-compat with existing call sites and to surface
+     * future lazy-load needs cleanly. Reads only from the engine, never the
+     * DB. Driven by the engine subscription in {@link ngAfterViewInit}, so
+     * any save/delete/remote-invalidate refreshes this list automatically.
+     *
+     * Representative selection per Name lineage (Active > Pending >
+     * Inactive > none, then VersionSequence DESC) and the projection to
+     * {@link FormComponentSummary} match the previous RunView-based
+     * implementation exactly.
+     */
     private async loadExistingForms(): Promise<void> {
         const provider = this.provider;
-        if (!provider) {
+        const engine = InteractiveFormsEngine.Instance;
+        if (!provider || !engine.Loaded) {
             this.ExistingForms = [];
+            this.cdr.markForCheck();
             return;
         }
-        const rv = RunView.FromMetadataProvider(provider);
         const user = this.currentUser;
 
-        // Batch both queries — Components for the form list + the
-        // current user's overrides on those Components — so we don't
-        // pay two round-trips. The override join is keyed on
-        // ComponentID and filtered to the calling user's User-scope
-        // rows (the only ones the cockpit can edit anyway).
-        const [componentsResult, overridesResult] = await rv.RunViews([
-            {
-                EntityName: 'MJ: Components',
-                ExtraFilter: "Type='Form' OR Namespace LIKE 'Forms/%' OR Namespace LIKE '%/Forms/%'",
-                Fields: ['ID', 'Name', 'Namespace', 'Status', 'Description', 'VersionSequence', '__mj_UpdatedAt'],
-                OrderBy: 'Name, VersionSequence DESC',
-                MaxRows: 500,
-                ResultType: 'simple',
-            },
-            ...(user ? [{
-                EntityName: 'MJ: Entity Form Overrides',
-                ExtraFilter: `UserID='${user.ID}' AND Scope='User'`,
-                Fields: ['ComponentID', 'Status', 'EntityID'],
-                MaxRows: 500,
-                ResultType: 'simple' as const,
-            }] : []),
-        ], user ?? undefined);
-
-        if (!componentsResult.Success) {
-            LogError(`FormBuilderResource.loadExistingForms (components): ${componentsResult.ErrorMessage}`);
-            this.ExistingForms = [];
-            return;
-        }
-        // Build a quick lookup ComponentID → override Status + EntityID.
-        // If the override query failed we fall through with empty maps
-        // and every form just shows no override badge / no entity —
-        // degrades cleanly.
+        // Build lookup ComponentID → override Status + EntityID from the
+        // engine's cached overrides. Scoped to the current user's User-scope
+        // rows — Role/Global don't drive the cockpit's "your overrides" view.
         const overrideStatusByComponentID = new Map<string, 'Active' | 'Inactive' | 'Pending'>();
         const overrideEntityIDByComponentID = new Map<string, string>();
-        if (overridesResult?.Success) {
-            for (const row of (overridesResult.Results ?? []) as Array<{ ComponentID: string; Status: string; EntityID: string | null }>) {
-                if (row.Status === 'Active' || row.Status === 'Inactive' || row.Status === 'Pending') {
-                    overrideStatusByComponentID.set(NormalizeUUID(row.ComponentID), row.Status);
+        if (user) {
+            for (const o of engine.GetUserOverrides(user.ID)) {
+                const cid = o.ComponentID ? NormalizeUUID(o.ComponentID) : '';
+                if (!cid) continue;
+                if (o.Status === 'Active' || o.Status === 'Inactive' || o.Status === 'Pending') {
+                    overrideStatusByComponentID.set(cid, o.Status);
                 }
-                if (row.EntityID) {
-                    overrideEntityIDByComponentID.set(NormalizeUUID(row.ComponentID), row.EntityID);
+                if (o.EntityID) {
+                    overrideEntityIDByComponentID.set(cid, o.EntityID);
                 }
             }
         }
 
-        // Group Components by Name (the lineage key) and pick ONE representative
-        // per lineage for the left rail. The version rail at the bottom of the
-        // rail handles historical versions — the form list itself should be one
-        // row per logical form, not one row per Component row.
-        //
-        // Representative selection priority (within a lineage):
-        //   1. The Component pointed at by an Active user override (what the
-        //      user actually sees at runtime).
-        //   2. Else the Component with a Pending user override (in-flight
-        //      refinement — the next thing to be activated).
-        //   3. Else the highest VersionSequence — i.e. the newest Component
-        //      row, regardless of override state.
-        //
-        // The override badge logic stays the same — it shows the override
-        // status for whichever Component ended up as the representative.
-        type RawComponent = {
+        // Group Components by Name (the lineage key) and pick ONE
+        // representative per lineage. Same Active > Pending > Inactive >
+        // VersionSequence-DESC priority as before.
+        type FormRow = {
             ID: string;
             Name: string;
             Namespace: string | null;
             Status: string | null;
             Description: string | null;
             VersionSequence: number | null;
-            __mj_UpdatedAt: string | Date | null;
+            UpdatedAt: Date | null;
         };
-        const componentsByName = new Map<string, RawComponent[]>();
-        for (const row of (componentsResult.Results ?? []) as RawComponent[]) {
-            const key = (row.Name ?? '').trim();
+        const componentsByName = new Map<string, FormRow[]>();
+        for (const c of engine.Forms) {
+            const key = (c.Name ?? '').trim();
             if (!key) continue;
+            const row: FormRow = {
+                ID: c.ID,
+                Name: c.Name,
+                Namespace: c.Namespace,
+                Status: c.Status,
+                Description: c.Description,
+                VersionSequence: c.VersionSequence,
+                UpdatedAt: c.__mj_UpdatedAt instanceof Date ? c.__mj_UpdatedAt : (c.__mj_UpdatedAt ? new Date(c.__mj_UpdatedAt) : null),
+            };
             const bucket = componentsByName.get(key);
             if (bucket) bucket.push(row); else componentsByName.set(key, [row]);
         }
 
         const rankOverride = (s: 'Active' | 'Inactive' | 'Pending' | null): number => {
-            // Higher rank wins. Active > Pending > Inactive > (no override).
             if (s === 'Active') return 3;
             if (s === 'Pending') return 2;
             if (s === 'Inactive') return 1;
             return 0;
         };
 
-        const representatives: RawComponent[] = [];
+        const representatives: FormRow[] = [];
         for (const bucket of componentsByName.values()) {
             bucket.sort((a, b) => {
                 const oa = overrideStatusByComponentID.get(NormalizeUUID(a.ID)) ?? null;
                 const ob = overrideStatusByComponentID.get(NormalizeUUID(b.ID)) ?? null;
                 const da = rankOverride(ob) - rankOverride(oa);
                 if (da !== 0) return da;
-                // Same override-rank → newer version wins.
                 return (b.VersionSequence ?? 0) - (a.VersionSequence ?? 0);
             });
             representatives.push(bucket[0]);
@@ -859,8 +878,6 @@ export class FormBuilderResourceComponent
             const norm = NormalizeUUID(r.ID);
             const entityID = overrideEntityIDByComponentID.get(norm) ?? null;
             const entity = entityID ? provider.Entities?.find(e => UUIDsEqual(e.ID, entityID)) : null;
-            const updatedRaw = r.__mj_UpdatedAt;
-            const updatedAt = updatedRaw ? (updatedRaw instanceof Date ? updatedRaw : new Date(updatedRaw)) : null;
             return {
                 ID: r.ID,
                 Name: r.Name,
@@ -873,9 +890,10 @@ export class FormBuilderResourceComponent
                 TargetEntityDisplayName: entity?.DisplayName ?? null,
                 TargetEntityIcon: entity?.Icon ?? null,
                 TargetEntitySchemaName: entity?.SchemaName ?? null,
-                UpdatedAt: updatedAt,
+                UpdatedAt: r.UpdatedAt,
             };
         });
+        this.cdr.markForCheck();
     }
 
     /**
@@ -1828,59 +1846,52 @@ export class FormBuilderResourceComponent
         this.ChatPendingAttachments = null;
     }
 
+    /**
+     * Recompute the version-rail rows from `InteractiveFormsEngine`'s
+     * caches — all Component rows in the active form's Name lineage, joined
+     * against the current user's override rows to tag Active / Pending.
+     * No DB round-trip. Auto-refreshed by the engine subscription in
+     * {@link ngAfterViewInit} on any save/delete/remote-invalidate.
+     *
+     * Kept `async` for callers that already `await` it; the body is sync.
+     */
     public async loadVersionsForActiveForm(): Promise<void> {
         if (!this.SelectedFormName) {
             this.Versions = [];
             this.ActiveVersionID = null;
+            this.cdr.markForCheck();
             return;
         }
-        const provider = this.provider;
+        const engine = InteractiveFormsEngine.Instance;
         const user = this.currentUser;
-        if (!provider || !user) {
+        if (!engine.Loaded || !user) {
             this.Versions = [];
+            this.cdr.markForCheck();
             return;
         }
         this.VersionsLoading = true;
         this.cdr.markForCheck();
         try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const escapedName = this.SelectedFormName.replace(/'/g, "''");
-            const result = await rv.RunView<{
-                ID: string;
-                Name: string;
-                Version: string;
-                VersionSequence: number;
-                Status: string;
-                __mj_UpdatedAt: string;
-            }>({
-                EntityName: 'MJ: Components',
-                ExtraFilter: `Name='${escapedName}'`,
-                Fields: ['ID', 'Name', 'Version', 'VersionSequence', 'Status', '__mj_UpdatedAt'],
-                OrderBy: 'VersionSequence DESC',
-                ResultType: 'simple',
-            }, user);
-            if (!result.Success) {
-                LogError(`FormBuilderResource.loadVersionsForActiveForm: ${result.ErrorMessage}`);
-                this.Versions = [];
-                return;
-            }
-            // Cross-reference overrides to tag Active / Pending versions for
-            // the current user. Single query, joined client-side — small N.
-            const overrideResult = await rv.RunView<{
-                ComponentID: string;
-                Status: string;
-            }>({
-                EntityName: 'MJ: Entity Form Overrides',
-                ExtraFilter: `UserID='${user.ID}' AND ComponentID IN (${(result.Results ?? []).map(r => `'${r.ID}'`).join(',') || "''"})`,
-                Fields: ['ComponentID', 'Status'],
-                ResultType: 'simple',
-            }, user);
-            // Delegate the join to the pure helper — testable without
-            // booting Angular DI. See form-builder-version-rail.helpers.ts.
-            this.Versions = joinVersionsWithOverrides(
-                result.Results ?? [],
-                overrideResult.Results ?? [],
-            );
+            // Lineage rows from the engine — already sorted VersionSequence
+            // DESC by GetLineageByName. Project to the helper's expected
+            // simple-row shape so the existing join logic stays unchanged.
+            const lineage = engine.GetLineageByName(this.SelectedFormName).map(c => ({
+                ID: c.ID,
+                Name: c.Name,
+                Version: c.Version,
+                VersionSequence: c.VersionSequence,
+                Status: c.Status ?? '',
+                __mj_UpdatedAt: c.__mj_UpdatedAt instanceof Date
+                    ? c.__mj_UpdatedAt.toISOString()
+                    : (c.__mj_UpdatedAt ?? null),
+            }));
+            // User-scoped overrides keyed by ComponentID. Filter to the
+            // lineage's ComponentIDs so the helper sees only relevant rows.
+            const lineageIDs = new Set(lineage.map(r => NormalizeUUID(r.ID)));
+            const overrides = engine.GetUserOverrides(user.ID)
+                .filter(o => o.ComponentID && lineageIDs.has(NormalizeUUID(o.ComponentID)))
+                .map(o => ({ ComponentID: o.ComponentID, Status: o.Status }));
+            this.Versions = joinVersionsWithOverrides(lineage, overrides);
             this.ActiveVersionID = pickActiveVersionID(this.Versions) ?? this.SelectedFormID;
         } finally {
             this.VersionsLoading = false;
@@ -2288,6 +2299,11 @@ export class FormBuilderResourceComponent
         this.PreviewRecordLabel = '';
         this.PreviewError = null;
         this.CanvasDiverged = false;
+        // Clear chat so the new form doesn't inherit the previously-loaded
+        // form's conversation. The chat surface is disabled until the form
+        // is saved (template gates on SelectedFormID) — we don't want the
+        // user typing into a chat that's bound to the wrong subject.
+        this.resetChatToFresh();
         this.cdr.markForCheck();
         this.registerAgentContext();
     }

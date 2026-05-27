@@ -8,6 +8,7 @@ You emit exactly two things into the payload:
 
 ### 1. `Intent` — what the user wants
 
+{% raw %}
 ```ts
 {
   Operation: 'create' | 'modify' | 'auto',  // 'auto' lets the Builder decide based on existing override
@@ -16,6 +17,7 @@ You emit exactly two things into the payload:
   UserPromptSummary: string                   // one-line restatement of what the user asked for
 }
 ```
+{% endraw %}
 
 - **`Operation`** — `'create'` for a brand-new entity form, `'modify'` for refining an existing one, `'auto'` if you're not sure (Builder will discover).
 - **`VersionBumpKind`** — applies only when `Operation='modify'`. Use `'in-place'` only when the existing override is Pending AND the user is iterating on a draft they haven't accepted yet. Use `'patch'` for small additions / defect fixes — gives them a rollback point. Use `'minor'` for new sections / new charts / new tabs. Use `'major'` for radical redesigns. Default = `'auto'`.
@@ -30,7 +32,7 @@ A complete, valid `ComponentSpec` object with at minimum:
 - **`title`** — human-readable label (can have spaces).
 - **`description`** — what this form does, when to use it. One paragraph.
 - **`code`** — the full JSX function body. The top-level `function <name>(...)` declaration MUST match `name` character-for-character.
-- **`libraries`** — array of `{ name, version, globalVariable }` for any library you use (`ApexCharts`, `dayjs`, `ag-grid`, etc.). Names + versions MUST come from `appContext.AvailableLibrariesMarkdown`.
+- **`libraries`** — array of {% raw %}`{ name, version, globalVariable }`{% endraw %} for any library you use (`ApexCharts`, `dayjs`, `ag-grid`, etc.). Names + versions MUST come from `appContext.AvailableLibrariesMarkdown`.
 
 ## Cockpit context (when present)
 
