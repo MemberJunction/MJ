@@ -330,9 +330,34 @@ Tags are matched against `MJTestSuiteRunEntity.Tags`, which is a JSON array stri
 - **DB mode only.** `results.json` does not currently emit the Tags field, so `--from-json --tag` prints a warning and ignores the tag.
 - **`mj test regression compare --tag=...`** flips to DB mode (drops `--from-json`), so it needs an MJ provider configured. Point your `mj.config.cjs` at the archive DB before running.
 
-## Adopting the Runner in Your Own Project (Phase 8)
+## Adopting the Runner in Your Own Project
 
-The agentic test runner ships as a published Docker image — `memberjunction/agentic-test-runner` on Docker Hub. External adopters don't need to clone the MJ monorepo or install the CLI; everything works via `docker run`.
+The agentic test runner ships as a published Docker image — `memberjunction/agentic-test-runner` on Docker Hub. External adopters **don't need to clone the MJ monorepo**. You can drive it either through the `mj` CLI (which auto-routes to the image when you're not in the monorepo) or directly via `docker run`.
+
+### Provider database (required)
+
+The test engine loads test definitions + Computer Use prompts and records results in an **MJ database**, then drives your app's URL in the browser. So an external run needs a reachable MJ DB (`DB_HOST`/`DB_DATABASE`/`DB_USERNAME`/`DB_PASSWORD`) — typically your instance under test, or a throwaway. `host.docker.internal` reaches a DB published on your host (mapped automatically). **Pushing tests/prompts mutates that DB's metadata** — prefer a throwaway over untouchable prod.
+
+### Via the `mj` CLI (no monorepo)
+
+Outside the monorepo, the regression commands route to the published image automatically:
+
+```bash
+# Mode B/C — drive a URL (docker run under the hood):
+mj test regression remote --target=./my-suite/target.json --env-file=./.env
+
+# Mode D — boot your app alongside the runner (your app compose is all you supply):
+mj test regression remote --target=./app/target.json --overlay=./app/docker-compose.app.yml --env-file=./.env
+
+# Diff / export your runs (operate on ./test-results):
+mj test regression compare
+mj test regression export
+
+# Pin the image for reproducibility:
+mj test regression remote --target=./t.json --image=memberjunction/agentic-test-runner:v5.37.0
+```
+
+`--target`'s directory is mounted at `/work` (its `metadata/` is pushed via `extraMetadataDirs: ["/work/metadata"]`); results land in `./test-results`. Auth `env:` refs in the target resolve from `--env-file`.
 
 ### Scaffold a starter directory
 
@@ -358,20 +383,21 @@ Available scaffolds (run `mj test regression init --list` for an inventory):
 
 ### Run it directly (no MJ CLI)
 
-After scaffolding, every example's README walks through the `docker run` invocation. The shape is:
+The cleanest direct form passes your target profile to the image and lets it load it:
 
 ```bash
 docker run --rm \
+    --add-host host.docker.internal:host-gateway \
+    --env-file ./.env \
+    -v $(pwd)/my-suite:/work:ro \
     -v $(pwd)/test-results:/app/test-results \
-    -v $(pwd)/<scaffold-dir>/metadata:/app/byo-metadata \
-    -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
-    -e TEST_SUITE_NAME="<from target.json>" \
-    -e MJ_TEST_VAR_baseUrl="<your-app-url>" \
-    -e EXTRA_METADATA_DIRS=/app/byo-metadata \
-    memberjunction/agentic-test-runner:v<MJServer-version>
+    memberjunction/agentic-test-runner:v<MJServer-version> \
+    run --target=/work/target.json
 ```
 
-The runner image's entrypoint dispatcher accepts three subcommands: `init <name>`, `run` (default), and `exec <cmd>`. Run with `help` to see the full surface:
+Your `.env` supplies `DB_*`, `AI_VENDOR_API_KEY__GeminiLLM` (and/or `__AnthropicLLM`), and any auth `env:` refs the target uses. (You can still drive purely by env vars — `TEST_SUITE_NAME`, `MJ_TEST_VAR_*`, `EXTRA_METADATA_DIRS` — by omitting `--target`.)
+
+The dispatcher accepts: `run [--target <file>]` (default), `import-bacpac`, `export [<run-dir>]`, `init <name>`, `exec <cmd>`. Run with `help` to see the full surface:
 
 ```bash
 docker run --rm memberjunction/agentic-test-runner help
@@ -388,7 +414,7 @@ The image is published by the same workflow that publishes `memberjunction/api` 
 
 ### CI integration
 
-Drop [`examples/github-actions/regression.yml`](examples/github-actions/regression.yml) into your repo's `.github/workflows/` directory and configure the required secrets (`ANTHROPIC_API_KEY`, `APP_TEST_USER`, `APP_TEST_PASSWORD`). The workflow runs nightly + on PRs, uploads `test-results/run-*/` as artifacts, and fails the build on regressions.
+Drop [`examples/github-actions/regression.yml`](examples/github-actions/regression.yml) into your repo's `.github/workflows/` directory and configure the required secrets (`AI_VENDOR_API_KEY__GeminiLLM`, `DB_*`, and any auth env: refs your target uses, e.g. `STAGING_TEST_USER`/`STAGING_TEST_PASSWORD`). The workflow runs nightly + on dispatch, runs `docker run … run --target`, and uploads `test-results/` as an artifact.
 
 ### What gets baked into the image
 
@@ -398,10 +424,16 @@ The published runner is **self-contained** — every dependency the suite needs 
 - **Computer Use engine + MJ test driver** (the LLM-driven controller/judge)
 - **MJ CLI** (`npx mj` works inside the container)
 - **TestingFramework** (oracle registry, suite runner, variable substitution)
-- **All five example scaffolds** under `/app/examples/` (extractable via `init`)
-- **Dispatcher entrypoint** that routes `init|run|exec` subcommands
+- **All example scaffolds** under `/app/examples/` (extractable via `init`)
+- **The regression scripts** under `/app/docker/regression/scripts/` — target-profile loader, report/screenshot generators, bacpac importer (`import-bacpac.cjs`), shared `lib/db.cjs`
+- **SqlPackage** (amd64 build) for the `import-bacpac` path
+- **Dispatcher entrypoint** routing `run [--target] | import-bacpac | export | init | exec`
 
-The image is built by [`docker/agentic-test-runner/Dockerfile`](../agentic-test-runner/Dockerfile). The MJ regression compose (full self-contained stack — Mode A) still uses [`docker/regression/Dockerfile.test-runner`](Dockerfile.test-runner), but post-Phase-8 that becomes a thin overlay on the published image.
+The image is built by [`docker/agentic-test-runner/Dockerfile`](../agentic-test-runner/Dockerfile). The MJ regression compose (full self-contained stack — Mode A) still uses [`docker/regression/Dockerfile.test-runner`](Dockerfile.test-runner).
+
+### Bacpac externally (prerequisite)
+
+`mj test regression up --bacpac` works outside the monorepo via [`docker-compose.bacpac-standalone.yml`](docker-compose.bacpac-standalone.yml) (sqlserver → bacpac-import → `memberjunction/api` → `memberjunction/explorer` → test-runner). It is **gated on a published `memberjunction/explorer` image**, which is a separate workstream (the Explorer must be made runtime-configurable first). Until that image ships, the `explorer` service can't pull and external bacpac stays dormant — Mode B/C/D are independent of it.
 
 ## Environment Variables
 
@@ -416,8 +448,10 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 | `AUTH0_CLIENT_SECRET` | Yes | Auth0 application client secret |
 | `TEST_UID` | Yes | Test user email (must exist in Auth0, email verified, no MFA) |
 | `TEST_PWD` | Yes | Test user password in Auth0 |
-| `ANTHROPIC_API_KEY` | Yes | Anthropic API key (for Computer Use controller/judge LLM) |
-| `GOOGLE_API_KEY` | No | Google API key (if using Gemini models) |
+| `AI_VENDOR_API_KEY__GeminiLLM` | Yes* | Google Gemini API key — the **primary** Computer Use model |
+| `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
+
+\* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
 
 ### Auth0 Setup Requirements
 

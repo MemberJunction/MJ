@@ -41,7 +41,7 @@ npm run build
 
 # Copy the example env file and fill in real values
 cp docker/regression/.env.test.example docker/regression/.env.test
-# Edit: AUTH0_*, TEST_UID/TEST_PWD, ANTHROPIC_API_KEY at minimum.
+# Edit: AUTH0_*, TEST_UID/TEST_PWD, AI_VENDOR_API_KEY__GeminiLLM at minimum.
 # Everything else has sensible defaults.
 ```
 

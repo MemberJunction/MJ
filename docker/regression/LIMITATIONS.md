@@ -250,7 +250,7 @@ Multiple times during Phase 2 / Phase 3 verification I ran a docker compose comm
 ### 6.1 Loopback test verifies the SAME-DB round-trip; cross-DB push to a separately-provisioned MJ instance is unverified
 **Severity:** P1 before recommending archive for production use
 
-Phase 3 verified pull → tag → push with `ARCHIVE_MJ_CONFIG=archive-local.config.cjs`, which points back at the same docker SQL Server. The push works (`Updated: 1, Unchanged: 13`), but this doesn't verify:
+Phase 3 verified pull → tag → push with the `ARCHIVE_DB_*` vars pointed back at the same docker SQL Server (loopback). The push works (`Updated: 1, Unchanged: 13`), but this doesn't verify:
 - Schema compatibility between source and destination MJ versions
 - Behavior when the destination doesn't have the source's `Tests` / `TestSuites` records (the `@lookup` references would fail)
 - Encryption-key compatibility (`MJ_BASE_ENCRYPTION_KEY` must match for encrypted fields to round-trip)
@@ -258,7 +258,7 @@ Phase 3 verified pull → tag → push with `ARCHIVE_MJ_CONFIG=archive-local.con
 
 **Workaround:** the BYO loopback demo proves the *plumbing* works; cross-DB validation needs a real second MJ instance to test against.
 
-**Suggested fix:** add a `docker/regression/configs/archive-secondary.config.cjs.example` that boots a *second* SQL Server + MJAPI in the same compose project, with its own migrations + codegen. Run the BYO suite against the primary, archive to the secondary, query both, diff results.
+**Suggested fix:** boot a *second* SQL Server + MJAPI in the same compose project, with its own migrations + codegen, and point the `ARCHIVE_DB_*` vars at it. Run the BYO suite against the primary, archive to the secondary, query both, diff results.
 
 ### 6.2 Archive pull always pulls the LATEST suite run regardless of when the suite started
 **Severity:** P3

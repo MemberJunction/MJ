@@ -20,9 +20,26 @@ FROM mcr.microsoft.com/playwright:v1.58.1-noble
 
 # socat: required for any test that needs an in-container "localhost" alias.
 # Kept here so MJ-specific overlays don't have to re-install it. Cheap (~1MB).
+# unzip: needed to unpack the SqlPackage standalone build (bacpac import path).
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends socat ca-certificates curl \
+    && apt-get install -y --no-install-recommends socat ca-certificates curl unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# SqlPackage (bacpac import — used by the `import-bacpac` dispatcher subcommand
+# and scripts/import-bacpac.cjs). x64 standalone build only; the bacpac
+# importer service is pinned to linux/amd64 in the standalone compose, so this
+# arch-guard keeps the multi-arch build clean (the arm64 leg simply skips it).
+RUN ARCH="$(dpkg --print-architecture)"; \
+    if [ "$ARCH" = "amd64" ]; then \
+      curl -fsSL -o /tmp/sqlpackage.zip https://aka.ms/sqlpackage-linux \
+      && mkdir -p /opt/sqlpackage \
+      && unzip -q /tmp/sqlpackage.zip -d /opt/sqlpackage \
+      && chmod +x /opt/sqlpackage/sqlpackage \
+      && ln -s /opt/sqlpackage/sqlpackage /usr/local/bin/sqlpackage \
+      && rm /tmp/sqlpackage.zip; \
+    else \
+      echo "sqlpackage skipped on $ARCH (bacpac import runs under the amd64 pin)"; \
+    fi
 
 WORKDIR /app
 
@@ -39,6 +56,11 @@ RUN npx turbo build --concurrency=2 --filter="@memberjunction*"
 
 # ── Step 4: default MJ config (overlays can replace) ────────────────────────
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+
+# ── Step 4b: regression scripts (target loader, report generators, bacpac
+# importer, shared lib). The dispatcher's `run --target` / `import-bacpac` /
+# `export` subcommands invoke these from /app/docker/regression/scripts. ──────
+COPY docker/regression/scripts/ ./docker/regression/scripts/
 
 # ── Step 5: ComputerUseTestDriver bootstrap (@RegisterClass fires) ──────────
 RUN echo "import '@memberjunction/computer-use-engine';" > /app/bootstrap.mjs

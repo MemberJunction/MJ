@@ -24,10 +24,11 @@
   "files": [
     "/bin",
     "/dist",
-    "/oclif.manifest.json"
+    "/oclif.manifest.json",
+    "/regression-compose"
   ],
   "scripts": {
-    "build": "tsc && tsc-alias -f && oclif manifest",
+    "build": "tsc && tsc-alias -f && oclif manifest && node scripts/copy-regression-assets.mjs",
     "prepack": "npm run build && oclif readme",
     "postpack": "rimraf oclif.manifest.json",
     "version": "oclif readme && git add README.md",

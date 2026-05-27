@@ -1,7 +1,8 @@
 import { Command, Flags } from '@oclif/core';
-import { requireMonorepoRoot, spawnInherit } from '../../../lib/regression/docker-helpers.js';
+import { isInsideMonorepo, spawnInherit } from '../../../lib/regression/docker-helpers.js';
 
 const REGRESSION_RESULTS_DIR = 'docker/regression/test-results';
+const EXTERNAL_RESULTS_DIR = 'test-results';
 
 export default class TestRegressionCompare extends Command {
   static description =
@@ -44,13 +45,16 @@ export default class TestRegressionCompare extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(TestRegressionCompare);
-    requireMonorepoRoot();
+
+    // Results live under docker/regression/test-results in the monorepo, or
+    // ./test-results when running externally (where remote/up wrote them).
+    const resultsDir = isInsideMonorepo() ? REGRESSION_RESULTS_DIR : EXTERNAL_RESULTS_DIR;
 
     // --tag flips us to DB mode (results.json doesn't carry Tags), so drop
     // --from-json when the user asks for tag filtering.
     const args: string[] = ['test', 'compare'];
     if (!flags.tag) {
-      args.push('--from-json', REGRESSION_RESULTS_DIR);
+      args.push('--from-json', resultsDir);
     }
     if (flags.tag) args.push('--tag', flags.tag);
     if (flags['diff-only']) args.push('--diff-only');

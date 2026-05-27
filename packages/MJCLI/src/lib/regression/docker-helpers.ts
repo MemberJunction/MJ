@@ -8,11 +8,35 @@
  */
 import { spawn, type SpawnOptions } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 export const REGRESSION_DIR = 'docker/regression';
 export const COMPOSE_FILE = `${REGRESSION_DIR}/docker-compose.test.yml`;
 export const BACPAC_OVERLAY = `${REGRESSION_DIR}/docker-compose.bacpac.yml`;
+export const STANDALONE_COMPOSE = `${REGRESSION_DIR}/docker-compose.standalone.yml`;
+export const BACPAC_STANDALONE_COMPOSE = `${REGRESSION_DIR}/docker-compose.bacpac-standalone.yml`;
+
+/**
+ * Package root of @memberjunction/cli (resolved from this compiled module at
+ * dist/lib/regression/docker-helpers.js → up 3). Used to locate compose assets
+ * bundled into the published package for external (no-monorepo) use.
+ */
+const PKG_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+
+/**
+ * Resolve a standalone compose file. Prefers the monorepo copy (cwd-relative
+ * `docker/regression/<name>`); falls back to the copy bundled into this CLI
+ * package at build time (`<pkg>/regression-compose/<name>`) so external users
+ * who only `npm i -g @memberjunction/cli` still have it. Returns the first path
+ * that exists, or the bundled path (so the caller can surface a clear error).
+ */
+export function resolveStandaloneCompose(monorepoRelPath: string): string {
+  const monorepo = path.resolve(monorepoRelPath);
+  if (existsSync(monorepo)) return monorepo;
+  const bundled = path.join(PKG_ROOT, 'regression-compose', path.basename(monorepoRelPath));
+  return existsSync(bundled) ? bundled : monorepo;
+}
 export const ENV_FILE = `${REGRESSION_DIR}/.env.test`;
 export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
@@ -168,4 +192,26 @@ export function resolveTargetPath(input: string): string {
   if (input.includes('/')) return path.resolve(input);
   const withSuffix = input.endsWith('.target.json') ? input : `${input}.target.json`;
   return path.resolve(TARGETS_DIR, withSuffix);
+}
+
+/**
+ * Build a `docker run …` argument list for the published image (external,
+ * no-monorepo path). Mounts are [hostPath, containerPath] pairs; envFile is
+ * injected with `--env-file`; `host.docker.internal` is always mapped so a DB
+ * published on the host is reachable on Linux too.
+ */
+export function dockerRunArgs(
+  image: string,
+  subArgs: string[],
+  opts: { mounts?: Array<[string, string]>; envFile?: string } = {},
+): string[] {
+  const args = ['run', '--rm', '--add-host', 'host.docker.internal:host-gateway'];
+  if (opts.envFile && existsSync(opts.envFile)) {
+    args.push('--env-file', opts.envFile);
+  }
+  for (const [hostPath, containerPath] of opts.mounts ?? []) {
+    args.push('-v', `${hostPath}:${containerPath}`);
+  }
+  args.push(image, ...subArgs);
+  return args;
 }
