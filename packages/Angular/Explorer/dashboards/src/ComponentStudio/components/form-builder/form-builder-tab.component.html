@@ -1,0 +1,111 @@
+<div class="form-builder-tab">
+
+  <!-- ============================================================
+       TOP TOOLBAR — entity picker, mode pills, code & chat handoff
+       ============================================================ -->
+  <div class="fbt-toolbar">
+    <div class="fbt-toolbar-left">
+      <!-- Entity picker -->
+      <div class="fbt-entity-picker" [class.open]="IsEntityPickerOpen">
+        <button class="fbt-entity-btn" (click)="ToggleEntityPicker()">
+          <i class="fa-solid fa-table"></i>
+          <span>
+            @if (state.FormTargetEntityName) {
+              {{ state.FormTargetEntityName }}
+            } @else {
+              <em>Pick entity…</em>
+            }
+          </span>
+          <i class="fa-solid fa-chevron-down chev"></i>
+        </button>
+        @if (IsEntityPickerOpen) {
+          <div class="fbt-entity-popover" (click)="$event.stopPropagation()">
+            <input type="text"
+                   class="fbt-entity-search"
+                   placeholder="Search entities…"
+                   [value]="EntityPickerSearch"
+                   (input)="OnEntityPickerSearch($event)" />
+            <ul class="fbt-entity-list">
+              @for (e of filteredEntityChoices; track e.Name; let idx = $index) {
+                @if (idx < 50) {
+                  <li class="fbt-entity-item" (click)="OnEntityPicked(e.Name)">
+                    <span class="fbt-entity-display">{{ e.DisplayName }}</span>
+                    <span class="fbt-entity-name">{{ e.Name }}</span>
+                  </li>
+                }
+              }
+            </ul>
+          </div>
+        }
+      </div>
+
+      <!-- Mode pills -->
+      <div class="fbt-mode-pills" role="radiogroup" aria-label="Preview mode">
+        <button class="fbt-mode-pill"
+                [class.active]="state.FormPreviewMode === 'view'"
+                (click)="SetPreviewMode('view')"
+                title="View mode — read-only">
+          <i class="fa-solid fa-eye"></i> View
+        </button>
+        <button class="fbt-mode-pill"
+                [class.active]="state.FormPreviewMode === 'edit'"
+                (click)="SetPreviewMode('edit')"
+                title="Edit mode — fields editable">
+          <i class="fa-solid fa-pen"></i> Edit
+        </button>
+        <button class="fbt-mode-pill"
+                [class.active]="state.FormPreviewMode === 'create'"
+                (click)="SetPreviewMode('create')"
+                title="Create mode — empty record">
+          <i class="fa-solid fa-plus"></i> Create
+        </button>
+      </div>
+    </div>
+
+    <div class="fbt-toolbar-spacer"></div>
+
+    <div class="fbt-toolbar-right">
+      <button class="fbt-tool-btn"
+              (click)="OnViewCode()"
+              title="View generated code">
+        <i class="fa-solid fa-code"></i> View Code
+      </button>
+      <button class="fbt-tool-btn"
+              [disabled]="!state.FormCanvas"
+              (click)="OnOpenInChat()"
+              title="Hand off the current canvas to the chat agent">
+        <i class="fa-solid fa-comment-dots"></i> Open in Chat
+      </button>
+    </div>
+  </div>
+
+  <!-- ============================================================
+       CANVAS BODY
+       ============================================================ -->
+  <div class="fbt-canvas-host">
+    @if (!state.FormTargetEntityName) {
+      <div class="fbt-empty">
+        <i class="fa-solid fa-table-list"></i>
+        <h3>Pick an entity to start the form</h3>
+        <p>Choose the target entity from the toolbar. Form Studio loads the curated schema and lets you drag fields onto the canvas.</p>
+      </div>
+    } @else {
+      @if (state.FormCodeOnlySectionsDetected) {
+        <div class="fbt-lossy-banner" role="alert">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          Some parts of this form's code can't be represented on the canvas. Edit them in the Code tab to avoid losing them.
+        </div>
+      }
+      <mj-form-builder-canvas
+        [Canvas]="state.FormCanvas"
+        [Schema]="state.FormSchema"
+        [SelectedElementId]="state.FormSelectedElementId"
+        [SelectedSectionId]="state.FormSelectedSectionId"
+        (CanvasChanged)="OnCanvasChanged($event)"
+        (ElementSelected)="OnElementSelected($event)"
+        (SectionSelected)="OnSectionSelected($event)"
+        (Deselected)="OnDeselected()">
+      </mj-form-builder-canvas>
+    }
+  </div>
+</div>
