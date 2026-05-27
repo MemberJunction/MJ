@@ -769,6 +769,30 @@ export class BaseAgent {
      */
     private _fileOutputs: FileOutputRef[] = [];
 
+    // ───────────────────────── Sub-class state accessors ──────────────────────────
+    // Read-only `protected` getters so driver sub-classes (e.g. Skip) can inspect
+    // the current run's state without being able to corrupt internal invariants.
+    // Mutations still flow through the framework's own methods (createStepEntity,
+    // queueStepSave, incrementExecutionCount, etc.).
+    // (`AgentRun` and `MediaOutputs` are already public getters above; the
+    // accessors below cover state that previously had no external surface.)
+
+    /** Depth of this agent in the execution hierarchy (0 = root). @protected */
+    protected get Depth(): number { return this._depth; }
+
+    /** Agent name hierarchy from root to current (e.g. `['Sage', 'Skip', 'Researcher']`). @protected */
+    protected get AgentHierarchy(): readonly string[] { return this._agentHierarchy; }
+
+    /** Parent step counts used to build the `2.1.3` hierarchical step label. @protected */
+    protected get ParentStepCounts(): readonly number[] { return this._parentStepCounts; }
+
+    /**
+     * Accumulated file outputs (PDF, Excel, Word, etc.) produced this run.
+     * Mirrors the existing `MediaOutputs` accessor pattern but is scoped to
+     * driver sub-classes since it's a more internal collection.
+     * @protected
+     */
+    protected get FileOutputs(): FileOutputRef[] { return this._fileOutputs; }
 
     /**
      * Payload manager for handling payload access control.
@@ -5452,11 +5476,16 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Creates a step entity for tracking.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes (e.g. Skip) can author custom
+     * `AIAgentRunStep` records with the same setup correctness — `StepNumber`,
+     * hierarchy breadcrumb, UUID validation, payload serialization, and the
+     * `queueStepSave` coupling that keeps INSERT-then-UPDATE ordering safe.
+     *
+     * @protected
      * @param params - Step creation parameters
      * @returns {Promise<MJAIAgentRunStepEntityExtended>} - The created step entity
      */
-    private async createStepEntity(params: {
+    protected async createStepEntity(params: {
         stepType: MJAIAgentRunStepEntityExtended["StepType"];
         stepName: string;
         contextUser: UserInfo;
@@ -5565,7 +5594,16 @@ The context is now within limits. Please retry your request with the recovered c
         };
     }
 
-    private async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
+    /**
+     * Finalizes a step entity with completion status. Pairs with `createStepEntity`
+     * — drivers that create custom steps should also finalize them through this
+     * method so `Status`/`CompletedAt`/`Success`/`ErrorMessage`/`OutputData` are
+     * populated consistently and the UPDATE is sequenced behind the INSERT via
+     * `queueStepSave`.
+     *
+     * @protected
+     */
+    protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
         try {
             stepEntity.Status = success ? 'Completed' : 'Failed';
             stepEntity.CompletedAt = new Date();
@@ -5602,9 +5640,14 @@ The context is now within limits. Please retry your request with the recovered c
      *   agent loop isn't blocked by observability writes — but they ARE surfaced
      *   in `finalizeAgentRun` so callers see step-record drift.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes (e.g. Skip) that author
+     * custom `AIAgentRunStep` records can fire-and-forget saves through the
+     * same chained/non-blocking machinery instead of awaiting `entity.Save()`
+     * inline and blocking the agent loop.
+     *
+     * @protected
      */
-    private queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
+    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended): void {
         const id = stepEntity.ID;
         const previousSave = this._stepSavePromises.get(id) ?? Promise.resolve();
         const currentSave = previousSave.then(() => stepEntity.Save()).then((ok) => {
@@ -5625,9 +5668,12 @@ The context is now within limits. Please retry your request with the recovered c
      * preload dispatches so a misbehaving LLM (or a runaway data source) can't
      * exhaust the model API or DB pool.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes performing custom parallel
+     * work get the same bounded-fan-out + ordered-results contract for free.
+     *
+     * @protected
      */
-    private async mapWithConcurrency<T, R>(
+    protected async mapWithConcurrency<T, R>(
         items: T[],
         limit: number,
         worker: (item: T, index: number) => Promise<R>
@@ -5687,11 +5733,15 @@ The context is now within limits. Please retry your request with the recovered c
     /**
      * Formats a message with agent hierarchy for streaming/progress updates.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes emit progress events whose
+     * breadcrumbs line up with the framework's own — keeps the Explorer tree
+     * view consistent across custom and built-in dispatch.
+     *
+     * @protected
      * @param {string} baseMessage - The base message to format
      * @returns {string} - The formatted message with hierarchy breadcrumb
      */
-    private formatHierarchicalMessage(baseMessage: string): string {
+    protected formatHierarchicalMessage(baseMessage: string): string {
         if (this._depth > 0) {
             // Build breadcrumb from agent hierarchy (skip root agent)
             const breadcrumb = this._agentHierarchy
@@ -5711,12 +5761,15 @@ The context is now within limits. Please retry your request with the recovered c
      * - Nested sub-agent step 3: buildHierarchicalStep(3, [2, 1]) => "2.1.3"
      * - Deep nesting: buildHierarchicalStep(5, [1, 2, 3, 4]) => "1.2.3.4.5"
      *
+     * Exposed as `protected` so driver sub-classes can emit step labels that
+     * match the framework's `2.1.3` nesting convention.
+     *
      * @param currentStep - Current agent's step number (1-based)
      * @param parentSteps - Array of parent step counts from root to immediate parent
      * @returns Formatted hierarchical step string, or undefined if currentStep is undefined/null
-     * @private
+     * @protected
      */
-    private buildHierarchicalStep(currentStep: number | undefined, parentSteps: number[]): string | undefined {
+    protected buildHierarchicalStep(currentStep: number | undefined, parentSteps: number[]): string | undefined {
         if (currentStep == null) return undefined;
 
         if (parentSteps.length === 0) {
@@ -6903,9 +6956,13 @@ The context is now within limits. Please retry your request with the recovered c
      * Used by both the single and parallel sub-agent dispatch paths so name
      * resolution is consistent and there's one place to fix lookup bugs.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes with custom routing logic
+     * still resolve names through the same case-insensitive child-then-related
+     * lookup the framework uses internally.
+     *
+     * @protected
      */
-    private resolveSubAgentByName(
+    protected resolveSubAgentByName(
         params: ExecuteAgentParams,
         name: string
     ): { subAgentEntity: MJAIAgentEntityExtended; relationship?: MJAIAgentRelationshipEntity } | undefined {
@@ -6943,9 +7000,12 @@ The context is now within limits. Please retry your request with the recovered c
      * round-trip for environments without it. Returns the original value on
      * non-cloneable inputs.
      *
-     * @private
+     * Exposed as `protected` so driver sub-classes performing their own parallel
+     * dispatch get the same payload-isolation guarantee.
+     *
+     * @protected
      */
-    private cloneSubAgentPayload<T>(payload: T): T {
+    protected cloneSubAgentPayload<T>(payload: T): T {
         if (payload === null || payload === undefined) return payload;
         if (typeof payload !== 'object') return payload;
         try {
@@ -9906,23 +9966,27 @@ The context is now within limits. Please retry your request with the recovered c
 
     /**
      * Increments the execution count for an item (action or sub-agent).
-     * 
+     *
+     * Exposed as `protected` so driver sub-classes performing custom dispatch
+     * bump the same per-item counter the framework checks against execution
+     * guardrails — without this, custom dispatch silently bypasses limits.
+     *
      * @param itemId - The item ID to increment (action ID or sub-agent ID)
-     * @private
+     * @protected
      */
-    private incrementExecutionCount(itemId: string): void {
+    protected incrementExecutionCount(itemId: string): void {
         const currentCount = this._executionCounts.get(itemId) || 0;
         this._executionCounts.set(itemId, currentCount + 1);
     }
 
     /**
      * Gets the execution count for an item (action or sub-agent).
-     * 
+     *
      * @param itemId - The item ID to get count for
      * @returns The execution count (0 if never executed)
-     * @private
+     * @protected
      */
-    private getExecutionCount(itemId: string): number {
+    protected getExecutionCount(itemId: string): number {
         return this._executionCounts.get(itemId) || 0;
     }
 
