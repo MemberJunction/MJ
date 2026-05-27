@@ -128,6 +128,103 @@
     border: 2px solid var(--mj-bg-page);
 }
 
+/* --- Hide-bubble affordance ("×" pill on the outer-left edge of the bubble) ---
+   Revealed on hover. Touch-only devices (no hover) get a permanent low-opacity
+   render so the affordance is reachable without a hover gesture. */
+.chat-overlay-bubble-close {
+    position: absolute;
+    top: 50%;
+    /* Sits flush with the bubble's left bounding-box edge — no dead-zone gap that
+       would drop the :hover state mid-reach. The bubble's circular shape means the
+       visible space between the circle and the pill still reads as a gap. */
+    right: 100%;
+    transform: translateY(-50%);
+    width: 1.25rem;
+    height: 1.25rem;
+    padding: 0;
+    border-radius: 9999px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-strong);
+    color: var(--mj-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.chat-overlay-bubble:hover .chat-overlay-bubble-close {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.chat-overlay-bubble-close:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-brand-primary);
+    transform: translateY(-50%) scale(1.08);
+}
+
+/* Touch devices: keep the pill reachable without a hover gesture. */
+@media (hover: none) {
+    .chat-overlay-bubble-close {
+        opacity: 0.7;
+        pointer-events: auto;
+    }
+}
+
+/* While actively dragging, suppress the close pill — it shouldn't compete with the drag affordance. */
+.chat-overlay-bubble.is-dragging .chat-overlay-bubble-close,
+.chat-overlay-bubble.is-pressed .chat-overlay-bubble-close {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* --- Collapsed sliver (right edge, replaces bubble when hidden) --- */
+
+.chat-overlay-sliver {
+    position: fixed;
+    right: 0;
+    width: 0.875rem;        /* 14px sliver */
+    height: 5rem;           /* 80px tall */
+    padding: 0;
+    background: var(--mj-brand-primary);
+    border: none;
+    border-radius: 8px 0 0 8px;
+    color: var(--mj-text-inverse);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 2147483647;
+    transition: width 0.18s ease, background 0.15s ease;
+    animation: overlayBubbleIn 0.25s ease;
+}
+
+.chat-overlay-sliver:hover {
+    width: 1.5rem;          /* widens slightly to invite the click */
+    background: color-mix(in srgb, var(--mj-brand-primary) 85%, white);
+}
+
+.chat-overlay-sliver-icon {
+    font-size: 0.55rem;
+    opacity: 0.95;
+}
+
+.chat-overlay-sliver:hover .chat-overlay-sliver-icon {
+    font-size: 0.7rem;
+}
+
+.chat-overlay-sliver-badge {
+    /* Pull the badge a hair outside the sliver so it isn't clipped by the narrow width. */
+    top: -6px;
+    right: -6px;
+}
+
 /* --- Expanded Panel --- */
 
 .chat-overlay-panel {
@@ -312,5 +409,11 @@
 
     .resize-handle {
         display: none;
+    }
+
+    /* Slightly wider sliver on touch so it meets the WCAG minimum touch target. */
+    .chat-overlay-sliver {
+        width: 1.25rem;
+        height: 4.5rem;
     }
 }

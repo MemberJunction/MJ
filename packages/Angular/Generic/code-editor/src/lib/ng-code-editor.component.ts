@@ -34,8 +34,8 @@ import { ToolbarConfig, ToolbarButton, ToolbarButtonGroup, ToolbarActionEvent } 
 // Import composition token extension for SQL highlighting
 import { compositionTokenExtension, CompositionTokenClickEvent, CompositionTokenResolver, CompositionTokenInfo } from './composition-token-extension';
 
-// Import MJ Metadata for default hover resolution
-import { Metadata } from '@memberjunction/core';
+// Import QueryEngine for default hover resolution
+import { QueryEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export type Setup = 'basic' | 'minimal' | null;
@@ -524,7 +524,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
    */
   private resolveCompositionToken(fullPath: string): CompositionTokenInfo | null {
     try {
-      const allQueries = this.ProviderToUse.Queries;
+      const allQueries = QueryEngine.Instance.Queries;
       const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
       if (segments.length === 0) return null;
 
@@ -535,7 +535,7 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
       let query = allQueries.find(q => {
         if (q.Name !== queryName) return false;
         if (categorySegments.length === 0) return true;
-        const expectedPath = '/' + categorySegments.join('/') + '/';
+        const expectedPath = categorySegments.join('/');
         return q.CategoryPath === expectedPath;
       });
 
@@ -550,8 +550,8 @@ export class CodeEditorComponent extends BaseAngularComponent implements OnInit,
         Name: query.Name,
         Description: query.Description ?? undefined,
         Status: query.Status,
-        Category: query.CategoryPath ? query.CategoryPath.replace(/^\/|\/$/g, '').replace(/\//g, ' / ') : undefined,
-        HasParameters: query.Parameters.length > 0,
+        Category: query.CategoryPath ? query.CategoryPath.replace(/\//g, ' / ') : undefined,
+        HasParameters: query.QueryParameters.length > 0,
         Reusable: query.Reusable
       };
     } catch (e) {

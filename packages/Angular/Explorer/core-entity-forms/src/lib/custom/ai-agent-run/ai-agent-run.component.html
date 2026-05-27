@@ -155,11 +155,8 @@
               <mj-ai-agent-run-timeline
                 [aiAgentRunId]="record.ID"
                 [dataHelper]="dataHelper"
-                [autoRefresh]="record.Status === 'Running'"
-                [refreshInterval]="30000"
                 (itemSelected)="selectTimelineItem($event)"
-                (navigateToEntity)="navigateToEntityRecord($event)"
-                (agentRunCompleted)="onAgentRunCompleted($event)">
+                (navigateToEntity)="navigateToEntityRecord($event)">
               </mj-ai-agent-run-timeline>
             </as-split-area>
             <!-- JSON Detail Pane -->

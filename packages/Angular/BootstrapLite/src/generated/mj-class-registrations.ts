@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (348 classes)
+// @memberjunction/core-entities (349 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -206,6 +206,7 @@ import {
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -264,6 +265,7 @@ import {
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -672,6 +674,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -730,6 +733,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJQueryDependencyEntity,
     MJQueryEntity,
     MJQueryEntityEntity,
+    MJQueryEntityExtended,
     MJQueryFieldEntity,
     MJQueryParameterEntity,
     MJQueryPermissionEntity,
@@ -903,7 +907,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 414;
+export const CLASS_REGISTRATIONS_COUNT = 415;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

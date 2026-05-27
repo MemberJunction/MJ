@@ -264,10 +264,21 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
 
   /**
    * Get a user setting value by key.
+   *
+   * **Read-after-write semantics**: this consults the in-memory pending-
+   * debounced-writes map FIRST. Without that, a `SetSettingDebounced`
+   * followed immediately by `GetSetting` would return the old DB-cached
+   * value because the debounce timer hasn't fired yet and the entity
+   * hasn't been saved. Callers that update a preference and re-render
+   * synchronously (e.g. form-variant picker → form reload) depend on
+   * this freshness guarantee.
+   *
    * @param settingKey - The setting key to find (e.g., "default-view-setting/Contacts")
    * @returns The setting value string, or undefined if not found
    */
   public GetSetting(settingKey: string): string | undefined {
+    const pending = this._pendingSettings.get(settingKey);
+    if (pending !== undefined) return pending.value;
     const setting = this.UserSettings.find((s) => s.Setting === settingKey);
     return setting?.Value ?? undefined;
   }

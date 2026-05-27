@@ -46,3 +46,4 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 export * from './lib/panel-slot/base-form-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
 export * from './lib/panel-slot/form-slot-coordinator.service';
+export * from './lib/interactive-form/interactive-form.component';

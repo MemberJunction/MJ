@@ -1,0 +1,38 @@
+{
+  "name": "@memberjunction/react-linter",
+  "version": "5.37.0",
+  "description": "Static-analysis lint engine for MemberJunction interactive React components. Browser-free: Babel AST + TypeScript-based validation only. Safe to depend on from server-side actions, CLI tooling, and (eventually) Component Studio in the browser. The companion package @memberjunction/react-test-harness layers Playwright-based runtime execution on top of these rules.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  },
+  "dependencies": {
+    "@babel/parser": "^7.29.0",
+    "@babel/traverse": "^7.29.0",
+    "@babel/types": "^7.29.0",
+    "@memberjunction/core": "5.37.0",
+    "@memberjunction/core-entities": "5.37.0",
+    "@memberjunction/global": "5.37.0",
+    "@memberjunction/interactive-component-types": "5.37.0",
+    "@memberjunction/react-runtime": "5.37.0",
+    "@memberjunction/sql-dialect": "5.37.0",
+    "@memberjunction/sql-parser": "5.37.0",
+    "typescript": "^5.9.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}
