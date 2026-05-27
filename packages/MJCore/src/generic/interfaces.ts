@@ -558,22 +558,23 @@ export interface IMetadataProvider {
      */
     get AuthorizationRoles(): AuthorizationRoleInfo[]
 
+    /** @deprecated Use `QueryEngine.Instance.Queries` from `@memberjunction/core-entities` instead. */
     get Queries(): QueryInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Fields` from `@memberjunction/core-entities` instead. */
     get QueryFields(): QueryFieldInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Categories` from `@memberjunction/core-entities` instead. */
     get QueryCategories(): QueryCategoryInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Permissions` from `@memberjunction/core-entities` instead. */
     get QueryPermissions(): QueryPermissionInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.QueryEntities` from `@memberjunction/core-entities` instead. */
     get QueryEntities(): QueryEntityInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Parameters` from `@memberjunction/core-entities` instead. */
     get QueryParameters(): QueryParameterInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.Dependencies` from `@memberjunction/core-entities` instead. */
     get QueryDependencies(): QueryDependencyInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.SQLDialects` from `@memberjunction/core-entities` instead. */
     get SQLDialects(): SQLDialectInfo[]
-
+    /** @deprecated Use `QueryEngine.Instance.QuerySQLs` from `@memberjunction/core-entities` instead. */
     get QuerySQLs(): QuerySQLInfo[]
 
     get Libraries(): LibraryInfo[]
