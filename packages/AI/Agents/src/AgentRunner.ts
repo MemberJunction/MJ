@@ -989,10 +989,8 @@ export class AgentRunner {
 
     /**
      * Saves media outputs to AIAgentRunMedia table for permanent storage.
-     * This creates records for each media output promoted during agent execution.
-     *
-     * Only media with `persist !== false` is saved. Media items with `persist: false`
-     * are typically intercepted binary content that was never used in the final output.
+     * Creates a record for each media output promoted during agent execution.
+     * All items in the array are saved.
      *
      * @param agentRunId - The ID of the agent run
      * @param mediaOutputs - Array of media outputs to save
@@ -1021,17 +1019,7 @@ export class AgentRunner {
             return [];
         }
 
-        // Filter to only persist media that should be saved
-        // persist=false means intercepted but unused binary content (e.g., images not used in response)
-        const mediaToSave = mediaOutputs.filter(m => m.persist !== false);
-        if (mediaToSave.length === 0) {
-            LogStatus(`All ${mediaOutputs.length} media outputs have persist=false, skipping save`);
-            return [];
-        }
-
-        if (mediaToSave.length < mediaOutputs.length) {
-            LogStatus(`Filtering: ${mediaToSave.length} of ${mediaOutputs.length} media outputs will be persisted`);
-        }
+        const mediaToSave = mediaOutputs;
 
         const savedIds: string[] = [];
         const md = provider || this._provider;
