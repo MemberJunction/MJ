@@ -123,6 +123,16 @@ export interface LoopAgentResponse<P = any> {
         };
 
         /**
+         * Multiple sub-agents to run in parallel (when type='Sub-Agent')
+         */
+        subAgents?: Array<{
+            name: string;
+            message: string;
+            templateParameters?: Record<string, any>;
+            terminateAfter: boolean;
+        }>;
+
+        /**
          * Client tools to invoke (when type='ClientTools').
          * Supports both PascalCase (spec) and camelCase (LLM convenience).
          */

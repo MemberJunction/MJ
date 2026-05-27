@@ -16,7 +16,7 @@ import {
     SimpleVectorDatabase,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (348 classes)
+// @memberjunction/core-entities (349 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -206,6 +206,7 @@ import {
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -673,6 +674,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
     MJEntityFieldValueEntity,
+    MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,

@@ -6,8 +6,9 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider } from "@memberjunction/core";
-import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
+import { BaseEntity, LogError, Metadata, UserInfo, IMetadataProvider, IStartupSink, RegisterForStartup } from "@memberjunction/core";
+import { BaseSingleton, MJGlobal, MJLruCache, UUIDsEqual } from "@memberjunction/global";
+import { createHash } from "crypto";
 import { MJAIActionEntity, MJActionEntity,
          MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity,
          MJAIModelActionEntity, MJAIPromptModelEntity, MJAIPromptTypeEntity,
@@ -62,7 +63,12 @@ export class EntityAIActionParams extends AIActionParams {
  *
  * @description ONLY USE ON SERVER-SIDE. For metadata only, use the AIEngineBase class which can be used anywhere.
  */
-export class AIEngine extends BaseSingleton<AIEngine> {
+@RegisterForStartup({
+    deferred: true,
+    deferredDelay: 15000,
+    description: "Server-side AI Engine and Embeddings Pre-Warming"
+})
+export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
 
@@ -100,6 +106,35 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     private _actionEmbeddingsCache: Map<string, boolean> = new Map();
     private _embeddingsGenerated: boolean = false;
 
+    /**
+     * In-memory query embedding cache.
+     *
+     * - LRU eviction (5000-entry default) — keeps hot queries warm across bursts.
+     * - Stores the in-flight `Promise<EmbedTextResult>` so concurrent callers
+     *   for the same key share one inference rather than racing.
+     * - Cache keys are `${modelID}|sha256(text)` so a 50KB text doesn't pin
+     *   its full string in the Map.
+     * - Failed promises are evicted via `Delete` so we don't trap negative
+     *   results.
+     */
+    private _embeddingCache: MJLruCache<string, Promise<EmbedTextResult | null>> = new MJLruCache({ maxSize: 5000 });
+
+    /**
+     * Clears all cached text embeddings.
+     */
+    public ClearEmbeddingCache(): void {
+        this._embeddingCache.Clear();
+    }
+
+    /**
+     * Builds a bounded, collision-resistant cache key for a (model, text) pair.
+     * Hashing the text keeps Map memory bounded regardless of text size.
+     */
+    private buildEmbeddingCacheKey(modelId: string, text: string): string {
+        const hash = createHash('sha256').update(text).digest('hex');
+        return `${modelId}|${hash}`;
+    }
+
     // Loading state management
     private _loaded: boolean = false;
     private _loading: boolean = false;
@@ -108,6 +143,22 @@ export class AIEngine extends BaseSingleton<AIEngine> {
 
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
+    }
+
+    /**
+     * Executes the background startup sequence. This method is called automatically
+     * by the StartupManager. It runs AIEngine configuration and pre-warms the local
+     * embedding models and vector caches.
+     *
+     * @param contextUser The authenticated user context (system/boot user context)
+     * @param provider Optional metadata provider override
+     */
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Load the AI configuration and base metadata
+        await this.Config(false, contextUser, provider);
+
+        // Pre-generate agent, action, and other local embeddings in the background
+        await this.ensureEmbeddingsGenerated();
     }
 
     // ========================================================================
@@ -956,26 +1007,81 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     /**
      * Helper method to instantiate a class instance for the given model and calculate an embedding
      * vector from the provided text.
+     *
+     * Includes an LRU cache (see `_embeddingCache`) that dedupes concurrent calls for the same
+     * (model, text) pair — the in-flight Promise is shared until it settles.
+     *
+     * @param options.bypassCache when true, skips the cache read but still populates it on success
+     * @param options.noCache    when true, neither reads nor writes the cache (also forfeits
+     *                            promise dedup — a `noCache` caller always re-infers, even if
+     *                            an equivalent inference is already in flight)
+     *
+     * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
      */
-    public async EmbedText(model: MJAIModelEntityExtended, text: string, apiKey?: string): Promise<EmbedTextResult | null> {
-        const params: EmbedTextParams = {
-            text: text,
-            model: model.APIName
-        };
-
-        const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
-            BaseEmbeddings,
-            model.DriverClass,
-            apiKey
-        );
-
-        if (!embedding) {
-            LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+    public async EmbedText(
+        model: MJAIModelEntityExtended,
+        text: string,
+        apiKey?: string,
+        options?: { bypassCache?: boolean; noCache?: boolean }
+    ): Promise<EmbedTextResult | null> {
+        if (!text || text.trim().length === 0) {
             return null;
         }
 
-        const result = await embedding.EmbedText(params);
-        return result;
+        const bypassCache = options?.bypassCache ?? false;
+        const noCache = options?.noCache ?? false;
+        const cacheKey = this.buildEmbeddingCacheKey(model.ID, text);
+
+        if (!bypassCache && !noCache) {
+            const cached = this._embeddingCache.Get(cacheKey);
+            if (cached) {
+                return cached;
+            }
+        }
+
+        // Inference promise — installed in the cache *before* awaiting so concurrent
+        // callers can share it (avoids redundant CPU-bound ONNX inference under load).
+        const inferencePromise = (async (): Promise<EmbedTextResult | null> => {
+            const params: EmbedTextParams = {
+                text: text,
+                model: model.APIName
+            };
+
+            const embedding = MJGlobal.Instance.ClassFactory.CreateInstance<BaseEmbeddings>(
+                BaseEmbeddings,
+                model.DriverClass,
+                apiKey
+            );
+
+            if (!embedding) {
+                LogError(`AIEngine: Failed to create embedding instance for model ${model.Name}. Skipping embedding generation.`);
+                return null;
+            }
+
+            return await embedding.EmbedText(params);
+        })();
+
+        if (!noCache) {
+            this._embeddingCache.Set(cacheKey, inferencePromise);
+            // Evict failed/empty results so we don't trap a bad cached entry.
+            // Check-then-delete so we don't evict a newer entry that replaced
+            // ours (e.g. a later `bypassCache` caller overwrote the slot, or LRU
+            // rotated us out and a fresh inference took the key).
+            const evictIfStillOurs = () => {
+                if (this._embeddingCache.Get(cacheKey) === inferencePromise) {
+                    this._embeddingCache.Delete(cacheKey);
+                }
+            };
+            inferencePromise
+                .then(result => {
+                    if (!result || !result.vector || result.vector.length === 0) {
+                        evictIfStillOurs();
+                    }
+                })
+                .catch(evictIfStillOurs);
+        }
+
+        return await inferencePromise;
     }
 
     // ========================================================================

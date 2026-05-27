@@ -42,6 +42,12 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationRequest = new EventEmitter<NavigationRequest>();
   @Output() analyzeRequested = new EventEmitter<{ artifactId: string; snapshot: DataSnapshot }>();
+  /**
+   * "Apply to my form" — bubbled from the form-aware component-artifact-viewer
+   * branch. Carries the spec + entity. Consumer (chat message card, etc.)
+   * confirms and invokes the Create-or-Modify Interactive Form action.
+   */
+  @Output() applyFormRequested = new EventEmitter<{ spec: unknown; entityName: string }>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 

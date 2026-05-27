@@ -29,18 +29,18 @@
     "@angular/router": "21.1.3"
   },
   "dependencies": {
-    "@memberjunction/ng-ui-components": "5.37.0",
     "@angular/animations": "21.1.3",
     "@angular/cdk": "21.1.3",
     "@memberjunction/ai": "5.37.0",
     "@memberjunction/ai-agent-client": "5.37.0",
     "@memberjunction/ai-core-plus": "5.37.0",
     "@memberjunction/ai-engine-base": "5.37.0",
-    "@memberjunction/ng-agent-client": "5.37.0",
     "@memberjunction/core": "5.37.0",
     "@memberjunction/core-entities": "5.37.0",
     "@memberjunction/global": "5.37.0",
     "@memberjunction/graphql-dataprovider": "5.37.0",
+    "@memberjunction/interactive-component-types": "5.37.0",
+    "@memberjunction/ng-agent-client": "5.37.0",
     "@memberjunction/ng-artifacts": "5.37.0",
     "@memberjunction/ng-base-types": "5.37.0",
     "@memberjunction/ng-code-editor": "5.37.0",
@@ -52,6 +52,7 @@
     "@memberjunction/ng-shared-generic": "5.37.0",
     "@memberjunction/ng-tasks": "5.37.0",
     "@memberjunction/ng-testing": "5.37.0",
+    "@memberjunction/ng-ui-components": "5.37.0",
     "rxjs": "^7.8.2",
     "tslib": "^2.8.1"
   },

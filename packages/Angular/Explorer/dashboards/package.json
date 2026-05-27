@@ -131,6 +131,7 @@
     "@memberjunction/ng-markdown": "5.37.0",
     "@memberjunction/ng-notifications": "5.37.0",
     "@memberjunction/ng-query-viewer": "5.37.0",
+    "@memberjunction/ng-base-forms": "5.37.0",
     "@memberjunction/ng-react": "5.37.0",
     "@memberjunction/ng-resource-permissions": "5.37.0",
     "@memberjunction/ng-scheduling": "5.37.0",

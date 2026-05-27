@@ -457,6 +457,8 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     retryInstructions?: string;
     /** Sub-agent details when step is 'sub-agent' */
     subAgent?: AgentSubAgentRequest<TContext>;
+    /** Multiple sub-agents executing in parallel when step is 'sub-agent' */
+    subAgents?: AgentSubAgentRequest<TContext>[];
     /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
     /** Message to send to user when step is 'chat' */
@@ -660,7 +662,7 @@ export type NextStepDecision = {
 export type NextStepDetails <P = any> = 
     | { type: 'Prompt'; promptId: string; promptName: string; payload?: P }
     | { type: 'Actions'; actions: AgentAction[]; payload?: P }
-    | { type: 'Sub-Agent'; subAgent: AgentSubAgentRequest; payload?: P }
+    | { type: 'Sub-Agent'; subAgent?: AgentSubAgentRequest; subAgents?: AgentSubAgentRequest[]; payload?: P }
     | { type: 'Retry'; retryReason: string; retryInstructions: string; payload?: P }
     | { type: 'Chat'; message: string; payload?: P }
     | { type: 'Complete'; payload?: P };

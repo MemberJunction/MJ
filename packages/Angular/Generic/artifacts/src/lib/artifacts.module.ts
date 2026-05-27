@@ -11,6 +11,9 @@ import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { NgTreesModule } from '@memberjunction/ng-trees';
+// BaseFormsModule supplies `<mj-interactive-form>` for the form-aware
+// component-artifact viewer branch (componentRole === 'form').
+import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -84,6 +87,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     QueryViewerModule,
     SharedGenericModule,
     NgTreesModule,
+    BaseFormsModule,
     ComponentFeedbackPanelComponent,
     AgGridModule,
   ],
