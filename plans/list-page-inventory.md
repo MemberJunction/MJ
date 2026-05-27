@@ -1,6 +1,6 @@
 # MJ Explorer List-Page Inventory
 
-> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-okrs.md`](ui-consistency-okrs.md). The gameplan that uses this data is in [`list-page-consistency-gameplan.md`](list-page-consistency-gameplan.md).
+> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-objectives.md`](ui-consistency-objectives.md). The gameplan that uses this data is in [`list-page-consistency-gameplan.md`](list-page-consistency-gameplan.md).
 >
 > **Status: data artifact.** Generated 2026-05-22 via automated audit of `packages/Angular/**`. Source-of-truth for the list-page consistency program. Feeds directly into [`plans/list-page-standardization.md`](list-page-standardization.md).
 >

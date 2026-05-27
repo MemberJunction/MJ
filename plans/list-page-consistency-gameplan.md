@@ -1,6 +1,6 @@
 # List-Page Consistency Gameplan
 
-> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-okrs.md`](ui-consistency-okrs.md). This gameplan is the *playbook* for the list-page priority — the sequence and dependencies. KRs that draw from it are tracked in the OKR doc.
+> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-objectives.md`](ui-consistency-objectives.md). This gameplan is the *playbook* for the list-page priority — the sequence and dependencies. KRs that draw from it are tracked in the scorecard.
 >
 > **Status: gameplan draft.** Drafted 2026-05-22 after the list-page inventory audit. Anchored in empirical data from [`plans/list-page-inventory.md`](list-page-inventory.md). No dates, no execution — sequence + decisions + dependencies only.
 >

@@ -1,6 +1,6 @@
 # MJ Explorer UI Consistency — Program Catalog
 
-> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-okrs.md`](ui-consistency-okrs.md) (the master OKR doc). This catalog is the *backlog* — every component, layout pattern, CI gate, and visual-identity item that's known to need work, sized in person-days. Quarterly KRs are picked from here.
+> **Part of the UI consistency program.** Current commitments live in [`ui-consistency-objectives.md`](ui-consistency-objectives.md). This catalog is the *backlog* — every component, layout pattern, CI gate, and visual-identity item that's known to need work, sized in person-days. Objectives are picked from here.
 >
 > **Status: working catalog.** Drafted 2026-05-22 after supervisor agreement to restructure away from the original four-KR quarterly OKR.
 >
@@ -47,8 +47,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Standardized "nothing to show" display for empty lists, no-results states, and uninitialized sections.
-- **Replaces**: 102 inline empty-state patterns across 77 files.
-- **Baseline → Target**: 102 → 0 inline instances. Re-measured via grep for `class="empty-state"` / `class="no-data"` / `class="no-results"` / similar.
+- **Replaces**: 137+ inline empty-state patterns across 137+ files. (102 use `.empty-state` class; 35+ use `.no-data`, `.no-results`, or text-only patterns.)
+- **Baseline → Target**: 137+ → 0 inline instances. Re-measured via grep for `class="empty-state"` / `class="no-data"` / `class="no-results"` / similar.
 - **Contract**:
   - Selector: `mj-empty-state`
   - Inputs: `Icon` (FA class), `Title`, `Message`, `ActionText` (optional), `Variant` (`'empty' | 'no-results' | 'error'`)
@@ -63,11 +63,11 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Right-side slide-in panel for record detail. Closes the drawer-vs-modal UX inconsistency documented in chrome-conventions Section 11.
-- **Replaces**: 12 bespoke right-side detail panels.
-- **Baseline → Target**: 12 → 0 bespoke `.detail-panel-*` implementations. ~1,000+ lines of bespoke CSS to be deleted (worst single offender: agent-configuration at 470+ lines).
+- **Replaces**: 10 bespoke right-side detail panels.
+- **Baseline → Target**: 10 → 0 bespoke `.detail-panel-*` implementations. ~11,500 lines of bespoke CSS to be deleted (worst single offender: entity-form at 2,650 lines; agent-configuration at 1,003 lines).
 - **Contract**: Defined in `plans/explorer-chrome-conventions.md` Section 11. Selector `mj-detail-drawer`; built on CDK Overlay; focus-trap + scroll-lock + aria-modal.
-- **Effort**: ~9 days total (½ design + 2 build + 5 migrate-all + 1½ QA). Reference-pair subset (~4 days): ½ + 2 + 1 + ½.
-- **DoD**: Component shipped; all 12 panels migrated; displaced CSS deleted; ESC/backdrop dismiss tested; focus management verified; light/dark validated.
+- **Effort**: ~8 days total (½ design + 2 build + 4 migrate-all + 1½ QA). Reference-pair subset (~4 days): ½ + 2 + 1 + ½.
+- **DoD**: Component shipped; all 10 panels migrated; displaced CSS deleted; ESC/backdrop dismiss tested; focus management verified; light/dark validated.
 - **Risks**: agent-configuration has tabs inside the drawer with sticky footer + nested scrolling — needs prototyping. CDK Overlay interactions with Kendo/third-party widgets in some panels.
 - **Tier**: 1 (high-leverage, closes UX gap, deletes most CSS debt of any single item)
 
@@ -75,8 +75,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Standardized confirmation modal.
-- **Replaces**: 3 bespoke confirm-dialog implementations + inline confirm patterns scattered across custom forms.
-- **Baseline → Target**: 3 bespoke impls + ~8 inline confirm calls → 0 bespoke; all using canonical.
+- **Replaces**: 16+ confirm patterns — 3 bespoke confirm-dialog components + 5 `window.confirm()` calls + 8+ inline confirm modal patterns across custom forms.
+- **Baseline → Target**: 16+ patterns → 0 bespoke; all using canonical.
 - **Contract**:
   - Selector: `mj-confirm-dialog`
   - Inputs: `Visible` (two-way), `Title`, `Message`, `Type` (`'default' | 'danger'`), `ConfirmText`, `CancelText`
@@ -91,8 +91,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Unified status display (dot + label or pill) for active/pending/error/success/etc.
-- **Replaces**: 6+ bespoke status patterns — AI agent-configuration's status badges (~36 lines CSS), conversations message-status dots, archive-status indicators, scheduling activity status, action-execution status, integration status.
-- **Baseline → Target**: 6+ bespoke patterns → 0; single component with semantic status taxonomy.
+- **Replaces**: 14+ bespoke status implementations — 10 CSS-based patterns (`.status-badge`, `.status-dot`, `.status-pill`, `.status-indicator`, `.card-status-dot`, `.exec-status-badge`, `.lock-status-badge`, `.config-status-badge`, `.status-label`, plus inline variants) + 4 dedicated components (`test-status-badge`, `review-status-indicator`, `archive-status-badge`, `flow-status-bar`). Spans 30+ semantic color/state variants.
+- **Baseline → Target**: 14+ bespoke implementations → 0; single component with semantic status taxonomy.
 - **Contract**:
   - Selector: `mj-status-indicator`
   - Inputs: `Status` (`'active' | 'pending' | 'error' | 'success' | 'disabled' | 'running'`), `Label`, `Variant` (`'dot' | 'pill'`)
@@ -106,8 +106,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: General-purpose badge (separate from `<mj-stat-badge>` which stays for chrome counts).
-- **Replaces**: ~79 badge/pill instances across 5+ implementations — `mj-pill`, `mj-notification-badge`, inline `.status-badge` across 71 files (370 CSS declarations).
-- **Baseline → Target**: 79 instances + 370 CSS decls → 0 bespoke (≤30 legitimate one-off uses).
+- **Replaces**: 427+ badge/pill CSS class references across 75+ files and 14 dedicated badge/pill component files — `mj-pill`, `mj-notification-badge`, `archive-status-badge`, `test-status-badge`, `evaluation-badge`, `stat-badge`, inline `.status-badge`, and numerous domain-specific variants. ~300–350 CSS declarations.
+- **Baseline → Target**: 427+ instances + 300–350 CSS decls → 0 bespoke (≤30 legitimate one-off uses).
 - **Contract**:
   - Selector: `mj-badge`
   - Inputs: `Text`, `Type` (`'default' | 'success' | 'warning' | 'danger' | 'info'`), `Size` (`'sm' | 'md'`), `Variant` (`'solid' | 'subtle'`)
@@ -134,8 +134,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Generic collapsible section container (broader than the minimal `<mj-accordion-panel>`).
-- **Replaces**: 29+ files copying the bespoke `.section-header` + chevron + content + expand-animation pattern.
-- **Baseline → Target**: 29+ files → 0 bespoke; all using canonical or `<mj-accordion-panel>` where appropriate.
+- **Replaces**: 44+ files using `.section-header` class, with 72+ files implementing clickable chevron-toggle patterns.
+- **Baseline → Target**: 44+ files → 0 bespoke; all using canonical or `<mj-accordion-panel>` where appropriate.
 - **Contract**:
   - Selector: `mj-collapsible-section`
   - Inputs: `Title`, `Subtitle`, `Icon`, `Expanded` (two-way), `Disabled`
@@ -161,8 +161,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Standardized KPI / metric tile for dashboard "Overview" pages.
-- **Replaces**: Every "Overview" page reinventing `.stat-item` / `.stat-label` / `.stat-value` markup. ~10 dashboards.
-- **Baseline → Target**: ~10 bespoke stat-tile implementations → 0; all using canonical.
+- **Replaces**: 53+ components reinventing `.stat-item` / `.stat-label` / `.stat-value` / `.kpi-card` / `.metric-card` markup across dashboards (26), core-entity-forms (13), settings (4), generic packages (6), and shared components (4+).
+- **Baseline → Target**: 53+ bespoke stat-tile implementations → 0; all using canonical.
 - **Contract** (proposed; finalize in design step):
   - Selector: `mj-stat-tile`
   - Inputs: `Label`, `Value`, `Unit` (optional), `Icon` (optional), `Trend` (`'up' | 'down' | 'flat' | null`), `TrendValue`, `Variant` (`'default' | 'success' | 'warning' | 'danger'`)
@@ -176,8 +176,8 @@ These are components surfaced by the April 15 baseline audit and the May 21 wide
 
 - **Status**: Sized
 - **Purpose**: Layout primitive wrapping `.form-section > .form-field > label + input` so consumers don't copy markup.
-- **Replaces**: 29+ files manually constructing this markup.
-- **Baseline → Target**: 29+ files → 0 manual `.form-section` markup.
+- **Replaces**: 20 files manually constructing this markup.
+- **Baseline → Target**: 20 files → 0 manual `.form-section` markup.
 - **Contract**:
   - Selector: `mj-form-section`
   - Inputs: `Title`, `Description` (optional), `Layout` (`'single' | 'two-column'`)
@@ -258,35 +258,36 @@ Existing primitives with adoption gaps. Mostly Q1 work that didn't fully roll ou
 ### B1 — Button adoption push (`mjButton`)
 
 - **Status**: Sized
-- **Baseline (April 15)**: 24% adoption (~512 of ~2,152 buttons).
-- **Target**: ≥80% adoption.
-- **Effort**: ~5 days (migrating ~1,300+ buttons; mechanical but high volume).
-- **DoD**: ≥80% via re-measurement script; exceptions documented (icon-only buttons that legitimately don't need the directive).
+- **Baseline (verified May 2026)**: 20.75% adoption (~805 of ~3,878 buttons).
+- **Target**: 100% of in-scope buttons.
+- **Effort**: ~8 days (migrating ~3,000+ buttons; mechanical but very high volume).
+- **DoD**: 100% of in-scope via re-measurement script; exception list committed (icon-only mobile buttons, third-party-rendered buttons, etc.).
 - **Tier**: 1 (foundational; biggest raw count from April audit)
+- **Note**: 100% requires CI button-override gate in place (otherwise new code drifts).
 
 ### B2 — Switch adoption push (`<mj-switch>`)
 
 - **Status**: Sized
-- **Baseline**: 5% adoption (~5 of ~97).
-- **Target**: ≥80%.
+- **Baseline (verified May 2026)**: 5.47% adoption (~11 of ~201).
+- **Target**: 100% of in-scope.
 - **Effort**: ~3 days.
-- **DoD**: ≥80% via re-measurement.
+- **DoD**: 100% via re-measurement.
 - **Tier**: 2
 
 ### B3 — Loading adoption push (`<mj-loading>` vs `fa-spinner`)
 
 - **Status**: Sized
-- **Baseline**: 49% (~198 `mj-loading` vs ~205 `fa-spinner`).
-- **Target**: ≥80% (close to 100% — fa-spinner inline is almost always a regression).
+- **Baseline (verified May 2026)**: 40.18% (~221 `mj-loading` vs ~329 `fa-spinner` across .html + .ts files).
+- **Target**: 100% of in-scope.
 - **Effort**: ~3 days.
-- **DoD**: ≥80% via re-measurement; remaining `fa-spinner` instances documented as intentional.
+- **DoD**: 100% via re-measurement; remaining `fa-spinner` instances on the documented exception list (intentional uses only).
 - **Tier**: 1
 
 ### B4 — `.mj-input` styling adoption
 
 - **Status**: Sized
 - **Baseline**: 36% (~86 of ~238 text inputs).
-- **Target**: ≥80%.
+- **Target**: 100% of in-scope.
 - **Effort**: ~2 days.
 - **Tier**: 2
 
@@ -294,7 +295,7 @@ Existing primitives with adoption gaps. Mostly Q1 work that didn't fully roll ou
 
 - **Status**: Sized
 - **Baseline**: 38% (~32 of ~85).
-- **Target**: ≥80%.
+- **Target**: 100% of in-scope.
 - **Effort**: ~1 day.
 - **Tier**: 2
 
@@ -302,7 +303,7 @@ Existing primitives with adoption gaps. Mostly Q1 work that didn't fully roll ou
 
 - **Status**: Sized
 - **Baseline**: 17% (~27 of ~156).
-- **Target**: ≥80%.
+- **Target**: 100% of in-scope.
 - **Effort**: ~2 days.
 - **Tier**: 2
 
@@ -310,7 +311,7 @@ Existing primitives with adoption gaps. Mostly Q1 work that didn't fully roll ou
 
 - **Status**: Sized
 - **Baseline**: 50%.
-- **Target**: ≥80%.
+- **Target**: 100% of in-scope.
 - **Effort**: ~1 day.
 - **Tier**: 3
 
@@ -318,7 +319,7 @@ Existing primitives with adoption gaps. Mostly Q1 work that didn't fully roll ou
 
 - **Status**: Sized
 - **Baseline**: 58%.
-- **Target**: ≥80%.
+- **Target**: 100% of in-scope.
 - **Effort**: ~1 day.
 - **Tier**: 3
 
