@@ -7000,6 +7000,16 @@ The context is now within limits. Please retry your request with the recovered c
      * round-trip for environments without it. Returns the original value on
      * non-cloneable inputs.
      *
+     * **JSON fallback caveats** — the round-trip is *not* shape-preserving:
+     *   - `Date` → ISO string
+     *   - `Map`, `Set`, `RegExp`, typed arrays → `{}`
+     *   - `undefined` values and function-valued properties → dropped
+     *   - `BigInt` → throws (caught by the outer try/catch, returns original)
+     *   - circular refs → throws (returns original)
+     * If payloads ever carry those shapes, behavior diverges between the
+     * structuredClone path (Node 17+) and the JSON path. Keep sub-agent
+     * payloads to plain JSON-safe shapes to avoid this skew.
+     *
      * Exposed as `protected` so driver sub-classes performing their own parallel
      * dispatch get the same payload-isolation guarantee.
      *
@@ -7231,10 +7241,11 @@ The context is now within limits. Please retry your request with the recovered c
      *  4. Finalize each step entity with its own contribution recorded.
      *  5. Append an aggregated `user` summary message to the parent conversation.
      *
-     * Termination semantics: the parent terminates only if at least one
-     * **successful** sub-agent requested `terminateAfter: true`. A failing
-     * sub-agent's `terminateAfter` is ignored so the parent gets a chance to
-     * react/retry rather than aborting on a single failure.
+     * Termination semantics: matches the single sub-agent path — if any
+     * dispatched child requested `terminateAfter: true`, the parent terminates
+     * regardless of whether that child succeeded. The parent's reported step is
+     * `Failed` when any child failed, `Success` when terminating cleanly, and
+     * `Retry` otherwise.
      *
      * @private
      */
@@ -7421,13 +7432,15 @@ The context is now within limits. Please retry your request with the recovered c
             content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(allExecutions)}`
         });
 
-        // Termination semantics: only a SUCCESSFUL sub-agent can terminate the parent.
-        // Failing sub-agents fall through to Retry so the parent can react.
+        // Termination semantics: matches the single sub-agent path —
+        // `terminateAfter` triggers parent termination regardless of the child's
+        // success/failure. The parent's step reflects whether any child failed:
+        // Failed if any did, Success if terminating cleanly, otherwise Retry.
         const shouldTerminateParent = allExecutions.some(e =>
-            e.result.success && e.request.terminateAfter === true
+            e.request.terminateAfter === true
         );
         return {
-            step: anyFailure ? 'Retry' : (shouldTerminateParent ? 'Success' : 'Retry'),
+            step: anyFailure ? 'Failed' : (shouldTerminateParent ? 'Success' : 'Retry'),
             terminate: shouldTerminateParent,
             newPayload: mergedPayload,
             previousPayload: previousDecision.newPayload

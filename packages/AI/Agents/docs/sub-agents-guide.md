@@ -294,7 +294,7 @@ Loop agents can invoke multiple sub-agents concurrently (e.g., executing multipl
 7. **Unified Conversation Logging**: The parent conversation receives a single aggregated markdown log showing the delegation and results of all sub-agents that ran in parallel.
 
 ### Termination Semantics
-The parent agent terminates only when at least one **successful** sub-agent requested `terminateAfter: true`. A failing sub-agent's `terminateAfter` flag is **ignored** — the parent falls through to a `Retry` step so it has a chance to react to the failure rather than silently aborting on it.
+Matches the single sub-agent path — if any dispatched child requested `terminateAfter: true`, the parent terminates regardless of whether that child succeeded. The parent's step is reported as `Failed` when any child failed, `Success` when terminating cleanly, and `Retry` otherwise.
 
 ### Response JSON Structure
 ```json

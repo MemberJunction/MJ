@@ -56,8 +56,9 @@ interface LoopAgentResponse {
          * Multiple sub-agents to run IN PARALLEL (when type='Sub-Agent').
          * Use only when the sub-tasks are genuinely independent — their result
          * payloads are merged back into the parent sequentially in this array's
-         * order. `terminateAfter` is respected only on a sub-agent that
-         * succeeds; failures fall through to a Retry so you can react.
+         * order. If any sub-agent has `terminateAfter: true`, the parent
+         * terminates after the parallel batch regardless of that child's
+         * success — same semantics as a single `subAgent` call.
          */
         subAgents?: Array<{ name: string; message: string; terminateAfter: boolean }>;
         /** Message index to expand (when type='Retry' and expanding a compacted message) */

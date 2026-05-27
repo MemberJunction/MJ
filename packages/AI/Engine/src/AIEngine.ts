@@ -991,7 +991,9 @@ export class AIEngine extends BaseSingleton<AIEngine> {
      * (model, text) pair — the in-flight Promise is shared until it settles.
      *
      * @param options.bypassCache when true, skips the cache read but still populates it on success
-     * @param options.noCache    when true, neither reads nor writes the cache
+     * @param options.noCache    when true, neither reads nor writes the cache (also forfeits
+     *                            promise dedup — a `noCache` caller always re-infers, even if
+     *                            an equivalent inference is already in flight)
      *
      * Empty/whitespace `text` short-circuits to `null` without invoking the embedding provider.
      */
@@ -1041,13 +1043,21 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         if (!noCache) {
             this._embeddingCache.Set(cacheKey, inferencePromise);
             // Evict failed/empty results so we don't trap a bad cached entry.
+            // Check-then-delete so we don't evict a newer entry that replaced
+            // ours (e.g. a later `bypassCache` caller overwrote the slot, or LRU
+            // rotated us out and a fresh inference took the key).
+            const evictIfStillOurs = () => {
+                if (this._embeddingCache.Get(cacheKey) === inferencePromise) {
+                    this._embeddingCache.Delete(cacheKey);
+                }
+            };
             inferencePromise
                 .then(result => {
                     if (!result || !result.vector || result.vector.length === 0) {
-                        this._embeddingCache.Delete(cacheKey);
+                        evictIfStillOurs();
                     }
                 })
-                .catch(() => this._embeddingCache.Delete(cacheKey));
+                .catch(evictIfStillOurs);
         }
 
         return await inferencePromise;

@@ -356,7 +356,7 @@ Loop agents can request multiple sub-agents to run in parallel by returning a `s
 * **Payload isolation**: Each child sub-agent receives a deep-cloned copy of its input payload, so in-flight mutations by one sibling can't be observed by another.
 * **State Merging**: Aggregates all media/file outputs and sequentially merges child/related sub-agent payloads back into the parent state via the `PayloadManager` to avoid race conditions.
 * **Per-sibling audit trail**: Each parallel sub-agent's `AIAgentRunStep` records *its own* contribution as `PayloadAtEnd` rather than the cumulative merged state, so forensic logs distinguish each sibling.
-* **Termination semantics**: The parent terminates only if at least one **successful** sub-agent requested `terminateAfter: true`. A failing sub-agent's `terminateAfter` is ignored — the parent falls through to `Retry` so it can react.
+* **Termination semantics**: Matches the single sub-agent path — if any dispatched child requested `terminateAfter: true`, the parent terminates regardless of whether that child succeeded. The parent's step is reported as `Failed` when any child failed, `Success` when terminating cleanly, and `Retry` otherwise.
 * **Context Preservation**: Appends an aggregated delegation and completion log to the parent conversation context once all parallel steps complete.
 
 #### Loop Response Schema

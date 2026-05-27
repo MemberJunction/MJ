@@ -501,7 +501,7 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
             expect(assistantContents[1]).toContain('ChildAgent2');
         });
 
-        it('should NOT terminate the parent when only the failing sub-agent requested terminateAfter', async () => {
+        it('should terminate the parent with Failed step when a failing sub-agent requested terminateAfter', async () => {
             const params: ExecuteAgentParams<any> = {
                 agent: { ID: 'parent-agent-id', Name: 'ParentAgent' } as any,
                 contextUser: { ID: 'user-1' } as any,
@@ -534,10 +534,10 @@ describe('Parallel Sub-Agents and Save Queuing', () => {
 
             const result = await agent.testProcessSubAgentStep(params, previousDecision);
 
-            // The failing sub-agent's terminateAfter must be ignored.
-            // We saw at least one failure → step is Retry, terminate is false.
-            expect(result.terminate).toBe(false);
-            expect(result.step).toBe('Retry');
+            // Matches the single sub-agent path: terminateAfter triggers termination
+            // regardless of success. anyFailure → step='Failed'.
+            expect(result.terminate).toBe(true);
+            expect(result.step).toBe('Failed');
         });
 
         it('should terminate the parent when a successful sub-agent requested terminateAfter', async () => {
