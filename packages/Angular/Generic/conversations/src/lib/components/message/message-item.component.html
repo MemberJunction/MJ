@@ -123,17 +123,6 @@
           </div>
         }
 
-        <!-- Suggested Responses (shown only for last message by owner) -->
-        @if (isLastMessageInConversation && isConversationOwner && suggestedResponses.length > 0) {
-          <mj-suggested-responses
-            [suggestedResponses]="suggestedResponses"
-            [disabled]="isProcessing"
-            [isLastMessage]="isLastMessageInConversation"
-            [isConversationOwner]="isConversationOwner"
-            (responseSelected)="onSuggestedResponseSelected($event)">
-          </mj-suggested-responses>
-        }
-
         <!-- Agent Response Form (shown only for last message by owner) -->
         @if (isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form
