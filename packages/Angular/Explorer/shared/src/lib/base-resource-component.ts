@@ -65,6 +65,14 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this._resourceRecordSavedEvent = value;
     }
 
+    private _resourceCloseRequestedEvent: (() => void) | null = null;
+    public get ResourceCloseRequestedEvent(): (() => void) | null {
+        return this._resourceCloseRequestedEvent;
+    }
+    public set ResourceCloseRequestedEvent(value: (() => void) | null) {
+        this._resourceCloseRequestedEvent = value;
+    }
+
     private _displayNameChangedEvent: ((newName: string) => void) | null = null;
     public get DisplayNameChangedEvent(): ((newName: string) => void) | null {
         return this._displayNameChangedEvent;
@@ -230,6 +238,19 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToURLSegment();
         if (this._resourceRecordSavedEvent) {
             this._resourceRecordSavedEvent(resourceRecordEntity);
+        }
+    }
+
+    /**
+     * Ask the host shell to close/dismiss this resource (typically: close the tab).
+     * Called by subclasses that hosted a form that emitted a 'dismiss' navigation
+     * event — most often, a brand-new record where the user clicked Discard. The
+     * record was never saved, the form is empty, and leaving it open serves no
+     * purpose. The tab-container listens for this and closes the workspace tab.
+     */
+    protected NotifyCloseRequested(): void {
+        if (this._resourceCloseRequestedEvent) {
+            this._resourceCloseRequestedEvent();
         }
     }
 

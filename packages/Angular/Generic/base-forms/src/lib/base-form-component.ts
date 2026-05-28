@@ -374,6 +374,11 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   public CancelEdit() {
     if (this.record) {
       const r = <BaseEntity>this.record;
+      // Capture BEFORE any mutation — Revert() can clear the "new" flag on some
+      // entities. We need to know whether this record was ever persisted so we
+      // can tell the host to dismiss the form (there's nothing to view).
+      const wasNeverSaved = !r.IsSaved;
+
       if (r.Dirty || this.PendingRecordsDirty()) {
         // Revert is safe here — the toolbar's discard dialog already confirmed with the user
         r.Revert();
@@ -388,6 +393,15 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
         this.RaiseEvent(BaseFormComponentEventCodes.REVERT_PENDING_CHANGES);
       }
       this.EndEditMode();
+
+      // For never-saved records, ask the host to dismiss the form — leaving it
+      // in view mode shows an empty record (there IS no record) and any
+      // subsequent "Create New" click for the same entity would silently
+      // reuse this abandoned form. Hosts that don't have a meaningful close
+      // semantic can ignore this event.
+      if (wasNeverSaved) {
+        this.Navigate.emit({ Kind: 'dismiss', Reason: 'new-record-discarded' });
+      }
     }
   }
 

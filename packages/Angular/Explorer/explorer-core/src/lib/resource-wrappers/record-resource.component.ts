@@ -8,7 +8,7 @@ import { Metadata, CompositeKey, EntityInfo, IMetadataProvider } from '@memberju
   standalone: false,
     selector: 'mj-record-resource',
     styles: [`:host { display: block; height: 100%; width: 100%; }`],
-    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" ></mj-single-record>`
+    template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get PrimaryKey(): CompositeKey {
