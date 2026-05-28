@@ -7,7 +7,7 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
-import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase } from '../types/open-app-types.js';
+import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest } from '../manifest/manifest-loader.js';
 import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
@@ -838,7 +838,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
-  inherited: { AllowDoubleUnderscoreSchema?: boolean; Verbose?: boolean },
+  inherited: PassthroughInstallOptions,
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {

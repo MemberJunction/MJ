@@ -73,6 +73,21 @@ export interface InstallOptions {
 }
 
 /**
+ * Subset of {@link InstallOptions} forwarded from a top-level `mj app install`
+ * to its recursive dependency installs. Behavior/environment flags that should
+ * govern the entire install run (the parent app and every dependency it pulls
+ * in) belong here. App-identity options (`Source`, `Version`) stay per-app and
+ * are NOT passthrough — each dependency has its own source and resolves its
+ * own latest release.
+ *
+ * Expand by adding fields to the `Pick` list when a new behavior flag is added
+ * to {@link InstallOptions} and should also apply to dependency installs.
+ * Adding a field here is the single place to wire passthrough semantics; the
+ * orchestrator and any caller pick it up automatically.
+ */
+export type PassthroughInstallOptions = Pick<InstallOptions, 'AllowDoubleUnderscoreSchema' | 'Verbose'>;
+
+/**
  * Options for the upgrade command.
  */
 export interface UpgradeOptions {
