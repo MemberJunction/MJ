@@ -222,7 +222,12 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     }
 
     protected ResourceRecordSaved(resourceRecordEntity: BaseEntity) {
-        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToString();
+        // Use ToURLSegment, NOT ToString. ResourceRecordID is consumed by
+        // EntityRecordResource.GetPrimaryKey → CompositeKey.LoadFromURLSegment, which
+        // expects URL-segment format (e.g. "ID|<uuid>"). ToString produces "ID=<uuid>",
+        // which LoadFromURLSegment treats as a raw value and double-prefixes —
+        // breaking any code path that re-reads this field after save.
+        this.Data.ResourceRecordID = resourceRecordEntity.PrimaryKey.ToURLSegment();
         if (this._resourceRecordSavedEvent) {
             this._resourceRecordSavedEvent(resourceRecordEntity);
         }
