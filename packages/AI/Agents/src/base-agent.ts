@@ -454,7 +454,12 @@ export class BaseAgent {
      * This prevents context overflow when action results contain large base64 data (images, audio, video).
      *
      * Uses generic ValueType=MediaOutput detection from action metadata to identify media output params.
-     * Intercepted media is stored in _mediaOutputs with refId and persist=false (not saved unless used).
+     *
+     * Intercepted media is stored in `_mediaOutputs` with a generated `refId` and is **always
+     * persisted** by `AgentRunner` — all media outputs are saved to `AIAgentRunMedia` +
+     * `ConversationDetailAttachment` (which auto-pairs to an artifact via the server hook).
+     * The `${media:<refId>}` placeholder injected into the action result keeps the LLM's
+     * context window small; the LLM is told the media will be displayed automatically.
      *
      * @param actionParams - The output parameters from an action result
      * @param actionEntity - Optional action entity metadata for ValueType checking
@@ -496,11 +501,10 @@ export class BaseAgent {
                         // Generate unique reference ID
                         const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
 
-                        // Store in unified media outputs with persist=false (won't be saved unless placeholder is used)
+                        // Store in unified media outputs — always persisted by AgentRunner.
                         this._mediaOutputs.push({
                             ...media,
                             refId,
-                            persist: false  // Not persisted unless placeholder is resolved in final output
                         });
 
                         references.push(`\${media:${refId}}`);
@@ -516,7 +520,7 @@ export class BaseAgent {
                         Value: {
                             mediaReferences: references,
                             count: mediaItems.length,
-                            note: `${extractedCount} media item(s) extracted. Use placeholder syntax in your response: <img src="${references[0]}" alt="description" />`
+                            note: `${extractedCount} media item(s) extracted and will be displayed to the user automatically.`
                         }
                     });
                     this.logStatus(`📦 Extracted ${extractedCount} ${param.Name} item(s) to media references`, true);
@@ -531,14 +535,13 @@ export class BaseAgent {
                 if (isMediaOutputParam || base64Pattern.test(param.Value.substring(0, 1000))) {
                     const refId = `data-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
 
-                    // Store in unified media outputs with persist=false
+                    // Store in unified media outputs — always persisted by AgentRunner.
                     this._mediaOutputs.push({
                         modality: 'Image', // Default to image, could be enhanced with mime detection
                         mimeType: 'application/octet-stream',
                         data: param.Value,
                         label: `Media data from ${param.Name}`,
                         refId,
-                        persist: false
                     });
 
                     sanitizedParams.push({
@@ -559,43 +562,53 @@ export class BaseAgent {
     }
 
     /**
-     * Resolves media placeholders in a string.
-     * Replaces ${media:ref-id} with actual data URIs (data:mime;base64,...).
-     * Sets persist=true on resolved media so it will be saved to AIAgentRunMedia.
+     * Substitutes `${media:<refId>}` placeholders in a string with the actual
+     * data URI (`data:<mime>;base64,<bytes>`) of the matching intercepted media item.
+     *
+     * Used for payload / actionable-command resolution at the terminal step, where the
+     * LLM wants to embed image (or other media) data inline at a specific position in
+     * its structured output rather than as a trailing attachment card. The string
+     * variant of placeholder resolution; recursive walker lives in
+     * {@link resolveMediaPlaceholdersInPayload}.
+     *
+     * This function only does substitution — it has no persistence side effects.
      *
      * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to actual data URIs
+     * @returns String with placeholders resolved to actual data URIs (or the original
+     *          placeholder if the refId is unknown — defensive, shouldn't happen)
      * @private
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInString(text: string): string {
-        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        // Fast path: nothing to resolve if there are no intercepted media items.
         const hasRefIds = this._mediaOutputs.some(m => m.refId);
         if (!text || !hasRefIds) {
             return text;
         }
 
-        // Match ${media:ref-id} pattern
+        // Match ${media:ref-id} pattern (lowercase letters, digits, dashes only —
+        // matches the IDs generated by interceptLargeBinaryContent).
         const placeholderRegex = /\$\{media:([a-z0-9-]+)\}/g;
 
         return text.replace(placeholderRegex, (match, refId: string) => {
             const media = this._mediaOutputs.find(m => m.refId === refId);
             if (media?.data) {
-                // Mark for persistence since it's being used in final output
-                media.persist = true;
                 return `data:${media.mimeType};base64,${media.data}`;
             }
-            // Keep placeholder if not found (shouldn't happen in normal flow)
+            // Unknown refId — leave the placeholder in place rather than emit a broken
+            // data URI. Defensive; this branch should not fire in normal flow.
             this.logStatus(`⚠️ Media reference '${refId}' not found in registry`, true);
             return match;
         });
     }
 
     /**
-     * Resolves media placeholders in a payload of any type.
-     * - For strings: resolves placeholders directly
-     * - For objects: recursively processes all string properties
-     * - For arrays: recursively processes all elements
+     * Resolves `${media:<refId>}` placeholders anywhere inside an arbitrary payload.
+     *   - Strings: resolves placeholders directly
+     *   - Objects: recursively processes every string property
+     *   - Arrays:  recursively processes every element
+     *
+     * Pure resolution — no persistence side effects.
      *
      * @param payload - The payload that may contain media placeholders in string values
      * @returns Payload with all placeholders resolved to actual data URIs
@@ -603,24 +616,12 @@ export class BaseAgent {
      * @since 3.1.0
      */
     private resolveMediaPlaceholdersInPayload<T>(payload: T): T {
-        // Check if any media has a refId (meaning we have intercepted media to resolve)
+        // Fast path: nothing to resolve if no intercepted media exists.
         const hasRefIds = this._mediaOutputs.some(m => m.refId);
         if (!hasRefIds) {
             return payload;
         }
-
-        // Count how many media items have persist=false before resolution
-        const unpersisted = this._mediaOutputs.filter(m => m.refId && m.persist === false).length;
-        const resolved = this.resolveMediaPlaceholdersRecursive(payload);
-        // Count how many were marked for persistence (persist changed from false to true)
-        const persistedAfter = this._mediaOutputs.filter(m => m.refId && m.persist === true).length;
-        const resolvedCount = persistedAfter - (unpersisted - this._mediaOutputs.filter(m => m.refId && m.persist === false).length);
-
-        if (resolvedCount > 0) {
-            this.logStatus(`✅ Resolved ${resolvedCount} media placeholder(s) in final payload`, true);
-        }
-
-        return resolved;
+        return this.resolveMediaPlaceholdersRecursive(payload);
     }
 
     /**
@@ -653,61 +654,6 @@ export class BaseAgent {
 
         // Return primitives (numbers, booleans) as-is
         return value;
-    }
-
-    /**
-     * Processes media placeholders in agent messages for conversational agents.
-     *
-     * Unlike artifact-based agents (which embed images in HTML payload), conversational agents
-     * should display images via ConversationDetailAttachment. This method:
-     * 1. Detects ${media:xxx} placeholders in the message
-     * 2. Sets persist=true on referenced media (triggers save to AIAgentRunMedia)
-     * 3. Strips media HTML tags from the message (images display via attachment instead)
-     *
-     * @param message - The message that may contain media placeholders
-     * @returns Cleaned message with media tags stripped
-     * @private
-     * @since 3.1.0
-     */
-    private processMessageMediaPlaceholders(message: string): string {
-        if (!message) {
-            return message;
-        }
-
-        // Check if any media has a refId (meaning we have intercepted media)
-        const hasRefIds = this._mediaOutputs.some(m => m.refId);
-        if (!hasRefIds) {
-            return message;
-        }
-
-        // Find all ${media:xxx} placeholders and mark referenced media for persistence
-        const placeholderRegex = /\$\{media:([a-zA-Z0-9_-]+)\}/g;
-        let match;
-        let promotedCount = 0;
-
-        while ((match = placeholderRegex.exec(message)) !== null) {
-            const refId = match[1];
-            const media = this._mediaOutputs.find(m => m.refId === refId);
-            if (media && media.persist !== true) {
-                media.persist = true;  // Triggers save to AIAgentRunMedia
-                promotedCount++;
-            }
-        }
-
-        if (promotedCount > 0) {
-            this.logStatus(`📎 Auto-promoted ${promotedCount} media output(s) from message placeholders`, true);
-        }
-
-        // Strip <img>, <audio>, <video> tags containing media placeholders
-        // The media will display via ConversationDetailAttachment instead
-        let cleanedMessage = message
-            .replace(/<img[^>]*src=["']\$\{media:[^}]+\}["'][^>]*\/?>/gi, '')
-            .replace(/<audio[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/audio>/gi, '')
-            .replace(/<video[^>]*src=["']\$\{media:[^}]+\}["'][^>]*>.*?<\/video>/gi, '')
-            .replace(/\n\s*\n\s*\n/g, '\n\n')  // Clean up excessive newlines
-            .trim();
-
-        return cleanedMessage;
     }
 
     /**
@@ -9885,13 +9831,6 @@ The context is now within limits. Please retry your request with the recovered c
             ? this.resolveMediaPlaceholdersInPayload(finalStep.actionableCommands)
             : finalStep.actionableCommands;
 
-        // For root agents: process message for media placeholders
-        // This promotes referenced media (sets persist=true) and strips media HTML tags
-        // so images display via ConversationDetailAttachment instead of embedded in message
-        const processedMessage = (finalStep.message && isRootAgent)
-            ? this.processMessageMediaPlaceholders(finalStep.message)
-            : finalStep.message;
-
         if (this._agentRun) {
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
@@ -9917,7 +9856,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             this._agentRun.Result = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
             this._agentRun.FinalStep = finalStep.step;
-            this._agentRun.Message = processedMessage;
+            this._agentRun.Message = finalStep.message;
 
             // Set the FinalPayloadObject - this will automatically stringify for the DB
             this._agentRun.FinalPayloadObject = resolvedPayload;
@@ -9941,10 +9880,8 @@ The context is now within limits. Please retry your request with the recovered c
             this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
         }
 
-        // Return unified media outputs array which includes:
-        // - Explicitly promoted media (persist defaults to true)
-        // - Intercepted binary with refIds (persist=false unless placeholder was resolved)
-        // Sub-agents pass their full mediaOutputs to parent for merging and placeholder resolution.
+        // Return unified media outputs — all items are persisted by AgentRunner.
+        // Sub-agents pass their mediaOutputs to parent for merging and placeholder resolution.
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload: resolvedPayload,
