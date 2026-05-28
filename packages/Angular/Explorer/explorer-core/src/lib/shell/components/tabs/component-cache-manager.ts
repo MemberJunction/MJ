@@ -179,6 +179,45 @@ export class ComponentCacheManager {
   }
 
   /**
+   * Re-key a cached component when its underlying record identity changes.
+   *
+   * Used when a "new record" component (cached at `recordId = ''`) becomes a saved record
+   * (now identified by its new PK). Without re-keying, the next "new record" request would
+   * still resolve to this same cache entry, surfacing the previously-saved record on a form
+   * the user expects to be blank.
+   *
+   * Preserves the live component instance — only the cache key + stored identity change.
+   * Returns true if a matching entry was found and re-keyed, false otherwise.
+   */
+  rekeyComponent(
+    resourceType: string,
+    oldRecordId: string,
+    newRecordId: string,
+    appId: string
+  ): boolean {
+    const oldKey = this.getCacheKey(resourceType, oldRecordId, appId);
+    const info = this.cache.get(oldKey);
+    if (!info) {
+      return false;
+    }
+
+    const newKey = this.getCacheKey(resourceType, newRecordId, appId);
+    if (oldKey === newKey) {
+      return false;
+    }
+
+    info.resourceRecordId = newRecordId;
+    info.lastUsed = new Date();
+    if (info.resourceData) {
+      info.resourceData.ResourceRecordID = newRecordId;
+    }
+
+    this.cache.delete(oldKey);
+    this.cache.set(newKey, info);
+    return true;
+  }
+
+  /**
    * Find a cached component by tab ID and detach it.
    * This is a convenience wrapper for callers that only know the tab ID
    * (e.g., Golden Layout tab close events). It resolves the tab ID to

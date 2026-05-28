@@ -404,13 +404,14 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (10 classes)
+// @memberjunction/ng-artifacts (11 classes)
 import {
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
@@ -959,6 +960,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
@@ -1107,7 +1109,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 512;
+export const CLASS_REGISTRATIONS_COUNT = 513;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
