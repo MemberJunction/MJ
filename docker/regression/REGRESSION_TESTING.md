@@ -166,13 +166,15 @@ The regression runner has no built-in knowledge of MemberJunction. You can point
 2. **Tests + a suite** authored as MJ metadata JSON files.
 3. **(Optional) Custom oracles** plugged in via `--oracles-module`.
 
-A complete worked example lives at [`docker/regression/examples/generic-web/`](examples/generic-web/) — 3 tests against MDN Web Docs plus a custom IOracle. The fastest way to start is to copy that directory:
+A complete worked example ships as the `generic-web` template inside the CLI — 3 tests against MDN Web Docs plus a custom IOracle. Scaffold it into your working directory, adapt, and run:
 
 ```bash
-cp -R docker/regression/examples/generic-web docker/regression/examples/my-app
-# edit my-app/target.json, the test JSONs, and oracles/*.cjs
-mj test regression remote --target=docker/regression/examples/my-app/target.json
+mj test regression init generic-web        # → ./generic-web/
+# edit ./generic-web/target.json, the test JSONs under metadata/tests/, and oracles/*.cjs
+mj test regression remote --target=./generic-web/target.json
 ```
+
+Run `mj test regression init --list` to see every available template.
 
 ### Authoring tests
 
@@ -207,7 +209,7 @@ Or via the target profile so `mj test regression remote` picks it up:
 {
   "name": "my-app",
   "kind": "generic-web",
-  "oraclesModule": "/app/docker/regression/examples/my-app/oracles/my-oracles.cjs",
+  "oraclesModule": "./my-app/oracles/my-oracles.cjs",
   // … rest of the profile
 }
 ```
@@ -255,7 +257,7 @@ The loader (`packages/TestingFramework/CLI/src/utils/oracle-module-loader.ts`) d
 }
 ```
 
-See [`docker/regression/examples/generic-web/oracles/mdn-oracles.cjs`](examples/generic-web/oracles/mdn-oracles.cjs) for two working examples.
+See the `mdn-oracles.cjs` shipped in the `generic-web` template (`mj test regression init generic-web`) for two working examples.
 
 ## Bringing Your Own App (Mode D — `--overlay`)
 
@@ -264,19 +266,20 @@ Mode D lets you boot your app **inside the regression compose network** alongsid
 The flow combines a **target profile** (points at the in-network hostname) with a **docker-compose overlay** (defines the app service):
 
 ```bash
+mj test regression init static-file-server                  # scaffold the template
 mj test regression remote \
-    --target=docker/regression/examples/static-file-server/target.json \
-    --overlay=docker/regression/examples/static-file-server/docker-compose.app.yml
+    --target=./static-file-server/target.json \
+    --overlay=./static-file-server/docker-compose.app.yml
 ```
 
 `--overlay` can be passed multiple times to layer overlays (compose merges in declaration order — later overlays override earlier ones).
 
-### Two reference examples
+### Two reference templates
 
-| Example | What it shows |
+| Template | What it shows |
 |---|---|
-| [`examples/static-file-server/`](examples/static-file-server/) | The minimal overlay pattern. `nginx:alpine` serving two static pages, 2 tests, no auth. Use this as your copy-and-edit starting point. |
-| [`examples/bring-your-own-app/`](examples/bring-your-own-app/) | A realistic Angular + Express app with **planted bugs** (broken counter, no-op submit handler). Includes archive flow and more elaborate test JSONs. Use this when authoring tests for a real app and you want to see how to catch UI defects. |
+| `static-file-server` (via `mj test regression init static-file-server`) | The minimal overlay pattern. `nginx:alpine` serving two static pages, 2 tests, no auth. Use this as your copy-and-edit starting point. |
+| `bring-your-own-app` (via `mj test regression init bring-your-own-app`) | Mode D scaffold — target profile + compose overlay template + suite metadata. Adapt the overlay's `byo-app` service to bring up YOUR app (the template does not ship a demo app — you bring one). |
 
 ### What an overlay must do
 
@@ -297,13 +300,13 @@ At a minimum, your `docker-compose.app.yml` overlay needs:
    services:
      test-runner:
        volumes:
-         - ./examples/my-app/metadata:/app/my-app-metadata   # NOT :ro
+         - ./my-app/metadata:/app/my-app-metadata   # NOT :ro
    ```
    Reference the in-container path from your target profile's `extraMetadataDirs`. Volume **must be RW** — `mj sync push` writes `primaryKey`/`sync` state back into the JSON files.
 
 ### Path-resolution gotcha
 
-Compose resolves relative paths in overlays against the directory of the **first** `-f` file (the base regression compose at `docker/regression/`), **not** the overlay's own location. That's why overlays under `examples/` reference paths like `examples/my-app/...` instead of `./...`. Get this wrong and `build:` or `volumes:` will fail with file-not-found.
+Compose resolves relative paths in overlays against the directory of the **first** `-f` file (the base regression compose at `docker/regression/`), **not** the overlay's own location. So an overlay scaffolded into `./my-app/` references its app source as `./my-app/...` (relative to the repo root, where the base compose is anchored), **not** as `./...`. Get this wrong and `build:` or `volumes:` will fail with file-not-found.
 
 ### Where results land
 
@@ -414,7 +417,7 @@ The image is published by the same workflow that publishes `memberjunction/api` 
 
 ### CI integration
 
-Drop [`examples/github-actions/regression.yml`](examples/github-actions/regression.yml) into your repo's `.github/workflows/` directory and configure the required secrets (`AI_VENDOR_API_KEY__GeminiLLM`, `DB_*`, and any auth env: refs your target uses, e.g. `STAGING_TEST_USER`/`STAGING_TEST_PASSWORD`). The workflow runs nightly + on dispatch, runs `docker run … run --target`, and uploads `test-results/` as an artifact.
+Scaffold the workflow into your project with `mj test regression init github-actions` (drops a starter `regression.yml` into `./github-actions/`), then move it into your repo's `.github/workflows/` directory and configure the required secrets (`AI_VENDOR_API_KEY__GeminiLLM`, `DB_*`, and any auth env: refs your target uses, e.g. `STAGING_TEST_USER`/`STAGING_TEST_PASSWORD`). The workflow runs nightly + on dispatch, runs `docker run … run --target`, and uploads `test-results/` as an artifact.
 
 ### What gets baked into the image
 
@@ -424,7 +427,7 @@ The published runner is **self-contained** — every dependency the suite needs 
 - **Computer Use engine + MJ test driver** (the LLM-driven controller/judge)
 - **MJ CLI** (`npx mj` works inside the container)
 - **TestingFramework** (oracle registry, suite runner, variable substitution)
-- **All example scaffolds** under `/app/examples/` (extractable via `init`)
+- (Mode templates for `mj test regression init <name>` ship with `@memberjunction/cli`, not with the image — install the CLI to scaffold them.)
 - **The regression scripts** under `/app/docker/regression/scripts/` — target-profile loader, report/screenshot generators, bacpac importer (`import-bacpac.cjs`), shared `lib/db.cjs`
 - **SqlPackage** (amd64 build) for the `import-bacpac` path
 - **Dispatcher entrypoint** routing `run [--target] | import-bacpac | export | init | exec`

@@ -1,10 +1,7 @@
 #!/bin/bash
 # Entrypoint dispatcher for `memberjunction/agentic-test-runner`.
 #
-# Supports three subcommands:
-#   init <example-name>      Copy an example directory from /app/examples/ to /out/
-#                            (the caller's bind-mounted cwd). Used by
-#                            `mj test regression init` and direct docker invocations.
+# Supports these subcommands:
 #   run [--target <file>]    Run the test suite. With --target, loads a target
 #                            profile (load-target-profile.cjs) → MJ_TEST_VAR_*/
 #                            TEST_SUITE_NAME/EXTRA_METADATA_DIRS/ORACLES_MODULE.
@@ -17,6 +14,10 @@
 #                            `docker run … exec npx mj test list`.
 #   help                     Print this help.
 #
+# Scaffolding mode templates (the former `init` subcommand) has moved to the
+# CLI: `npm i -g @memberjunction/cli && mj test regression init <template>`.
+# Templates ship inside the published CLI package — no Docker run required.
+#
 # The MJ-specific full-stack flow uses docker/regression/test-runner-entrypoint.sh
 # instead of this dispatcher — that script is mounted by the regression compose
 # and overrides ENTRYPOINT. This dispatcher is the entry point for everyone else.
@@ -27,13 +28,11 @@ shift || true
 
 case "$SUBCMD" in
     init)
-        if [ -z "${1:-}" ]; then
-            echo "✗ usage: init <example-name>" >&2
-            echo "  available examples:" >&2
-            ls -1 /app/examples/ 2>/dev/null | sed 's/^/    /' >&2
-            exit 1
-        fi
-        exec /usr/local/bin/agentic-test-runner-init "$@"
+        echo "✗ The 'init' subcommand has moved to the MJ CLI." >&2
+        echo "  Install once: npm i -g @memberjunction/cli" >&2
+        echo "  Then run:     mj test regression init <template>" >&2
+        echo "                mj test regression init --list" >&2
+        exit 2
         ;;
 
     run)

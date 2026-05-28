@@ -27,7 +27,7 @@ see [`LIMITATIONS.md`](LIMITATIONS.md).
 12. [Browser Context Isolation](#12-browser-context-isolation)
 13. [Archive Flow](#13-archive-flow)
 14. [CLI Surface](#14-cli-surface)
-15. [Examples Directory](#15-examples-directory)
+15. [Init Templates](#15-init-templates)
 16. [File Inventory](#16-file-inventory)
 17. [Diagnostic Outputs](#17-diagnostic-outputs)
 18. [Extension Points](#18-extension-points)
@@ -149,8 +149,8 @@ direction:
   │   • Playwright + Chromium                                │
   │   • Full monorepo `dist/` (mj CLI, TestingFramework,     │
   │     Computer Use, ComputerUseTestDriver, oracles, ...)   │
-  │   • Dispatcher entrypoint (init | run | exec | help)     │
-  │   • Bundled example scaffolds under /app/examples/       │
+  │   • Dispatcher entrypoint (run | import-bacpac | export) │
+  │   • (init templates ship with @memberjunction/cli)       │
   │   • No MJ-specific config or socat shim                  │
   └──────────────────────────────────────────────────────────┘
                               │  consumed by
@@ -187,9 +187,7 @@ direction:
 | `mj` CLI on `$PATH` (via `npx`) | Entry point for `mj test suite`, `mj test compare`, `mj sync` |
 | `bootstrap.mjs` | One-line `import '@memberjunction/computer-use-engine'` so `@RegisterClass(BaseTestDriver, 'ComputerUseTestDriver')` fires before the CLI runs |
 | `mj.config.cjs` | Default config copied from [`docker/MJAPI/docker.config.cjs`](../MJAPI/docker.config.cjs); can be overridden by mount |
-| `examples/` | The five bundled scaffolds (`remote-mj`, `generic-web`, `static-file-server`, `bring-your-own-app`, `github-actions`) |
-| `/usr/local/bin/agentic-test-runner` | Dispatcher script (entrypoint) |
-| `/usr/local/bin/agentic-test-runner-init` | Init script invoked by the dispatcher |
+| `/usr/local/bin/agentic-test-runner` | Dispatcher script (entrypoint) — supports `run`, `import-bacpac`, `export`, `exec`, `help` |
 
 ---
 
@@ -294,7 +292,6 @@ definition serve both Mode A (waits for MJExplorer) and Modes B/C/D
   - `./scripts:/app/docker/regression/scripts:ro` — `.cjs` helpers
   - `./archive:/app/docker/regression/archive:ro` — archive entity-cascade configs
   - `./targets:/app/docker/regression/targets:ro` — target profiles
-  - `./examples:/app/docker/regression/examples` (RW — mj-sync writes back primaryKey/sync)
   - `../../metadata:/app/metadata` (RW)
   - `./test-metadata:/app/test-metadata:ro` — Docker-only test user/tags
 - **Shared memory:** `shm_size: 4gb` (Chromium tab stability)
@@ -310,7 +307,7 @@ definition serve both Mode A (waits for MJExplorer) and Modes B/C/D
 
 ### byo-app (Mode D overlay-supplied)
 
-- **Defined by:** the user's overlay (e.g. [`examples/bring-your-own-app/docker-compose.app.yml`](examples/bring-your-own-app/docker-compose.app.yml))
+- **Defined by:** the user's overlay (scaffold one via `mj test regression init bring-your-own-app` for a Mode D template)
 - **Profile:** `full` (joins the `--profile full` startup)
 - **Added by overlay** to the existing compose project; not present in the base
 - **Conventional service name:** anything — the runner reaches it via the name set in the target profile's `baseUrl`
@@ -592,11 +589,11 @@ shorthand for the full file path.
 |---|---|
 | [`targets/staging-mj.example.target.json`](targets/staging-mj.example.target.json) | Mode B example — points at a fictitious staging MJ deployment with auth via `env:` refs |
 | [`targets/generic-web.example.target.json`](targets/generic-web.example.target.json) | Mode C example — no auth, custom variables block |
-| [`targets/byo-app.target.json`](targets/byo-app.target.json) | Mode D — paired with `examples/bring-your-own-app/docker-compose.app.yml` |
+| [`targets/byo-app.target.json`](targets/byo-app.target.json) | Mode D — paired with the overlay scaffolded by `mj test regression init bring-your-own-app` |
 
 `.example.target.json` files are committed scaffolds — copy them to
 `<name>.target.json` (gitignored) and edit. The `.gitignore` in `targets/`
-allows checked-in examples + the BYO one through.
+allows the checked-in `*.example.target.json` files + `byo-app.target.json` through.
 
 ---
 
@@ -731,7 +728,7 @@ module.exports = { FinalUrlHostOracle, myOracle };
 ```
 
 Reference implementation at
-[`docker/regression/examples/generic-web/oracles/mdn-oracles.cjs`](examples/generic-web/oracles/mdn-oracles.cjs).
+`generic-web/oracles/mdn-oracles.cjs` (scaffold it via `mj test regression init generic-web`).
 
 ### Registration order + override
 
@@ -993,12 +990,12 @@ with shared helpers in
 | `mj test regression compare [--tag] [--diff-only] …` | Diff the two most recent runs | `mj test compare --from-json <dir>` (or DB mode with `--tag`) |
 | `mj test regression export [--run=<X>]` | Export a run as a portable standalone HTML (screenshots inlined) | `node scripts/inline-report.cjs <run-dir>` |
 | `mj test regression remote --target=<X> [--overlay=Y] …` | Run against a remote URL (Mode B/C/D) | Loads target via loader, sets env, runs compose |
-| `mj test regression init <name> [--list] [--force-docker] [--image=Y]` | Scaffold an example into cwd | Local copy if inside monorepo, `docker run … init <name>` otherwise |
+| `mj test regression init <name> [--list]` | Scaffold a mode template into cwd | Copies from `init-templates/` bundled inside the CLI |
 
 ### Guards + ergonomics
 
 - **`requireMonorepoRoot()`** — every subcommand except `init` calls this at startup. Exits 1 with a helpful message if `docker/regression/docker-compose.test.yml` doesn't exist in cwd. (Until Phase 8's image is published, this is unavoidable; afterward we can lift it.)
-- **`findMonorepoExamplesDir()`** — `init` uses this instead, walking up from cwd looking for `docker/regression/examples/`. If found, copies the example locally; otherwise shells out to `docker run`.
+- **`isInsideMonorepo()`** — soft check used by `compare`, `up`, `export`, `remote` to choose between monorepo-relative paths and external/published-image paths. Walks up from cwd looking for `docker/regression/docker-compose.test.yml`. `init` does NOT use it — templates ship inside the CLI package so init works the same in monorepo and external installs.
 - **`envFileExists()`** — gracefully omits `--env-file` from compose args when `.env.test` is missing.
 - **`resolveTargetPath()`** — handles bare names (`byo-app`), paths (`./my.target.json`), or absolute paths uniformly.
 
@@ -1042,31 +1039,38 @@ mj test regression remote --target=byo-app --overlay=foo.yml
 
 ---
 
-## 15. Examples Directory
+## 15. Init Templates
 
-Bundled scaffolds at [`docker/regression/examples/`](examples/) — five
-directories that each illustrate one adoption pattern.
+Bundled scaffold templates live inside the published CLI at
+[`packages/MJCLI/src/init-templates/`](../../packages/MJCLI/src/init-templates/) — five
+directories that each illustrate one adoption pattern. The CLI's `init`
+command resolves them via `__dirname` relative to the compiled
+`init.js`, so they ship with `@memberjunction/cli` for both monorepo
+and `npm i -g` users.
 
-| Directory | Mode | Components | When to use |
+| Template | Mode | Components | When to use |
 |---|---|---|---|
-| [`remote-mj/`](examples/remote-mj/) | B | target.json + README only | Drive the canonical MJ Explorer regression suite against a deployed MJ instance (staging / customer / production) |
-| [`generic-web/`](examples/generic-web/) | C | target.json + 3 tests (MDN) + custom oracle (`mdn-oracles.cjs`) + README | Test any non-MJ web app; demonstrates `{{baseUrl}}` substitution + custom IOracle plugin |
-| [`static-file-server/`](examples/static-file-server/) | D (minimal) | Dockerfile + 2 HTML pages + overlay + 2 tests + README | Smallest possible Mode D — nginx serving static files, no language/framework deps |
-| [`bring-your-own-app/`](examples/bring-your-own-app/) | D (realistic) | Angular + Express demo with **planted bugs** + overlay + 2 tests + archive flow + README | Realistic Mode D — shows test JSON shape, overlay pattern, archive integration. Tests intentionally fail to demonstrate defect-catching. |
-| [`github-actions/`](examples/github-actions/) | CI integration | Copy-paste workflow YAML + README | Drop into your repo's `.github/workflows/` to run the runner in CI |
+| `remote-mj` | B | target.json + README only | Drive the canonical MJ Explorer regression suite against a deployed MJ instance (staging / customer / production) |
+| `generic-web` | C | target.json + 3 tests (MDN) + custom oracle (`mdn-oracles.cjs`) + README | Test any non-MJ web app; demonstrates `{{baseUrl}}` substitution + custom IOracle plugin |
+| `static-file-server` | D (minimal) | Dockerfile + 2 HTML pages + overlay + 2 tests + README | Smallest possible Mode D — nginx serving static files, no language/framework deps |
+| `bring-your-own-app` | D (scaffold) | target.json + compose overlay template + 2 example tests + suite + README | Mode D scaffold — adapt the overlay's `byo-app` service to YOUR app. The template does **not** ship a demo app. |
+| `github-actions` | CI integration | Copy-paste workflow YAML + README | Drop into your repo's `.github/workflows/` to run the runner in CI |
 
-### Where the examples are baked in
+### How they get shipped
 
-When the `agentic-test-runner` image is built, all of `docker/regression/examples/`
-is COPYed to `/app/examples/` in the image. The bundled `init` subcommand
-extracts a named example to `/out` (the user's bind-mounted cwd):
+The templates live in the CLI source tree at
+`packages/MJCLI/src/init-templates/`.
+[`scripts/copy-regression-assets.mjs`](../../packages/MJCLI/scripts/copy-regression-assets.mjs)
+runs at build time (`npm run build`) and `cpSync`s the templates into
+`dist/commands/test/regression/init-templates/` alongside the compiled
+`init.js`. The published npm tarball's `files` array includes `/dist`,
+so the templates ship with every install. There is no separate
+`docker/regression/examples/` directory anymore.
 
 ```bash
-docker run --rm -v $(pwd):/out memberjunction/agentic-test-runner init generic-web
+mj test regression init --list                # show available templates
+mj test regression init generic-web           # scaffold ./generic-web/
 ```
-
-`mj test regression init` provides the same experience locally (copy from
-host) or via `docker run` (when invoked outside the monorepo).
 
 ---
 
@@ -1134,17 +1138,18 @@ host) or via `docker run` (when invoked outside the monorepo).
 
 Kept separate from `metadata/` so it never gets pushed to a developer's local DB.
 
-### `docker/regression/examples/`
+### Init templates (no longer in `docker/regression/`)
 
-See §15 above.
+Mode scaffold templates have moved into the published CLI at
+[`packages/MJCLI/src/init-templates/`](../../packages/MJCLI/src/init-templates/).
+See §15 above for the list of bundled templates and how they ship.
 
 ### `docker/agentic-test-runner/`
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Generic published image — Playwright + monorepo + dispatcher + examples |
-| `dispatcher.sh` | Entrypoint script — routes `init|run|exec|help` subcommands |
-| `init.sh` | Implements `init <name>` — copies an example from `/app/examples/` to `/out` |
+| `Dockerfile` | Generic published image — Playwright + monorepo + dispatcher (no scaffold templates; those ship with `@memberjunction/cli`) |
+| `dispatcher.sh` | Entrypoint script — routes `run|import-bacpac|export|exec|help` subcommands. `init` was retired here; use the MJ CLI instead. |
 
 ---
 
@@ -1212,15 +1217,15 @@ OR score dropped by more than 0.10. "Improvement" is the inverse.
 2. Add a new CLI subcommand in `packages/MJCLI/src/commands/test/regression/` if the profile needs a user-facing entry point.
 3. Document in `REGRESSION_TESTING.md` and (if new mode) in §2 of this file.
 
-### Add a new example scaffold
+### Add a new init template
 
-1. Create `docker/regression/examples/<name>/` with at minimum a `target.json` and a `README.md`.
-2. (If Mode D) include `docker-compose.app.yml` + the app's Dockerfile.
+1. Create `packages/MJCLI/src/init-templates/<name>/` with at minimum a `target.json` and a `README.md`.
+2. (If Mode D) include `docker-compose.app.yml` (template form — point `byo-app` at a user-supplied image/build) and any starter metadata.
 3. (If using custom oracles) include `oracles/<name>-oracles.cjs`.
-4. (If shipping tests) include `metadata/{tests,test-suites}/` mirroring the canonical layout.
-5. Add a row to `docker/regression/examples/README.md`.
-6. Add a row to §15 of this file.
-7. The next image build will bake it into `/app/examples/`, and `init` will be able to extract it.
+4. (If shipping starter tests) include `<name>-metadata/{tests,test-suites}/` mirroring the canonical layout.
+5. Add a row to §15 of this file.
+6. Rebuild MJCLI (`cd packages/MJCLI && npm run build`) — `scripts/copy-regression-assets.mjs` will copy the new template into `dist/commands/test/regression/init-templates/` so it ships in the published CLI.
+7. Verify with `mj test regression init --list` (your new template should appear).
 
 ### Make a package lazy-loadable in the runner image
 

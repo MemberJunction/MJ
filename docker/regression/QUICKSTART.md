@@ -148,30 +148,31 @@ record TestRun rows). The browser, however, drives `my-staging`'s URL.
 
 ### Mode C — generic web app (any URL)
 
-Walkthrough lives at [`examples/generic-web/`](examples/generic-web/). MDN is the
-reference target — runs end-to-end with no auth in ~5 minutes.
+Scaffold a starter project for Mode C from a bundled template:
 
 ```bash
-npx mj test regression remote --target=docker/regression/examples/generic-web/target.json
+mj test regression init generic-web     # creates ./generic-web/
+mj test regression remote --target=./generic-web/target.json
 ```
+
+The MDN reference target runs end-to-end with no auth in ~5 minutes.
 
 To adapt for your own app:
 
-1. Copy the example dir somewhere editable
-2. Edit `target.json` — set `baseUrl`, `allowedDomains`, optional `auth.bindings`
-3. Replace the test JSONs under `metadata/tests/` with your own (one per user journey)
-4. Optionally add custom oracles in `oracles/<name>.cjs` and reference via
+1. Edit `generic-web/target.json` — set `baseUrl`, `allowedDomains`, optional `auth.bindings`
+2. Replace the test JSONs under `generic-web/metadata/tests/` with your own (one per user journey)
+3. Optionally add custom oracles in `generic-web/oracles/<name>.cjs` and reference via
    `target.json: { oraclesModule: "..." }`
 
 ### Mode D — bring-your-own-app (overlay)
 
-Walkthrough at [`examples/bring-your-own-app/`](examples/bring-your-own-app/) — an
-Angular + Express demo with two intentional bugs the suite catches.
+Scaffold a Mode D starter (target profile + compose overlay template + suite metadata):
 
 ```bash
-npx mj test regression remote \
-  --target=byo-app \
-  --overlay=docker/regression/examples/bring-your-own-app/docker-compose.app.yml
+mj test regression init bring-your-own-app    # creates ./bring-your-own-app/
+mj test regression remote \
+  --target=./bring-your-own-app/target.json \
+  --overlay=./bring-your-own-app/docker-compose.app.yml
 ```
 
 To adapt for your own app:
@@ -351,7 +352,7 @@ push command only — don't override it globally.
 - **[REGRESSION_TESTING.md](REGRESSION_TESTING.md)** — operational reference: every
   subcommand, every env var, every output file
 - **[LIMITATIONS.md](LIMITATIONS.md)** — known gaps and future work
-- **[examples/](examples/)** — copy-paste starting points for Modes B, C, D
+- **`mj test regression init --list`** — copy-paste starting points for Modes B, C, D (scaffolded by the CLI; templates ship with `@memberjunction/cli`)
 
 If you hit something this quickstart doesn't cover, search the architecture doc
 first — most rough edges have an explanation buried in there.

@@ -65,14 +65,12 @@ COPY docker/regression/scripts/ ./docker/regression/scripts/
 # ── Step 5: ComputerUseTestDriver bootstrap (@RegisterClass fires) ──────────
 RUN echo "import '@memberjunction/computer-use-engine';" > /app/bootstrap.mjs
 
-# ── Step 6: Bundle the example scaffolds + dispatcher scripts ───────────────
-# Examples are how `init <name>` ships starter directories to adopters without
-# them having to clone the monorepo. Dispatcher is the entrypoint that routes
-# `init|run|exec` subcommands.
-COPY docker/regression/examples/ ./examples/
+# ── Step 6: Dispatcher script ───────────────────────────────────────────────
+# Dispatcher is the entrypoint that routes `run|import-bacpac|export|exec|help`
+# subcommands. Scaffolding (the former `init` subcommand) has moved to the CLI
+# (`mj test regression init`) — the templates ship inside @memberjunction/cli.
 COPY docker/agentic-test-runner/dispatcher.sh /usr/local/bin/agentic-test-runner
-COPY docker/agentic-test-runner/init.sh /usr/local/bin/agentic-test-runner-init
-RUN chmod +x /usr/local/bin/agentic-test-runner /usr/local/bin/agentic-test-runner-init
+RUN chmod +x /usr/local/bin/agentic-test-runner
 
 # ── Step 7: results dir + volumes ───────────────────────────────────────────
 RUN mkdir -p /app/test-results

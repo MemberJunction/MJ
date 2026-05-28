@@ -41,7 +41,6 @@ export const ENV_FILE = `${REGRESSION_DIR}/.env.test`;
 export const TARGETS_DIR = `${REGRESSION_DIR}/targets`;
 export const LOAD_TARGET_SCRIPT = `${REGRESSION_DIR}/scripts/load-target-profile.cjs`;
 export const GEN_FORMS_SCRIPT = `${REGRESSION_DIR}/gen-forms.sh`;
-export const EXAMPLES_DIR = `${REGRESSION_DIR}/examples`;
 export const RESULTS_DIR = `${REGRESSION_DIR}/test-results`;
 export const INLINE_REPORT_SCRIPT = `${REGRESSION_DIR}/scripts/inline-report.cjs`;
 
@@ -71,29 +70,22 @@ export function requireMonorepoRoot(): void {
 }
 
 /**
- * Walk up from cwd looking for `docker/regression/examples/`. Returns the
- * absolute path to the examples dir when found, or null when the cwd isn't
- * under an MJ monorepo checkout. Used by `init` to decide whether to copy
- * examples locally or shell out to `docker run` against the published image.
+ * Soft check — returns true when there's an MJ monorepo at-or-above cwd.
+ * Used by commands (compare, up, export, remote) to pick monorepo-relative
+ * paths over external/published-image paths. Unlike `requireMonorepoRoot()`,
+ * this does NOT exit on failure.
+ *
+ * The sentinel is the regression base compose file: it lives in every
+ * monorepo checkout and is never present in an external `npm i -g` install.
  */
-export function findMonorepoExamplesDir(startDir: string = process.cwd()): string | null {
+export function isInsideMonorepo(startDir: string = process.cwd()): boolean {
   let dir = path.resolve(startDir);
   const root = path.parse(dir).root;
   while (dir !== root) {
-    const candidate = path.join(dir, EXAMPLES_DIR);
-    if (existsSync(candidate)) return candidate;
+    if (existsSync(path.join(dir, COMPOSE_FILE))) return true;
     dir = path.dirname(dir);
   }
-  return null;
-}
-
-/**
- * Soft check — returns true when there's an MJ monorepo at-or-above cwd.
- * Used by `init` to pick the local-copy path over the docker-run path.
- * Unlike `requireMonorepoRoot()`, this does NOT exit on failure.
- */
-export function isInsideMonorepo(): boolean {
-  return findMonorepoExamplesDir() !== null;
+  return false;
 }
 
 /** Returns true when `<cwd>/<ENV_FILE>` exists (e.g. user copied .env.test.example). */

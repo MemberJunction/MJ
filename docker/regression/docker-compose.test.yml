@@ -248,10 +248,5 @@ services:
       # Target profile JSONs for Modes B/C/D (read-only — the runner only
       # consumes them, the loader runs on the host).
       - ./targets:/app/docker/regression/targets:ro
-      # Example directories (generic-web, bring-your-own-app, etc.). Each
-      # holds its own metadata/, oracles/, and (optionally) docker-compose
-      # overlay. RW because mj-sync writes primaryKey + sync state back into
-      # the test/suite JSONs after autoCreateMissingRecords.
-      - ./examples:/app/docker/regression/examples
       - ../../metadata:/app/metadata
       - ./test-metadata:/app/test-metadata:ro
