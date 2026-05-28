@@ -2174,6 +2174,12 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+        // Central exemption check: if the user holds any role that grants this
+        // permission without an RLS filter, they are exempt — return no filter.
+        if (this.UserExemptFromRowLevelSecurity(user, type)) {
+            return '';
+        }
+
         const userRLS = this.GetUserRowLevelSecurityInfo(user, type);
         if (userRLS && userRLS.length > 0) {
             // userRLS has all of the objects that apply to this user. The user is NOT exempt from RLS, so we need to OR together all of the RLS object filters
