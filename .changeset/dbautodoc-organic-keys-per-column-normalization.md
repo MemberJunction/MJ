@@ -1,5 +1,5 @@
 ---
-"@memberjunction/db-auto-doc": minor
+"@memberjunction/db-auto-doc": patch
 "@memberjunction/core": patch
 ---
 
