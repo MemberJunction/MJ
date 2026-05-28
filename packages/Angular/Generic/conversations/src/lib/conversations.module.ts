@@ -24,7 +24,6 @@ import { MessageItemComponent } from './components/message/message-item.componen
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
-import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
@@ -81,7 +80,6 @@ const COMPONENTS = [
   MessageListComponent,
   MessageInputComponent,
   MessageInputBoxComponent,
-  SuggestedResponsesComponent,
   ActionableCommandsComponent,
   MentionDropdownComponent,
   MentionEditorComponent,

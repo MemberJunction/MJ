@@ -404,13 +404,14 @@ import {
     MJEntityCommunicationMessageTypeEntityExtended,
 } from '@memberjunction/entity-communications-base';
 
-// @memberjunction/ng-artifacts (10 classes)
+// @memberjunction/ng-artifacts (11 classes)
 import {
     CodeArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
@@ -854,6 +855,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DataArtifactViewerComponent,
     DocxArtifactViewerComponent,
     HtmlArtifactViewerComponent,
+    ImageArtifactViewerComponent,
     JsonArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
     PdfArtifactViewerComponent,
