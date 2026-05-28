@@ -31,7 +31,7 @@ import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent, HomeAppPinService } from '@memberjunction/ng-shared';
 import { ResourceData, MJResourceTypeEntity, ResourcePermissionEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
+import { BaseEntity, DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager, CachedComponentInfo } from './component-cache-manager';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -646,6 +646,12 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       }
     };
 
+    // When a record is saved, re-key the tab and cache (new-record → saved transition)
+    // and refresh the tab title to reflect the entity's current display name.
+    instance.ResourceRecordSavedEvent = (entity: BaseEntity) => {
+      this.handleResourceRecordSaved(driverClass, activeTab.applicationId, activeTab.id, instance, entity);
+    };
+
     // Get the native element and append to container
     const nativeElement = (componentRef.hostView as unknown as { rootNodes: HTMLElement[] }).rootNodes[0];
     container.appendChild(nativeElement);
@@ -734,6 +740,110 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         container.removeChild(container.firstChild);
       }
     }
+  }
+
+  /**
+   * Handle a record-saved event from a hosted resource component.
+   *
+   * Does two things on every save:
+   *
+   * 1. **Re-key new-record tabs.** When a tab opened as "Create New Record" (empty
+   *    `resourceRecordId`) transitions to a saved record, we update both the workspace
+   *    tab's id and the component-cache key to the new PK. Without this, the next
+   *    `OpenNewEntityRecord(<sameEntity>)` would match this tab (both have empty
+   *    `resourceRecordId`) and focus the stale form instead of opening a fresh one.
+   *    For existing records being re-saved, this step is a no-op.
+   *
+   * 2. **Refresh the tab title.** Whether new or existing, the entity's display name
+   *    (typically its `Name` field) may have changed. We call the resource component's
+   *    `GetResourceDisplayName` and push the result to the tab — so a tab that read
+   *    "New Foo Record" before save now reads the actual entered name.
+   */
+  private handleResourceRecordSaved(
+    driverClass: string,
+    appId: string,
+    tabId: string,
+    instance: BaseResourceComponent,
+    entity: BaseEntity
+  ): void {
+    const tab = this.workspaceManager.GetTab(tabId);
+    if (!tab) {
+      return;
+    }
+
+    const oldRecordId = tab.resourceRecordId || '';
+    // ToURLSegment, NOT ToString — must match the format NavigationService.OpenEntityRecord
+    // uses and that EntityRecordResource.GetPrimaryKey expects via LoadFromURLSegment.
+    const newRecordId = entity?.PrimaryKey?.ToURLSegment?.() ?? '';
+    const isNewRecordTransition = oldRecordId === '' && !!newRecordId;
+
+    if (isNewRecordTransition) {
+      // Re-key the cache entry first, so when the workspace config emission triggers
+      // signature/needsReload checks below, the cache lookup at the new id succeeds.
+      this.cacheManager.rekeyComponent(driverClass, oldRecordId, newRecordId, appId);
+
+      // Keep the in-memory single-resource identity in sync so detach uses the correct key.
+      if (this.singleResourceCacheIdentity?.tabId === tabId) {
+        this.singleResourceCacheIdentity = {
+          ...this.singleResourceCacheIdentity,
+          recordId: newRecordId
+        };
+      }
+
+      // Pre-compute and stamp the new signature so the configuration-subscription path
+      // in single-resource mode doesn't see a "content changed" delta and trigger a
+      // needless reload cycle (which would destroy the currently attached component).
+      if (this.useSingleResourceMode && this.currentSingleResourceSignature !== null) {
+        const updatedTab: WorkspaceTab = {
+          ...tab,
+          resourceRecordId: newRecordId,
+          configuration: { ...tab.configuration, recordId: newRecordId, isNew: undefined }
+        };
+        this.currentSingleResourceSignature = this.getTabContentSignature(updatedTab);
+      }
+
+      // Propagate the new id to the workspace tab.
+      this.workspaceManager.UpdateTabResourceRecordId(tabId, newRecordId);
+    }
+
+    // Always refresh the tab title — the entity's display-name field (typically Name)
+    // may have just been set or changed. Done after the rekey so the resource component's
+    // Data.ResourceRecordID reflects the saved PK before GetResourceDisplayName reads it.
+    //
+    // ProviderBase caches GetEntityRecordName results, so a plain call here would return
+    // the pre-edit name. Pre-warm the cache with a forceRefresh so the downstream read
+    // inside GetResourceDisplayName picks up the saved name. Only meaningful for entity
+    // records with a PK; other resource types' GetResourceDisplayName doesn't hit the
+    // record-name cache and will work either way.
+    void this.refreshTabTitleAfterSave(tabId, instance, entity);
+  }
+
+  /**
+   * After a save, invalidate the entity-record-name cache for the saved record and then
+   * push the resource component's current display name into the tab title.
+   *
+   * Errors are swallowed (logged via the inner call paths) — failing to refresh a tab
+   * title should never break the save flow.
+   */
+  private async refreshTabTitleAfterSave(
+    tabId: string,
+    instance: BaseResourceComponent,
+    entity: BaseEntity
+  ): Promise<void> {
+    try {
+      const entityName = entity?.EntityInfo?.Name;
+      const pk = entity?.PrimaryKey;
+      if (entityName && pk?.HasValue) {
+        // forceRefresh: true overwrites the cached (pre-edit) name with the fresh one.
+        // GetResourceDisplayName (called next) reads the same cache and now sees fresh data.
+        const md = instance.ProviderToUse;
+        await md.GetEntityRecordName(entityName, pk, md.CurrentUser, true);
+      }
+    } catch {
+      // Cache pre-warm failures are non-fatal — the title update below will fall back
+      // to whatever the cache has and the user can still interact with the form.
+    }
+    await this.updateTabTitleFromResource(tabId, instance, instance.Data);
   }
 
   /**
@@ -902,11 +1012,8 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         this.emitFirstLoadCompleteOnce();
       };
 
-      instance.ResourceRecordSavedEvent = (entity: { Get?: (key: string) => unknown }) => {
-        // Update tab title if needed
-        if (entity && entity.Get && entity.Get('Name')) {
-          // TODO: Implement UpdateTabTitle in WorkspaceStateManager
-        }
+      instance.ResourceRecordSavedEvent = (entity: BaseEntity) => {
+        this.handleResourceRecordSaved(driverClass, tab.applicationId, tabId, instance, entity);
       };
 
       // Wire up display name change notifications
