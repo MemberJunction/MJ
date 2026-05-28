@@ -92,35 +92,19 @@ describe('Manifest Validation', () => {
             });
         });
 
-        it('should accept the array form and normalize it to the record form', () => {
-            const m = {
-                ...minimalManifest(),
-                dependencies: [
-                    { name: 'mj-bizapps-common', repository: 'https://github.com/MemberJunction/bizapps-common', versionRange: '>=5.30.0 <6.0.0' },
-                ],
-            };
-            const result = ValidateManifestObject(m);
-            expect(result.Success).toBe(true);
-            // Normalized: array entry with repository -> object variant keyed by name
-            expect(result.Manifest!.dependencies).toEqual({
-                'mj-bizapps-common': { version: '>=5.30.0 <6.0.0', repository: 'https://github.com/MemberJunction/bizapps-common' },
-            });
-        });
-
-        it('should normalize an array entry without a repository to the bare-range form', () => {
-            const m = {
-                ...minimalManifest(),
-                dependencies: [{ name: 'dep-app-one', versionRange: '^1.0.0' }],
-            };
+        it('should accept the bare-range string variant', () => {
+            const m = { ...minimalManifest(), dependencies: { 'dep-app-one': '^1.0.0' } };
             const result = ValidateManifestObject(m);
             expect(result.Success).toBe(true);
             expect(result.Manifest!.dependencies).toEqual({ 'dep-app-one': '^1.0.0' });
         });
 
-        it('should reject an array entry with an invalid app name', () => {
+        it('should reject the array form (only the record form is supported)', () => {
             const m = {
                 ...minimalManifest(),
-                dependencies: [{ name: 'Bad_Name', versionRange: '^1.0.0' }],
+                dependencies: [
+                    { name: 'mj-bizapps-common', repository: 'https://github.com/MemberJunction/bizapps-common', versionRange: '>=5.30.0 <6.0.0' },
+                ],
             };
             expect(ValidateManifestObject(m).Success).toBe(false);
         });

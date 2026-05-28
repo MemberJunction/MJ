@@ -110,58 +110,6 @@ const hooksSchema = z.object({
     preRemove: z.string().optional(),
 });
 
-// ── App Dependencies ──────────────────────────────────────
-
-/** A dependency value: a bare semver range, or an object with version + repository. */
-const dependencyValueSchema = z.union([
-    z.string().min(1),
-    z.object({
-        version: z.string().min(1),
-        repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
-    }),
-]);
-
-/**
- * Canonical record form: an object keyed by dependency app name.
- *   { "mj-bizapps-common": { "version": ">=5.30.0 <6.0.0", "repository": "https://..." } }
- */
-const dependencyRecordSchema = z.record(
-    z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-    dependencyValueSchema
-);
-
-/**
- * Legacy / alternate array form some authors reach for (it reads like npm/package
- * manifests). Each entry carries the app name inline. Accepted and normalized to
- * the canonical record form so these manifests don't hard-fail validation:
- *   [ { "name": "mj-bizapps-common", "repository": "https://...", "versionRange": ">=5.30.0 <6.0.0" } ]
- */
-const dependencyArrayEntrySchema = z.object({
-    name: z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
-    repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL').optional(),
-    versionRange: z.string().min(1),
-});
-
-type NormalizedDependencies = Record<string, z.infer<typeof dependencyValueSchema>>;
-
-/**
- * Accepts either the canonical record form or the array form, always producing
- * the record form. Array entries with a repository become the object variant;
- * entries without one fall back to the bare-range string variant.
- */
-const dependenciesSchema = z.union([
-    dependencyRecordSchema,
-    z.array(dependencyArrayEntrySchema).transform((entries): NormalizedDependencies => {
-        const record: NormalizedDependencies = {};
-        for (const entry of entries) {
-            record[entry.name] = entry.repository
-                ? { version: entry.versionRange, repository: entry.repository }
-                : entry.versionRange;
-        }
-        return record;
-    }),
-]);
-
 // ── Full Manifest ─────────────────────────────────────────
 
 /**
@@ -201,9 +149,18 @@ export const mjAppManifestSchema = z.object({
     // NPM Packages
     packages: packagesSchema,
 
-    // App Dependencies — canonical record form, or the array form (normalized to record).
-    // Values can be a semver range string or an object with version + repository.
-    dependencies: dependenciesSchema.optional(),
+    // App Dependencies — object keyed by app name; values can be a semver range
+    // string or an object with version + repository.
+    dependencies: z.record(
+        z.string().regex(appNameRegex, 'Dependency app name must match app name format'),
+        z.union([
+            z.string().min(1),
+            z.object({
+                version: z.string().min(1),
+                repository: z.string().regex(githubRepoRegex, 'Dependency repository must be a GitHub URL'),
+            })
+        ])
+    ).optional(),
 
     // Code Visibility
     code: codeSchema.optional(),
