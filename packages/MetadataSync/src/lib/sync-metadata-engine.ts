@@ -6,16 +6,28 @@
  * uses it in three ways:
  *
  *   1. **Preload** — `Config()` scans every JSON file under each entity
- *      directory once, collects the primary keys, groups them by entity,
- *      and asks `BaseEngine.Load` to issue one filtered `RunView` per
- *      entity. The loaded `BaseEntity` instances live on dynamic properties
- *      named via {@link getPropertyNameForEntity}; lookups during the sync
- *      phase consult those arrays instead of round-tripping the DB.
+ *      directory once, collects the set of entity names touched (including
+ *      nested `relatedEntities`), and asks `BaseEngine.Load` to issue one
+ *      unfiltered `RunView` per entity. We load *all* rows of each touched
+ *      entity, not just the PKs mentioned in files — for two reasons:
+ *
+ *        (a) `mj sync` is for METADATA. The entities involved (Actions,
+ *            Prompts, Agents, Templates, etc.) are inherently bounded —
+ *            hundreds to low tens of thousands of rows per tenant, not
+ *            millions. Loading everything is faster than computing and
+ *            shipping a giant `WHERE IN (...)` clause.
+ *        (b) `@lookup:` resolution often targets records that aren't in
+ *            the local files (e.g. a category referenced by name). A
+ *            full preload means those lookups hit the cache too.
+ *
+ *      The loaded `BaseEntity` instances live on dynamic properties named
+ *      via {@link getPropertyNameForEntity}; lookups during the sync phase
+ *      consult those arrays instead of round-tripping the DB.
  *
  *   2. **Event-driven mutation** — `BaseEngine` already wires up the global
- *      `BaseEntity` event bus; saves/deletes fired during the push update
- *      our cached arrays in place. See {@link canUseImmediateMutation} for
- *      why bypassing the default filter/orderby guard is safe here.
+ *      `BaseEntity` event bus. Because our configs carry no Filter/OrderBy,
+ *      the base class's default `canUseImmediateMutation` path handles
+ *      save/delete/remote-invalidate events automatically.
  *
  *   3. **Lookup + file caches** — Resolved `@lookup` keys are memoized in
  *      {@link lookupCache} and parsed file contents are memoized in
@@ -33,8 +45,7 @@ import {
   IMetadataProvider,
   UserInfo
 } from '@memberjunction/core';
-import { GetDialect, IsUuidSQLType, SQLDialect } from '@memberjunction/sql-dialect';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { IsUuidSQLType } from '@memberjunction/sql-dialect';
 import fastGlob from 'fast-glob';
 import fs from 'fs-extra';
 import { JsonPreprocessor } from './json-preprocessor';
@@ -44,17 +55,17 @@ import { SyncEngine } from './sync-engine';
 /** Prefix used to namespace the dynamic per-entity cache properties on the engine instance. */
 const CACHED_ENTITY_PROP_PREFIX = 'cached_';
 
-/**
- * Soft cap on PKs we'll pack into a single preload filter. Above this we skip
- * preload for that entity entirely (cache is best-effort; the per-record path
- * still works). The realistic sync workload stays well under this; the cap
- * exists to keep us off SQL Server's expression-tree limit and the planner's
- * worst-case OR-explosion paths.
- */
-const MAX_PKS_PER_BULK_FILTER = 500;
-
 /** Concurrency cap for parallel file reads during preload. */
 const FILE_READ_CONCURRENCY = 16;
+
+/**
+ * Emit a warning when any single preloaded entity comes back with more rows
+ * than this. `mj sync` is for metadata — entities in this benchmark band
+ * (Actions, Prompts, Templates, etc.) are bounded by design. Loading 100k+
+ * rows of one entity into RAM is a signal that something is being synced
+ * that shouldn't be (or the metadata set has grown beyond the tool's intent).
+ */
+const LARGE_ENTITY_WARN_THRESHOLD = 100_000;
 
 /** Cached file contents produced by the preload scan. */
 export interface CachedFile {
@@ -78,7 +89,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   /** Reverse index used to scope lookup invalidation on delete: entity name → set of lookup keys touching that entity. */
   private lookupKeysByEntity: Map<string, Set<string>> = new Map();
 
-  /** Non-fatal warnings collected during preload (malformed shapes, skipped entities). Drained by the caller after `Config()`. */
+  /** Non-fatal warnings collected during preload (malformed shapes, oversized entities). Drained by the caller after `Config()`. */
   private warnings: string[] = [];
 
   public initializeEngine(syncEngine: SyncEngine): void {
@@ -107,8 +118,9 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
   /**
    * Build the dynamic configuration list and trigger `BaseEngine.Load` —
-   * which fans the per-entity filtered views out over a single `RunViews`
-   * batch under the hood.
+   * which fans the per-entity unfiltered views out over a single `RunViews`
+   * batch under the hood. Then check each loaded slot for size and emit
+   * warnings if anything came back larger than the metadata-scale threshold.
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<unknown> {
     const configs = await this.buildDynamicConfigs();
@@ -116,37 +128,9 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
     if (configs.length > 0) {
       await this.Load(configs, providerToUse, forceRefresh, contextUser);
+      this.warnOnOversizedSlots(configs);
     }
     return true;
-  }
-
-  /**
-   * Allow in-place cache mutation even though our configs carry a `Filter`.
-   *
-   * The base class returns `false` whenever a config has a Filter or OrderBy
-   * because the saved entity might no longer match (filter) or might need to
-   * re-sort (orderby). Our filters are always `(ID='pk1') OR (ID='pk2') ...`
-   * built from the PKs we preloaded — which means:
-   *
-   *  - `update` events: the PK is unchanged, so the entity still matches the
-   *    filter; splicing in place is safe.
-   *  - `delete` events: same PK; safe.
-   *  - `create` events: the new PK was *not* in the preload list, so the
-   *    filter would reject it on a re-fetch. We deliberately accept this:
-   *    the cache is best-effort for the duration of the sync, and we want
-   *    newly-created records visible to subsequent lookups in the same run.
-   *
-   * We don't override behavior for any non-preload configs (defensive — the
-   * class doesn't load any today but a future subclass might).
-   */
-  protected override canUseImmediateMutation(
-    config: BaseEnginePropertyConfig,
-    skipAdditionalLoadingCheck: boolean = false
-  ): boolean {
-    if (config.PropertyName?.startsWith(CACHED_ENTITY_PROP_PREFIX)) {
-      return true;
-    }
-    return super.canUseImmediateMutation(config, skipAdditionalLoadingCheck);
   }
 
   public markEntityAsPreloaded(entityName: string): void {
@@ -264,8 +248,8 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
   /**
    * Canonical string representation of a record's primary key, used as the
-   * key in dedup sets, file caches, and entity-cache lookups. UUID-typed
-   * components are lower-cased to bridge SQL Server (upper) vs PG (lower).
+   * key in entity-cache dedup/removal lookups. UUID-typed components are
+   * lower-cased to bridge SQL Server (upper) vs PG (lower).
    */
   public serializePrimaryKey(entityInfo: EntityInfo, primaryKey: Record<string, unknown>): string {
     const parts = entityInfo.PrimaryKeys.map((pk: EntityFieldInfo) => {
@@ -282,146 +266,15 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     return parts.join('|');
   }
 
-  public getUniquePrimaryKeys(
-    entityInfo: EntityInfo,
-    pks: Array<Record<string, unknown>>
-  ): Array<Record<string, unknown>> {
-    const seen = new Set<string>();
-    const unique: Array<Record<string, unknown>> = [];
-    for (const pk of pks) {
-      const serialized = this.serializePrimaryKey(entityInfo, pk);
-      if (!seen.has(serialized)) {
-        seen.add(serialized);
-        unique.push(pk);
-      }
-    }
-    return unique;
-  }
-
   /**
-   * Build a SQL `WHERE` fragment matching every PK in `uniquePks`.
-   *
-   * String/UUID/date values are quoted via the active dialect's
-   * `QuoteStringLiteral` (centralizes the `''` doubling rule). Numeric and
-   * boolean PKs are shape-validated before being inlined so a malformed
-   * metadata file can't smuggle arbitrary SQL through an unquoted PK slot.
-   *
-   * Throws on a non-numeric value for a non-quoted PK type. Callers in this
-   * file catch and skip preload for that entity — the per-record path still
-   * works.
-   */
-  public buildBulkFilter(entityInfo: EntityInfo, uniquePks: Array<Record<string, unknown>>): string {
-    const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
-    const filterParts: string[] = [];
-    for (const pk of uniquePks) {
-      const pkParts: string[] = [];
-      for (const pkField of entityInfo.PrimaryKeys) {
-        const literal = this.formatPKLiteral(pkField, pk[pkField.Name], dialect);
-        pkParts.push(`${pkField.Name} = ${literal}`);
-      }
-      filterParts.push(`(${pkParts.join(' AND ')})`);
-    }
-    return filterParts.join(' OR ');
-  }
-
-  /**
-   * Format a single PK field value as a SQL literal. NeedsQuotes drives the
-   * branch — quoted types go through the dialect's escape; unquoted types
-   * must shape-check as numeric/boolean.
-   */
-  private formatPKLiteral(pkField: EntityFieldInfo, val: unknown, dialect: SQLDialect): string {
-    if (pkField.NeedsQuotes) {
-      const strVal = val !== undefined && val !== null ? String(val) : '';
-      return dialect.QuoteStringLiteral(strVal);
-    }
-    if (typeof val === 'number' && Number.isFinite(val)) {
-      return String(val);
-    }
-    if (typeof val === 'string' && /^-?\d+(\.\d+)?$/.test(val)) {
-      return val;
-    }
-    if (typeof val === 'boolean') {
-      return val ? '1' : '0';
-    }
-    throw new Error(
-      `Invalid primary key value for ${pkField.Name} (type ${pkField.Type}): expected numeric/boolean, got ${typeof val} (${JSON.stringify(val)})`
-    );
-  }
-
-  /**
-   * Skip preload for any record whose `primaryKey` still carries an
-   * unresolved metadata reference (`@lookup:`, `@parent:`, `@root:`,
-   * `@file:`, `@env:`, `@template:`). Those values resolve to real IDs
-   * later in SyncEngine's per-record path; if we let them through here
-   * we'd inline the literal `@lookup:...` string into a `WHERE ID = '...'`
-   * filter and SQL Server would (correctly) reject the cast to
-   * uniqueidentifier.
-   */
-  private hasUnresolvedReference(primaryKey: Record<string, unknown>): boolean {
-    for (const value of Object.values(primaryKey)) {
-      if (typeof value === 'string' && /^@(lookup|parent|root|file|env|template):/.test(value)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private extractPrimaryKeysRecursive(
-    records: Array<Record<string, unknown>>,
-    entityName: string,
-    keysByEntity: Map<string, Array<Record<string, unknown>>>,
-    filePath: string
-  ): void {
-    let list = keysByEntity.get(entityName);
-    if (!list) {
-      list = [];
-      keysByEntity.set(entityName, list);
-    }
-
-    for (const record of records) {
-      const deleteRecord = record.deleteRecord as { delete?: boolean } | undefined;
-      if (deleteRecord?.delete === true) {
-        continue;
-      }
-
-      const primaryKey = record.primaryKey as Record<string, unknown> | undefined;
-      if (primaryKey && Object.keys(primaryKey).length > 0 && !this.hasUnresolvedReference(primaryKey)) {
-        list.push(primaryKey);
-      }
-
-      const relatedEntities = record.relatedEntities as Record<string, unknown> | undefined;
-      if (relatedEntities) {
-        for (const [relatedEntityName, relatedRecords] of Object.entries(relatedEntities)) {
-          if (Array.isArray(relatedRecords)) {
-            this.extractPrimaryKeysRecursive(
-              relatedRecords as Array<Record<string, unknown>>,
-              relatedEntityName,
-              keysByEntity,
-              filePath
-            );
-          } else {
-            // Malformed shape: relatedEntities[X] must be an array. Validation
-            // will catch this eventually, but if preload runs first the user
-            // gets confusing cache-miss behavior instead of a pointer to the
-            // bad file. Surface it now.
-            this.warnings.push(
-              `Skipped preload for relatedEntities['${relatedEntityName}'] in ${filePath}: expected an array, got ${typeof relatedRecords}.`
-            );
-          }
-        }
-      }
-    }
-  }
-
-  /**
-   * Reads every JSON file under each configured entity dir (in parallel,
-   * concurrency-capped), caches the parsed + `@include`-resolved content,
-   * collects primary keys (including nested `relatedEntities`), and assembles
-   * the `BaseEngine` configs that drive the bulk preload.
+   * Walk every entity referenced by metadata files (including nested
+   * `relatedEntities`) and build one unfiltered `BaseEngine` config per
+   * entity. Each config triggers a single `SELECT * FROM vw<Entity>`
+   * (capped by `IgnoreMaxRows: true` in BaseEngine), pre-populating the
+   * per-entity slot the sync path will read from.
    */
   private async buildDynamicConfigs(): Promise<Partial<BaseEnginePropertyConfig>[]> {
-    const keysByEntity: Map<string, Array<Record<string, unknown>>> = new Map();
-    const configs: Partial<BaseEnginePropertyConfig>[] = [];
+    const entitiesFound: Set<string> = new Set();
 
     for (const entityDir of this.entityDirs) {
       const entityConfig = await loadEntityConfig(entityDir);
@@ -436,55 +289,90 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
         ignore: ['**/node_modules/**', '**/.mj-*.json']
       });
 
-      await this.processFilesInParallel(files, entityConfig.entity, keysByEntity);
+      await this.processFilesInParallel(files, entityConfig.entity, entitiesFound);
     }
 
-    for (const [entityName, pks] of keysByEntity.entries()) {
+    const configs: Partial<BaseEnginePropertyConfig>[] = [];
+    for (const entityName of entitiesFound) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
-      if (!entityInfo || pks.length === 0) continue;
-
-      const uniquePks = this.getUniquePrimaryKeys(entityInfo, pks);
-      if (uniquePks.length === 0) continue;
-
-      // BaseEngine writes each load into a single property slot, so we use
-      // one config per entity. Above the threshold we skip preload for this
-      // entity (no config pushed, not marked preloaded) — the per-record
-      // path in SyncEngine will resolve lookups/loads against the DB the
-      // old way. Slower than preload, but correct, and avoids submitting a
-      // pathologically large OR clause.
-      if (uniquePks.length > MAX_PKS_PER_BULK_FILTER) {
-        this.warnings.push(
-          `Skipped preload for '${entityName}': ${uniquePks.length} primary keys exceeds threshold of ${MAX_PKS_PER_BULK_FILTER}. Falling back to per-record lookups for this entity.`
-        );
-        continue;
-      }
-
-      let filter: string;
-      try {
-        filter = this.buildBulkFilter(entityInfo, uniquePks);
-      } catch (err) {
-        // A malformed PK in any one record poisons the whole filter — skip
-        // preload for the entity and let the per-record path surface the
-        // real error against the offending record.
-        this.warnings.push(
-          `Skipped preload for '${entityName}': ${err instanceof Error ? err.message : String(err)}. Falling back to per-record lookups.`
-        );
-        continue;
-      }
+      if (!entityInfo) continue;
 
       this.markEntityAsPreloaded(entityName);
-      const propName = this.getPropertyNameForEntity(entityName);
       configs.push({
-        PropertyName: propName,
+        PropertyName: this.getPropertyNameForEntity(entityName),
         EntityName: entityName,
         Type: 'entity',
         ResultType: 'entity_object',
-        Filter: filter,
+        // No Filter — load all rows. Metadata entities are bounded by design;
+        // the few thousand-row tables we touch are faster to bulk-load than
+        // to fence with a giant WHERE clause. See the module docstring for
+        // the full reasoning.
         AutoRefresh: true
       });
     }
 
     return configs;
+  }
+
+  /**
+   * After `BaseEngine.Load` finishes, walk the configs and check whether any
+   * single preloaded entity exceeded the metadata-scale threshold. Emit a
+   * warning so the operator knows their sync is loading something it
+   * probably shouldn't be.
+   */
+  private warnOnOversizedSlots(configs: Partial<BaseEnginePropertyConfig>[]): void {
+    for (const config of configs) {
+      if (!config.PropertyName || !config.EntityName) continue;
+      const list = (this as unknown as Record<string, unknown>)[config.PropertyName];
+      if (!Array.isArray(list)) continue;
+      if (list.length > LARGE_ENTITY_WARN_THRESHOLD) {
+        this.warnings.push(
+          `Preloaded ${list.length.toLocaleString()} rows of '${config.EntityName}'. mj sync is intended for metadata-scale entities (hundreds to low tens of thousands); this is large enough that you may want to confirm this entity belongs in a sync workflow.`
+        );
+      }
+    }
+  }
+
+  /**
+   * Recursively walk records collecting every entity name they (or their
+   * `relatedEntities`) reference. We don't collect primary keys because
+   * preload is unfiltered — knowing the entity is enough.
+   *
+   * Malformed `relatedEntities` shapes (non-array values) produce a warning
+   * pointing at the offending file rather than silently being skipped.
+   */
+  private collectEntitiesRecursive(
+    records: Array<Record<string, unknown>>,
+    entityName: string,
+    entitiesFound: Set<string>,
+    filePath: string
+  ): void {
+    entitiesFound.add(entityName);
+
+    for (const record of records) {
+      const deleteRecord = record.deleteRecord as { delete?: boolean } | undefined;
+      if (deleteRecord?.delete === true) {
+        continue;
+      }
+
+      const relatedEntities = record.relatedEntities as Record<string, unknown> | undefined;
+      if (!relatedEntities) continue;
+
+      for (const [relatedEntityName, relatedRecords] of Object.entries(relatedEntities)) {
+        if (Array.isArray(relatedRecords)) {
+          this.collectEntitiesRecursive(
+            relatedRecords as Array<Record<string, unknown>>,
+            relatedEntityName,
+            entitiesFound,
+            filePath
+          );
+        } else {
+          this.warnings.push(
+            `Skipped preload for relatedEntities['${relatedEntityName}'] in ${filePath}: expected an array, got ${typeof relatedRecords}.`
+          );
+        }
+      }
+    }
   }
 
   /**
@@ -495,7 +383,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   private async processFilesInParallel(
     files: string[],
     entityName: string,
-    keysByEntity: Map<string, Array<Record<string, unknown>>>
+    entitiesFound: Set<string>
   ): Promise<void> {
     for (let i = 0; i < files.length; i += FILE_READ_CONCURRENCY) {
       const batch = files.slice(i, i + FILE_READ_CONCURRENCY);
@@ -503,7 +391,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       for (const { filePath, rawData, fileData } of parsed) {
         this.cacheFile(filePath, rawData, fileData);
         const records = Array.isArray(fileData) ? fileData : [fileData];
-        this.extractPrimaryKeysRecursive(records as Array<Record<string, unknown>>, entityName, keysByEntity, filePath);
+        this.collectEntitiesRecursive(records as Array<Record<string, unknown>>, entityName, entitiesFound, filePath);
       }
     }
   }
