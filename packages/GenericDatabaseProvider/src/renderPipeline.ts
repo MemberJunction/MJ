@@ -1,4 +1,5 @@
-import { DatabasePlatform, UserInfo, QueryDependencySpec, QueryParameterInfo } from '@memberjunction/core';
+import { DatabasePlatform, UserInfo, QueryDependencySpec } from '@memberjunction/core';
+import { MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { GetDialect } from '@memberjunction/sql-dialect';
 import { SQLParser } from '@memberjunction/sql-parser';
 import { QueryCompositionEngine, CompositionResult, CompositionCTEInfo } from './queryCompositionEngine.js';
@@ -53,7 +54,7 @@ export interface RenderContext {
     /** Parameter values from the caller */
     Parameters?: Record<string, string>;
     /** Formal parameter definitions (for validation). Null = skip validation. */
-    ParameterDefinitions?: QueryParameterInfo[];
+    ParameterDefinitions?: MJQueryParameterEntity[];
     /** Whether the outer query uses Nunjucks templates */
     UsesTemplate?: boolean;
     /** Inline dependency specs for transient query testing */

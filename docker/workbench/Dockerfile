@@ -80,8 +80,9 @@ COPY claude-settings.json /root/.claude/settings.json
 COPY entrypoint.sh /entrypoint.sh
 COPY db-bootstrap.sh /usr/local/bin/db-bootstrap
 COPY db-bootstrap-pg.sh /usr/local/bin/db-bootstrap-pg
+COPY baseline-roundtrip.sh /usr/local/bin/baseline-roundtrip
 COPY auth-setup.sh /usr/local/bin/auth-setup
-RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap /usr/local/bin/db-bootstrap-pg /usr/local/bin/auth-setup
+RUN chmod +x /entrypoint.sh /usr/local/bin/db-bootstrap /usr/local/bin/db-bootstrap-pg /usr/local/bin/baseline-roundtrip /usr/local/bin/auth-setup
 
 # Set zsh as default shell
 ENV SHELL=/bin/zsh

@@ -1,9 +1,10 @@
 import { Arg, Ctx, ObjectType, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { RunQuery, QueryInfo, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult } from '@memberjunction/core';
+import { RunQuery, IRunQueryProvider, IMetadataProvider, RunQueryParams, LogError, RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { Metadata } from '@memberjunction/core';
+import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -149,9 +150,9 @@ export class RunQueriesWithCacheCheckOutput {
 
 @Resolver()
 export class RunQueryResolver extends ResolverBase {
-  private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<QueryInfo | null> {
-    // Filter queries based on provided criteria
-    const queries = md.Queries.filter(q => {
+  private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<MJQueryEntity | null> {
+    const qe = QueryEngine.Instance;
+    const queries = qe.Queries.filter(q => {
       if (QueryID) {
         return q.ID.trim().toLowerCase() === QueryID.trim().toLowerCase();
       } else if (QueryName) {
@@ -169,8 +170,8 @@ export class RunQueryResolver extends ResolverBase {
 
     if (queries.length === 0) {
       if (refreshMetadataIfNotFound) {
-        // If we didn't find the query, refresh metadata and try again
-        await md.Refresh();
+        // If we didn't find the query, force-refresh QueryEngine and retry
+        await QueryEngine.Instance.Config(true);
         return this.findQuery(md, QueryID, QueryName, CategoryID, CategoryPath, false); // change the refresh flag to false so we don't loop infinitely
       } 
       else {

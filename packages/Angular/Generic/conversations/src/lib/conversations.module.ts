@@ -24,7 +24,6 @@ import { MessageItemComponent } from './components/message/message-item.componen
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
-import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
 import { DynamicFormsModule } from '@memberjunction/ng-forms';
 import { ActionableCommandsComponent } from './components/message/actionable-commands.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
@@ -36,6 +35,8 @@ import { ConversationSidebarComponent } from './components/sidebar/conversation-
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
+import { ConversationAgentPickerComponent } from './components/conversation/conversation-agent-picker.component';
+import { ConversationModePickerComponent } from './components/conversation/conversation-mode-picker.component';
 import { ThreadPanelComponent } from './components/thread/thread-panel.component';
 import { CollectionTreeComponent } from './components/collection/collection-tree.component';
 import { CollectionViewComponent } from './components/collection/collection-view.component';
@@ -79,7 +80,6 @@ const COMPONENTS = [
   MessageListComponent,
   MessageInputComponent,
   MessageInputBoxComponent,
-  SuggestedResponsesComponent,
   ActionableCommandsComponent,
   MentionDropdownComponent,
   MentionEditorComponent,
@@ -90,6 +90,8 @@ const COMPONENTS = [
   ConversationListComponent,
   ConversationChatAreaComponent,
   ConversationEmptyStateComponent,
+  ConversationAgentPickerComponent,
+  ConversationModePickerComponent,
   ThreadPanelComponent,
   CollectionTreeComponent,
   CollectionViewComponent,

@@ -54,6 +54,48 @@
     </div>
   </div>
 
+  <!-- Form-role preview controls (banner + mode + real-record picker).
+       Visible only for componentRole==='form' components, since they're
+       the only ones that bind to a record. -->
+  @if (IsFormRolePreview && State.IsRunning) {
+    <div class="form-preview-bar">
+      <div class="form-preview-banner">
+        <i class="fa-solid fa-shield-halved"></i>
+        PREVIEW — changes will not be saved
+      </div>
+      <div class="form-preview-controls">
+        <!-- Mode pills synced with the Form Builder tab -->
+        <div class="form-mode-pills">
+          <button class="form-mode-pill"
+                  [class.active]="FormPreviewMode === 'view'"
+                  (click)="SetFormPreviewMode('view')">View</button>
+          <button class="form-mode-pill"
+                  [class.active]="FormPreviewMode === 'edit'"
+                  (click)="SetFormPreviewMode('edit')">Edit</button>
+          <button class="form-mode-pill"
+                  [class.active]="FormPreviewMode === 'create'"
+                  (click)="SetFormPreviewMode('create')">Create</button>
+        </div>
+
+        <!-- Real-record picker; null = fixture data -->
+        @if (FormPreviewMode !== 'create' && FormTargetEntity) {
+          <div class="form-record-picker">
+            <label>Record</label>
+            <select [value]="SelectedRecordID ?? ''" (change)="OnPickRecord($event)">
+              <option value="">— Fixture data —</option>
+              @for (r of RecentRecords; track r.ID) {
+                <option [value]="r.ID">{{ r.Display }}</option>
+              }
+            </select>
+            @if (IsLoadingRecord) {
+              <i class="fa-solid fa-spinner fa-spin"></i>
+            }
+          </div>
+        }
+      </div>
+    </div>
+  }
+
   <!-- Preview Area -->
   <div class="preview-area">
     @if (!State.SelectedComponent) {
@@ -83,11 +125,33 @@
         <mj-react-component
           #reactComponent
           [component]="LocalComponentSpec"
+          [componentProps]="FixtureFormHostProps"
           (componentEvent)="OnComponentEvent($event)"
           (initialized)="OnReactInitialized()"
           (openEntityRecord)="OnOpenEntityRecord($event)">
         </mj-react-component>
       </div>
+
+      <!-- Form-role sandboxed event log -->
+      @if (IsFormRolePreview && EventLog.length > 0) {
+        <div class="form-event-log">
+          <div class="form-event-log-header">
+            <i class="fa-solid fa-list"></i>
+            <span>Events (sandboxed)</span>
+            <span class="spacer"></span>
+            <button class="form-event-log-clear" (click)="ClearEventLog()">Clear</button>
+          </div>
+          <ul class="form-event-log-list">
+            @for (e of EventLog; track $index) {
+              <li class="form-event-log-row">
+                <span class="form-event-log-ts">{{ e.Timestamp | date:'HH:mm:ss' }}</span>
+                <span class="form-event-log-type">{{ e.Type }}</span>
+                <span class="form-event-log-payload">{{ e.Payload }}</span>
+              </li>
+            }
+          </ul>
+        </div>
+      }
 
       <!-- Error Overlay (inline, does not replace the component) -->
       @if (State.CurrentError) {

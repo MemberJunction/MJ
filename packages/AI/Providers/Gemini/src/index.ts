@@ -91,7 +91,8 @@ export class GeminiLLM extends BaseLLM {
      * Convert MJ effort level (1-100) to Gemini thinkingBudget (0-24576)
      *
      * Mapping strategy:
-     * - 1-33 (low): 1024-4096 tokens
+     * - 1 (minimal): 0 (disabled) on Flash; clamped to ~1024 on Pro
+     * - 2-33 (low): 1024-4096 tokens
      * - 34-66 (medium): 4097-12288 tokens
      * - 67-100 (high): 12289-24576 tokens
      * - undefined: No thinkingConfig (Gemini default ~8192)
@@ -124,16 +125,16 @@ export class GeminiLLM extends BaseLLM {
         const isFlashModel = lowerModel.includes('flash');
         const isProModel = lowerModel.includes('pro') && !isFlashModel;
 
-        // Very low effort (1-5) - try to disable thinking on Flash models
-        if (level <= 5 && isFlashModel) {
+        // Minimal effort (1) - disable thinking on Flash models
+        if (level === 1 && isFlashModel) {
             return 0; // Disable thinking (only works on Flash/Flash-Lite)
         }
 
         // For Pro models, minimum effective budget is ~1024
-        // For Flash models with effort > 5, use normal scaling
+        // For Flash models with effort >= 2, use normal scaling
         if (level <= 33) {
-            // Low: linear scale from 1024 to 4096
-            return Math.round(1024 + ((level - 1) / 32) * (4096 - 1024));
+            // Low (2-33): linear scale from 1024 to 4096
+            return Math.round(1024 + ((level - 2) / 31) * (4096 - 1024));
         } else if (level <= 66) {
             // Medium: linear scale from 4097 to 12288
             return Math.round(4097 + ((level - 34) / 32) * (12288 - 4097));
@@ -417,11 +418,11 @@ export class GeminiLLM extends BaseLLM {
                     numericLevel = 0;
                 }
 
-                if (!numericLevel || numericLevel <= 1) {
-                    geminiLevel = "MINIMAL" // if we don't have thinking setup and we're dealing with Gemini 3 series models, set thinking level to minimal
+                if (numericLevel === 1) {
+                    geminiLevel = "MINIMAL" // effort 1 is the minimum valid value and maps to minimal thinking on Gemini 3+ models
                 }
-                else if(numericLevel <= 33) {
-                    geminiLevel = "LOW" 
+                else if (numericLevel >= 2 && numericLevel <= 33) {
+                    geminiLevel = "LOW"
                 }
                 else if (numericLevel <= 66) {
                     geminiLevel = "MEDIUM" 

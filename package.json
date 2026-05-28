@@ -16,6 +16,7 @@
     "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
     "packages/AI/DatabaseDesigner/*",
+    "packages/AI/FormBuilder/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",

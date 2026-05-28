@@ -2674,9 +2674,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._isDisposingSocketIntentionally = false;
             this._wsClient = createClient({
                 url: this.ConfigData.WSURL,
-                connectionParams: {
+                // Function form: re-evaluated on every connection attempt (including
+                // retries after 4403 "Token expired"). This lets the client pick up a
+                // freshly-refreshed token instead of reusing the stale one.
+                connectionParams: () => ({
                     Authorization: 'Bearer ' + this.ConfigData.Token,
-                },
+                }),
                 keepAlive: 30000, // Send keepalive ping every 30 seconds
                 retryAttempts: 3,
                 shouldRetry: () => true,
@@ -2687,7 +2690,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             this._wsClient.on('connected', () => {
                 this._socketStateSubject.next('connected');
             });
-            this._wsClient.on('closed', () => {
+            this._wsClient.on('closed', (event: unknown) => {
                 // Ignore closes we initiated via disposeWSClient() — those already
                 // emit 'unknown' themselves. Only treat unexpected closes (retries
                 // exhausted) as 'disconnected'.
@@ -2695,6 +2698,16 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     return;
                 }
                 this._socketStateSubject.next('disconnected');
+
+                // If the server closed with 4403 "Token expired", eagerly refresh
+                // the token so that graphql-ws retries use a fresh one. Without this,
+                // all retry attempts would reuse the stale token and fail.
+                const closeCode = (event as { code?: number })?.code;
+                if (closeCode === 4403 && this._configData.Data.RefreshTokenFunction) {
+                    this.RefreshToken().catch(() => {
+                        // RefreshToken failure is handled via notifyAuthenticationError
+                    });
+                }
             });
 
             // Start cleanup timer if not already running
