@@ -60,6 +60,16 @@ export interface InstallOptions {
     Verbose?: boolean;
     /** Allow schema names starting with '__'. Dangerous; MJ-internal apps only. */
     AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * Internal use only. When true, the engine skips dependency resolution and
+     * installs ONLY this app. The orchestrator sets this when installing the
+     * pre-resolved members of a dependency graph in topological order — each
+     * member's transitive dependencies were already resolved and installed
+     * ahead of it by the top-level call, so re-resolving here would be
+     * redundant and (for cycles) could recurse without bound. Not exposed via
+     * the CLI; callers should never set this directly.
+     */
+    SkipDependencyResolution?: boolean;
 }
 
 /**

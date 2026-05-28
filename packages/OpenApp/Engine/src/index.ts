@@ -35,6 +35,13 @@ export type {
     DependencyResolutionResult,
     InstalledAppMap
 } from './dependency/dependency-resolver.js';
+export { ResolveDependencyGraph } from './dependency/dependency-graph-builder.js';
+export type {
+    ManifestFetcher,
+    FetchedManifest,
+    RootApp,
+    GraphResolutionResult
+} from './dependency/dependency-graph-builder.js';
 export {
     CheckMJVersionCompatibility,
     CheckDependencyVersionCompatibility,
