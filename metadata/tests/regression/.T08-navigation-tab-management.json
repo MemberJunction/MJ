@@ -4,7 +4,7 @@
     "Name": "T08 - Navigation and Tab Management",
     "Description": "Opens multiple entity records in separate tabs, switches between tabs, and closes a tab without losing the others. Validates the core tab management workflow.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed. Use Shift+Click on the tab to open the page as a tab.",
+      "goal": "Navigate to Data Explorer. Open at least two different entity records so they appear in separate tabs in the tab bar. Switch between the tabs to verify each shows its own content. Then close one of the tabs and verify that the remaining tab(s) are still open and functional with their correct content displayed. Use Shift+Click on the tab to open the page as a tab.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "8F37873C-FD30-4C2C-A875-716DCE7C9E77"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.253Z",
+    "lastModified": "2026-05-28T03:08:25.604Z",
     "checksum": "0b74f880942853697af3ce8ea9af0d1974813030c084a3a2db7958b1484aeeb5"
   }
 }

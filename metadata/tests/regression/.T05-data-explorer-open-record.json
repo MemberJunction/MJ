@@ -4,7 +4,7 @@
     "Name": "T05 - Data Explorer Open Entity Record",
     "Description": "From the Members entity grid in Data Explorer, opens a specific member record to view its detail form with fields like Name, Email, and Organization.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and open the Members entity to see the records grid. Then click on a specific member record to open its Full Record using the `Open Full Record` button. Verify that the detail form displays with populated fields such as Name, Email, Organization, or Membership Type.",
+      "goal": "Navigate to Data Explorer and open the Members entity to see the records grid. Then click on a specific member record to open its Full Record using the `Open Full Record` button. Verify that the detail form displays with populated fields such as Name, Email, Organization, or Membership Type.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -83,7 +83,7 @@
     "ID": "2BB830E5-AAB2-4537-BC35-366E5F7D9D31"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.189Z",
+    "lastModified": "2026-05-28T03:08:25.499Z",
     "checksum": "994c7926387fc075deff6313e9dcef8af56d84e20e6850d5761162998da3edb6"
   }
 }

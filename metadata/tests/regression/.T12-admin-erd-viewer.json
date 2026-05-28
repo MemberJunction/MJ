@@ -4,7 +4,7 @@
     "Name": "T12 - Admin Dashboard ERD Viewer",
     "Description": "Navigates to the Admin application, opens the ERD (Entity Relationship Diagram) viewer, and verifies it renders entities and relationships.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the Admin application. Find and open the ERD (Entity Relationship Diagram) viewer. Verify that entity boxes or nodes are visible in the diagram.",
+      "goal": "Use the application switcher to navigate to the Admin application. Find and open the ERD (Entity Relationship Diagram) viewer. Verify that entity boxes or nodes are visible in the diagram.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "9E9BED5F-AEF5-42FE-A892-2CF09EF44952"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.335Z",
+    "lastModified": "2026-05-28T03:08:25.682Z",
     "checksum": "9b8a02845031d9baefbb9d6b87d5fac80da5b2af4bc180e4ca84d965f4241167"
   }
 }

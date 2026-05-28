@@ -4,7 +4,7 @@
     "Name": "T10 - Entity Form Edit and Save Record",
     "Description": "Opens an existing Member record, modifies a field value, saves the changes, and verifies the save succeeded.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
+      "goal": "Navigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "E3EDE599-BBCB-4AB0-947E-76E933261185"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.294Z",
+    "lastModified": "2026-05-28T03:08:25.643Z",
     "checksum": "8d59a56a2a91a0e57d0d65df28975a3e564d5eb9a2c3275e3dc4a18a15a2eb8b"
   }
 }

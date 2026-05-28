@@ -4,7 +4,7 @@
     "Name": "T13 - Admin Dashboard User Management",
     "Description": "Navigates to Admin > Users and verifies the user management dashboard loads with a list of users.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the Admin application. Find and open the Users section or user management area. Verify that a list of users is displayed with at least one user record visible.",
+      "goal": "Use the application switcher to navigate to the Admin application. Find and open the Users section or user management area. Verify that a list of users is displayed with at least one user record visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "3881D46F-D7C9-46DE-B3E3-D54FB8DA4566"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.355Z",
+    "lastModified": "2026-05-28T03:08:25.702Z",
     "checksum": "5221a4d61c1157646618a8d5f8726b4ee65659fdb4f73d18c79221699f8065af"
   }
 }

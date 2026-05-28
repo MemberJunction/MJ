@@ -4,7 +4,7 @@
     "Name": "T17 - Settings Page Navigation",
     "Description": "Opens the user settings/preferences page and verifies settings categories are displayed.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nFind and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
+      "goal": "Find and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "D94781D3-F117-4832-B497-3CDB9CE2296E"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.438Z",
+    "lastModified": "2026-05-28T03:08:25.785Z",
     "checksum": "daa6912c6803698fc487f51f959a1640ae388d11c1f72472d88510073252de8f"
   }
 }

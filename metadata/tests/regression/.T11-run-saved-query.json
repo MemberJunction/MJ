@@ -4,7 +4,7 @@
     "Name": "T11 - Run a Saved Query",
     "Description": "Navigates to the Query Browser, finds and executes a saved query, and verifies results are displayed in a grid.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and look for the Queries section or Query Browser. Find any available saved query and execute it. Verify that query results are displayed in a table or grid with data rows.",
+      "goal": "Navigate to Data Explorer and look for the Queries section or Query Browser. Find any available saved query and execute it. Verify that query results are displayed in a table or grid with data rows.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "A5174558-E08A-4A33-982C-2ADCACC01100"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.315Z",
+    "lastModified": "2026-05-28T03:08:25.663Z",
     "checksum": "c1f5bda50cacf66cfe6e33465fb84b3d3a9c76ac7d40c23c85c0a6cf438deeba"
   }
 }

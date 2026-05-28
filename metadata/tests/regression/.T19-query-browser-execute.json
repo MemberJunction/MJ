@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T19 - Query Browser Execute Query",
-    "Description": "Navigates to Data Explorer > Queries, finds a query related to events or members, executes it, and verifies results display.",
+    "Description": "Navigates to Data Explorer > Queries, selects a query that has no required parameters, runs it, and verifies tabular results display.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer. Find the Queries section and locate a query related to events or members. Select and execute the query. Verify that results are displayed in a tabular format with data rows.",
+      "goal": "Navigate to Data Explorer and open the Queries section. Select a runnable query (one without required input parameters), click Run, and verify that results are displayed in a tabular format with data rows.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "F89CF3DF-CDC1-4460-9BD1-C98E750C163F"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.482Z",
-    "checksum": "23bfcaf91ef09f157ce87f76d68d50ab2a6e4e8d148674a6c48b0bc84bcd13b5"
+    "lastModified": "2026-05-28T03:08:25.826Z",
+    "checksum": "6c870c373f84b7dfdc933f1694782f8263e6cdb4f247f740f31dd00dda98cbdc"
   }
 }

@@ -4,7 +4,7 @@
     "Name": "T24 - Session Persistence Reload Page",
     "Description": "Logs in, navigates to Data Explorer, opens a record, reloads the browser page, and verifies the session is maintained.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly — this is normal, wait for it to finish. You have a limited amount of steps to be sure to wait for a good amount of time.",
+      "goal": "Navigate to Data Explorer and open any entity (e.g., Members). Then reload the browser page (press F5 or use the Refresh action). After the page reloads, verify that the user is still logged in (not redirected to the login page) and the application is functional. Note: after reload, the app may show the loading screen again briefly — this is normal, wait for it to finish. You have a limited amount of steps to be sure to wait for a good amount of time.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -76,7 +76,7 @@
     "ID": "C2496941-0035-4B09-9E5C-C4D53822F940"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.585Z",
+    "lastModified": "2026-05-28T03:08:25.927Z",
     "checksum": "4db7674b6194b4f6d61c5969f45ffaac606a07f57119e53eb3f1113702ecd18c"
   }
 }

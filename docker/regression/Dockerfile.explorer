@@ -44,6 +44,15 @@ FROM nginx:alpine
 
 COPY --from=builder /app/packages/MJExplorer/dist/MJExplorer/browser /usr/share/nginx/html
 
+# Bake the ephemeral-workspace flag into the static index.html so the
+# regression Explorer never persists or restores workspace (tab) state.
+# This makes each test's fresh BrowserContext start from a clean default
+# workspace, eliminating cross-test tab leakage that would otherwise occur
+# under a shared test user. WorkspaceStateManager reads this flag from
+# `window.__MJ_EPHEMERAL_WORKSPACE__` and short-circuits load + persist.
+# Production Explorer images do NOT inject this flag — behavior is unchanged.
+RUN sed -i 's|<head>|<head><script>window.__MJ_EPHEMERAL_WORKSPACE__=true;</script>|' /usr/share/nginx/html/index.html
+
 # nginx config: SPA routing + reverse proxy for GraphQL API.
 # The config maintains a $connection_upgrade map (Connection: "upgrade" for
 # WebSocket, "close" for HTTP) so GraphQL subscriptions work end-to-end.

@@ -42,8 +42,20 @@ echo ""
 # ./.docker-generated/MJExplorer-forms/ on the host. That's the whole point
 # of this container.
 echo "Step 3: Running CodeGen to generate Angular entity forms..."
+# Run codegen TWICE. The AssociationDemo tables are brand-new to this fresh temp
+# DB, so the FIRST pass onboards them: it creates their EntityField metadata
+# rows — including the __mj_CreatedAt/__mj_UpdatedAt system date fields — and
+# commits them to the DB. But the generated output files emitted during that
+# same first pass are produced from in-memory metadata captured before those
+# system fields existed, so the non-core GraphQL types (and entity subclasses)
+# come out WITHOUT _mj__CreatedAt/_mj__UpdatedAt. A SECOND codegen process loads
+# metadata that now includes those committed fields and regenerates the output
+# correctly. Without this, single-record reads + saves of demo entities fail
+# at runtime with "Cannot query field _mj__CreatedAt on type AssociationDemoMember_".
 npx mj codegen
-echo "  ✓ CodeGen complete"
+echo "  ↻ CodeGen pass 1 complete; re-running against settled metadata..."
+npx mj codegen
+echo "  ✓ CodeGen complete (2 passes)"
 echo ""
 
 # Sanity check: confirm forms were written to the bind-mount.

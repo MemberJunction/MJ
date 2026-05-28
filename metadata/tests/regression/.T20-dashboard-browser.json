@@ -4,7 +4,7 @@
     "Name": "T20 - Dashboard Browser",
     "Description": "Navigates to Data Explorer > Dashboards and opens a dashboard to verify it renders correctly.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer. Find the Dashboards section and open a dashboard. Verify that the dashboard renders with at least one widget, chart, or data display visible.",
+      "goal": "Navigate to Data Explorer. Find the Dashboards section and open a dashboard. Verify that the dashboard renders with at least one widget, chart, or data display visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "4069DC55-B2BB-452C-8AD2-599802D90E6B"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.502Z",
+    "lastModified": "2026-05-28T03:08:25.848Z",
     "checksum": "fcb2e67fc0d118733c14b8de50ce5b53eacb2068d259e39c3f045954f9eb2641"
   }
 }

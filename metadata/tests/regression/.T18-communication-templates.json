@@ -4,7 +4,7 @@
     "Name": "T18 - Communication Templates View",
     "Description": "Navigates to the Communication application and views communication templates.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the Communication application (if available). View the template list or template browser. Verify that at least one communication template is displayed.",
+      "goal": "Use the application switcher to navigate to the Communication application (if available). View the template list or template browser. Verify that at least one communication template is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "3CEF8310-6CDD-493F-824D-C13EB9BB9217"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.457Z",
+    "lastModified": "2026-05-28T03:08:25.805Z",
     "checksum": "cdafb5dd0c51ae911279a1a38bb8d0a6527729876d0874cc3e387ad9f3ad2aaa"
   }
 }

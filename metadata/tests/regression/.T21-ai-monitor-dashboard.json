@@ -4,7 +4,7 @@
     "Name": "T21 - AI Monitor Dashboard",
     "Description": "Navigates to AI > Monitor and verifies the monitoring dashboard loads with status indicators.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
+      "goal": "Use the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "7F861EDC-EDEF-4333-8EFE-C9B6F2209404"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.523Z",
+    "lastModified": "2026-05-28T03:08:25.868Z",
     "checksum": "8867c9d30170e708e799840b7bfd7f0b5afbe4cdf05ea256262279e64e0f21a5"
   }
 }

@@ -4,7 +4,7 @@
     "Name": "T01 - Login Smoke",
     "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test — if login fails, nothing else can run.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nVerify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
+      "goal": "Verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -84,7 +84,7 @@
     "ID": "2F4CAED9-0916-433E-8A63-70C4B71B337B"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.102Z",
+    "lastModified": "2026-05-28T03:08:25.414Z",
     "checksum": "c231e749ffbffb0fa452c8f428572084cd184cc5abd0d427aa61eee2fef2f59f"
   }
 }

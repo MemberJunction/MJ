@@ -4,7 +4,7 @@
     "Name": "T06 - Data Explorer Search",
     "Description": "Uses the search functionality to find an entity or record. Searches for 'Event' and verifies results appear.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
+      "goal": "Use the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -74,7 +74,7 @@
     "ID": "8D4FF31A-B6D0-4E02-9528-4F0D0E240851"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.210Z",
+    "lastModified": "2026-05-28T03:08:25.520Z",
     "checksum": "d62e16f6637f990e4cc396b62750c789f1fb15728fe31bcd21aea3edb8eff735"
   }
 }

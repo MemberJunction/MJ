@@ -4,7 +4,7 @@
     "Name": "T16 - Lists Create and Populate",
     "Description": "Navigates to the Lists application, creates a new list, adds a record to it, and verifies the list contains the record.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to the Lists application (if available in the app switcher). Create a new list named 'Regression Test List'. Add at least one record to it (such as a Member record). Verify the list shows the added record.",
+      "goal": "Navigate to the Lists application (if available in the app switcher). Create a new list named 'Regression Test List'. Add at least one record to it (such as a Member record). Verify the list shows the added record.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "5BE50BF7-D0C4-4A02-A441-41C8ECF08CF6"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.416Z",
+    "lastModified": "2026-05-28T03:08:25.764Z",
     "checksum": "eaebef9f779ce6cf7e131269d6e8a6df25e9a9435942cf8a4fbe52ed5f620726"
   }
 }

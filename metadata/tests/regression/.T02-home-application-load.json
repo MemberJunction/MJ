@@ -4,7 +4,7 @@
     "Name": "T02 - Home Application Load",
     "Description": "After login, verifies the Home application loads with navigation elements visible including header, app switcher, and at least one navigation item.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nVerify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
+      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -76,7 +76,7 @@
     "ID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.125Z",
+    "lastModified": "2026-05-28T03:08:25.436Z",
     "checksum": "810c7d9883150c5bfb1f3fe0af4a26ebd9c1fdde3b3ada1a32fa538479830916"
   }
 }

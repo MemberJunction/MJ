@@ -130,9 +130,29 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Ephemeral mode: when `window.__MJ_EPHEMERAL_WORKSPACE__ === true` is set
+   * (only baked into the regression test Explorer build via Dockerfile.explorer),
+   * the workspace neither loads from nor persists to the server. Every fresh
+   * BrowserContext starts from a default workspace configuration, so tab/workspace
+   * state can never leak across regression tests sharing a user. Production
+   * deployments never set this flag, so behavior is unchanged.
+   */
+  private isEphemeral(): boolean {
+    return typeof window !== 'undefined'
+      && (window as Window & { __MJ_EPHEMERAL_WORKSPACE__?: boolean }).__MJ_EPHEMERAL_WORKSPACE__ === true;
+  }
+
+  /**
    * Load workspace from database using UserInfoEngine for centralized, cached access
    */
   private async loadWorkspace(userId: string): Promise<void> {
+    if (this.isEphemeral()) {
+      // Test mode — skip server load entirely. Just emit a default config so the
+      // workspace starts clean for this BrowserContext. No MJWorkspaceEntity is
+      // created or read; the DB row (if any) is ignored.
+      this.configuration$.next(createDefaultWorkspaceConfiguration());
+      return;
+    }
     // Use UserInfoEngine for centralized, cached workspace loading
     const engine = UserInfoEngine.Instance;
     const workspaces = engine.Workspaces;
@@ -174,6 +194,11 @@ export class WorkspaceStateManager {
    * Persist configuration to database (debounced)
    */
   private async persistConfiguration(): Promise<void> {
+    if (this.isEphemeral()) {
+      // Test mode — no-op. We never persist workspace state in the regression
+      // environment so tab/workspace state can't leak across tests.
+      return;
+    }
     const workspace = this.workspace$.value;
     const config = this.configuration$.value;
 

@@ -4,7 +4,7 @@
     "Name": "T15 - AI Application Prompt Management",
     "Description": "Navigates to AI > Prompts and views the prompt management interface. Opens a prompt to see its detail form.",
     "InputDefinition": {
-      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
+      "goal": "Use the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -75,7 +75,7 @@
     "ID": "92255EB2-CC3D-4FF2-8652-EE2CFB5D8A6D"
   },
   "sync": {
-    "lastModified": "2026-05-26T23:33:31.396Z",
+    "lastModified": "2026-05-28T03:08:25.744Z",
     "checksum": "d78da94ddc93ab5aca6874093852fc565fdb1b789be426f899b797e7e806b512"
   }
 }
