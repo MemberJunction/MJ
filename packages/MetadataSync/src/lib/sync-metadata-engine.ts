@@ -89,6 +89,24 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
   /** Reverse index used to scope lookup invalidation on delete: entity name → set of lookup keys touching that entity. */
   private lookupKeysByEntity: Map<string, Set<string>> = new Map();
 
+  /**
+   * O(1) PK lookup index built after preload completes. Keyed by entity
+   * name, then by `serializePrimaryKey(...)` of the entity's own PK.
+   *
+   * Without this, `loadEntity` falls into an `Array.find(... GetAll())`
+   * scan over the entire preloaded slot, which is O(N) per record being
+   * processed — i.e. O(N×K) overall. For entities like `MJ: Integration
+   * Object Fields` where DB-wide row count can be 10×+ the file count,
+   * that turns into billions of comparisons (38 min for the integrations
+   * dir alone in real-world measurement).
+   *
+   * Kept in sync by {@link addEntityToCache} / {@link removeEntityFromCache}.
+   * `findCachedByPrimaryKey` falls back to an array scan on Map miss so
+   * we tolerate drift from `BaseEngine`'s event-driven slot mutations
+   * (which mutate the array directly without going through our helpers).
+   */
+  private pkIndexes: Map<string, Map<string, BaseEntity>> = new Map();
+
   /** Non-fatal warnings collected during preload (malformed shapes, oversized entities). Drained by the caller after `Config()`. */
   private warnings: string[] = [];
 
@@ -128,9 +146,75 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
 
     if (configs.length > 0) {
       await this.Load(configs, providerToUse, forceRefresh, contextUser);
+      this.buildPKIndexes(configs);
       this.warnOnOversizedSlots(configs);
     }
     return true;
+  }
+
+  /**
+   * Build the per-entity PK → entity Map from each populated slot.
+   * Runs once after `BaseEngine.Load` completes. The cost (one walk
+   * over the loaded arrays, building Map entries) is trivial compared
+   * to the per-record-lookup savings it enables downstream.
+   */
+  private buildPKIndexes(configs: Partial<BaseEnginePropertyConfig>[]): void {
+    for (const config of configs) {
+      if (!config.PropertyName || !config.EntityName) continue;
+      const entityInfo = this.syncEngine.getEntityInfo(config.EntityName);
+      if (!entityInfo) continue;
+      const list = (this as unknown as Record<string, unknown>)[config.PropertyName];
+      if (!Array.isArray(list)) continue;
+
+      const index = new Map<string, BaseEntity>();
+      for (const entity of list as BaseEntity[]) {
+        try {
+          const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
+          index.set(pkStr, entity);
+        } catch {
+          // Defensive: a malformed cached entity shouldn't break index
+          // construction for the whole entity. The array scan fallback
+          // will still find it if needed.
+        }
+      }
+      this.pkIndexes.set(config.EntityName, index);
+    }
+  }
+
+  /**
+   * O(1) PK lookup against the preload cache, with an array-scan
+   * fallback so we tolerate drift from `BaseEngine` event-driven
+   * slot mutations that don't go through our `addEntityToCache` helper.
+   *
+   * Returns `null` when the entity isn't preloaded or the PK isn't in
+   * the cache — callers fall through to a DB load.
+   */
+  public findCachedByPrimaryKey(entityName: string, primaryKey: Record<string, unknown>): BaseEntity | null {
+    if (!this.isEntityPreloaded(entityName)) return null;
+    const entityInfo = this.syncEngine.getEntityInfo(entityName);
+    if (!entityInfo) return null;
+
+    const pkStr = this.serializePrimaryKey(entityInfo, primaryKey);
+    const index = this.pkIndexes.get(entityName);
+    const hit = index?.get(pkStr);
+    if (hit) return hit;
+
+    // Fallback: someone (BaseEngine event handler) might have spliced
+    // a new entity into the array slot without updating the index.
+    // Linear scan once, and if we find a match, repair the index so
+    // subsequent hits stay O(1).
+    const list = this.getCachedEntities(entityName);
+    for (const entity of list) {
+      try {
+        if (this.serializePrimaryKey(entityInfo, entity.GetAll()) === pkStr) {
+          index?.set(pkStr, entity);
+          return entity;
+        }
+      } catch {
+        // skip malformed entries
+      }
+    }
+    return null;
   }
 
   public markEntityAsPreloaded(entityName: string): void {
@@ -176,31 +260,50 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     // only (the entity might not be saved yet, in which case no dedup is
     // possible anyway).
     const incomingKey = entity.PrimaryKey;
-    const index = list.findIndex(e => {
+    const arrayIdx = list.findIndex(e => {
       if (e === entity) return true;
       const existingKey = e.PrimaryKey;
       if (!incomingKey || !existingKey) return false;
       return existingKey.Equals(incomingKey);
     });
-    if (index >= 0) {
-      list[index] = entity;
+    if (arrayIdx >= 0) {
+      list[arrayIdx] = entity;
     } else {
       list.push(entity);
     }
+
+    // Keep the PK index in sync. Skip silently when serializePrimaryKey
+    // throws — typically a half-built entity with no PK populated yet.
+    try {
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      if (entityInfo) {
+        const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
+        let index = this.pkIndexes.get(entityName);
+        if (!index) {
+          index = new Map<string, BaseEntity>();
+          this.pkIndexes.set(entityName, index);
+        }
+        index.set(pkStr, entity);
+      }
+    } catch { /* defensive: malformed entity */ }
   }
 
   public removeEntityFromCache(entityName: string, primaryKey: Record<string, unknown>): void {
     const propName = this.getPropertyNameForEntity(entityName);
     const list = (this as unknown as Record<string, unknown>)[propName] as BaseEntity[] | undefined;
-    if (list) {
-      const entityInfo = this.syncEngine.getEntityInfo(entityName);
-      if (entityInfo) {
-        const pkStr = this.serializePrimaryKey(entityInfo, primaryKey);
-        const index = list.findIndex(e => this.serializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
-        if (index >= 0) {
-          list.splice(index, 1);
+    const entityInfo = this.syncEngine.getEntityInfo(entityName);
+    let pkStr: string | null = null;
+    if (entityInfo) {
+      pkStr = this.serializePrimaryKey(entityInfo, primaryKey);
+      if (list) {
+        const arrayIdx = list.findIndex(e => this.serializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
+        if (arrayIdx >= 0) {
+          list.splice(arrayIdx, 1);
         }
       }
+    }
+    if (pkStr !== null) {
+      this.pkIndexes.get(entityName)?.delete(pkStr);
     }
     this.invalidateLookupsForEntity(entityName);
   }

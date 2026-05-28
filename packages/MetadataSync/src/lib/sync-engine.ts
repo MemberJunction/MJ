@@ -1084,10 +1084,11 @@ export class SyncEngine {
     }
 
     if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
-      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
-      const pkStr = this.syncMetadataEngine.serializePrimaryKey(entityInfo, primaryKey);
-      const cached = cachedEntities.find(e => this.syncMetadataEngine!.serializePrimaryKey(entityInfo, e.GetAll()) === pkStr);
-      return cached || null;
+      // O(1) PK lookup against the preload cache. The previous Array.find
+      // + per-entity serializePrimaryKey(GetAll()) was O(N×K) overall and
+      // dominated runtime for entities with large DB-side populations
+      // (Integration Object Fields: 38min → seconds).
+      return this.syncMetadataEngine.findCachedByPrimaryKey(entityName, primaryKey);
     }
     
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
