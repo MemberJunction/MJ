@@ -151,7 +151,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const depsResult = await InstallDependencies(depResult.DepsToInstall, context);
+        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
         if (!depsResult.Success) {
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
         }
@@ -431,7 +434,10 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
       }
       // Install any new dependencies required by the upgraded version
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const installResult = await InstallDependencies(depResult.DepsToInstall, context);
+        const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
         if (!installResult.Success) {
           return BuildFailureResult(
             'Upgrade',
@@ -820,10 +826,17 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * dependencies appear earlier in the order and are therefore already installed,
  * so re-resolving here would be redundant (and, for any cycle that slipped the
  * up-front check, unbounded).
+ *
+ * Inherited options that affect the install ENVIRONMENT (verbosity, the
+ * schema-name override) are forwarded from the parent so a flag set on the
+ * top-level call also governs the dependency installs. Options that identify
+ * the app itself (Source, Version) are not forwarded — each dependency has its
+ * own source and resolves its own version.
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
+  inherited: { AllowDoubleUnderscoreSchema?: boolean; Verbose?: boolean },
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -833,7 +846,15 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
-    const result = await InstallApp({ Source: dep.Repository, SkipDependencyResolution: true }, context);
+    const result = await InstallApp(
+      {
+        Source: dep.Repository,
+        SkipDependencyResolution: true,
+        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
+        Verbose: inherited.Verbose,
+      },
+      context,
+    );
     if (!result.Success) {
       return { Success: false, ErrorMessage: `Failed to install dependency: ${result.ErrorMessage}` };
     }

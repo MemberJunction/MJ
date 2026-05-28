@@ -211,6 +211,28 @@ describe('InstallApp dependency orchestration', () => {
         expect(installSequence).toEqual(['app-a', 'app-root']);
     });
 
+    it('forwards AllowDoubleUnderscoreSchema from the parent install to every dependency install', async () => {
+        // Dependency uses a '__'-prefixed schema; flag must reach the dep's schema creation.
+        serveManifests({
+            'https://github.com/test/app-root': manifestJSON('app-root', { 'app-common': dep('app-common') }),
+            'https://github.com/test/app-common': manifestJSON('app-common', {}),
+        });
+
+        const result = await InstallApp(
+            { Source: 'https://github.com/test/app-root', AllowDoubleUnderscoreSchema: true },
+            context,
+        );
+
+        expect(result.Success).toBe(true);
+        // Every CreateAppSchema call (one per app installed) should carry allowDoubleUnderscore: true.
+        const createCalls = vi.mocked(CreateAppSchema).mock.calls;
+        expect(createCalls.length).toBe(2); // common + root
+        for (const call of createCalls) {
+            // Signature: (schemaName, dbProvider, { allowDoubleUnderscore })
+            expect((call[2] as { allowDoubleUnderscore?: boolean }).allowDoubleUnderscore).toBe(true);
+        }
+    });
+
     it('detects a cross-repo cycle up front and performs no install work', async () => {
         // root -> a -> b -> a  (cycle)
         serveManifests({
