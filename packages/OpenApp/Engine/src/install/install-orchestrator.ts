@@ -151,9 +151,10 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        // Pass the parent's full options so every behavior flag (e.g. Verbose,
-        // AllowDoubleUnderscoreSchema, and any future flag) propagates to deps.
-        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, options);
+        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
+        });
         if (!depsResult.Success) {
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
         }
@@ -431,14 +432,11 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
         );
       }
-      // Install any new dependencies required by the upgraded version.
-      // UpgradeOptions ≠ InstallOptions, so map the parallel fields explicitly.
-      // (Source is overridden per-dep inside InstallDependencies.)
+      // Install any new dependencies required by the upgraded version
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
         const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          Source: '',
-          Verbose: options.Verbose,
           AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Verbose: options.Verbose,
         });
         if (!installResult.Success) {
           return BuildFailureResult(
@@ -829,25 +827,18 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * so re-resolving here would be redundant (and, for any cycle that slipped the
  * up-front check, unbounded).
  *
- * The parent's options are spread into each dependency install so behavior
- * flags set at the top level (e.g. `--verbose`,
- * `--dangerously-ignore-dbl-underscore-schema-rule`) govern the whole install
- * run, including dependency installs. Three fields are then overridden because
- * they're per-app identity, not behavior:
- *   - `Source`              — set to the dependency's repository URL.
- *   - `Version`             — cleared; each dependency resolves its own latest
- *                             release rather than inheriting the parent's pin.
- *   - `SkipDependencyResolution` — forced true so pre-resolved members don't
- *                             re-resolve their own subtrees.
- *
- * Future behavior flags added to {@link InstallOptions} are forwarded
- * automatically via the spread; only the three per-app-identity overrides
- * above need explicit handling.
+ * Inherited options that affect install BEHAVIOR (verbosity, the schema-name
+ * override) are forwarded from the parent so a flag set on the top-level call
+ * also governs the dependency installs. App-identity options (Source, Version)
+ * are NOT forwarded — each dependency has its own source and installs its own
+ * latest release rather than inheriting the parent's pin. The forwarded set is
+ * explicit so new flags require a deliberate decision about whether they apply
+ * to dependencies.
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
-  parentInstallOptions: InstallOptions,
+  inherited: { AllowDoubleUnderscoreSchema?: boolean; Verbose?: boolean },
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -859,10 +850,10 @@ async function InstallDependencies(
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
     const result = await InstallApp(
       {
-        ...parentInstallOptions,
         Source: dep.Repository,
-        Version: undefined,
         SkipDependencyResolution: true,
+        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
+        Verbose: inherited.Verbose,
       },
       context,
     );
