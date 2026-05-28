@@ -208,6 +208,8 @@ export class SQLServerDialect extends SQLDialect {
 
     private static readonly _BooleanTypeNames = ['bit'] as const;
     private static readonly _StringTypeNames = ['text', 'ntext', 'varchar', 'nvarchar', 'char', 'nchar'] as const;
+    /** `char` and `nchar` right-pad stored values with spaces up to declared length. */
+    private static readonly _FixedWidthStringTypeNames = ['char', 'nchar'] as const;
     private static readonly _DateTypeNames = ['date', 'time', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime'] as const;
     private static readonly _IntegerTypeNames = ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'rowversion', 'timestamp'] as const;
     private static readonly _FloatTypeNames = ['decimal', 'numeric', 'float', 'real'] as const;
@@ -220,6 +222,7 @@ export class SQLServerDialect extends SQLDialect {
 
     get BooleanTypeNames(): readonly string[]  { return SQLServerDialect._BooleanTypeNames; }
     get StringTypeNames(): readonly string[]   { return SQLServerDialect._StringTypeNames; }
+    get FixedWidthStringTypeNames(): readonly string[] { return SQLServerDialect._FixedWidthStringTypeNames; }
     get DateTypeNames(): readonly string[]     { return SQLServerDialect._DateTypeNames; }
     get IntegerTypeNames(): readonly string[]  { return SQLServerDialect._IntegerTypeNames; }
     get FloatTypeNames(): readonly string[]    { return SQLServerDialect._FloatTypeNames; }

@@ -4,6 +4,7 @@ import { RunViewParams } from "../views/runView"
 import { BaseEntity } from "./baseEntity"
 import { RowLevelSecurityFilterInfo, UserInfo, UserRoleInfo } from "./securityInfo"
 import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, CodeNameFromString } from "./util"
+import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
@@ -1069,7 +1070,21 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get IsUniqueIdentifier(): boolean {
         return this.Type.trim().toLowerCase() === 'uniqueidentifier';
-    }    
+    }
+
+    /**
+     * Returns true if the field's SQL type is **fixed-width / space-padded**
+     * (SQL Server `char`/`nchar`, PostgreSQL `char`/`character`/`bpchar`).
+     *
+     * Authoritative source is `@memberjunction/sql-dialect` so the list of
+     * fixed-width types stays in one place per dialect. `BaseEntity` reads
+     * this on value-set to rtrim padding the DB returned, preventing
+     * spurious dirty-flagging when application code stores the logical
+     * (un-padded) form of the value.
+     */
+    get FixedWidthColumn(): boolean {
+        return IsFixedWidthStringSQLType(this.Type);
+    }
 
     /**
      * Returns true if the field has a default value set
