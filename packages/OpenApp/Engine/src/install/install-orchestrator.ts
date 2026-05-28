@@ -151,10 +151,9 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
       }
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
-        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
-          Verbose: options.Verbose,
-        });
+        // Pass the parent's full options so every behavior flag (e.g. Verbose,
+        // AllowDoubleUnderscoreSchema, and any future flag) propagates to deps.
+        const depsResult = await InstallDependencies(depResult.DepsToInstall, context, options);
         if (!depsResult.Success) {
           return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depsResult.ErrorMessage ?? 'Dependency installation failed');
         }
@@ -432,11 +431,14 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           depResult.ErrorMessage ?? 'Dependency check failed for upgrade',
         );
       }
-      // Install any new dependencies required by the upgraded version
+      // Install any new dependencies required by the upgraded version.
+      // UpgradeOptions ≠ InstallOptions, so map the parallel fields explicitly.
+      // (Source is overridden per-dep inside InstallDependencies.)
       if (depResult.DepsToInstall && depResult.DepsToInstall.length > 0) {
         const installResult = await InstallDependencies(depResult.DepsToInstall, context, {
-          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
+          Source: '',
           Verbose: options.Verbose,
+          AllowDoubleUnderscoreSchema: options.AllowDoubleUnderscoreSchema,
         });
         if (!installResult.Success) {
           return BuildFailureResult(
@@ -827,16 +829,25 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
  * so re-resolving here would be redundant (and, for any cycle that slipped the
  * up-front check, unbounded).
  *
- * Inherited options that affect the install ENVIRONMENT (verbosity, the
- * schema-name override) are forwarded from the parent so a flag set on the
- * top-level call also governs the dependency installs. Options that identify
- * the app itself (Source, Version) are not forwarded — each dependency has its
- * own source and resolves its own version.
+ * The parent's options are spread into each dependency install so behavior
+ * flags set at the top level (e.g. `--verbose`,
+ * `--dangerously-ignore-dbl-underscore-schema-rule`) govern the whole install
+ * run, including dependency installs. Three fields are then overridden because
+ * they're per-app identity, not behavior:
+ *   - `Source`              — set to the dependency's repository URL.
+ *   - `Version`             — cleared; each dependency resolves its own latest
+ *                             release rather than inheriting the parent's pin.
+ *   - `SkipDependencyResolution` — forced true so pre-resolved members don't
+ *                             re-resolve their own subtrees.
+ *
+ * Future behavior flags added to {@link InstallOptions} are forwarded
+ * automatically via the spread; only the three per-app-identity overrides
+ * above need explicit handling.
  */
 async function InstallDependencies(
   deps: Array<{ AppName: string; Repository: string; VersionRange: string }>,
   context: OrchestratorContext,
-  inherited: { AllowDoubleUnderscoreSchema?: boolean; Verbose?: boolean },
+  parentInstallOptions: InstallOptions,
 ): Promise<InternalResult> {
   for (const dep of deps) {
     if (!dep.Repository) {
@@ -848,10 +859,10 @@ async function InstallDependencies(
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
     const result = await InstallApp(
       {
+        ...parentInstallOptions,
         Source: dep.Repository,
+        Version: undefined,
         SkipDependencyResolution: true,
-        AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
-        Verbose: inherited.Verbose,
       },
       context,
     );
