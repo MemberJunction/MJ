@@ -254,7 +254,27 @@ export function collectFKEdgesFromState(state: DatabaseDocumentation): FKEdge[] 
     }
     // Final dedup — if a soft FK redundantly describes a hard FK, keep one.
     // We keep the HARD one (confidence=1) when both exist.
-    return dedupEdges(out);
+    const deduped = dedupEdges(out);
+
+    // Guard: drop any edge whose source OR target column doesn't actually exist
+    // in the schema. Soft-FK detection can name a target column by heuristic that
+    // isn't real (e.g. `Subscriber.Email` when the real column is `EmailAddress`);
+    // building a bridge view on such an edge yields uncreatable SQL ("Invalid
+    // column name"). Keeping only edges whose endpoints exist guarantees every
+    // generated bridge view compiles.
+    const validColumns = new Set<string>();
+    for (const schema of state.schemas) {
+        for (const table of schema.tables) {
+            for (const col of table.columns) {
+                validColumns.add(`${schema.name}.${table.name}.${col.name}`.toLowerCase());
+            }
+        }
+    }
+    const exists = (s: string, t: string, c: string): boolean =>
+        validColumns.has(`${s}.${t}.${c}`.toLowerCase());
+    return deduped.filter(
+        (e) => exists(e.sourceSchema, e.sourceTable, e.sourceColumn) && exists(e.targetSchema, e.targetTable, e.targetColumn),
+    );
 }
 
 /**
