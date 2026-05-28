@@ -1298,13 +1298,13 @@ export class RunAIAgentResolver extends ResolverBase {
         // Reverse to get chronological order (oldest first)
         const details = detailsResult.Results.reverse();
 
-        // Get all message IDs for batch loading attachments
+        // Get all message IDs for batch loading artifacts
         const messageIds = details.map(d => d.ID);
 
-        // Batch load all attachments for these messages
-        const attachmentsByDetailId = await attachmentService.GetAttachmentsBatch(messageIds, contextUser, provider);
-
-        // Batch load input artifacts for these messages
+        // Batch load input artifacts for these messages. Since the backfill migration
+        // (V202605271400__Backfill_Attachment_Artifacts) converted all legacy
+        // ConversationDetailAttachment rows to artifact pairs, the artifact junction
+        // is the single source of truth — no separate attachment query needed.
         const inputArtifactsByDetailId = await this.loadInputArtifactsBatch(messageIds, contextUser, provider);
 
         // Build ChatMessage array with attachments and input artifacts
@@ -1312,69 +1312,9 @@ export class RunAIAgentResolver extends ResolverBase {
 
         for (const detail of details) {
             const role = this.mapDetailRoleToMessageRole(detail.Role);
-            const attachments = attachmentsByDetailId.get(detail.ID) || [];
-
-            // Get attachment data with content URLs (handles both inline and FileID storage)
-            const attachmentDataPromises = attachments.map(att =>
-                attachmentService.GetAttachmentData(att, contextUser, provider)
-            );
-            const attachmentDataResults = await Promise.all(attachmentDataPromises);
-
-            // Decide inline vs. tools per-attachment via the artifact-type registry
-            // and the pure RouteArtifact() function. See plans/artifact-attachment-unification.md.
-            //
-            // Note on the modality check: this resolver doesn't know which model will
-            // ultimately run, so RouteArtifact's modality predicate is passed as a no-op.
-            // Model-specific modality enforcement is the driver layer's responsibility;
-            // a follow-up PR can thread the active model through here to surface modality
-            // mismatches at the hard-error path described in plan §4.
             const validAttachments: AttachmentData[] = [];
 
-            for (const result of attachmentDataResults) {
-                if (!result) continue;
-                // Storage-unified attachments link forward to their artifact version
-                // via ArtifactVersionID; the artifact path handles delivery, so skip
-                // the attachment row here to avoid double-processing.
-                if (result.attachment.ArtifactVersionID) {
-                    continue;
-                }
-                const mime = result.attachment.MimeType || '';
-                const fileName = result.attachment.FileName ?? '';
-                const ext = fileName.includes('.') ? fileName.split('.').pop() : undefined;
-                const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mime, ext);
-
-                const decision = RouteArtifact({
-                    typeDefault: artifactType?.DefaultDeliveryMode ?? 'ToolsOnly',
-                    forceToolsOnly: false,
-                    mimeType: mime,
-                    sizeBytes: result.attachment.FileSizeBytes ?? 0,
-                    inlineSizeCap: INLINE_SIZE_CAP,
-                    modelSupportsModality: () => true,
-                    modelName: '<resolver>',
-                    artifactTypeName: artifactType?.Name ?? mime,
-                });
-
-                if (decision.delivery !== 'inline') {
-                    // Tools or error: skip inline embedding. The agent reaches the
-                    // bytes via artifact tools. Driver layer handles modality enforcement.
-                    if (decision.delivery === 'tools' && decision.annotation) {
-                        LogStatus(`[RunAIAgentResolver] ${decision.annotation}`);
-                    }
-                    continue;
-                }
-                validAttachments.push({
-                    type: ConversationUtility.GetAttachmentTypeFromMime(result.attachment.MimeType),
-                    mimeType: result.attachment.MimeType,
-                    fileName: result.attachment.FileName ?? undefined,
-                    sizeBytes: result.attachment.FileSizeBytes ?? undefined,
-                    width: result.attachment.Width ?? undefined,
-                    height: result.attachment.Height ?? undefined,
-                    durationSeconds: result.attachment.DurationSeconds ?? undefined,
-                    content: result.contentUrl
-                });
-            }
-
-            // Get input artifacts for this message — same routing logic, plus ForceToolsOnly.
+            // Get input artifacts for this message — routing via RouteArtifact.
             const inputArtifacts = inputArtifactsByDetailId.get(detail.ID) || [];
             for (const artifactVersion of inputArtifacts) {
                 const artifactMime = artifactVersion.MimeType || '';
