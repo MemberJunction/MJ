@@ -59,6 +59,11 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
 
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
+  /**
+   * Emitted when the hosted form asks to be dismissed (e.g., user clicked Discard on
+   * a brand-new record). Parent components should close the tab / route the user back.
+   */
+  @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
 
   private recentAccessService: RecentAccessService;
   private navigationService = inject(NavigationService);
@@ -469,6 +474,11 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
         break;
       case 'email':
         window.open(`mailto:${event.EmailAddress}`, '_self');
+        break;
+      case 'dismiss':
+        // Form asked to be dismissed (typically Discard on a new record).
+        // Re-emit so the parent (EntityRecordResource) can close the tab.
+        this.recordDismissed.emit();
         break;
     }
   }
