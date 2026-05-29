@@ -5,6 +5,7 @@ import {
   ViewChild, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -822,7 +823,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   /** Label for the currently-selected variant (or "Default form" if none). */
   get CurrentVariantLabel(): string {
-    const v = this.EffectiveVariants?.find(x => x.ID === this.EffectiveCurrentVariantID);
+    const v = this.EffectiveVariants?.find(x => UUIDsEqual(x.ID, this.EffectiveCurrentVariantID));
     return v?.Label ?? 'Default form';
   }
 

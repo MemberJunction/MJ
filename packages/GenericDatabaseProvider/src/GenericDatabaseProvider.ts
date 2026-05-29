@@ -1528,13 +1528,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 bHasWhere = true;
             }
 
-            // 5. Row-Level Security
-            if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-                const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-                if (rlsWhereClause && rlsWhereClause.length > 0) {
-                    whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-                    bHasWhere = true;
-                }
+            // 5. Row-Level Security (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
+            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+            if (rlsWhereClause && rlsWhereClause.length > 0) {
+                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
+                bHasWhere = true;
             }
 
             // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
@@ -2196,11 +2194,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
 
-        if (!entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
-            const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
-            if (rlsWhereClause && rlsWhereClause.length > 0) {
-                whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
-            }
+        const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
+        if (rlsWhereClause && rlsWhereClause.length > 0) {
+            whereSQL = bHasWhere ? `${whereSQL} AND (${rlsWhereClause})` : `(${rlsWhereClause})`;
         }
 
         return whereSQL;
@@ -3129,9 +3125,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             return `${this.QuoteIdentifier(pk.CodeName)}=${quotes}${val.Value}${quotes}`;
         }).join(' AND ');
 
-        // Append Read RLS filter if user is not exempt
+        // Append Read RLS filter (exemption check is centralized in GetUserRowLevelSecurityWhereClause)
         let fullWhere = where;
-        if (user && !entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Read)) {
+        if (user) {
             const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Read, '');
             if (rlsWhereClause && rlsWhereClause.length > 0) {
                 fullWhere = `${where} AND (${rlsWhereClause})`;
@@ -3201,10 +3197,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         type: EntityPermissionType
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, type)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, type, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;
@@ -3230,10 +3222,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         user: UserInfo
     ): Promise<boolean> {
         const entityInfo = entity.EntityInfo;
-        if (entityInfo.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Create)) {
-            return true;
-        }
-
         const rlsWhereClause = entityInfo.GetUserRowLevelSecurityWhereClause(user, EntityPermissionType.Create, '');
         if (!rlsWhereClause || rlsWhereClause.length === 0) {
             return true;

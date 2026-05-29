@@ -1,0 +1,3 @@
+# Default bind-mount target for bacpac mode (see docker-compose.bacpac.yml).
+# Never commit actual database exports.
+*.bacpac

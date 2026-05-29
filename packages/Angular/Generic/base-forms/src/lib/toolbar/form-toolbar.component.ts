@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, TemplateRef, ChangeDetectorRef, inject, DoCheck } from '@angular/core';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from '../isa-related-panel/isa-hierarchy-utils';
@@ -566,7 +567,7 @@ export class MjFormToolbarComponent implements DoCheck {
 
   /** Label for the currently-active variant, or "Default form" when none. */
   public get CurrentVariantLabel(): string {
-    const v = this.Variants?.find(x => x.ID === this.CurrentVariantID);
+    const v = this.Variants?.find(x => UUIDsEqual(x.ID, this.CurrentVariantID));
     return v?.Label ?? 'Default form';
   }
 

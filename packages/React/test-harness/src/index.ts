@@ -1,5 +1,5 @@
 export { ReactTestHarness, TestHarnessOptions } from './lib/test-harness';
-export { BrowserManager, BrowserContextOptions } from './lib/browser-context';
+export { BrowserManager, BrowserContextOptions, classifyConnectEndpoint } from './lib/browser-context';
 // Export the component runner that uses the real React runtime UMD bundle
 export { ComponentRunner, ComponentExecutionOptions, ComponentExecutionResult } from './lib/component-runner';
 export { AssertionHelpers } from './lib/assertion-helpers';
