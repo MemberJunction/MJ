@@ -376,7 +376,6 @@ export class SchedulingInstrumentationService {
       ownerUser: job.OwnerUser,
       notifyOnSuccess: job.NotifyOnSuccess,
       notifyOnFailure: job.NotifyOnFailure,
-      // Generated field; resolves to a boolean after CodeGen runs for v5.38.x.
       runImmediatelyIfNeverRun: job.RunImmediatelyIfNeverRun === true,
       startAt: job.StartAt ? new Date(job.StartAt) : undefined,
       endAt: job.EndAt ? new Date(job.EndAt) : undefined,

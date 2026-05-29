@@ -458,7 +458,7 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private async executeJob(
         job: MJScheduledJobEntity,
         contextUser: UserInfo
-    ): Promise<MJScheduledJobRunEntity> {
+    ): Promise<MJScheduledJobRunEntity | null> {
         // Try to acquire lock for this job
         const lockAcquired = await this.tryAcquireLock(job);
 

@@ -245,8 +245,6 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
         this.Configuration = job.Configuration ?? '';
         this.NotifyOnSuccess = job.Get('NotifyOnSuccess') as boolean ?? false;
         this.NotifyOnFailure = job.Get('NotifyOnFailure') as boolean ?? true;
-        // Strongly-typed property — added by CodeGen after the v5.38.x migration runs.
-        // Will compile-error until then; user is doing the migration + CodeGen pass before merging.
         this.RunImmediatelyIfNeverRun = job.RunImmediatelyIfNeverRun ?? false;
     }
 
@@ -257,11 +255,10 @@ export class ScheduledJobEditorComponent extends BaseAngularComponent implements
         job.CronExpression = this.CronExpression.trim();
         job.Timezone = this.Timezone;
         job.Status = this.Status;
-        job.Set('ConcurrencyMode', this.ConcurrencyMode);
+        job.ConcurrencyMode = this.ConcurrencyMode as 'Skip' | 'Queue' | 'Concurrent';
         job.Configuration = this.Configuration;
-        job.Set('NotifyOnSuccess', this.NotifyOnSuccess);
-        job.Set('NotifyOnFailure', this.NotifyOnFailure);
-        // Strongly-typed property — added by CodeGen after the v5.38.x migration runs.
+        job.NotifyOnSuccess = this.NotifyOnSuccess;
+        job.NotifyOnFailure = this.NotifyOnFailure;
         job.RunImmediatelyIfNeverRun = this.RunImmediatelyIfNeverRun;
     }
 

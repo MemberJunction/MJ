@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { Metadata, LogError } from "@memberjunction/core";
-import type { SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "@memberjunction/core";
+import type { SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRunViewProvider } from "@memberjunction/core";
 
 /**
  * Action wrapper around {@link Metadata.Provider.SearchEntity}: ranked hybrid
@@ -77,7 +77,7 @@ export class SearchEntityAction extends BaseAction {
                 contextUser: params.ContextUser,
             };
 
-            const md = params.Provider ?? new Metadata();
+            const md = params.Provider as unknown as IRunViewProvider ?? new Metadata();
             const searchParams: SearchEntityParams = { entityName, searchText, options };
             const results: EntitySearchResult[] = await md.SearchEntity(searchParams);
 
