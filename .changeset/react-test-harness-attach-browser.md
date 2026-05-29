@@ -1,0 +1,5 @@
+---
+"@memberjunction/react-test-harness": minor
+---
+
+Allow the React test harness to attach to an already-running browser instead of always launching a throwaway Chromium. Pass `connect` (or set `MJ_REACT_TEST_HARNESS_CONNECT`) with an `http(s)://` endpoint to attach over CDP (`connectOverCDP`) — e.g. a real Chrome started with `--remote-debugging-port` — or a `ws(s)://` endpoint to attach to a Playwright server (`connect`); the method is auto-detected from the scheme, with a `connectType` override for raw CDP websockets. By default a fresh isolated context is created inside the attached browser; opt into `reuseExistingContext` (or `MJ_REACT_TEST_HARNESS_REUSE_CONTEXT=true`) to share the running browser's cookies/auth/session. `BrowserManager.close()` is now ownership-aware: it only closes pages and contexts the harness created and never tears down a browser it merely attached to. Fully backward compatible — with no endpoint the harness still launches its own browser exactly as before.

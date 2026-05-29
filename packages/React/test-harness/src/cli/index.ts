@@ -12,7 +12,13 @@ const program = new Command();
 
 program
   .name('mj-react-test')
-  .description('React component test harness for MemberJunction')
+  .description(
+    'React component test harness for MemberJunction.\n' +
+    'To attach to an existing browser instead of launching one, set ' +
+    'MJ_REACT_TEST_HARNESS_CONNECT (http(s)://… for CDP, ws(s)://… for a ' +
+    'Playwright server); optionally MJ_REACT_TEST_HARNESS_REUSE_CONTEXT=true ' +
+    'to reuse its session.'
+  )
   .version('2.69.1');
 
 program
