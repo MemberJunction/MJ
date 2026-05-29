@@ -6,7 +6,7 @@ import {
     OnDestroy,
     inject,
 } from '@angular/core';
-import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJGlobal, MJEventType, MJEvent } from '@memberjunction/global';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ResourceData, MJEnvironmentEntityExtended, UserInfoEngine, ComponentMetadataEngine, InteractiveFormsEngine } from '@memberjunction/core-entities';
@@ -510,7 +510,7 @@ export class FormBuilderResourceComponent
             // cache. Used to scope chat conversations to this cockpit so
             // they don't pollute the main Chat list. Deterministic name-
             // based lookup against in-memory data — no RunView.
-            const md = new Metadata();
+            const md = this.provider;
             const app = md.Applications?.find(
                 a => a.Name?.trim().toLowerCase() === FormBuilderResourceComponent.COCKPIT_APP_NAME.toLowerCase()
             );
@@ -1139,7 +1139,7 @@ export class FormBuilderResourceComponent
         const form = this.ContextMenuForm;
         this.CloseContextMenu();
         if (!form) return;
-        if (this.SelectedFormID !== form.ID) await this.OnFormPicked(form);
+        if (!UUIDsEqual(this.SelectedFormID, form.ID)) await this.OnFormPicked(form);
         await this.OnDelete();
     }
 
@@ -1157,7 +1157,7 @@ export class FormBuilderResourceComponent
         const form = this.ContextMenuForm;
         this.CloseContextMenu();
         if (!form) return;
-        if (this.SelectedFormID !== form.ID) {
+        if (!UUIDsEqual(this.SelectedFormID, form.ID)) {
             this.notifications.CreateSimpleNotification(
                 `Open "${form.Name}" first, then export from there.`, 'info', 4000);
             return;
@@ -1523,7 +1523,7 @@ export class FormBuilderResourceComponent
         // title in the chat-area stays in sync if we ever re-render. The
         // chat-area updates its own title via the conversation entity,
         // but we keep this hook here for parity with the workspace shell.
-        if (this.ChatConversation && this.ChatConversation.ID === event.conversationId) {
+        if (this.ChatConversation && UUIDsEqual(this.ChatConversation.ID, event.conversationId)) {
             this.ChatConversation.Name = event.name;
             if (event.description !== undefined) {
                 this.ChatConversation.Description = event.description;
@@ -1739,7 +1739,7 @@ export class FormBuilderResourceComponent
      */
     public async PickLineageConversation(c: { ID: string; Name: string | null }): Promise<void> {
         this.ConversationHistoryDropdownOpen = false;
-        if (c.ID === this.ChatConversationId) {
+        if (UUIDsEqual(c.ID, this.ChatConversationId)) {
             this.cdr.markForCheck();
             return;
         }
@@ -2001,7 +2001,7 @@ export class FormBuilderResourceComponent
      * push, etc.).
      */
     public async OnVersionRowClick(v: ComponentVersionRow): Promise<void> {
-        if (v.ID === this.SelectedFormID) return;
+        if (UUIDsEqual(v.ID, this.SelectedFormID)) return;
         const summary: FormComponentSummary = {
             ID: v.ID,
             Name: v.Name,
@@ -2030,7 +2030,7 @@ export class FormBuilderResourceComponent
             this.cdr.markForCheck();
             return;
         }
-        if (this.DiffSourceVersionID === v.ID) {
+        if (UUIDsEqual(this.DiffSourceVersionID, v.ID)) {
             // Same version clicked again — cancel selection.
             this.DiffSourceVersionID = null;
             this.cdr.markForCheck();
@@ -3075,7 +3075,7 @@ export class FormBuilderResourceComponent
             // Resolve RelatedEntity name from the ID. EntityRelationshipInfo
             // doesn't carry the friendly name directly; look it up from
             // the provider's cached entity list.
-            const related = provider.Entities?.find(e => e.ID === r.RelatedEntityID);
+            const related = provider.Entities?.find(e => UUIDsEqual(e.ID, r.RelatedEntityID));
             const name = related?.Name ?? '(unknown)';
             const type = (r.Type ?? 'One To Many').trim();
             const display = r.DisplayName && r.DisplayName !== name ? ` — ${r.DisplayName}` : '';

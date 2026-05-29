@@ -171,7 +171,7 @@ export class CompareCommand {
             }
 
             // Load both suite runs
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: CLI tool runs in single-user, single-connection context
             const previousRun = await md.GetEntityObject<MJTestSuiteRunEntity>('MJ: Test Suite Runs', contextUser);
             const currentRun = await md.GetEntityObject<MJTestSuiteRunEntity>('MJ: Test Suite Runs', contextUser);
 
