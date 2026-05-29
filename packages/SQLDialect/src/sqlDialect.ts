@@ -285,6 +285,19 @@ export abstract class SQLDialect implements SQLParserDialect {
     /** SQL type names this dialect uses for variable-length character / text columns. */
     abstract get StringTypeNames(): readonly string[];
 
+    /**
+     * Subset of {@link StringTypeNames} that represents **fixed-width** /
+     * space-padded character types. SQL Server `char`/`nchar` and PostgreSQL
+     * `char`/`bpchar`/`character` (without `varying`) all right-pad stored
+     * values with spaces up to the declared length and return that padding
+     * in result sets. Variable-width types (`varchar`, `nvarchar`, `text`,
+     * etc.) do not.
+     *
+     * Used by `BaseEntity` to rtrim padding on load so dirty-checks and
+     * downstream consumers see the logical value, not the storage form.
+     */
+    abstract get FixedWidthStringTypeNames(): readonly string[];
+
     /** SQL type names this dialect uses for date / time / timestamp columns. */
     abstract get DateTypeNames(): readonly string[];
 

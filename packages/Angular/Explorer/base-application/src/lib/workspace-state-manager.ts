@@ -679,6 +679,43 @@ export class WorkspaceStateManager {
   }
 
   /**
+   * Update a tab's top-level `resourceRecordId` (and mirror it into `configuration.recordId`).
+   *
+   * Used when a "new record" tab transitions to a saved record — the tab was opened with
+   * an empty recordId, but once the user saves, the tab now represents an actual record.
+   * Without this, the next "Create New Record" request would match this tab (both have
+   * empty `resourceRecordId`) and focus the stale form instead of opening a fresh one.
+   *
+   * Also clears `configuration.isNew` since the record now exists.
+   */
+  UpdateTabResourceRecordId(tabId: string, newRecordId: string): void {
+    const config = this.configuration$.value;
+    if (!config) {
+      return;
+    }
+
+    const updatedTabs = config.tabs.map(tab => {
+      if (tab.id === tabId) {
+        const { isNew: _isNew, ...restConfig } = tab.configuration;
+        return {
+          ...tab,
+          resourceRecordId: newRecordId,
+          configuration: {
+            ...restConfig,
+            recordId: newRecordId
+          }
+        };
+      }
+      return tab;
+    });
+
+    this.UpdateConfiguration({
+      ...config,
+      tabs: updatedTabs
+    });
+  }
+
+  /**
    * Get the ID of the currently active tab
    */
   GetActiveTabId(): string | null {

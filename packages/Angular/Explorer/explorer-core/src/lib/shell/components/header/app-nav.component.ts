@@ -140,6 +140,18 @@ export class AppNavComponent implements OnInit, OnDestroy {
     const config = this.workspaceManager.GetConfiguration();
     this.updateActiveStates(config);
     this.cdr.markForCheck();
+
+    // In Angular 21 zoneless mode, markForCheck() alone is unreliable when the trigger
+    // is an RxJS subscription (workspaceManager.Configuration here) not tracked by the
+    // zoneless scheduler — the dirty flag is set but no follow-up tick is scheduled.
+    // detectChanges() runs CD synchronously on this view, rendering the new data
+    // immediately. Wrapped because detectChanges throws if invoked re-entrantly during
+    // another in-flight CD pass — harmless if so.
+    try {
+      this.cdr.detectChanges();
+    } catch {
+      // Re-entrant CD — harmless, the in-flight pass picks up our markForCheck.
+    }
   }
 
   /**

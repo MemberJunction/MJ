@@ -403,6 +403,17 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns a parenthesized subquery that resolves an entity's ID by its BaseTable + SchemaName.
+    * Used in logged SQL to keep INSERT statements portable across databases
+    * (avoids hardcoding runtime UUIDs that may differ on a fresh database).
+    */
+   protected entityIdSubquery(tableName: string, schemaName: string): string {
+      const schema = mj_core_schema();
+      return `(${this.selectTop(1, 'ID',
+         `FROM ${this.qs(schema, 'vwEntities')} WHERE BaseTable = '${tableName}' AND SchemaName = '${schemaName}'`)})`;
+   }
+
+   /**
     * Returns ISNULL/COALESCE expression.
     * Both platforms support COALESCE, but SQL Server also has ISNULL.
     */
@@ -807,10 +818,11 @@ export class ManageMetadataBase {
                   updatedCount++;
                   logStatus(`    > Organic key: Updated "${okConfig.Name}" on ${ownerEntityName}`);
                } else {
-                  // Insert new — generate a deterministic UUID based on entity+name for idempotency
+                  // Insert new — use entity-lookup subquery so the logged SQL is portable across databases
+                  const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
                   const insertSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKey')}
                      (EntityID, Name, ${okConfig.Description ? 'Description, ' : ''}MatchFieldNames, NormalizationStrategy, ${okConfig.CustomNormalizationExpression ? 'CustomNormalizationExpression, ' : ''}Sequence, Status)
-                     VALUES ('${ownerEntityId}', '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
+                     VALUES (${ownerSubquery}, '${okConfig.Name}', ${okConfig.Description ? `'${okConfig.Description.replace(/'/g, "''")}', ` : ''}'${matchFieldNames}', '${okConfig.NormalizationStrategy || 'LowerCaseTrim'}', ${okConfig.CustomNormalizationExpression ? `'${okConfig.CustomNormalizationExpression.replace(/'/g, "''")}', ` : ''}${okConfig.Sequence ?? 0}, 'Active')`;
                   await this.LogSQLAndExecute(pool, insertSQL,
                      `Insert organic key "${okConfig.Name}" on ${ownerEntityName}`);
                   createdCount++;
@@ -867,11 +879,15 @@ export class ManageMetadataBase {
                      await this.LogSQLAndExecute(pool, updateRelSQL,
                         `Update organic key related entity: "${okConfig.Name}" → ${relEntityName}`);
                   } else {
+                     // Use subqueries for FK references so the logged SQL is portable across databases
+                     const ownerSubquery = this.entityIdSubquery(tableConfig.TableName, tableConfig.SchemaName);
+                     const organicKeySubquery = `(SELECT ID FROM ${this.qs(schema, 'EntityOrganicKey')} WHERE EntityID = ${ownerSubquery} AND Name = '${okConfig.Name}')`;
+                     const relEntitySubquery = this.entityIdSubquery(reConfig.TableName, reConfig.SchemaName);
                      const insertRelSQL = `INSERT INTO ${this.qs(schema, 'EntityOrganicKeyRelatedEntity')}
                         (EntityOrganicKeyID, RelatedEntityID, RelatedEntityFieldNames,
                          TransitiveObjectName, TransitiveObjectMatchFieldNames, TransitiveObjectOutputFieldName, RelatedEntityJoinFieldName,
                          DisplayName, DisplayLocation, Sequence)
-                        VALUES ('${organicKeyId}', '${relEntityId}',
+                        VALUES (${organicKeySubquery}, ${relEntitySubquery},
                          ${relFieldNames ? `'${relFieldNames}'` : 'NULL'},
                          ${transitiveObject ? `'${transitiveObject}'` : 'NULL'},
                          ${transitiveMatchFields ? `'${transitiveMatchFields}'` : 'NULL'},
