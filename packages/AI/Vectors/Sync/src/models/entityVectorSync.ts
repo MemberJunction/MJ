@@ -720,19 +720,28 @@ export class EntityVectorSyncer extends VectorBase {
   }
 
   /**
-   * Returns all active Entity Documents of the 'Record Duplicate' type.
-   * Note that this only returns the first active Entity Document. Meaning if there are multiple Entity Documents for the same entity, 
-   * only the oldest one will be returned.
-   * @param entityIDs If provided, only Entity Documents for the specified entities will be returned.
+   * Returns active Entity Documents for vectorization. Defaults to the
+   * `Record Duplicate` document type for back-compat with the historical use
+   * case (duplicate detection); pass `entityDocumentType` to target a different
+   * type (e.g. `'Search'` for the search-tier vector pool that backs
+   * `Provider.SearchEntity`).
+   *
+   * When multiple active EntityDocuments exist for the same entity (e.g. for
+   * different content variants), only the first row encountered is kept — the
+   * one-doc-per-entity restriction matches what existing vectorize callers
+   * already expect.
+   *
+   * @param entityNames If provided, only Entity Documents for the specified entities will be returned.
+   * @param entityDocumentType Name of the EntityDocumentType to filter by. Defaults to 'Record Duplicate'.
    */
-  public async GetActiveEntityDocuments(entityNames?: string[]): Promise<MJEntityDocumentEntity[]> {
+  public async GetActiveEntityDocuments(entityNames?: string[], entityDocumentType: string = 'Record Duplicate'): Promise<MJEntityDocumentEntity[]> {
     await EntityDocumentCache.Instance.Refresh(false, super.CurrentUser);
-    const entityDocumentType: MJEntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName('Record Duplicate');
-    if (!entityDocumentType) {
-      throw new Error('Entity Document Type not found');
+    const docType: MJEntityDocumentTypeEntity | undefined = EntityDocumentCache.Instance.GetDocumentTypeByName(entityDocumentType);
+    if (!docType) {
+      throw new Error(`Entity Document Type "${entityDocumentType}" not found`);
     }
 
-    let filter = `TypeID = '${entityDocumentType.ID}' AND Status = 'Active' `;
+    let filter = `TypeID = '${docType.ID}' AND Status = 'Active' `;
     if (entityNames && entityNames.length > 0) {
       filter += ` AND Entity IN (${entityNames.map((entityName: string) => `'${entityName}'`).join(',')})`;
     }
