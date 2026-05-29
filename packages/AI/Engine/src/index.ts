@@ -1,5 +1,4 @@
 export * from './AIEngine';
-export * from './SearchEntitiesWiring';
 export * from './services/AgentEmbeddingService';
 export * from './services/ActionEmbeddingService';
 export * from './services/ConversationAttachmentService';

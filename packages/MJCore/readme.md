@@ -1243,6 +1243,8 @@ for (const r of results) {
 
 **Configuration:** semantic and hybrid modes require an Active `EntityDocument` of type `Search` registered for the target entity. The MJ install seeds one for `MJ: Entities` so the entity catalog is searchable out of the box; users enable it for other entities via metadata (see `/metadata/entity-documents/`).
 
+**Provider implementation:** the public `SearchEntities` method declared on `IMetadataProvider` is implemented polymorphically — `GenericDatabaseProvider` runs the search in-process (embedding the query via `AIEngine.EmbedTextLocal` and querying `SimpleVectorServiceProvider` directly), while `GraphQLDataProvider` proxies to a server resolver. No registration or wiring is required at startup.
+
 ---
 
 ## Weighted Reciprocal Rank Fusion (`ComputeRRF`)

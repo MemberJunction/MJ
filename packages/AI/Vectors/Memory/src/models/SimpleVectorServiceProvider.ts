@@ -25,7 +25,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { RunView, LogError, UserInfo, ProviderBase } from '@memberjunction/core';
+import { RunView, LogError, UserInfo } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
     BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams,
@@ -233,33 +233,4 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
  *  is always loaded so the class registration runs. */
 export function LoadSimpleVectorServiceProvider(): void {
     // intentionally empty
-}
-
-/**
- * Convenience wiring: registers the SearchEntities `queryVectorIndex` hook so
- * `Provider.SearchEntities()` can run semantic mode without the caller having
- * to set up plumbing themselves. The companion `embedText` hook is registered
- * separately by `@memberjunction/ai-engine` (because the embedder lives there).
- *
- * Call this once during host startup, after `MJGlobal.ClassFactory` has been
- * populated. Safe to call multiple times — it just overwrites the hook.
- */
-export function RegisterSimpleVectorServiceProviderHooks(): void {
-    const provider = new SimpleVectorServiceProvider();
-    // Pull whatever hook is currently registered so we don't clobber a more
-    // capable embedText that's already in place; only fill in queryVectorIndex.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const existing = (ProviderBase as any)._searchEntitiesHooks ?? {};
-    ProviderBase.RegisterSearchEntitiesHooks({
-        embedText: existing.embedText ?? (async () => null),
-        queryVectorIndex: async (entityDocumentId, queryVector, topK, contextUser) => {
-            const result = await provider.QueryIndex(
-                { id: entityDocumentId, vector: queryVector, topK } as never,
-                contextUser
-            );
-            if (!result.success) return [];
-            const data = result.data as { matches?: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> } | null;
-            return data?.matches ?? [];
-        },
-    });
 }

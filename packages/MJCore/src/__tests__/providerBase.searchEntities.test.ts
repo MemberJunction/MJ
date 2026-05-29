@@ -1,20 +1,27 @@
 /**
  * Tests for ProviderBase.SearchEntities()
  *
- * SearchEntities is the cross-mode (lexical / semantic / hybrid) search helper
- * on IMetadataProvider. These tests exercise the orchestration logic by
- * stubbing the private lexical/semantic passes and the permission filter,
- * leaving the blending + result-shaping under test.
+ * The orchestration (lexical + semantic + RRF blend + permission filter)
+ * is concrete on ProviderBase. The semantic pass is `protected abstract`
+ * and is overridden by concrete providers (server-side: real embedder +
+ * vector pool; client-side: full GraphQL proxy that bypasses this code path).
+ *
+ * These tests exercise the orchestration by replacing the private helpers
+ * on the class prototype before each case. Private members in TypeScript
+ * are a compile-time guard, not a runtime one — JavaScript still lets us
+ * swap them, which is the only way to test the orchestration in isolation
+ * without standing up a database + AIEngine + vector pool.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ProviderBase } from '../generic/providerBase';
 import { EntityInfo } from '../generic/entityInfo';
 import { ProviderType } from '../generic/interfaces';
 import { ScoredCandidate } from '../generic/scoring/ReciprocalRankFusion';
 
-/** Minimal ProviderBase subclass that lets each test inject its own
- *  lexical/semantic/permission stubs via `as any` access. */
+/** Minimal concrete `ProviderBase` for testing. Implements the abstract
+ *  semantic pass via a per-instance result list; other private helpers
+ *  on ProviderBase are stubbed via prototype monkey-patching below. */
 class StubProvider extends ProviderBase {
     public stubEntity: EntityInfo | undefined;
     public stubLexical: ScoredCandidate[] = [];
@@ -31,24 +38,10 @@ class StubProvider extends ProviderBase {
     public async GetRecordFavoriteStatus(): Promise<boolean> { return false; }
     public async SetRecordFavoriteStatus(): Promise<void> { /* no-op */ }
 
-    // Override the private passes via `as any` in tests by stashing results
-    // on instance fields and shadowing the originals.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async searchEntitiesLexicalPass(): Promise<ScoredCandidate[]> { return this.stubLexical; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> { return this.stubSemantic; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async resolveSearchEntityDocument(): Promise<{ id: string; driverClass: string | null; apiName: string | null } | null> {
-        // Semantic mode requires a resolved EntityDocument; pretend we have one
-        return { id: 'doc-1', driverClass: null, apiName: null };
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private async searchEntitiesFilterByPermission(_entity: EntityInfo, ids: string[]): Promise<Set<string>> {
-        // Default: pass everything through. Tests override stubPermissionAllowedIds to restrict.
-        return this.stubPermissionAllowedIds ?? new Set(ids);
+    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+        return this.stubSemantic;
     }
 
-    // Stubs for abstract pieces that SearchEntities doesn't exercise:
     protected async InternalRunView(): Promise<{ Success: boolean; Results: unknown[]; RowCount: number; TotalRowCount: number; ExecutionTime: number; ErrorMessage: string; UserViewRunID: string }> {
         return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     }
@@ -58,7 +51,6 @@ class StubProvider extends ProviderBase {
     }
 }
 
-/** Build a minimal EntityInfo stand-in. SearchEntities only reads .Name, .ID, and (via lexical pass which is stubbed) Fields. */
 const buildEntity = (overrides: Partial<{ ID: string; Name: string }> = {}): EntityInfo => ({
     ID: overrides.ID ?? 'entity-1',
     Name: overrides.Name ?? 'Test Entity',
@@ -67,10 +59,42 @@ const buildEntity = (overrides: Partial<{ ID: string; Name: string }> = {}): Ent
 
 describe('ProviderBase.SearchEntities', () => {
     let provider: StubProvider;
+    // Saved originals so we can restore between tests
+    type ProviderBaseProto = ProviderBase & {
+        resolveSearchEntityDocument: (...args: unknown[]) => Promise<{ id: string; driverClass: string | null; apiName: string | null } | null>;
+        searchEntitiesLexicalPass: (...args: unknown[]) => Promise<ScoredCandidate[]>;
+        searchEntitiesFilterByPermission: (entity: EntityInfo, ids: string[], contextUser?: unknown) => Promise<Set<string>>;
+    };
+    let proto: ProviderBaseProto;
+    let originalResolve: ProviderBaseProto['resolveSearchEntityDocument'];
+    let originalLexical: ProviderBaseProto['searchEntitiesLexicalPass'];
+    let originalFilter: ProviderBaseProto['searchEntitiesFilterByPermission'];
 
     beforeEach(() => {
         provider = new StubProvider();
         provider.stubEntity = buildEntity();
+        proto = ProviderBase.prototype as ProviderBaseProto;
+        originalResolve = proto.resolveSearchEntityDocument;
+        originalLexical = proto.searchEntitiesLexicalPass;
+        originalFilter = proto.searchEntitiesFilterByPermission;
+
+        // Default stubs — tests can override per-case
+        proto.resolveSearchEntityDocument = vi.fn(async () => ({ id: 'doc-1', driverClass: null, apiName: null }));
+        proto.searchEntitiesLexicalPass = vi.fn(async function (this: StubProvider) {
+            return this.stubLexical;
+        }) as ProviderBaseProto['searchEntitiesLexicalPass'];
+        proto.searchEntitiesFilterByPermission = vi.fn(async function (
+            this: StubProvider, _entity: EntityInfo, ids: string[]
+        ) {
+            return this.stubPermissionAllowedIds ?? new Set(ids);
+        }) as ProviderBaseProto['searchEntitiesFilterByPermission'];
+    });
+
+    afterEach(() => {
+        // Restore the originals so prototype stubs don't leak across files.
+        proto.resolveSearchEntityDocument = originalResolve;
+        proto.searchEntitiesLexicalPass = originalLexical;
+        proto.searchEntitiesFilterByPermission = originalFilter;
     });
 
     describe('input validation', () => {
@@ -122,7 +146,6 @@ describe('ProviderBase.SearchEntities', () => {
             ];
 
             const r = await provider.SearchEntities('Test', 'foo', { topK: 10 });
-            // 'shared' should rank first (appears in both lists)
             expect(r[0].recordId).toBe('shared');
             expect(r[0].matchType).toBe('hybrid');
             expect(r[0].components.lexical).toBeDefined();
@@ -131,7 +154,7 @@ describe('ProviderBase.SearchEntities', () => {
     });
 
     describe('weights', () => {
-        it('lexical weight 0 effectively suppresses lexical contribution', async () => {
+        it('lexical weight 0 suppresses lexical contribution', async () => {
             provider.stubLexical = [{ ID: 'lex-only', Score: 1.0 }];
             provider.stubSemantic = [{ ID: 'sem-only', Score: 1.0 }];
 
@@ -140,7 +163,6 @@ describe('ProviderBase.SearchEntities', () => {
                 weights: { lexical: 0, semantic: 1 },
                 topK: 10,
             });
-            // Only sem-only survives — lex-only's RRF contribution is zero
             expect(r.map(x => x.recordId)).toEqual(['sem-only']);
         });
     });

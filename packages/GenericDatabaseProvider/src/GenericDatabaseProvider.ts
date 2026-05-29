@@ -88,6 +88,8 @@ import {
 } from '@memberjunction/core-entities';
 
 import { AIEngine, EntityAIActionParams } from '@memberjunction/aiengine';
+import { SimpleVectorServiceProvider } from '@memberjunction/ai-vectors-memory';
+import { ScoredCandidate } from '@memberjunction/core';
 import { QueueManager } from '@memberjunction/queue';
 import { EntityActionEngineServer } from '@memberjunction/actions';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -3773,5 +3775,56 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
         }
         return maxDate ? maxDate.toISOString() : new Date().toISOString();
+    }
+
+    /**
+     * Server-side semantic ranking for {@link ProviderBase.SearchEntities}. Embeds the query
+     * text via `AIEngine.EmbedTextLocal` (using the configured local embedding model) and runs
+     * a vector cosine query against the in-process `SimpleVectorServiceProvider`, which
+     * rehydrates the vector pool for `entityDocumentId` from
+     * `MJ: Entity Record Documents.VectorJSON` rows.
+     *
+     * Failures (no embedding model available, vector index miss) degrade to an empty result
+     * set so hybrid mode can still surface lexical matches.
+     */
+    protected override async searchEntitiesSemanticPass(
+        entityDocumentId: string,
+        searchText: string,
+        overFetch: number,
+        _embeddingDriverClass: string | null,
+        _embeddingApiName: string | null,
+        contextUser: UserInfo | undefined
+    ): Promise<ScoredCandidate[]> {
+        let queryVector: number[] | null = null;
+        try {
+            const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+            queryVector = embed?.result?.vector ?? null;
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: EmbedTextLocal threw: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+        if (!queryVector) return [];
+
+        const vectorProvider = new SimpleVectorServiceProvider();
+        const result = await vectorProvider.QueryIndex(
+            { id: entityDocumentId, vector: queryVector, topK: overFetch } as never,
+            contextUser
+        );
+        if (!result.success) return [];
+
+        const data = result.data as { matches?: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> } | null;
+        const matches = data?.matches ?? [];
+
+        const out: ScoredCandidate[] = [];
+        for (const m of matches) {
+            const recordId = String(m.metadata?.['RecordID'] ?? '');
+            if (!recordId) continue;
+            out.push({
+                ID: recordId,
+                Score: m.score,
+                Metadata: { entityRecordDocumentId: m.id },
+            });
+        }
+        return out;
     }
 }

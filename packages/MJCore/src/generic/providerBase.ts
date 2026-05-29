@@ -164,49 +164,7 @@ export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrgan
  * Implements common functionality for metadata caching, refresh, and dataset management.
  * Subclasses must implement abstract methods for provider-specific operations.
  */
-/**
- * Pluggable hooks SearchEntities calls to embed the query text and dispatch the
- * vector search against a configured EntityDocument index. Host packages
- * (`@memberjunction/ai-engine`, `@memberjunction/ai-vectors-memory`) register
- * implementations via {@link ProviderBase.RegisterSearchEntitiesHooks}. When
- * not registered, semantic mode degrades to empty results.
- */
-export interface SearchEntitiesHooks {
-    /** Embed the query text. Return null if no embedding model is available. */
-    embedText(text: string, contextUser?: UserInfo): Promise<number[] | null>;
-
-    /**
-     * Run a topK vector query against the cached index for `entityDocumentId`.
-     * The returned `metadata.RecordID` MUST be the parent entity's record ID;
-     * `id` is the EntityRecordDocument PK.
-     */
-    queryVectorIndex(
-        entityDocumentId: string,
-        queryVector: number[],
-        topK: number,
-        contextUser?: UserInfo
-    ): Promise<Array<{ id: string; score: number; metadata?: Record<string, unknown> }>>;
-}
-
 export abstract class ProviderBase implements IMetadataProvider, IRunViewProvider, IRunQueryProvider {
-    /**
-     * Hooks for semantic search wiring. Registered by host packages (the AI
-     * engine + the vector memory provider) so MJCore avoids hard build-time
-     * dependencies. See {@link SearchEntitiesHooks}.
-     */
-    protected static _searchEntitiesHooks: SearchEntitiesHooks | undefined;
-
-    /**
-     * Register implementations of the SearchEntities hooks. Typically called once
-     * at server startup from `@memberjunction/ai-vectors-memory`'s host-bootstrap
-     * code (or any equivalent wiring) — never required for SearchEntities to
-     * exist on the API surface; only required for `mode: 'semantic' | 'hybrid'`
-     * to return results.
-     */
-    public static RegisterSearchEntitiesHooks(hooks: SearchEntitiesHooks): void {
-        ProviderBase._searchEntitiesHooks = hooks;
-    }
-
     private _ConfigData: ProviderConfigDataBase;
     private _latestLocalMetadataTimestamps: MetadataInfo[];
     private _latestRemoteMetadataTimestamps: MetadataInfo[];
@@ -1262,62 +1220,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     }
 
     /**
-     * Embed the query text using the configured embedding model and dispatch
-     * a QueryIndex against the SimpleVectorServiceProvider (or any VectorDB
-     * provider registered against the EntityDocument's VectorDatabase).
+     * Run the semantic ranking pass for {@link SearchEntities}. Each concrete
+     * `ProviderBase` subclass supplies its own implementation: server-side
+     * providers (`GenericDatabaseProvider`) embed the query text and query
+     * an in-process vector pool directly; client-side providers
+     * (`GraphQLDataProvider`) override `SearchEntities` outright to proxy
+     * via GraphQL and never reach this method.
      *
-     * Returns ScoredCandidate[] whose `ID` is the parent record's RecordID
-     * and `Metadata.entityRecordDocumentId` carries the EntityRecordDocument PK.
-     *
-     * Both the embedding helper and the vector provider are resolved through
-     * `ProviderBase.RegisterSearchEntitiesHooks()` (called by host packages —
-     * see `@memberjunction/ai-engine` and `@memberjunction/ai-vectors-memory`),
-     * which keeps MJCore free of build-time dependencies on the AI/vector
-     * packages while still letting SearchEntities work at runtime.
+     * @returns Ranked array of `ScoredCandidate` whose `ID` is the parent
+     *          entity's record ID and `Metadata.entityRecordDocumentId`
+     *          carries the EntityRecordDocument PK.
      */
-    private async searchEntitiesSemanticPass(
+    protected abstract searchEntitiesSemanticPass(
         entityDocumentId: string,
         searchText: string,
         overFetch: number,
-        _embeddingDriverClass: string | null,
-        _embeddingApiName: string | null,
+        embeddingDriverClass: string | null,
+        embeddingApiName: string | null,
         contextUser: UserInfo | undefined
-    ): Promise<ScoredCandidate[]> {
-        const hooks = ProviderBase._searchEntitiesHooks;
-        if (!hooks?.embedText || !hooks?.queryVectorIndex) {
-            LogStatus('SearchEntities: semantic hooks not registered; semantic pass returns empty. Call ProviderBase.RegisterSearchEntitiesHooks() from your AI/vector wiring.');
-            return [];
-        }
-
-        let queryVector: number[] | null = null;
-        try {
-            queryVector = await hooks.embedText(searchText, contextUser);
-        } catch (e) {
-            LogError(`SearchEntities: embedText hook threw: ${e instanceof Error ? e.message : String(e)}`);
-            return [];
-        }
-        if (!queryVector) return [];
-
-        let matches: Array<{ id: string; score: number; metadata?: Record<string, unknown> }> = [];
-        try {
-            matches = await hooks.queryVectorIndex(entityDocumentId, queryVector, overFetch, contextUser);
-        } catch (e) {
-            LogError(`SearchEntities: queryVectorIndex hook threw: ${e instanceof Error ? e.message : String(e)}`);
-            return [];
-        }
-
-        const out: ScoredCandidate[] = [];
-        for (const m of matches) {
-            const recordId = String(m.metadata?.['RecordID'] ?? '');
-            if (!recordId) continue;
-            out.push({
-                ID: recordId,
-                Score: m.score,
-                Metadata: { entityRecordDocumentId: m.id },
-            });
-        }
-        return out;
-    }
+    ): Promise<ScoredCandidate[]>;
 
     /** Blend lexical + semantic via canonical weighted ComputeRRF. */
     private searchEntitiesBlend(

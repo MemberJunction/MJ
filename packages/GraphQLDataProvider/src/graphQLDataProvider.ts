@@ -15,7 +15,8 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider } from "@memberjunction/core";
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         SearchEntitiesOptions, EntitySearchResult, ScoredCandidate } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
@@ -1475,6 +1476,89 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         if(data && data.GetRecordDuplicates){
             return data.GetRecordDuplicates;
         }
+    }
+
+    /**
+     * Search a single entity's records via the server's `SearchEntities` resolver.
+     * The full ranking (lexical + semantic + RRF blend) runs server-side against the
+     * backing database provider; the client receives the already-ranked, already
+     * permission-filtered result list.
+     *
+     * Overrides the abstract template-method orchestration on `ProviderBase` because
+     * the client has no embedder, no vector pool, and no business doing the work
+     * locally — one round-trip to the server returns the final ranked list.
+     */
+    public async SearchEntities(
+        entityName: string,
+        searchText: string,
+        options?: SearchEntitiesOptions
+    ): Promise<EntitySearchResult[]> {
+        if (!entityName || !searchText || !searchText.trim()) {
+            return [];
+        }
+
+        const query = gql`query SearchEntitiesQuery($params: SearchEntitiesInput!) {
+            SearchEntities(params: $params) {
+                Success
+                ErrorMessage
+                Results {
+                    EntityRecordDocumentID
+                    RecordID
+                    Score
+                    MatchType
+                    LexicalScore
+                    SemanticScore
+                }
+            }
+        }`;
+
+        const params = {
+            EntityName: entityName,
+            SearchText: searchText,
+            Mode: options?.mode ?? 'hybrid',
+            RrfK: options?.rrfK,
+            LexicalWeight: options?.weights?.lexical,
+            SemanticWeight: options?.weights?.semantic,
+            TopK: options?.topK,
+            MinScore: options?.minScore,
+            EntityDocumentID: options?.entityDocumentId,
+        };
+
+        const data = await this.ExecuteGQL(query, { params });
+        if (!data?.SearchEntities?.Success) {
+            if (data?.SearchEntities?.ErrorMessage) {
+                LogError(`SearchEntities GraphQL error: ${data.SearchEntities.ErrorMessage}`);
+            }
+            return [];
+        }
+
+        return (data.SearchEntities.Results as Array<{
+            EntityRecordDocumentID: string | null;
+            RecordID: string;
+            Score: number;
+            MatchType: EntitySearchResult['matchType'];
+            LexicalScore: number | null;
+            SemanticScore: number | null;
+        }>).map(r => ({
+            entityRecordDocumentId: r.EntityRecordDocumentID,
+            recordId: r.RecordID,
+            score: r.Score,
+            matchType: r.MatchType,
+            components: {
+                lexical: r.LexicalScore ?? undefined,
+                semantic: r.SemanticScore ?? undefined,
+            },
+        }));
+    }
+
+    /**
+     * Unreachable on the client — `SearchEntities` is overridden above to proxy the
+     * entire operation via GraphQL, so the inherited template-method orchestration
+     * never invokes this. Implementing the abstract method as a no-op is purely a
+     * type-system requirement.
+     */
+    protected async searchEntitiesSemanticPass(): Promise<ScoredCandidate[]> {
+        return [];
     }
 
     public async MergeRecords(request: RecordMergeRequest, contextUser?: UserInfo, options?: EntityMergeOptions): Promise<RecordMergeResult> {
