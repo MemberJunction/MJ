@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "MJ Entities Search",
-      "EntityID": "@lookup:Entities.Name=MJ: Entities",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Entities",
       "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
       "Status": "Active",
       "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
