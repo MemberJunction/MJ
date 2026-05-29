@@ -11,7 +11,7 @@
  *   2. installs each app exactly once even in a diamond graph, and
  *   3. detects a cross-repo cycle up front and performs NO install work.
  *
- * The de-dup assertion is the key proof of the `SkipDependencyResolution` flow:
+ * The de-dup assertion is the key proof of the `_skipDependencyResolution` flow:
  * since the stubs report nothing as installed, a regression that let dependency
  * installs re-resolve their own subtrees would install the shared dep multiple
  * times (and in the wrong order).

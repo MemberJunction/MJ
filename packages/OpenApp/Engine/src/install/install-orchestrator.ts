@@ -85,7 +85,7 @@ export interface OrchestratorContext {
  * 4.  Resolve the FULL transitive dependency graph (fetch every dependency's
  *     manifest, detect cross-repo cycles, topologically sort) — skipped when
  *     this call is itself a pre-resolved member of a parent's graph
- * 5.  Install dependencies in leaf-first order (each via SkipDependencyResolution)
+ * 5.  Install dependencies in leaf-first order (each via _skipDependencyResolution)
  * 6.  Check schema (no collision)
  * 7.  Create schema
  * 8.  Run migrations (Skyway - DDL + metadata DML)
@@ -145,7 +145,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
     // Steps 4-5: Resolve the full transitive dependency graph and install members
     // in leaf-first order. Skipped when this call is itself a pre-resolved member
     // of a parent's graph (the parent already resolved and installed our deps).
-    if (!options.SkipDependencyResolution) {
+    if (!options._skipDependencyResolution) {
       const depResult = await ResolveDependencyChain(manifest, context);
       if (!depResult.Success) {
         return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, depResult.ErrorMessage ?? 'Dependency resolution failed');
@@ -822,7 +822,7 @@ function BuildManifestFetcher(context: OrchestratorContext): ManifestFetcher {
 /**
  * Installs the resolved dependencies sequentially in the leaf-first order
  * produced by the graph resolution. Each dependency is installed via
- * {@link InstallApp} with `SkipDependencyResolution` set — its own transitive
+ * {@link InstallApp} with `_skipDependencyResolution` set — its own transitive
  * dependencies appear earlier in the order and are therefore already installed,
  * so re-resolving here would be redundant (and, for any cycle that slipped the
  * up-front check, unbounded).
@@ -848,10 +848,17 @@ async function InstallDependencies(
       };
     }
     context.Callbacks?.OnProgress?.('Dependencies', `Installing dependency from ${dep.Repository}...`);
+    // NOTE (known limitation, tracked in #2713): we install from the dependency's
+    // repository with no Version, so it resolves to whatever its default-branch
+    // manifest reports — `dep.VersionRange` is NOT enforced for fresh installs.
+    // Declared ranges are only checked against ALREADY-installed deps (see
+    // ProcessEdge in dependency-graph-builder.ts). So a `>=1.0 <2.0` requirement
+    // can silently install 3.0 if that's the latest. Pre-existing behavior, not a
+    // regression; range-gated fresh installs are deferred follow-on work.
     const result = await InstallApp(
       {
         Source: dep.Repository,
-        SkipDependencyResolution: true,
+        _skipDependencyResolution: true,
         AllowDoubleUnderscoreSchema: inherited.AllowDoubleUnderscoreSchema,
         Verbose: inherited.Verbose,
       },

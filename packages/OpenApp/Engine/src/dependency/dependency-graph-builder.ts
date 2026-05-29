@@ -193,6 +193,12 @@ async function ProcessEdge(
 
     // Validate every edge that requires an already-installed dependency, so a
     // conflict introduced by any parent in the graph is surfaced.
+    //
+    // NOTE (known limitation, tracked in #2713): the range is only enforced when
+    // the dependency is ALREADY installed. For a not-yet-installed dep, no range
+    // check happens here and the orchestrator installs whatever its default-branch
+    // manifest reports (see InstallDependencies in install-orchestrator.ts), so a
+    // declared range like '>=1.0 <2.0' does not gate a fresh install.
     if (installed && installed.Version) {
         const compat = CheckDependencyVersionCompatibility(installed.Version, versionRange);
         if (!compat.Compatible) {
@@ -203,6 +209,13 @@ async function ProcessEdge(
     }
 
     // Already processed this node — only the per-edge version check above applies.
+    //
+    // NOTE (known limitation, tracked in #2713): when the existing node is an
+    // uninstalled dep, a second dependent's `versionRange` is NOT compared against
+    // the first dependent's range that created the node — so a diamond conflict
+    // (a needs `common ^1`, b needs `common ^2`, common uninstalled) is silently
+    // first-write-wins. Reconciling ranges across edges for the same uninstalled
+    // node would belong right here.
     if (graph.has(depName)) {
         return;
     }
