@@ -170,4 +170,55 @@ describe('ResolveDependencyGraph', () => {
             expect(result.ErrorMessage).toContain('Failed to fetch manifest');
         });
     });
+
+    // Characterization tests pinning two KNOWN limitations documented in code and
+    // tracked in issue #2713. They assert the CURRENT (intentionally limited)
+    // behavior so it can't change silently. When #2713 is implemented, these
+    // should be flipped to expect a conflict error (see notes inline).
+    describe('Documented limitations (tracked in #2713)', () => {
+        it('does NOT enforce a declared version range for an uninstalled dependency', async () => {
+            // 'a' is uninstalled but fetchable. The root demands an impossible-to-meet
+            // range, yet resolution succeeds because the range is only validated for
+            // ALREADY-installed deps. The orchestrator then installs a's latest release
+            // regardless of the range (install-orchestrator.ts).
+            // When #2713 lands: resolve a concrete version against the range and fail here.
+            const fetcher = fetcherFrom({ a: [] });
+            const root: RootApp = {
+                AppName: 'root',
+                Repository: repo('root'),
+                Dependencies: { a: { version: '>=99.0.0 <100.0.0', repository: repo('a') } },
+            };
+            const result = await ResolveDependencyGraph(root, {}, fetcher);
+
+            expect(result.Success).toBe(true);
+            const a = result.InstallOrder!.find((d) => d.AppName === 'a');
+            expect(a!.AlreadyInstalled).toBe(false);
+            // The range is recorded on the node but never enforced for a fresh install.
+            expect(a!.VersionRange).toBe('>=99.0.0 <100.0.0');
+        });
+
+        it('resolves a diamond conflict on an uninstalled shared dep as first-write-wins (no error today)', async () => {
+            // root -> a, b ; a -> common@^1 ; b -> common@^2 ; common is uninstalled.
+            // The first edge (a's) creates the 'common' node with range ^1; the second
+            // edge (b's ^2) early-returns at `if (graph.has(depName)) return` and is
+            // never compared, so the incompatible ranges silently coexist.
+            // When #2713 lands: reconcile ranges across edges and fail with a conflict.
+            const fetcher: ManifestFetcher = async (repoUrl: string) => {
+                const name = repoUrl.replace('https://github.com/test/', '');
+                const manifests: Record<string, FetchedManifest> = {
+                    a: { name: 'a', repository: repo('a'), dependencies: { common: { version: '^1.0.0', repository: repo('common') } } },
+                    b: { name: 'b', repository: repo('b'), dependencies: { common: { version: '^2.0.0', repository: repo('common') } } },
+                    common: { name: 'common', repository: repo('common'), dependencies: {} },
+                };
+                const m = manifests[name];
+                return m ? { Success: true, Manifest: m } : { Success: false, ErrorMessage: `not found: ${name}` };
+            };
+            const result = await ResolveDependencyGraph(rootApp('root', 'a', 'b'), {}, fetcher);
+
+            expect(result.Success).toBe(true); // no conflict surfaced
+            const common = result.InstallOrder!.filter((d) => d.AppName === 'common');
+            expect(common.length).toBe(1); // shared dep installed once
+            expect(common[0].VersionRange).toBe('^1.0.0'); // a's range won; b's ^2.0.0 ignored
+        });
+    });
 });
