@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg><span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span></div>
+
+<header class="site-header"><div class="site-header-inner">
+    <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+    <nav class="site-nav"><a href="getting-started.html">Getting Started</a><a href="architecture.html">Architecture</a><a href="guides.html">Guides</a><a href="packages.html">Packages</a><a href="ai-and-agents.html">AI &amp; Agents</a><a href="ecosystem.html">Ecosystem</a></nav>
+    <div class="site-nav-right">
+        <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+        <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()"><svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+    </div>
+</div></header>
+
+<main>
+
+<section class="section" style="padding-bottom: var(--space-8);">
+    <div class="container">
+        <div class="breadcrumb" style="justify-content: center;"><a href="../index.html">Docs</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span>Community</span></div>
+        <div class="section-header">
+            <div class="section-eyebrow">Get involved</div>
+            <h1>Community &amp; contributing</h1>
+            <p class="lead">MemberJunction is open source. Discussions, issues, and PRs happen on GitHub. Here's how to plug in.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <div class="feature-grid">
+            <a href="https://github.com/MemberJunction/MJ/discussions" class="feature-card">
+                <div class="icon-tile tile-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+                <h3>GitHub Discussions</h3>
+                <p>Ask questions, share what you're building, propose ideas. The main place for asynchronous conversation.</p>
+            </a>
+            <a href="https://github.com/MemberJunction/MJ/issues" class="feature-card">
+                <div class="icon-tile tile-warn" style="background: rgba(245, 158, 11, 0.10); color: var(--accent-warning);"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg></div>
+                <h3>Issue Tracker</h3>
+                <p>Report bugs, request features, track existing work. Search before filing — many issues are duplicates.</p>
+            </a>
+            <a href="https://github.com/MemberJunction/MJ/releases" class="feature-card">
+                <div class="icon-tile tile-success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14 2 14 8 20 8"/><path d="M4 22h16a2 2 0 0 0 2-2V8l-6-6H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2z"/></svg></div>
+                <h3>Releases</h3>
+                <p>Changelog &amp; published release notes for every version. Subscribe to releases on GitHub to get notified.</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--bg-surface-2); border-top: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default);">
+    <div class="container">
+        <div class="section-header left" style="max-width: 720px;">
+            <div class="section-eyebrow">Contribute code</div>
+            <h2>Contributing</h2>
+            <p>The MJ codebase has strong conventions. The fastest way to a merged PR is to follow them. The high-level rules:</p>
+        </div>
+
+        <ul style="max-width: 720px; padding-left: var(--space-6); color: var(--text-secondary);">
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Branches:</strong> Cut from <code>next</code> with a descriptive name. Track the same-named remote. Never push directly to <code>next</code> or <code>main</code>.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Types:</strong> No <code>any</code>. No <code>.Get('FieldName')</code> when a typed property exists. Strong typing throughout — generated entity classes are the source of truth.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Tests:</strong> Vitest. When you change a package, run its tests. Broken tests are as bad as broken builds.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Imports:</strong> No dynamic <code>import()</code> as a shortcut. Static imports at the top of files. The narrowly-justified exceptions are listed in <code>CLAUDE.md</code>.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Re-exports:</strong> Don't re-export types from other packages. Import directly from the source.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Singletons:</strong> Use <code>BaseSingleton&lt;T&gt;</code>, not <code>static _instance</code>.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Preferences:</strong> Use <code>UserInfoEngine</code>, not <code>localStorage</code>.</li>
+            <li style="list-style: disc; margin-bottom: var(--space-2);"><strong>Migrations:</strong> Read <a href="migrations.html" class="inline-link">migrations/CLAUDE.md</a> before authoring SQL.</li>
+        </ul>
+
+        <p style="max-width: 720px; margin-top: var(--space-6);">For the full developer handbook, see <a href="https://github.com/MemberJunction/MJ/blob/main/CLAUDE.md" class="inline-link">CLAUDE.md</a> in the repo. It's exhaustive but worth the read if you'll be making non-trivial contributions.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="section-header left" style="max-width: 720px;">
+            <div class="section-eyebrow">PR workflow</div>
+            <h2>From idea to merge</h2>
+        </div>
+
+        <div class="phase-list" style="max-width: 720px;">
+            <div class="phase-card">
+                <div class="phase-num">1</div>
+                <div>
+                    <h4>Open a discussion or issue first</h4>
+                    <div class="phase-meta">Especially for non-trivial changes</div>
+                    <p>Saves you (and reviewers) from rejected PRs. Architectural changes, new packages, or large refactors should always be discussed before coding.</p>
+                </div>
+            </div>
+            <div class="phase-card">
+                <div class="phase-num">2</div>
+                <div>
+                    <h4>Cut a feature branch from <code>next</code></h4>
+                    <div class="phase-meta">Track the same-named remote</div>
+                    <p>Use the <code>new-branch</code> Claude Code skill or do it manually: <code>git checkout -b feature/x &amp;&amp; git push -u origin feature/x</code>.</p>
+                </div>
+            </div>
+            <div class="phase-card">
+                <div class="phase-num">3</div>
+                <div>
+                    <h4>Add a changeset</h4>
+                    <div class="phase-meta">One per logical change</div>
+                    <p>Run <code>npx changeset</code> (or use the <code>changeset</code> skill). Required for all PRs that touch published packages.</p>
+                </div>
+            </div>
+            <div class="phase-card">
+                <div class="phase-num">4</div>
+                <div>
+                    <h4>Open a PR against <code>next</code></h4>
+                    <div class="phase-meta">Use the PR template</div>
+                    <p>Include a clear test plan. The <code>create-pr</code> Claude Code skill builds a strong starting point.</p>
+                </div>
+            </div>
+            <div class="phase-card">
+                <div class="phase-num">5</div>
+                <div>
+                    <h4>Address review</h4>
+                    <div class="phase-meta">CI must pass, tests must pass</div>
+                    <p>Push fix commits rather than amending. Squash happens at merge time.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="text-align: center;">
+    <div class="container-narrow">
+        <h2 style="font-size: 32px;">Thanks for being here.</h2>
+        <p class="lead" style="max-width: 480px; margin: var(--space-4) auto var(--space-8);">Whether you're filing a bug, writing a guide, building a BizApp, or just kicking the tires — your work makes the platform better.</p>
+        <div class="hero-actions">
+            <a href="https://github.com/MemberJunction/MJ/discussions" class="btn btn-primary">Join a discussion →</a>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">Star on GitHub</a>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

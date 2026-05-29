@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ecosystem — MemberJunction Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script>(function(){const s=localStorage.getItem('mj-docs-theme');const p=window.matchMedia('(prefers-color-scheme: dark)').matches;document.documentElement.setAttribute('data-theme',s||(p?'dark':'light'));})();</script>
+</head>
+<body>
+
+<div class="proto-banner"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg><span><strong>Prototype</strong> — see <a href="../plan.md">plan.md</a>.</span></div>
+
+<header class="site-header"><div class="site-header-inner">
+    <a href="../index.html" class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></a>
+    <nav class="site-nav"><a href="getting-started.html">Getting Started</a><a href="architecture.html">Architecture</a><a href="guides.html">Guides</a><a href="packages.html">Packages</a><a href="ai-and-agents.html">AI &amp; Agents</a><a href="ecosystem.html" class="active">Ecosystem</a></nav>
+    <div class="site-nav-right">
+        <button class="search-trigger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg><span class="search-text">Search docs…</span><kbd>⌘K</kbd></button>
+        <button class="theme-toggle" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()"><svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg><svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+        <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">GitHub</a>
+    </div>
+</div></header>
+
+<main>
+
+<section class="section" style="padding-bottom: var(--space-8);">
+    <div class="container">
+        <div class="breadcrumb" style="justify-content: center;"><a href="../index.html">Docs</a><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><span>Ecosystem</span></div>
+        <div class="section-header">
+            <div class="section-eyebrow">Beyond the core</div>
+            <h1>The ecosystem</h1>
+            <p class="lead">Subprojects, BizApps, integrations, deployment tools, and developer ergonomics — everything that ships alongside MemberJunction core.</p>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">BizApps — packaged business verticals</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
+                <h3>CRM</h3>
+                <p>Accounts, contacts, opportunities, pipeline management, activity tracking. Drop-in entity extensions and Actions.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/actions-bizapps-crm</span></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7H3"/><path d="M21 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"/></svg></div>
+                <h3>Accounting</h3>
+                <p>Chart of accounts, AR/AP, journal entries, period closing, financial reporting integrations.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/actions-bizapps-accounting</span></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+                <h3>LMS</h3>
+                <p>Courses, enrollments, certifications, progress tracking. Integrates with the content autotagging pipeline.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/actions-bizapps-lms</span></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3"/><path d="M5 21v-4a4 4 0 0 1 4-4h6a4 4 0 0 1 4 4v4"/></svg></div>
+                <h3>Social / Community</h3>
+                <p>Channels, posts, threading, reactions, member feeds. Designed for association and member-org communities.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/actions-bizapps-social</span></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2"/><line x1="9" x2="15" y1="6" y2="6"/></svg></div>
+                <h3>Form Builders</h3>
+                <p>Event registration, membership renewal, custom data capture forms. Generates entities + UI from form definitions.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/actions-bizapps-formbuilders</span></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-pink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg></div>
+                <h3>Knowledge Hub</h3>
+                <p>Content autotagging, taxonomy management, semantic search, RAG+ context — the AI-native KMS layer.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><span class="badge badge-mono">@memberjunction/ai-knowledge</span></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">Developer tools</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg></div>
+                <h3>MJ CLI</h3>
+                <p>The <code>mj</code> command-line tool. Scaffolding, codegen, migrations, metadata sync, deployment, and ad-hoc tasks.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                <h3>VS Code Extension</h3>
+                <p>Browse entities, edit metadata, run CodeGen, and chat with your project agent — directly inside the editor.</p>
+                <p style="margin-top: var(--space-3);"><a href="#" class="btn btn-outline btn-sm">Install from Marketplace</a></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m9 17 6-6"/></svg></div>
+                <h3>Claude Code Skills</h3>
+                <p>A growing catalog of task-specific skills for developing on MJ — from <code>pg-migrate</code> to <code>code-review</code> to <code>add-ai-model</code>.</p>
+                <p style="margin-top: var(--space-3);"><a href="ai-and-agents.html" class="inline-link">View the catalog →</a></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-sm">
+    <div class="container">
+        <h3 style="font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: var(--space-5); padding-bottom: var(--space-3); border-bottom: 1px solid var(--border-default);">Deployment &amp; ops</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/></svg></div>
+                <h3>Docker Images</h3>
+                <p>Production MJAPI container published on every release. Plus a Docker Workbench for sandboxed development against a dedicated SQL Server instance.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-success"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="m17 8 4 4-4 4"/></svg></div>
+                <h3>Hosted MJ (MJC)</h3>
+                <p>MemberJunction Central — fully hosted MJ deployment. Sign up, point at your data, skip the ops entirely.</p>
+                <p style="margin-top: var(--space-3);"><a href="#" class="btn btn-outline btn-sm">Visit MJC ↗</a></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17 12 22l10-5"/><path d="M12 2 2 7l10 5 10-5-10-5Z"/></svg></div>
+                <h3>OpenApp</h3>
+                <p>The deployment format for packaging Skip apps + brain + entity extensions as one publishable unit. Versioned, no-breaking-changes governed.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--bg-surface-2); border-top: 1px solid var(--border-default);">
+    <div class="container-narrow text-center">
+        <div class="section-eyebrow">More on the way</div>
+        <h2 style="font-size: 28px;">Ecosystem is growing</h2>
+        <p class="lead" style="max-width: 560px; margin: var(--space-4) auto var(--space-6);">As sibling repositories (extensions, integrations, sample apps) come online, they'll be aggregated here automatically. The docs build fetches READMEs from sibling repos on every nightly rebuild.</p>
+        <a href="https://github.com/orgs/MemberJunction/repositories" class="btn btn-secondary">Browse all MemberJunction repos →</a>
+    </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand"><div class="site-brand"><span class="site-brand-mark">MJ</span><span>MemberJunction</span></div><p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p></div>
+        <div class="footer-col"><h5>Docs</h5><ul><li><a href="getting-started.html">Getting Started</a></li><li><a href="architecture.html">Architecture</a></li><li><a href="guides.html">Guides</a></li><li><a href="packages.html">Packages</a></li></ul></div>
+        <div class="footer-col"><h5>AI</h5><ul><li><a href="ai-and-agents.html">Providers</a></li><li><a href="ai-and-agents.html">Agent Framework</a></li><li><a href="ai-and-agents.html">MCP &amp; A2A</a></li></ul></div>
+        <div class="footer-col"><h5>Community</h5><ul><li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li><li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li><li><a href="community.html">Contributing</a></li></ul></div>
+        <div class="footer-col"><h5>Resources</h5><ul><li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li><li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li><li><a href="migrations.html">Migrations</a></li></ul></div>
+    </div>
+    <div class="footer-bottom"><span>© MemberJunction. MIT licensed.</span><div class="legal-links"><a href="#">Privacy</a><a href="#">Terms</a><a href="https://github.com/MemberJunction/MJ">Source</a></div></div>
+</footer>
+
+</body>
+</html>

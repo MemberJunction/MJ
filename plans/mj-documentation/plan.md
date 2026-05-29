@@ -114,13 +114,9 @@
 
 This plan assumes **Astro Starlight**.
 
-### Hedge against future tooling changes
+### Component approach
 
-Starlight supports React, Vue, Svelte, and Solid via Astro's framework integrations, but committing interactive components to any single framework makes a future migration painful. To keep that door open:
-
-- **Author interactive components as Astro components or framework-agnostic web components** wherever practical.
-- Reach for a framework integration (React, Vue, etc.) only when an existing component library justifies it, and isolate those imports so the dependency surface is visible.
-- This rule keeps content portable if we ever switch to Docusaurus (e.g. when versioning becomes a hard requirement) without rewriting the component layer.
+Use **Astro components** by default. Reach for a framework integration (React, Vue) only when an existing component library justifies it — and isolate those imports. We're not optimizing for a future Docusaurus migration; we're optimizing for one clean, durable build.
 
 ---
 
@@ -358,13 +354,14 @@ In `MJ/.github/workflows/release.yml` (or wherever the release is cut), add:
 
 ## 9. Phased migration
 
-### Phase 0 — Audit (1 week, requires legacy site export)
-- Get the export of the legacy `docs.memberjunction.org`.
-- Diff against repo content (`MJ/README.md`, `MJ/guides/*`, package READMEs, CLAUDE.md).
-- Identify any content present on the legacy site but NOT in the repos. Two outcomes per item:
-  - (a) Move it into the appropriate repo as markdown, OR
-  - (b) Decide it's stale and discard.
-- Output: a checklist confirming "every legacy URL has a destination — repo file, GH Pages page, or 410 Gone."
+### Phase 0 — Audit (1-2 days, low effort)
+- **Legacy site context:** `docs.memberjunction.org` is currently hosted on **readme.com**. The content there is significantly out of date and largely superseded by in-repo READMEs and `/guides/`. **Do not invest in a full content port** — it would slow Phase 1 down for little gain.
+- **What to do instead:**
+  - Export the readme.com project (their dashboard has an export button).
+  - Skim the top-level page list and identify any page that contains content NOT already in this repo. Expected: a handful at most.
+  - For each, decide: (a) move it into the appropriate repo as markdown, or (b) discard as stale.
+  - Capture the URL list for the 301 redirect map in Phase 2.
+- **Output:** a one-page memo listing legacy URLs and their disposition (new site path / 301 target / 410 Gone).
 
 ### Phase 1 — Build (1-2 weeks)
 - Stand up `MemberJunction/docs` repo using this prototype as the IA reference.
@@ -395,6 +392,8 @@ In `MJ/.github/workflows/release.yml` (or wherever the release is cut), add:
 
 **Current state:** `typedoc.json` and `typedoc.base.json` exist at MJ repo root.
 
+**Scope:** TypeDoc must cover **every package** matched by the `workspaces` globs in root `package.json` (currently ~175 packages, growing). The pipeline auto-discovers — never hand-list entry points, or new packages silently fall off the API reference. The `typedoc.json` `entryPoints` should glob the same paths that `workspaces` does, with a small `exclude` list for app packages (`MJAPI`, `MJExplorer`) that don't ship a public TS API.
+
 **Recommended approach:** Generate TypeDoc as part of MJ's existing release workflow, upload as a release artifact, and have the docs site fetch the artifact at build time.
 
 **Steps:**
@@ -412,6 +411,33 @@ In `MJ/.github/workflows/release.yml` (or wherever the release is cut), add:
 **Why fetch from release artifact, not generate fresh:** TypeDoc on a 175-package monorepo takes 5-10 minutes. Doing it once per release in MJ's workflow (where MJ is already checked out and built) is dramatically faster than doing it in the docs build (which would need to clone and `npm install` the whole monorepo).
 
 **Edge case:** if MJ skips a release without a docs change, the docs site uses the previous artifact — fine.
+
+---
+
+## 10a. Markdown link rewriting (the load-bearing detail)
+
+When the docs site renders `MJ/guides/DASHBOARD_BEST_PRACTICES.md`, that file's internal links point at sibling paths in the MJ repo:
+
+```markdown
+See [the caching guide](./CACHING_AND_PUBSUB_GUIDE.md)
+See [the Angular conventions](../packages/Angular/CLAUDE.md)
+See [`mj-form-toolbar`](../packages/Angular/Generic/form-toolbar/src/lib/form-toolbar.component.ts)
+```
+
+None of those resolve on the deployed docs site without rewriting. The fetcher MUST run a **remark plugin** over every fetched markdown file that does this for each relative link:
+
+| Link target | Rewrite to |
+|---|---|
+| Another file the docs site also renders (e.g. `./CACHING_AND_PUBSUB_GUIDE.md`) | Site-local URL (`/guides/caching`) |
+| A file in the source repo we don't render (e.g. `../packages/Angular/CLAUDE.md`) | Absolute `https://github.com/MemberJunction/MJ/blob/<sha>/...` |
+| A non-markdown source file (`.ts`, `.sql`, etc.) | Absolute GitHub URL pinned to the build's commit SHA |
+| Already-absolute links (`https://...`) | Pass through unchanged |
+
+Pin to the **build commit SHA**, not `main`, so a link rendered today still points at the same code six months from now. The fetcher already knows the SHA (it gets it from the GitHub API at fetch time).
+
+Implementation note: write this as a unified/remark plugin operating on the MDAST, not regex on the raw markdown string — link syntax has too many edge cases (reference-style links, image links, links inside HTML blocks).
+
+**This is the single biggest implementation footgun on the project.** Build and test the rewriter before wiring up the rest of the fetch pipeline.
 
 ---
 
@@ -502,9 +528,12 @@ We'll know this worked when:
 
 ## 16. Appendix: this prototype
 
-The HTML files in `/docs-prototype/` are static, hand-coded approximations of the final site's IA and visual feel. They demonstrate:
-- The page set we'd ship.
-- The content sourcing model (notice every long-form section says "rendered from `MJ/guides/...`" rather than copying content in).
-- The visual language (which the final Starlight build can match by overriding theme tokens).
+The HTML files in `plans/mj-documentation/html/` (plus `index.html` at this directory's root) are static, hand-coded approximations of the final site. The prototype is intentionally **high-fidelity** so reviewers and the agent implementing the real site can ship without misinterpretation.
 
-These files are throwaway. After review, the actual implementation lives in `MemberJunction/docs` and this `/docs-prototype/` directory is deleted.
+The prototype demonstrates:
+- **Information architecture** — the page set we'd ship and the navigation between them.
+- **Content sourcing model** — every long-form section explicitly cites its source repo file. The prototype never copies content in; it shows where rendered content would land.
+- **Visual language** — typography scale, color tokens (light + dark mode), component patterns (cards, code blocks, callouts, sidebar nav, on-this-page rail). The final Astro Starlight build inherits this design system by overriding theme tokens.
+- **Real content** — package names, guide titles/excerpts, AI provider list, architecture layers, and skill catalog are pulled from the actual MJ repo. What a reviewer sees in the prototype is what they'll see in the deployed site, modulo full long-form body content.
+
+These files are throwaway. After review and Phase 1 sign-off, the actual implementation lives in `MemberJunction/docs` and `plans/mj-documentation/` is deleted.

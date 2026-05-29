@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="MemberJunction — the open-source, AI-native metadata-driven application platform. Unify your data, add intelligence, ship faster.">
+    <title>MemberJunction — Documentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="html/styles.css">
+    <script>
+        (function() {
+            const stored = localStorage.getItem('mj-docs-theme');
+            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const theme = stored || (prefersDark ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', theme);
+        })();
+    </script>
+</head>
+<body>
+
+<div class="proto-banner">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/></svg>
+    <span><strong>Prototype</strong> — Demonstrates IA + visual language only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.</span>
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="html/getting-started.html">Getting Started</a>
+            <a href="html/architecture.html">Architecture</a>
+            <a href="html/guides.html">Guides</a>
+            <a href="html/packages.html">Packages</a>
+            <a href="html/ai-and-agents.html">AI &amp; Agents</a>
+            <a href="html/ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <button class="search-trigger" aria-label="Search documentation">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                <span class="search-text">Search docs…</span>
+                <kbd>⌘K</kbd>
+            </button>
+            <button class="theme-toggle" aria-label="Toggle theme" onclick="(function(){const t=document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark';document.documentElement.setAttribute('data-theme',t);localStorage.setItem('mj-docs-theme',t);})()">
+                <svg class="sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                <svg class="moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                GitHub
+            </a>
+        </div>
+    </div>
+</header>
+
+<section class="hero">
+    <div class="container">
+        <div class="hero-inner">
+            <div class="hero-eyebrow">
+                <span class="pill">NEW</span>
+                <span>Agent Framework v2 — built on MCP &amp; A2A</span>
+            </div>
+            <h1>Build data-driven apps,<br>powered by AI.</h1>
+            <p class="tagline">MemberJunction is an open-source platform that turns your database into a fully functional, AI-native application — auto-generated APIs, typed entities, Angular UI, and a deep agent framework, all driven by metadata.</p>
+            <div class="hero-actions">
+                <a href="html/getting-started.html" class="btn btn-primary btn-lg">
+                    Get started
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+                </a>
+                <a href="html/architecture.html" class="btn btn-secondary btn-lg">Read the architecture</a>
+            </div>
+
+            <div class="stat-strip">
+                <div class="stat-item">
+                    <div class="stat-num">175+</div>
+                    <div class="stat-label">Modular packages</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-num">26</div>
+                    <div class="stat-label">AI providers</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-num">v2</div>
+                    <div class="stat-label">Agent framework</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-num">MIT</div>
+                    <div class="stat-label">Licensed</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<main>
+
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-eyebrow">Pick your path</div>
+            <h2>Where do you want to start?</h2>
+            <p class="lead">Four common entry points. Each one is a guided sequence — not a wall of links.</p>
+        </div>
+        <div class="path-grid">
+            <a href="html/getting-started.html" class="path-card">
+                <div class="icon-tile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 13a7 7 0 0 1 7-7c1.83 0 3.49.7 4.74 1.84"/><path d="M19 11a7 7 0 0 1-7 7c-1.83 0-3.49-.7-4.74-1.84"/><path d="M3 22 12 11"/><path d="M15 16 9 22"/><path d="M21 9 15 3"/></svg>
+                </div>
+                <h3>I'm new here</h3>
+                <p>Install MJ, run the API and Explorer, create your first entity. The 30-minute path from nothing to a running app.</p>
+                <span class="arrow-link">Getting Started <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </a>
+            <a href="html/architecture.html" class="path-card">
+                <div class="icon-tile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
+                </div>
+                <h3>I want to understand the system</h3>
+                <p>Layers, design philosophy, the metadata-driven model, and the protocols (GraphQL, MCP, A2A) we expose.</p>
+                <span class="arrow-link">Architecture <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </a>
+            <a href="html/custom-apps.html" class="path-card">
+                <div class="icon-tile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+                </div>
+                <h3>I'm building on MJ</h3>
+                <p>Custom apps, dashboards, lazy-loaded modules, theming, Angular conventions, and entity extension.</p>
+                <span class="arrow-link">Custom Apps <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </a>
+            <a href="html/ai-and-agents.html" class="path-card">
+                <div class="icon-tile">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                </div>
+                <h3>I'm working with AI</h3>
+                <p>Providers, the agent framework, MCP / A2A, prompts, vectors, RAG+, and the Claude Code skills catalog.</p>
+                <span class="arrow-link">AI &amp; Agents <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+            </a>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-eyebrow">What it does</div>
+            <h2>One platform. Database to AI agents.</h2>
+            <p class="lead">Define your schema. MemberJunction generates everything that depends on it — and provides the runtime that uses it.</p>
+        </div>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-brand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+                </div>
+                <h3>Metadata-driven</h3>
+                <p>Your database schema is the source of truth. Entities, fields, validation, audit trails, and permissions are all metadata — never hand-written boilerplate.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+                </div>
+                <h3>AI-native</h3>
+                <p>26 providers behind a single abstraction. Anthropic, OpenAI, Gemini, Bedrock, Mistral, Groq, and more — swap models without touching application code.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-info">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 7h6v6"/><path d="M22 7 12 17l-5-5L2 17"/></svg>
+                </div>
+                <h3>Agent Framework</h3>
+                <p>Build autonomous workflows with Loop and Flow agents. First-class MCP &amp; A2A support means your agents speak the protocols Claude, Cursor, and others already use.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-success">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                </div>
+                <h3>CodeGen</h3>
+                <p>One command generates strongly-typed entity classes, GraphQL schemas, Angular forms, stored procedures, and views. From schema change to production-ready code in seconds.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-amber">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9a2 2 0 0 1 2-2h.93a2 2 0 0 0 1.664-.89l.812-1.22A2 2 0 0 1 10.07 4h3.86a2 2 0 0 1 1.664.89l.812 1.22A2 2 0 0 0 18.07 7H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><circle cx="12" cy="13" r="3"/></svg>
+                </div>
+                <h3>Angular UI</h3>
+                <p>100+ reusable components, auto-generated CRUD forms, a dashboard framework, and a design token system that supports white-labeling out of the box.</p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-pink">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                </div>
+                <h3>Actions Framework</h3>
+                <p>A pluggable interface for exposing functionality to agents, workflows, and low-code builders. Discoverable, declarative, type-safe.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="background: var(--bg-surface-2); border-top: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default);">
+    <div class="container">
+        <div class="section-header left" style="max-width: 720px;">
+            <div class="section-eyebrow">In code</div>
+            <h2>What working with MJ looks like</h2>
+            <p>A typical pattern: load entities, work with strongly-typed properties, save. The metadata system handles validation, audit, FK relationships, and AI capabilities behind the scenes.</p>
+        </div>
+        <pre><code><span class="tk-kw">import</span> { Metadata, RunView } <span class="tk-kw">from</span> <span class="tk-str">'@memberjunction/core'</span>;
+<span class="tk-kw">import</span> { UserEntity } <span class="tk-kw">from</span> <span class="tk-str">'mj_generatedentities'</span>;
+
+<span class="tk-com">// Load a strongly-typed entity — types are generated from your schema</span>
+<span class="tk-kw">const</span> md = <span class="tk-kw">new</span> <span class="tk-ty">Metadata</span>();
+<span class="tk-kw">const</span> user = <span class="tk-kw">await</span> md.<span class="tk-fn">GetEntityObject</span>&lt;<span class="tk-ty">UserEntity</span>&gt;(<span class="tk-str">'Users'</span>);
+<span class="tk-kw">await</span> user.<span class="tk-fn">Load</span>(userId);
+
+<span class="tk-com">// Mutate via real properties — no .Get('FieldName') stringly-typed access</span>
+user.Status = <span class="tk-str">'Active'</span>;
+user.LastLoginAt = <span class="tk-kw">new</span> <span class="tk-ty">Date</span>();
+
+<span class="tk-com">// Save — validation, audit (Record Changes), and pub/sub fire automatically</span>
+<span class="tk-kw">const</span> saved = <span class="tk-kw">await</span> user.<span class="tk-fn">Save</span>();
+
+<span class="tk-com">// Query collections with RunView — batched, cached, multi-server aware</span>
+<span class="tk-kw">const</span> rv = <span class="tk-kw">new</span> <span class="tk-ty">RunView</span>();
+<span class="tk-kw">const</span> result = <span class="tk-kw">await</span> rv.<span class="tk-fn">RunView</span>&lt;<span class="tk-ty">UserEntity</span>&gt;({
+    <span class="tk-attr">EntityName</span>: <span class="tk-str">'Users'</span>,
+    <span class="tk-attr">ExtraFilter</span>: <span class="tk-str">`Status='Active'`</span>,
+    <span class="tk-attr">OrderBy</span>: <span class="tk-str">'LastLoginAt DESC'</span>,
+    <span class="tk-attr">MaxRows</span>: <span class="tk-num">50</span>,
+    <span class="tk-attr">ResultType</span>: <span class="tk-str">'entity_object'</span>
+});</code></pre>
+        <p class="muted" style="font-size: 13px; margin-top: var(--space-3);">Same pattern from the API server, an Angular component, a Node script, or an AI agent action — one metadata layer underneath all of it.</p>
+    </div>
+</section>
+
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-eyebrow">Deep dives</div>
+            <h2>Best-practices guides, written for production</h2>
+            <p class="lead">13 guides covering the patterns we use — and the patterns we've learned to avoid.</p>
+        </div>
+        <div class="guide-grid">
+            <a href="html/guides.html" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Caching &amp; Pub/Sub</h3>
+                    <span class="badge badge-mono">~24 min</span>
+                </div>
+                <p>How data stays fresh across multiple servers and connected browser clients — the multi-tier cache, BaseEngine integration, Redis pub/sub, and the trust model.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">guides/CACHING_AND_PUBSUB_GUIDE.md</span>
+                    <span>Read →</span>
+                </div>
+            </a>
+            <a href="html/guides.html" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>Dashboard Best Practices</h3>
+                    <span class="badge badge-mono">~18 min</span>
+                </div>
+                <p>Patterns for building MJ dashboards: architecture, state management, engine classes, user preferences, layout and the shared page chrome.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">guides/DASHBOARD_BEST_PRACTICES.md</span>
+                    <span>Read →</span>
+                </div>
+            </a>
+            <a href="html/guides.html" class="guide-card">
+                <div class="guide-card-header">
+                    <h3>BaseEntity Server-Side Patterns</h3>
+                    <span class="badge badge-mono">~14 min</span>
+                </div>
+                <p>When server-side entity subclasses are needed: persisted embeddings, cross-record invariants via ValidateAsync, FK cleanup before delete, in-memory cache sync.</p>
+                <div class="guide-card-footer">
+                    <span class="file-path">guides/BASE_ENTITY_SERVER_PATTERNS.md</span>
+                    <span>Read →</span>
+                </div>
+            </a>
+        </div>
+        <div style="text-align: center; margin-top: var(--space-8);">
+            <a href="html/guides.html" class="btn btn-outline">Browse all 13 guides →</a>
+        </div>
+    </div>
+</section>
+
+<hr class="section-divider">
+
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-eyebrow">Built on MJ</div>
+            <h2>The ecosystem</h2>
+            <p class="lead">Subprojects and verticals — extensions, integrations, and packaged BizApps.</p>
+        </div>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="icon-tile tile-brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></div>
+                <h3>BizApps — CRM, LMS, Accounting</h3>
+                <p>Production-grade Actions and entity extensions for common business domains. Drop them into any MJ deployment.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><a href="html/ecosystem.html" class="inline-link">View BizApps →</a></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 17 12 22l10-5"/><path d="M2 12 12 17l10-5"/><path d="M12 2 2 7l10 5 10-5-10-5Z"/></svg></div>
+                <h3>MCP &amp; A2A Servers</h3>
+                <p>MJ exposes its entities, actions, and agents over the Model Context Protocol and Agent-to-Agent protocol — Claude Desktop, Cursor, and other clients connect natively.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><a href="html/ai-and-agents.html" class="inline-link">Read the protocols →</a></p>
+            </div>
+            <div class="feature-card">
+                <div class="icon-tile tile-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
+                <h3>VSCode Extension</h3>
+                <p>Edit metadata, browse entities, run CodeGen, and chat with the project agent — directly inside your editor.</p>
+                <p style="margin-top: var(--space-3); font-size: 13px;"><a href="html/ecosystem.html" class="inline-link">Install →</a></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section" style="text-align: center;">
+    <div class="container-narrow">
+        <h2 style="font-size: 36px;">Ready to start?</h2>
+        <p class="lead" style="max-width: 560px; margin: var(--space-4) auto var(--space-8);">Install the CLI, scaffold an MJ project, and have a running API + Explorer in under 10 minutes.</p>
+        <div class="hero-actions">
+            <a href="html/getting-started.html" class="btn btn-primary btn-lg">Get started →</a>
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline btn-lg">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+                Star on GitHub
+            </a>
+        </div>
+    </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+    <div class="footer-inner">
+        <div class="footer-brand">
+            <div class="site-brand">
+                <span class="site-brand-mark">MJ</span>
+                <span>MemberJunction</span>
+            </div>
+            <p>Open-source, AI-native metadata-driven application platform. MIT licensed.</p>
+        </div>
+        <div class="footer-col">
+            <h5>Docs</h5>
+            <ul>
+                <li><a href="html/getting-started.html">Getting Started</a></li>
+                <li><a href="html/architecture.html">Architecture</a></li>
+                <li><a href="html/guides.html">Guides</a></li>
+                <li><a href="html/packages.html">Packages</a></li>
+                <li><a href="#">API Reference</a></li>
+            </ul>
+        </div>
+        <div class="footer-col">
+            <h5>AI</h5>
+            <ul>
+                <li><a href="html/ai-and-agents.html">Providers</a></li>
+                <li><a href="html/ai-and-agents.html">Agent Framework</a></li>
+                <li><a href="html/ai-and-agents.html">MCP &amp; A2A</a></li>
+                <li><a href="html/ai-and-agents.html">Skills Catalog</a></li>
+            </ul>
+        </div>
+        <div class="footer-col">
+            <h5>Community</h5>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+                <li><a href="html/community.html">Contributing</a></li>
+            </ul>
+        </div>
+        <div class="footer-col">
+            <h5>Resources</h5>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ">GitHub</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="html/migrations.html">Migrations</a></li>
+                <li><a href="html/ecosystem.html">Ecosystem</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="footer-bottom">
+        <span>© MemberJunction. MIT licensed.</span>
+        <div class="legal-links">
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
+            <a href="https://github.com/MemberJunction/MJ">Source</a>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>
