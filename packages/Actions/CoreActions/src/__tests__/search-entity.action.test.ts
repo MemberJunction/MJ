@@ -10,7 +10,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const searchEntityMock = vi.fn();
 
 vi.mock('@memberjunction/core', () => ({
-    Metadata: vi.fn().mockImplementation(() => ({ SearchEntity: searchEntityMock })),
     LogError: vi.fn(),
 }));
 
@@ -31,12 +30,18 @@ vi.mock('@memberjunction/actions', () => ({
 
 import { SearchEntityAction } from '../custom/data/search-entity.action';
 
-const makeParams = (overrides: Array<{ Name: string; Value: unknown }>): {
+const makeProvider = () => ({ SearchEntity: searchEntityMock });
+
+const makeParams = (
+    overrides: Array<{ Name: string; Value: unknown }>,
+    opts: { withProvider?: boolean } = { withProvider: true }
+): {
     Params: Array<{ Name: string; Type: string; Value: unknown }>;
     ContextUser?: unknown;
     Provider?: unknown;
 } => ({
     Params: overrides.map(p => ({ Name: p.Name, Type: 'Input', Value: p.Value })),
+    Provider: opts.withProvider !== false ? makeProvider() : undefined,
 });
 
 describe('SearchEntityAction', () => {
@@ -65,6 +70,20 @@ describe('SearchEntityAction', () => {
             expect(r.Success).toBe(false);
             expect(r.ResultCode).toBe('MISSING_PARAMETER');
             expect(r.Message).toMatch(/SearchText/);
+        });
+
+        it('returns MISSING_PROVIDER when params.Provider is absent', async () => {
+            const params = makeParams(
+                [
+                    { Name: 'EntityName', Value: 'Foo' },
+                    { Name: 'SearchText', Value: 'bar' },
+                ],
+                { withProvider: false }
+            );
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const r = await (action as any).InternalRunAction(params);
+            expect(r.Success).toBe(false);
+            expect(r.ResultCode).toBe('MISSING_PROVIDER');
         });
 
         it('rejects invalid Mode values', async () => {

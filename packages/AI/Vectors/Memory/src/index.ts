@@ -12,4 +12,4 @@ export {
 } from './models/SimpleVectorService';
 
 export { SimpleVectorDatabase, LoadSimpleVectorDatabase } from './models/SimpleVectorDatabase';
-export { SimpleVectorServiceProvider, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';
+export { SimpleVectorServiceProvider, SimpleVectorIndexCache, LoadSimpleVectorServiceProvider } from './models/SimpleVectorServiceProvider';

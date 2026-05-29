@@ -1,5 +1,5 @@
 import { BaseEntity } from "./baseEntity";
-import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
+import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult } from "./interfaces";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
@@ -1046,8 +1046,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Resolve EntityDocument when semantic ranking is in play
         let entityDocumentId: string | null = null;
-        let embeddingModelDriverClass: string | null = null;
-        let embeddingModelAPIName: string | null = null;
+        let embeddingAIModelId: string | null = null;
         if (mode === 'semantic' || mode === 'hybrid') {
             const resolved = await this.resolveSearchEntityDocument(
                 entity.ID,
@@ -1056,8 +1055,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             );
             if (resolved) {
                 entityDocumentId = resolved.id;
-                embeddingModelDriverClass = resolved.driverClass;
-                embeddingModelAPIName = resolved.apiName;
+                embeddingAIModelId = resolved.aiModelId;
             }
             if (!entityDocumentId && mode === 'semantic') {
                 LogError(`SearchEntity: no active 'Search' EntityDocument for entity "${entityName}"; cannot run semantic-only mode`);
@@ -1078,8 +1076,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     entityDocumentId,
                     searchText,
                     overFetch,
-                    embeddingModelDriverClass,
-                    embeddingModelAPIName,
+                    embeddingAIModelId,
                     contextUser
                 ),
         ]);
@@ -1152,21 +1149,24 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Active EntityDocument joined to the 'Search' type via the denormalized
      * `Type` column on `vwEntityDocuments` (avoids a SQL subquery and keeps
      * this metadata-layer code provider-agnostic).
+     *
+     * Returns just the EntityDocument PK and its AIModelID; concrete semantic-pass
+     * implementations look up the model from `AIEngine` to recover the driver
+     * class and API name (the view does not project them). Threading AIModelID
+     * through ensures the query embedding is generated with the *same* model
+     * used to build the index — anything else produces garbage cosine scores.
      */
     private async resolveSearchEntityDocument(
         entityID: string,
         explicitId: string | undefined,
         contextUser: UserInfo | undefined
-    ): Promise<{ id: string; driverClass: string | null; apiName: string | null } | null> {
+    ): Promise<{ id: string; aiModelId: string | null } | null> {
         const filter = explicitId
             ? `ID='${explicitId.replace(/'/g, "''")}'`
             : `EntityID='${entityID.replace(/'/g, "''")}' AND Status='Active' AND Type='Search'`;
         const r = await this.RunView<{
             ID: string;
             AIModelID: string | null;
-            AIModel: string | null;
-            AIDriverClass: string | null;
-            AIAPIName: string | null;
         }>({
             EntityName: 'MJ: Entity Documents',
             ExtraFilter: filter,
@@ -1178,15 +1178,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const row = r.Results![0];
         return {
             id: row.ID,
-            driverClass: row.AIDriverClass ?? null,
-            apiName: row.AIAPIName ?? null,
+            aiModelId: row.AIModelID ?? null,
         };
     }
 
     /**
      * Substring/prefix LIKE search against the entity's name field and any
-     * fields flagged `IncludeInUserSearchAPI`. Returns lexical scores in [0,1]
-     * blended by best match per row.
+     * string-typed fields flagged `IncludeInUserSearchAPI`. Returns lexical
+     * scores in [0,1] blended by best match per row.
+     *
+     * **Wildcard handling.** SQL Server's `LIKE` treats `%`, `_`, and `[`
+     * specially; a user searching for `50%_off` would otherwise match far more
+     * than intended. We escape those three characters and declare an explicit
+     * `ESCAPE '\\'` so user-supplied text is matched literally.
+     *
+     * **Field filtering.** Only string-typed fields are searched. Bit/numeric/
+     * date fields can be flagged `IncludeInUserSearchAPI` via metadata edit;
+     * applying `LIKE` to those would error or implicit-convert in subtle ways.
      */
     private async searchEntitiesLexicalPass(
         entity: EntityInfo,
@@ -1197,13 +1205,22 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const trimmed = searchText.trim();
         if (!trimmed) return [];
 
-        const sanitized = trimmed.replace(/'/g, "''");
-        const searchableFieldNames = entity.Fields
-            .filter(f => f.IncludeInUserSearchAPI || f.IsNameField)
-            .map(f => f.Name);
-        if (searchableFieldNames.length === 0) return [];
+        // Escape quotes for SQL string literal, then escape LIKE wildcards
+        // (%, _, [) with the explicit ESCAPE character we declare below.
+        const sanitized = trimmed
+            .replace(/'/g, "''")
+            .replace(/\\/g, '\\\\')
+            .replace(/%/g, '\\%')
+            .replace(/_/g, '\\_')
+            .replace(/\[/g, '\\[');
 
-        const likeClauses = searchableFieldNames.map(n => `${n} LIKE '%${sanitized}%'`).join(' OR ');
+        const searchableFields = entity.Fields
+            .filter(f => (f.IncludeInUserSearchAPI || f.IsNameField) && f.TSType === EntityFieldTSType.String);
+        if (searchableFields.length === 0) return [];
+
+        const likeClauses = searchableFields
+            .map(f => `${f.Name} LIKE '%${sanitized}%' ESCAPE '\\'`)
+            .join(' OR ');
 
         const r = await this.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
@@ -1250,8 +1267,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         entityDocumentId: string,
         searchText: string,
         overFetch: number,
-        embeddingDriverClass: string | null,
-        embeddingApiName: string | null,
+        embeddingAIModelId: string | null,
         contextUser: UserInfo | undefined
     ): Promise<ScoredCandidate[]>;
 

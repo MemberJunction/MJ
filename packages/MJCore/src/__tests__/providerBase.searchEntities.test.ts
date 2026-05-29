@@ -61,7 +61,7 @@ const buildEntity = (overrides: Partial<{ ID: string; Name: string }> = {}): Ent
 describe('ProviderBase.SearchEntity / SearchEntities', () => {
     let provider: StubProvider;
     type ProviderBaseProto = ProviderBase & {
-        resolveSearchEntityDocument: (...args: unknown[]) => Promise<{ id: string; driverClass: string | null; apiName: string | null } | null>;
+        resolveSearchEntityDocument: (...args: unknown[]) => Promise<{ id: string; aiModelId: string | null } | null>;
         searchEntitiesLexicalPass: (...args: unknown[]) => Promise<ScoredCandidate[]>;
         searchEntitiesFilterByPermission: (entity: EntityInfo, ids: string[], contextUser?: unknown) => Promise<Set<string>>;
     };
@@ -78,7 +78,7 @@ describe('ProviderBase.SearchEntity / SearchEntities', () => {
         originalLexical = proto.searchEntitiesLexicalPass;
         originalFilter = proto.searchEntitiesFilterByPermission;
 
-        proto.resolveSearchEntityDocument = vi.fn(async () => ({ id: 'doc-1', driverClass: null, apiName: null }));
+        proto.resolveSearchEntityDocument = vi.fn(async () => ({ id: 'doc-1', aiModelId: null }));
         proto.searchEntitiesLexicalPass = vi.fn(async function (this: StubProvider) {
             return this.stubLexical;
         }) as ProviderBaseProto['searchEntitiesLexicalPass'];

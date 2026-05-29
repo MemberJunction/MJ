@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { Metadata, LogError } from "@memberjunction/core";
+import { LogError } from "@memberjunction/core";
 import type { SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRunViewProvider } from "@memberjunction/core";
 
 /**
@@ -77,7 +77,20 @@ export class SearchEntityAction extends BaseAction {
                 contextUser: params.ContextUser,
             };
 
-            const md = params.Provider as unknown as IRunViewProvider ?? new Metadata();
+            // Always thread the invoking provider through — the action must run
+            // against the same metadata layer the caller is bound to (multi-server
+            // clients, request-scoped server-side providers). Falling back to the
+            // global `new Metadata()` would silently land on the wrong server in
+            // multi-provider scenarios. See CLAUDE.md "Don't Reach for the Global
+            // Metadata Provider in Per-Provider Code Paths".
+            const md = params.Provider as unknown as IRunViewProvider | undefined;
+            if (!md) {
+                return {
+                    Success: false,
+                    ResultCode: "MISSING_PROVIDER",
+                    Message: "RunActionParams.Provider is required — SearchEntity must run against the caller's metadata provider.",
+                };
+            }
             const searchParams: SearchEntityParams = { entityName, searchText, options };
             const results: EntitySearchResult[] = await md.SearchEntity(searchParams);
 

@@ -1,22 +1,36 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock @memberjunction/core BEFORE importing the provider.
-// The provider uses RunView for loading EntityRecordDocument rows.
+// The provider uses RunView for loading EntityRecordDocument rows and subscribes
+// to BaseEntity events for cache invalidation — both have to be present.
 const runViewMock = vi.fn();
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
-    RunView: vi.fn().mockImplementation(() => ({ RunView: runViewMock })),
+    // RunView must be `new`-able — declare as a class so `new RunView()` works.
+    // `vi.fn().mockImplementation(() => ...)` is not reliably constructable in
+    // Vitest 4.x.
+    RunView: class { public RunView = runViewMock; },
     UserInfo: class {},
+    BaseEntity: class {
+        public static get BaseEventCode(): string { return 'BaseEntityEvent'; }
+    },
+    BaseEntityEvent: class {},
 }));
 
 // VectorDBBase enforces non-empty apiKey but the provider passes a placeholder.
-// We don't need to mock VectorDBBase itself — just stub @memberjunction/global's
-// RegisterClass so the decorator doesn't try to register at import time.
+// Also stub the event-listener wiring so the singleton's subscription doesn't
+// blow up under the lightweight test environment.
 vi.mock('@memberjunction/global', async () => {
     const actual = await vi.importActual<Record<string, unknown>>('@memberjunction/global');
     return {
         ...actual,
         RegisterClass: () => (target: unknown) => target,
+        MJEventType: { ComponentEvent: 'ComponentEvent' },
+        MJGlobal: {
+            Instance: {
+                GetEventListener: () => ({ subscribe: () => ({ unsubscribe: () => undefined }) }),
+            },
+        },
     };
 });
 
@@ -157,6 +171,34 @@ describe('SimpleVectorServiceProvider', () => {
             SimpleVectorServiceProvider.InvalidateIndex('doc-1');
             await provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
             expect(runViewMock).toHaveBeenCalledTimes(2);
+        });
+
+        it('dedupes concurrent cold loads — one DB read for many parallel callers', async () => {
+            // Mock a slow RunView so we can reliably overlap parallel calls.
+            let resolveRunView!: (v: unknown) => void;
+            runViewMock.mockImplementation(() => new Promise(resolve => {
+                resolveRunView = resolve;
+            }));
+
+            const provider = new SimpleVectorServiceProvider();
+            // Fire three callers concurrently before any of them complete.
+            const a = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            const b = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+            const c = provider.QueryIndex({ id: 'doc-1', vector: [1, 0, 0], topK: 1 } as never);
+
+            // Release the in-flight RunView with a single payload.
+            resolveRunView({
+                Success: true,
+                Results: [{ ID: 'erd-1', RecordID: 'A', VectorJSON: JSON.stringify([1, 0, 0]) }],
+            });
+
+            const [ra, rb, rc] = await Promise.all([a, b, c]);
+
+            // Only ONE underlying RunView call, despite three concurrent callers.
+            expect(runViewMock).toHaveBeenCalledTimes(1);
+            expect(ra.success).toBe(true);
+            expect(rb.success).toBe(true);
+            expect(rc.success).toBe(true);
         });
 
         it('InvalidateAll drops every cached index', async () => {

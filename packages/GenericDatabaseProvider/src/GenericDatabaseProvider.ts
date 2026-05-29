@@ -3781,10 +3781,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * Server-side semantic ranking pass for {@link ProviderBase.SearchEntity}
      * (and, by extension, the batched {@link ProviderBase.SearchEntities}).
      *
-     * Embeds the query text via `AIEngine.EmbedTextLocal` (using the configured
-     * local embedding model) and runs a vector cosine query against the in-process
-     * `SimpleVectorServiceProvider`, which rehydrates the vector pool for
-     * `entityDocumentId` from `MJ: Entity Record Documents.VectorJSON` rows.
+     * The query embedding MUST be generated with the same model that produced
+     * the indexed vectors — otherwise cosine scores compare apples to oranges
+     * and rankings are garbage. We look up the EntityDocument's `AIModelID` via
+     * `AIEngine.Models` to recover the driver class / APIName and call
+     * `EmbedText(model, text)` directly. If the EntityDocument does not specify
+     * a model (or the model isn't loaded) we fall back to
+     * `EmbedTextLocal` (highest-power local model) only as a last resort.
+     *
+     * Vector ranking runs against the in-process `SimpleVectorServiceProvider`,
+     * which rehydrates the vector pool for `entityDocumentId` from
+     * `MJ: Entity Record Documents.VectorJSON` rows.
      *
      * Failures (no embedding model available, vector index miss) degrade to an
      * empty result set so hybrid mode can still surface lexical matches.
@@ -3793,16 +3800,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         entityDocumentId: string,
         searchText: string,
         overFetch: number,
-        _embeddingDriverClass: string | null,
-        _embeddingApiName: string | null,
+        embeddingAIModelId: string | null,
         contextUser: UserInfo | undefined
     ): Promise<ScoredCandidate[]> {
+        // Ensure AIEngine is loaded so Models / EmbedText are usable. Config()
+        // is a no-op when already initialized — safe to call on every search.
+        try {
+            await AIEngine.Instance.Config(false, contextUser);
+        } catch (e) {
+            LogError(`searchEntitiesSemanticPass: AIEngine.Config failed: ${e instanceof Error ? e.message : String(e)}`);
+            return [];
+        }
+
         let queryVector: number[] | null = null;
         try {
-            const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
-            queryVector = embed?.result?.vector ?? null;
+            if (embeddingAIModelId) {
+                const model = AIEngine.Instance.Models.find(m => m.ID === embeddingAIModelId);
+                if (!model) {
+                    LogError(`searchEntitiesSemanticPass: EntityDocument AIModelID="${embeddingAIModelId}" not found in AIEngine.Models. Index/query model mismatch is likely — refusing to fall back silently.`);
+                    return [];
+                }
+                const result = await AIEngine.Instance.EmbedText(model, searchText);
+                queryVector = result?.vector ?? null;
+            } else {
+                // No model on the EntityDocument — last-resort fallback to the
+                // highest-power local embedder. Logged because this path means
+                // indexing-time and query-time models can diverge.
+                LogError(`searchEntitiesSemanticPass: no AIModelID on EntityDocument "${entityDocumentId}"; falling back to highest-power local embedding model. Index/query mismatch possible.`);
+                const embed = await AIEngine.Instance.EmbedTextLocal(searchText);
+                queryVector = embed?.result?.vector ?? null;
+            }
         } catch (e) {
-            LogError(`searchEntitiesSemanticPass: EmbedTextLocal threw: ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`searchEntitiesSemanticPass: embedding generation threw: ${e instanceof Error ? e.message : String(e)}`);
             return [];
         }
         if (!queryVector) return [];

@@ -86,10 +86,13 @@ describe('ComputeRRF (canonical)', () => {
                 { ID: 'shared', Score: 0.5 },
             ];
 
-            const lexicalHeavy = ComputeRRF([lexical, semantic], 60, [10.0, 1.0]);
+            // The fused score for `shared` is the sum of both lists' contributions,
+            // so a weight large enough to overcome that summation (here w > 61, the
+            // RRF denominator at rank 1 with k=60) is what flips the ordering.
+            const lexicalHeavy = ComputeRRF([lexical, semantic], 60, [100.0, 1.0]);
             expect(lexicalHeavy[0].ID).toBe('lex_top');
 
-            const semanticHeavy = ComputeRRF([lexical, semantic], 60, [1.0, 10.0]);
+            const semanticHeavy = ComputeRRF([lexical, semantic], 60, [1.0, 100.0]);
             expect(semanticHeavy[0].ID).toBe('sem_top');
         });
 

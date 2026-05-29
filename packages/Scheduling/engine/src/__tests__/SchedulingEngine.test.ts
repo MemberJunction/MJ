@@ -138,6 +138,7 @@ vi.mock('../NotificationManager', () => ({
 
 import { SchedulingEngine } from '../ScheduledJobEngine';
 import { SchedulingEngineBase } from '@memberjunction/scheduling-engine-base';
+import { CronExpressionHelper } from '../CronExpressionHelper';
 
 describe('SchedulingEngine', () => {
     let engine: SchedulingEngine;
@@ -147,6 +148,12 @@ describe('SchedulingEngine', () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.useFakeTimers();
+        // `vi.clearAllMocks()` wipes the mock return values declared at
+        // `vi.mock()` registration time, so re-install the CronExpressionHelper
+        // stubs here. Without this, GetNextRunTime returns undefined and the
+        // initializeNextRunTimes branch tests can't observe the cron-tick path.
+        (CronExpressionHelper.GetNextRunTime as ReturnType<typeof vi.fn>).mockReturnValue(new Date('2025-06-01T00:00:00Z'));
+        (CronExpressionHelper.IsExpressionDue as ReturnType<typeof vi.fn>).mockReturnValue(false);
         // Access the singleton and reset its state
         engine = SchedulingEngine.Instance;
         // Stop any existing polling

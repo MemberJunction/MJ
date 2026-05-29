@@ -13,9 +13,20 @@
  * `EntityDocument` / `EntityRecordDocument` pipeline through the standard
  * `VectorDBBase` contract, without standing up a remote vector store.
  *
- * **Cache:** `Map<EntityDocumentID, LoadedIndex>` with TTL eviction. The
- * sync pipeline can also explicitly invalidate an entry after writing back
- * fresh `VectorJSON` rows (see {@link SimpleVectorServiceProvider.InvalidateIndex}).
+ * **Cache:** held on the `SimpleVectorIndexCache` singleton (BaseSingleton-based)
+ * so every `SimpleVectorServiceProvider` instance in the process — and every
+ * bundler-duplicated copy of this module — shares one Map of loaded indexes.
+ * The cache:
+ *
+ *   - Dedupes concurrent cold loads (the first caller installs an in-flight
+ *     Promise; later callers await the same one — no duplicate DB reads or
+ *     vector-pool builds).
+ *   - Subscribes once to `BaseEntity` save/delete events for
+ *     `MJ: Entity Record Documents` and invalidates the affected
+ *     EntityDocumentID automatically — manual fixes, ad-hoc imports, and
+ *     anything that goes through `BaseEntity.Save()` invalidates without the
+ *     sync pipeline needing to remember to call `InvalidateIndex`.
+ *   - Honors a TTL as a safety net for non-BaseEntity writes.
  *
  * **When NOT to use this driver:** > a few thousand `EntityRecordDocument`
  * rows per `EntityDocument`, multi-process deployments, scenarios that need
@@ -24,8 +35,8 @@
  * @module @memberjunction/ai-vectors-memory
  */
 
-import { RegisterClass } from '@memberjunction/global';
-import { RunView, LogError, UserInfo } from '@memberjunction/core';
+import { BaseSingleton, MJEventType, MJGlobal, RegisterClass } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import type {
     BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams,
@@ -47,20 +58,138 @@ interface LoadedIndex {
 }
 
 /**
- * Default TTL (in ms) before a cached index is considered stale and reloaded
- * on the next query. The sync pipeline should also call
- * {@link SimpleVectorServiceProvider.InvalidateIndex} when it writes back
- * fresh embeddings — TTL is just the safety net for that signal getting lost.
+ * Default TTL (ms) before a cached index is considered stale and reloaded
+ * on the next query. The BaseEntity event subscription invalidates affected
+ * indexes the moment an `EntityRecordDocument` row is saved/deleted; TTL is
+ * just the safety net for writes that bypass BaseEntity (raw SQL, external
+ * tools).
  */
 const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Module-scope cache so multiple `new SimpleVectorServiceProvider()` instances
- * in the same process share loaded indexes. Provider lookup currently
- * instantiates a fresh provider per query; a shared cache prevents redundant
- * VectorJSON parsing across those callers.
+ * BaseSingleton-backed cache for `SimpleVectorServiceProvider`. Holds the
+ * per-EntityDocument index pool plus the in-flight Promise map used to dedupe
+ * cold loads, and subscribes once to BaseEntity events so cache entries
+ * invalidate automatically when underlying EntityRecordDocument rows change.
+ *
+ * The provider class itself (`SimpleVectorServiceProvider`) remains a
+ * non-singleton — callers can `new` one freely and they all delegate to this
+ * shared cache. That separation matches the existing VectorDBBase contract
+ * while giving us process-wide cache coherence.
  */
-const indexCache = new Map<string, LoadedIndex>();
+export class SimpleVectorIndexCache extends BaseSingleton<SimpleVectorIndexCache> {
+    private indexCache = new Map<string, LoadedIndex>();
+    private inFlightLoads = new Map<string, Promise<LoadedIndex | null>>();
+    private ttlMs = DEFAULT_TTL_MS;
+    private subscribedToBaseEntityEvents = false;
+
+    protected constructor() {
+        super();
+        // Wire BaseEntity event subscription exactly once per process.
+        this.subscribeToBaseEntityEvents();
+    }
+
+    public static get Instance(): SimpleVectorIndexCache {
+        return super.getInstance<SimpleVectorIndexCache>();
+    }
+
+    public get TtlMs(): number { return this.ttlMs; }
+    public set TtlMs(value: number) { this.ttlMs = value; }
+
+    public get Size(): number { return this.indexCache.size; }
+
+    /**
+     * Get the cached index (or load it). Concurrent callers asking for the
+     * same EntityDocumentID before the first load completes share the same
+     * Promise — only one DB read and vector-pool build happens.
+     */
+    public async GetOrLoad(
+        entityDocumentId: string,
+        contextUser: UserInfo | undefined,
+        loader: () => Promise<LoadedIndex | null>
+    ): Promise<LoadedIndex | null> {
+        const now = Date.now();
+        const cached = this.indexCache.get(entityDocumentId);
+        if (cached && (now - cached.loadedAt) < this.ttlMs) {
+            return cached;
+        }
+
+        // Dedupe: if another caller is already loading, return their Promise.
+        const existing = this.inFlightLoads.get(entityDocumentId);
+        if (existing) return existing;
+
+        const p = (async (): Promise<LoadedIndex | null> => {
+            try {
+                const loaded = await loader();
+                if (loaded) {
+                    this.indexCache.set(entityDocumentId, loaded);
+                }
+                return loaded;
+            } finally {
+                // Always clear in-flight slot, success or failure, so the next
+                // caller can retry on failure instead of being stuck with a
+                // resolved-null Promise forever.
+                this.inFlightLoads.delete(entityDocumentId);
+            }
+        })();
+        this.inFlightLoads.set(entityDocumentId, p);
+        // Suppress unhandled rejection warning if no awaiter exists at throw time.
+        p.catch(() => { /* handled by GetOrLoad caller's await */ });
+        return p;
+    }
+
+    public Invalidate(entityDocumentId: string): void {
+        this.indexCache.delete(entityDocumentId);
+        // Don't drop in-flight loads — let any in-progress caller complete and
+        // we'll just discard their result on the next read (TTL handles it).
+        // Aggressively cancelling would race with concurrent QueryIndex calls.
+    }
+
+    public InvalidateAll(): void {
+        this.indexCache.clear();
+    }
+
+    /**
+     * Subscribe to BaseEntity save/delete events and invalidate the affected
+     * EntityDocument index when an `MJ: Entity Record Documents` row changes.
+     * Idempotent — only subscribes once per singleton instance.
+     */
+    private subscribeToBaseEntityEvents(): void {
+        if (this.subscribedToBaseEntityEvents) return;
+        this.subscribedToBaseEntityEvents = true;
+
+        try {
+            MJGlobal.Instance.GetEventListener(false).subscribe((mjEvent) => {
+                if (mjEvent.event !== MJEventType.ComponentEvent) return;
+                if (mjEvent.eventCode !== BaseEntity.BaseEventCode) return;
+
+                const ev = mjEvent.args as BaseEntityEvent;
+                if (!ev) return;
+                if (ev.type !== 'save' && ev.type !== 'delete' && ev.type !== 'remote-invalidate') return;
+
+                const entityName = ev.baseEntity?.EntityInfo?.Name ?? ev.entityName;
+                if (entityName !== 'MJ: Entity Record Documents') return;
+
+                // Pull EntityDocumentID off the affected row. On save/delete the
+                // BaseEntity is hydrated; on remote-invalidate we may have only
+                // the entity name, in which case we conservatively drop ALL
+                // cached indexes (small price for correctness — TTL would have
+                // expired them within 15 min anyway).
+                if (ev.baseEntity) {
+                    const docId = ev.baseEntity.Get('EntityDocumentID');
+                    if (typeof docId === 'string' && docId.length > 0) {
+                        this.Invalidate(docId);
+                    }
+                } else {
+                    this.InvalidateAll();
+                }
+            });
+        } catch (e) {
+            // Subscription is best-effort — falling back to TTL is fine.
+            LogError(`SimpleVectorIndexCache: failed to subscribe to BaseEntity events: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+}
 
 /**
  * In-process VectorDBBase driver that loads embeddings from
@@ -72,11 +201,17 @@ const indexCache = new Map<string, LoadedIndex>();
  * ```typescript
  * provider.QueryIndex({ id: entityDocumentId, vector: queryEmbedding, topK: 10 }, contextUser);
  * ```
+ *
+ * Multiple instances share one cache via {@link SimpleVectorIndexCache}.
  */
 @RegisterClass(VectorDBBase, 'SimpleVectorServiceProvider')
 export class SimpleVectorServiceProvider extends VectorDBBase {
-    /** TTL (ms) before a cached index is considered stale on next query. */
-    public static TtlMs: number = DEFAULT_TTL_MS;
+    /**
+     * Static accessor preserved for back-compat with existing callers. Delegates
+     * to the underlying singleton.
+     */
+    public static get TtlMs(): number { return SimpleVectorIndexCache.Instance.TtlMs; }
+    public static set TtlMs(value: number) { SimpleVectorIndexCache.Instance.TtlMs = value; }
 
     /**
      * In-process driver — no remote auth. Same placeholder fallback as
@@ -86,22 +221,23 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
     constructor(apiKey?: string) { super(apiKey && apiKey.trim().length > 0 ? apiKey : 'in-memory-no-auth'); }
 
     /**
-     * Drop a cached index. Call after the sync pipeline writes fresh
-     * `VectorJSON` rows for `entityDocumentId` so the next query reloads
-     * immediately instead of waiting for the TTL to expire.
+     * Drop a cached index. The BaseEntity event subscription handles this
+     * automatically for `Save()` / `Delete()` paths; call this manually only
+     * when writing VectorJSON via a path that bypasses BaseEntity (raw SQL,
+     * the sync pipeline's bulk inserts, etc.).
      */
     public static InvalidateIndex(entityDocumentId: string): void {
-        indexCache.delete(entityDocumentId);
+        SimpleVectorIndexCache.Instance.Invalidate(entityDocumentId);
     }
 
     /** Drop ALL cached indexes. Used in tests and after global re-syncs. */
     public static InvalidateAll(): void {
-        indexCache.clear();
+        SimpleVectorIndexCache.Instance.InvalidateAll();
     }
 
     /** Expose the cache size for diagnostics / tests. */
     public static get CacheSize(): number {
-        return indexCache.size;
+        return SimpleVectorIndexCache.Instance.Size;
     }
 
     /**
@@ -109,47 +245,44 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
      * Returns null when the EntityDocument has no embedded records yet — the
      * caller treats this as an empty result rather than an error so a
      * freshly-installed system without a sync run yet just returns nothing.
+     *
+     * Concurrent calls for the same `entityDocumentId` while a load is in
+     * flight share the in-flight Promise via {@link SimpleVectorIndexCache}.
      */
-    private async loadIndex(entityDocumentId: string, contextUser: UserInfo | undefined): Promise<LoadedIndex | null> {
-        const now = Date.now();
-        const cached = indexCache.get(entityDocumentId);
-        if (cached && (now - cached.loadedAt) < SimpleVectorServiceProvider.TtlMs) {
-            return cached;
-        }
+    private loadIndex(entityDocumentId: string, contextUser: UserInfo | undefined): Promise<LoadedIndex | null> {
+        return SimpleVectorIndexCache.Instance.GetOrLoad(entityDocumentId, contextUser, async () => {
+            const rv = new RunView();
+            const r = await rv.RunView<{ ID: string; RecordID: string | null; VectorJSON: string | null }>({
+                EntityName: 'MJ: Entity Record Documents',
+                ExtraFilter: `EntityDocumentID='${entityDocumentId.replace(/'/g, "''")}' AND VectorJSON IS NOT NULL`,
+                Fields: ['ID', 'RecordID', 'VectorJSON'],
+                ResultType: 'simple',
+            }, contextUser);
 
-        const rv = new RunView();
-        const r = await rv.RunView<{ ID: string; RecordID: string | null; VectorJSON: string | null }>({
-            EntityName: 'MJ: Entity Record Documents',
-            ExtraFilter: `EntityDocumentID='${entityDocumentId.replace(/'/g, "''")}' AND VectorJSON IS NOT NULL`,
-            Fields: ['ID', 'RecordID', 'VectorJSON'],
-            ResultType: 'simple',
-        }, contextUser);
-
-        if (!r.Success) {
-            LogError(`SimpleVectorServiceProvider.loadIndex: RunView failed for EntityDocumentID="${entityDocumentId}": ${r.ErrorMessage}`);
-            return null;
-        }
-
-        const service = new SimpleVectorService();
-        const recordIdsByDocId = new Map<string, string>();
-        const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
-
-        for (const row of r.Results ?? []) {
-            if (!row.ID || !row.RecordID || !row.VectorJSON) continue;
-            try {
-                const parsed = JSON.parse(row.VectorJSON);
-                if (!Array.isArray(parsed) || !parsed.every(v => typeof v === 'number')) continue;
-                entries.push({ key: row.ID, vector: parsed as number[], metadata: { RecordID: row.RecordID } });
-                recordIdsByDocId.set(row.ID, row.RecordID);
-            } catch {
-                // Skip rows with unparseable VectorJSON — likely stale/corrupted; sync will fix
+            if (!r.Success) {
+                LogError(`SimpleVectorServiceProvider.loadIndex: RunView failed for EntityDocumentID="${entityDocumentId}": ${r.ErrorMessage}`);
+                return null;
             }
-        }
 
-        service.LoadVectors(entries);
-        const loaded: LoadedIndex = { service, recordIdsByDocId, loadedAt: now };
-        indexCache.set(entityDocumentId, loaded);
-        return loaded;
+            const service = new SimpleVectorService();
+            const recordIdsByDocId = new Map<string, string>();
+            const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
+
+            for (const row of r.Results ?? []) {
+                if (!row.ID || !row.RecordID || !row.VectorJSON) continue;
+                try {
+                    const parsed = JSON.parse(row.VectorJSON);
+                    if (!Array.isArray(parsed) || !parsed.every(v => typeof v === 'number')) continue;
+                    entries.push({ key: row.ID, vector: parsed as number[], metadata: { RecordID: row.RecordID } });
+                    recordIdsByDocId.set(row.ID, row.RecordID);
+                } catch {
+                    // Skip rows with unparseable VectorJSON — likely stale/corrupted; sync will fix
+                }
+            }
+
+            service.LoadVectors(entries);
+            return { service, recordIdsByDocId, loadedAt: Date.now() };
+        });
     }
 
     // ── VectorDBBase implementation ──────────────────────────────────────────

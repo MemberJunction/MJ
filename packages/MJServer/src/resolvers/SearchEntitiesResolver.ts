@@ -90,6 +90,15 @@ export class SearchEntitiesResponseType {
     declare Groups: EntitySearchResultGroupType[];
 }
 
+/**
+ * Per-request cap on how many entities a single `SearchEntities` call may
+ * search. Each entity in the batch triggers 2–4 RunViews server-side; an
+ * uncapped batch from a malicious or buggy client could fan out into
+ * thousands of concurrent DB queries. 20 covers every realistic use case
+ * (agent prompt seeding, multi-entity navbar search) with margin to spare.
+ */
+const MAX_SEARCH_ENTITIES_BATCH_SIZE = 20;
+
 @Resolver(SearchEntitiesResponseType)
 export class SearchEntitiesResolver {
     @Query(() => SearchEntitiesResponseType)
@@ -98,6 +107,13 @@ export class SearchEntitiesResolver {
         @Arg('params', () => [SearchEntityInput]) params: SearchEntityInput[]
     ): Promise<SearchEntitiesResponseType> {
         try {
+            if (params.length > MAX_SEARCH_ENTITIES_BATCH_SIZE) {
+                return {
+                    Success: false,
+                    ErrorMessage: `Batch size ${params.length} exceeds the per-request cap of ${MAX_SEARCH_ENTITIES_BATCH_SIZE}. Split the request.`,
+                    Groups: params.map(p => ({ EntityName: p.EntityName, Results: [] })),
+                };
+            }
             const md = GetReadOnlyProvider(providers);
             const user = UserCache.Instance.Users.find(
                 (u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase()
